@@ -9,7 +9,7 @@ export const docStatusEnum = pgEnum("doc_status", ["inbox", "filed"]);
 export const partyKindEnum = pgEnum("party_kind", ["person", "organization"]);
 export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-provided"]);
 export const actionStatusEnum = pgEnum("action_status", ["open", "done", "cancelled"]);
-export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta"]);
+export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta", "registry-item", "debt"]);
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual"]);
 
 // --- financial registry (sub-project 2) ---

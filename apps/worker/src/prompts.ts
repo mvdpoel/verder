@@ -19,6 +19,28 @@ export function buildEntryPrompt(email: {
   ].join("\n");
 }
 
+export const REGISTRY_PROMPT_VERSION = "registry-v1";
+export function buildRegistryPrompt(candidate: {
+  counterpartyName: string | null; counterpartyIban: string | null;
+  mandateId: string | null; cadence: string; typicalAmountCents: number;
+  chargeCount: number;
+}): string {
+  const euros = (Math.abs(candidate.typicalAmountCents) / 100).toFixed(2);
+  return [
+    "A recurring charge was found on a Dutch bank statement in a debt-restructuring (WSNP/bewindvoering) dossier.",
+    "Identify the payee. Reply with strict JSON only, keys:",
+    `name (string: clean display name of the company, e.g. "Ziggo" not "SEPA Incasso ZIGGO BV 12345"),`,
+    `category (one of "energy","insurance","telecom","streaming","software","housing","other"),`,
+    "isDebtCollector (boolean: true when the payee is a debt collection party — Dutch: incasso,",
+    "incassobureau, deurwaarder, gerechtsdeurwaarder — otherwise false).",
+    "",
+    `Counterparty: ${candidate.counterpartyName ?? "(unknown)"}`,
+    `IBAN: ${candidate.counterpartyIban ?? "(none)"}`,
+    `Direct-debit mandate: ${candidate.mandateId ?? "(none)"}`,
+    `Cadence: ${candidate.cadence}, ${candidate.chargeCount} charges of ~EUR ${euros}`,
+  ].join("\n");
+}
+
 export const DOCMETA_PROMPT_VERSION = "docmeta-v1";
 export function buildDocMetaPrompt(filename: string, text: string): string {
   return [

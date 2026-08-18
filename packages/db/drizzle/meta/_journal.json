@@ -64,6 +64,13 @@
       "when": 1787086118500,
       "tag": "0008_registry_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787090460725,
+      "tag": "0009_burly_jack_murdock",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { scanNasFolder } from "./nas";
+import { mineRegistry } from "./registry-mine";
 import { sendPush } from "./push";
 
 const url = process.env.WORKER_DATABASE_URL
@@ -66,6 +67,18 @@ await boss.work("nas.scan", async () => {
   await scanNasFolder({ db, scanDir: process.env.NAS_SCAN_DIR ?? "/mnt/nas/scans",
     vaultDir: process.env.VAULT_DIR ?? "./vault-files",
     enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); } });
+});
+
+// Registry mining sweep: no direct enqueue from web — the cron sweeps all
+// un-mined transactions (idempotent via suggestion-key dedup, matches the
+// watcher architecture). receipts.resolve is consumed by Task 8; the queue
+// exists already so aggregator candidates enqueue safely.
+await boss.createQueue("registry.mine");
+await boss.createQueue("receipts.resolve");
+await boss.schedule("registry.mine", "*/2 * * * *");
+await boss.work("registry.mine", async () => {
+  await mineRegistry({ db, llm,
+    enqueueResolve: async (suggestionId) => { await boss.send("receipts.resolve", { suggestionId }); } });
 });
 
 console.log("worker up");
