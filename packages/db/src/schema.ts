@@ -1,4 +1,5 @@
-import { bigint, boolean, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, boolean, check, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const channelEnum = pgEnum("channel", ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]);
 export const directionEnum = pgEnum("direction", ["inbound", "outbound", "internal"]);
@@ -10,6 +11,15 @@ export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-pro
 export const actionStatusEnum = pgEnum("action_status", ["open", "done", "cancelled"]);
 export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta"]);
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual"]);
+
+// --- financial registry (sub-project 2) ---
+export const itemCategoryEnum = pgEnum("item_category", ["energy", "insurance", "telecom", "streaming", "software", "housing", "other"]);
+export const billingCycleEnum = pgEnum("billing_cycle", ["monthly", "quarterly", "yearly", "irregular"]);
+export const paymentChannelEnum = pgEnum("payment_channel", ["direct-debit", "paypal", "apple", "invoice"]);
+export const discoverySourceEnum = pgEnum("discovery_source", ["manual", "bank", "paypal", "apple", "email"]);
+export const itemStatusEnum = pgEnum("item_status", ["identified", "mandatory", "allowed", "requested", "to-cancel", "canceled"]);
+export const debtStatusEnum = pgEnum("debt_status", ["identified", "acknowledged", "disputed", "in-settlement", "settled"]);
+export const txSourceEnum = pgEnum("tx_source", ["abn-camt053", "abn-tsv", "paypal-csv"]);
 
 export const ledgerEvents = pgTable("ledger_events", {
   seq: bigint("seq", { mode: "number" }).primaryKey(),
@@ -136,6 +146,72 @@ export const suggestions = pgTable("suggestions", {
   verdictAt: timestamp("verdict_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// --- financial registry tables ---
+// Editable fact tables (financial_items, debts, transactions): a typo is a
+// typo — UPDATE allowed, DELETE never (enforced by grants).
+// registry_decisions is an EVIDENCE table: insert-only, ledger-backed.
+
+export const financialItems = pgTable("financial_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  category: itemCategoryEnum("category").notNull(),
+  providerPartyId: uuid("provider_party_id").references(() => parties.id),
+  amountCents: integer("amount_cents").notNull(),
+  billingCycle: billingCycleEnum("billing_cycle").notNull(),
+  paymentChannel: paymentChannelEnum("payment_channel").notNull(),
+  contractStart: date("contract_start"),
+  contractEnd: date("contract_end"),
+  noticePeriod: text("notice_period"),
+  cancellationMethod: text("cancellation_method"),
+  cancellationDetails: text("cancellation_details"),
+  accountNumber: text("account_number"),
+  discoveredVia: discoverySourceEnum("discovered_via").notNull().default("manual"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const debts = pgTable("debts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  creditorPartyId: uuid("creditor_party_id").references(() => parties.id),
+  creditorName: text("creditor_name").notNull(),
+  principalCents: integer("principal_cents"),
+  claimedCents: integer("claimed_cents").notNull(),
+  references_: text("references"),
+  origin: text("origin"),
+  originStory: text("origin_story"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const transactions = pgTable("transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  source: txSourceEnum("source").notNull(),
+  bookedAt: timestamp("booked_at", { withTimezone: true }).notNull(),
+  amountCents: integer("amount_cents").notNull(), // signed: debits negative
+  counterpartyName: text("counterparty_name"),
+  counterpartyIban: text("counterparty_iban"),
+  description: text("description"),
+  mandateId: text("mandate_id"),
+  statementSha256: text("statement_sha256").notNull(),
+  rowIndex: integer("row_index").notNull(),
+  parseError: boolean("parse_error").notNull().default(false),
+  rawRow: text("raw_row"),
+  financialItemId: uuid("financial_item_id").references(() => financialItems.id),
+}, (t) => [uniqueIndex("tx_stmt_row_uq").on(t.statementSha256, t.rowIndex)]);
+
+export const registryDecisions = pgTable("registry_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  financialItemId: uuid("financial_item_id").references(() => financialItems.id),
+  debtId: uuid("debt_id").references(() => debts.id),
+  status: text("status").notNull(),
+  explanation: text("explanation").notNull(),
+  documentId: uuid("document_id").references(() => documents.id),
+  blockerNote: text("blocker_note"),
+  overrideReason: text("override_reason"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("registry_decision_target_ck", sql`num_nonnulls(${t.financialItemId}, ${t.debtId}) = 1`),
+]);
 
 export const workerRuns = pgTable("worker_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
