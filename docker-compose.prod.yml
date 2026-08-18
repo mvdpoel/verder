@@ -22,7 +22,7 @@ services:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     restart: unless-stopped
     env_file: .env.prod
-    ports: ["127.0.0.1:3000:3000"] # cloudflared points here; never exposed on LAN
+    ports: ["${WEB_BIND:-127.0.0.1}:3000:3000"] # default host-only for cloudflared; set WEB_BIND to a LAN IP to expose on the LAN
     volumes:
       - "${VAULT_HOST_DIR:?set in .env.prod}:/vault"
     depends_on:
