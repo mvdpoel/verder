@@ -9,6 +9,7 @@ export function getAuth(): ReturnType<typeof createAuth> {
     db: getDb().db,
     secret: process.env.AUTH_SECRET!,
     baseURL: process.env.APP_URL ?? "http://localhost:3000",
+    trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
   });
   return g.__verderAuth;
 }
