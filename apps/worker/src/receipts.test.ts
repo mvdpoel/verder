@@ -194,6 +194,48 @@ describe("resolveAggregator", () => {
     await pool.end();
   });
 
+  it("never resurrects a rejected suggestion: a late resolve job is a no-op", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));
+    const { suggestion } = await seedAggregatorSuggestion(db, "apple");
+    // Martin rejected the unresolved card before the queued job ran
+    // (suggestions.reject leaves proposed.resolved === false).
+    await db.update(schema.suggestions).set({
+      status: "rejected", finalPayload: { reason: "not mine" }, verdictAt: new Date(),
+    }).where(eq(schema.suggestions.id, suggestion.id));
+
+    const { port, queries } = fakeGmail(`r-${crypto.randomUUID()}`);
+    const llm: LlmPort = { chatJson: async () => { throw new Error("must not classify"); } };
+    await resolveAggregator({ db, gmail: port, llm, vaultDir }, suggestion.id);
+
+    expect(queries).toHaveLength(0);            // skipped before any Gmail work
+    const after = await reload(db, suggestion.id);
+    expect(after.status).toBe("rejected");      // verdict stands — never resurrected
+    const p = after.proposed as Record<string, unknown>;
+    expect(p.resolved).toBe(false);             // proposed untouched after the verdict
+    expect(p.name).toBe("Apple");
+    await pool.end();
+  });
+
+  it("leaves an approved suggestion untouched: the recorded diff stays intact", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));
+    const { suggestion } = await seedAggregatorSuggestion(db, "apple");
+    await db.update(schema.suggestions).set({
+      status: "approved", finalPayload: { name: "Apple" }, verdictAt: new Date(),
+    }).where(eq(schema.suggestions.id, suggestion.id));
+
+    const { port, queries } = fakeGmail(`r-${crypto.randomUUID()}`);
+    const llm: LlmPort = { chatJson: async () => { throw new Error("must not classify"); } };
+    await resolveAggregator({ db, gmail: port, llm, vaultDir }, suggestion.id);
+
+    expect(queries).toHaveLength(0);
+    const after = await reload(db, suggestion.id);
+    expect(after.status).toBe("approved");
+    expect((after.proposed as Record<string, unknown>).resolved).toBe(false);
+    await pool.end();
+  });
+
   it("reuses an already-ingested receipt email instead of re-fetching", async () => {
     const { db, pool } = createDb(URL);
     const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));

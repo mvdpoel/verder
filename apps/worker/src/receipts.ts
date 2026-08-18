@@ -48,6 +48,14 @@ export async function resolveAggregator(
     const [s] = await deps.db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.id, suggestionId));
     if (!s || s.kind !== "registry-item") return;
+    // Martin's verdict is final: a late or retried resolve job must never
+    // resurrect a rejected card or rewrite proposed after approval — the
+    // recorded suggestion-vs-verdict diff is evidence (golden rule).
+    if (s.verdictAt !== null || (s.status !== "pending" && s.status !== "needs-manual")) {
+      await recordRun(deps.db, "receipts", "ok",
+        { suggestionId, outcome: "skipped", reason: `verdict already given (${s.status})` });
+      return;
+    }
     const proposed = (s.proposed ?? {}) as Record<string, unknown>;
     const aggregator = proposed.aggregator;
     if ((aggregator !== "apple" && aggregator !== "paypal") || proposed.resolved !== false) return;
