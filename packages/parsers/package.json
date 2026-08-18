@@ -1,0 +1,10 @@
+{
+  "name": "@verder/parsers",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit", "build": "tsc --noEmit" },
+  "dependencies": { "fast-xml-parser": "^4.5.0" },
+  "devDependencies": { "@types/node": "^22.10.2", "vitest": "^2.1.8", "typescript": "^5.7.2" }
+}
