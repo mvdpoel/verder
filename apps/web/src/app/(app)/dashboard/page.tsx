@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { EnablePush } from "@/components/enable-push";
+import { formatEuro } from "@/components/registry-list";
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
   const stats = await caller.dashboard.stats();
+  const registry = await caller.registry.stats();
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
   return (
@@ -13,13 +15,16 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold">Hi Martin 👋 — here's where things stand</h1>
         <EnablePush />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Link href="/queue" className="rounded border bg-white p-4">
           <p className="text-3xl font-bold">{stats.pendingSuggestions}</p><p>to review</p></Link>
         <Link href="/vault" className="rounded border bg-white p-4">
           <p className="text-3xl font-bold">{stats.inboxDocs}</p><p>documents to sort</p></Link>
         <div className="rounded border bg-white p-4">
           <p className="text-3xl font-bold">{stats.openActionItems}</p><p>open actions</p></div>
+        <Link href="/registry" className="rounded border bg-white p-4">
+          <p className="text-3xl font-bold">{registry.itemCount}</p>
+          <p>registry items · {formatEuro(registry.monthlyTotalCents)}/mo · {registry.pendingDecisions} pending</p></Link>
       </div>
       <section>
         <h2 className="font-semibold mb-2">System health</h2>
