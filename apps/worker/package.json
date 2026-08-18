@@ -9,6 +9,7 @@
     "nightly-verify": "tsx src/ops/verify-nightly.ts",
     "model-check": "tsx src/ops/check-model-updates.ts",
     "eval": "tsx src/eval/run-eval.ts",
+    "registry-eval": "tsx src/eval/run-registry-eval.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",

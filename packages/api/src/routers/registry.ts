@@ -258,6 +258,49 @@ export const registryRouter = router({
       return all.filter((to) => isValidTransition(input.kind, input.from, to));
     }),
 
+  /**
+   * Full registry snapshot for the VerderGroep report (print export): every
+   * item with provider name, monthly-normalized cost and its latest ledgered
+   * decision, every debt with its status, plus the ledger head hash so the
+   * report carries the same tamper-evidence statement as the logbook export.
+   */
+  exportReport: protectedProcedure.query(async ({ ctx }) => {
+    const itemRows = await ctx.db
+      .select({ item: schema.financialItems, providerName: schema.parties.name })
+      .from(schema.financialItems)
+      .leftJoin(schema.parties, eq(schema.financialItems.providerPartyId, schema.parties.id))
+      .orderBy(schema.financialItems.name);
+    const items = await Promise.all(itemRows.map(async ({ item, providerName }) => {
+      const decisions = await decisionTimeline(ctx.db, { financialItemId: item.id });
+      return {
+        id: item.id, name: item.name, category: item.category,
+        providerName: providerName ?? null,
+        amountCents: item.amountCents, billingCycle: item.billingCycle,
+        monthlyCents: monthlyCents(item),
+        status: decisions[0]?.status ?? "identified",
+        latestExplanation: decisions[0]?.explanation ?? null,
+      };
+    }));
+    const debtRows = await ctx.db.select().from(schema.debts)
+      .orderBy(schema.debts.creditorName);
+    const debts = await Promise.all(debtRows.map(async (debt) => {
+      const decisions = await decisionTimeline(ctx.db, { debtId: debt.id });
+      return {
+        id: debt.id, creditorName: debt.creditorName,
+        principalCents: debt.principalCents, claimedCents: debt.claimedCents,
+        references: debt.references_,
+        status: decisions[0]?.status ?? "identified",
+      };
+    }));
+    const [head] = await ctx.db.select().from(schema.ledgerEvents)
+      .orderBy(desc(schema.ledgerEvents.seq)).limit(1);
+    return {
+      generatedAt: new Date().toISOString(),
+      headHash: head?.eventHash ?? null,
+      items, debts,
+    };
+  }),
+
   stats: protectedProcedure.query(async ({ ctx }) => {
     // Statuses come from effectiveStatus (ledger-seq ordered) so the tile can
     // never disagree with the screens. Integer cents throughout.

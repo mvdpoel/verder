@@ -21,6 +21,7 @@ export default async function RegistryPage({ searchParams }: {
         <div className="flex gap-2">
           <Link href="/registry/new" className="rounded bg-slate-900 text-white px-4 py-2">+ Add</Link>
           <Link href="/registry/import" className="rounded border px-4 py-2 hover:bg-slate-100">Import statement</Link>
+          <Link href="/registry/export" className="rounded border px-4 py-2 hover:bg-slate-100">Export report</Link>
         </div>
       </div>
       <p className="text-slate-600">

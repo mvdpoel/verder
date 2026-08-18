@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { desc } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -225,6 +226,43 @@ describe("registry router", () => {
     expect(await c.registry.validNext({ kind: "debt", from: "settled" })).toEqual([]);
     // unknown from-status (possible via override) → no valid edges, not a crash
     expect(await c.registry.validNext({ kind: "item", from: "constructor" })).toEqual([]);
+  });
+
+  it("exportReport: items with provider name + latest explanation, debts, head hash", async () => {
+    const c = caller();
+    const party = await c.parties.create({ kind: "organization", name: `Eneco NV ${Date.now()}` });
+    const item = await c.registry.items.create(itemInput({
+      name: "Export-Eneco", amountCents: 14280, providerPartyId: party.id }));
+    await c.registry.decide({ financialItemId: item.id, status: "mandatory",
+      explanation: "Energie is een basisvoorziening." });
+    const plain = await c.registry.items.create(itemInput({
+      name: "Export-Plain", amountCents: 1200, billingCycle: "quarterly" }));
+    const debt = await c.registry.debts.create({
+      creditorName: "Export-Incasso", claimedCents: 123400 });
+    await c.registry.decide({ debtId: debt.id, status: "acknowledged",
+      explanation: "Vordering komt overeen met de facturen." });
+
+    const report = await c.registry.exportReport();
+    expect(new Date(report.generatedAt).getTime()).not.toBeNaN();
+    const [head] = await db.select().from(schema.ledgerEvents)
+      .orderBy(desc(schema.ledgerEvents.seq)).limit(1);
+    expect(report.headHash).toBe(head.eventHash);
+
+    const decided = report.items.find((r) => r.id === item.id);
+    expect(decided).toMatchObject({
+      name: "Export-Eneco", providerName: party.name, status: "mandatory",
+      amountCents: 14280, billingCycle: "monthly", monthlyCents: 14280,
+      latestExplanation: "Energie is een basisvoorziening.",
+    });
+    const undecided = report.items.find((r) => r.id === plain.id);
+    expect(undecided).toMatchObject({
+      status: "identified", providerName: null, latestExplanation: null,
+      monthlyCents: 400,
+    });
+    const debtRow = report.debts.find((r) => r.id === debt.id);
+    expect(debtRow).toMatchObject({
+      creditorName: "Export-Incasso", claimedCents: 123400, status: "acknowledged",
+    });
   });
 
   it("rejects unauthenticated calls", async () => {
