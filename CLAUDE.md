@@ -1,8 +1,9 @@
 # verder — project notes for Claude
 
 ## Homelab access
-- SSH: `ssh homelab` (key-based, user is a sudoer). This is the deployment target: fast disk/mem/CPU, AMD Radeon 16 GB VRAM (ROCm), Ollama installed, cloudflared tunnel + CF API key present.
-- Production stack runs there via `docker-compose.prod.yml` (see `docs/deploy.md`).
+- SSH: `ssh homelab` (key-based, user is a sudoer). This is the deployment target: fast disk/mem/CPU, AMD Radeon RX 9070 16 GB VRAM (ROCm), Ollama installed (listens on 0.0.0.0:11434), cloudflared tunnel (token-based, runs as docker container `operator-os-cloudflared`).
+- Production stack DEPLOYED (2026-08-18): repo at `~/apps/verder` (synced via rsync, no GitHub key on homelab), data under `/srv/verder/{vault,backups,scans-inbox}`, stack via `docker compose --env-file .env.prod -f docker-compose.prod.yml`, nightly cron 03:30. Secrets in `~/apps/verder/.env.prod` and `~/apps/verder/secrets/role-passwords` (never commit). App on http://192.168.188.148:3000, LAN-only until Cloudflare hostname + Access are configured.
+- Eval baseline (golden rule): qwen3.5:9b scored 4/6 on `pnpm --filter worker eval`, prompt entry-v1 (misses: invented action item on FYI email; ambiguous marked clear).
 
 ## Build & test
 - Run builds/tests with `env -u NODE_ENV` — the shell exports `NODE_ENV=development`, which breaks `next build`.
