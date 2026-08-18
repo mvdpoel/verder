@@ -4,6 +4,7 @@ import { entriesRouter } from "./routers/entries";
 import { documentsRouter } from "./routers/documents";
 import { suggestionsRouter } from "./routers/suggestions";
 import { verifyRouter } from "./routers/verify";
+import { registryRouter } from "./routers/registry";
 import { dashboardRouter } from "./routers/dashboard";
 import { pushRouter } from "./routers/push";
 
@@ -13,6 +14,7 @@ export const appRouter = router({
   documents: documentsRouter,
   suggestions: suggestionsRouter,
   verify: verifyRouter,
+  registry: registryRouter,
   dashboard: dashboardRouter,
   push: pushRouter,
 });
