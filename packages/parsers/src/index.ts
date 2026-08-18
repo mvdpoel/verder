@@ -3,3 +3,4 @@ export { detectSource, type ParsedRow, type ParseResult, type StatementSource } 
 export { parseCamt053 } from "./camt053";
 export { parseAbnTsv } from "./abn-tsv";
 export { parsePaypalCsv } from "./paypal-csv";
+export { detectRecurring, normalizeName, type RecurringCandidate } from "./recurring";
