@@ -26,6 +26,20 @@ describe("documents router", () => {
     expect(one.status).toBe("inbox");
   });
 
+  it("rejects a sha256 that is not 64 lowercase hex chars", async () => {
+    const c = caller();
+    const base = { sizeBytes: 10, mime: "application/pdf", title: "Evil",
+      source: "upload" as const, receivedAt: new Date() };
+    // 64 chars long, but a path traversal escaping the vault
+    const traversal = "../".repeat(18) + "etc/passwd";
+    expect(traversal).toHaveLength(64);
+    await expect(c.documents.registerUpload({ ...base, sha256: traversal }))
+      .rejects.toThrow();
+    // uppercase hex is also rejected (canonical form is lowercase)
+    await expect(c.documents.registerUpload({ ...base, sha256: "A".repeat(64) }))
+      .rejects.toThrow();
+  });
+
   it("update() files a document via status-change row (original row untouched)", async () => {
     const c = caller();
     const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 5,

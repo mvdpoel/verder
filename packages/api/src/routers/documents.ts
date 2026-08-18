@@ -38,7 +38,7 @@ export async function effectiveDocument(db: Db, id: string) {
 
 export const documentsRouter = router({
   registerUpload: protectedProcedure.input(z.object({
-    sha256: z.string().length(64), sizeBytes: z.number().int().positive(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/), sizeBytes: z.number().int().positive(),
     mime: z.string(), title: z.string().min(1),
     source: z.enum(["upload", "nas-scan", "email-attachment"]),
     sourceRef: z.string().optional(), receivedAt: z.coerce.date(),
