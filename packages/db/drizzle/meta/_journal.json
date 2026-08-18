@@ -43,6 +43,13 @@
       "when": 1787056954235,
       "tag": "0005_black_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787058429202,
+      "tag": "0006_woozy_moonstone",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { scanNasFolder } from "./nas";
+import { sendPush } from "./push";
 
 const url = process.env.WORKER_DATABASE_URL
   ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -46,7 +47,7 @@ async function extractText(mime: string, buf: Buffer): Promise<string> {
 }
 
 await boss.work("suggest.entry", async ([job]) => {
-  await suggestEntry({ db, llm }, (job.data as { rawEmailId: string }).rawEmailId);
+  await suggestEntry({ db, llm, sendPush }, (job.data as { rawEmailId: string }).rawEmailId);
 });
 
 await boss.createQueue("suggest.docmeta");
@@ -56,7 +57,7 @@ await boss.work("suggest.docmeta", async ([job]) => {
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
   const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", doc.sha256));
-  await suggestDocMeta({ db, llm, extractText }, documentId, buf);
+  await suggestDocMeta({ db, llm, extractText, sendPush }, documentId, buf);
 });
 
 await boss.createQueue("nas.scan");

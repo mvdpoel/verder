@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
+import { EnablePush } from "@/components/enable-push";
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
@@ -8,7 +9,10 @@ export default async function DashboardPage() {
   const staleMs = 15 * 60 * 1000;
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Hi Martin 👋 — here's where things stand</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Hi Martin 👋 — here's where things stand</h1>
+        <EnablePush />
+      </div>
       <div className="grid grid-cols-3 gap-4">
         <Link href="/queue" className="rounded border bg-white p-4">
           <p className="text-3xl font-bold">{stats.pendingSuggestions}</p><p>to review</p></Link>

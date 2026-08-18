@@ -5,6 +5,7 @@ import { documentsRouter } from "./routers/documents";
 import { suggestionsRouter } from "./routers/suggestions";
 import { verifyRouter } from "./routers/verify";
 import { dashboardRouter } from "./routers/dashboard";
+import { pushRouter } from "./routers/push";
 
 export const appRouter = router({
   parties: partiesRouter,
@@ -13,6 +14,7 @@ export const appRouter = router({
   suggestions: suggestionsRouter,
   verify: verifyRouter,
   dashboard: dashboardRouter,
+  push: pushRouter,
 });
 export type AppRouter = typeof appRouter;
 export { createContext, type Context } from "./trpc";

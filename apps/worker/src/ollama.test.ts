@@ -25,7 +25,7 @@ describe("suggestEntry", () => {
       details: "Huurcontract voor vrijdag opsturen.",
       direction: "inbound",
       actionItems: [{ description: "Huurcontract opsturen", clarity: "clear" }] }) };
-    await suggestEntry({ db, llm }, raw.id);
+    await suggestEntry({ db, llm, sendPush: async () => {} }, raw.id);
     const [s] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.rawEmailId, raw.id));
     expect(s.status).toBe("pending");
@@ -38,7 +38,7 @@ describe("suggestEntry", () => {
     const { db, pool } = createDb(URL);
     const raw = await insertEmail(db);
     const llm: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
-    await suggestEntry({ db, llm }, raw.id);
+    await suggestEntry({ db, llm, sendPush: async () => {} }, raw.id);
     const [s] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.rawEmailId, raw.id))
       .orderBy(desc(schema.suggestions.createdAt)).limit(1);
