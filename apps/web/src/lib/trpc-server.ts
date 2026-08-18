@@ -6,10 +6,20 @@ import { eq } from "drizzle-orm";
 import { getAuth } from "./auth";
 import { getDb } from "./db";
 
+/**
+ * Validates the session cookie server-side and resolves the app user id.
+ * Returns null for missing/invalid sessions. Route handlers that do work
+ * outside tRPC (e.g. writing to the vault) MUST check this first — the
+ * middleware only checks cookie presence, not validity.
+ */
+export const getSessionUserId = cache(async (): Promise<string | null> => {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  return session ? await appUserId(session.user.email) : null;
+});
+
 export const serverCaller = cache(async () => {
   const { db } = getDb();
-  const session = await getAuth().api.getSession({ headers: await headers() });
-  const userId = session ? await appUserId(session.user.email) : null;
+  const userId = await getSessionUserId();
   return appRouter.createCaller(createContext({ db, userId }));
 });
 
