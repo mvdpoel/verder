@@ -10,7 +10,9 @@ import { DEBT_STATUSES, ITEM_STATUSES, isValidTransition } from "../registry-sta
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-const itemFields = z.object({
+// Exported: suggestions.approveRegistryItem/approveDebt reuse these shapes so
+// queue approval and manual creation can never drift apart.
+export const itemFields = z.object({
   name: z.string().min(1),
   category: z.enum(["energy", "insurance", "telecom", "streaming", "software", "housing", "other"]),
   providerPartyId: z.string().uuid().nullish(),
@@ -26,7 +28,7 @@ const itemFields = z.object({
   discoveredVia: z.enum(["manual", "bank", "paypal", "apple", "email"]).default("manual"),
 });
 
-const debtFields = z.object({
+export const debtFields = z.object({
   creditorPartyId: z.string().uuid().nullish(),
   creditorName: z.string().min(1),
   principalCents: z.number().int().nullish(),

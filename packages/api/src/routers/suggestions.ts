@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { canonicalJson } from "@verder/core";
 import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";
+import { debtFields, itemFields } from "./registry";
 
 const entryForApproval = z.object({
   occurredAt: z.coerce.date(),
@@ -80,6 +81,69 @@ export const suggestionsRouter = router({
         status: "approved", finalPayload: { title: input.title, docType: input.docType ?? null },
         verdictAt: new Date(),
       }).where(eq(schema.suggestions.id, input.id));
+    })),
+
+  // Registry approvals (Task 11): the miner only ever suggested — these are the
+  // single doorway through which a candidate becomes a registry record.
+  approveRegistryItem: protectedProcedure.input(z.object({
+    id: z.string().uuid(), item: itemFields,
+  })).mutation(({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      const [s] = await tx.select().from(schema.suggestions)
+        .where(eq(schema.suggestions.id, input.id));
+      if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
+        throw new Error("Suggestion not open for review");
+      if (s.kind !== "registry-item") throw new Error("Not a registry-item suggestion");
+      const p = (s.proposed ?? {}) as {
+        name?: string; category?: string; transactionIds?: unknown; discoveredVia?: string };
+      // discoveredVia comes from the mining payload (bank/paypal/apple), not
+      // from whatever the form defaulted to.
+      const viaParsed = itemFields.shape.discoveredVia.safeParse(p.discoveredVia);
+      const [item] = await tx.insert(schema.financialItems).values({
+        ...input.item,
+        discoveredVia: viaParsed.success ? viaParsed.data : input.item.discoveredVia,
+      }).returning();
+      // Evidence charges auto-link to the new item.
+      const txIds = Array.isArray(p.transactionIds)
+        ? p.transactionIds.filter((x): x is string => typeof x === "string")
+        : [];
+      if (txIds.length > 0) {
+        await tx.update(schema.transactions).set({ financialItemId: item.id })
+          .where(inArray(schema.transactions.id, txIds));
+      }
+      const unchanged = s.proposed !== null &&
+        canonicalJson(input.item.name) === canonicalJson(p.name) &&
+        canonicalJson(input.item.category) === canonicalJson(p.category);
+      await tx.update(schema.suggestions).set({
+        status: unchanged ? "approved" : "edited",
+        finalPayload: JSON.parse(JSON.stringify(input.item)),
+        verdictAt: new Date(),
+      }).where(eq(schema.suggestions.id, input.id));
+      return { itemId: item.id };
+    })),
+
+  approveDebt: protectedProcedure.input(z.object({
+    id: z.string().uuid(), debt: debtFields,
+  })).mutation(({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      const [s] = await tx.select().from(schema.suggestions)
+        .where(eq(schema.suggestions.id, input.id));
+      if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
+        throw new Error("Suggestion not open for review");
+      if (s.kind !== "debt") throw new Error("Not a debt suggestion");
+      const { references, ...rest } = input.debt;
+      const [debt] = await tx.insert(schema.debts)
+        .values({ ...rest, references_: references }).returning();
+      const p = (s.proposed ?? {}) as { creditorName?: string; claimedCents?: number };
+      const unchanged = s.proposed !== null &&
+        canonicalJson(input.debt.creditorName) === canonicalJson(p.creditorName) &&
+        canonicalJson(input.debt.claimedCents) === canonicalJson(p.claimedCents);
+      await tx.update(schema.suggestions).set({
+        status: unchanged ? "approved" : "edited",
+        finalPayload: JSON.parse(JSON.stringify(input.debt)),
+        verdictAt: new Date(),
+      }).where(eq(schema.suggestions.id, input.id));
+      return { debtId: debt.id };
     })),
 
   reject: protectedProcedure.input(z.object({
