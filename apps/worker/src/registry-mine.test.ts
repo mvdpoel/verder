@@ -130,6 +130,28 @@ describe("mineRegistry", () => {
     await pool.end();
   });
 
+  it("never links via an empty normalized name (digits-only names must not collide)", async () => {
+    const { db, pool } = createDb(URL);
+    // Item whose name normalizes to "" (digits/punctuation only).
+    const digits = String(Date.now()) + Math.floor(Math.random() * 1e6);
+    const [item] = await db.insert(schema.financialItems).values({
+      name: digits, category: "other", amountCents: 999,
+      billingCycle: "monthly", paymentChannel: "invoice", discoveredVia: "manual",
+    }).returning();
+    // Candidate with its own fresh mandate whose counterparty name also
+    // normalizes to "" — it must NOT be treated as evidence for that item.
+    const mandateId = `MD-${crypto.randomUUID()}`;
+    const fresh = await insertCharges(db, { counterpartyName: "999-888", mandateId });
+    await mineRegistry({ db, llm: fixedLlm({ name: "x", category: "other", isDebtCollector: false }) });
+    const after = await db.select().from(schema.transactions)
+      .where(inArray(schema.transactions.id, fresh.map((r) => r.id)));
+    expect(after.every((t) => t.financialItemId === null)).toBe(true);
+    expect(after.some((t) => t.financialItemId === item.id)).toBe(false);
+    // The real payee reaches the review queue instead of silently vanishing.
+    expect(await suggestionsByKey(db, mandateId)).toHaveLength(1);
+    await pool.end();
+  });
+
   it("classifies a debt collector into a debt suggestion", async () => {
     const { db, pool } = createDb(URL);
     const mandateId = `MD-${crypto.randomUUID()}`;

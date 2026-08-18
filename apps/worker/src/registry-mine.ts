@@ -86,7 +86,13 @@ export async function mineRegistry(deps: {
     }
     const items = await deps.db.select({ id: schema.financialItems.id, name: schema.financialItems.name })
       .from(schema.financialItems);
-    const byName = new Map(items.map((i) => [normalizeName(i.name), i.id]));
+    // Empty normalized names (digits/punctuation-only) carry no identity:
+    // mapping "" would falsely link unrelated candidates to that item.
+    const byName = new Map<string, string>();
+    for (const i of items) {
+      const n = normalizeName(i.name);
+      if (n) byName.set(n, i.id);
+    }
 
     // Dedup spine: every key ever suggested, ANY status — rejected included.
     const priorKeys = new Set(
@@ -98,10 +104,13 @@ export async function mineRegistry(deps: {
     for (const c of candidates) {
       // One bad candidate must not block the sweep (gmail.ts discipline).
       try {
+        // Same guard on lookup: a counterparty name that normalizes to ""
+        // proves nothing and must never match an item.
+        const normName = c.counterpartyName ? normalizeName(c.counterpartyName) : "";
         const matchedItemId =
           (c.mandateId && byMandate.get(c.mandateId)) ||
           (c.counterpartyIban && byIban.get(c.counterpartyIban)) ||
-          (c.counterpartyName && byName.get(normalizeName(c.counterpartyName))) ||
+          (normName && byName.get(normName)) ||
           null;
         if (matchedItemId) {
           // Known item: the new charges are auto-linked evidence, no suggestion.
