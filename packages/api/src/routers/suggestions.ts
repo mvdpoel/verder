@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { canonicalJson } from "@verder/core";
 import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
@@ -49,8 +49,10 @@ export const suggestionsRouter = router({
     id: z.string().uuid(), entry: entryForApproval,
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
+      // FOR UPDATE: a concurrent approve/reject waits on the row lock and then
+      // sees the committed verdict — double-approve is impossible.
       const [s] = await tx.select().from(schema.suggestions)
-        .where(eq(schema.suggestions.id, input.id));
+        .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
         throw new Error("Suggestion not open for review");
       const entry = await insertEntry(tx, ctx.userId, input.entry, { eventType: "entry.created" });
@@ -89,8 +91,10 @@ export const suggestionsRouter = router({
     id: z.string().uuid(), item: itemFields,
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
+      // FOR UPDATE: a concurrent approve/reject waits on the row lock and then
+      // sees the committed verdict — double-approve is impossible.
       const [s] = await tx.select().from(schema.suggestions)
-        .where(eq(schema.suggestions.id, input.id));
+        .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
         throw new Error("Suggestion not open for review");
       if (s.kind !== "registry-item") throw new Error("Not a registry-item suggestion");
@@ -103,13 +107,24 @@ export const suggestionsRouter = router({
         ...input.item,
         discoveredVia: viaParsed.success ? viaParsed.data : input.item.discoveredVia,
       }).returning();
-      // Evidence charges auto-link to the new item.
-      const txIds = Array.isArray(p.transactionIds)
-        ? p.transactionIds.filter((x): x is string => typeof x === "string")
-        : [];
+      // Evidence charges auto-link to the new item. A malformed payload fails
+      // loudly — approving with half the evidence silently missing is worse
+      // than a visible error.
+      const rawTxIds = Array.isArray(p.transactionIds) ? p.transactionIds : [];
+      if (!rawTxIds.every((x): x is string => typeof x === "string"))
+        throw new Error("Suggestion payload has malformed transactionIds");
+      const txIds = rawTxIds;
       if (txIds.length > 0) {
-        await tx.update(schema.transactions).set({ financialItemId: item.id })
-          .where(inArray(schema.transactions.id, txIds));
+        // `financialItemId IS NULL`: never steal evidence already claimed by
+        // another item; the count check makes missing/claimed charges loud.
+        const linked = await tx.update(schema.transactions).set({ financialItemId: item.id })
+          .where(and(inArray(schema.transactions.id, txIds),
+            isNull(schema.transactions.financialItemId)))
+          .returning({ id: schema.transactions.id });
+        if (linked.length !== txIds.length)
+          throw new Error(
+            `Evidence link failed: ${txIds.length} transactions expected, ` +
+            `${linked.length} linkable (missing or already linked to another item)`);
       }
       const unchanged = s.proposed !== null &&
         canonicalJson(input.item.name) === canonicalJson(p.name) &&
@@ -126,8 +141,10 @@ export const suggestionsRouter = router({
     id: z.string().uuid(), debt: debtFields,
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
+      // FOR UPDATE: a concurrent approve/reject waits on the row lock and then
+      // sees the committed verdict — double-approve is impossible.
       const [s] = await tx.select().from(schema.suggestions)
-        .where(eq(schema.suggestions.id, input.id));
+        .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
         throw new Error("Suggestion not open for review");
       if (s.kind !== "debt") throw new Error("Not a debt suggestion");
@@ -148,8 +165,14 @@ export const suggestionsRouter = router({
 
   reject: protectedProcedure.input(z.object({
     id: z.string().uuid(), reason: z.string().optional(),
-  })).mutation(({ ctx, input }) =>
-    ctx.db.update(schema.suggestions).set({
+  })).mutation(async ({ ctx, input }) => {
+    // Conditional claim: a verdict already given (approved/edited/rejected)
+    // stands — reject must never flip it or overwrite the recorded edit diff.
+    const claimed = await ctx.db.update(schema.suggestions).set({
       status: "rejected", finalPayload: { reason: input.reason ?? null }, verdictAt: new Date(),
-    }).where(eq(schema.suggestions.id, input.id))),
+    }).where(and(eq(schema.suggestions.id, input.id),
+      inArray(schema.suggestions.status, ["pending", "needs-manual"])))
+      .returning({ id: schema.suggestions.id });
+    if (claimed.length === 0) throw new Error("Suggestion not open for review");
+  }),
 });

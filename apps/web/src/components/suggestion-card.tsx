@@ -110,7 +110,7 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
       </div>
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
-          disabled={!name || approve.isPending}
+          disabled={!name || approve.isPending || reject.isPending}
           onClick={() => approve.mutate({ id: s.id, item: {
             name, category, amountCents,
             billingCycle: (["monthly", "quarterly", "yearly", "irregular"].includes(p.billingCycle ?? "")
@@ -120,7 +120,9 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
             discoveredVia: (["manual", "bank", "paypal", "apple", "email"].includes(p.discoveredVia ?? "")
               ? p.discoveredVia : "bank") as "bank",
           } })}>Add to registry</button>
-        <button className="rounded border px-4 py-1" onClick={() => reject.mutate({ id: s.id })}>
+        <button className="rounded border px-4 py-1 disabled:opacity-50"
+          disabled={approve.isPending || reject.isPending}
+          onClick={() => reject.mutate({ id: s.id })}>
           Not a subscription</button>
       </div>
     </li>
@@ -149,11 +151,13 @@ function DebtCard({ s }: { s: Suggestion }) {
       <p className="text-sm text-slate-700">Claimed: {formatEuro(claimedCents)}</p>
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
-          disabled={!creditorName || approve.isPending}
+          disabled={!creditorName || approve.isPending || reject.isPending}
           onClick={() => approve.mutate({ id: s.id, debt: {
             creditorName, claimedCents, references: p.references ?? undefined } })}>
           Add as debt</button>
-        <button className="rounded border px-4 py-1" onClick={() => reject.mutate({ id: s.id })}>
+        <button className="rounded border px-4 py-1 disabled:opacity-50"
+          disabled={approve.isPending || reject.isPending}
+          onClick={() => reject.mutate({ id: s.id })}>
           Not a debt</button>
       </div>
     </li>

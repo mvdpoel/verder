@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -147,6 +147,91 @@ describe("suggestions router", () => {
     }
   });
 
+  it("concurrent double-approve creates exactly one financial item", async () => {
+    const txs = await makeChargeTransactions();
+    const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
+    const uniqueName = `Netflix-${crypto.randomUUID()}`;
+    const item = { ...itemForApproval, name: uniqueName };
+    // Two concurrent HTTP requests (two pool connections): only one may win.
+    const results = await Promise.allSettled([
+      caller().suggestions.approveRegistryItem({ id: s.id, item }),
+      caller().suggestions.approveRegistryItem({ id: s.id, item }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const items = await db.select().from(schema.financialItems)
+      .where(eq(schema.financialItems.name, uniqueName));
+    expect(items).toHaveLength(1);
+    for (const t of txs) {
+      const [tx] = await db.select().from(schema.transactions)
+        .where(eq(schema.transactions.id, t.id));
+      expect(tx.financialItemId).toBe(items[0].id);
+    }
+  });
+
+  it("approveRegistryItem fails loudly when the payload references nonexistent transactions", async () => {
+    const s = await makeRegistryItemSuggestion([crypto.randomUUID(), crypto.randomUUID()]);
+    const uniqueName = `Ghost-${crypto.randomUUID()}`;
+    await expect(caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, name: uniqueName } })).rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("pending"); // no verdict recorded
+    expect(after.verdictAt).toBeNull();
+    const items = await db.select().from(schema.financialItems)
+      .where(eq(schema.financialItems.name, uniqueName));
+    expect(items).toHaveLength(0); // rolled back — no half-created item
+  });
+
+  it("approveRegistryItem fails loudly on malformed (non-string) transactionIds", async () => {
+    const s = await makeRegistryItemSuggestion([123, {}, null] as unknown as string[]);
+    const uniqueName = `Malformed-${crypto.randomUUID()}`;
+    await expect(caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, name: uniqueName } })).rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("pending");
+    const items = await db.select().from(schema.financialItems)
+      .where(eq(schema.financialItems.name, uniqueName));
+    expect(items).toHaveLength(0);
+  });
+
+  it("approveRegistryItem never steals transactions already linked to another item", async () => {
+    const txs = await makeChargeTransactions();
+    const [manual] = await db.insert(schema.financialItems).values({
+      name: `Manual-${crypto.randomUUID()}`, category: "streaming", amountCents: 1299,
+      billingCycle: "monthly", paymentChannel: "direct-debit", discoveredVia: "manual",
+    }).returning();
+    await db.update(schema.transactions).set({ financialItemId: manual.id })
+      .where(inArray(schema.transactions.id, txs.map((t) => t.id)));
+    const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
+    const uniqueName = `Dup-${crypto.randomUUID()}`;
+    await expect(caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, name: uniqueName } })).rejects.toThrow();
+    for (const t of txs) {
+      const [tx] = await db.select().from(schema.transactions)
+        .where(eq(schema.transactions.id, t.id));
+      expect(tx.financialItemId).toBe(manual.id); // evidence stayed with the manual item
+    }
+    const items = await db.select().from(schema.financialItems)
+      .where(eq(schema.financialItems.name, uniqueName));
+    expect(items).toHaveLength(0);
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("pending");
+  });
+
+  it("reject after approve is refused: the verdict and edit diff stand", async () => {
+    const txs = await makeChargeTransactions();
+    const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
+    await caller().suggestions.approveRegistryItem({ id: s.id, item: itemForApproval });
+    await expect(caller().suggestions.reject({ id: s.id, reason: "oops double click" }))
+      .rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("approved");
+    expect((after.finalPayload as { name?: string }).name).toBe("Netflix"); // diff preserved
+  });
+
   async function makeDebtSuggestion() {
     const [s] = await db.insert(schema.suggestions).values({
       kind: "debt", model: "qwen3.5:9b", promptVersion: "registry-v1",
@@ -185,6 +270,19 @@ describe("suggestions router", () => {
     const [after] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.id, s.id));
     expect(after.status).toBe("edited");
+  });
+
+  it("concurrent double-approve creates exactly one debt", async () => {
+    const s = await makeDebtSuggestion();
+    const creditorName = `Intrum-${crypto.randomUUID()}`;
+    const results = await Promise.allSettled([
+      caller().suggestions.approveDebt({ id: s.id, debt: { creditorName, claimedCents: 25000 } }),
+      caller().suggestions.approveDebt({ id: s.id, debt: { creditorName, claimedCents: 25000 } }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const debts = await db.select().from(schema.debts)
+      .where(eq(schema.debts.creditorName, creditorName));
+    expect(debts).toHaveLength(1);
   });
 
   it("approveDebt leaves rejected suggestions untouched", async () => {
