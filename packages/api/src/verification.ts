@@ -4,11 +4,25 @@ import { canonicalJson, sha256Hex, verifyChain, type ChainEvent, type VerifyResu
 import { schema, type Db } from "@verder/db";
 import { readFilePath } from "./storage";
 import { entryEventPayload } from "./routers/entries";
+import { registryDecisionPayload } from "./registry-decide";
 
 export type FullVerificationResult = VerifyResult & {
   headHash: string | null;
   checkedFiles: number;
 };
+
+/**
+ * Recomputes the payload hash of a registry.decision event from the live
+ * registry_decisions row — any edit to a stored decision surfaces as a
+ * payload_hash_mismatch at that event's seq. Shared by runFullVerification
+ * and the registry tamper tests.
+ */
+export async function registryDecisionPayloadHash(db: Db, decisionId: string): Promise<string> {
+  const [decision] = await db.select().from(schema.registryDecisions)
+    .where(eq(schema.registryDecisions.id, decisionId));
+  if (!decision) return "missing-decision-row".padEnd(64, "0");
+  return sha256Hex(canonicalJson(registryDecisionPayload(decision)));
+}
 
 /**
  * Full ledger verification: walks the whole chain, recomputing payload hashes
@@ -78,6 +92,8 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
           ownerPartyId: a.ownerPartyId, dueAt: a.dueAt, clarity: a.clarity })),
       })));
     }
+    if (e.eventType === "registry.decision")
+      return registryDecisionPayloadHash(db, e.entityId);
     if (e.eventType !== "document.ingested") return e.payloadHash;
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.id, e.entityId));
