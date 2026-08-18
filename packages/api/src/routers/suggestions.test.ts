@@ -131,6 +131,49 @@ describe("suggestions router", () => {
     expect(after.status).toBe("edited");
   });
 
+  it("approveRegistryItem marks edited when only the amount changed", async () => {
+    const txs = await makeChargeTransactions();
+    const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
+    await caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, amountCents: 9999 } });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("edited");
+  });
+
+  it("approveRegistryItem marks edited when only billing cycle and payment channel changed", async () => {
+    const txs = await makeChargeTransactions();
+    const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
+    await caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, billingCycle: "yearly", paymentChannel: "invoice" } });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("edited");
+  });
+
+  it("approveRegistryItem stores the client-sent discoveredVia when the payload lacks it", async () => {
+    const txs = await makeChargeTransactions();
+    // Miner payload without discoveredVia — the form's value must win, and a
+    // field the miner never proposed is not an edit.
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "registry-item", model: "qwen3.5:9b", promptVersion: "registry-v1",
+      proposed: {
+        key: `iban:NL91ABNA0417164300-${crypto.randomUUID()}`, groupBy: "iban",
+        transactionIds: txs.map((t) => t.id),
+        name: "Netflix", category: "streaming", amountCents: 1299,
+        billingCycle: "monthly", paymentChannel: "direct-debit",
+      },
+    }).returning();
+    const res = await caller().suggestions.approveRegistryItem({
+      id: s.id, item: { ...itemForApproval, discoveredVia: "bank" } });
+    const [item] = await db.select().from(schema.financialItems)
+      .where(eq(schema.financialItems.id, res.itemId));
+    expect(item.discoveredVia).toBe("bank"); // not silently defaulted to manual
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("approved");
+  });
+
   it("approveRegistryItem leaves rejected suggestions untouched", async () => {
     const txs = await makeChargeTransactions();
     const s = await makeRegistryItemSuggestion(txs.map((t) => t.id));
@@ -248,8 +291,9 @@ describe("suggestions router", () => {
     return s;
   }
 
-  it("approveDebt creates the debt and marks approved when unchanged", async () => {
+  it("approveDebt creates the debt and marks edited when a reference was added", async () => {
     const s = await makeDebtSuggestion();
+    // proposed.references is null — adding "dossier 12345" is an edit
     const res = await caller().suggestions.approveDebt({
       id: s.id, debt: { creditorName: "Intrum Justitia", claimedCents: 25000, references: "dossier 12345" } });
     expect(res.debtId).toBeTruthy();
@@ -258,6 +302,17 @@ describe("suggestions router", () => {
     expect(debt.creditorName).toBe("Intrum Justitia");
     expect(debt.claimedCents).toBe(25000);
     expect(debt.references_).toBe("dossier 12345");
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("edited");
+  });
+
+  it("approveDebt marks approved when every proposed field is unchanged", async () => {
+    const s = await makeDebtSuggestion();
+    // references omitted vs proposed null: absent submitted nullish = proposed
+    // null, not an edit.
+    await caller().suggestions.approveDebt({
+      id: s.id, debt: { creditorName: "Intrum Justitia", claimedCents: 25000 } });
     const [after] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.id, s.id));
     expect(after.status).toBe("approved");

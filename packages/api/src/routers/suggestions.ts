@@ -25,6 +25,22 @@ const entryForApproval = z.object({
   })),
 });
 
+/**
+ * True when every create-input field the miner actually proposed matches the
+ * final submitted value (deep compare via canonical JSON; null and absent are
+ * equivalent). Fields absent from the proposed payload are not edits — the
+ * miner never suggested them. The verdict label must be truthful: "approved"
+ * may only mean Martin accepted the suggestion unedited (golden rule).
+ */
+function unchangedFromProposal(
+  shapeKeys: string[], proposed: unknown, final: Record<string, unknown>,
+): boolean {
+  if (proposed === null || typeof proposed !== "object") return false;
+  const p = proposed as Record<string, unknown>;
+  return shapeKeys.every((key) =>
+    !(key in p) || canonicalJson(final[key] ?? null) === canonicalJson(p[key] ?? null));
+}
+
 export const suggestionsRouter = router({
   list: protectedProcedure.input(z.object({
     status: z.enum(["pending", "approved", "edited", "rejected", "needs-manual"]).default("pending"),
@@ -101,12 +117,17 @@ export const suggestionsRouter = router({
       const p = (s.proposed ?? {}) as {
         name?: string; category?: string; transactionIds?: unknown; discoveredVia?: string };
       // discoveredVia comes from the mining payload (bank/paypal/apple), not
-      // from whatever the form defaulted to.
-      const viaParsed = itemFields.shape.discoveredVia.safeParse(p.discoveredVia);
-      const [item] = await tx.insert(schema.financialItems).values({
+      // from whatever the form defaulted to. Guard on !== undefined: the schema
+      // field carries .default("manual"), so safeParse(undefined) would
+      // "succeed" as manual and silently discard the client-sent value.
+      const viaParsed = p.discoveredVia !== undefined
+        ? itemFields.shape.discoveredVia.safeParse(p.discoveredVia)
+        : null;
+      const finalItem = {
         ...input.item,
-        discoveredVia: viaParsed.success ? viaParsed.data : input.item.discoveredVia,
-      }).returning();
+        discoveredVia: viaParsed?.success ? viaParsed.data : input.item.discoveredVia,
+      };
+      const [item] = await tx.insert(schema.financialItems).values(finalItem).returning();
       // Evidence charges auto-link to the new item. A malformed payload fails
       // loudly — approving with half the evidence silently missing is worse
       // than a visible error.
@@ -126,12 +147,13 @@ export const suggestionsRouter = router({
             `Evidence link failed: ${txIds.length} transactions expected, ` +
             `${linked.length} linkable (missing or already linked to another item)`);
       }
-      const unchanged = s.proposed !== null &&
-        canonicalJson(input.item.name) === canonicalJson(p.name) &&
-        canonicalJson(input.item.category) === canonicalJson(p.category);
+      const unchanged =
+        unchangedFromProposal(Object.keys(itemFields.shape), s.proposed, finalItem);
       await tx.update(schema.suggestions).set({
         status: unchanged ? "approved" : "edited",
-        finalPayload: JSON.parse(JSON.stringify(input.item)),
+        // finalPayload records what was actually stored (incl. the resolved
+        // discoveredVia), not just what the form happened to send.
+        finalPayload: JSON.parse(JSON.stringify(finalItem)),
         verdictAt: new Date(),
       }).where(eq(schema.suggestions.id, input.id));
       return { itemId: item.id };
@@ -151,10 +173,8 @@ export const suggestionsRouter = router({
       const { references, ...rest } = input.debt;
       const [debt] = await tx.insert(schema.debts)
         .values({ ...rest, references_: references }).returning();
-      const p = (s.proposed ?? {}) as { creditorName?: string; claimedCents?: number };
-      const unchanged = s.proposed !== null &&
-        canonicalJson(input.debt.creditorName) === canonicalJson(p.creditorName) &&
-        canonicalJson(input.debt.claimedCents) === canonicalJson(p.claimedCents);
+      const unchanged =
+        unchangedFromProposal(Object.keys(debtFields.shape), s.proposed, input.debt);
       await tx.update(schema.suggestions).set({
         status: unchanged ? "approved" : "edited",
         finalPayload: JSON.parse(JSON.stringify(input.debt)),
