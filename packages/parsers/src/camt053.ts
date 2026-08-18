@@ -1,0 +1,132 @@
+import { XMLParser } from "fast-xml-parser";
+import { decimalToCents } from "./money";
+import type { ParseResult, ParsedRow } from "./types";
+
+/**
+ * CAMT.053 (ISO 20022 bank-to-customer statement) parser, ABN AMRO flavor.
+ * One ParsedRow per Ntry/NtryDtls/TxDtls (a batched Ntry fans out into one
+ * row per TxDtls, using the TxDtls-level TxAmt when present). Only EUR is
+ * accepted; anything else lands in errors[].
+ */
+
+type XmlNode = Record<string, unknown>;
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  textNodeName: "#text",
+  parseTagValue: false, // keep amounts as strings — money is string math only
+  parseAttributeValue: false,
+  trimValues: true,
+  isArray: (name) => name === "Stmt" || name === "Ntry" || name === "TxDtls" || name === "Ustrd",
+});
+
+function asNode(v: unknown): XmlNode | null {
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as XmlNode) : null;
+}
+
+function text(v: unknown): string | null {
+  if (typeof v === "string") return v.length > 0 ? v : null;
+  const node = asNode(v);
+  if (node && typeof node["#text"] === "string") return node["#text"] as string;
+  return null;
+}
+
+/** Amt elements carry a Ccy attribute: { "#text": "142.80", "@_Ccy": "EUR" }. */
+function amount(v: unknown): { value: string; ccy: string | null } | null {
+  const value = text(v);
+  if (value === null) return null;
+  const node = asNode(v);
+  const ccy = node && typeof node["@_Ccy"] === "string" ? (node["@_Ccy"] as string) : null;
+  return { value, ccy };
+}
+
+function path(node: XmlNode | null, ...keys: string[]): unknown {
+  let cur: unknown = node;
+  for (const key of keys) {
+    const n = asNode(cur);
+    if (!n) return undefined;
+    cur = n[key];
+  }
+  return cur;
+}
+
+export function parseCamt053(buf: Buffer): ParseResult {
+  const doc = parser.parse(buf.toString("utf8")) as XmlNode;
+  const stmts = path(doc, "Document", "BkToCstmrStmt") as XmlNode | undefined;
+  const stmtList = (asNode(stmts)?.["Stmt"] ?? []) as unknown[];
+  if (!Array.isArray(stmtList) || stmtList.length === 0) {
+    throw new Error("parseCamt053: no BkToCstmrStmt/Stmt found — not a CAMT.053 file");
+  }
+
+  const rows: ParsedRow[] = [];
+  const errors: ParseResult["errors"] = [];
+  let rowIndex = 0;
+
+  for (const stmt of stmtList) {
+    const entries = (asNode(stmt)?.["Ntry"] ?? []) as unknown[];
+    if (!Array.isArray(entries)) continue;
+
+    for (const entryRaw of entries) {
+      const entry = asNode(entryRaw);
+      const raw = JSON.stringify(entryRaw);
+      try {
+        if (!entry) throw new Error("malformed Ntry");
+        const entryAmt = amount(entry["Amt"]);
+        if (!entryAmt) throw new Error("Ntry has no Amt");
+        const ind = text(entry["CdtDbtInd"]);
+        if (ind !== "DBIT" && ind !== "CRDT") throw new Error(`unknown CdtDbtInd: ${ind}`);
+        const sign = ind === "DBIT" ? -1 : 1;
+        const bookgDt = text(path(entry, "BookgDt", "Dt"));
+        if (!bookgDt || !/^\d{4}-\d{2}-\d{2}$/.test(bookgDt)) {
+          throw new Error(`missing or malformed BookgDt/Dt: ${bookgDt}`);
+        }
+        const bookedAt = new Date(`${bookgDt}T00:00:00Z`);
+
+        const txDtlsList = path(entry, "NtryDtls", "TxDtls");
+        const txDtls: XmlNode[] = Array.isArray(txDtlsList)
+          ? txDtlsList.map((t) => asNode(t) ?? {})
+          : [{}]; // entry without details still yields one row from entry-level data
+
+        for (const tx of txDtls) {
+          const txAmt = amount(path(tx, "AmtDtls", "TxAmt", "Amt")) ?? entryAmt;
+          const ccy = txAmt.ccy ?? entryAmt.ccy;
+          if (ccy !== "EUR") throw new Error(`unsupported currency: ${ccy ?? "unknown"} (only EUR)`);
+
+          const pties = asNode(tx["RltdPties"]);
+          const counterpartyName =
+            sign < 0
+              ? text(path(pties, "Cdtr", "Nm"))
+              : text(path(pties, "Dbtr", "Nm"));
+          const counterpartyIban =
+            sign < 0
+              ? text(path(pties, "CdtrAcct", "Id", "IBAN"))
+              : text(path(pties, "DbtrAcct", "Id", "IBAN"));
+          const mandateId = text(path(tx, "Refs", "MndtId"));
+          const ustrd = path(tx, "RmtInf", "Ustrd");
+          const description = Array.isArray(ustrd)
+            ? ustrd.map((u) => text(u)).filter((u): u is string => u !== null).join(" ") || null
+            : text(ustrd);
+
+          rows.push({
+            rowIndex: rowIndex++,
+            bookedAt,
+            amountCents: sign * Math.abs(decimalToCents(txAmt.value)),
+            counterpartyName,
+            counterpartyIban,
+            description,
+            mandateId,
+          });
+        }
+      } catch (err) {
+        errors.push({
+          rowIndex: rowIndex++,
+          raw,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  return { rows, errors };
+}

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>ABNANL2A-2026-08-01-0001</MsgId>
+      <CreDtTm>2026-08-01T02:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>0574908765.2026.0007</Id>
+      <Acct><Id><IBAN>NL77ABNA0574908765</IBAN></Id><Ccy>EUR</Ccy></Acct>
+      <Ntry>
+        <Amt Ccy="EUR">142.80</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-07-01</Dt></BookgDt>
+        <ValDt><Dt>2026-07-01</Dt></ValDt>
+        <BkTxCd><Prtry><Cd>N247</Cd></Prtry></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>VF-2026-07-TERMIJN</EndToEndId>
+              <MndtId>VF-000123456</MndtId>
+            </Refs>
+            <RltdPties>
+              <Cdtr><Nm>Vattenfall Klantenservice N.V.</Nm></Cdtr>
+              <CdtrAcct><Id><IBAN>NL91ABNA0417164300</IBAN></Id></CdtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>Termijnbedrag juli 2026</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">13.99</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-07-08</Dt></BookgDt>
+        <ValDt><Dt>2026-07-08</Dt></ValDt>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><EndToEndId>RETOUR-2026123456</EndToEndId></Refs>
+            <RltdPties>
+              <Dbtr><Nm>Bol.com B.V.</Nm></Dbtr>
+              <DbtrAcct><Id><IBAN>NL12INGB0001234567</IBAN></Id></DbtrAcct>
+            </RltdPties>
+            <RmtInf>
+              <Ustrd>Retour bestelling 2026123456</Ustrd>
+              <Ustrd>Klantnummer 998877</Ustrd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">25.98</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-07-15</Dt></BookgDt>
+        <ValDt><Dt>2026-07-15</Dt></ValDt>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><MndtId>APPLE-0001</MndtId></Refs>
+            <AmtDtls><TxAmt><Amt Ccy="EUR">12.99</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Cdtr><Nm>APPLE.COM/BILL</Nm></Cdtr>
+              <CdtrAcct><Id><IBAN>IE12BOFI90000112345678</IBAN></Id></CdtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>APPLE.COM/BILL 1043782921</Ustrd></RmtInf>
+          </TxDtls>
+          <TxDtls>
+            <Refs><EndToEndId>PP-1029384756</EndToEndId></Refs>
+            <AmtDtls><TxAmt><Amt Ccy="EUR">12.99</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Cdtr><Nm>PayPal Europe S.a r.l. et Cie S.C.A</Nm></Cdtr>
+            </RltdPties>
+            <RmtInf><Ustrd>1029384756 PAYPAL</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="USD">20.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-07-20</Dt></BookgDt>
+        <NtryDtls>
+          <TxDtls>
+            <RltdPties><Cdtr><Nm>US Merchant Inc</Nm></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Foreign currency card payment</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>
