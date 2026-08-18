@@ -46,7 +46,16 @@ export interface EntryPayloadSource {
  * change to this shape invalidates existing chains — never change it.
  */
 export function entryEventPayload(p: EntryPayloadSource) {
-  const items = [...p.actionItems].sort((a, b) => a.description.localeCompare(b.description));
+  // Sort by description, then break ties on the remaining fields: ties on
+  // description alone would leave DB retrieval order in control and
+  // verify.run could rebuild a different payload for untampered data.
+  // Description keeps its original localeCompare ordering so payloads without
+  // ties hash exactly as before.
+  const tieKey = (a: EntryPayloadSource["actionItems"][number]) =>
+    [a.ownerPartyId ?? "", a.dueAt?.toISOString() ?? "", a.clarity].join("|");
+  const items = [...p.actionItems].sort((a, b) =>
+    a.description.localeCompare(b.description) ||
+    (tieKey(a) < tieKey(b) ? -1 : tieKey(a) > tieKey(b) ? 1 : 0));
   return {
     id: p.id, occurredAt: p.occurredAt.toISOString(),
     channel: p.channel, direction: p.direction,

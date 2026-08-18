@@ -17,7 +17,34 @@ export const verifyRouter = router({
       entityId: e.entityId, payloadHash: e.payloadHash,
       prevHash: e.prevHash, eventHash: e.eventHash }));
     let checkedFiles = 0;
+    // Documents can be legitimately linked to an entry AFTER its creation via
+    // documents.linkToEntry, which appends a document.linked event. The
+    // entry.created/entry.corrected rebuild below therefore must not compare
+    // against the current entry_documents rows as-is — later links would read
+    // as tampering. Resolve each document.linked event back to its
+    // (entry, document) pair by matching its payload hash against the live
+    // link rows for that document, and exclude those pairs from the rebuild.
+    const linkedLater = new Map<string, Set<string>>(); // entryId -> documentIds
+    const resolvedLinkHash = new Map<number, string>(); // seq -> payloadHash
+    for (const e of rows) {
+      if (e.eventType !== "document.linked") continue;
+      const candidates = await ctx.db.select().from(schema.entryDocuments)
+        .where(eq(schema.entryDocuments.documentId, e.entityId));
+      for (const c of candidates) {
+        const h = sha256Hex(canonicalJson({ documentId: c.documentId, entryId: c.entryId }));
+        if (h !== e.payloadHash) continue;
+        resolvedLinkHash.set(e.seq, h);
+        const set = linkedLater.get(c.entryId) ?? new Set<string>();
+        set.add(c.documentId);
+        linkedLater.set(c.entryId, set);
+        break;
+      }
+    }
     const res = await verifyChain(events, async (e) => {
+      if (e.eventType === "document.linked")
+        // No live entry_documents row hashes to this event's payload: the
+        // link row was deleted or altered after the fact.
+        return resolvedLinkHash.get(e.seq) ?? "link-row-missing".padEnd(64, "0");
       if (e.eventType === "entry.created" || e.eventType === "entry.corrected") {
         // Rebuild the canonical payload from the live rows — any edit to a
         // stored entry (or its participants/documents/action items) surfaces
@@ -31,6 +58,7 @@ export const verifyRouter = router({
           .where(eq(schema.entryDocuments.entryId, entry.id));
         const items = await ctx.db.select().from(schema.actionItems)
           .where(eq(schema.actionItems.entryId, entry.id));
+        const later = linkedLater.get(entry.id);
         return sha256Hex(canonicalJson(entryEventPayload({
           id: entry.id, occurredAt: entry.occurredAt,
           channel: entry.channel, direction: entry.direction,
@@ -38,7 +66,7 @@ export const verifyRouter = router({
           source: entry.source, sourceRef: entry.sourceRef,
           supersedesId: entry.supersedesId,
           participantPartyIds: parts.map((p) => p.partyId),
-          documentIds: docs.map((d) => d.documentId),
+          documentIds: docs.map((d) => d.documentId).filter((id) => !later?.has(id)),
           actionItems: items.map((a) => ({ description: a.description,
             ownerPartyId: a.ownerPartyId, dueAt: a.dueAt, clarity: a.clarity })),
         })));

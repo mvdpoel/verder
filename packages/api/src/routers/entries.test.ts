@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
+import { entryEventPayload } from "./entries";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 
@@ -53,5 +54,26 @@ describe("entries router", () => {
   it("rejects unauthenticated calls", async () => {
     const anon = appRouter.createCaller(createContext({ db, userId: null }));
     await expect(anon.entries.list({})).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+});
+
+describe("entryEventPayload", () => {
+  it("is deterministic for action items with identical descriptions", () => {
+    const base = {
+      id: "00000000-0000-0000-0000-000000000001",
+      occurredAt: new Date("2026-08-18T10:00:00Z"),
+      channel: "call" as const, direction: "inbound" as const,
+      summary: "Tie test", details: null, source: "manual" as const,
+      sourceRef: null, supersedesId: null,
+      participantPartyIds: [], documentIds: [],
+    };
+    const itemA = { description: "Send documents", clarity: "clear" as const,
+      ownerPartyId: "00000000-0000-0000-0000-0000000000aa", dueAt: null };
+    const itemB = { description: "Send documents", clarity: "clear" as const,
+      ownerPartyId: "00000000-0000-0000-0000-0000000000bb",
+      dueAt: new Date("2026-09-01T00:00:00Z") };
+    const one = entryEventPayload({ ...base, actionItems: [itemA, itemB] });
+    const two = entryEventPayload({ ...base, actionItems: [itemB, itemA] });
+    expect(one).toEqual(two);
   });
 });
