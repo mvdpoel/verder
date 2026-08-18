@@ -8,7 +8,7 @@ const CYCLES = ["monthly", "quarterly", "yearly", "irregular"] as const;
 const CHANNELS = ["direct-debit", "paypal", "apple", "invoice"] as const;
 
 /** Parse a typed euro amount ("12,50" / "12.50" / "12") to integer cents. String math, never floats. */
-function euroToCents(s: string): number | null {
+export function euroToCents(s: string): number | null {
   const m = s.trim().replace(/[€\s]/g, "").match(/^(-?)(\d+)(?:[.,](\d{1,2}))?$/);
   if (!m) return null;
   const [, sign, euros, frac = ""] = m;

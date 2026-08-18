@@ -73,6 +73,53 @@ function SourceBadge({ source }: { source: string }) {
   return <span className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-500">via {source}</span>;
 }
 
+export type DecisionRow = {
+  id: string;
+  status: string;
+  explanation: string;
+  createdAt: Date;
+  documentId: string | null;
+  blockerNote: string | null;
+  overrideReason: string | null;
+};
+
+/** Read-only ledger-backed decision timeline, newest first. */
+export function DecisionTimeline({ decisions, kind, docTitles }: {
+  decisions: DecisionRow[];
+  kind: "item" | "debt";
+  docTitles: Map<string, string>;
+}) {
+  if (decisions.length === 0) {
+    return <p className="text-sm text-slate-600">No decisions yet — that&apos;s fine, it starts as &quot;identified&quot;. The first call is yours to make below.</p>;
+  }
+  return (
+    <ol className="space-y-3">
+      {decisions.map((d) => (
+        <li key={d.id} className="rounded border bg-white p-3">
+          <div className="flex items-center gap-2">
+            <StatusBadge status={d.status} kind={kind} />
+            <span className="text-xs text-slate-500">
+              {new Date(d.createdAt).toLocaleString("nl-NL")}
+            </span>
+            {d.documentId && (
+              <Link href={`/vault/${d.documentId}`} className="text-xs underline text-slate-600">
+                {docTitles.get(d.documentId) ?? "document"}
+              </Link>
+            )}
+          </div>
+          <p className="mt-1 text-sm whitespace-pre-wrap">{d.explanation}</p>
+          {d.blockerNote && (
+            <p className="mt-1 text-xs text-amber-700">Blocker: {d.blockerNote}</p>
+          )}
+          {d.overrideReason && (
+            <p className="mt-1 text-xs text-slate-500">Off the usual path — {d.overrideReason}</p>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 const EMPTY_STATE = "Nothing here yet — import a bank statement and let's find out together what's out there.";
 
 export function RegistryItemsList({ items }: { items: RegistryItemRow[] }) {

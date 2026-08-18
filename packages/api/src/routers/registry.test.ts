@@ -211,6 +211,22 @@ describe("registry router", () => {
     expect(after.pendingDecisions - before.pendingDecisions).toBe(5);
   });
 
+  it("validNext lists the allowed next statuses per kind and from-status", async () => {
+    const c = caller();
+    expect((await c.registry.validNext({ kind: "item", from: "identified" })).sort())
+      .toEqual(["allowed", "mandatory", "requested", "to-cancel"]);
+    expect(await c.registry.validNext({ kind: "item", from: "mandatory" }))
+      .toEqual(["allowed"]);
+    expect(await c.registry.validNext({ kind: "item", from: "canceled" })).toEqual([]);
+    expect((await c.registry.validNext({ kind: "debt", from: "identified" })).sort())
+      .toEqual(["acknowledged", "disputed"]);
+    expect(await c.registry.validNext({ kind: "debt", from: "in-settlement" }))
+      .toEqual(["settled"]);
+    expect(await c.registry.validNext({ kind: "debt", from: "settled" })).toEqual([]);
+    // unknown from-status (possible via override) → no valid edges, not a crash
+    expect(await c.registry.validNext({ kind: "item", from: "constructor" })).toEqual([]);
+  });
+
   it("rejects unauthenticated calls", async () => {
     const anon = appRouter.createCaller(createContext({ db, userId: null }));
     await expect(anon.registry.items.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });

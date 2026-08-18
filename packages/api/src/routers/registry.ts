@@ -4,6 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { decide, effectiveStatus } from "../registry-decide";
+import { DEBT_STATUSES, ITEM_STATUSES, isValidTransition } from "../registry-status";
 
 // --- input schemas -----------------------------------------------------------
 
@@ -246,6 +247,14 @@ export const registryRouter = router({
 
   decide: protectedProcedure.input(decideInput).mutation(({ ctx, input }) =>
     ctx.db.transaction((tx) => decide(tx, ctx.userId, input))),
+
+  /** Allowed next statuses from a given status — drives the decision form. */
+  validNext: protectedProcedure
+    .input(z.object({ kind: z.enum(["item", "debt"]), from: z.string().min(1) }))
+    .query(({ input }) => {
+      const all = input.kind === "item" ? ITEM_STATUSES : DEBT_STATUSES;
+      return all.filter((to) => isValidTransition(input.kind, input.from, to));
+    }),
 
   stats: protectedProcedure.query(async ({ ctx }) => {
     // Statuses come from effectiveStatus (ledger-seq ordered) so the tile can
