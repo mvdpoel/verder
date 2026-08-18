@@ -32,7 +32,9 @@ function basePayload(c: RecurringCandidate, sourceById: Map<string, TxRow["sourc
     c.mandateId ? "direct-debit" : "invoice";
   const discoveredVia = c.aggregator ?? (viaPaypalCsv ? "paypal" : "bank");
   return {
-    key: c.key,
+    // Namespaced by group kind: a mandate id that equals another payee's
+    // normalized name (or an IBAN) must never collide in the dedup spine.
+    key: `${c.groupBy}:${c.key}`,
     groupBy: c.groupBy,
     counterpartyName: c.counterpartyName,
     counterpartyIban: c.counterpartyIban,
@@ -94,7 +96,8 @@ export async function mineRegistry(deps: {
       if (n) byName.set(n, i.id);
     }
 
-    // Dedup spine: every key ever suggested, ANY status — rejected included.
+    // Dedup spine: every namespaced key (`groupBy:key`) ever suggested,
+    // ANY status — rejected included.
     const priorKeys = new Set(
       (await deps.db.select({ key: sql<string | null>`${schema.suggestions.proposed} ->> 'key'` })
         .from(schema.suggestions)
@@ -120,7 +123,8 @@ export async function mineRegistry(deps: {
           linked += c.transactionIds.length;
           continue;
         }
-        if (priorKeys.has(c.key)) continue;
+        const dedupKey = `${c.groupBy}:${c.key}`;
+        if (priorKeys.has(dedupKey)) continue;
 
         const base = basePayload(c, sourceById);
         let suggestionId: string;
@@ -146,7 +150,7 @@ export async function mineRegistry(deps: {
           suggestionId = s.id;
           failures.push({ key: c.key, message: `classify: ${String(err)}` });
         }
-        priorKeys.add(c.key);
+        priorKeys.add(dedupKey);
         suggested++;
         if (c.aggregator && deps.enqueueResolve) {
           // Guarded: the receipts.resolve queue may not exist yet (Task 8).

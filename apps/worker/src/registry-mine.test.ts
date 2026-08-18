@@ -53,7 +53,7 @@ describe("mineRegistry", () => {
     const llm: LlmPort = { chatJson: async (p) => { prompts.push(p);
       return { name: "Test Energie", category: "energy", isDebtCollector: false }; } };
     await mineRegistry({ db, llm });
-    const found = await suggestionsByKey(db, mandateId);
+    const found = await suggestionsByKey(db, `mandate:${mandateId}`);
     expect(found).toHaveLength(1);
     const s = found[0];
     expect(s.kind).toBe("registry-item");
@@ -75,7 +75,7 @@ describe("mineRegistry", () => {
     expect(prompts.some((x) => x.includes("Testenergie"))).toBe(true);
     // Mining is idempotent: a second sweep must not re-suggest the same key.
     await mineRegistry({ db, llm });
-    expect(await suggestionsByKey(db, mandateId)).toHaveLength(1);
+    expect(await suggestionsByKey(db, `mandate:${mandateId}`)).toHaveLength(1);
     // The run is visible on the dashboard.
     const runs = await db.select().from(schema.workerRuns);
     expect(runs.some((r) => r.worker === "registry-mine" && r.status === "ok")).toBe(true);
@@ -88,9 +88,9 @@ describe("mineRegistry", () => {
     await insertCharges(db, { counterpartyName: "Sportschool Fit", mandateId });
     await db.insert(schema.suggestions).values({
       kind: "registry-item", status: "rejected",
-      proposed: { key: mandateId, name: "Sportschool Fit" } });
+      proposed: { key: `mandate:${mandateId}`, name: "Sportschool Fit" } });
     await mineRegistry({ db, llm: fixedLlm({ name: "Sportschool Fit", category: "other", isDebtCollector: false }) });
-    const found = await suggestionsByKey(db, mandateId);
+    const found = await suggestionsByKey(db, `mandate:${mandateId}`);
     expect(found).toHaveLength(1);               // only the rejected one
     expect(found[0].status).toBe("rejected");
     await pool.end();
@@ -111,7 +111,7 @@ describe("mineRegistry", () => {
     const after = await db.select().from(schema.transactions)
       .where(inArray(schema.transactions.id, fresh.map((r) => r.id)));
     expect(after.every((t) => t.financialItemId === item.id)).toBe(true);
-    expect(await suggestionsByKey(db, mandateId)).toHaveLength(0);
+    expect(await suggestionsByKey(db, `mandate:${mandateId}`)).toHaveLength(0);
     await pool.end();
   });
 
@@ -148,7 +148,36 @@ describe("mineRegistry", () => {
     expect(after.every((t) => t.financialItemId === null)).toBe(true);
     expect(after.some((t) => t.financialItemId === item.id)).toBe(false);
     // The real payee reaches the review queue instead of silently vanishing.
-    expect(await suggestionsByKey(db, mandateId)).toHaveLength(1);
+    expect(await suggestionsByKey(db, `mandate:${mandateId}`)).toHaveLength(1);
+    await pool.end();
+  });
+
+  it("keeps a payee whose normalized name equals another payee's mandate id (keys namespaced by group)", async () => {
+    const { db, pool } = createDb(URL);
+    // A mandate id of letters+space only, so another payee's NAME can
+    // normalize to the exact same string (normalizeName strips digits/punct).
+    const shared = `md ${letters()}`;
+    const payeeAName = `Energie ${letters()}`;
+    const payeeBName = shared.toUpperCase();     // normalizes back to `shared`
+    await insertCharges(db, { counterpartyName: payeeAName, mandateId: shared });
+    await insertCharges(db, { counterpartyName: payeeBName });
+    const llm = fixedLlm({ name: "x", category: "other", isDebtCollector: false });
+    await mineRegistry({ db, llm });
+    const byCounterparty = (name: string) => db.select().from(schema.suggestions)
+      .where(sql`${schema.suggestions.proposed} ->> 'counterpartyName' = ${name}`);
+    // BOTH payees must reach the review queue — a bare-key collision would
+    // silently suppress one of them forever.
+    const forA = await byCounterparty(payeeAName);
+    const forB = await byCounterparty(payeeBName);
+    expect(forA).toHaveLength(1);
+    expect(forB).toHaveLength(1);
+    // Keys carry the group namespace so they can never collide across kinds.
+    expect((forA[0].proposed as Record<string, unknown>).key).toBe(`mandate:${shared}`);
+    expect((forB[0].proposed as Record<string, unknown>).key).toBe(`name:${shared}`);
+    // Second sweep stays idempotent for both.
+    await mineRegistry({ db, llm });
+    expect(await byCounterparty(payeeAName)).toHaveLength(1);
+    expect(await byCounterparty(payeeBName)).toHaveLength(1);
     await pool.end();
   });
 
@@ -158,7 +187,7 @@ describe("mineRegistry", () => {
     await insertCharges(db, { counterpartyName: "Incasso Bureau Snel", mandateId, amountCents: -25000 });
     await mineRegistry({ db,
       llm: fixedLlm({ name: "Incassobureau Snel", category: "other", isDebtCollector: true }) });
-    const [s] = await suggestionsByKey(db, mandateId);
+    const [s] = await suggestionsByKey(db, `mandate:${mandateId}`);
     expect(s.kind).toBe("debt");
     const p = s.proposed as Record<string, unknown>;
     expect(p.creditorName).toBe("Incassobureau Snel");
@@ -172,7 +201,7 @@ describe("mineRegistry", () => {
     const mandateId = `MD-${crypto.randomUUID()}`;
     await insertCharges(db, { counterpartyName: "Onbekende Afschrijver", mandateId });
     await mineRegistry({ db, llm: { chatJson: async () => { throw new Error("ollama down"); } } });
-    const [s] = await suggestionsByKey(db, mandateId);
+    const [s] = await suggestionsByKey(db, `mandate:${mandateId}`);
     expect(s.kind).toBe("registry-item");
     expect(s.status).toBe("needs-manual");
     const p = s.proposed as Record<string, unknown>;
@@ -190,7 +219,7 @@ describe("mineRegistry", () => {
     await mineRegistry({ db,
       llm: fixedLlm({ name: "Apple", category: "software", isDebtCollector: false }),
       enqueueResolve: async (id) => { enqueued.push(id); } });
-    const [s] = await suggestionsByKey(db, key);
+    const [s] = await suggestionsByKey(db, `name:${key}`);
     expect(s).toBeDefined();
     const p = s.proposed as Record<string, unknown>;
     expect(p.aggregator).toBe("apple");
