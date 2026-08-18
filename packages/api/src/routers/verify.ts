@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
-import { sha256Hex, verifyChain, type ChainEvent } from "@verder/core";
+import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@verder/core";
 import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { readFilePath } from "../storage";
+import { entryEventPayload } from "./entries";
 
 export const verifyRouter = router({
   run: protectedProcedure.mutation(async ({ ctx }) => {
@@ -17,6 +18,31 @@ export const verifyRouter = router({
       prevHash: e.prevHash, eventHash: e.eventHash }));
     let checkedFiles = 0;
     const res = await verifyChain(events, async (e) => {
+      if (e.eventType === "entry.created" || e.eventType === "entry.corrected") {
+        // Rebuild the canonical payload from the live rows — any edit to a
+        // stored entry (or its participants/documents/action items) surfaces
+        // as a payload_hash_mismatch at this seq.
+        const [entry] = await ctx.db.select().from(schema.logEntries)
+          .where(eq(schema.logEntries.id, e.entityId));
+        if (!entry) return "missing-entry-row".padEnd(64, "0");
+        const parts = await ctx.db.select().from(schema.entryParticipants)
+          .where(eq(schema.entryParticipants.entryId, entry.id));
+        const docs = await ctx.db.select().from(schema.entryDocuments)
+          .where(eq(schema.entryDocuments.entryId, entry.id));
+        const items = await ctx.db.select().from(schema.actionItems)
+          .where(eq(schema.actionItems.entryId, entry.id));
+        return sha256Hex(canonicalJson(entryEventPayload({
+          id: entry.id, occurredAt: entry.occurredAt,
+          channel: entry.channel, direction: entry.direction,
+          summary: entry.summary, details: entry.details,
+          source: entry.source, sourceRef: entry.sourceRef,
+          supersedesId: entry.supersedesId,
+          participantPartyIds: parts.map((p) => p.partyId),
+          documentIds: docs.map((d) => d.documentId),
+          actionItems: items.map((a) => ({ description: a.description,
+            ownerPartyId: a.ownerPartyId, dueAt: a.dueAt, clarity: a.clarity })),
+        })));
+      }
       if (e.eventType !== "document.ingested") return e.payloadHash;
       const [doc] = await ctx.db.select().from(schema.documents)
         .where(eq(schema.documents.id, e.entityId));

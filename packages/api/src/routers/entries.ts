@@ -24,6 +24,43 @@ const entryInput = z.object({
 
 export type EntryInput = z.infer<typeof entryInput>;
 
+export interface EntryPayloadSource {
+  id: string;
+  occurredAt: Date;
+  channel: EntryInput["channel"];
+  direction: EntryInput["direction"];
+  summary: string;
+  details: string | null;
+  source: EntryInput["source"];
+  sourceRef: string | null;
+  supersedesId: string | null;
+  participantPartyIds: string[];
+  documentIds: string[];
+  actionItems: { description: string; ownerPartyId: string | null;
+    dueAt: Date | null; clarity: EntryInput["actionItems"][number]["clarity"] }[];
+}
+
+/**
+ * Canonical ledger payload for entry.created / entry.corrected events.
+ * verify.run rebuilds this from the live rows to detect tampering, so any
+ * change to this shape invalidates existing chains — never change it.
+ */
+export function entryEventPayload(p: EntryPayloadSource) {
+  const items = [...p.actionItems].sort((a, b) => a.description.localeCompare(b.description));
+  return {
+    id: p.id, occurredAt: p.occurredAt.toISOString(),
+    channel: p.channel, direction: p.direction,
+    summary: p.summary, details: p.details,
+    source: p.source, sourceRef: p.sourceRef,
+    supersedesId: p.supersedesId,
+    participantPartyIds: [...p.participantPartyIds].sort(),
+    documentIds: [...p.documentIds].sort(),
+    actionItems: items.map((a) => ({ description: a.description,
+      ownerPartyId: a.ownerPartyId,
+      dueAt: a.dueAt?.toISOString() ?? null, clarity: a.clarity })),
+  };
+}
+
 export async function insertEntry(
   tx: Db, userId: string, input: EntryInput,
   opts: { eventType: "entry.created" | "entry.corrected"; supersedesId?: string }
@@ -46,18 +83,18 @@ export async function insertEntry(
         ownerPartyId: a.ownerPartyId, dueAt: a.dueAt, clarity: a.clarity })));
   await appendLedgerEvent(tx, {
     eventType: opts.eventType, entityType: "log_entry", entityId: entry.id,
-    payload: {
-      id: entry.id, occurredAt: input.occurredAt.toISOString(),
+    payload: entryEventPayload({
+      id: entry.id, occurredAt: input.occurredAt,
       channel: input.channel, direction: input.direction,
       summary: input.summary, details: input.details ?? null,
       source: input.source, sourceRef: input.sourceRef ?? null,
       supersedesId: opts.supersedesId ?? null,
-      participantPartyIds: [...input.participantPartyIds].sort(),
-      documentIds: [...input.documentIds].sort(),
-      actionItems: items.map((a) => ({ description: a.description,
+      participantPartyIds: input.participantPartyIds,
+      documentIds: input.documentIds,
+      actionItems: input.actionItems.map((a) => ({ description: a.description,
         ownerPartyId: a.ownerPartyId ?? null,
-        dueAt: a.dueAt?.toISOString() ?? null, clarity: a.clarity })),
-    },
+        dueAt: a.dueAt ?? null, clarity: a.clarity })),
+    }),
   });
   return entry;
 }

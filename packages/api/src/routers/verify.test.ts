@@ -64,4 +64,26 @@ describe("verify router", () => {
     const found = exp.entries.find((e) => e.summary === "Export test entry");
     expect(found?.participants).toContain("Case Manager");
   });
+
+  it("detects tampering with a stored log entry row", async () => {
+    const c = caller();
+    const entry = await c.entries.create({ occurredAt: new Date(), channel: "call",
+      direction: "inbound", summary: "Original untampered summary",
+      participantPartyIds: [], documentIds: [], actionItems: [] });
+    const admin = createDb(ADMIN_URL);
+    try {
+      await admin.db.execute(
+        sql`UPDATE log_entries SET summary = 'tampered' WHERE id = ${entry.id}`);
+      const broken = await c.verify.run();
+      expect(broken.ok).toBe(false);
+      if (!broken.ok) expect(broken.reason).toBe("payload_hash_mismatch");
+      // Restore so the chain is coherent again for later tests.
+      await admin.db.execute(
+        sql`UPDATE log_entries SET summary = 'Original untampered summary' WHERE id = ${entry.id}`);
+      const restored = await c.verify.run();
+      expect(restored.ok).toBe(true);
+    } finally {
+      await admin.pool.end();
+    }
+  });
 });
