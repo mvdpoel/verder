@@ -53,7 +53,17 @@ export function parseAbnTsv(buf: Buffer): ParseResult {
       const bookedAt = new Date(
         `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T00:00:00Z`
       );
-      if (Number.isNaN(bookedAt.getTime())) throw new Error(`invalid booking date: ${date}`);
+      // Date parsing rolls out-of-range DAYS over ("20260231" → 2026-03-03) and
+      // only returns Invalid Date for out-of-range months — compare the UTC
+      // components back to catch impossible calendar dates.
+      if (
+        Number.isNaN(bookedAt.getTime()) ||
+        bookedAt.getUTCFullYear() !== Number(date.slice(0, 4)) ||
+        bookedAt.getUTCMonth() + 1 !== Number(date.slice(4, 6)) ||
+        bookedAt.getUTCDate() !== Number(date.slice(6, 8))
+      ) {
+        throw new Error(`invalid booking date: ${date}`);
+      }
       const amountCents = decimalToCents(cols[6]);
       const description = cols.slice(7).join("\t").trim() || null;
 

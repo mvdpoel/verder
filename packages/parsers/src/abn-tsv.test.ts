@@ -49,6 +49,25 @@ describe("parseAbnTsv", () => {
     expect(row.description).toContain("Café De Zon"); // é is byte 0xE9 in the fixture
   });
 
+  it("routes impossible booking dates to errors instead of rolling them over", () => {
+    // "20260231" would roll over to 2026-03-03 via Date parsing — must error.
+    const line = (date: string) =>
+      Buffer.from(
+        `123456789\tEUR\t${date}\t1000,00\t990,00\t${date}\t-10,00\tSEPA Overboeking Naam: Test\n`,
+        "latin1"
+      );
+    for (const bad of ["20260231", "20260431", "20260229", "20260200"]) {
+      const result = parseAbnTsv(line(bad));
+      expect(result.rows, bad).toHaveLength(0);
+      expect(result.errors, bad).toHaveLength(1);
+      expect(result.errors[0].message).toMatch(/booking date/);
+    }
+    // sanity: real leap day still parses
+    expect(parseAbnTsv(line("20280229")).rows[0].bookedAt.toISOString()).toBe(
+      "2028-02-29T00:00:00.000Z"
+    );
+  });
+
   it("lists the malformed line with its raw text instead of throwing", () => {
     const err = result.errors[0];
     expect(err.rowIndex).toBe(4);

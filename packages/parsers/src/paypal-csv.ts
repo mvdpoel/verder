@@ -50,7 +50,17 @@ function parseDate(s: string): Date {
     sep === "/" && firstNum <= 12 ? [second, first] : [first, second];
   const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00Z`;
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) throw new Error(`invalid date: ${s}`);
+  // Date parsing rolls out-of-range DAYS over ("2026-02-31" → 2026-03-03) and
+  // only returns Invalid Date for out-of-range months, so compare the UTC
+  // components back against what we parsed to catch impossible calendar dates.
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== Number(year) ||
+    date.getUTCMonth() + 1 !== Number(month) ||
+    date.getUTCDate() !== Number(day)
+  ) {
+    throw new Error(`invalid date: ${s}`);
+  }
   return date;
 }
 

@@ -67,6 +67,26 @@ describe("parsePaypalCsv", () => {
     expect(row.amountCents).toBe(-250);
   });
 
+  it("routes impossible calendar dates to errors instead of rolling them over", () => {
+    // V8 only yields Invalid Date for out-of-range months; out-of-range days
+    // roll over ("31-02-2026" → 2026-03-03). Those must be errors, not rows.
+    const csv = (date: string) =>
+      Buffer.from(
+        `"Date","Name","Type","Status","Currency","Gross","Transaction ID"\n` +
+          `"${date}","X","Payment","Completed","EUR","-1.00","T1"\n`
+      );
+    for (const bad of ["31-02-2026", "31-04-2026", "29-02-2026"]) {
+      const result = parsePaypalCsv(csv(bad));
+      expect(result.rows, bad).toHaveLength(0);
+      expect(result.errors, bad).toHaveLength(1);
+      expect(result.errors[0].message).toMatch(/invalid date/);
+    }
+    // sanity: real leap day still parses
+    expect(parsePaypalCsv(csv("29-02-2028")).rows[0].bookedAt.toISOString()).toBe(
+      "2028-02-29T00:00:00.000Z"
+    );
+  });
+
   it("throws loudly when required headers are missing", () => {
     expect(() => parsePaypalCsv(Buffer.from("garbage\nmore garbage\n"))).toThrow();
   });
