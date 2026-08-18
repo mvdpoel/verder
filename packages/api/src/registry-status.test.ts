@@ -60,4 +60,19 @@ describe("isValidTransition", () => {
     expect(isValidTransition("item", "identified", "acknowledged")).toBe(false);
     expect(isValidTransition("debt", "identified", "mandatory")).toBe(false);
   });
+
+  it("Object.prototype keys as statuses return false, never throw", () => {
+    // A recorded override can put ANY string into a decision's status column;
+    // a later effectiveStatus of e.g. "constructor" must not crash validation
+    // (edges["constructor"] on a plain object resolves to Object.prototype's
+    // constructor — .includes is not a function) or the target is bricked.
+    for (const s of ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) {
+      for (const kind of ["item", "debt"] as const) {
+        expect(() => isValidTransition(kind, s, "allowed"), `${kind} from=${s}`).not.toThrow();
+        expect(isValidTransition(kind, s, "allowed")).toBe(false);
+        expect(() => isValidTransition(kind, "identified", s)).not.toThrow();
+        expect(isValidTransition(kind, "identified", s)).toBe(false);
+      }
+    }
+  });
 });

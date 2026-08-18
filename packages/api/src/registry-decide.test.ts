@@ -131,6 +131,72 @@ describe("registry decisions", () => {
     )).rejects.toThrow(/exactly one/i);
   });
 
+  it("two decisions in ONE transaction: latest wins despite identical createdAt", async () => {
+    // createdAt defaults to now(), which is the transaction timestamp — two
+    // decides in the same transaction produce byte-identical createdAt values.
+    // Ordering must therefore use a monotonic tiebreaker (the ledger seq),
+    // both for effectiveStatus afterwards and for the transition validation
+    // of the second decide itself.
+    const item = await mkItem("Odido");
+    await db.transaction(async (tx) => {
+      await decide(tx, userId, { financialItemId: item.id, status: "to-cancel",
+        explanation: "Dropping this plan." });
+      // identified→canceled is NOT an edge: this second decide only validates
+      // if it sees the to-cancel recorded a statement earlier in this tx.
+      await decide(tx, userId, { financialItemId: item.id, status: "canceled",
+        explanation: "Cancellation confirmed." });
+    });
+    const rows = await db.select().from(schema.registryDecisions)
+      .where(eq(schema.registryDecisions.financialItemId, item.id));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].createdAt.getTime()).toBe(rows[1].createdAt.getTime());
+    expect(await effectiveStatus(db, { financialItemId: item.id })).toBe("canceled");
+    expect((await verifyDecisions()).ok).toBe(true);
+  });
+
+  it("concurrent decides on one target are serialized: exactly one wins", async () => {
+    // Both racers start from "identified" where mandatory is a valid target,
+    // but mandatory→mandatory is not an edge: after either commits, the other
+    // must re-read the committed status and reject — never record an invalid
+    // transition without an overrideReason.
+    const item = await mkItem("Essent");
+    const attempt = (explanation: string) => db.transaction((tx) =>
+      decide(tx, userId, { financialItemId: item.id, status: "mandatory",
+        explanation }));
+    const results = await Promise.allSettled([attempt("racer 1"), attempt("racer 2")]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason.message).toMatch(/transition/i);
+    const rows = await db.select().from(schema.registryDecisions)
+      .where(eq(schema.registryDecisions.financialItemId, item.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].overrideReason).toBeNull();
+    expect(await effectiveStatus(db, { financialItemId: item.id })).toBe("mandatory");
+    expect((await verifyDecisions()).ok).toBe(true);
+  });
+
+  it("concurrent decides on one debt are serialized too", async () => {
+    const debt = await mkDebt("CJIB");
+    const attempt = (status: string, explanation: string) => db.transaction((tx) =>
+      decide(tx, userId, { debtId: debt.id, status, explanation }));
+    const results = await Promise.allSettled([
+      attempt("acknowledged", "racer 1"), attempt("acknowledged", "racer 2")]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rows = await db.select().from(schema.registryDecisions)
+      .where(eq(schema.registryDecisions.debtId, debt.id));
+    expect(rows).toHaveLength(1);
+    expect(await effectiveStatus(db, { debtId: debt.id })).toBe("acknowledged");
+  });
+
+  it("decide on a nonexistent target throws not-found", async () => {
+    await expect(db.transaction((tx) =>
+      decide(tx, userId, { financialItemId: "00000000-0000-0000-0000-000000000000",
+        status: "allowed", explanation: "ghost" }),
+    )).rejects.toThrow(/not found/i);
+  });
+
   it("verifier detects tampering with a decision row", async () => {
     const item = await mkItem("Vattenfall");
     const decision = await db.transaction((tx) =>
@@ -160,8 +226,9 @@ describe("registry decisions", () => {
   });
 
   it("latest decision wins even after an admin-side ordering probe", async () => {
-    // effectiveStatus must order by createdAt: two decisions in separate
-    // transactions get distinct now() timestamps.
+    // Two decisions in separate transactions get distinct now() timestamps
+    // AND increasing ledger seqs — createdAt and seq order agree here, and
+    // effectiveStatus (seq-ordered) must match the createdAt-ordered probe.
     const debt = await mkDebt("Belastingdienst");
     await db.transaction((tx) => decide(tx, userId, { debtId: debt.id,
       status: "acknowledged", explanation: "Checked." }));

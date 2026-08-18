@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "./ledger";
 import { isValidTransition } from "./registry-status";
@@ -35,7 +35,17 @@ export function registryDecisionPayload(d: RegistryDecision) {
   };
 }
 
-/** Current status of an item/debt: latest decision row, default "identified". */
+/**
+ * Current status of an item/debt: latest decision row, default "identified".
+ *
+ * "Latest" is defined by the ledger seq of each decision's registry.decision
+ * event, NOT by createdAt: createdAt is the transaction timestamp, so two
+ * decisions made in one transaction tie exactly, and under concurrency a
+ * transaction that started earlier can commit later. The ledger seq is
+ * strictly monotonic in recording order (appendLedgerEvent serializes on an
+ * advisory lock), and every decision gets its event in the same transaction.
+ * Any "latest decision" query elsewhere must order by seq the same way.
+ */
 export async function effectiveStatus(
   db: Db, target: { financialItemId?: string; debtId?: string }
 ): Promise<string> {
@@ -44,9 +54,38 @@ export async function effectiveStatus(
   const where = target.financialItemId
     ? eq(schema.registryDecisions.financialItemId, target.financialItemId)
     : eq(schema.registryDecisions.debtId, target.debtId!);
-  const [latest] = await db.select().from(schema.registryDecisions)
-    .where(where).orderBy(desc(schema.registryDecisions.createdAt)).limit(1);
+  const [latest] = await db
+    .select({ status: schema.registryDecisions.status })
+    .from(schema.registryDecisions)
+    .innerJoin(schema.ledgerEvents, and(
+      eq(schema.ledgerEvents.entityId, schema.registryDecisions.id),
+      eq(schema.ledgerEvents.eventType, "registry.decision"),
+    ))
+    .where(where)
+    .orderBy(desc(schema.ledgerEvents.seq)).limit(1);
   return latest?.status ?? "identified";
+}
+
+/**
+ * Serializes decisions per target: locks the financial_items/debts row
+ * (SELECT ... FOR UPDATE) so a concurrent decide() on the same target blocks
+ * until this transaction commits, then re-reads the committed status. Without
+ * this, two transactions could both validate against the same stale status
+ * and record a transition the matrix forbids — without an overrideReason.
+ * Throws if the target row does not exist.
+ */
+async function lockTarget(
+  tx: Db, target: { financialItemId?: string; debtId?: string }
+): Promise<void> {
+  const [row] = target.financialItemId
+    ? await tx.select({ id: schema.financialItems.id }).from(schema.financialItems)
+        .where(eq(schema.financialItems.id, target.financialItemId)).for("update")
+    : await tx.select({ id: schema.debts.id }).from(schema.debts)
+        .where(eq(schema.debts.id, target.debtId!)).for("update");
+  if (!row)
+    throw new Error(target.financialItemId
+      ? `Financial item ${target.financialItemId} not found`
+      : `Debt ${target.debtId} not found`);
 }
 
 /**
@@ -64,8 +103,9 @@ export async function decide(
   if ((input.financialItemId ? 1 : 0) + (input.debtId ? 1 : 0) !== 1)
     throw new Error("Exactly one of financialItemId or debtId must be set");
   const kind = input.financialItemId ? "item" : "debt";
-  const current = await effectiveStatus(tx, {
-    financialItemId: input.financialItemId, debtId: input.debtId });
+  const target = { financialItemId: input.financialItemId, debtId: input.debtId };
+  await lockTarget(tx, target);
+  const current = await effectiveStatus(tx, target);
   if (!isValidTransition(kind, current, input.status) && !input.overrideReason)
     throw new Error(
       `Invalid ${kind} status transition "${current}" → "${input.status}" — ` +

@@ -32,5 +32,8 @@ const DEBT_EDGES: Record<DebtStatus, readonly DebtStatus[]> = {
 
 export function isValidTransition(kind: "item" | "debt", from: string, to: string): boolean {
   const edges: Record<string, readonly string[]> = kind === "item" ? ITEM_EDGES : DEBT_EDGES;
-  return edges[from]?.includes(to) ?? false;
+  // Object.hasOwn guard: an overridden decision can put any string into the
+  // status column, and a bare edges[from] lookup would resolve prototype keys
+  // ("constructor", "toString", …) to non-arrays and throw.
+  return Object.hasOwn(edges, from) ? edges[from].includes(to) : false;
 }
