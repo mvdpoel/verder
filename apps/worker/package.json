@@ -1,0 +1,31 @@
+{
+  "name": "worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg-boss": "^10.1.5",
+    "googleapis": "^144.0.0",
+    "chokidar": "^4.0.1",
+    "web-push": "^3.6.7",
+    "pdf-parse": "^1.1.1",
+    "tesseract.js": "^5.1.1",
+    "@verder/api": "workspace:*",
+    "@verder/core": "workspace:*",
+    "@verder/db": "workspace:*",
+    "drizzle-orm": "^0.38.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8",
+    "typescript": "^5.7.2",
+    "@types/web-push": "^3.6.4",
+    "@types/pdf-parse": "^1.1.4"
+  }
+}

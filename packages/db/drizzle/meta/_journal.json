@@ -29,6 +29,13 @@
       "when": 1787051240467,
       "tag": "0003_auth_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787056108871,
+      "tag": "0004_worker_role",
+      "breakpoints": true
     }
   ]
 }
