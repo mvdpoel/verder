@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
+import { readFilePath } from "@verder/api/src/storage";
 import { pollGmail, type GmailPort } from "./gmail";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -38,6 +39,12 @@ describe("pollGmail", () => {
     const [raw] = await db.select().from(schema.rawEmails)
       .where(eq(schema.rawEmails.id, enqueued[0]));
     expect(raw.subject).toContain("rental contract");
+    // Legal-evidence requirement (spec: persist raw message with full headers
+    // *before* AI runs): the canonical RFC822 bytes must live in the vault at
+    // the content-addressed path of the stored hash, not just as a hash that
+    // is only verifiable while Gmail retains the message.
+    const storedRaw = readFileSync(readFilePath(vaultDir, raw.rawRfc822Sha256));
+    expect(storedRaw.toString()).toBe(`raw-${raw.gmailMessageId}`);
     const docs = await db.select().from(schema.documents)
       .where(eq(schema.documents.sourceRef, raw.gmailMessageId));
     expect(docs).toHaveLength(1);

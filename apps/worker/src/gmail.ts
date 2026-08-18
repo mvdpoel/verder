@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
@@ -45,10 +44,15 @@ export async function pollGmail(deps: {
           .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
         if (!relevant) continue;
         const rawEmailId = await deps.db.transaction(async (tx) => {
+          // Legal-evidence requirement: persist the canonical RFC822 original
+          // (full headers: Received, Message-ID, DKIM...) to the vault before
+          // AI runs. A bare hash is only verifiable while Gmail retains the
+          // message; the vault copy makes it independently verifiable forever.
+          const { sha256: rawSha256 } = await storeFile(deps.vaultDir, msg.raw);
           const [row] = await tx.insert(schema.rawEmails).values({
             gmailMessageId: msg.id, gmailThreadId: msg.threadId,
             fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
-            sentAt: msg.sentAt, rawRfc822Sha256: sha256Hex(msg.raw),
+            sentAt: msg.sentAt, rawRfc822Sha256: rawSha256,
             bodyText: msg.bodyText,
           }).returning();
           for (const att of msg.attachments) {
