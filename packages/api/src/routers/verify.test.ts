@@ -9,6 +9,7 @@ import { sha256Hex } from "@verder/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { relPathFor } from "../storage";
+import { runFullVerification } from "../verification";
 import { assertSafeToTruncate } from "../test-db-guard";
 
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
@@ -109,6 +110,33 @@ describe("verify router", () => {
       await admin.db.execute(sql`DELETE FROM entry_documents
         WHERE entry_id = ${entry.id} AND document_id = ${doc.id}`);
       expect((await c.verify.run()).ok).toBe(true);
+    } finally {
+      await admin.pool.end();
+    }
+  });
+
+  it("router and runFullVerification report identical results (green and tampered)", async () => {
+    const c = caller();
+    // Green case: same result object from both entry points.
+    const viaRouter = await c.verify.run();
+    const direct = await runFullVerification(db, vaultDir);
+    expect(direct).toEqual(viaRouter);
+    expect(direct.ok).toBe(true);
+    // Tampered case: both must flag the same seq for the same reason.
+    const entry = await c.entries.create({ occurredAt: new Date(), channel: "other",
+      direction: "internal", summary: "Parity check entry",
+      participantPartyIds: [], documentIds: [], actionItems: [] });
+    const admin = createDb(ADMIN_URL);
+    try {
+      await admin.db.execute(
+        sql`UPDATE log_entries SET summary = 'parity-tampered' WHERE id = ${entry.id}`);
+      const brokenRouter = await c.verify.run();
+      const brokenDirect = await runFullVerification(db, vaultDir);
+      expect(brokenDirect).toEqual(brokenRouter);
+      expect(brokenDirect.ok).toBe(false);
+      await admin.db.execute(
+        sql`UPDATE log_entries SET summary = 'Parity check entry' WHERE id = ${entry.id}`);
+      expect((await runFullVerification(db, vaultDir)).ok).toBe(true);
     } finally {
       await admin.pool.end();
     }

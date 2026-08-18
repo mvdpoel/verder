@@ -1,0 +1,43 @@
+# Production stack for the homelab.
+# Run every compose command with the prod env file so ${...} substitution and
+# container env come from one place:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: verder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.prod}
+      POSTGRES_DB: verder
+    ports: ["127.0.0.1:5432:5432"] # host-only, for migrations/seed from the checkout
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verder -d verder"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    env_file: .env.prod
+    ports: ["127.0.0.1:3000:3000"] # cloudflared points here; never exposed on LAN
+    volumes:
+      - "${VAULT_HOST_DIR:?set in .env.prod}:/vault"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    restart: unless-stopped
+    env_file: .env.prod
+    volumes:
+      - "${VAULT_HOST_DIR:?set in .env.prod}:/vault"
+      - "${NAS_SCAN_HOST_DIR:?set in .env.prod}:/scans:ro"
+      - "./secrets:/repo/secrets"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata:

@@ -3,6 +3,8 @@ dist/
 .next/
 .env
 .env.local
+.env.prod
+secrets/
 .turbo/
 vault-files/
 next-env.d.ts
