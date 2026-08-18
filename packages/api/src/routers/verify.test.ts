@@ -9,6 +9,7 @@ import { sha256Hex } from "@verder/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { relPathFor } from "../storage";
+import { assertSafeToTruncate } from "../test-db-guard";
 
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
@@ -20,6 +21,9 @@ describe("verify router", () => {
     // register documents whose vault files never existed on disk, so wipe the
     // evidence tables first (admin role — the app role has no DELETE grants).
     // vitest.config.ts disables file parallelism so this cannot race them.
+    // Never truncate a non-local database (DATABASE_URL could point at the
+    // real evidence ledger) — fail loudly instead.
+    assertSafeToTruncate(ADMIN_URL);
     const admin = createDb(ADMIN_URL);
     await admin.db.execute(sql`TRUNCATE ledger_events, log_entries, documents, parties CASCADE`);
     await admin.pool.end();
