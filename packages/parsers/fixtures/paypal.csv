@@ -1,0 +1,7 @@
+﻿"Date","Name","Type","Status","Currency","Gross","Transaction ID"
+"03-07-2026","Spotify AB","Subscription Payment","Completed","EUR","-13,99","7AB12345CD6789012"
+"15-07-2026","Netflix International B.V.","PreApproved Payment Bill User Payment","Completed","EUR","-15,99","8XY98765EF4321098"
+"20-07-2026","Some Webshop","Payment","Pending","EUR","-9,99","5PD11223GH3344556"
+"25-07-2026","Bol.com B.V.","Refund","Completed","EUR","24,95","2RF55667JK7788990"
+"27-07-2026","Kaput Merchant","Payment","Completed","EUR","not-a-number","3ER99887LM6655443"
+"28-07-2026","Currency Conversion","General Currency Conversion","Completed","USD","-10,00","4CC12321NM4567890"
