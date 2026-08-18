@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestRawEmail, type GmailPort } from "./gmail";
 import { recordRun } from "./heartbeat";
@@ -56,6 +56,15 @@ export async function resolveAggregator(
         { suggestionId, outcome: "skipped", reason: `verdict already given (${s.status})` });
       return;
     }
+    // The search + extraction below can take seconds to minutes; Martin may
+    // give a verdict mid-flight (the unresolved card invites "fill it in
+    // yourself"). Every write re-checks openness in its WHERE so a verdict
+    // given after our initial load is never overwritten.
+    const stillOpen = and(
+      eq(schema.suggestions.id, s.id),
+      isNull(schema.suggestions.verdictAt),
+      inArray(schema.suggestions.status, ["pending", "needs-manual"]),
+    );
     const proposed = (s.proposed ?? {}) as Record<string, unknown>;
     const aggregator = proposed.aggregator;
     if ((aggregator !== "apple" && aggregator !== "paypal") || proposed.resolved !== false) return;
@@ -89,13 +98,15 @@ export async function resolveAggregator(
 
     if (receiptRawEmailIds.length === 0) {
       // Degrade to needs-manual — the candidate surfaces for Martin's eyes,
-      // it is never dropped.
-      await deps.db.update(schema.suggestions).set({
+      // it is never dropped. Unless a verdict landed mid-search: then it stands.
+      const claimed = await deps.db.update(schema.suggestions).set({
         status: "needs-manual",
         proposed: { ...proposed, note: "payee unknown — check PayPal/Apple account" },
-      }).where(eq(schema.suggestions.id, s.id));
+      }).where(stillOpen).returning({ id: schema.suggestions.id });
       await recordRun(deps.db, "receipts", failures.length ? "error" : "ok",
-        { suggestionId, receipts: 0, outcome: "needs-manual", failures });
+        { suggestionId, receipts: 0,
+          outcome: claimed.length ? "needs-manual" : "skipped: verdict given mid-flight",
+          failures });
       return;
     }
 
@@ -118,22 +129,32 @@ export async function resolveAggregator(
     };
     if (extractError !== null || items.length === 0) {
       // Receipt evidence is secured, but the AI could not read line items:
-      // keep the original classification and hand it to Martin.
-      await deps.db.update(schema.suggestions).set({
+      // keep the original classification and hand it to Martin — unless a
+      // verdict landed mid-flight: then it stands.
+      const claimed = await deps.db.update(schema.suggestions).set({
         status: "needs-manual", proposed: resolvedBase,
-      }).where(eq(schema.suggestions.id, s.id));
+      }).where(stillOpen).returning({ id: schema.suggestions.id });
       await recordRun(deps.db, "receipts", extractError !== null ? "error" : "ok",
         { suggestionId, receipts: receiptRawEmailIds.length, items: 0,
-          outcome: "needs-manual", ...(extractError !== null ? { message: `extract: ${extractError}` } : {}),
+          outcome: claimed.length ? "needs-manual" : "skipped: verdict given mid-flight",
+          ...(extractError !== null ? { message: `extract: ${extractError}` } : {}),
           failures });
       return;
     }
 
     // First line item resolves this suggestion; extra items fan out into
-    // additional suggestions carrying the same evidence.
-    await deps.db.update(schema.suggestions).set({
+    // additional suggestions carrying the same evidence. If Martin's verdict
+    // landed while we were extracting, the recorded diff is evidence — leave
+    // proposed alone and fan nothing out.
+    const claimed = await deps.db.update(schema.suggestions).set({
       proposed: { ...resolvedBase, name: items[0].name, amountCents: items[0].amountCents },
-    }).where(eq(schema.suggestions.id, s.id));
+    }).where(stillOpen).returning({ id: schema.suggestions.id });
+    if (claimed.length === 0) {
+      await recordRun(deps.db, "receipts", failures.length ? "error" : "ok",
+        { suggestionId, receipts: receiptRawEmailIds.length,
+          outcome: "skipped: verdict given mid-flight", failures });
+      return;
+    }
     for (let i = 1; i < items.length; i++) {
       await deps.db.insert(schema.suggestions).values({
         kind: "registry-item", model, promptVersion: RECEIPT_PROMPT_VERSION,

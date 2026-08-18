@@ -236,6 +236,63 @@ describe("resolveAggregator", () => {
     await pool.end();
   });
 
+  it("does not overwrite a verdict given while the Gmail search was running", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));
+    const { suggestion } = await seedAggregatorSuggestion(db, "paypal");
+    // Martin rejects the card mid-search — after the resolver's initial
+    // status check, before its no-receipt fallback write.
+    const port: GmailPort = {
+      listMessageIds: async () => {
+        await db.update(schema.suggestions).set({
+          status: "rejected", finalPayload: { reason: "not mine" }, verdictAt: new Date(),
+        }).where(eq(schema.suggestions.id, suggestion.id));
+        return [];
+      },
+      getMessage: async () => { throw new Error("must not fetch"); },
+    };
+    const llm: LlmPort = { chatJson: async () => { throw new Error("must not classify"); } };
+    await resolveAggregator({ db, gmail: port, llm, vaultDir }, suggestion.id);
+
+    const after = await reload(db, suggestion.id);
+    expect(after.status).toBe("rejected");      // never flipped back to needs-manual
+    expect(after.finalPayload).toEqual({ reason: "not mine" });
+    const p = after.proposed as Record<string, unknown>;
+    expect(p.note).toBeUndefined();             // proposed untouched after the verdict
+    await pool.end();
+  });
+
+  it("does not rewrite proposed or fan out after a mid-flight approval", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));
+    const { suggestion, key } = await seedAggregatorSuggestion(db, "apple");
+    const receiptId = `r-${crypto.randomUUID()}`;
+    const { port } = fakeGmail(receiptId);
+    // Martin approves the unresolved card ("fill it in yourself") while the
+    // LLM extraction is still running.
+    const llm: LlmPort = { chatJson: async () => {
+      await db.update(schema.suggestions).set({
+        status: "approved", finalPayload: { name: "Apple" }, verdictAt: new Date(),
+      }).where(eq(schema.suggestions.id, suggestion.id));
+      return { items: [
+        { name: "Apple TV+", amountCents: 699 },
+        { name: "iCloud+ 200 GB", amountCents: 299 },
+      ] };
+    } };
+    await resolveAggregator({ db, gmail: port, llm, vaultDir }, suggestion.id);
+
+    const after = await reload(db, suggestion.id);
+    expect(after.status).toBe("approved");      // the verdict stands
+    const p = after.proposed as Record<string, unknown>;
+    expect(p.resolved).toBe(false);             // suggestion-vs-approved diff intact
+    expect(p.name).toBe("Apple");
+    // No fan-out from a decided card.
+    const extras = await db.select().from(schema.suggestions)
+      .where(sql`${schema.suggestions.proposed} ->> 'key' = ${`${key}#1`}`);
+    expect(extras).toHaveLength(0);
+    await pool.end();
+  });
+
   it("reuses an already-ingested receipt email instead of re-fetching", async () => {
     const { db, pool } = createDb(URL);
     const vaultDir = mkdtempSync(join(tmpdir(), "receipts-vault-"));
