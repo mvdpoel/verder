@@ -21,7 +21,7 @@ export function realLlmPort(): LlmPort {
       const res = await fetch(`${process.env.OLLAMA_URL ?? "http://localhost:11434"}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: process.env.OLLAMA_MODEL ?? "qwen2.5:14b",
+        body: JSON.stringify({ model: process.env.OLLAMA_MODEL ?? "qwen3.5:9b",
           messages: [{ role: "user", content: prompt }], format: "json", stream: false }),
         signal: AbortSignal.timeout(120_000),
       });
@@ -54,7 +54,7 @@ export async function suggestEntry(
   const base = { occurredAt: email.sentAt.toISOString(), channel: "email" as const,
     participantNames: [email.fromAddr],
     attachmentDocumentIds: attachmentDocs.map((d) => d.id) };
-  const model = process.env.OLLAMA_MODEL ?? "qwen2.5:14b";
+  const model = process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
   try {
     const parsed = llmEntrySchema.parse(await deps.llm.chatJson(buildEntryPrompt({
       from: email.fromAddr, subject: email.subject, sentAt: email.sentAt, bodyText: email.bodyText })));
@@ -86,7 +86,7 @@ export async function suggestDocMeta(
   const [doc] = await deps.db.select().from(schema.documents)
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
-  const model = process.env.OLLAMA_MODEL ?? "qwen2.5:14b";
+  const model = process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
   try {
     const text = await deps.extractText(doc.mime, fileBuf);
     const parsed = llmDocSchema.parse(

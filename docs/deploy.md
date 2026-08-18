@@ -11,7 +11,7 @@ checkout for migrations/seeding, and a nightly cron job.
   `packageManager`; `corepack enable` gives you the right pnpm). Needed only
   for migrations, seeding and the one-time Gmail auth.
 - Ollama running on the homelab with the model pulled:
-  `ollama pull qwen2.5:14b` (or whatever `OLLAMA_MODEL` you set).
+  `ollama pull qwen3.5:9b` (or whatever `OLLAMA_MODEL` you set).
 - An existing cloudflared tunnel you can point at `http://localhost:3000`.
 - A Google Cloud OAuth "Desktop app" client JSON for the Gmail watcher.
 - Host directories: the vault dir (e.g. `/srv/verder/vault`), the NAS scan
@@ -37,7 +37,7 @@ look like:
 | `VAULT_DIR` | `/vault` (container mount of `VAULT_HOST_DIR`) |
 | `NAS_SCAN_DIR` | `/scans` (container mount of `NAS_SCAN_HOST_DIR`) |
 | `OLLAMA_URL` | `http://<homelab-lan-ip>:11434` — the container cannot reach `localhost` on the host |
-| `OLLAMA_MODEL` | e.g. `qwen2.5:14b` |
+| `OLLAMA_MODEL` | e.g. `qwen3.5:9b` |
 | `GMAIL_CREDENTIALS_PATH` | `./secrets/gmail-oauth.json` (compose mounts `./secrets` into the worker at `/repo/secrets`) |
 | `GMAIL_TOKEN_PATH` | `./secrets/gmail-token.json` |
 | `RELEVANT_SENDERS` | comma-separated From-address filters, e.g. `@verdergroep.nl` |

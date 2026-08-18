@@ -5,7 +5,7 @@
 import { createDb } from "@verder/db";
 import { recordRun } from "../heartbeat";
 
-const model = process.env.OLLAMA_MODEL ?? "qwen2.5:14b";
+const model = process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
 const base = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const url = process.env.WORKER_DATABASE_URL
   ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";

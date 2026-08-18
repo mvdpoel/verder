@@ -28,4 +28,4 @@ for (const s of samples) {
   console.log(`${ok ? "PASS" : "FAIL"} — ${s.subject}${ok ? "" : ` → ${JSON.stringify(out.success ? out.data : out.error.issues)}`}`);
   if (ok) pass++;
 }
-console.log(`\n${pass}/${samples.length} with model=${process.env.OLLAMA_MODEL ?? "qwen2.5:14b"} prompt=${PROMPT_VERSION}`);
+console.log(`\n${pass}/${samples.length} with model=${process.env.OLLAMA_MODEL ?? "qwen3.5:9b"} prompt=${PROMPT_VERSION}`);
