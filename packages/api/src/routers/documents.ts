@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
@@ -58,6 +59,14 @@ export const documentsRouter = router({
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))
     .query(({ ctx, input }) => effectiveDocument(ctx.db, input.id)),
+
+  bySha: protectedProcedure.input(z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/) }))
+    .query(async ({ ctx, input }) => {
+      const [doc] = await ctx.db.select().from(schema.documents)
+        .where(eq(schema.documents.sha256, input.sha256));
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+      return effectiveDocument(ctx.db, doc.id);
+    }),
 
   file: protectedProcedure.input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

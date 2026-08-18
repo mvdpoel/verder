@@ -4,3 +4,5 @@ dist/
 .env
 .turbo/
 vault-files/
+next-env.d.ts
+*.tsbuildinfo
