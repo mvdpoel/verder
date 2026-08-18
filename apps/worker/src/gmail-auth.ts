@@ -26,14 +26,32 @@ export async function oauthClient(): Promise<Auth.OAuth2Client> {
   return client;
 }
 
+export type MessageListFn = (params: {
+  userId: "me"; q: string; maxResults: number; pageToken?: string;
+}) => Promise<{ data: {
+  messages?: { id?: string | null }[] | null;
+  nextPageToken?: string | null;
+} }>;
+
+// Gmail's messages.list is paged; a single page caps out well below what a
+// live inbox can hold in 7 days, so follow nextPageToken until exhausted.
+export async function listAllMessageIds(list: MessageListFn, query: string): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await list({ userId: "me", q: query, maxResults: 100, pageToken });
+    ids.push(...(res.data.messages ?? []).map((m) => m.id!));
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return ids;
+}
+
 export async function realGmailPort(): Promise<GmailPort> {
   const auth = await oauthClient();
   const gmail = google.gmail({ version: "v1", auth });
   return {
-    async listMessageIds(query) {
-      const res = await gmail.users.messages.list({ userId: "me", q: query, maxResults: 50 });
-      return (res.data.messages ?? []).map((m) => m.id!);
-    },
+    listMessageIds: (query) =>
+      listAllMessageIds((params) => gmail.users.messages.list(params), query),
     async getMessage(id): Promise<GmailMessage> {
       const raw = await gmail.users.messages.get({ userId: "me", id, format: "raw" });
       const full = await gmail.users.messages.get({ userId: "me", id, format: "full" });
