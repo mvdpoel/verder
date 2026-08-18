@@ -116,6 +116,10 @@ export const rawEmails = pgTable("raw_emails", {
   rawRfc822Sha256: text("raw_rfc822_sha256").notNull(),
   bodyText: text("body_text").notNull(),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+  // Transactional-outbox marker: set once the suggest.entry job for this email
+  // has been enqueued. NULL means the ingest committed but the enqueue is still
+  // owed — the gmail poller retries it on the next cycle.
+  suggestQueuedAt: timestamp("suggest_queued_at", { withTimezone: true }),
 });
 
 export const suggestions = pgTable("suggestions", {

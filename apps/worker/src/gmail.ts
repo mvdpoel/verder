@@ -20,41 +20,68 @@ export async function pollGmail(deps: {
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
 }): Promise<{ ingested: number }> {
   const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
-  const partyEmails = (await deps.db.select().from(schema.parties))
-    .map((p) => p.email).filter((e): e is string => !!e);
-  const ids = await deps.gmail.listMessageIds("newer_than:7d");
   let ingested = 0;
+  const failures: { id: string; message: string }[] = [];
   try {
+    const partyEmails = (await deps.db.select().from(schema.parties))
+      .map((p) => p.email).filter((e): e is string => !!e);
+    const ids = await deps.gmail.listMessageIds("newer_than:7d");
     for (const id of ids) {
-      const [seen] = await deps.db.select().from(schema.rawEmails)
-        .where(eq(schema.rawEmails.gmailMessageId, id));
-      if (seen) continue;
-      const msg = await deps.gmail.getMessage(id);
-      const relevant = [...senders, ...partyEmails]
-        .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
-      if (!relevant) continue;
-      const rawEmailId = await deps.db.transaction(async (tx) => {
-        const [row] = await tx.insert(schema.rawEmails).values({
-          gmailMessageId: msg.id, gmailThreadId: msg.threadId,
-          fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
-          sentAt: msg.sentAt, rawRfc822Sha256: sha256Hex(msg.raw),
-          bodyText: msg.bodyText,
-        }).returning();
-        for (const att of msg.attachments) {
-          const { sha256 } = await storeFile(deps.vaultDir, att.data);
-          await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
-            mime: att.mime, title: att.filename, source: "email-attachment",
-            sourceRef: msg.id, receivedAt: msg.sentAt });
+      // One bad message must not block the rest of the mailbox: isolate each
+      // message so a persistent failure only surfaces in worker_runs while
+      // every other message still ingests.
+      try {
+        const [seen] = await deps.db.select().from(schema.rawEmails)
+          .where(eq(schema.rawEmails.gmailMessageId, id));
+        if (seen) {
+          // Outbox repair: the ingest committed but the suggest.entry enqueue
+          // failed afterwards (send error or crash). Retry it now, otherwise
+          // the email never reaches the review queue.
+          if (!seen.suggestQueuedAt) await enqueueAndMark(deps, seen.id);
+          continue;
         }
-        return row.id;
-      });
-      await deps.enqueueSuggest(rawEmailId);
-      ingested++;
+        const msg = await deps.gmail.getMessage(id);
+        const relevant = [...senders, ...partyEmails]
+          .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
+        if (!relevant) continue;
+        const rawEmailId = await deps.db.transaction(async (tx) => {
+          const [row] = await tx.insert(schema.rawEmails).values({
+            gmailMessageId: msg.id, gmailThreadId: msg.threadId,
+            fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
+            sentAt: msg.sentAt, rawRfc822Sha256: sha256Hex(msg.raw),
+            bodyText: msg.bodyText,
+          }).returning();
+          for (const att of msg.attachments) {
+            const { sha256 } = await storeFile(deps.vaultDir, att.data);
+            await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
+              mime: att.mime, title: att.filename, source: "email-attachment",
+              sourceRef: msg.id, receivedAt: msg.sentAt });
+          }
+          return row.id;
+        });
+        await enqueueAndMark(deps, rawEmailId);
+        ingested++;
+      } catch (err) {
+        failures.push({ id, message: String(err) });
+      }
     }
-    await recordRun(deps.db, "gmail", "ok", { ingested, scanned: ids.length });
+    await recordRun(deps.db, "gmail", failures.length ? "error" : "ok",
+      { ingested, scanned: ids.length, failures });
   } catch (err) {
     await recordRun(deps.db, "gmail", "error", { message: String(err) });
     throw err;
   }
   return { ingested };
+}
+
+// Enqueue the suggest job, then mark the raw email as enqueued. If the mark
+// itself fails the job is merely sent again next poll (at-least-once), which
+// beats the alternative of an email that never reaches the review queue.
+async function enqueueAndMark(
+  deps: { db: Db; enqueueSuggest: (rawEmailId: string) => Promise<void> },
+  rawEmailId: string,
+): Promise<void> {
+  await deps.enqueueSuggest(rawEmailId);
+  await deps.db.update(schema.rawEmails).set({ suggestQueuedAt: new Date() })
+    .where(eq(schema.rawEmails.id, rawEmailId));
 }

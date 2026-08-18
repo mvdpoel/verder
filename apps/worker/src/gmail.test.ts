@@ -8,14 +8,18 @@ import { pollGmail, type GmailPort } from "./gmail";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
-function fakeGmail(id: string): GmailPort {
-  const msg = {
+function makeMsg(id: string) {
+  return {
     id, threadId: "t-1", from: "case@verdergroep.nl", to: "martin@vanderpoel.pro",
     subject: "Please send your rental contract", sentAt: new Date(),
     bodyText: "Beste Martin, graag je huurcontract opsturen.",
     raw: Buffer.from(`raw-${id}`),
     attachments: [{ filename: "checklist.pdf", mime: "application/pdf", data: Buffer.from(`pdf-${id}`) }],
   };
+}
+
+function fakeGmail(id: string): GmailPort {
+  const msg = makeMsg(id);
   return { listMessageIds: async () => [id], getMessage: async () => msg };
 }
 
@@ -38,6 +42,57 @@ describe("pollGmail", () => {
       .where(eq(schema.documents.sourceRef, raw.gmailMessageId));
     expect(docs).toHaveLength(1);
     expect(docs[0].source).toBe("email-attachment");
+    await pool.end();
+  });
+
+  it("re-enqueues the suggest job on a later poll when the enqueue failed after commit", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const id = `m-outbox-${Date.now()}`;
+    // First poll: ingest commits, but the enqueue fails (pg-boss down / crash).
+    await pollGmail({ db, gmail: fakeGmail(id), vaultDir,
+      enqueueSuggest: async () => { throw new Error("pg-boss send failed"); },
+    }).catch(() => { /* per-message failures must not lose the commit */ });
+    const [raw] = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.gmailMessageId, id));
+    expect(raw).toBeDefined();                 // email was committed
+    expect(raw.suggestQueuedAt).toBeNull();    // but the enqueue is still owed
+    // Recovery poll: same message is seen, yet the suggest job must be enqueued.
+    const enqueued: string[] = [];
+    await pollGmail({ db, gmail: fakeGmail(id), vaultDir,
+      enqueueSuggest: async (x: string) => { enqueued.push(x); } });
+    expect(enqueued).toEqual([raw.id]);
+    const [repaired] = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.id, raw.id));
+    expect(repaired.suggestQueuedAt).not.toBeNull();
+    await pool.end();
+  });
+
+  it("isolates a failing message so healthy messages still ingest", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const badId = `m-bad-${Date.now()}`;
+    const goodId = `m-good-${Date.now()}`;
+    const gmail: GmailPort = {
+      listMessageIds: async () => [badId, goodId],
+      getMessage: async (mid) => {
+        if (mid === badId) throw new Error("deterministic fetch failure");
+        return makeMsg(mid);
+      },
+    };
+    const enqueued: string[] = [];
+    const result = await pollGmail({ db, gmail, vaultDir,
+      enqueueSuggest: async (x: string) => { enqueued.push(x); } });
+    expect(result.ingested).toBe(1);           // the healthy message got through
+    const [good] = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.gmailMessageId, goodId));
+    expect(good).toBeDefined();
+    expect(enqueued).toEqual([good.id]);
+    // The failure is still surfaced on the dashboard via worker_runs.
+    const runs = await db.select().from(schema.workerRuns);
+    const errorRuns = runs.filter((r) => r.worker === "gmail" && r.status === "error"
+      && JSON.stringify(r.detail).includes(badId));
+    expect(errorRuns.length).toBeGreaterThan(0);
     await pool.end();
   });
 });
