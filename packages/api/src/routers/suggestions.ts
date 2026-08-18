@@ -37,6 +37,10 @@ export const suggestionsRouter = router({
         ? (await ctx.db.select().from(schema.rawEmails)
             .where(eq(schema.rawEmails.id, s.rawEmailId)))[0] ?? null
         : null,
+      document: s.documentId
+        ? (await ctx.db.select().from(schema.documents)
+            .where(eq(schema.documents.id, s.documentId)))[0] ?? null
+        : null,
     })));
   }),
 

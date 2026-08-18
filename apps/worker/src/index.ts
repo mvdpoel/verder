@@ -7,6 +7,7 @@ import { recordRun } from "./heartbeat";
 import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
+import { scanNasFolder } from "./nas";
 
 const url = process.env.WORKER_DATABASE_URL
   ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -56,6 +57,14 @@ await boss.work("suggest.docmeta", async ([job]) => {
   if (!doc) return;
   const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", doc.sha256));
   await suggestDocMeta({ db, llm, extractText }, documentId, buf);
+});
+
+await boss.createQueue("nas.scan");
+await boss.schedule("nas.scan", "*/2 * * * *");
+await boss.work("nas.scan", async () => {
+  await scanNasFolder({ db, scanDir: process.env.NAS_SCAN_DIR ?? "/mnt/nas/scans",
+    vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+    enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); } });
 });
 
 console.log("worker up");
