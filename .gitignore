@@ -2,6 +2,7 @@ node_modules/
 dist/
 .next/
 .env
+.env.local
 .turbo/
 vault-files/
 next-env.d.ts
