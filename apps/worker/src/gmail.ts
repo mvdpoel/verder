@@ -14,6 +14,42 @@ export interface GmailPort {
   getMessage(id: string): Promise<GmailMessage>;
 }
 
+/**
+ * Evidence-first ingest of one Gmail message: persist the canonical RFC822
+ * original (full headers: Received, Message-ID, DKIM...) to the vault before
+ * AI runs. A bare hash is only verifiable while Gmail retains the message; the
+ * vault copy makes it independently verifiable forever. Attachments become
+ * vault-backed documents in the same transaction.
+ *
+ * `skipSuggest` is for receipt lookups (registry aggregator resolution): those
+ * emails are financial evidence, not correspondence, so no suggest.entry job
+ * is ever owed — stamping the outbox marker at insert time keeps pollGmail's
+ * outbox repair from enqueuing one later.
+ */
+export async function ingestRawEmail(
+  deps: { db: Db; vaultDir: string },
+  msg: GmailMessage,
+  opts?: { skipSuggest?: boolean },
+): Promise<string> {
+  return deps.db.transaction(async (tx) => {
+    const { sha256: rawSha256 } = await storeFile(deps.vaultDir, msg.raw);
+    const [row] = await tx.insert(schema.rawEmails).values({
+      gmailMessageId: msg.id, gmailThreadId: msg.threadId,
+      fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
+      sentAt: msg.sentAt, rawRfc822Sha256: rawSha256,
+      bodyText: msg.bodyText,
+      ...(opts?.skipSuggest ? { suggestQueuedAt: new Date() } : {}),
+    }).returning();
+    for (const att of msg.attachments) {
+      const { sha256 } = await storeFile(deps.vaultDir, att.data);
+      await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
+        mime: att.mime, title: att.filename, source: "email-attachment",
+        sourceRef: msg.id, receivedAt: msg.sentAt });
+    }
+    return row.id;
+  });
+}
+
 export async function pollGmail(deps: {
   db: Db; gmail: GmailPort; vaultDir: string;
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
@@ -44,26 +80,7 @@ export async function pollGmail(deps: {
         const relevant = [...senders, ...partyEmails]
           .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
         if (!relevant) continue;
-        const rawEmailId = await deps.db.transaction(async (tx) => {
-          // Legal-evidence requirement: persist the canonical RFC822 original
-          // (full headers: Received, Message-ID, DKIM...) to the vault before
-          // AI runs. A bare hash is only verifiable while Gmail retains the
-          // message; the vault copy makes it independently verifiable forever.
-          const { sha256: rawSha256 } = await storeFile(deps.vaultDir, msg.raw);
-          const [row] = await tx.insert(schema.rawEmails).values({
-            gmailMessageId: msg.id, gmailThreadId: msg.threadId,
-            fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
-            sentAt: msg.sentAt, rawRfc822Sha256: rawSha256,
-            bodyText: msg.bodyText,
-          }).returning();
-          for (const att of msg.attachments) {
-            const { sha256 } = await storeFile(deps.vaultDir, att.data);
-            await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
-              mime: att.mime, title: att.filename, source: "email-attachment",
-              sourceRef: msg.id, receivedAt: msg.sentAt });
-          }
-          return row.id;
-        });
+        const rawEmailId = await ingestRawEmail(deps, msg);
         await enqueueAndMark(deps, rawEmailId);
         ingested++;
       } catch (err) {

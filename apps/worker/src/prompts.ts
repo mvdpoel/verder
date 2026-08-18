@@ -41,6 +41,22 @@ export function buildRegistryPrompt(candidate: {
   ].join("\n");
 }
 
+export const RECEIPT_PROMPT_VERSION = "receipt-v1";
+export function buildReceiptPrompt(receipt: { subject: string; bodyText: string }): string {
+  return [
+    "An Apple or PayPal receipt email from a Dutch debt-restructuring (WSNP/bewindvoering) dossier.",
+    "Extract the purchased subscription/product line items. Reply with strict JSON only:",
+    `{ "items": [{ "name": string, "amountCents": integer }] }`,
+    `name is the clean product/subscription name (e.g. "iCloud+ 50 GB"); amountCents is the`,
+    "line amount in integer euro cents (EUR 2,99 -> 299). List actual line items only, no totals,",
+    "no taxes. Empty items array when the email contains no purchase line items.",
+    "",
+    `Subject: ${receipt.subject}`,
+    "",
+    receipt.bodyText.slice(0, 6000),
+  ].join("\n");
+}
+
 export const DOCMETA_PROMPT_VERSION = "docmeta-v1";
 export function buildDocMetaPrompt(filename: string, text: string): string {
   return [

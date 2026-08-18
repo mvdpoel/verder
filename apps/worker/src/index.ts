@@ -9,6 +9,7 @@ import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { scanNasFolder } from "./nas";
 import { mineRegistry } from "./registry-mine";
+import { resolveAggregator } from "./receipts";
 import { sendPush } from "./push";
 
 const url = process.env.WORKER_DATABASE_URL
@@ -79,6 +80,15 @@ await boss.schedule("registry.mine", "*/2 * * * *");
 await boss.work("registry.mine", async () => {
   await mineRegistry({ db, llm,
     enqueueResolve: async (suggestionId) => { await boss.send("receipts.resolve", { suggestionId }); } });
+});
+
+// Aggregator resolution: APPLE.COM/BILL and PayPal statement lines resolve
+// into real subscriptions via targeted Gmail receipt searches.
+await boss.work("receipts.resolve", async ([job]) => {
+  const gmail = await realGmailPort();
+  await resolveAggregator({ db, gmail, llm,
+    vaultDir: process.env.VAULT_DIR ?? "./vault-files" },
+    (job.data as { suggestionId: string }).suggestionId);
 });
 
 console.log("worker up");
