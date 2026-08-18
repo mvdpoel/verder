@@ -11,7 +11,8 @@
     "eval": "tsx src/eval/run-eval.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "backfill": "tsx src/ops/backfill-gmail.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",

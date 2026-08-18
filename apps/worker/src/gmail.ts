@@ -17,6 +17,7 @@ export interface GmailPort {
 export async function pollGmail(deps: {
   db: Db; gmail: GmailPort; vaultDir: string;
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
+  query?: string;
 }): Promise<{ ingested: number }> {
   const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
   let ingested = 0;
@@ -24,7 +25,7 @@ export async function pollGmail(deps: {
   try {
     const partyEmails = (await deps.db.select().from(schema.parties))
       .map((p) => p.email).filter((e): e is string => !!e);
-    const ids = await deps.gmail.listMessageIds("newer_than:7d");
+    const ids = await deps.gmail.listMessageIds(deps.query ?? "newer_than:7d");
     for (const id of ids) {
       // One bad message must not block the rest of the mailbox: isolate each
       // message so a persistent failure only surfaces in worker_runs while
