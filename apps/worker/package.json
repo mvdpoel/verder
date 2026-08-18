@@ -6,6 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "gmail:auth": "tsx src/gmail-auth.ts",
+    "eval": "tsx src/eval/run-eval.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit"
@@ -15,6 +16,7 @@
     "googleapis": "^144.0.0",
     "chokidar": "^4.0.1",
     "web-push": "^3.6.7",
+    "zod": "^3.24.1",
     "pdf-parse": "^1.1.1",
     "tesseract.js": "^5.1.1",
     "@verder/api": "workspace:*",

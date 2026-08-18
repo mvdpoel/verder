@@ -1,0 +1,20 @@
+[
+  { "from": "j.devries@verdergroep.nl", "subject": "Aanleveren loonstroken",
+    "bodyText": "Beste heer Van der Poel, voor de boedelafdracht hebben wij uw loonstroken van juni en juli nodig. Graag uiterlijk vrijdag aanleveren via de mail.",
+    "expect": { "actionItemCount": 1, "summaryContains": "loonstro" } },
+  { "from": "incasso@energieleverancier.nl", "subject": "Betalingsherinnering factuur 2024-8812",
+    "bodyText": "Geachte heer, wij hebben uw betaling van factuur 2024-8812 ad EUR 214,80 nog niet ontvangen. U kunt contact opnemen met uw bewindvoerder.",
+    "expect": { "actionItemCount": 0, "summaryContains": "factuur" } },
+  { "from": "planning@verdergroep.nl", "subject": "Bevestiging afspraak 24 september",
+    "bodyText": "Beste heer Van der Poel, hierbij bevestigen wij uw afspraak met uw bewindvoerder op dinsdag 24 september om 10:30 op ons kantoor in Zwolle. U hoeft verder niets te doen.",
+    "expect": { "actionItemCount": 0, "summaryContains": "afspraak" } },
+  { "from": "j.devries@verdergroep.nl", "subject": "Huurcontract opsturen",
+    "bodyText": "Beste heer Van der Poel, voor uw dossier hebben wij nog een kopie van uw huurcontract nodig. Kunt u deze uiterlijk vrijdag per e-mail naar ons opsturen?",
+    "expect": { "actionItemCount": 1, "summaryContains": "huurcontract" } },
+  { "from": "wsnp@rechtspraak.nl", "subject": "Stand van zaken WSNP-traject",
+    "bodyText": "Geachte heer Van der Poel, hierbij informeren wij u dat uw WSNP-traject volgens schema verloopt. De eerstvolgende verslaglegging door de bewindvoerder vindt plaats in december. U hoeft op dit bericht niet te reageren.",
+    "expect": { "actionItemCount": 0, "summaryContains": "wsnp" } },
+  { "from": "j.devries@verdergroep.nl", "subject": "Stukken",
+    "bodyText": "Beste heer Van der Poel, kunt u nog even naar de stukken kijken? Alvast bedankt.",
+    "expect": { "actionItemCount": 1, "summaryContains": "stukken", "clarity": "ambiguous" } }
+]
