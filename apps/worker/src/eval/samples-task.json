@@ -1,0 +1,23 @@
+[
+  { "subject": "Kopie paspoort nodig voor uw dossier",
+    "bodyText": "Beste heer Van der Poel, voor de volledigheid van uw dossier hebben wij nog een kopie van uw paspoort nodig. Graag kopie paspoort opsturen via de beveiligde upload of per e-mail. Met vriendelijke groet, J. de Vries, VerderGroep",
+    "expect": { "isTask": true, "title": "Kopie paspoort opsturen", "assigneeHint": "martin" } },
+  { "subject": "Aanleveren loonstroken — uiterlijk 29 augustus",
+    "bodyText": "Beste heer Van der Poel, voor de berekening van de boedelafdracht hebben wij uw loonstroken van juni en juli nodig. Wilt u deze uiterlijk vrijdag 29 augustus 2026 per e-mail aanleveren? Zonder deze stukken kunnen wij de berekening niet afronden.",
+    "expect": { "isTask": true, "title": "Loonstroken juni en juli aanleveren", "assigneeHint": "martin" } },
+  { "subject": "Indienen boedelverslag WSNP-traject",
+    "bodyText": "Geachte bewindvoerder, in het kader van het WSNP-traject van de heer M. van der Poel verzoeken wij VerderGroep het halfjaarlijkse boedelverslag uiterlijk 15 september 2026 bij de rechter-commissaris in te dienen. De heer Van der Poel hoeft zelf geen actie te ondernemen.",
+    "expect": { "isTask": true, "title": "Boedelverslag indienen bij rechter-commissaris", "assigneeHint": "verdergroep" } },
+  { "subject": "Formulier budgetplan ondertekenen en retourneren",
+    "bodyText": "Beste heer Van der Poel, in de bijlage vindt u het aangepaste budgetplan. Wilt u het formulier ondertekenen en aan ons retourneren? Daarna verwerken wij de wijzigingen in uw beheerrekening.",
+    "expect": { "isTask": true, "title": "Budgetplan ondertekenen en retourneren", "assigneeHint": "martin" } },
+  { "subject": "Nieuwsbrief augustus: energie besparen in de zomer",
+    "bodyText": "Beste klant, in deze nieuwsbrief leest u onze beste tips om deze zomer energie te besparen. Ook: zo werkt de nieuwe app, en wat het prijsplafond voor u betekent. Veel leesplezier! U ontvangt deze nieuwsbrief omdat u klant bij ons bent.",
+    "expect": { "isTask": false } },
+  { "subject": "Stand van zaken WSNP-traject",
+    "bodyText": "Geachte heer Van der Poel, hierbij informeren wij u dat uw WSNP-traject volgens schema verloopt. De eerstvolgende verslaglegging door de bewindvoerder vindt plaats in december. U hoeft op dit bericht niet te reageren.",
+    "expect": { "isTask": false } },
+  { "subject": "Bevestiging: uw betaling is verwerkt",
+    "bodyText": "Beste heer Van der Poel, wij bevestigen dat uw maandelijkse afdracht van EUR 125,00 op de boedelrekening is ontvangen en verwerkt. Deze e-mail is ter informatie; u hoeft verder niets te doen.",
+    "expect": { "isTask": false } }
+]
