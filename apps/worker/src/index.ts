@@ -9,6 +9,7 @@ import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { scanNasFolder } from "./nas";
 import { mineRegistry } from "./registry-mine";
+import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
 import { sendPush } from "./push";
 
@@ -49,7 +50,13 @@ async function extractText(mime: string, buf: Buffer): Promise<string> {
 }
 
 await boss.work("suggest.entry", async ([job]) => {
-  await suggestEntry({ db, llm, sendPush }, (job.data as { rawEmailId: string }).rawEmailId);
+  const { rawEmailId } = job.data as { rawEmailId: string };
+  await suggestEntry({ db, llm, sendPush }, rawEmailId);
+  // Action-item mining rides along, error-isolated: suggestTask swallows its
+  // own failures, and this guard makes sure a task-mine crash can never fail
+  // (and re-run) the entry suggestion above.
+  try { await suggestTask({ db, llm }, rawEmailId); }
+  catch (err) { await recordRun(db, "task-mine", "error", { rawEmailId, message: String(err) }); }
 });
 
 await boss.createQueue("suggest.docmeta");
