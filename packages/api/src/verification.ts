@@ -5,6 +5,7 @@ import { schema, type Db } from "@verder/db";
 import { readFilePath } from "./storage";
 import { entryEventPayload } from "./routers/entries";
 import { registryDecisionPayload } from "./registry-decide";
+import { taskStatusPayload } from "./task-decide";
 
 export type FullVerificationResult = VerifyResult & {
   headHash: string | null;
@@ -22,6 +23,29 @@ export async function registryDecisionPayloadHash(db: Db, decisionId: string): P
     .where(eq(schema.registryDecisions.id, decisionId));
   if (!decision) return "missing-decision-row".padEnd(64, "0");
   return sha256Hex(canonicalJson(registryDecisionPayload(decision)));
+}
+
+/**
+ * Recomputes the payload hash of a task.status event from the live
+ * task_status_changes row — any edit to a stored status change surfaces as a
+ * payload_hash_mismatch at that event's seq. Shared by runFullVerification
+ * and the task tamper tests.
+ */
+export async function taskStatusPayloadHash(db: Db, changeId: string): Promise<string> {
+  const [change] = await db.select().from(schema.taskStatusChanges)
+    .where(eq(schema.taskStatusChanges.id, changeId));
+  if (!change) return "missing-task-status-row".padEnd(64, "0");
+  return sha256Hex(canonicalJson(taskStatusPayload(change)));
+}
+
+/**
+ * Context for makeLedgerRecompute: pre-resolved document.linked events (see
+ * runFullVerification) and an optional counter hook for verified vault files.
+ */
+export interface LedgerRecomputeContext {
+  linkedLater: Map<string, Set<string>>; // entryId -> documentIds linked after creation
+  resolvedLinkHash: Map<number, string>; // seq -> payloadHash of document.linked events
+  onFileChecked?: () => void;
 }
 
 /**
@@ -61,11 +85,27 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
       break;
     }
   }
-  const res = await verifyChain(events, async (e) => {
+  const res = await verifyChain(events, makeLedgerRecompute(db, vaultDir, {
+    linkedLater, resolvedLinkHash, onFileChecked: () => { checkedFiles++; } }));
+  return { ...res, headHash: rows.at(-1)?.eventHash ?? null, checkedFiles };
+}
+
+/**
+ * Builds the per-event payload-hash recompute callback used by
+ * runFullVerification — the single dispatch table mapping each ledger event
+ * type to its live-row rebuild. Exported so tests can exercise the ACTUAL
+ * dispatch (e.g. the task.status branch) without needing a whole-chain-green
+ * database: an untested dispatch line here means tampering with that event
+ * type's rows would go undetected (the sub-project 2 lesson).
+ */
+export function makeLedgerRecompute(
+  db: Db, vaultDir: string, ctx: LedgerRecomputeContext
+): (e: ChainEvent) => Promise<string> {
+  return async (e) => {
     if (e.eventType === "document.linked")
       // No live entry_documents row hashes to this event's payload: the
       // link row was deleted or altered after the fact.
-      return resolvedLinkHash.get(e.seq) ?? "link-row-missing".padEnd(64, "0");
+      return ctx.resolvedLinkHash.get(e.seq) ?? "link-row-missing".padEnd(64, "0");
     if (e.eventType === "entry.created" || e.eventType === "entry.corrected") {
       // Rebuild the canonical payload from the live rows — any edit to a
       // stored entry (or its participants/documents/action items) surfaces
@@ -79,7 +119,7 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
         .where(eq(schema.entryDocuments.entryId, entry.id));
       const items = await db.select().from(schema.actionItems)
         .where(eq(schema.actionItems.entryId, entry.id));
-      const later = linkedLater.get(entry.id);
+      const later = ctx.linkedLater.get(entry.id);
       return sha256Hex(canonicalJson(entryEventPayload({
         id: entry.id, occurredAt: entry.occurredAt,
         channel: entry.channel, direction: entry.direction,
@@ -94,15 +134,16 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
     }
     if (e.eventType === "registry.decision")
       return registryDecisionPayloadHash(db, e.entityId);
+    if (e.eventType === "task.status")
+      return taskStatusPayloadHash(db, e.entityId);
     if (e.eventType !== "document.ingested") return e.payloadHash;
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.id, e.entityId));
     if (!doc) return "missing-document-row".padEnd(64, "0");
     try {
       const buf = await readFile(readFilePath(vaultDir, doc.sha256));
-      checkedFiles++;
+      ctx.onFileChecked?.();
       return sha256Hex(buf) === doc.sha256 ? e.payloadHash : "file-hash-mismatch".padEnd(64, "0");
     } catch { return "file-missing".padEnd(64, "0"); }
-  });
-  return { ...res, headHash: rows.at(-1)?.eventHash ?? null, checkedFiles };
+  };
 }
