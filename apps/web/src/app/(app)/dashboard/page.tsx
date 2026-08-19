@@ -3,6 +3,7 @@ import { serverCaller } from "@/lib/trpc-server";
 import { EnablePush } from "@/components/enable-push";
 import { formatEuro } from "@/components/registry-list";
 import { WsnpTimeline } from "@/components/wsnp-timeline";
+import { KIND_BADGE, KIND_LABEL } from "@/components/timeline-kinds";
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
@@ -11,6 +12,7 @@ export default async function DashboardPage() {
   const taskStats = await caller.tasks.stats();
   const timeline = await caller.milestones.timeline();
   const clearedBlockers = await caller.registry.clearedBlockers();
+  const keyEvents = await caller.timeline.recent({ limit: 5 });
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
   return (
@@ -54,6 +56,26 @@ export default async function DashboardPage() {
           })}
           {stats.lastWorkerRuns.length === 0 && <li>🟡 Watchers haven't reported yet.</li>}
         </ul>
+      </section>
+      <section>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="font-semibold">Recent key events</h2>
+          <Link className="text-sm text-slate-500 hover:underline" href="/timeline">full timeline →</Link>
+        </div>
+        {keyEvents.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No key events yet — <Link className="hover:underline" href="/timeline">add the moments that matter</Link>.
+          </p>
+        ) : (
+          <ul className="space-y-1">{keyEvents.map((e) => (
+            <li key={e.id} className="text-sm">
+              <span className={`rounded px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind] ?? KIND_BADGE.other}`}>
+                {KIND_LABEL[e.kind] ?? e.kind}
+              </span>{" "}
+              <Link className="hover:underline" href="/timeline">{e.title}</Link>
+              <span className="text-xs text-slate-500"> · {new Date(e.happenedAt).toLocaleDateString("nl-NL")}</span>
+            </li>))}</ul>
+        )}
       </section>
       <section>
         <h2 className="font-semibold mb-2">Recently logged</h2>
