@@ -5,6 +5,7 @@ import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { decide, effectiveStatus } from "../registry-decide";
 import { DEBT_STATUSES, ITEM_STATUSES, isValidTransition } from "../registry-status";
+import { effectiveTaskStatus } from "../task-decide";
 
 // --- input schemas -----------------------------------------------------------
 
@@ -98,6 +99,39 @@ function definedOnly<T extends Record<string, unknown>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 }
 
+/** Task statuses that still block a registry decision (same set as tasks.list "open ball"). */
+const BLOCKING_TASK_STATUSES: readonly string[] = ["open", "in-progress", "waiting"];
+
+/**
+ * Live blocking tasks for a financial item: tasks linked via financialItemId
+ * whose EFFECTIVE status (latest by ledger seq — see task-decide.ts) is still
+ * open/in-progress/waiting. Ordered like the tasks screen: dueAt ascending
+ * with nulls last, then createdAt — the most urgent blocker first.
+ */
+async function blockingTasksForItem(db: Db, financialItemId: string) {
+  const rows = await db
+    .select({
+      id: schema.tasks.id, title: schema.tasks.title,
+      dueAt: schema.tasks.dueAt, createdAt: schema.tasks.createdAt,
+    })
+    .from(schema.tasks)
+    .where(eq(schema.tasks.financialItemId, financialItemId));
+  const withStatus = await Promise.all(rows.map(async (t) => ({
+    ...t, effectiveStatus: await effectiveTaskStatus(db, t.id),
+  })));
+  return withStatus
+    .filter((t) => BLOCKING_TASK_STATUSES.includes(t.effectiveStatus))
+    .sort((a, b) => {
+      const dueA = a.dueAt?.getTime() ?? Infinity;
+      const dueB = b.dueAt?.getTime() ?? Infinity;
+      if (dueA !== dueB) return dueA - dueB;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    })
+    .map(({ id, title, effectiveStatus: status, dueAt }) => ({
+      id, title, effectiveStatus: status, dueAt,
+    }));
+}
+
 // --- routers -----------------------------------------------------------------
 
 const itemsRouter = router({
@@ -148,6 +182,7 @@ const itemsRouter = router({
         decisions,
         transactions,
         documents: await decisionDocuments(ctx.db, decisions),
+        blockingTasks: await blockingTasksForItem(ctx.db, item.id),
       };
     }),
 });

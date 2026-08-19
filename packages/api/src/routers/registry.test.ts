@@ -265,6 +265,43 @@ describe("registry router", () => {
     });
   });
 
+  it("items.get returns live blockingTasks that clear when tasks complete", async () => {
+    const c = caller();
+    const item = await c.registry.items.create(itemInput({ name: "Blocked-Item" }));
+    const other = await c.registry.items.create(itemInput({ name: "Other-Item" }));
+    const blocking = await c.tasks.create({
+      title: "Migrate mailbox", financialItemId: item.id,
+      dueAt: new Date("2026-09-01T00:00:00Z"),
+    });
+    const dropped = await c.tasks.create({ title: "Old idea", financialItemId: item.id });
+    const otherTask = await c.tasks.create({ title: "Unrelated", financialItemId: other.id });
+    await c.tasks.create({ title: "No link at all" });
+
+    // open + dropped-later task both block while open; dueAt-first ordering
+    let got = await c.registry.items.get({ id: item.id });
+    expect(got.blockingTasks).toEqual([
+      { id: blocking.id, title: "Migrate mailbox", effectiveStatus: "open",
+        dueAt: new Date("2026-09-01T00:00:00Z") },
+      { id: dropped.id, title: "Old idea", effectiveStatus: "open", dueAt: null },
+    ]);
+
+    // dropped tasks stop blocking; in-progress stays live with its new status
+    await c.tasks.setStatus({ taskId: dropped.id, status: "dropped" });
+    await c.tasks.setStatus({ taskId: blocking.id, status: "in-progress" });
+    got = await c.registry.items.get({ id: item.id });
+    expect(got.blockingTasks.map((t) => [t.id, t.effectiveStatus]))
+      .toEqual([[blocking.id, "in-progress"]]);
+
+    // completing the last blocking task clears the list
+    await c.tasks.setStatus({ taskId: blocking.id, status: "done" });
+    got = await c.registry.items.get({ id: item.id });
+    expect(got.blockingTasks).toEqual([]);
+
+    // the other item's task never bled in — and still blocks its own item
+    const otherGot = await c.registry.items.get({ id: other.id });
+    expect(otherGot.blockingTasks.map((t) => t.id)).toEqual([otherTask.id]);
+  });
+
   it("rejects unauthenticated calls", async () => {
     const anon = appRouter.createCaller(createContext({ db, userId: null }));
     await expect(anon.registry.items.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
