@@ -4,6 +4,17 @@ import { DecisionForm } from "@/components/decision-form";
 import { ItemFactsForm } from "@/components/item-facts-form";
 import { DecisionTimeline, StatusBadge, formatEuro } from "@/components/registry-list";
 
+const TASK_STATUS_BADGE: Record<string, string> = {
+  open: "bg-slate-100 text-slate-700",
+  "in-progress": "bg-blue-100 text-blue-700",
+  waiting: "bg-amber-100 text-amber-700",
+};
+
+function TaskStatusBadge({ status }: { status: string }) {
+  const cls = TASK_STATUS_BADGE[status] ?? "bg-slate-100 text-slate-700";
+  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{status}</span>;
+}
+
 export default async function RegistryItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
@@ -11,6 +22,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
   const vaultDocs = await caller.documents.list({ limit: 100 });
   const docTitles = new Map(item.documents.map((d) => [d.id, d.title]));
   const blocker = item.decisions[0]?.blockerNote;
+  const blockingTasks = item.blockingTasks;
 
   return (
     <div className="space-y-6">
@@ -21,7 +33,38 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
           {item.category} · {formatEuro(item.amountCents)}/{item.billingCycle} · {formatEuro(item.monthlyCents)}/mo · via {item.discoveredVia}
         </span>
       </div>
-      {blocker && (
+      {blockingTasks.length > 0 && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm space-y-2">
+          <p>
+            {blocker
+              ? <>Keep in mind: {blocker}</>
+              : <>A few tasks are still in the way before this one can move — one step at a time:</>}
+          </p>
+          <ul className="space-y-1">
+            {blockingTasks.map((t) => (
+              <li key={t.id} className="flex items-center gap-2">
+                <TaskStatusBadge status={t.effectiveStatus} />
+                <Link href={`/tasks/${t.id}`} className="underline">{t.title}</Link>
+                {t.dueAt && (
+                  <span className="text-slate-500">
+                    due {new Date(t.dueAt).toLocaleDateString("nl-NL")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* The cleared nudge only appears when linked tasks actually finished —
+          a blockerNote that never had a task is still just a note to keep. */}
+      {blockingTasks.length === 0 && item.clearedTaskCount > 0 && (
+        <p className="rounded border border-green-300 bg-green-50 p-3 text-sm">
+          Blocker cleared — ready to decide?{" "}
+          <a href="#decide" className="underline">Record the next step below.</a>{" "}
+          {blocker && <span className="text-slate-500">(The note was: {blocker})</span>}
+        </p>
+      )}
+      {blockingTasks.length === 0 && item.clearedTaskCount === 0 && blocker && (
         <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
           Keep in mind: {blocker}
         </p>
@@ -74,7 +117,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
               )}
           </section>
         </div>
-        <div className="space-y-6">
+        <div className="space-y-6" id="decide">
           <DecisionForm kind="item" targetId={item.id}
             currentStatus={item.effectiveStatus}
             documents={vaultDocs.map((d) => ({ id: d.id, title: d.effectiveTitle }))} />
