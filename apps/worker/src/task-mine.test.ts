@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eq, sql, and, gt } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import type { LlmPort } from "./ollama";
 import { suggestTask } from "./task-mine";
@@ -117,14 +117,15 @@ describe("suggestTask", () => {
   it("swallows an LLM failure: nothing inserted, failed run recorded, no exception escapes", async () => {
     const { db, pool } = createDb(URL);
     const email = await insertEmail(db);
-    const before = new Date();
     await expect(suggestTask({ db,
       llm: { chatJson: async () => { throw new Error("ollama down"); } } },
       email.id)).resolves.toBeUndefined();
     expect(await taskSuggestionsFor(db, email.id)).toHaveLength(0);
+    // Scoped by the unique rawEmailId in detail, not by time: ranAt is DB-clock
+    // (container) while new Date() is host-clock — sub-second skew made a
+    // gt(ranAt, before) filter intermittently miss the just-inserted row.
     const runs = await db.select().from(schema.workerRuns)
-      .where(and(eq(schema.workerRuns.worker, "task-mine"),
-        gt(schema.workerRuns.ranAt, before)));
+      .where(eq(schema.workerRuns.worker, "task-mine"));
     expect(runs.some((r) => r.status === "error"
       && (r.detail as Record<string, unknown> | null)?.rawEmailId === email.id)).toBe(true);
     await pool.end();
