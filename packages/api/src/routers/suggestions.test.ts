@@ -350,4 +350,165 @@ describe("suggestions router", () => {
       .where(eq(schema.suggestions.id, s.id));
     expect(after.status).toBe("rejected");
   });
+
+  // --- task approval (sub-project 3, Task 6) ---------------------------------
+
+  async function makeTaskSuggestion(opts?: { title?: string; dueAt?: string | null }) {
+    const [raw] = await db.insert(schema.rawEmails).values({
+      gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-task",
+      fromAddr: "casemanager@verdergroep.nl", toAddr: "martin@vanderpoel.pro",
+      subject: "Loonstroken opsturen", sentAt: new Date(),
+      rawRfc822Sha256: "b".repeat(64), bodyText: "Graag loonstroken juni en juli opsturen.",
+    }).returning();
+    const title = opts?.title ?? `Send payslips ${crypto.randomUUID()}`;
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "task", rawEmailId: raw.id, model: "qwen3.5:9b", promptVersion: "task-v1",
+      proposed: {
+        key: `task:${raw.id}:${title.toLowerCase()}`,
+        title, details: "June and July payslips.",
+        dueAt: opts?.dueAt === undefined ? "2026-09-01" : opts.dueAt,
+        assigneeHint: "martin", rawEmailId: raw.id,
+      },
+    }).returning();
+    return s;
+  }
+
+  async function makeParty() {
+    const [party] = await db.insert(schema.parties).values({
+      kind: "organization", name: `VerderGroep-${crypto.randomUUID()}`,
+    }).returning();
+    return party;
+  }
+
+  it("approveTask creates the task and marks approved when unchanged (assignee pick is not an edit)", async () => {
+    const s = await makeTaskSuggestion();
+    const party = await makeParty();
+    const p = s.proposed as { title: string; details: string };
+    const task = await caller().suggestions.approveTask({
+      id: s.id,
+      task: { title: p.title, details: p.details,
+        dueAt: new Date("2026-09-01"), assigneePartyId: party.id },
+    });
+    expect(task.id).toBeTruthy();
+    const [row] = await db.select().from(schema.tasks)
+      .where(eq(schema.tasks.id, task.id));
+    expect(row.title).toBe(p.title);
+    expect(row.assigneePartyId).toBe(party.id);
+    expect(row.createdBy).toBe(userId);
+    expect(row.dueAt?.toISOString()).toBe(new Date("2026-09-01").toISOString());
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    // Same title/details/dueAt as proposed; assigneePartyId was never proposed
+    // (only a hint), so picking one is not an edit.
+    expect(after.status).toBe("approved");
+    expect(after.finalPayload).toBeTruthy();
+    expect(after.verdictAt).toBeTruthy();
+  });
+
+  it("approveTask marks approved when empty proposed details are left empty", async () => {
+    const [raw] = await db.insert(schema.rawEmails).values({
+      gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-task",
+      fromAddr: "casemanager@verdergroep.nl", toAddr: "martin@vanderpoel.pro",
+      subject: "Bellen", sentAt: new Date(),
+      rawRfc822Sha256: "b".repeat(64), bodyText: "Graag even terugbellen.",
+    }).returning();
+    const title = `Call back ${crypto.randomUUID()}`;
+    // The miner records details: "" when the model gives none; the card
+    // submits an empty textarea as absent. Same emptiness — not an edit.
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "task", rawEmailId: raw.id, model: "qwen3.5:9b", promptVersion: "task-v1",
+      proposed: { key: `task:${raw.id}:call back`, title, details: "",
+        dueAt: null, assigneeHint: "martin", rawEmailId: raw.id },
+    }).returning();
+    await caller().suggestions.approveTask({ id: s.id, task: { title } });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("approved");
+  });
+
+  it("approveTask marks edited when the title was changed", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string; details: string };
+    await caller().suggestions.approveTask({
+      id: s.id,
+      task: { title: `${p.title} (reworded)`, details: p.details, dueAt: new Date("2026-09-01") },
+    });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("edited");
+  });
+
+  it("approveTask marks edited when only the due date was changed", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string; details: string };
+    await caller().suggestions.approveTask({
+      id: s.id,
+      task: { title: p.title, details: p.details, dueAt: new Date("2026-09-15") },
+    });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("edited");
+  });
+
+  it("approveTask refuses non-task suggestions", async () => {
+    const s = await makeSuggestion(); // kind: "log-entry"
+    await expect(caller().suggestions.approveTask({
+      id: s.id, task: { title: "Not a task suggestion" } })).rejects.toThrow();
+  });
+
+  it("approveTask after reject is refused and creates nothing", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string };
+    await caller().suggestions.reject({ id: s.id, reason: "Not a task" });
+    await expect(caller().suggestions.approveTask({
+      id: s.id, task: { title: p.title } })).rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("rejected");
+    const rows = await db.select().from(schema.tasks)
+      .where(eq(schema.tasks.title, p.title));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("concurrent double-approve creates exactly one task", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string };
+    const results = await Promise.allSettled([
+      caller().suggestions.approveTask({ id: s.id, task: { title: p.title } }),
+      caller().suggestions.approveTask({ id: s.id, task: { title: p.title } }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rows = await db.select().from(schema.tasks)
+      .where(eq(schema.tasks.title, p.title));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("approveTask fails loudly on a nonexistent assigneePartyId and leaves the suggestion open", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string };
+    await expect(caller().suggestions.approveTask({
+      id: s.id, task: { title: p.title, assigneePartyId: crypto.randomUUID() } }))
+      .rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("pending"); // no verdict recorded — rolled back
+    expect(after.verdictAt).toBeNull();
+    const rows = await db.select().from(schema.tasks)
+      .where(eq(schema.tasks.title, p.title));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("approveTask fails loudly on a nonexistent linked entry id", async () => {
+    const s = await makeTaskSuggestion();
+    const p = s.proposed as { title: string };
+    await expect(caller().suggestions.approveTask({
+      id: s.id, task: { title: p.title, entryId: crypto.randomUUID() } }))
+      .rejects.toThrow();
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    expect(after.status).toBe("pending");
+    const rows = await db.select().from(schema.tasks)
+      .where(eq(schema.tasks.title, p.title));
+    expect(rows).toHaveLength(0);
+  });
 });

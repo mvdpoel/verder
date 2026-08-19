@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { canonicalJson } from "@verder/core";
 import { schema } from "@verder/db";
@@ -6,6 +7,7 @@ import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";
 import { debtFields, itemFields } from "./registry";
+import { taskFields } from "./tasks";
 
 const entryForApproval = z.object({
   occurredAt: z.coerce.date(),
@@ -181,6 +183,71 @@ export const suggestionsRouter = router({
         verdictAt: new Date(),
       }).where(eq(schema.suggestions.id, input.id));
       return { debtId: debt.id };
+    })),
+
+  // Task approvals (sub-project 3, Task 6): the single doorway through which a
+  // mined action item becomes a task. Rejection reuses the shared `reject`.
+  approveTask: protectedProcedure.input(z.object({
+    id: z.string().uuid(), task: taskFields,
+  })).mutation(({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      // FOR UPDATE: a concurrent approve/reject waits on the row lock and then
+      // sees the committed verdict — double-approve is impossible.
+      const [s] = await tx.select().from(schema.suggestions)
+        .where(eq(schema.suggestions.id, input.id)).for("update");
+      if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
+        throw new TRPCError({ code: "CONFLICT", message: "Suggestion not open for review" });
+      if (s.kind !== "task")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Not a task suggestion" });
+      // Strict link validation: every referenced id must exist. The FKs would
+      // also refuse, but a named error beats a raw constraint violation, and
+      // the throw rolls the whole transaction back — no half-approved state.
+      const missing = (field: string): never => {
+        throw new TRPCError({
+          code: "BAD_REQUEST", message: `Linked ${field} does not exist` });
+      };
+      const t = input.task;
+      if (t.assigneePartyId != null && !(await tx.select({ id: schema.parties.id })
+        .from(schema.parties).where(eq(schema.parties.id, t.assigneePartyId))).length)
+        missing("assigneePartyId");
+      if (t.entryId != null && !(await tx.select({ id: schema.logEntries.id })
+        .from(schema.logEntries).where(eq(schema.logEntries.id, t.entryId))).length)
+        missing("entryId");
+      if (t.financialItemId != null && !(await tx.select({ id: schema.financialItems.id })
+        .from(schema.financialItems).where(eq(schema.financialItems.id, t.financialItemId))).length)
+        missing("financialItemId");
+      if (t.debtId != null && !(await tx.select({ id: schema.debts.id })
+        .from(schema.debts).where(eq(schema.debts.id, t.debtId))).length)
+        missing("debtId");
+      if (t.documentId != null && !(await tx.select({ id: schema.documents.id })
+        .from(schema.documents).where(eq(schema.documents.id, t.documentId))).length)
+        missing("documentId");
+      const [task] = await tx.insert(schema.tasks)
+        .values({ ...t, createdBy: ctx.userId }).returning();
+      // Truthful edit diff over ALL taskFields keys present in the proposed
+      // payload. The mined dueAt is a "YYYY-MM-DD" string while the submitted
+      // value is a Date (which canonicalJson serializes as {}) — normalize
+      // both sides to ISO instants so an unchanged date reads "approved".
+      // assigneePartyId is never proposed (only assigneeHint), so picking an
+      // assignee is not an edit — unchangedFromProposal skips absent keys.
+      const p = (s.proposed ?? {}) as Record<string, unknown>;
+      const proposedDue = typeof p.dueAt === "string" ? new Date(p.dueAt) : null;
+      const proposedForDiff = { ...p };
+      if (proposedDue && !Number.isNaN(proposedDue.getTime()))
+        proposedForDiff.dueAt = proposedDue.toISOString();
+      // The miner records details: "" when the model gives none; the card
+      // submits an empty textarea as absent. Same emptiness — not an edit.
+      if (proposedForDiff.details === "") proposedForDiff.details = null;
+      const finalTask = { ...t, dueAt: t.dueAt ? t.dueAt.toISOString() : null };
+      const unchanged =
+        unchangedFromProposal(Object.keys(taskFields.shape), proposedForDiff, finalTask);
+      await tx.update(schema.suggestions).set({
+        status: unchanged ? "approved" : "edited",
+        // finalPayload records what was actually stored, dueAt as ISO instant.
+        finalPayload: JSON.parse(JSON.stringify(finalTask)),
+        verdictAt: new Date(),
+      }).where(eq(schema.suggestions.id, input.id));
+      return task;
     })),
 
   reject: protectedProcedure.input(z.object({
