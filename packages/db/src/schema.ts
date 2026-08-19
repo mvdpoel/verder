@@ -257,6 +257,24 @@ export const milestones = pgTable("milestones", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Curated key events: Martin's hand-picked story of the process (intake,
+// request sent to court, a call, a letter that arrived). Editable display aid
+// like milestones — NOT ledgered; linked logbook entries and documents remain
+// the evidence.
+export const timelineEventKindEnum = pgEnum("timeline_event_kind", ["process", "mail", "call", "meeting", "document", "other"]);
+
+export const timelineEvents = pgTable("timeline_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  happenedAt: timestamp("happened_at", { withTimezone: true }).notNull(),
+  kind: timelineEventKindEnum("kind").notNull().default("other"),
+  note: text("note"),
+  entryId: uuid("entry_id").references(() => logEntries.id),
+  documentId: uuid("document_id").references(() => documents.id),
+  milestoneId: uuid("milestone_id").references(() => milestones.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const workerRuns = pgTable("worker_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   worker: text("worker").notNull(),
