@@ -302,6 +302,55 @@ describe("registry router", () => {
     expect(otherGot.blockingTasks.map((t) => t.id)).toEqual([otherTask.id]);
   });
 
+  it("a blockerNote without ever-linked tasks is a note, not a clearance", async () => {
+    const c = caller();
+    const item = await c.registry.items.create(itemInput({ name: "Note-Only" }));
+    await c.registry.decide({ financialItemId: item.id, status: "to-cancel",
+      explanation: "Can go, but not yet.", blockerNote: "wait for contract end" });
+    const got = await c.registry.items.get({ id: item.id });
+    expect(got.blockingTasks).toEqual([]);
+    // no task was ever linked → nothing was "cleared"
+    expect(got.clearedTaskCount).toBe(0);
+    const cleared = await c.registry.clearedBlockers();
+    expect(cleared.map((b) => b.id)).not.toContain(item.id);
+  });
+
+  it("clearedBlockers lists items whose linked tasks all completed, not live-blocked ones", async () => {
+    const c = caller();
+    // item with a blockerNote whose only linked task is done → cleared
+    const clearedItem = await c.registry.items.create(itemInput({ name: "Cleared-Item" }));
+    await c.registry.decide({ financialItemId: clearedItem.id, status: "to-cancel",
+      explanation: "Cancel after migration.", blockerNote: "migrate mailbox first" });
+    const doneTask = await c.tasks.create({
+      title: "Migrate mailbox", financialItemId: clearedItem.id });
+    await c.tasks.setStatus({ taskId: doneTask.id, status: "done" });
+    const got = await c.registry.items.get({ id: clearedItem.id });
+    expect(got.blockingTasks).toEqual([]);
+    expect(got.clearedTaskCount).toBe(1);
+
+    // item with a blockerNote, one done task but one still-open task → not cleared
+    const blockedItem = await c.registry.items.create(itemInput({ name: "Still-Blocked" }));
+    await c.registry.decide({ financialItemId: blockedItem.id, status: "to-cancel",
+      explanation: "Cancel later.", blockerNote: "two steps left" });
+    const finished = await c.tasks.create({ title: "Step one", financialItemId: blockedItem.id });
+    await c.tasks.setStatus({ taskId: finished.id, status: "done" });
+    await c.tasks.create({ title: "Step two", financialItemId: blockedItem.id });
+
+    const cleared = await c.registry.clearedBlockers();
+    expect(cleared.find((b) => b.id === clearedItem.id)).toEqual({
+      id: clearedItem.id, name: "Cleared-Item", blockerNote: "migrate mailbox first" });
+    expect(cleared.map((b) => b.id)).not.toContain(blockedItem.id);
+    const blockedGot = await c.registry.items.get({ id: blockedItem.id });
+    expect(blockedGot.clearedTaskCount).toBe(1);
+    expect(blockedGot.blockingTasks).toHaveLength(1);
+
+    // a NEWER decision without a blockerNote supersedes the note → nudge gone
+    await c.registry.decide({ financialItemId: clearedItem.id, status: "canceled",
+      explanation: "Migration done, cancellation sent." });
+    const afterDecide = await c.registry.clearedBlockers();
+    expect(afterDecide.map((b) => b.id)).not.toContain(clearedItem.id);
+  });
+
   it("rejects unauthenticated calls", async () => {
     const anon = appRouter.createCaller(createContext({ db, userId: null }));
     await expect(anon.registry.items.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });

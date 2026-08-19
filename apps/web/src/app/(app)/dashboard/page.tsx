@@ -10,6 +10,7 @@ export default async function DashboardPage() {
   const registry = await caller.registry.stats();
   const taskStats = await caller.tasks.stats();
   const timeline = await caller.milestones.timeline();
+  const clearedBlockers = await caller.registry.clearedBlockers();
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
   return (
@@ -19,6 +20,17 @@ export default async function DashboardPage() {
         <EnablePush />
       </div>
       <WsnpTimeline stages={timeline.stages} countdown={timeline.countdown} />
+      {clearedBlockers.length > 0 && (
+        <section className="space-y-2">
+          {clearedBlockers.map((b) => (
+            <Link key={b.id} href={`/registry/${b.id}`}
+              className="block rounded border border-green-300 bg-green-50 p-3 text-sm">
+              <span className="font-medium">{b.name}</span> — blocker cleared, ready to decide?{" "}
+              <span className="text-slate-500">(The note was: {b.blockerNote})</span>
+            </Link>
+          ))}
+        </section>
+      )}
       <div className="grid grid-cols-5 gap-4">
         <Link href="/queue" className="rounded border bg-white p-4">
           <p className="text-3xl font-bold">{stats.pendingSuggestions}</p><p>to review</p></Link>

@@ -55,11 +55,18 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
           </ul>
         </div>
       )}
-      {blockingTasks.length === 0 && blocker && (
+      {/* The cleared nudge only appears when linked tasks actually finished —
+          a blockerNote that never had a task is still just a note to keep. */}
+      {blockingTasks.length === 0 && item.clearedTaskCount > 0 && (
         <p className="rounded border border-green-300 bg-green-50 p-3 text-sm">
           Blocker cleared — ready to decide?{" "}
           <a href="#decide" className="underline">Record the next step below.</a>{" "}
-          <span className="text-slate-500">(The note was: {blocker})</span>
+          {blocker && <span className="text-slate-500">(The note was: {blocker})</span>}
+        </p>
+      )}
+      {blockingTasks.length === 0 && item.clearedTaskCount === 0 && blocker && (
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          Keep in mind: {blocker}
         </p>
       )}
       <div className="grid grid-cols-2 gap-8 items-start">

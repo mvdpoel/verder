@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { decide, effectiveStatus } from "../registry-decide";
@@ -102,13 +102,19 @@ function definedOnly<T extends Record<string, unknown>>(obj: T) {
 /** Task statuses that still block a registry decision (same set as tasks.list "open ball"). */
 const BLOCKING_TASK_STATUSES: readonly string[] = ["open", "in-progress", "waiting"];
 
+/** Task statuses that count as "cleared": the linked work was finished or let go. */
+const CLEARED_TASK_STATUSES: readonly string[] = ["done", "dropped"];
+
 /**
- * Live blocking tasks for a financial item: tasks linked via financialItemId
- * whose EFFECTIVE status (latest by ledger seq — see task-decide.ts) is still
- * open/in-progress/waiting. Ordered like the tasks screen: dueAt ascending
- * with nulls last, then createdAt — the most urgent blocker first.
+ * Linked-task view for a financial item: tasks linked via financialItemId,
+ * split by EFFECTIVE status (latest by ledger seq — see task-decide.ts) into
+ * live blockers (open/in-progress/waiting) and a cleared count (done/dropped).
+ * The cleared count is what makes the "blocker cleared" nudge truthful — an
+ * item that never had a linked task has nothing to clear. Blockers ordered
+ * like the tasks screen: dueAt ascending with nulls last, then createdAt —
+ * the most urgent blocker first.
  */
-async function blockingTasksForItem(db: Db, financialItemId: string) {
+async function linkedTasksForItem(db: Db, financialItemId: string) {
   const rows = await db
     .select({
       id: schema.tasks.id, title: schema.tasks.title,
@@ -119,7 +125,7 @@ async function blockingTasksForItem(db: Db, financialItemId: string) {
   const withStatus = await Promise.all(rows.map(async (t) => ({
     ...t, effectiveStatus: await effectiveTaskStatus(db, t.id),
   })));
-  return withStatus
+  const blockingTasks = withStatus
     .filter((t) => BLOCKING_TASK_STATUSES.includes(t.effectiveStatus))
     .sort((a, b) => {
       const dueA = a.dueAt?.getTime() ?? Infinity;
@@ -130,6 +136,9 @@ async function blockingTasksForItem(db: Db, financialItemId: string) {
     .map(({ id, title, effectiveStatus: status, dueAt }) => ({
       id, title, effectiveStatus: status, dueAt,
     }));
+  const clearedTaskCount = withStatus
+    .filter((t) => CLEARED_TASK_STATUSES.includes(t.effectiveStatus)).length;
+  return { blockingTasks, clearedTaskCount };
 }
 
 // --- routers -----------------------------------------------------------------
@@ -175,6 +184,7 @@ const itemsRouter = router({
       const transactions = await ctx.db.select().from(schema.transactions)
         .where(eq(schema.transactions.financialItemId, item.id))
         .orderBy(desc(schema.transactions.bookedAt));
+      const { blockingTasks, clearedTaskCount } = await linkedTasksForItem(ctx.db, item.id);
       return {
         ...item,
         effectiveStatus: decisions[0]?.status ?? "identified",
@@ -182,7 +192,8 @@ const itemsRouter = router({
         decisions,
         transactions,
         documents: await decisionDocuments(ctx.db, decisions),
-        blockingTasks: await blockingTasksForItem(ctx.db, item.id),
+        blockingTasks,
+        clearedTaskCount,
       };
     }),
 });
@@ -292,6 +303,55 @@ export const registryRouter = router({
       const all = input.kind === "item" ? ITEM_STATUSES : DEBT_STATUSES;
       return all.filter((to) => isValidTransition(input.kind, input.from, to));
     }),
+
+  /**
+   * Items whose blocker actually cleared: the latest ledgered decision carries
+   * a blockerNote, no linked task still has a live effective status
+   * (open/in-progress/waiting), and at least one linked task finished
+   * (done/dropped). Items that never had a linked task are excluded — nothing
+   * was cleared there, the note is just a note. Drives the dashboard nudge.
+   *
+   * Set-based on purpose (one query, not N× items.get). Both "latest" lookups
+   * order by ledger seq, exactly like decisionTimeline/effectiveTaskStatus —
+   * createdAt ties within a transaction (sub-project 2 lesson). A task with no
+   * status changes coalesces to 'open', matching effectiveTaskStatus.
+   */
+  clearedBlockers: protectedProcedure.query(async ({ ctx }) => {
+    const rows = (await ctx.db.execute(sql`
+      WITH latest_decision AS (
+        SELECT DISTINCT ON (d.financial_item_id) d.financial_item_id, d.blocker_note
+        FROM registry_decisions d
+        JOIN ledger_events e
+          ON e.entity_id = d.id AND e.event_type = 'registry.decision'
+        WHERE d.financial_item_id IS NOT NULL
+        ORDER BY d.financial_item_id, e.seq DESC
+      ),
+      task_effective AS (
+        SELECT t.financial_item_id,
+          COALESCE(
+            (SELECT c.status FROM task_status_changes c
+             JOIN ledger_events te
+               ON te.entity_id = c.id AND te.event_type = 'task.status'
+             WHERE c.task_id = t.id ORDER BY te.seq DESC LIMIT 1),
+            'open') AS status
+        FROM tasks t
+        WHERE t.financial_item_id IS NOT NULL
+      )
+      SELECT i.id, i.name, ld.blocker_note
+      FROM financial_items i
+      JOIN latest_decision ld ON ld.financial_item_id = i.id
+      WHERE ld.blocker_note IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM task_effective te
+          WHERE te.financial_item_id = i.id
+            AND te.status IN ('open', 'in-progress', 'waiting'))
+        AND EXISTS (
+          SELECT 1 FROM task_effective te
+          WHERE te.financial_item_id = i.id
+            AND te.status IN ('done', 'dropped'))
+      ORDER BY i.name`)).rows as { id: string; name: string; blocker_note: string }[];
+    return rows.map((r) => ({ id: r.id, name: r.name, blockerNote: r.blocker_note }));
+  }),
 
   /**
    * Full registry snapshot for the VerderGroep report (print export): every
