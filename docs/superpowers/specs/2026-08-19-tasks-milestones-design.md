@@ -73,7 +73,7 @@ Statuses: `open / in-progress / waiting / done / dropped`. Transitions: `open �
 
 - Transition-matrix unit tests (full edge matrix, unknown/prototype-key statuses).
 - `setTaskStatus` integration: ledger payload hash exactness, tamper test breaking verification at the right seq, concurrency (two parallel setStatus → one winner), override recording. Direct `runFullVerification` test covering a `task.status` event.
-- Mining: convergence (Nth run → 0 new), rejected stays gone, FYI email → no task suggestion, LLM failure → needs-manual, error isolation.
+- Mining: convergence (Nth run → 0 new), rejected stays gone, FYI email → no task suggestion, LLM failure → no task suggestion but failure recorded in the worker run (the email's entry suggestion still surfaces it to Martin — there is no deterministic task candidate to degrade to needs-manual), error isolation.
 - Approve: double-approve race, edit-diff truthfulness on every field, stale/invalid link ids fail loudly.
 - Timeline derivation unit tests (current-stage logic, countdown math on 547 days).
 - Eval: ≥6 action-item samples (Dutch document requests, deadline mails, 2+ FYI-only negatives) with expected `{isTask, title, assigneeHint}`; runner `task-eval`, score recorded with `TASK_PROMPT_VERSION`.
