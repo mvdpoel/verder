@@ -83,6 +83,15 @@ export const timelineRouter = router({
   recent: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(20).default(5) }).default({}))
     .query(async ({ ctx, input }) => withLinks(ctx.db, await newestFirst(ctx.db, input.limit))),
 
+  /** Key events already telling the story of one logbook entry (dedupe guard). */
+  forEntry: protectedProcedure.input(z.object({ entryId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db.select().from(schema.timelineEvents)
+        .where(eq(schema.timelineEvents.entryId, input.entryId))
+        .orderBy(desc(schema.timelineEvents.happenedAt), desc(schema.timelineEvents.id));
+      return rows;
+    }),
+
   create: protectedProcedure.input(timelineEventFields).mutation(async ({ ctx, input }) => {
     const [event] = await ctx.db.insert(schema.timelineEvents).values(input).returning();
     return event;

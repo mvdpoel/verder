@@ -96,6 +96,29 @@ describe("timeline router", () => {
     })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("forEntry finds the events linked to one logbook entry, and nothing else", async () => {
+    const c = caller();
+    const [entry] = await db.insert(schema.logEntries).values({
+      channel: "meeting", direction: "internal", source: "manual",
+      occurredAt: new Date("2026-04-09T09:00:00Z"),
+      summary: `Intake gesprek ${Date.now()}`, createdBy: userId,
+    }).returning();
+
+    expect(await c.timeline.forEntry({ entryId: entry.id })).toEqual([]);
+
+    const linked = await c.timeline.create({
+      title: "Intake gesprek", happenedAt: new Date("2026-04-09T09:00:00Z"),
+      kind: "meeting", entryId: entry.id,
+    });
+    const unlinked = await c.timeline.create({
+      title: `Losstaand ${Date.now()}`, happenedAt: new Date("2026-04-10T09:00:00Z"),
+    });
+
+    const found = await c.timeline.forEntry({ entryId: entry.id });
+    expect(found.map((r) => r.id)).toEqual([linked.id]);
+    expect(found.some((r) => r.id === unlinked.id)).toBe(false);
+  });
+
   it("recent caps the list at the requested limit, newest first", async () => {
     const c = caller();
     const base = Date.parse("2027-01-01T00:00:00Z"); // far future: our rows lead
