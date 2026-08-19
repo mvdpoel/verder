@@ -9,3 +9,4 @@ secrets/
 vault-files/
 next-env.d.ts
 *.tsbuildinfo
+.gstack/
