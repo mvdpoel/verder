@@ -18,6 +18,8 @@ type ProposedRegistryItem = { name?: string; category?: string; amountCents?: nu
   resolved?: boolean; note?: string };
 type ProposedDebt = { creditorName?: string; claimedCents?: number; references?: string | null;
   counterpartyName?: string | null; chargeCount?: number; lastAt?: string };
+type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
+  assigneeHint?: "martin" | "verdergroep" | "other"; rawEmailId?: string };
 
 type Suggestion = { id: string; kind: string; model: string | null; proposed: unknown;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
@@ -27,7 +29,66 @@ export function SuggestionCard({ s }: { s: Suggestion }) {
   if (s.kind === "document-meta") return <DocMetaCard s={s} />;
   if (s.kind === "registry-item") return <RegistryItemCard s={s} />;
   if (s.kind === "debt") return <DebtCard s={s} />;
+  if (s.kind === "task") return <TaskCard s={s} />;
   return <EntryCard s={s} />;
+}
+
+function TaskCard({ s }: { s: Suggestion }) {
+  const router = useRouter();
+  const p = s.proposed as ProposedTask | null;
+  const [title, setTitle] = useState(p?.title ?? "");
+  const [details, setDetails] = useState(p?.details ?? "");
+  const [dueAt, setDueAt] = useState(p?.dueAt ?? ""); // YYYY-MM-DD or ""
+  // "" = not seeded yet; the assigneeHint is resolved once parties load.
+  const [assigneePartyId, setAssigneePartyId] = useState("");
+  const [seeded, setSeeded] = useState(false);
+  const parties = trpc.parties.list.useQuery();
+  const approve = trpc.suggestions.approveTask.useMutation({ onSuccess: () => router.refresh() });
+  const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
+  if (!p) return null;
+  // Seed the assignee select from the miner's hint: "verdergroep" preselects
+  // the party whose name matches /verder/i when one exists; otherwise blank.
+  if (!seeded && parties.data) {
+    if (p.assigneeHint === "verdergroep") {
+      const match = parties.data.find((party) => /verder/i.test(party.name));
+      if (match) setAssigneePartyId(match.id);
+    }
+    setSeeded(true);
+  }
+  const busy = approve.isPending || reject.isPending;
+  return (
+    <li className="rounded border bg-white p-4 space-y-3">
+      <p className="text-sm text-slate-500">
+        {s.rawEmail ? `From email · “${s.rawEmail.subject}”` : "Action item found"}
+        {s.model && <span> · suggested by {s.model}</span>}
+      </p>
+      <label className="block text-sm">Task<input className="w-full border rounded p-2"
+        value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+      <label className="block text-sm">Details<textarea className="w-full border rounded p-2" rows={2}
+        value={details} onChange={(e) => setDetails(e.target.value)} /></label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-sm">Due date<input type="date" className="w-full border rounded p-2"
+          value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
+        <label className="block text-sm">Assignee<select className="w-full border rounded p-2"
+          value={assigneePartyId} onChange={(e) => setAssigneePartyId(e.target.value)}>
+          <option value="">— nobody yet —</option>
+          {(parties.data ?? []).map((party) =>
+            <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
+      </div>
+      {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
+        <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
+      <div className="flex gap-2">
+        <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
+          disabled={!title.trim() || busy}
+          onClick={() => approve.mutate({ id: s.id, task: {
+            title: title.trim(), details: details || undefined,
+            dueAt: dueAt ? new Date(dueAt) : undefined,
+            assigneePartyId: assigneePartyId || undefined } })}>Add task</button>
+        <button className="rounded border px-4 py-1 disabled:opacity-50" disabled={busy}
+          onClick={() => reject.mutate({ id: s.id })}>Not a task</button>
+      </div>
+    </li>
+  );
 }
 
 function EntryCard({ s }: { s: Suggestion }) {
