@@ -72,8 +72,8 @@ DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
 ```
 
 Migrations run from the host checkout as the admin role (`verder`), never
-from the containers. The drizzle journal currently contains ten
-migrations — `0000` (schema) through `0009` — and covers everything
+from the containers. The drizzle journal currently contains twelve
+migrations — `0000` (schema) through `0011` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
@@ -92,6 +92,11 @@ in one pass:
   evidence (INSERT+SELECT only); fact tables get UPDATE but never DELETE
 - `0009_burly_jack_murdock` — `suggestion_kind` enum values
   `registry-item` and `debt`
+- `0010_volatile_amazoness` — tasks + milestones schema (`tasks`,
+  `task_status_changes`, `milestones`, `wsnp_stage` enum) and
+  `suggestion_kind` value `task`
+- `0011_task_grants` — task grants: `task_status_changes` is evidence
+  (INSERT+SELECT only); `tasks`/`milestones` get UPDATE but never DELETE
 
 ### 2.2 Change the role passwords from the dev defaults
 
