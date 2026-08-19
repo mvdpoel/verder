@@ -7,6 +7,7 @@ import { verifyRouter } from "./routers/verify";
 import { registryRouter } from "./routers/registry";
 import { registryImportRouter } from "./routers/registry-import";
 import { milestonesRouter } from "./routers/milestones";
+import { timelineRouter } from "./routers/timeline";
 import { tasksRouter } from "./routers/tasks";
 import { dashboardRouter } from "./routers/dashboard";
 import { pushRouter } from "./routers/push";
@@ -21,6 +22,7 @@ export const appRouter = router({
   // surface as registry.import.* (the path later tasks depend on).
   registry: mergeRouters(registryRouter, router({ import: registryImportRouter })),
   milestones: milestonesRouter,
+  timeline: timelineRouter,
   tasks: tasksRouter,
   dashboard: dashboardRouter,
   push: pushRouter,
