@@ -9,7 +9,7 @@ export const docStatusEnum = pgEnum("doc_status", ["inbox", "filed"]);
 export const partyKindEnum = pgEnum("party_kind", ["person", "organization"]);
 export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-provided"]);
 export const actionStatusEnum = pgEnum("action_status", ["open", "done", "cancelled"]);
-export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta", "registry-item", "debt"]);
+export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta", "registry-item", "debt", "task"]);
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual"]);
 
 // --- financial registry (sub-project 2) ---
@@ -212,6 +212,50 @@ export const registryDecisions = pgTable("registry_decisions", {
 }, (t) => [
   check("registry_decision_target_ck", sql`num_nonnulls(${t.financialItemId}, ${t.debtId}) = 1`),
 ]);
+
+// --- tasks + milestones (sub-project 3) ---
+// tasks and milestones are editable fact tables (UPDATE allowed, DELETE never).
+// task_status_changes is an EVIDENCE table: insert-only, ledger-backed
+// (eventType "task.status", entityType "task_status_change").
+
+export const wsnpStageEnum = pgEnum("wsnp_stage", ["application", "accepted", "onboarding", "wsnp-start", "settlement", "clean-slate"]);
+
+export const tasks = pgTable("tasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  details: text("details"),
+  assigneePartyId: uuid("assignee_party_id").references(() => parties.id),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  entryId: uuid("entry_id").references(() => logEntries.id),
+  financialItemId: uuid("financial_item_id").references(() => financialItems.id),
+  debtId: uuid("debt_id").references(() => debts.id),
+  documentId: uuid("document_id").references(() => documents.id),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const taskStatusChanges = pgTable("task_status_changes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id").notNull().references(() => tasks.id),
+  status: text("status").notNull(),
+  note: text("note"),
+  overrideReason: text("override_reason"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const milestones = pgTable("milestones", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  stage: wsnpStageEnum("stage").notNull(),
+  title: text("title").notNull(),
+  happenedAt: timestamp("happened_at", { withTimezone: true }),
+  expectedAt: timestamp("expected_at", { withTimezone: true }),
+  done: boolean("done").notNull().default(false),
+  note: text("note"),
+  entryId: uuid("entry_id").references(() => logEntries.id),
+  documentId: uuid("document_id").references(() => documents.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const workerRuns = pgTable("worker_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
