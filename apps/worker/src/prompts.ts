@@ -19,6 +19,26 @@ export function buildEntryPrompt(email: {
   ].join("\n");
 }
 
+export const TASK_PROMPT_VERSION = "task-v1";
+export function buildTaskPrompt(subject: string, bodyText: string): string {
+  return [
+    "You are screening email for a Dutch debt-restructuring (WSNP/bewindvoering) case.",
+    "The email below may be in Dutch. Decide whether it contains a concrete action item —",
+    "something a specific person must actually do. Reply with strict JSON only, keys:",
+    `isTask (boolean), title (string, short imperative task title, <=80 chars, in the email's language),`,
+    `details (string, 1-2 sentences of context), dueAt ("YYYY-MM-DD" when a deadline is stated, else null),`,
+    `assigneeHint ("martin" when Martin — the client — must act, "verdergroep" when the`,
+    `administrator VerderGroep must act, "other" otherwise).`,
+    "Purely informational email — status updates, confirmations, newsletters, FYI messages —",
+    "is NOT a task: reply with isTask false. Only a clear, explicit request counts.",
+    `When isTask is false, use "" for title and details and null for dueAt.`,
+    "",
+    `Subject: ${subject}`,
+    "",
+    bodyText.slice(0, 6000),
+  ].join("\n");
+}
+
 export const REGISTRY_PROMPT_VERSION = "registry-v1";
 export function buildRegistryPrompt(candidate: {
   counterpartyName: string | null; counterpartyIban: string | null;
