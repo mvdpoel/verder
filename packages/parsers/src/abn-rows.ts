@@ -4,8 +4,12 @@ import type { ParsedRow } from "./types";
 /**
  * The ABN AMRO statement row, independent of the container it arrived in.
  * Both the TSV export and the "Excel" export carry the same eight columns:
- *   [0] account [1] currency [2] booking date YYYYMMDD [3] balance before
- *   [4] balance after [5] value date [6] amount [7] description
+ *   [0] account [1] currency [2] booking date YYYYMMDD
+ *   [3][4][5] the value date and the running balances, in whichever order the
+ *             export writes them — nothing here reads them, and the two
+ *             fixtures in this repo disagree, so do not trust this line if you
+ *             come to use them: check a real export first
+ *   [6] amount [7] description
  * The TSV writes amounts with a comma decimal and the sheet with a dot;
  * decimalToCents accepts both, and does string math for either.
  *

@@ -63,6 +63,49 @@ describe("parseAbnSheet vs parseAbnTsv", () => {
   });
 });
 
+describe("parseAbnSheet (a spreadsheet that is not a statement)", () => {
+  it("reports every line as unreadable and parses nothing", () => {
+    // "Is a spreadsheet" is not "is an ABN statement". The caller has to be
+    // able to tell those apart before it writes anything to the ledger.
+    const result = parseAbnSheet(fixture("huishoudboekje.xlsx"));
+    expect(result.rows).toHaveLength(0);
+    expect(result.errors).toHaveLength(4); // header + 3 budget lines
+  });
+});
+
+describe("parseAbnSheet (limits)", () => {
+  it("refuses a statement longer than the cap rather than importing part of it", () => {
+    // Silently importing the first N rows would look like a clean import and
+    // leave transactions missing from the registry forever. Refusing says so.
+    expect(() => parseAbnSheet(fixture("abn.xls"), { maxRows: 3 }))
+      .toThrow(/more than 3 rows/);
+  });
+
+  it("imports a statement that fits the cap exactly", () => {
+    const result = parseAbnSheet(fixture("abn.xls"), { maxRows: 6 }); // 1 header + 5
+    expect(result.rows).toHaveLength(4);
+  });
+});
+
+describe("parseAbnSheet (header variants)", () => {
+  it("recognizes the header whatever case ABN exports it in", async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["REKENINGNUMMER", "Muntsoort", "Transactiedatum", "Rentedatum",
+        "Beginsaldo", "Eindsaldo", "Transactiebedrag", "Omschrijving"],
+      ["123456789", "EUR", "20260701", "20260701", "1000.00", "927.50", "-72.50",
+        "SEPA Overboeking  Naam: Test BV  IBAN: NL66INGB0007654321"],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet0");
+    const buf = Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "biff8" }) as Buffer);
+    const result = parseAbnSheet(buf);
+    expect(result.errors).toHaveLength(0); // the header is not a broken transaction
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].rowIndex).toBe(0); // and the data still starts at 0
+  });
+});
+
 describe("parseAbnSheet (header absent)", () => {
   it("imports the first row when it is data, not a header", async () => {
     const XLSX = await import("xlsx");

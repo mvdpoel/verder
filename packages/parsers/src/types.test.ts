@@ -22,6 +22,30 @@ describe("detectSource (spreadsheets)", () => {
     const zip = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(30)]);
     expect(detectSource("archive.zip", zip)).toBeNull();
   });
+
+  it("does not route a legacy Word document into a statement parser", () => {
+    const doc = Buffer.concat([
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      Buffer.from("WordDocument", "utf16le"), Buffer.alloc(256)]);
+    expect(detectSource("Beschikking.doc", doc)).toBeNull();
+  });
+});
+
+describe("detectSource (bounded text scan)", () => {
+  it("reads only the head of a large file, never the whole upload", () => {
+    // Uploads run to 50 MB. Decoding all of one to UTF-8 to look for an XML
+    // token costs ~2 bytes of JS string per byte of file, on the request path —
+    // and lets a token buried deep in a binary hijack the format decision.
+    const big = Buffer.concat([
+      Buffer.alloc(200_000, 0x41), Buffer.from("BkToCstmrStmt"), Buffer.alloc(200_000, 0x41)]);
+    expect(detectSource("scan.dat", big)).toBeNull();
+  });
+
+  it("still detects the tokens that live in the head", () => {
+    expect(detectSource("stmt.dat", Buffer.concat([
+      Buffer.from("<Document><BkToCstmrStmt>"), Buffer.alloc(100_000, 0x41)])))
+      .toBe("abn-camt053");
+  });
 });
 
 describe("detectSource (existing behaviour unchanged)", () => {

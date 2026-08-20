@@ -20,6 +20,16 @@ export interface ParseResult {
 export type StatementSource = "abn-camt053" | "abn-tsv" | "paypal-csv" | "abn-xls";
 
 /**
+ * How much of a file the TEXT heuristics look at. The container sniff needs
+ * the whole buffer (a ZIP scatters its entry names through the file); the text
+ * markers all live in the first line or two, and uploads run to 50 MB.
+ * Decoding all of one to UTF-8 on the request path would cost ~2 bytes of JS
+ * string per byte of file, and would let a token buried deep inside a binary
+ * hijack the format decision.
+ */
+const TEXT_SNIFF_BYTES = 1024;
+
+/**
  * Best-effort format sniff from the filename plus the file's bytes. Content
  * wins over extension; returns null when neither is conclusive.
  *
@@ -33,7 +43,7 @@ export function detectSource(filename: string, bytes: Buffer): StatementSource |
   if (container && isSpreadsheetMime(container)) return "abn-xls";
 
   const name = filename.toLowerCase();
-  let text = bytes.toString("utf8");
+  let text = bytes.subarray(0, TEXT_SNIFF_BYTES).toString("utf8");
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // UTF-8 BOM (PayPal)
 
   if (text.includes("BkToCstmrStmt") || /^\s*<\?xml/.test(text) || name.endsWith(".xml")) {
