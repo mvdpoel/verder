@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@verder/core";
 import { protectedProcedure, router } from "../trpc";
+import { recentEntities } from "../search/recent";
 import { realEmbedPort } from "../search/embed";
 import { realRerankPort } from "../search/rerank";
 import { retrieve } from "../search/retrieve";
@@ -14,6 +15,12 @@ const isoDate = z.string().regex(
 );
 
 export const searchRouter = router({
+  // Empty-state list for the ⌘K palette. Reads the index rather than nine
+  // source tables, and returns the same href field search.query hits carry so
+  // the palette has exactly one way to navigate.
+  recent: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(20).default(8) }).default({}))
+    .query(({ ctx, input }) => recentEntities(ctx.db, input.limit)),
   /**
    * Hybrid retrieval. The input is FLAT — no `filters` wrapper — because /search
    * builds it straight from URL search params and the ⌘K palette from one text box.
