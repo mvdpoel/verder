@@ -72,8 +72,8 @@ DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
 ```
 
 Migrations run from the host checkout as the admin role (`verder`), never
-from the containers. The drizzle journal currently contains nineteen
-migrations — `0000` (schema) through `0018` — and covers everything
+from the containers. The drizzle journal currently contains twenty-one
+migrations — `0000` (schema) through `0020` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
@@ -117,6 +117,14 @@ in one pass:
   `registry_decisions`, `entry_participants`, `entry_documents`)
 - `0018_retrieved_refs` — `suggestions.retrieved_refs` (retrieval citations;
   table-level grants already cover the new column)
+- `0019_document_text_trigger` — a fifteenth search-outbox trigger, on
+  `document_texts`, so text that lands after ingestion re-enqueues its document
+- `0020_abn_xls_tx_source` — `tx_source` enum gains `abn-xls` (ABN AMRO's
+  "Excel" statement export). Additive only: `ALTER TYPE ... ADD VALUE` rewrites
+  no row, so the append-only evidence guarantee is untouched. **This migration
+  must be applied before deploying a web/worker build that can detect
+  spreadsheets** — without it an Excel import parses fine and then fails on
+  `invalid input value for enum tx_source`
 
 ### 2.2 Change the role passwords from the dev defaults
 
@@ -202,6 +210,33 @@ Run it once by hand first: `./ops/nightly.sh`.
 4. Drop a scan into the NAS folder; within ~2 min it appears in the vault
    inbox.
 5. Run Verify in the UI → green, and `./ops/nightly.sh` → exit 0.
+
+## 7. Upgrading an existing deployment
+
+Order matters: migrate first, then rebuild, then backfill.
+
+```bash
+# 1. Sync the checkout, then migrate from the HOST as the admin role
+DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
+  pnpm --filter @verder/db migrate
+
+# 2. Rebuild the app containers
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build web worker
+```
+
+After deploying spreadsheet support, backfill the documents that were ingested
+before it — an ABN "Excel" export ingested earlier sits at `extractor: none`,
+`char_count: 0`, invisible to search, to `registry.mine` and to the "do we
+already have this?" panel:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+  pnpm --filter worker extract-texts   # picks up anything stored as extractor "none"
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+  pnpm --filter worker reindex         # gets the new text into search_chunks
+```
+
+Then check `/verify`: the hash chain still verifies and index health is green.
 
 ## Restore procedure
 

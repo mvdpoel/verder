@@ -1552,7 +1552,7 @@ Filename is RFC 5987 encoded: titles are user-controlled text."
 - Modify: `CLAUDE.md`
 - Modify: `docs/deploy.md`
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 ```bash
 env -u NODE_ENV pnpm -r test
@@ -1561,7 +1561,7 @@ env -u NODE_ENV pnpm -r build
 ```
 Expected: all green. Do not proceed on a failure — fix it.
 
-- [ ] **Step 2: Confirm SheetJS landed from the CDN, not npm**
+- [x] **Step 2: Confirm SheetJS landed from the CDN, not npm**
 
 Run: `grep -A2 '"xlsx"' pnpm-lock.yaml | head -20`
 Expected: a `cdn.sheetjs.com` tarball URL. If it resolved to the npm registry, the dependency value is wrong — fix it before shipping.
@@ -1578,7 +1578,7 @@ Log in as martin@vanderpoel.pro / devpass, upload the real ABN `.xlsx` through t
 2. The vault page for it shows a table, not a download.
 3. The Download button returns the original file.
 
-- [ ] **Step 4: Commit the doc updates**
+- [x] **Step 4: Commit the doc updates**
 
 Add to `CLAUDE.md` under the homelab bullet, after the sub-project 4 sentence:
 
