@@ -10,6 +10,7 @@
 ## Build & test
 - Run builds/tests with `env -u NODE_ENV` — the shell exports `NODE_ENV=development`, which breaks `next build`.
 - Dev DB: `docker compose up -d postgres` (roles: `verder` admin, `verder_app`, `verder_worker`). Dev login: martin@vanderpoel.pro / devpass.
+- Worker tests need poppler (`pdftoppm`) on the host: `brew install poppler`. Regenerating the extraction fixtures additionally needs ImageMagick 7 (`brew install imagemagick`): `bash apps/worker/src/fixtures/make-fixtures.sh`.
 - pnpm 10, Node 22+ (images use node:22-slim).
 
 ## Project laws
