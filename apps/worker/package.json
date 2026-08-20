@@ -11,6 +11,7 @@
     "eval": "tsx src/eval/run-eval.ts",
     "registry-eval": "tsx src/eval/run-registry-eval.ts",
     "task-eval": "tsx src/eval/run-task-eval.ts",
+    "retrieval-eval": "tsx src/eval/run-retrieval-eval.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
