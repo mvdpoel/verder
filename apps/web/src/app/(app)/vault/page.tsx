@@ -6,6 +6,10 @@ export default async function VaultPage() {
   const caller = await serverCaller();
   const inbox = await caller.documents.list({ status: "inbox", limit: 100 });
   const filed = await caller.documents.list({ status: "filed", limit: 100 });
+  // The way back from a mistake. Without a surface that lists them, a document
+  // discarded in error is reachable only by typing its UUID — the Undo button
+  // exists but is unreachable for anything Martin cannot already name.
+  const discarded = await caller.documents.list({ status: "discarded", limit: 100 });
   const Row = ({ d }: { d: (typeof inbox)[number] }) => (
     <li className="rounded border bg-white p-3 flex justify-between">
       <Link href={`/vault/${d.id}`} className="hover:underline">{d.effectiveTitle}</Link>
@@ -24,6 +28,19 @@ export default async function VaultPage() {
         <h2 className="font-semibold mb-2">Filed documents</h2>
         <ul className="space-y-2">{filed.map((d) => <Row key={d.id} d={d} />)}</ul>
       </section>
+      {discarded.length > 0 && (
+        <section>
+          <details>
+            <summary className="font-semibold cursor-pointer text-slate-600">
+              Discarded — {discarded.length} kept in the vault, hidden everywhere else
+            </summary>
+            <p className="text-sm text-slate-500 mt-1 mb-2">
+              Nothing here was deleted. Open one to undo the discard.
+            </p>
+            <ul className="space-y-2">{discarded.map((d) => <Row key={d.id} d={d} />)}</ul>
+          </details>
+        </section>
+      )}
     </div>
   );
 }

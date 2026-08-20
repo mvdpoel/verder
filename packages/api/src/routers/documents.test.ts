@@ -290,6 +290,18 @@ describe("documents router", () => {
     expect(list.map((d) => d.id)).toContain(keep.id);
   });
 
+  it("lists discarded documents under an explicit status filter", async () => {
+    // The vault page's "Discarded" section reads exactly this. Without it a
+    // document discarded by mistake is reachable only by typing its UUID, so
+    // the Undo button exists but cannot be found.
+    const junk = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: junk.id, status: "discarded", title: "image.png" });
+
+    const list = await caller().documents.list({ status: "discarded", limit: 100 });
+    expect(list.map((d) => d.id)).toContain(junk.id);
+    expect(list.every((d) => d.effectiveStatus === "discarded")).toBe(true);
+  });
+
   it("returns discarded documents when explicitly asked", async () => {
     const junk = await seedDocument({ title: "image.png", mime: "image/png" });
     await caller().documents.update({ id: junk.id, status: "discarded" });
