@@ -122,4 +122,16 @@ describe("search router", () => {
       eq(schema.workerRuns.worker, "search-rerank"), eq(schema.workerRuns.status, "error")));
     expect(after.length).toBe(before.length + 1);
   });
+
+  it("alreadyHave returns nothing to render when the suggestion asks for no document", async () => {
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "log-entry", model: "qwen3.5:9b", promptVersion: "entry-v1",
+      proposed: { summary: "Status update",
+        actionItems: [{ description: "Even terugbellen", clarity: "clear" }] },
+    }).returning();
+    const out = await caller().search.alreadyHave({ suggestionId: s.id });
+    expect(out.request).toBeNull();
+    expect(out.documents).toEqual([]);
+    expect(out.reranked).toBe(false);
+  });
 });

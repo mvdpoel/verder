@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { alreadyHave as runAlreadyHave, realAlreadyHaveDeps } from "../search/already-have";
 import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@verder/core";
 import { protectedProcedure, router } from "../trpc";
 import { recentEntities } from "../search/recent";
@@ -51,4 +52,14 @@ export const searchRouter = router({
     { db: ctx.db, embed: realEmbedPort(), rerank: realRerankPort() },
     input,
   )),
+  /**
+   * "Do we already have this?" — deep retrieval over the vault for the
+   * document a suggestion asks for. Read-only. The ranking lives in
+   * ../search/already-have.ts so it can be tested with fake ports instead of
+   * a 20 s Ollama rerank.
+   */
+  alreadyHave: protectedProcedure
+    .input(z.object({ suggestionId: z.string().uuid() }))
+    .query(({ ctx, input }) =>
+      runAlreadyHave(realAlreadyHaveDeps(ctx.db), input.suggestionId)),
 });
