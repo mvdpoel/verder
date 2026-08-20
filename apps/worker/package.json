@@ -14,7 +14,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "backfill": "tsx src/ops/backfill-gmail.ts"
+    "backfill": "tsx src/ops/backfill-gmail.ts",
+    "reindex": "tsx src/ops/reindex.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",
