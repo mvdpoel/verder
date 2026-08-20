@@ -1207,7 +1207,7 @@ exactly how the ABN export is stored."
 
 **Testing note:** this repo has no component render tests and no testing-library (`apps/web/vitest.config.ts` sets `environment: "node"`). The established pattern is to lift the decision into a pure module and test that — see `search-kinds.ts`, `index-health-state.ts`, `palette.ts`. Follow it; do not add a component-testing stack.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `apps/web/src/components/preview-kind.test.ts`:
 
@@ -1250,12 +1250,12 @@ describe("rowCountLabel", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter web test preview-kind`
 Expected: FAIL — cannot resolve `./preview-kind`.
 
-- [ ] **Step 3: Write the pure module**
+- [x] **Step 3: Write the pure module**
 
 Create `apps/web/src/components/preview-kind.ts`:
 
@@ -1282,12 +1282,12 @@ export function rowCountLabel(shown: number, total: number, truncated: boolean):
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `env -u NODE_ENV pnpm --filter web test preview-kind`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Write the component**
+- [x] **Step 5: Write the component**
 
 Create `apps/web/src/components/document-preview.tsx`:
 
@@ -1391,7 +1391,7 @@ export function DocumentPreview({ doc, height = "tall" }: {
 }
 ```
 
-- [ ] **Step 6: Use it on the vault page**
+- [x] **Step 6: Use it on the vault page**
 
 In `apps/web/src/app/(app)/vault/[id]/page.tsx`, replace lines 14–17 (the `d.mime.startsWith("image/") ? … : …` expression) with:
 
@@ -1407,7 +1407,7 @@ import { DocumentPreview } from "@/components/document-preview";
 
 The `eslint-disable-next-line` comment moves with the `<img>` into the component; remove it from the page.
 
-- [ ] **Step 7: Use it on the queue card**
+- [x] **Step 7: Use it on the queue card**
 
 In `apps/web/src/components/suggestion-card.tsx`, replace lines 260–264 with:
 
@@ -1423,17 +1423,17 @@ and add the import alongside the existing ones:
 import { DocumentPreview } from "@/components/document-preview";
 ```
 
-- [ ] **Step 8: Verify nothing else still branches on mime**
+- [x] **Step 8: Verify nothing else still branches on mime**
 
 Run: `grep -rn "api/files" apps/web/src --include="*.tsx"`
 Expected: matches only inside `document-preview.tsx`.
 
-- [ ] **Step 9: Typecheck and build**
+- [x] **Step 9: Typecheck and build**
 
 Run: `env -u NODE_ENV pnpm --filter web typecheck && env -u NODE_ENV pnpm --filter web build`
 Expected: both succeed.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/web/src/components/preview-kind.ts apps/web/src/components/preview-kind.test.ts \
