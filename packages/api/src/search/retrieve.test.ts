@@ -3,6 +3,9 @@ import { sql } from "drizzle-orm";
 import { createDb, type Db } from "@verder/db";
 import { retrieve } from "./retrieve";
 import type { EmbedPort } from "./embed";
+import { schema } from "@verder/db";
+import { and, eq } from "drizzle-orm";
+import type { RerankPort } from "./rerank";
 
 // Fixtures are INSERTed as verder_worker — in production only the worker writes the
 // index (migration 0016 gives verder_app SELECT and nothing else). Queries run as
@@ -242,5 +245,77 @@ describe("retrieve (fast mode)", () => {
 
     await expect(retrieve({ db, embed: fixedEmbed(null) },
       { q: "opzegging", cursor: "not-a-cursor" })).rejects.toThrow(/invalid search cursor/);
+  });
+
+  /** Three entities in one window, all keyword-only, so the fused order is
+   * deterministically Brief 0, Brief 1, Brief 2 (ts_rank_cd ties broken by chunk id
+   * are irrelevant here — each title is asserted, not each position). */
+  async function threeEntries() {
+    const w = testWindow();
+    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const [i, id] of ids.entries()) {
+      await insertChunk(writer, { entityType: "entry", entityId: id, title: `Brief ${i}`,
+        body: `opzegging nummer ${i}`, occurredAt: w.start });
+    }
+    const fused = await retrieve({ db, embed: fixedEmbed(null) },
+      { q: "opzegging", from: w.from, to: w.to });
+    return { w, fusedTitles: fused.hits.map((h) => h.title) };
+  }
+
+  it("deep mode reorders the fused hits and reports the prompt version", async () => {
+    const { w, fusedTitles } = await threeEntries();
+    // Reverse whatever the fused order was, so the assertion cannot pass by accident.
+    const rerank: RerankPort = {
+      rerank: async (_q, candidates) => [...candidates].reverse()
+        .map((c, i) => ({ id: c.id, score: candidates.length - i })),
+    };
+    const out = await retrieve({ db, embed: fixedEmbed(null), rerank },
+      { q: "opzegging", from: w.from, to: w.to, mode: "deep" });
+    expect(out.reranked).toBe(true);
+    expect(out.rerankPromptVersion).toBe("rerank-v1");
+    expect(out.hits.map((h) => h.title)).toEqual([...fusedTitles].reverse());
+  });
+
+  it("deep mode keeps hits the model did not score, in fused order, behind the scored ones", async () => {
+    const { w, fusedTitles } = await threeEntries();
+    // Score only the LAST candidate; the other two must keep their relative order.
+    const rerank: RerankPort = {
+      rerank: async (_q, candidates) => [{ id: candidates[candidates.length - 1].id, score: 3 }],
+    };
+    const out = await retrieve({ db, embed: fixedEmbed(null), rerank },
+      { q: "opzegging", from: w.from, to: w.to, mode: "deep" });
+    expect(out.reranked).toBe(true);
+    expect(out.hits.map((h) => h.title))
+      .toEqual([fusedTitles[2], fusedTitles[0], fusedTitles[1]]);
+  });
+
+  it("deep mode returns the fused order and records the degradation when the rerank fails", async () => {
+    const marker = `rr${crypto.randomUUID().slice(0, 8)}`;
+    const { w, fusedTitles } = await threeEntries();
+    const rerank: RerankPort = {
+      rerank: async () => { throw new Error(`TimeoutError ${marker}`); },
+    };
+    const out = await retrieve({ db, embed: fixedEmbed(null), rerank },
+      { q: "opzegging", from: w.from, to: w.to, mode: "deep" });
+    // Search may degrade; it may not error.
+    expect(out.reranked).toBe(false);
+    expect(out.rerankPromptVersion).toBe("rerank-v1");
+    expect(out.hits.map((h) => h.title)).toEqual(fusedTitles);
+
+    const runs = await db.select().from(schema.workerRuns).where(and(
+      eq(schema.workerRuns.worker, "search-rerank"), eq(schema.workerRuns.status, "error")));
+    const mine = runs.filter((r) =>
+      String((r.detail as Record<string, unknown> | null)?.message ?? "").includes(marker));
+    expect(mine).toHaveLength(1);
+    expect((mine[0].detail as Record<string, unknown>).promptVersion).toBe("rerank-v1");
+  });
+
+  it("deep mode without a rerank port behaves exactly like fast mode", async () => {
+    const { w, fusedTitles } = await threeEntries();
+    const out = await retrieve({ db, embed: fixedEmbed(null) },
+      { q: "opzegging", from: w.from, to: w.to, mode: "deep" });
+    expect(out.reranked).toBe(false);
+    expect(out.rerankPromptVersion).toBeNull();
+    expect(out.hits.map((h) => h.title)).toEqual(fusedTitles);
   });
 });

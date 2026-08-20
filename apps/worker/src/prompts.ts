@@ -87,3 +87,8 @@ export function buildDocMetaPrompt(filename: string, text: string): string {
     "Extracted text:", text.slice(0, 4000),
   ].join("\n");
 }
+
+// The rerank prompt runs inside packages/api (the retrieval pipeline lives there; the
+// worker imports @verder/api, never the other way round). Re-exported here so this file
+// stays the single index of every prompt and its version.
+export { RERANK_PROMPT_VERSION, buildRerankPrompt } from "@verder/api/src/search/rerank";

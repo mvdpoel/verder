@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -91,5 +91,35 @@ describe("search router", () => {
   it("rejects an unauthenticated caller", async () => {
     const anon = appRouter.createCaller(createContext({ db, userId: null }));
     await expect(anon.search.query({ q: "opzegging" })).rejects.toThrow(/UNAUTHORIZED/);
+  });
+
+  it("deep mode reports the prompt version and degrades to the fused order when Ollama is down", async () => {
+    const w = testWindow();
+    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const [i, id] of ids.entries()) await chunk(id, `Brief ${i}`, `opzegging nummer ${i}`, w.start);
+
+    const fast = await caller().search.query({ q: "opzegging", from: w.from, to: w.to });
+    expect(fast.rerankPromptVersion).toBeNull();
+
+    const deep = await caller().search.query({
+      q: "opzegging", from: w.from, to: w.to, mode: "deep",
+    });
+    // The router really does hand retrieve() a rerank port — the version is recorded
+    // even though the model never answered.
+    expect(deep.rerankPromptVersion).toBe("rerank-v1");
+    expect(deep.reranked).toBe(false);
+    // Degraded, not errored: same hits, same order as fast mode.
+    expect(deep.hits.map((h) => h.entityId)).toEqual(fast.hits.map((h) => h.entityId));
+  });
+
+  it("deep mode records the degradation in worker_runs", async () => {
+    const w = testWindow();
+    await chunk(crypto.randomUUID(), "Brief", "opzegging bevestigd", w.start);
+    const before = await db.select().from(schema.workerRuns).where(and(
+      eq(schema.workerRuns.worker, "search-rerank"), eq(schema.workerRuns.status, "error")));
+    await caller().search.query({ q: "opzegging", from: w.from, to: w.to, mode: "deep" });
+    const after = await db.select().from(schema.workerRuns).where(and(
+      eq(schema.workerRuns.worker, "search-rerank"), eq(schema.workerRuns.status, "error")));
+    expect(after.length).toBe(before.length + 1);
   });
 });

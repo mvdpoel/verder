@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
+import { schema, type Db } from "@verder/db";
 import { rrfFuse, type SearchEntityType, type SearchStatus } from "@verder/core";
 import { asQuery, type EmbedPort } from "./embed";
+import { RERANK_PROMPT_VERSION, type RerankPort } from "./rerank";
 
 /**
  * The single entry point for retrieval: the tRPC router, the ⌘K palette, the queue
@@ -24,6 +25,11 @@ const CANDIDATES = 50;
 const EF_SEARCH_FILTERED = 100;
 const DEFAULT_LIMIT = 20;
 const MAX_OFFSET = 500;
+/** The spec's deep budget: rerank the top 20 collapsed entities, never the whole page set. */
+const RERANK_TOP_N = 20;
+/** worker_runs.worker for a degraded rerank, so a silently degraded search is visible
+ * beside the other jobs on the dashboard's system-health list. */
+const RERANK_WORKER_NAME = "search-rerank";
 
 /** Where a hit sends the reader. milestones, timeline events, raw emails and parties
  * have no detail route in this application (verified against apps/web/src/app/(app)) —
@@ -120,7 +126,7 @@ async function fetchDisplayRows(db: Db, q: string, ids: string[]): Promise<Map<s
 }
 
 export async function retrieve(
-  deps: { db: Db; embed: EmbedPort },
+  deps: { db: Db; embed: EmbedPort; rerank?: RerankPort },
   input: RetrieveInput,
 ): Promise<RetrieveResult> {
   const q = input.q.trim();
@@ -200,7 +206,41 @@ export async function retrieve(
     return true;
   });
 
-  const page = collapsed.slice(offset, offset + limit);
+  // Deep mode reranks the head of the collapsed list BEFORE pagination, so page 1 of a
+  // deep search reflects the model's judgement rather than the fused order's.
+  let ordered = collapsed;
+  let reranked = false;
+  let rerankPromptVersion: string | null = null;
+  if (input.mode === "deep" && deps.rerank) {
+    rerankPromptVersion = RERANK_PROMPT_VERSION;
+    const head = collapsed.slice(0, RERANK_TOP_N);
+    const tail = collapsed.slice(RERANK_TOP_N);
+    // One extra display query in deep mode; the 20 s LLM call dominates it.
+    const headRows = await fetchDisplayRows(deps.db, q, head.map((f) => f.id));
+    try {
+      const scored = await deps.rerank.rerank(q, head.map((f) => {
+        const r = headRows.get(f.id);
+        return { id: f.id, text: r ? `${r.title}\n${r.head}` : "" };
+      }));
+      const byId = new Map(scored.map((s) => [s.id, s.score]));
+      const judged = head.filter((f) => byId.has(f.id))
+        .sort((a, b) => (byId.get(b.id) ?? 0) - (byId.get(a.id) ?? 0));
+      const untouched = head.filter((f) => !byId.has(f.id));
+      ordered = [...judged, ...untouched, ...tail];
+      reranked = true;
+    } catch (err) {
+      // Search may degrade, it may never error: timeout, non-JSON reply and nonsense
+      // ordering all return the fused order, recorded so the degradation is visible.
+      try {
+        await deps.db.insert(schema.workerRuns).values({
+          worker: RERANK_WORKER_NAME, status: "error",
+          detail: { promptVersion: RERANK_PROMPT_VERSION, message: String(err) },
+        });
+      } catch { /* recording a degradation must never turn it into a failure */ }
+    }
+  }
+
+  const page = ordered.slice(offset, offset + limit);
   const rows = await fetchDisplayRows(deps.db, q, page.map((f) => f.id));
 
   const hits: SearchHit[] = [];
@@ -223,10 +263,9 @@ export async function retrieve(
 
   return {
     hits,
-    nextCursor: collapsed.length > offset + limit ? encodeCursor(offset + limit) : null,
+    nextCursor: ordered.length > offset + limit ? encodeCursor(offset + limit) : null,
     semanticAvailable: vec !== null,
-    // Deep mode is wired in Task 9; the wire shape is final from here on.
-    reranked: false,
-    rerankPromptVersion: null,
+    reranked,
+    rerankPromptVersion,
   };
 }
