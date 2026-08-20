@@ -11,6 +11,7 @@ import { timelineRouter } from "./routers/timeline";
 import { tasksRouter } from "./routers/tasks";
 import { dashboardRouter } from "./routers/dashboard";
 import { pushRouter } from "./routers/push";
+import { searchRouter } from "./routers/search";
 
 export const appRouter = router({
   parties: partiesRouter,
@@ -26,6 +27,7 @@ export const appRouter = router({
   tasks: tasksRouter,
   dashboard: dashboardRouter,
   push: pushRouter,
+  search: searchRouter,
 });
 export type AppRouter = typeof appRouter;
 export { createContext, type Context } from "./trpc";
