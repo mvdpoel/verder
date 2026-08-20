@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, check, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
 export const channelEnum = pgEnum("channel", ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]);
 export const directionEnum = pgEnum("direction", ["inbound", "outbound", "internal"]);
@@ -274,6 +274,78 @@ export const timelineEvents = pgTable("timeline_events", {
   milestoneId: uuid("milestone_id").references(() => milestones.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// --- searchable knowledge base (sub-project 4) ---
+// DERIVED tables, deliberately NOT evidence. They hold no facts: only a
+// rebuildable lookup FOR the facts that live in the evidence tables. They
+// append no ledger_events and they allow UPDATE and DELETE, because the drain
+// replaces chunks whose source text changed. `pnpm --filter worker reindex`
+// recreates all of it from source records. A tampered index cannot corrupt the
+// record — it can only fail to find it, and index health is shown on /verify.
+
+// pg-core has no tsvector type; customType is the seam. The column IS part of
+// this TypeScript schema — Postgres computes the value, drizzle knows it exists.
+// drizzle-kit renders it as the quoted type name "tsvector", which resolves to
+// pg_catalog.tsvector.
+export const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() { return "tsvector"; },
+});
+
+// One row per vault document. OCR and PDF parsing are expensive, so they run
+// once per sha256, ever — the content-addressed bytes are the cache key.
+export const documentTexts = pgTable("document_texts", {
+  documentId: uuid("document_id").primaryKey().references(() => documents.id),
+  sha256: text("sha256").notNull(),
+  text: text("text").notNull(),
+  extractor: text("extractor").notNull(),
+  // char_count is the length BEFORE the 1 MB cap; truncated says the cap bit.
+  charCount: integer("char_count").notNull(),
+  truncated: boolean("truncated").notNull().default(false),
+  extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const searchChunks = pgTable("search_chunks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  chunkIndex: integer("chunk_index").notNull(),
+  // title and body are denormalized on purpose: results render without joins.
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }),
+  // Denormalized effective status, resolved once at index time from whichever
+  // child table owns it (document_status_changes / task_status_changes /
+  // registry_decisions). NULL for entities that have no status. Query-time
+  // status filtering reads THIS column and never a per-type subquery. Plain
+  // text, not an enum, so the vocabulary can grow without a migration. No index:
+  // at most ~17 distinct values, too low-cardinality to beat the GIN/HNSW and
+  // entity_type access paths — it is applied as a filter over their rows.
+  status: text("status"),
+  tsv: tsvector("tsv").generatedAlwaysAs(sql`to_tsvector('dutch', title || ' ' || body)`),
+  // nomic-embed-text is 768-dimensional. NULL means the embedding failed and
+  // the chunk is lexical-only until a later drain retries it.
+  embedding: vector("embedding", { dimensions: 768 }),
+  sourceHash: text("source_hash").notNull(),
+  embedAttempts: integer("embed_attempts").notNull().default(0),
+  indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("search_chunk_uq").on(t.entityType, t.entityId, t.chunkIndex),
+  index("search_chunks_tsv_idx").using("gin", t.tsv),
+  index("search_chunks_embedding_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
+  index("search_chunks_entity_type_idx").on(t.entityType),
+  index("search_chunks_occurred_idx").on(t.occurredAt),
+]);
+
+// Trigger outbox: source-table triggers write (entity_type, entity_id) here and
+// the search.drain job dedupes, reindexes and deletes the drained rows. Rows
+// arrive ONLY through the SECURITY DEFINER trigger function, so neither
+// application role is granted INSERT on this table.
+export const searchOutbox = pgTable("search_outbox", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  enqueuedAt: timestamp("enqueued_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("search_outbox_enqueued_idx").on(t.enqueuedAt)]);
 
 export const workerRuns = pgTable("worker_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
