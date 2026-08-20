@@ -169,6 +169,33 @@ describe("retrieve (fast mode)", () => {
     expect(toCancel.hits[0].href).toBe(`/registry/${item}`);
   });
 
+  it("never returns chunks belonging to a discarded document", async () => {
+    const w = testWindow();
+    const junk = crypto.randomUUID();
+    const keep = crypto.randomUUID();
+    await insertChunk(writer, { entityType: "document", entityId: junk, title: "image.png",
+      body: "linkedin handtekening logo opzegging", occurredAt: w.start, status: "discarded" });
+    await insertChunk(writer, { entityType: "document", entityId: keep, title: "Beschikking.pdf",
+      body: "linkedin handtekening logo opzegging", occurredAt: w.start, status: "filed" });
+
+    const out = await retrieve({ db, embed: fixedEmbed(null) },
+      { q: "handtekening logo", from: w.from, to: w.to });
+    expect(out.hits.map((h) => h.title)).toEqual(["Beschikking.pdf"]);
+  });
+
+  it("still returns chunks whose status is null", async () => {
+    // Most entity types have no status at all; they must not be filtered out.
+    // `status = 'discarded'` is false for NULL, but a careless `<>` yields NULL and
+    // would silently drop every statusless entity. IS DISTINCT FROM is what keeps them.
+    const w = testWindow();
+    const entityId = crypto.randomUUID();
+    await insertChunk(writer, { entityType: "email", entityId, title: "Mail van VerderGroep",
+      body: "een unieke zoekterm in een mailbericht", occurredAt: w.start, status: null });
+    const out = await retrieve({ db, embed: fixedEmbed(null) },
+      { q: "unieke zoekterm", from: w.from, to: w.to });
+    expect(out.hits.map((h) => h.title)).toContain("Mail van VerderGroep");
+  });
+
   it("returns keyword results when every embedding is NULL, and still reports semantic up", async () => {
     const w = testWindow();
     const entityId = crypto.randomUUID();

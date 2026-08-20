@@ -43,6 +43,11 @@ export async function recentEntities(db: Db, limit: number): Promise<RecentRecor
     FROM search_chunks
     WHERE chunk_index = 0
       AND entity_type NOT IN ('party', 'email')
+      -- Discarding enqueues a reindex, so without this a signature logo Martin just
+      -- discarded would arrive at the very top of this indexed_at-ordered list.
+      -- IS DISTINCT FROM, not <>: most entity types have no status, and
+      -- NULL <> 'discarded' is NULL, which would empty the palette entirely.
+      AND status IS DISTINCT FROM 'discarded'
     ORDER BY indexed_at DESC
     LIMIT ${limit}`)).rows as {
       entity_type: string; entity_id: string; title: string;

@@ -171,11 +171,18 @@ export async function retrieve(
   // Status resolution is ONE column comparison: search_chunks.status is denormalized by
   // loadAndRender (Task 5). No per-entity-type status subquery lives here, which is why
   // registry and debt statuses work exactly like document and task statuses.
+  //
+  // A discarded document is junk Martin has already judged — a signature logo from an
+  // email footer — so it never appears in results. IS DISTINCT FROM, not <>: most entity
+  // types carry no status at all, and `NULL <> 'discarded'` is NULL, which would silently
+  // drop every one of them. The predicate lives in this shared `where`, so it gates the
+  // lexical and the semantic candidate query alike.
   const where = sql`
     (${types}::text[] IS NULL OR c.entity_type = ANY(${types}::text[]))
     AND (${from}::timestamptz IS NULL OR c.occurred_at >= ${from}::timestamptz)
     AND (${to}::timestamptz IS NULL OR c.occurred_at <= ${to}::timestamptz)
     AND (${status}::text IS NULL OR c.status = ${status}::text)
+    AND c.status IS DISTINCT FROM 'discarded'
     AND (${partyId}::uuid IS NULL
          OR (c.entity_type = 'party' AND c.entity_id = ${partyId}::uuid)
          OR (c.entity_type = 'entry' AND EXISTS (

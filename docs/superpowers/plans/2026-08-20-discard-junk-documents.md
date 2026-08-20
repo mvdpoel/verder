@@ -438,7 +438,7 @@ documents.list with no status filter."
 
 **Freshness note (verified, no work needed):** `document_status_changes` already has a `search_outbox` trigger (`0017_search_triggers.sql`, `search_enqueue('document', 'document_id')`), so appending a discard enqueues a reindex and `search.drain` rewrites `search_chunks.status` within 60 s. This task only adds the filter.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Follow the harness the existing `retrieve.test.ts` uses to seed chunks:
 
@@ -464,12 +464,18 @@ it("still returns chunks whose status is null", async () => {
 
 That second test is the one that matters: `status = 'discarded'` is false for NULL, but a careless `!=` would drop every statusless entity. `IS DISTINCT FROM` is what keeps NULLs.
 
-- [ ] **Step 2: Run it to verify it fails**
+**DEVIATION (executed 2026-08-20):** the two tests were rewritten against the harness `retrieve.test.ts` actually has. There is no `seedChunk` and `retrieve` takes `({ db, embed }, input)`, not `(db, input)`; fixtures are INSERTed with the `verder_worker` role and read back as `verder_app`. Critically, the dev database is shared and never truncated, so an exact-set assertion needs the file's `testWindow()` scoping — every fixture gets an `occurredAt` inside a private window and every call passes `from`/`to`, which scopes both retrieval branches. Bodies were made Dutch (`handtekening logo`, the `'dutch'` text-search config) rather than the plan's English strings.
+
+**DEVIATION (executed 2026-08-20) — one more surface, found by grepping `search_chunks`:** `retrieve.ts` was not the only query selecting chunks for a user-facing list. `packages/api/src/search/recent.ts` — the ⌘K palette's empty state — reads chunks ordered by `indexed_at DESC`, and per this task's own freshness note a discard *enqueues a reindex*. So a just-discarded signature logo would arrive at position #1 of the palette: the single most visible place in the app, and precisely the surface this task exists to clear. Fixed with the same `AND status IS DISTINCT FROM 'discarded'` predicate under its own TDD cycle (test in `recent.test.ts` asserting the discarded document is gone AND a statusless task survives; watched it fail with `expected true to be false`). `already-have.ts` needed nothing — it calls `retrieve`. Within `retrieve.ts` itself the plan's "check for more than one statement" holds: the `where` fragment is shared by the lexical and semantic candidate queries, so one predicate gates both, and `fetchDisplayRows` only re-reads ids that already passed it.
+
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test retrieve`
 Expected: FAIL — the discarded chunk is returned.
 
-- [ ] **Step 3: Implement**
+Observed: `AssertionError: expected [ 'image.png', 'Beschikking.pdf' ] to deeply equal [ 'Beschikking.pdf' ]` — exactly that reason. The statusless test passed pre-implementation, as it must: it is the guard that the fix does not over-filter, so its job is to keep passing after Step 3.
+
+- [x] **Step 3: Implement**
 
 In `packages/api/src/search/retrieve.ts`, beside the existing status predicate at line 178, add:
 
@@ -481,12 +487,12 @@ In `packages/api/src/search/retrieve.ts`, beside the existing status predicate a
 
 Apply it to every branch of the query that selects candidate chunks — check whether the file builds more than one statement (fast path and rerank path) and cover each.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test retrieve`
 Expected: PASS, plus the pre-existing retrieval tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/search/retrieve.ts packages/api/src/search/retrieve.test.ts

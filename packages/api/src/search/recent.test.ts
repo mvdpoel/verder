@@ -53,6 +53,24 @@ describe("recentEntities", () => {
     expect(rows.some((r) => r.title === "Palette probe tail")).toBe(false);
   });
 
+  it("never lists a discarded document, but keeps the statusless ones", async () => {
+    // Discard enqueues a reindex, so a just-discarded signature logo would arrive at
+    // the very TOP of this indexed_at-ordered list — the worst possible place for it.
+    const junk = crypto.randomUUID();
+    const keep = crypto.randomUUID();
+    await worker.insert(schema.searchChunks).values([
+      { entityType: "document", entityId: junk, chunkIndex: 0, title: "Palette probe junk",
+        body: "handtekening logo", status: "discarded", sourceHash: crypto.randomUUID() },
+      // No status at all: most entity types have none, and they must survive the filter.
+      { entityType: "task", entityId: keep, chunkIndex: 0, title: "Palette probe statusless",
+        body: "iets te doen", sourceHash: crypto.randomUUID() },
+    ]);
+
+    const rows = await recentEntities(app, 8);
+    expect(rows.some((r) => r.title === "Palette probe junk")).toBe(false);
+    expect(rows.some((r) => r.title === "Palette probe statusless")).toBe(true);
+  });
+
   it("never lists a record type the palette cannot open", async () => {
     await worker.insert(schema.searchChunks).values({
       entityType: "party", entityId: crypto.randomUUID(), chunkIndex: 0,
