@@ -72,8 +72,8 @@ DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
 ```
 
 Migrations run from the host checkout as the admin role (`verder`), never
-from the containers. The drizzle journal currently contains twelve
-migrations — `0000` (schema) through `0011` — and covers everything
+from the containers. The drizzle journal currently contains nineteen
+migrations — `0000` (schema) through `0018` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
@@ -97,6 +97,26 @@ in one pass:
   `suggestion_kind` value `task`
 - `0011_task_grants` — task grants: `task_status_changes` is evidence
   (INSERT+SELECT only); `tasks`/`milestones` get UPDATE but never DELETE
+- `0012_lively_scarlet_witch` — curated key events (`timeline_events` +
+  `timeline_event_kind` enum)
+- `0013_timeline_grants` — `timeline_events` grants (editable display aid:
+  UPDATE allowed, DELETE never)
+- `0014_vector_extension` — `CREATE EXTENSION IF NOT EXISTS vector`. Requires
+  the `pgvector/pgvector:pg17` image; a stock `postgres:17` fails here and
+  every later migration cascades
+- `0015_knowledge_base` — `document_texts`, `search_chunks`, `search_outbox`,
+  the GIN index on `tsv` and the HNSW cosine index on `embedding`
+- `0016_search_grants` — index grants. FIRST tables in this project with
+  DELETE: the index is DERIVED, not evidence — fully rebuildable by `reindex`,
+  it appends no ledger events, and index health is surfaced on `/verify`.
+  Neither role gets INSERT on `search_outbox`; rows arrive only through the
+  SECURITY DEFINER trigger function owned by `verder`
+- `0017_search_triggers` — `search_enqueue()` plus fourteen
+  `AFTER INSERT OR UPDATE` triggers: nine entity tables and five
+  parent-refresh tables (`document_status_changes`, `task_status_changes`,
+  `registry_decisions`, `entry_participants`, `entry_documents`)
+- `0018_retrieved_refs` — `suggestions.retrieved_refs` (retrieval citations;
+  table-level grants already cover the new column)
 
 ### 2.2 Change the role passwords from the dev defaults
 
@@ -185,6 +205,10 @@ Run it once by hand first: `./ops/nightly.sh`.
 
 ## Restore procedure
 
+Both the dump and the restore must run on a **pgvector-capable image**
+(`pgvector/pgvector:pg17`): the dump contains `CREATE EXTENSION IF NOT EXISTS
+vector`, and a stock `postgres:17` fails on that line and cascades.
+
 1. Stop web + worker (leave postgres up):
    ```bash
    docker compose --env-file .env.prod -f docker-compose.prod.yml stop web worker
@@ -201,7 +225,20 @@ Run it once by hand first: `./ops/nightly.sh`.
    ```bash
    rsync -a "$BACKUP_DIR/vault/" "$VAULT_HOST_DIR/"
    ```
-4. Start everything and verify:
+4. Rebuild the search index. The nightly dump excludes `search_chunks` data
+   (`--exclude-table-data=public.search_chunks`), so a restored database has
+   the table, its GIN/HNSW indexes and no rows — search would silently return
+   nothing:
+   ```bash
+   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d worker
+   docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+     pnpm --filter worker reindex
+   ```
+   This is GPU-bound and not instant. To rebuild only part of the corpus use
+   the flags `--entity=document`, `--since=2026-01-01`, `--prune`; there is no
+   environment-variable form. Check `/verify` afterwards: chunk count non-zero,
+   outbox depth draining, embedding failures at zero.
+5. Start everything and verify:
    ```bash
    docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
    docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \

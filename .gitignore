@@ -8,5 +8,7 @@ secrets/
 .turbo/
 vault-files/
 next-env.d.ts
+# Tesseract language data, downloaded on demand by the OCR tests (~11 MB).
+*.traineddata
 *.tsbuildinfo
 .gstack/

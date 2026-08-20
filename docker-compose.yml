@@ -1,6 +1,13 @@
 services:
   postgres:
-    image: postgres:17
+    # -trixie, not the bare :pg17 tag. The bare tag is Debian 12 (glibc 2.36);
+    # production's postgres:17 was Debian 13 (glibc 2.41), and glibc IS the
+    # collation provider. Attaching a 2.41-built data directory to a 2.36 image
+    # leaves every text index ordered by rules the server no longer agrees with
+    # — silently wrong lookups and unique indexes that stop catching duplicates.
+    # -trixie is the same 17.11-1.pgdg13+2 build and the same glibc 2.41, plus
+    # pgvector. Keep dev and prod on the same tag.
+    image: pgvector/pgvector:pg17-trixie
     environment:
       POSTGRES_USER: verder
       POSTGRES_PASSWORD: verder

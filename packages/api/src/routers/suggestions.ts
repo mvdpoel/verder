@@ -8,6 +8,7 @@ import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";
 import { debtFields, itemFields } from "./registry";
 import { taskFields } from "./tasks";
+import { documentRequestText } from "../search/document-request";
 
 const entryForApproval = z.object({
   occurredAt: z.coerce.date(),
@@ -52,6 +53,9 @@ export const suggestionsRouter = router({
       .orderBy(desc(schema.suggestions.createdAt));
     return Promise.all(rows.map(async (s) => ({
       ...s,
+      // Pure and cheap: decided here so the card only calls the deep-retrieval
+      // procedure for suggestions that actually ask for a document.
+      documentRequest: documentRequestText(s.kind, s.proposed),
       rawEmail: s.rawEmailId
         ? (await ctx.db.select().from(schema.rawEmails)
             .where(eq(schema.rawEmails.id, s.rawEmailId)))[0] ?? null

@@ -4,6 +4,7 @@ import { schema, type Db } from "@verder/db";
 import { recordRun } from "./heartbeat";
 import { buildDocMetaPrompt, buildEntryPrompt, DOCMETA_PROMPT_VERSION, PROMPT_VERSION } from "./prompts";
 import { sendPush as realSendPush } from "./push";
+import type { RetrievedRef, RetrieveRefsFn } from "./retrieval-refs";
 
 export interface LlmPort { chatJson(prompt: string): Promise<unknown> }
 
@@ -43,7 +44,8 @@ const llmEntrySchema = z.object({
 });
 
 export async function suggestEntry(
-  deps: { db: Db; llm: LlmPort; sendPush?: SendPushFn }, rawEmailId: string,
+  deps: { db: Db; llm: LlmPort; sendPush?: SendPushFn; retrieveRefs?: RetrieveRefsFn },
+  rawEmailId: string,
 ): Promise<void> {
   const sendPush = deps.sendPush ?? realSendPush;
   const [email] = await deps.db.select().from(schema.rawEmails)
@@ -54,20 +56,32 @@ export async function suggestEntry(
   const base = { occurredAt: email.sentAt.toISOString(), channel: "email" as const,
     participantNames: [email.fromAddr],
     attachmentDocumentIds: attachmentDocs.map((d) => d.id) };
+  // What the index already knows about this email's subject matter. Computed
+  // BEFORE the LLM call so both the parsed suggestion and the needs-manual
+  // fallback carry the same provenance. realRetrieveRefs never throws; this
+  // guard covers injected test doubles that might.
+  let retrievedRefs: RetrievedRef[] = [];
+  if (deps.retrieveRefs) {
+    try {
+      retrievedRefs = await deps.retrieveRefs(
+        `${email.subject}\n${email.bodyText.slice(0, 2000)}`);
+    } catch { retrievedRefs = []; }
+  }
   const model = process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
   try {
     const parsed = llmEntrySchema.parse(await deps.llm.chatJson(buildEntryPrompt({
       from: email.fromAddr, subject: email.subject, sentAt: email.sentAt, bodyText: email.bodyText })));
     await deps.db.insert(schema.suggestions).values({
       kind: "log-entry", rawEmailId, model, promptVersion: PROMPT_VERSION,
+      retrievedRefs,
       proposed: { ...base, direction: parsed.direction, summary: parsed.summary,
         details: parsed.details, actionItems: parsed.actionItems } });
     await notifyNewSuggestion(deps.db, email.subject, sendPush);
-    await recordRun(deps.db, "ollama", "ok", { rawEmailId });
+    await recordRun(deps.db, "ollama", "ok", { rawEmailId, refs: retrievedRefs.length });
   } catch (err) {
     await deps.db.insert(schema.suggestions).values({
       kind: "log-entry", rawEmailId, model, promptVersion: PROMPT_VERSION,
-      status: "needs-manual",
+      status: "needs-manual", retrievedRefs,
       proposed: { ...base, direction: "inbound", summary: email.subject,
         details: email.bodyText.slice(0, 2000), actionItems: [] } });
     await notifyNewSuggestion(deps.db, email.subject, sendPush);

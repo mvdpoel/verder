@@ -4,7 +4,13 @@
 #   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 services:
   postgres:
-    image: postgres:17
+    # -trixie, not the bare :pg17 tag — same PostgreSQL build (17.11-1.pgdg13+2)
+    # and same glibc (2.41) as the postgres:17 image this replaced, so the
+    # existing data directory keeps the exact collation its indexes were built
+    # under. The bare :pg17 tag is Debian 12 / glibc 2.36 and would downgrade
+    # the collation provider under a live ledger. Verified before the swap:
+    # pg_database.datcollversion was 2.41 and actual 2.41.
+    image: pgvector/pgvector:pg17-trixie
     restart: unless-stopped
     environment:
       POSTGRES_USER: verder

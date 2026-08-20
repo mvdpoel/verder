@@ -7,11 +7,15 @@ import { recordRun } from "./heartbeat";
 import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
+import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
+import { storeDocumentText } from "./document-text";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
 import { sendPush } from "./push";
+import { realEmbedPort } from "@verder/api/src/search/embed";
+import { drainOnce } from "./search-drain";
 
 const url = process.env.WORKER_DATABASE_URL
   ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -36,22 +40,11 @@ await boss.work("gmail.poll", async () => {
 });
 
 const llm = realLlmPort();
-
-async function extractText(mime: string, buf: Buffer): Promise<string> {
-  if (mime === "application/pdf") {
-    const pdfParse = (await import("pdf-parse")).default;
-    return (await pdfParse(buf)).text;
-  }
-  if (mime.startsWith("image/")) {
-    const { recognize } = await import("tesseract.js");
-    return (await recognize(buf, "nld+eng")).data.text;
-  }
-  return "";
-}
+const retrieveRefs = realRetrieveRefs(db);
 
 await boss.work("suggest.entry", async ([job]) => {
   const { rawEmailId } = job.data as { rawEmailId: string };
-  await suggestEntry({ db, llm, sendPush }, rawEmailId);
+  await suggestEntry({ db, llm, sendPush, retrieveRefs }, rawEmailId);
   // Action-item mining rides along, error-isolated: suggestTask swallows its
   // own failures, and this guard makes sure a task-mine crash can never fail
   // (and re-run) the entry suggestion above.
@@ -66,7 +59,11 @@ await boss.work("suggest.docmeta", async ([job]) => {
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
   const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", doc.sha256));
-  await suggestDocMeta({ db, llm, extractText, sendPush }, documentId, buf);
+  // Extract once, store it, and hand the same text to the docmeta prompt: the
+  // text the model saw is the text the search index holds.
+  const stored = await storeDocumentText({ db }, doc, buf);
+  await suggestDocMeta({ db, llm, extractText: async () => stored.text, sendPush },
+    documentId, buf);
 });
 
 await boss.createQueue("nas.scan");
@@ -96,6 +93,16 @@ await boss.work("receipts.resolve", async ([job]) => {
   await resolveAggregator({ db, gmail, llm,
     vaultDir: process.env.VAULT_DIR ?? "./vault-files" },
     (job.data as { suggestionId: string }).suggestionId);
+});
+
+// Search index freshness: the fourteen triggers fill search_outbox and this is
+// its only consumer. Every minute is pg-boss's finest cron granularity and the
+// spec's 60 s target.
+const embed = realEmbedPort();
+await boss.createQueue("search.drain");
+await boss.schedule("search.drain", "* * * * *");
+await boss.work("search.drain", async () => {
+  await drainOnce({ db, embed });
 });
 
 console.log("worker up");

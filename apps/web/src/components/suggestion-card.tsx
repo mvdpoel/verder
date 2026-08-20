@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { formatEuro } from "@/components/registry-list";
+import { RetrievedRefs } from "@/components/retrieved-refs";
+import { AlreadyHaveThis } from "@/components/already-have-this";
 
 type Proposed = { occurredAt: string; channel: string; direction: "inbound" | "outbound";
   summary: string; details: string; participantNames: string[];
@@ -22,6 +24,7 @@ type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
   assigneeHint?: "martin" | "verdergroep" | "other"; rawEmailId?: string };
 
 type Suggestion = { id: string; kind: string; model: string | null; proposed: unknown;
+  retrievedRefs: unknown; documentRequest: string | null;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
   document: { sha256: string; mime: string; title: string } | null };
 
@@ -39,6 +42,7 @@ function TaskCard({ s }: { s: Suggestion }) {
   const [title, setTitle] = useState(p?.title ?? "");
   const [details, setDetails] = useState(p?.details ?? "");
   const [dueAt, setDueAt] = useState(p?.dueAt ?? ""); // YYYY-MM-DD or ""
+  const [pickedDocId, setPickedDocId] = useState<string | null>(null);
   // "" = not seeded yet; the assigneeHint is resolved once parties load.
   const [assigneePartyId, setAssigneePartyId] = useState("");
   const [seeded, setSeeded] = useState(false);
@@ -75,6 +79,10 @@ function TaskCard({ s }: { s: Suggestion }) {
           {(parties.data ?? []).map((party) =>
             <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
       </div>
+      {s.documentRequest && <AlreadyHaveThis suggestionId={s.id} request={s.documentRequest}
+        selected={pickedDocId ? [pickedDocId] : []}
+        onToggle={(id) => setPickedDocId((prev) => (prev === id ? null : id))} />}
+      <RetrievedRefs refs={s.retrievedRefs} />
       {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
         <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
       <div className="flex gap-2">
@@ -83,6 +91,7 @@ function TaskCard({ s }: { s: Suggestion }) {
           onClick={() => approve.mutate({ id: s.id, task: {
             title: title.trim(), details: details || undefined,
             dueAt: dueAt ? new Date(dueAt) : undefined,
+            documentId: pickedDocId ?? undefined,
             assigneePartyId: assigneePartyId || undefined } })}>Add task</button>
         <button className="rounded border px-4 py-1 disabled:opacity-50" disabled={busy}
           onClick={() => reject.mutate({ id: s.id })}>Not a task</button>
@@ -96,6 +105,7 @@ function EntryCard({ s }: { s: Suggestion }) {
   const p = s.proposed as Proposed | null;
   const [summary, setSummary] = useState(p?.summary ?? "");
   const [details, setDetails] = useState(p?.details ?? "");
+  const [pickedDocIds, setPickedDocIds] = useState<string[]>([]);
   const approve = trpc.suggestions.approveEntry.useMutation({ onSuccess: () => router.refresh() });
   const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
   if (!p) return null;
@@ -109,6 +119,11 @@ function EntryCard({ s }: { s: Suggestion }) {
         value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
       <label className="block text-sm">Details<textarea className="w-full border rounded p-2" rows={3}
         value={details} onChange={(e) => setDetails(e.target.value)} /></label>
+      {s.documentRequest && <AlreadyHaveThis suggestionId={s.id} request={s.documentRequest}
+        selected={pickedDocIds}
+        onToggle={(id) => setPickedDocIds((prev) =>
+          prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
+      <RetrievedRefs refs={s.retrievedRefs} />
       {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
         <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
       <div className="flex gap-2">
@@ -116,7 +131,8 @@ function EntryCard({ s }: { s: Suggestion }) {
           onClick={() => approve.mutate({ id: s.id, entry: {
             occurredAt: new Date(p.occurredAt), channel: p.channel as "email", direction: p.direction,
             summary, details: details || undefined, source: "gmail-watch",
-            participantPartyIds: [], documentIds: p.attachmentDocumentIds,
+            participantPartyIds: [],
+            documentIds: [...new Set([...p.attachmentDocumentIds, ...pickedDocIds])],
             actionItems: p.actionItems } })}>Add to the record</button>
         <button className="rounded border px-4 py-1" onClick={() => reject.mutate({ id: s.id })}>Not relevant</button>
       </div>
@@ -169,6 +185,7 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
           value={category} onChange={(e) => setCategory(e.target.value as ItemCategory)}>
           {ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
       </div>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
           disabled={!name || approve.isPending || reject.isPending}
@@ -210,6 +227,7 @@ function DebtCard({ s }: { s: Suggestion }) {
       <label className="block text-sm">Creditor<input className="w-full border rounded p-2"
         value={creditorName} onChange={(e) => setCreditorName(e.target.value)} /></label>
       <p className="text-sm text-slate-700">Claimed: {formatEuro(claimedCents)}</p>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
           disabled={!creditorName || approve.isPending || reject.isPending}
@@ -248,6 +266,7 @@ function DocMetaCard({ s }: { s: Suggestion }) {
         value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="block text-sm">Type<input className="w-full border rounded p-2"
         value={docType} onChange={(e) => setDocType(e.target.value)} /></label>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1"
           onClick={() => approve.mutate({ id: s.id, title, docType: docType || undefined })}>

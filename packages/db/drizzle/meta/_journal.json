@@ -99,6 +99,41 @@
       "when": 1787160018424,
       "tag": "0013_timeline_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787208253455,
+      "tag": "0014_vector_extension",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787208294246,
+      "tag": "0015_knowledge_base",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787208587446,
+      "tag": "0016_search_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787217272428,
+      "tag": "0017_search_triggers",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787228437751,
+      "tag": "0018_retrieved_refs",
+      "breakpoints": true
     }
   ]
 }
