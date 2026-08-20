@@ -1071,7 +1071,7 @@ copy of the magic bytes."
 
 **Why a query and not server-side parsing:** `suggestion-card.tsx` is a client component (it holds `useState`), so it cannot await a parse. One tRPC query serves both it and the server-rendered vault page.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("returns capped rows for a spreadsheet, reporting the true total", async () => {
@@ -1106,12 +1106,12 @@ it("rejects an unauthenticated caller", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents`
 Expected: FAIL — `sheetPreview is not a function`.
 
-- [ ] **Step 3: Implement the procedure**
+- [x] **Step 3: Implement the procedure**
 
 In `packages/api/src/routers/documents.ts`, add the imports:
 
@@ -1171,12 +1171,12 @@ Then add the procedure **inside** the `documentsRouter` object, alongside `get` 
   }),
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/routers/documents.ts packages/api/src/routers/documents.test.ts

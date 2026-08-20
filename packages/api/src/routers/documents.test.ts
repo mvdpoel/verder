@@ -1,19 +1,26 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
+import { storeFile } from "../storage";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 
 describe("documents router", () => {
-  let db: Db; let userId: string;
+  let db: Db; let userId: string; let vaultDir: string;
   beforeAll(async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), "verder-docs-vault-"));
+    process.env.VAULT_DIR = vaultDir;
     db = createDb(APP_URL).db;
     const [u] = await db.insert(schema.users)
       .values({ email: `d${Date.now()}@test.local`, name: "Martin" }).returning();
     userId = u.id;
   });
   const caller = () => appRouter.createCaller(createContext({ db, userId }));
+  const anonCaller = () => appRouter.createCaller(createContext({ db, userId: null }));
   const sha = () => crypto.randomUUID().replaceAll("-", "").padEnd(64, "a");
 
   it("registers an upload idempotently", async () => {
@@ -51,5 +58,39 @@ describe("documents router", () => {
     const [raw] = await db.select().from(schema.documents)
       .where((await import("drizzle-orm")).eq(schema.documents.id, doc.id));
     expect(raw.title).toBe("scan_001"); // evidence row never mutated
+  });
+
+  it("returns capped rows for a spreadsheet, reporting the true total", async () => {
+    const buf = Buffer.from(readFileSync(
+      new URL("../../../parsers/fixtures/abn.xls", import.meta.url)));
+    const { sha256 } = await storeFile(vaultDir, buf);
+    await caller().documents.registerUpload({
+      sha256, sizeBytes: buf.length, mime: "application/vnd.ms-excel",
+      title: "abn.xls", source: "upload", receivedAt: new Date() });
+
+    const preview = await caller().documents.sheetPreview({ sha256, maxRows: 3 });
+    expect(preview.sheetName).toBe("Sheet0");
+    expect(preview.rows).toHaveLength(3);
+    expect(preview.totalRows).toBe(6);
+    expect(preview.totalSheets).toBe(1);
+    expect(preview.truncated).toBe(true);
+    expect(preview.rows[0][0]).toBe("Rekeningnummer");
+  });
+
+  it("refuses a document that is not a spreadsheet", async () => {
+    const buf = Buffer.from("%PDF-1.4\nnot a sheet");
+    const { sha256 } = await storeFile(vaultDir, buf);
+    await caller().documents.registerUpload({
+      sha256, sizeBytes: buf.length, mime: "application/pdf",
+      title: "letter.pdf", source: "upload", receivedAt: new Date() });
+    await expect(caller().documents.sheetPreview({ sha256 }))
+      .rejects.toThrow(/not a spreadsheet/i);
+  });
+
+  it("rejects an unauthenticated caller", async () => {
+    // asserting the CODE, not merely "it threw": an unknown sha would throw
+    // NOT_FOUND too, which would pass a bare toThrow() without proving auth.
+    await expect(anonCaller().documents.sheetPreview({ sha256: "0".repeat(64) }))
+      .rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });

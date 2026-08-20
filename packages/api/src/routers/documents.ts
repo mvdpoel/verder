@@ -1,10 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import {
+  isSpreadsheetMime, readWorkbook, sniffContainer, UNINFORMATIVE_MIMES,
+  type SheetData,
+} from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
-import { relPathFor } from "../storage";
+import { readFilePath, relPathFor } from "../storage";
 
 export async function ingestDocument(tx: Db, input: {
   sha256: string; sizeBytes: number; mime: string; title: string;
@@ -37,6 +42,9 @@ export async function effectiveDocument(db: Db, id: string) {
     effectiveDocType: latest?.docType ?? doc.docType };
 }
 
+/** Enough to see what a statement is; far short of hanging the tab on a big one. */
+export const SHEET_PREVIEW_MAX_ROWS = 200;
+
 export const documentsRouter = router({
   registerUpload: protectedProcedure.input(z.object({
     sha256: z.string().regex(/^[0-9a-f]{64}$/), sizeBytes: z.number().int().positive(),
@@ -67,6 +75,45 @@ export const documentsRouter = router({
       if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
       return effectiveDocument(ctx.db, doc.id);
     }),
+
+  sheetPreview: protectedProcedure.input(z.object({
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    maxRows: z.number().int().min(1).max(1000).default(SHEET_PREVIEW_MAX_ROWS),
+  })).query(async ({ ctx, input }) => {
+    const [doc] = await ctx.db.select().from(schema.documents)
+      .where(eq(schema.documents.sha256, input.sha256));
+    if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+
+    const buf = await readFile(
+      readFilePath(process.env.VAULT_DIR ?? "./vault-files", input.sha256));
+    // The stored mime is whatever the source claimed — ABN's export arrives as
+    // octet-stream — so fall back to the bytes, exactly as extraction does.
+    const mime = UNINFORMATIVE_MIMES.has(doc.mime)
+      ? (sniffContainer(buf) ?? doc.mime)
+      : doc.mime;
+    if (!isSpreadsheetMime(mime)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Document is not a spreadsheet" });
+    }
+
+    let sheets: SheetData[];
+    try {
+      sheets = readWorkbook(buf);
+    } catch (err) {
+      throw new TRPCError({ code: "BAD_REQUEST",
+        message: `Could not read this workbook: ${err instanceof Error ? err.message : String(err)}` });
+    }
+    if (sheets.length === 0) {
+      return { sheetName: "", rows: [], totalRows: 0, totalSheets: 0, truncated: false };
+    }
+    const first = sheets[0];
+    return {
+      sheetName: first.name,
+      rows: first.rows.slice(0, input.maxRows),
+      totalRows: first.rows.length,
+      totalSheets: sheets.length,
+      truncated: first.rows.length > input.maxRows,
+    };
+  }),
 
   file: protectedProcedure.input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
