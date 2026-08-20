@@ -22,6 +22,9 @@ export interface ExtractedText {
 export const MIN_PDF_TEXT_CHARS = 200;
 export const RASTER_DPI = 200;
 export const MAX_OCR_PAGES = 20;
+// The cap is on characters (code points), not bytes, so a Dutch letter full of
+// accents is never cut mid-code-point.
+export const MAX_TEXT_CHARS = 1_000_000;
 
 export interface OcrPort { ocrImage(png: Buffer): Promise<string> }
 
@@ -54,10 +57,10 @@ export async function rasterizePdf(
   }
 }
 
-// Counted in code points, not UTF-16 units, so a Dutch letter full of accents
-// is never measured or cut mid-code-point.
-function measure(raw: string): { text: string; charCount: number; truncated: boolean } {
-  return { text: raw, charCount: Array.from(raw).length, truncated: false };
+function cap(raw: string): { text: string; charCount: number; truncated: boolean } {
+  const cps = Array.from(raw);
+  if (cps.length <= MAX_TEXT_CHARS) return { text: raw, charCount: cps.length, truncated: false };
+  return { text: cps.slice(0, MAX_TEXT_CHARS).join(""), charCount: cps.length, truncated: true };
 }
 
 export async function extractDocumentText(
@@ -66,19 +69,25 @@ export async function extractDocumentText(
 ): Promise<ExtractedText> {
   const ocr = deps.ocr ?? realOcrPort();
   const rasterize = deps.rasterize ?? rasterizePdf;
-  if (mime === "application/pdf") {
-    const pdfParse = (await import("pdf-parse")).default;
-    const parsed = (await pdfParse(buf)).text;
-    if (Array.from(parsed).length >= MIN_PDF_TEXT_CHARS) {
-      return { ...measure(parsed), extractor: "pdf-parse" };
+  try {
+    if (mime === "application/pdf") {
+      const pdfParse = (await import("pdf-parse")).default;
+      const parsed = (await pdfParse(buf)).text;
+      if (Array.from(parsed).length >= MIN_PDF_TEXT_CHARS) {
+        return { ...cap(parsed), extractor: "pdf-parse" };
+      }
+      const pages = await rasterize(buf);
+      const texts: string[] = [];
+      for (const page of pages) texts.push(await ocr.ocrImage(page));
+      return { ...cap(texts.join("\n\n").trim()), extractor: "ocr-pdf" };
     }
-    const pages = await rasterize(buf);
-    const texts: string[] = [];
-    for (const page of pages) texts.push(await ocr.ocrImage(page));
-    return { ...measure(texts.join("\n\n").trim()), extractor: "ocr-pdf" };
+    if (mime.startsWith("image/")) {
+      return { ...cap((await ocr.ocrImage(buf)).trim()), extractor: "ocr-image" };
+    }
+    return { text: "", charCount: 0, extractor: "none", truncated: false };
+  } catch (err) {
+    // Never throws: a document that cannot be read stays findable by its title
+    // and metadata, and the caller records the reason in worker_runs.
+    return { text: "", charCount: 0, extractor: "none", truncated: false, error: String(err) };
   }
-  if (mime.startsWith("image/")) {
-    return { ...measure((await ocr.ocrImage(buf)).trim()), extractor: "ocr-image" };
-  }
-  return { text: "", charCount: 0, extractor: "none", truncated: false };
 }

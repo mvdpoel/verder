@@ -57,4 +57,31 @@ describe("extractDocumentText", () => {
     expect(pages).toHaveLength(1);
     expect(pages[0].subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   });
+
+  it("caps oversized text at 1 MB and flags the truncation", async () => {
+    const huge = "é".repeat(1_000_050);
+    const out = await extractDocumentText("image/png", await fixture("scan-letter.png"),
+      { ocr: stubOcr(huge) });
+    expect(Array.from(out.text)).toHaveLength(1_000_000);
+    expect(out.charCount).toBe(1_000_050); // the length BEFORE the cap
+    expect(out.truncated).toBe(true);
+  });
+
+  it("never throws: a rasterizer failure comes back as extractor none with the error", async () => {
+    const out = await extractDocumentText("application/pdf", await fixture("scanned-letter.pdf"), {
+      ocr: stubOcr("SHOULD NOT RUN"),
+      rasterize: async () => { throw new Error("pdftoppm ENOENT"); },
+    });
+    expect(out.extractor).toBe("none");
+    expect(out.text).toBe("");
+    expect(out.error).toContain("pdftoppm ENOENT");
+  });
+
+  // Opt-in: downloads nld+eng training data on first run. Run once by hand with
+  //   OCR_TESTS=1 env -u NODE_ENV pnpm --filter worker test src/extract.test.ts
+  it.runIf(process.env.OCR_TESTS === "1")("really OCRs the scan fixture", async () => {
+    const out = await extractDocumentText("image/png", await fixture("scan-letter.png"));
+    expect(out.extractor).toBe("ocr-image");
+    expect(out.text).toContain("Ziggo");
+  }, 180_000);
 });
