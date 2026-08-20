@@ -120,6 +120,13 @@
       "when": 1787208587446,
       "tag": "0016_search_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787217272428,
+      "tag": "0017_search_triggers",
+      "breakpoints": true
     }
   ]
 }
