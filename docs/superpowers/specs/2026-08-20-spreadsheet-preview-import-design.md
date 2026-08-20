@@ -240,10 +240,18 @@ magic bytes.
 ## Deployment
 
 1. `pnpm install` picks up the CDN tarball; worker and web images rebuild.
-2. No migration — `document_texts.extractor` is a text column, not an enum.
-3. `pnpm --filter worker extract-texts` backfills the two existing
-   `application/octet-stream` documents (idempotent, and it already retries
-   anything stored as `none` on a readable mime).
+2. ~~No migration~~ — CORRECTED DURING IMPLEMENTATION. `document_texts.extractor`
+   is indeed a text column, but `transactions.source` is the Postgres enum
+   `tx_source`, so the new `abn-xls` value cannot be stored without
+   `0020_abn_xls_tx_source` (`ALTER TYPE ... ADD VALUE`). Additive: no row is
+   rewritten and the append-only guarantee is untouched. **It must be applied
+   from the host before the new web/worker images go up**, or an Excel import
+   parses cleanly and then dies on `invalid input value for enum tx_source`.
+   See docs/deploy.md §2.1 and §7.
+3. `pnpm --filter worker extract-texts` backfills the existing
+   `application/octet-stream` documents (idempotent; the retry predicate was
+   widened during implementation to cover the spreadsheet and uninformative
+   mimes, which is the population this backfill exists for).
 4. `pnpm --filter worker reindex` so the newly extracted text reaches
    `search_chunks`.
 

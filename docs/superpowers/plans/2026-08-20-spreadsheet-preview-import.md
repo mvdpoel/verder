@@ -1651,4 +1651,33 @@ Visit `/verify` and confirm the hash chain still verifies and index health is gr
 
 **Known deviation from the spec, resolved in this plan:** the spec's §"Components/4" implies the preview parses server-side. `suggestion-card.tsx` is a client component, so Task 6 adds a tRPC query instead — noted inline in Task 6.
 
+**Deviations discovered while executing, recorded here rather than left to be found:**
+
+1. **Migration 0020 (Task 4).** The spec said "no migration". `transactions.source`
+   is the `tx_source` pgEnum, so `abn-xls` could be detected and parsed but never
+   stored. `0020_abn_xls_tx_source` adds the value; additive, no row rewritten,
+   append-only guarantee untouched — but it must be applied BEFORE the new images
+   go up. Recorded in the spec, CLAUDE.md and docs/deploy.md §2.1/§7.
+2. **`@verder/parsers/sheet-mimes` subpath (Task 2/7).** The plan puts
+   `isSpreadsheetMime` in `sniff.ts` and imports it from the barrel. `sniff.ts`
+   builds `Buffer`s at module scope and the barrel reaches SheetJS, so a client
+   component (`preview-kind.ts`) cannot import either. The three-symbol
+   vocabulary moved to `src/sheet-mimes.ts`, published as its own subpath and
+   re-exported by `sniff.ts`, so server callers still have one import and the
+   definition still exists once. Same split `@verder/core` makes for ⌘K.
+3. **`readWorkbook` limits and a shared container check (post-review).** Task 1's
+   code has no guard at all; the shipped version refuses non-workbook containers
+   via `sniffContainer`'s own check, and caps input bytes, ZIP-declared inflated
+   bytes and rows per sheet. Measured cause: a 1.5 KB `.xlsx` declaring the full
+   grid ran over 120 s synchronously, and a 5 MB one inflating to 162 MB cost
+   11.3 s and 955 MB RSS. Consequence for the plan's Task 6: the preview reports
+   "the first N rows" instead of "N of TOTAL", because counting the total means
+   parsing the whole workbook — the work the cap refuses.
+4. **Import refused when nothing parses (post-review).** Task 4 inserts every
+   `ParseResult.errors` row as a `parseError` transaction. Detection cannot tell
+   an ABN statement from any other workbook, so a household budget produced one
+   permanent junk row per line in a table with no DELETE grant. Ingest now
+   registers the document (evidence first, unchanged) and then refuses with a
+   400 when a file yielded zero rows and only errors.
+
 **Type consistency checked:** `SheetData { name, rows }` (Task 1) is consumed unchanged in Tasks 3, 5, 6. `sniffContainer` returns `string | null` (a mime) everywhere. `abnRowToParsed(cols, rowIndex)` has one signature, used by both `abn-tsv.ts` and `abn-sheet.ts`. `previewKind` returns the same four-member union the component switches on. `sheetPreview`'s return shape is destructured identically in Task 7.
