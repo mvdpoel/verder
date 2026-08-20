@@ -1,9 +1,15 @@
-import { SEARCH_STATUSES, type SearchEntityType, type SearchStatus } from "@verder/core";
+import {
+  SEARCH_STATUSES, type SearchEntityType, type SearchStatus,
+} from "@verder/core/search/entity-types";
 
 // Shared search constants. Deliberately NOT a "use client" module: both the
 // server-rendered /search page and the client command palette import it, and
 // exports of a client module reach server components as client references
 // instead of their values (same reason as components/timeline-kinds.ts).
+//
+// The import is the /search/entity-types subpath, not the @verder/core barrel:
+// the barrel re-exports hash.ts, whose node:crypto import cannot be resolved in
+// the browser bundle the ⌘K palette pulls this module into.
 
 export const ENTITY_LABEL: Record<SearchEntityType, string> = {
   document: "Document",

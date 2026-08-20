@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CommandPalette } from "@/components/command-palette";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
       <main className="flex-1 p-8">{children}</main>
+      <CommandPalette />
     </div>
   );
 }

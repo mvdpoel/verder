@@ -1,4 +1,4 @@
-import { SEARCH_ENTITY_TYPES } from "@verder/core";
+import { SEARCH_ENTITY_TYPES } from "@verder/core/search/entity-types";
 
 // Pure palette logic, kept out of the client component so it can be tested
 // under vitest's node environment (this repo has no DOM test setup).
