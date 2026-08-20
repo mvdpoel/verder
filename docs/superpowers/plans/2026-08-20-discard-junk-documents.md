@@ -686,7 +686,7 @@ because discard is always reversible."
 - Consumes: `documents.update` semantics — the script appends a status change and a ledger event in one transaction, exactly as the router does.
 - Produces: `pnpm --filter worker discard-signature-images`, and an exported `discardSignatureImages(db): Promise<{ scanned: number; discarded: number; skipped: number }>` so it is testable.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("discards email-attachment images named image.png, one ledger event each", async () => {
@@ -730,12 +730,27 @@ it("leaves the ledger chain verifying", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+**DEVIATION (executed 2026-08-20) — the harness:** `apps/worker` has no `seedDocument` and no `verifyLedger`. The test file builds both locally in the style of `documents.test.ts`: fixtures go in through `ingestDocument` (from `@verder/api/src/routers/documents`) inside a transaction, so each one appends its own `document.ingested` event and the chain stays real, and `verifyLedger()` is `verifyChain(allEvents, e => e.payloadHash)` — chain linkage only, because this dev database is shared and never truncated.
+
+**DEVIATION (executed 2026-08-20) — the counts cannot be absolute.** `out.discarded === 2` and `second.skipped === 1` are not assertable here. Measured before writing a line of implementation: the dev database already held two `source='email-attachment', title='image.png'` documents — fixtures left behind by Task 5's `suggestions.test.ts`, one of them already discarded by that file's own test. The backfill is deliberately global, so it sees them. The assertions were rewritten to state what the script actually promises, and each one still fails on a wrong implementation:
+
+- `out.discarded >= 2` plus a per-document `effectiveStatus` check on all four fixtures (the two junk ones discarded; the real PDF and the hand-uploaded `image.png` still `inbox`) — that is what "matches the junk and nothing else" means.
+- `ledgerAfter - ledgerBefore === out.discarded`, which pins "one ledger event each" **exactly**, regardless of how many rows the shared corpus contributes.
+- `out.scanned === out.discarded + out.skipped`, and for idempotency `second.discarded === 0 && second.skipped === second.scanned` — "a second run appends nothing" is a statement about all of it, not about one row.
+- Also added: the junk row's `sha256` is re-read after the run and is unchanged. Nothing is deleted.
+
+**DEVIATION (executed 2026-08-20) — a fourth test, for Step 3's point 4.** "Print every document it is about to touch" is a requirement, so it gets an assertion rather than a manual eyeball: `discardSignatureImages(db, { log })` takes an injected line sink (defaulting to a no-op; the CLI entry passes `console.log`), and the test asserts one line per discard, naming the id and the title. Written after the implementation existed, so its teeth were checked the other way round — the `log(...)` call was temporarily disabled and the test was watched failing with `expected [] to have a length of 1 but got +0`, then restored.
+
+**DEVIATION (executed 2026-08-20) — the status change carries the effective title/docType forward** (`title: eff.effectiveTitle, docType: eff.effectiveDocType`), not nulls. Same reasoning as Task 6's deviation: `effectiveDocument` reads title and docType from *only the latest* `document_status_changes` row, so appending a bare status row would silently revert a title corrected at filing time. None of the nine has a corrected title, but a backfill that can quietly rewrite metadata is the wrong shape regardless.
+
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter worker test discard-signature-images`
 Expected: FAIL — cannot resolve the module.
 
-- [ ] **Step 3: Write the script**
+Observed: `Error: Failed to load url ./discard-signature-images … Does the file exist?`, 0 tests collected — exactly that reason.
+
+- [x] **Step 3: Write the script**
 
 Create `apps/worker/src/ops/discard-signature-images.ts`. It must:
 
@@ -749,7 +764,9 @@ Follow the structure of an existing ops script — `apps/worker/src/ops/extract-
 
 Add a doc comment recording *why* the title is the key: the disposition header is not retained on already-ingested documents, so post-hoc `title = 'image.png'` is the honest available signal, and it matched all nine in production on 2026-08-20.
 
-- [ ] **Step 4: Register the script**
+**As executed:** logic and CLI entry live in the one file the plan names, with `gmail-auth.ts`'s module-entry guard (``if (import.meta.url === `file://${process.argv[1]}`)``) so importing it from the test runs nothing. The entry does the `extract-texts` bootstrap — `WORKER_DATABASE_URL`, `createDb`, `recordRun("discard-signature-images", …)`, `pool.end()` in `finally` — and the idempotency skip reads `effectiveDocument(...).effectiveStatus`, never `row.status`, which would re-discard every row on every run. The `verder_worker` role already has `INSERT` on `document_status_changes` and `ledger_events` (migration 0004), so no grant change was needed.
+
+- [x] **Step 4: Register the script**
 
 In `apps/worker/package.json` scripts, alongside `extract-texts`:
 
@@ -757,12 +774,14 @@ In `apps/worker/package.json` scripts, alongside `extract-texts`:
 "discard-signature-images": "tsx src/ops/discard-signature-images.ts"
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter worker test discard-signature-images`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Commit**
+Observed: PASS, 4 tests (the extra one is the logging assertion above). Full worker suite 99 passed / 1 skipped across 18 files; `worker` typecheck clean. The CLI entry was also smoke-tested against the **dev** database — `pnpm --filter worker discard-signature-images` printed `scanned 6, discarded 0, already discarded 6`, i.e. it is a no-op end to end once the population is discarded. Nothing was run against production.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/worker/src/ops/discard-signature-images.ts \
