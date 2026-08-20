@@ -14,3 +14,12 @@ export const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsh
 export function isSpreadsheetMime(mime: string): boolean {
   return mime === XLS_MIME || mime === XLSX_MIME;
 }
+
+/**
+ * Mimes that carry no information, so the bytes get the final word. Lives here
+ * rather than beside the sniffer because the vault preview — a client
+ * component — has to recognize "this row tells us nothing" too, and asks the
+ * server to look at the bytes.
+ */
+export const UNINFORMATIVE_MIMES: ReadonlySet<string> =
+  new Set(["application/octet-stream", "binary/octet-stream", ""]);

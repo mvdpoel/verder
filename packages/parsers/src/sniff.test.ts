@@ -1,6 +1,16 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { isSpreadsheetMime, sniffContainer, UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME } from "./sniff";
+import {
+  effectiveMime, isSpreadsheetMime, sniffContainer, UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME,
+} from "./sniff";
+
+/** OLE2 magic with nothing behind it — the container .doc, .ppt and .msg share. */
+const ole2 = (streamName?: string) => Buffer.concat([
+  Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+  Buffer.alloc(256),
+  streamName ? Buffer.from(streamName, "utf16le") : Buffer.alloc(0),
+  Buffer.alloc(256),
+]);
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url));
 
@@ -11,6 +21,16 @@ describe("sniffContainer", () => {
 
   it("recognizes an OOXML .xlsx by ZIP magic plus an xl/ entry", () => {
     expect(sniffContainer(fixture("abn.xlsx"))).toBe(XLSX_MIME);
+  });
+
+  it("does NOT claim every legacy Office file is a spreadsheet", () => {
+    // OLE2 is also .doc, .ppt and .msg. Only the Workbook stream makes it Excel.
+    // Without this, a Beschikking.doc mailed as octet-stream would be recorded
+    // and served as application/vnd.ms-excel — permanently, on an evidence row.
+    expect(sniffContainer(ole2())).toBeNull();
+    expect(sniffContainer(ole2("WordDocument"))).toBeNull();
+    expect(sniffContainer(ole2("Workbook"))).toBe(XLS_MIME);
+    expect(sniffContainer(ole2("Book"))).toBe(XLS_MIME); // BIFF5 names it this way
   });
 
   it("does NOT claim a plain zip is a spreadsheet", () => {
@@ -42,6 +62,27 @@ describe("isSpreadsheetMime", () => {
     expect(isSpreadsheetMime(XLS_MIME)).toBe(true);
     expect(isSpreadsheetMime(XLSX_MIME)).toBe(true);
     expect(isSpreadsheetMime("application/pdf")).toBe(false);
+  });
+
+  it("is spelled the way browsers and Excel spell it", () => {
+    // Written out rather than compared to the constants: a typo in the constant
+    // would satisfy every assertion above and still be wrong everywhere else.
+    expect(XLS_MIME).toBe("application/vnd.ms-excel");
+    expect(XLSX_MIME)
+      .toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  });
+});
+
+describe("effectiveMime", () => {
+  it("lets the bytes decide only when the recorded mime says nothing", () => {
+    const xls = readFileSync(new URL("../fixtures/abn.xls", import.meta.url));
+    expect(effectiveMime("application/octet-stream", xls)).toBe(XLS_MIME);
+    expect(effectiveMime("", xls)).toBe(XLS_MIME);
+    // An informative mime is trusted, even when the bytes disagree.
+    expect(effectiveMime("application/pdf", xls)).toBe("application/pdf");
+    // Nothing to learn from the bytes either: the recorded mime stands.
+    expect(effectiveMime("application/octet-stream", Buffer.from("hello")))
+      .toBe("application/octet-stream");
   });
 });
 
