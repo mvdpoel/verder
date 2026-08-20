@@ -43,7 +43,7 @@ export function StatementUpload() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}>
         {busy ? "Reading your statement…"
-          : "Drop a bank or PayPal statement here (ABN CAMT.053, ABN TSV, PayPal CSV) or click to choose"}
+          : "Drop a bank or PayPal statement here (ABN CAMT.053, ABN TSV, ABN Excel, PayPal CSV) or click to choose"}
         <input type="file" multiple className="hidden" onChange={(e) => void upload(e.target.files)} />
       </label>
       {results.length > 0 && (

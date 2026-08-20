@@ -27,7 +27,7 @@ type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
 type Suggestion = { id: string; kind: string; model: string | null; proposed: unknown;
   retrievedRefs: unknown; documentRequest: string | null;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
-  document: { sha256: string; mime: string; title: string } | null };
+  document: { sha256: string; mime: string; title: string; sizeBytes: number } | null };
 
 export function SuggestionCard({ s }: { s: Suggestion }) {
   if (s.kind === "document-meta") return <DocMetaCard s={s} />;
@@ -259,7 +259,8 @@ function DocMetaCard({ s }: { s: Suggestion }) {
         {s.model && <span> · suggested by {s.model}</span>}
       </p>
       <DocumentPreview
-        doc={{ sha256: s.document.sha256, title: s.document.title, mime: s.document.mime }}
+        doc={{ sha256: s.document.sha256, title: s.document.title, mime: s.document.mime,
+          sizeBytes: s.document.sizeBytes }}
         height="short" />
       <label className="block text-sm">Title<input className="w-full border rounded p-2"
         value={title} onChange={(e) => setTitle(e.target.value)} /></label>

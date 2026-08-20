@@ -12,7 +12,8 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       <div>
         <h1 className="text-xl font-bold mb-1">{d.effectiveTitle}</h1>
         <p className="text-xs text-slate-500 mb-4 break-all">sha256: {d.sha256}</p>
-        <DocumentPreview doc={{ sha256: d.sha256, title: d.effectiveTitle, mime: d.mime }} />
+        <DocumentPreview doc={{ sha256: d.sha256, title: d.effectiveTitle, mime: d.mime,
+          sizeBytes: d.sizeBytes }} />
       </div>
       <DocumentMetaForm doc={{ id: d.id, title: d.effectiveTitle, docType: d.effectiveDocType,
         status: d.effectiveStatus }} entries={entries.map((e) => ({ id: e.id, summary: e.summary }))} />
