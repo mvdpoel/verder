@@ -229,6 +229,24 @@ describe("documents router", () => {
     expect(list.map((d) => d.id)).not.toContain(junk.id);
   });
 
+  it("does not let discarded documents eat the page budget", async () => {
+    // The limit has to bound what comes BACK, not what is scanned. Filtering
+    // after LIMIT means the nine backfilled signature logos silently shorten
+    // every evidence picker: registry/[id], registry/debts/[id] and the task
+    // form all ask for 100 documents and would be handed 91, with the nine real
+    // documents that would have filled those slots simply unattachable.
+    const keep = await seedDocument({ title: "Beschikking.pdf", mime: "application/pdf" });
+    const junkA = await seedDocument({ title: "image.png", mime: "image/png" });
+    const junkB = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: junkA.id, status: "discarded" });
+    await caller().documents.update({ id: junkB.id, status: "discarded" });
+
+    const list = await caller().documents.list({ limit: 2 });
+    expect(list).toHaveLength(2);
+    expect(list.every((d) => d.effectiveStatus !== "discarded")).toBe(true);
+    expect(list.map((d) => d.id)).toContain(keep.id);
+  });
+
   it("returns discarded documents when explicitly asked", async () => {
     const junk = await seedDocument({ title: "image.png", mime: "image/png" });
     await caller().documents.update({ id: junk.id, status: "discarded" });

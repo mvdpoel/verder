@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
@@ -59,13 +59,25 @@ export const documentsRouter = router({
     // here; they are only kept out of the surfaces Martin scans.
     includeDiscarded: z.boolean().default(false),
   })).query(async ({ ctx, input }) => {
-    const rows = await ctx.db.select().from(schema.documents)
+    // Filtered in SQL, BEFORE the limit. Filtering afterwards would let
+    // discarded documents eat the page budget: the evidence pickers ask for
+    // 100 and would be handed 91, with nine real documents pushed off the end
+    // and no indication the list was truncated.
+    //
+    // The EFFECTIVE status, resolved the same way effectiveDocument does it —
+    // a discard is appended to document_status_changes and never written back,
+    // so documents.status keeps reading "inbox" forever. Cast to text so the
+    // comparison does not depend on the enum's own operator set.
+    const effectiveStatus = sql`COALESCE((SELECT c.status FROM document_status_changes c
+      WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1),
+      documents.status)::text`;
+    const where = input.status
+      ? sql`${effectiveStatus} = ${input.status}`
+      // IS DISTINCT FROM, not <>, for the same reason it is used in search.
+      : input.includeDiscarded ? undefined : sql`${effectiveStatus} IS DISTINCT FROM 'discarded'`;
+    const rows = await ctx.db.select().from(schema.documents).where(where)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
-    const effective = await Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
-    if (input.status) return effective.filter((d) => d.effectiveStatus === input.status);
-    return input.includeDiscarded
-      ? effective
-      : effective.filter((d) => d.effectiveStatus !== "discarded");
+    return Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
   }),
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))

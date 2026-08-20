@@ -595,6 +595,31 @@ describe("suggestions router", () => {
       .toContain(s.id);
   });
 
+  it("approveEntry never puts a discarded document back into the record", async () => {
+    // suggestEntry snapshots every attachment id into proposed at poll time,
+    // and the queue card sends that snapshot back unconditionally. So an entry
+    // suggestion — which correctly stays in the queue, it has no documentId of
+    // its own — carries the signature logos with it. Approving would link a
+    // document Martin already judged junk into entry_documents, where it shows
+    // up in entries.get, in the entry's own search body, and in the signed
+    // verify.exportRange payload meant for the bewindvoerder.
+    const junk = await makeDocument("image.png", "image/png");
+    const keep = await makeDocument("Beschikking.pdf", "application/pdf");
+    await caller().documents.update({ id: junk.id, status: "discarded" });
+    const s = await makeSuggestion();
+
+    const { entryId } = await caller().suggestions.approveEntry({
+      id: s.id,
+      entry: { occurredAt: new Date(), channel: "email", direction: "inbound",
+        summary: "Beschikking ontvangen", source: "gmail-watch",
+        participantPartyIds: [], documentIds: [junk.id, keep.id], actionItems: [] },
+    });
+
+    const linked = await db.select().from(schema.entryDocuments)
+      .where(eq(schema.entryDocuments.entryId, entryId));
+    expect(linked.map((l) => l.documentId)).toEqual([keep.id]);
+  });
+
   it("list flags a document request and approving links the picked document to the entry", async () => {
     const [raw] = await db.insert(schema.rawEmails).values({
       gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-doc",

@@ -3,8 +3,20 @@ import { protectedProcedure, router } from "../trpc";
 
 export const dashboardRouter = router({
   stats: protectedProcedure.query(async ({ ctx }) => {
-    const [{ pending }] = (await ctx.db.execute(
-      sql`SELECT count(*)::int AS pending FROM suggestions WHERE status IN ('pending','needs-manual')`)).rows as [{ pending: number }];
+    // The EFFECTIVE document status, resolved exactly as inboxDocs below does
+    // it. suggestions.list drops a suggestion whose document is discarded, and
+    // a tile that disagrees renders "1 to review" over a queue that says it is
+    // empty — a count that can never drain, because nothing is left to decide
+    // it on. Discard lives in document_status_changes; documents.status keeps
+    // reading "inbox" forever, so the column alone would never catch it.
+    const [{ pending }] = (await ctx.db.execute(sql`
+      SELECT count(*)::int AS pending FROM suggestions s
+      WHERE s.status IN ('pending','needs-manual')
+        AND (s.document_id IS NULL OR COALESCE(
+          (SELECT c.status FROM document_status_changes c
+            WHERE c.document_id = s.document_id ORDER BY c.created_at DESC LIMIT 1),
+          (SELECT d.status FROM documents d WHERE d.id = s.document_id))
+          IS DISTINCT FROM 'discarded')`)).rows as [{ pending: number }];
     const [{ inbox }] = (await ctx.db.execute(sql`
       SELECT count(*)::int AS inbox FROM documents d
       WHERE COALESCE((SELECT c.status FROM document_status_changes c

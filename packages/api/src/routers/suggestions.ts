@@ -81,13 +81,27 @@ export const suggestionsRouter = router({
         .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
         throw new Error("Suggestion not open for review");
-      const entry = await insertEntry(tx, ctx.userId, input.entry, { eventType: "entry.created" });
+      // The document ids on an entry suggestion are an INGEST-TIME snapshot:
+      // suggestEntry copies every attachment of the email into `proposed` when
+      // the message is polled, and the queue card sends that snapshot back
+      // whenever Martin approves — however long after, and whatever he decided
+      // about those documents in between. Re-resolve them here, so a discarded
+      // signature logo cannot be linked into entry_documents, into the entry's
+      // indexed body, or into the signed export the bewindvoerder reads.
+      const documentIds: string[] = [];
+      for (const id of input.entry.documentIds) {
+        if ((await effectiveDocument(tx, id)).effectiveStatus !== "discarded") documentIds.push(id);
+      }
+      const entry = await insertEntry(tx, ctx.userId, { ...input.entry, documentIds },
+        { eventType: "entry.created" });
       const unchanged = s.proposed !== null &&
         canonicalJson(input.entry.summary) === canonicalJson((s.proposed as { summary?: string }).summary) &&
         (s.proposed as { details?: string }).details === (input.entry.details ?? undefined);
       await tx.update(schema.suggestions).set({
         status: unchanged ? "approved" : "edited",
-        finalPayload: JSON.parse(JSON.stringify(input.entry)),
+        // The filtered set, not the submitted one: the verdict record has to
+        // say what actually entered the ledger.
+        finalPayload: JSON.parse(JSON.stringify({ ...input.entry, documentIds })),
         resultEntryId: entry.id, verdictAt: new Date(),
       }).where(eq(schema.suggestions.id, input.id));
       return { entryId: entry.id };

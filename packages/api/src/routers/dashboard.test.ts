@@ -56,6 +56,27 @@ describe("dashboard router", () => {
     expect(after.openActionItems).toBe(before.openActionItems - 1);
   });
 
+  it("stops counting a suggestion once its document is discarded", async () => {
+    // The tile and the queue must agree. suggestions.list drops a suggestion
+    // whose document is discarded, so a tile that keeps counting it renders
+    // "1 to review" linking to a page that says the queue is empty — and the
+    // count never drains, because there is no surface left to decide it on.
+    const c = caller();
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 3,
+      mime: "image/png", title: "image.png", source: "email-attachment",
+      receivedAt: new Date() });
+    await db.insert(schema.suggestions).values({
+      kind: "document-meta", documentId: doc.id, proposed: { title: "image.png" } });
+    const before = await c.dashboard.stats();
+    const queueBefore = (await c.suggestions.list({ status: "pending" })).length;
+
+    await c.documents.update({ id: doc.id, status: "discarded", title: "image.png" });
+
+    const after = await c.dashboard.stats();
+    expect(after.pendingSuggestions).toBe(before.pendingSuggestions - 1);
+    expect((await c.suggestions.list({ status: "pending" })).length).toBe(queueBefore - 1);
+  });
+
   it("reports the latest run per worker", async () => {
     const c = caller();
     const worker = `test-worker-${Date.now()}`;
