@@ -7,6 +7,7 @@ import { recordRun } from "./heartbeat";
 import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
+import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
 import { storeDocumentText } from "./document-text";
 import { mineRegistry } from "./registry-mine";
@@ -39,10 +40,11 @@ await boss.work("gmail.poll", async () => {
 });
 
 const llm = realLlmPort();
+const retrieveRefs = realRetrieveRefs(db);
 
 await boss.work("suggest.entry", async ([job]) => {
   const { rawEmailId } = job.data as { rawEmailId: string };
-  await suggestEntry({ db, llm, sendPush }, rawEmailId);
+  await suggestEntry({ db, llm, sendPush, retrieveRefs }, rawEmailId);
   // Action-item mining rides along, error-isolated: suggestTask swallows its
   // own failures, and this guard makes sure a task-mine crash can never fail
   // (and re-run) the entry suggestion above.
