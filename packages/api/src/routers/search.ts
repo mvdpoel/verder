@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@verder/core";
 import { protectedProcedure, router } from "../trpc";
 import { recentEntities } from "../search/recent";
+import { readIndexHealth } from "../search/health";
 import { realEmbedPort } from "../search/embed";
 import { realRerankPort } from "../search/rerank";
 import { retrieve } from "../search/retrieve";
@@ -15,6 +16,12 @@ const isoDate = z.string().regex(
 );
 
 export const searchRouter = router({
+  // Index health for /verify. A query, never part of verify.run: the search
+  // index is derived, rebuildable and appends no ledger events, so
+  // runFullVerification — shared with the nightly worker script — stays exactly
+  // as it was. A stalled index can only fail to find a record; it can never
+  // change one.
+  health: protectedProcedure.query(({ ctx }) => readIndexHealth(ctx.db)),
   // Empty-state list for the ⌘K palette. Reads the index rather than nine
   // source tables, and returns the same href field search.query hits carry so
   // the palette has exactly one way to navigate.
