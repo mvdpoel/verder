@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { canonicalJson, sha256Hex } from "@verder/core";
 import { createDb, schema, type Db } from "@verder/db";
+import { entryEventPayload } from "./entries";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
@@ -535,5 +537,68 @@ describe("suggestions router", () => {
     // records only what was actually stored.
     expect(after.status).toBe("approved");
     expect((after.finalPayload as Record<string, unknown>).retrievedRefs).toBeUndefined();
+  });
+
+  it("list flags a document request and approving links the picked document to the entry", async () => {
+    const [raw] = await db.insert(schema.rawEmails).values({
+      gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-doc",
+      fromAddr: "casemanager@verdergroep.nl", toAddr: "martin@vanderpoel.pro",
+      subject: "Loonstroken", sentAt: new Date(),
+      rawRfc822Sha256: "c".repeat(64), bodyText: "Graag loonstroken opsturen.",
+    }).returning();
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "log-entry", rawEmailId: raw.id, model: "qwen3.5:9b", promptVersion: "entry-v1",
+      proposed: { occurredAt: new Date().toISOString(), channel: "email",
+        direction: "inbound", summary: "VerderGroep vraagt loonstroken",
+        details: "Juni en juli.", participantNames: ["VerderGroep"],
+        actionItems: [{ description: "Loonstroken opsturen", clarity: "clear" }],
+        attachmentDocumentIds: [] },
+    }).returning();
+    const listed = (await caller().suggestions.list({ status: "pending" }))
+      .find((row) => row.id === s.id);
+    expect(listed?.documentRequest).toBe("Loonstroken opsturen");
+
+    const [doc] = await db.insert(schema.documents).values({
+      sha256: crypto.randomUUID().replace(/-/g, "").padEnd(64, "0"),
+      sizeBytes: 999, mime: "application/pdf", title: "Loonstrook juni",
+      source: "upload", receivedAt: new Date(),
+    }).returning();
+    const { entryId } = await caller().suggestions.approveEntry({
+      id: s.id,
+      entry: { occurredAt: new Date(), channel: "email", direction: "inbound",
+        summary: "VerderGroep vraagt loonstroken", details: "Juni en juli.",
+        source: "gmail-watch", participantPartyIds: [], documentIds: [doc.id],
+        actionItems: [{ description: "Loonstroken opsturen", clarity: "clear" }] },
+    });
+    // The association goes through the existing linking path (insertEntry):
+    // an entry_documents row AND the documentId inside the entry.created payload.
+    const links = await db.select().from(schema.entryDocuments)
+      .where(eq(schema.entryDocuments.entryId, entryId));
+    expect(links.map((l) => l.documentId)).toContain(doc.id);
+    const [ev] = await db.select().from(schema.ledgerEvents)
+      .where(and(eq(schema.ledgerEvents.entityId, entryId),
+        eq(schema.ledgerEvents.eventType, "entry.created")));
+    expect(ev).toBeTruthy();
+    // ledger_events stores payload_hash, never the payload itself, so "the
+    // documentId is inside the entry.created payload" is asserted the way
+    // verification.ts asserts it: rebuild the canonical payload from the live
+    // rows and check it against the recorded hash.
+    const [entry] = await db.select().from(schema.logEntries)
+      .where(eq(schema.logEntries.id, entryId));
+    const items = await db.select().from(schema.actionItems)
+      .where(eq(schema.actionItems.entryId, entryId));
+    const payload = entryEventPayload({
+      id: entry.id, occurredAt: entry.occurredAt,
+      channel: entry.channel, direction: entry.direction,
+      summary: entry.summary, details: entry.details,
+      source: entry.source, sourceRef: entry.sourceRef,
+      supersedesId: entry.supersedesId,
+      participantPartyIds: [],
+      documentIds: links.map((l) => l.documentId),
+      actionItems: items.map((a) => ({ description: a.description,
+        ownerPartyId: a.ownerPartyId, dueAt: a.dueAt, clarity: a.clarity })),
+    });
+    expect(payload.documentIds).toContain(doc.id);
+    expect(sha256Hex(canonicalJson(payload))).toBe(ev.payloadHash);
   });
 });
