@@ -12,7 +12,7 @@
 // is an append to document_status_changes with its ledger event, exactly what
 // documents.update does when Martin clicks the button himself, and every one of
 // these stays individually undoable from its vault page.
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
@@ -87,24 +87,34 @@ export async function discardSignatureImages(
       skipped++;
       continue;
     }
-    // Say what is about to be touched before touching it — this writes to the
-    // evidence record, and Martin should be able to read back exactly what it
-    // did from the log alone.
-    log(`discard-signature-images: discarding ${row.id} — ${eff.effectiveTitle}`
-      + ` (${row.sizeBytes} bytes, ${row.mime}, ${row.source})`);
-    await db.transaction(async (tx) => {
+    const wrote = await db.transaction(async (tx) => {
+      // The check above ran OUTSIDE this transaction, which is a TOCTOU: two
+      // runs at once — or one run racing Martin clicking Discard — both read
+      // "inbox" and both append, and the evidence record then claims the
+      // document was discarded twice. Reproduced with two connection pools.
+      // The advisory lock serializes writers per document, and READ COMMITTED
+      // means the re-read below sees whatever the other writer committed.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${row.id}::text, 0))`);
+      const fresh = await effectiveDocument(tx, row.id);
+      if (fresh.effectiveStatus !== "inbox") return false;
+      // Say what is about to be touched before touching it — this writes to
+      // the evidence record, and Martin should be able to read back exactly
+      // what it did from the log alone.
+      log(`discard-signature-images: discarding ${row.id} — ${fresh.effectiveTitle}`
+        + ` (${row.sizeBytes} bytes, ${row.mime}, ${row.source})`);
       // Carry the effective title/docType forward. effectiveDocument reads them
       // from the LATEST status change only, so writing this row without them
       // would silently revert a correction made when the document was filed.
       await tx.insert(schema.documentStatusChanges).values({
         documentId: row.id, status: "discarded",
-        title: eff.effectiveTitle, docType: eff.effectiveDocType ?? undefined });
+        title: fresh.effectiveTitle, docType: fresh.effectiveDocType ?? undefined });
       await appendLedgerEvent(tx, {
         eventType: "document.updated", entityType: "document", entityId: row.id,
         payload: { id: row.id, status: "discarded",
-          title: eff.effectiveTitle ?? null, docType: eff.effectiveDocType ?? null } });
+          title: fresh.effectiveTitle ?? null, docType: fresh.effectiveDocType ?? null } });
+      return true;
     });
-    discarded++;
+    if (wrote) discarded++; else skipped++;
   }
   return { scanned: rows.length, discarded, skipped };
 }

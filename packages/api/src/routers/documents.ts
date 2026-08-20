@@ -162,6 +162,11 @@ export const documentsRouter = router({
       // decision would have it claim he discarded the same document twice.
       // A real edit (same status, new title) is NOT swallowed: the comparison
       // is against what appending would actually produce.
+      // Serialize writers per document, so the check below is not a TOCTOU:
+      // two clicks landing together (or a click racing the backfill) would
+      // otherwise both read the old status and both append.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.id}::text, 0))`);
       const [doc] = await tx.select().from(schema.documents)
         .where(eq(schema.documents.id, input.id));
       if (doc) {

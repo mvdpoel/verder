@@ -10,7 +10,9 @@ const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
 describe("discardSignatureImages", () => {
   const { db, pool } = createDb(URL);
-  afterAll(() => pool.end());
+  // A second pool stands in for a second CLI process — see the concurrency test.
+  const other = createDb(URL);
+  afterAll(async () => { await pool.end(); await other.pool.end(); });
   const sha = () => crypto.randomUUID().replaceAll("-", "").padEnd(64, "a");
   const seedDocument = (over: {
     title: string; mime: string; source: "upload" | "email-attachment";
@@ -123,7 +125,7 @@ describe("discardSignatureImages", () => {
     const later = await seedDocument({ title: "image.png", mime: "image/png",
       source: "email-attachment" });
 
-    const out = await discardSignatureImages(db, { before: new Date("2020-01-01T00:00:00Z") });
+    const out = await discardSignatureImages(db, { before: new Date(0) });
 
     expect(out.scanned).toBe(0);
     expect(out.discarded).toBe(0);
@@ -135,6 +137,53 @@ describe("discardSignatureImages", () => {
     // down as an assertion rather than a comment, and the tests above pass an
     // explicit `before` so they cannot silently rot past this date.
     expect(SIGNATURE_IMAGE_INGESTED_BEFORE.toISOString()).toBe("2026-08-21T00:00:00.000Z");
+  });
+
+  it("two runs at once still append exactly one discard per document", async () => {
+    // Reading the effective status outside the transaction that appends is a
+    // TOCTOU: both runs see "inbox", both insert, and the evidence record then
+    // claims the document was discarded twice. Same shape as the double-click
+    // on the Discard button, and the same answer — one decision, one row.
+    //
+    // Backdated and scoped with `before` so this ONE document is the entire
+    // match set. Racing against the shared corpus proves nothing: the ledger's
+    // advisory lock serializes the runs enough that they drift apart before
+    // they reach any late row.
+    // A private window nothing else can fall into. It moves EARLIER on every
+    // run (2e12 minus the clock), so the antique document a previous run left
+    // in this shared, never-truncated database sorts after `before` and the
+    // match set stays exactly one row.
+    const antique = new Date(2_000_000_000_000 - Date.now());
+    const [junk] = await db.transaction(async (tx) => {
+      const rows = await tx.insert(schema.documents).values({
+        sha256: sha(), sizeBytes: 10, mime: "image/png", title: "image.png",
+        source: "email-attachment", receivedAt: antique, createdAt: antique,
+      }).returning();
+      await appendLedgerEvent(tx, {
+        eventType: "document.ingested", entityType: "document", entityId: rows[0].id,
+        payload: { id: rows[0].id, sha256: rows[0].sha256, title: rows[0].title,
+          docType: null, mime: rows[0].mime, sizeBytes: rows[0].sizeBytes,
+          source: rows[0].source, sourceRef: null, receivedAt: antique.toISOString() } });
+      return rows;
+    });
+    const scoped = { before: new Date(antique.getTime() + 1) };
+    const before = await ledgerCount();
+
+    // Two pools, both warmed. One pool serializes the runs by accident (the
+    // second caller pays a connection handshake and loses the whole race), and
+    // the test would pass against the broken code. Warmed and separate, the
+    // duplicate reproduces every time: CHANGES 2 before the advisory lock.
+    await Promise.all([db.select().from(schema.documents).limit(1),
+      other.db.select().from(schema.documents).limit(1)]);
+    const [a, b] = await Promise.all([
+      discardSignatureImages(db, scoped), discardSignatureImages(other.db, scoped)]);
+
+    expect(a.scanned).toBe(1);
+    expect(b.scanned).toBe(1);
+    const changes = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, junk.id));
+    expect(changes).toHaveLength(1);
+    expect(await ledgerCount()).toBe(before + a.discarded + b.discarded);
   });
 
   it("leaves the ledger chain verifying", async () => {
