@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { extractDocumentText, type OcrPort } from "./extract";
+import { extractDocumentText, rasterizePdf, type OcrPort } from "./extract";
 
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 
@@ -40,5 +40,21 @@ describe("extractDocumentText", () => {
       { ocr: stubOcr("SHOULD NOT RUN", seen) });
     expect(out.extractor).toBe("pdf-parse");
     expect(seen).toHaveLength(0);
+  });
+
+  it("rasterizes and OCRs a scanned PDF whose text layer is empty", async () => {
+    const seen: Buffer[] = [];
+    const out = await extractDocumentText("application/pdf", await fixture("scanned-letter.pdf"),
+      { ocr: stubOcr("Uw dossiernummer is 2026-VG-00412", seen) });
+    expect(out.extractor).toBe("ocr-pdf");
+    expect(out.text).toBe("Uw dossiernummer is 2026-VG-00412");
+    expect(seen).toHaveLength(1); // one page in, one page rasterized
+    expect(seen[0].subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it("rasterizes with real poppler", async () => {
+    const pages = await rasterizePdf(await fixture("scanned-letter.pdf"), { dpi: 100 });
+    expect(pages).toHaveLength(1);
+    expect(pages[0].subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   });
 });

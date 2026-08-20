@@ -1,3 +1,11 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
+
 export type Extractor = "pdf-parse" | "ocr-image" | "ocr-pdf" | "none";
 
 export interface ExtractedText {
@@ -8,6 +16,12 @@ export interface ExtractedText {
   truncated: boolean;
   error?: string;
 }
+
+// A PDF that parses to less than this is a scan in a PDF wrapper: the NAS
+// scanner produces image-only PDFs and pdf-parse returns a couple of newlines.
+export const MIN_PDF_TEXT_CHARS = 200;
+export const RASTER_DPI = 200;
+export const MAX_OCR_PAGES = 20;
 
 export interface OcrPort { ocrImage(png: Buffer): Promise<string> }
 
@@ -20,6 +34,26 @@ export function realOcrPort(): OcrPort {
   };
 }
 
+/** Rasterizes the first MAX_OCR_PAGES pages to PNG with poppler's pdftoppm. */
+export async function rasterizePdf(
+  pdf: Buffer, opts: { dpi?: number; maxPages?: number } = {},
+): Promise<Buffer[]> {
+  const dir = await mkdtemp(join(tmpdir(), "verder-raster-"));
+  try {
+    const input = join(dir, "in.pdf");
+    await writeFile(input, pdf);
+    await run("pdftoppm", ["-png", "-r", String(opts.dpi ?? RASTER_DPI),
+      "-f", "1", "-l", String(opts.maxPages ?? MAX_OCR_PAGES), input, join(dir, "page")],
+      { timeout: 120_000 });
+    // pdftoppm zero-pads page numbers from ten pages on (page-01.png), so the
+    // file list is read back and sorted, never constructed by hand.
+    const names = (await readdir(dir)).filter((n) => n.endsWith(".png")).sort();
+    return await Promise.all(names.map((n) => readFile(join(dir, n))));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 // Counted in code points, not UTF-16 units, so a Dutch letter full of accents
 // is never measured or cut mid-code-point.
 function measure(raw: string): { text: string; charCount: number; truncated: boolean } {
@@ -28,12 +62,20 @@ function measure(raw: string): { text: string; charCount: number; truncated: boo
 
 export async function extractDocumentText(
   mime: string, buf: Buffer,
-  deps: { ocr?: OcrPort } = {},
+  deps: { ocr?: OcrPort; rasterize?: typeof rasterizePdf } = {},
 ): Promise<ExtractedText> {
   const ocr = deps.ocr ?? realOcrPort();
+  const rasterize = deps.rasterize ?? rasterizePdf;
   if (mime === "application/pdf") {
     const pdfParse = (await import("pdf-parse")).default;
-    return { ...measure((await pdfParse(buf)).text), extractor: "pdf-parse" };
+    const parsed = (await pdfParse(buf)).text;
+    if (Array.from(parsed).length >= MIN_PDF_TEXT_CHARS) {
+      return { ...measure(parsed), extractor: "pdf-parse" };
+    }
+    const pages = await rasterize(buf);
+    const texts: string[] = [];
+    for (const page of pages) texts.push(await ocr.ocrImage(page));
+    return { ...measure(texts.join("\n\n").trim()), extractor: "ocr-pdf" };
   }
   if (mime.startsWith("image/")) {
     return { ...measure((await ocr.ocrImage(buf)).trim()), extractor: "ocr-image" };
