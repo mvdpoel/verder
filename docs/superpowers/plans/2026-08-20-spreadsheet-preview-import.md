@@ -389,7 +389,7 @@ routed into a statement parser would write junk rows to the registry."
   - `abn-rows.ts`: `export function abnRowToParsed(cols: string[], rowIndex: number): ParsedRow` — throws on a malformed row, as the current inline logic does.
   - `abn-sheet.ts`: `export function parseAbnSheet(buf: Buffer): ParseResult`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/parsers/src/abn-sheet.test.ts`:
 
@@ -476,12 +476,12 @@ describe("parseAbnSheet (header absent)", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test abn-sheet`
 Expected: FAIL — cannot resolve `./abn-sheet`.
 
-- [ ] **Step 3: Lift the row mapping out of `abn-tsv.ts`**
+- [x] **Step 3: Lift the row mapping out of `abn-tsv.ts`**
 
 Create `packages/parsers/src/abn-rows.ts`. Move the regex constants, `extract()`, and the body of the `forEach` callback here verbatim — behaviour must not change, and `abn-tsv.test.ts` is the proof.
 
@@ -551,7 +551,7 @@ export function abnRowToParsed(cols: string[], rowIndex: number): ParsedRow {
 }
 ```
 
-- [ ] **Step 4: Reduce `abn-tsv.ts` to line-splitting**
+- [x] **Step 4: Reduce `abn-tsv.ts` to line-splitting**
 
 Replace the whole of `packages/parsers/src/abn-tsv.ts` with:
 
@@ -589,7 +589,7 @@ export function parseAbnTsv(buf: Buffer): ParseResult {
 }
 ```
 
-- [ ] **Step 5: Verify the refactor changed nothing**
+- [x] **Step 5: Verify the refactor changed nothing**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test abn-tsv`
 Expected: PASS, all 7 existing tests, unmodified. If any fail, the lift was not verbatim — fix before continuing.
@@ -598,7 +598,7 @@ Note: the old message was `expected 8 tab-separated columns, got N`; it is now `
 Run: `grep -rn "tab-separated columns" packages apps`
 Expected: no matches.
 
-- [ ] **Step 6: Write `parseAbnSheet`**
+- [x] **Step 6: Write `parseAbnSheet`**
 
 Create `packages/parsers/src/abn-sheet.ts`:
 
@@ -644,12 +644,12 @@ export function parseAbnSheet(buf: Buffer): ParseResult {
 }
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test`
 Expected: PASS — every parsers test, old and new.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/parsers/src/abn-rows.ts packages/parsers/src/abn-sheet.ts \
