@@ -4,6 +4,9 @@ import { extractDocumentText, rasterizePdf, realOcrPort, type OcrPort } from "./
 
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 
+const sheetFixture = (name: string) =>
+  readFile(new URL(`../../../packages/parsers/fixtures/${name}`, import.meta.url));
+
 // OCR is never run for real in this suite: tesseract.js downloads ~15 MB of
 // nld+eng training data on first use. The port is injected instead, and the one
 // real-OCR test at the bottom of this file is opt-in.
@@ -118,4 +121,45 @@ describe("extractDocumentText", () => {
     expect(out.extractor).toBe("ocr-image");
     expect(out.text).toContain("Ziggo");
   }, 180_000);
+});
+
+describe("extractDocumentText (spreadsheets)", () => {
+  it("extracts a legacy .xls recorded as octet-stream, by sniffing the bytes", async () => {
+    // Exactly the production case: ABN's export, mime recorded as octet-stream.
+    const out = await extractDocumentText("application/octet-stream", await sheetFixture("abn.xls"));
+    expect(out.extractor).toBe("sheet");
+    expect(out.text).toContain("Ziggo Services BV");
+    expect(out.text).toContain("Zilveren Kruis Achmea");
+    expect(out.error).toBeUndefined();
+  });
+
+  it("extracts a modern .xlsx", async () => {
+    const out = await extractDocumentText(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      await sheetFixture("abn.xlsx"));
+    expect(out.extractor).toBe("sheet");
+    expect(out.text).toContain("Belastingdienst Toeslagen");
+  });
+
+  it("names each sheet so multi-sheet workbooks stay legible in search results", async () => {
+    const out = await extractDocumentText("application/vnd.ms-excel", await sheetFixture("abn.xls"));
+    expect(out.text).toContain("## Sheet0");
+  });
+
+  it("counts characters and never OCRs a spreadsheet", async () => {
+    const seen: Buffer[] = [];
+    const out = await extractDocumentText("application/vnd.ms-excel",
+      await sheetFixture("abn.xls"), { ocr: stubOcr("SHOULD NOT RUN", seen) });
+    expect(seen).toHaveLength(0);
+    expect(out.charCount).toBe(Array.from(out.text).length);
+    expect(out.truncated).toBe(false);
+  });
+
+  it("records the reason instead of throwing when the workbook will not open", async () => {
+    const broken = Buffer.concat([
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(512)]);
+    const out = await extractDocumentText("application/octet-stream", broken);
+    expect(out.extractor).toBe("none");
+    expect(out.error).toBeTruthy();
+  });
 });
