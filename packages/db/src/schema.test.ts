@@ -14,4 +14,23 @@ describe("schema", () => {
     expect(found.some((r) => r.id === p.id)).toBe(true);
     await pool.end();
   });
+
+  it("stores retrieval citations on a suggestion without touching proposed", async () => {
+    const { db, pool } = createDb(url);
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "log-entry",
+      model: "qwen3.5:9b",
+      promptVersion: "entry-v1",
+      proposed: { summary: "VerderGroep vraagt loonstroken" },
+      retrievedRefs: [{
+        entityType: "document", entityId: crypto.randomUUID(),
+        title: "Loonstrook juni", score: 0.031, snippet: "…loonstrook juni 2026…",
+      }],
+    }).returning();
+    expect(s.retrievedRefs).toHaveLength(1);
+    // Provenance lives beside the proposal, never inside it: `proposed` is
+    // diffed against `final_payload` to record Martin's edits (golden rule).
+    expect((s.proposed as Record<string, unknown>).retrievedRefs).toBeUndefined();
+    await pool.end();
+  });
 });

@@ -142,6 +142,11 @@ export const suggestions = pgTable("suggestions", {
   promptVersion: text("prompt_version"),
   proposed: jsonb("proposed"),
   finalPayload: jsonb("final_payload"),
+  // What retrieval put in front of the model when this suggestion was built.
+  // Deliberately NOT inside `proposed`: `proposed` is diffed against
+  // `final_payload` to record Martin's edits (golden rule), and retrieval
+  // context in that column would make every diff noisy and untruthful.
+  retrievedRefs: jsonb("retrieved_refs"),
   resultEntryId: uuid("result_entry_id"),
   verdictAt: timestamp("verdict_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
