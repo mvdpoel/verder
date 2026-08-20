@@ -1461,7 +1461,7 @@ was the iframe giving up."
 - Consumes: `sniffContainer`, `UNINFORMATIVE_MIMES` (Task 2).
 - Produces: no new exports.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("serves a sniffed type inline when the stored mime says nothing", async () => {
@@ -1496,12 +1496,12 @@ it("never lets a title inject a header", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter web test files`
 Expected: FAIL — content-type is `application/octet-stream`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `apps/web/src/app/api/files/[sha256]/route.ts`, replace the response construction:
 
@@ -1526,12 +1526,12 @@ import { sniffContainer, UNINFORMATIVE_MIMES } from "@verder/parsers";
     });
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter web test files`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "apps/web/src/app/api/files/[sha256]/route.ts" apps/web/src/app/api/files/route.test.ts
