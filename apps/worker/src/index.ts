@@ -8,6 +8,7 @@ import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { scanNasFolder } from "./nas";
+import { storeDocumentText } from "./document-text";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
@@ -37,18 +38,6 @@ await boss.work("gmail.poll", async () => {
 
 const llm = realLlmPort();
 
-async function extractText(mime: string, buf: Buffer): Promise<string> {
-  if (mime === "application/pdf") {
-    const pdfParse = (await import("pdf-parse")).default;
-    return (await pdfParse(buf)).text;
-  }
-  if (mime.startsWith("image/")) {
-    const { recognize } = await import("tesseract.js");
-    return (await recognize(buf, "nld+eng")).data.text;
-  }
-  return "";
-}
-
 await boss.work("suggest.entry", async ([job]) => {
   const { rawEmailId } = job.data as { rawEmailId: string };
   await suggestEntry({ db, llm, sendPush }, rawEmailId);
@@ -66,7 +55,11 @@ await boss.work("suggest.docmeta", async ([job]) => {
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
   const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", doc.sha256));
-  await suggestDocMeta({ db, llm, extractText, sendPush }, documentId, buf);
+  // Extract once, store it, and hand the same text to the docmeta prompt: the
+  // text the model saw is the text the search index holds.
+  const stored = await storeDocumentText({ db }, doc, buf);
+  await suggestDocMeta({ db, llm, extractText: async () => stored.text, sendPush },
+    documentId, buf);
 });
 
 await boss.createQueue("nas.scan");
