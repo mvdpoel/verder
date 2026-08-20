@@ -915,7 +915,7 @@ try {
 Run: `env -u NODE_ENV pnpm --filter @verder/api test registry-import`
 Expected: PASS — new cases plus all pre-existing ones.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/parsers/src/types.ts packages/parsers/src/types.test.ts \
