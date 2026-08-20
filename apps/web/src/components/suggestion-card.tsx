@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { formatEuro } from "@/components/registry-list";
+import { RetrievedRefs } from "@/components/retrieved-refs";
 
 type Proposed = { occurredAt: string; channel: string; direction: "inbound" | "outbound";
   summary: string; details: string; participantNames: string[];
@@ -22,6 +23,7 @@ type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
   assigneeHint?: "martin" | "verdergroep" | "other"; rawEmailId?: string };
 
 type Suggestion = { id: string; kind: string; model: string | null; proposed: unknown;
+  retrievedRefs: unknown;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
   document: { sha256: string; mime: string; title: string } | null };
 
@@ -75,6 +77,7 @@ function TaskCard({ s }: { s: Suggestion }) {
           {(parties.data ?? []).map((party) =>
             <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
       </div>
+      <RetrievedRefs refs={s.retrievedRefs} />
       {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
         <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
       <div className="flex gap-2">
@@ -109,6 +112,7 @@ function EntryCard({ s }: { s: Suggestion }) {
         value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
       <label className="block text-sm">Details<textarea className="w-full border rounded p-2" rows={3}
         value={details} onChange={(e) => setDetails(e.target.value)} /></label>
+      <RetrievedRefs refs={s.retrievedRefs} />
       {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
         <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
       <div className="flex gap-2">
@@ -169,6 +173,7 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
           value={category} onChange={(e) => setCategory(e.target.value as ItemCategory)}>
           {ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
       </div>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
           disabled={!name || approve.isPending || reject.isPending}
@@ -210,6 +215,7 @@ function DebtCard({ s }: { s: Suggestion }) {
       <label className="block text-sm">Creditor<input className="w-full border rounded p-2"
         value={creditorName} onChange={(e) => setCreditorName(e.target.value)} /></label>
       <p className="text-sm text-slate-700">Claimed: {formatEuro(claimedCents)}</p>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
           disabled={!creditorName || approve.isPending || reject.isPending}
@@ -248,6 +254,7 @@ function DocMetaCard({ s }: { s: Suggestion }) {
         value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="block text-sm">Type<input className="w-full border rounded p-2"
         value={docType} onChange={(e) => setDocType(e.target.value)} /></label>
+      <RetrievedRefs refs={s.retrievedRefs} />
       <div className="flex gap-2">
         <button className="rounded bg-emerald-700 text-white px-4 py-1"
           onClick={() => approve.mutate({ id: s.id, title, docType: docType || undefined })}>
