@@ -54,7 +54,7 @@
 - Consumes: nothing.
 - Produces: `export interface SheetData { name: string; rows: string[][] }` and `export function readWorkbook(buf: Buffer): SheetData[]`.
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 In `packages/parsers/package.json`, add to `dependencies` (alongside `fast-xml-parser`):
 
@@ -64,7 +64,7 @@ In `packages/parsers/package.json`, add to `dependencies` (alongside `fast-xml-p
 
 Then run: `env -u NODE_ENV pnpm install`
 
-- [ ] **Step 2: Write the fixture generator**
+- [x] **Step 2: Write the fixture generator**
 
 Create `packages/parsers/fixtures/make-sheet-fixtures.mjs`. Both fixtures hold the *same* rows so Task 3 can assert the two containers parse identically. Row 4 is deliberately malformed (5 columns) to exercise the error path.
 
@@ -103,7 +103,7 @@ for (const [ext, bookType] of [["xls", "biff8"], ["xlsx", "xlsx"]]) {
 console.log("fixtures: abn.xls abn.xlsx");
 ```
 
-- [ ] **Step 3: Generate the fixtures**
+- [x] **Step 3: Generate the fixtures**
 
 Run: `env -u NODE_ENV node packages/parsers/fixtures/make-sheet-fixtures.mjs`
 Expected: prints `fixtures: abn.xls abn.xlsx`.
@@ -112,7 +112,7 @@ Verify the containers are what we think:
 Run: `file packages/parsers/fixtures/abn.xls packages/parsers/fixtures/abn.xlsx`
 Expected: `abn.xls: CDFV2 Microsoft Excel` and `abn.xlsx: Microsoft Excel 2007+`
 
-- [ ] **Step 4: Write the failing test**
+- [x] **Step 4: Write the failing test**
 
 Create `packages/parsers/src/sheet.test.ts`:
 
@@ -161,12 +161,12 @@ describe("readWorkbook (bad input)", () => {
 });
 ```
 
-- [ ] **Step 5: Run the test to verify it fails**
+- [x] **Step 5: Run the test to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test sheet`
 Expected: FAIL — `Failed to resolve import "./sheet"`.
 
-- [ ] **Step 6: Write the implementation**
+- [x] **Step 6: Write the implementation**
 
 Create `packages/parsers/src/sheet.ts`:
 
@@ -204,12 +204,12 @@ export function readWorkbook(buf: Buffer): SheetData[] {
 }
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test sheet`
 Expected: PASS, 9 tests (4 per container × 2, plus the bad-input case).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/parsers/package.json packages/parsers/src/sheet.ts \
