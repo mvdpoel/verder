@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { sha256Hex, type SearchEntityType } from "@verder/core";
 import { appendLedgerEvent } from "../ledger";
 import { ingestDocument } from "../routers/documents";
+import { insertEntry } from "../routers/entries";
+import { decide } from "../registry-decide";
+import { setTaskStatus } from "../task-decide";
 import { loadAndRender } from "./index-entity";
 
 // verder_worker, not verder_app: the derived-index grants give the app role
@@ -102,5 +105,136 @@ describe("loadAndRender — documents", () => {
 
   it("returns [] when the row no longer exists", async () => {
     expect(await loadAndRender(db, "document", randomUUID())).toEqual([]);
+  });
+});
+
+describe("loadAndRender — related values and effective status", () => {
+  it("renders a logbook entry with its participants and linked documents, ordered by name", async () => {
+    const marker = randomUUID();
+    const [org] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: `VerderGroep ${marker}` }).returning();
+    const [person] = await db.insert(schema.parties)
+      .values({ kind: "person", name: `Anna ${marker}` }).returning();
+    const doc = await makeDocument(marker, `Bijlage ${marker}.`);
+    const entry = await db.transaction((tx) => insertEntry(tx, userId, {
+      occurredAt: new Date("2026-08-19T09:00:00Z"), channel: "email", direction: "inbound",
+      summary: `Paspoort gevraagd ${marker}`, details: "Kopie paspoort opsturen.",
+      source: "manual", participantPartyIds: [org.id, person.id],
+      documentIds: [doc.id], actionItems: [],
+    }, { eventType: "entry.created" }));
+
+    const chunks = await loadAndRender(db, "entry", entry.id);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].title).toBe(`Paspoort gevraagd ${marker}`);
+    expect(chunks[0].body).toContain(`Anna ${marker}`);
+    expect(chunks[0].body).toContain(`VerderGroep ${marker}`);
+    expect(chunks[0].body).toContain(`Brief Ziggo ${marker}.pdf`);
+    // Sorted by party name, not by join order: an unordered join lets Postgres
+    // return the same participants in a different order on a later drain, which
+    // changes the body, changes source_hash and re-embeds for nothing.
+    expect(chunks[0].body.indexOf(`Anna ${marker}`))
+      .toBeLessThan(chunks[0].body.indexOf(`VerderGroep ${marker}`));
+    expect(chunks[0].status).toBeNull();
+  });
+
+  it("stamps the effective task status and the assignee name", async () => {
+    const marker = randomUUID();
+    const [assignee] = await db.insert(schema.parties)
+      .values({ kind: "person", name: `Martin ${marker}` }).returning();
+    const [task] = await db.insert(schema.tasks).values({
+      title: `Kopie paspoort opsturen ${marker}`, details: "Naar VerderGroep mailen.",
+      assigneePartyId: assignee.id, dueAt: new Date("2026-09-01T00:00:00Z"),
+      createdBy: userId,
+    }).returning();
+    await db.transaction((tx) => setTaskStatus(tx, userId, {
+      taskId: task.id, status: "in-progress", note: "Begonnen." }));
+
+    const chunks = await loadAndRender(db, "task", task.id);
+
+    expect(chunks).toHaveLength(1);
+    // Status lives in task_status_changes; the tasks row itself has no status
+    // column at all, so reading the row alone would index nothing.
+    expect(chunks[0].status).toBe("in-progress");
+    expect(chunks[0].body).toContain(`Martin ${marker}`);
+    expect(chunks[0].occurredAt?.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("stamps the effective financial-item status and the provider name", async () => {
+    const marker = randomUUID();
+    const [provider] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: `Ziggo B.V. ${marker}` }).returning();
+    const [item] = await db.insert(schema.financialItems).values({
+      name: `Ziggo ${marker}`, category: "telecom", providerPartyId: provider.id,
+      amountCents: 4250, billingCycle: "monthly", paymentChannel: "direct-debit",
+      noticePeriod: "1 maand", cancellationMethod: "online",
+      cancellationDetails: "Via Mijn Ziggo opzeggen.", accountNumber: "12345678",
+    }).returning();
+    await db.transaction((tx) => decide(tx, userId, {
+      financialItemId: item.id, status: "to-cancel", explanation: "Niet noodzakelijk." }));
+
+    const chunks = await loadAndRender(db, "financial_item", item.id);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].status).toBe("to-cancel");
+    expect(chunks[0].body).toContain(`Ziggo B.V. ${marker}`);
+  });
+
+  it("stamps the effective debt status and the creditor party name", async () => {
+    const marker = randomUUID();
+    const [creditor] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: `Intrum ${marker}` }).returning();
+    const [debt] = await db.insert(schema.debts).values({
+      creditorPartyId: creditor.id, creditorName: `Intrum ${marker}`,
+      claimedCents: 125_000, principalCents: 100_000, references_: `DOS-${marker}`,
+    }).returning();
+    await db.transaction((tx) => decide(tx, userId, {
+      debtId: debt.id, status: "disputed", explanation: "Bedrag klopt niet." }));
+
+    const chunks = await loadAndRender(db, "debt", debt.id);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].status).toBe("disputed");
+    expect(chunks[0].body).toContain(`DOS-${marker}`);
+  });
+
+  it("renders e-mails, milestones, timeline events and parties with a null status", async () => {
+    const marker = randomUUID();
+    const [email] = await db.insert(schema.rawEmails).values({
+      gmailMessageId: `msg-${marker}`, gmailThreadId: `thr-${marker}`,
+      fromAddr: "info@ziggo.nl", toAddr: "martin@vanderpoel.pro",
+      subject: `Opzegging bevestigd ${marker}`, sentAt: new Date("2026-08-18T08:30:00Z"),
+      rawRfc822Sha256: sha256Hex(`raw-${marker}`),
+      bodyText: "Uw abonnement is opgezegd per 1 oktober.",
+    }).returning();
+    const [milestone] = await db.insert(schema.milestones).values({
+      stage: "wsnp-start", title: `Toelating WSNP ${marker}`,
+      expectedAt: new Date("2026-10-01T00:00:00Z"), note: "Zitting gepland.",
+    }).returning();
+    const [event] = await db.insert(schema.timelineEvents).values({
+      title: `Intakegesprek ${marker}`, kind: "meeting",
+      happenedAt: new Date("2026-08-05T13:00:00Z"),
+    }).returning();
+    const [party] = await db.insert(schema.parties).values({
+      kind: "organization", name: `Bewind ${marker}`, email: "info@verdergroep.nl",
+    }).returning();
+
+    const cases: { type: SearchEntityType; id: string; title: string; contains: string }[] = [
+      { type: "email", id: email.id, title: `Opzegging bevestigd ${marker}`,
+        contains: "Uw abonnement is opgezegd per 1 oktober." },
+      { type: "milestone", id: milestone.id, title: `Toelating WSNP ${marker}`,
+        contains: "Zitting gepland." },
+      { type: "timeline_event", id: event.id, title: `Intakegesprek ${marker}`,
+        contains: `Intakegesprek ${marker}` },
+      { type: "party", id: party.id, title: `Bewind ${marker}`,
+        contains: "info@verdergroep.nl" },
+    ];
+    for (const c of cases) {
+      const chunks = await loadAndRender(db, c.type, c.id);
+      expect(chunks, c.type).toHaveLength(1);
+      expect(chunks[0].title, c.type).toBe(c.title);
+      expect(chunks[0].body, c.type).toContain(c.contains);
+      expect(chunks[0].status, c.type).toBeNull();
+    }
   });
 });
