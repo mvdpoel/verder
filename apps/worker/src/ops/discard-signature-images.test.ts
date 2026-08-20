@@ -2,8 +2,9 @@ import { afterAll, describe, expect, it } from "vitest";
 import { asc, eq } from "drizzle-orm";
 import { verifyChain, type ChainEvent } from "@verder/core";
 import { createDb, schema } from "@verder/db";
+import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument, ingestDocument } from "@verder/api/src/routers/documents";
-import { discardSignatureImages } from "./discard-signature-images";
+import { discardSignatureImages, SIGNATURE_IMAGE_INGESTED_BEFORE } from "./discard-signature-images";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -15,6 +16,9 @@ describe("discardSignatureImages", () => {
     title: string; mime: string; source: "upload" | "email-attachment";
   }) => db.transaction((tx) => ingestDocument(tx, {
     sha256: sha(), sizeBytes: 10, receivedAt: new Date(), ...over }));
+  // Every test that seeds a fresh fixture passes its own `before`, so the
+  // suite cannot start failing once the default cutoff is in the past.
+  const RUN = { before: new Date(Date.now() + 60_000) };
   const ledgerCount = async () => (await db.select().from(schema.ledgerEvents)).length;
   // Chain linkage only, exactly as documents.test.ts does it: this dev database
   // is shared and never truncated, so a whole-vault verification cannot be
@@ -39,7 +43,7 @@ describe("discardSignatureImages", () => {
       source: "upload" });
 
     const before = await ledgerCount();
-    const out = await discardSignatureImages(db);
+    const out = await discardSignatureImages(db, RUN);
 
     // At least our two: the shared dev database carries signature images left
     // behind by other test files, and the backfill is deliberately global.
@@ -63,10 +67,10 @@ describe("discardSignatureImages", () => {
   it("is idempotent — a second run appends nothing", async () => {
     await seedDocument({ title: "image.png", mime: "image/png",
       source: "email-attachment" });
-    await discardSignatureImages(db);
+    await discardSignatureImages(db, RUN);
     const after = await ledgerCount();
 
-    const second = await discardSignatureImages(db);
+    const second = await discardSignatureImages(db, RUN);
     expect(second.discarded).toBe(0);
     // Everything it scanned was already discarded — the count itself cannot be
     // pinned, because the corpus is shared, but "all of it" can.
@@ -79,17 +83,64 @@ describe("discardSignatureImages", () => {
     const junk = await seedDocument({ title: "image.png", mime: "image/png",
       source: "email-attachment" });
     const lines: string[] = [];
-    const out = await discardSignatureImages(db, { log: (l) => lines.push(l) });
+    const out = await discardSignatureImages(db, { ...RUN, log: (l) => lines.push(l) });
     // One line per discard, and it identifies the row — this writes to the
     // evidence record, so the log has to say what it did.
     expect(lines).toHaveLength(out.discarded);
     expect(lines.some((l) => l.includes(junk.id) && l.includes("image.png"))).toBe(true);
   });
 
+  it("never overrides a document Martin filed himself", async () => {
+    // `image.png` is exactly the filename Gmail, Apple Mail and Outlook give a
+    // pasted-from-clipboard image — a screenshot of a payment overview, a photo
+    // of a letter — sent as a genuine attachment. Those are precisely the parts
+    // the port filter now KEEPS, so they survive into this population. This
+    // script is registered as a permanent pnpm script and written into
+    // docs/deploy.md, so it WILL run again after a restore or a later deploy.
+    // At that point an explicit human judgement must win over a title match.
+    const kept = await seedDocument({ title: "image.png", mime: "image/png",
+      source: "email-attachment" });
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.documentStatusChanges).values({
+        documentId: kept.id, status: "filed", title: "Betaaloverzicht ING.png" });
+      await appendLedgerEvent(tx, {
+        eventType: "document.updated", entityType: "document", entityId: kept.id,
+        payload: { id: kept.id, status: "filed",
+          title: "Betaaloverzicht ING.png", docType: null } });
+    });
+
+    const out = await discardSignatureImages(db, RUN);
+
+    expect((await effectiveDocument(db, kept.id)).effectiveStatus).toBe("filed");
+    expect(out.scanned).toBe(out.discarded + out.skipped);
+  });
+
+  it("ignores documents ingested after the population it was measured against", async () => {
+    // The doc comment's justification — "on 2026-08-20 it matched all nine and
+    // nothing else" — is a measurement of one instant. Without a bound the
+    // query does not encode it, and a re-run months later sweeps up every
+    // image.png that arrived since.
+    const later = await seedDocument({ title: "image.png", mime: "image/png",
+      source: "email-attachment" });
+
+    const out = await discardSignatureImages(db, { before: new Date("2020-01-01T00:00:00Z") });
+
+    expect(out.scanned).toBe(0);
+    expect(out.discarded).toBe(0);
+    expect((await effectiveDocument(db, later.id)).effectiveStatus).toBe("inbox");
+  });
+
+  it("bounds the default run to the day the nine were measured", () => {
+    // Not a tautology: it is the one place the constant's meaning is written
+    // down as an assertion rather than a comment, and the tests above pass an
+    // explicit `before` so they cannot silently rot past this date.
+    expect(SIGNATURE_IMAGE_INGESTED_BEFORE.toISOString()).toBe("2026-08-21T00:00:00.000Z");
+  });
+
   it("leaves the ledger chain verifying", async () => {
     await seedDocument({ title: "image.png", mime: "image/png",
       source: "email-attachment" });
-    await discardSignatureImages(db);
+    await discardSignatureImages(db, RUN);
     await expect(verifyLedger()).resolves.toMatchObject({ ok: true });
   });
 });

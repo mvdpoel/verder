@@ -12,7 +12,7 @@
 // is an append to document_status_changes with its ledger event, exactly what
 // documents.update does when Martin clicks the button himself, and every one of
 // these stays individually undoable from its vault page.
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
@@ -37,8 +37,25 @@ import { recordRun } from "../heartbeat";
  * Deliberately not a heuristic on size or mime: this is a one-time cleanup of a
  * known population, not a rule the system keeps applying. Anything it misses,
  * Martin discards with one click.
+ *
+ * Two guards keep the query honest about that:
+ *
+ * - `created_at < SIGNATURE_IMAGE_INGESTED_BEFORE`. `image.png` is also the
+ *   filename Gmail, Apple Mail and Outlook give a pasted-from-clipboard image —
+ *   a screenshot of a payment overview, a photo of a letter — sent as a genuine
+ *   `Content-Disposition: attachment` part, which is exactly what the port
+ *   filter now KEEPS. Without a bound, a re-run after a restore (this is a
+ *   registered pnpm script and a documented deploy step, so it WILL run again)
+ *   would sweep up every one of those that arrived since.
+ * - Only a document still sitting in the inbox is touched. `filed` is an
+ *   explicit human judgement that the document matters, and a title match must
+ *   never override it.
  */
 const SIGNATURE_IMAGE_TITLE = "image.png";
+
+/** The nine were measured in production on 2026-08-20; the population this
+ *  script is about ends that day. */
+export const SIGNATURE_IMAGE_INGESTED_BEFORE = new Date("2026-08-21T00:00:00.000Z");
 
 export interface DiscardBackfillResult {
   scanned: number; discarded: number; skipped: number;
@@ -46,12 +63,14 @@ export interface DiscardBackfillResult {
 
 export async function discardSignatureImages(
   db: Db,
-  opts: { log?: (line: string) => void } = {},
+  opts: { log?: (line: string) => void; before?: Date } = {},
 ): Promise<DiscardBackfillResult> {
   const log = opts.log ?? (() => {});
+  const before = opts.before ?? SIGNATURE_IMAGE_INGESTED_BEFORE;
   const rows = await db.select().from(schema.documents)
     .where(and(eq(schema.documents.source, "email-attachment"),
-      eq(schema.documents.title, SIGNATURE_IMAGE_TITLE)));
+      eq(schema.documents.title, SIGNATURE_IMAGE_TITLE),
+      lt(schema.documents.createdAt, before)));
 
   let discarded = 0;
   let skipped = 0;
@@ -59,8 +78,12 @@ export async function discardSignatureImages(
     // The EFFECTIVE status, never row.status: discard lives in
     // document_status_changes and the column keeps reading 'inbox' forever, so
     // reading it here would re-discard every document on every run.
+    //
+    // Anything but 'inbox' is left alone. 'discarded' is what makes a second
+    // run append nothing; 'filed' is Martin saying this one matters, and no
+    // title match outranks that.
     const eff = await effectiveDocument(db, row.id);
-    if (eff.effectiveStatus === "discarded") {
+    if (eff.effectiveStatus !== "inbox") {
       skipped++;
       continue;
     }
@@ -93,7 +116,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     console.log("discard-signature-images: start");
     const res = await discardSignatureImages(db, { log: (line) => console.log(line) });
-    await recordRun(db, "discard-signature-images", "ok", res);
+    // No heartbeat on success, deliberately — reindex.ts is the precedent, not
+    // extract-texts.ts. The dashboard marks any worker unseen for 15 minutes
+    // red, so a one-time job that records "ok" becomes a permanent red row for
+    // something that is never supposed to run again, and degrades the one panel
+    // whose value is that red means something.
     console.log(`discard-signature-images: done — scanned ${res.scanned},`
       + ` discarded ${res.discarded}, already discarded ${res.skipped}`);
   } catch (err) {
