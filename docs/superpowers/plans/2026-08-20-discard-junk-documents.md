@@ -163,7 +163,7 @@ Migration 0021 is additive, like 0020 — migrate before the images."
 - Consumes: nothing.
 - Produces: `export function isInlineBodyImage(headers: { name?: string | null; value?: string | null }[] | null | undefined): boolean`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `apps/worker/src/gmail-parts.test.ts`:
 
@@ -222,12 +222,12 @@ describe("isInlineBodyImage", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter worker test gmail-parts`
 Expected: FAIL — cannot resolve `./gmail-parts`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `apps/worker/src/gmail-parts.ts`:
 
@@ -264,12 +264,12 @@ export function isInlineBodyImage(
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `env -u NODE_ENV pnpm --filter worker test gmail-parts`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Consult it in the walk**
+- [x] **Step 5: Consult it in the walk**
 
 In `apps/worker/src/gmail-auth.ts`, add the import:
 
@@ -291,7 +291,7 @@ to:
 
 Leave the recursion (`if (p.parts) await walk(p)`) exactly as it is — a skipped part may still have children.
 
-- [ ] **Step 6: Prove the port skips it end to end**
+- [x] **Step 6: Prove the port skips it end to end**
 
 Add to `apps/worker/src/gmail.test.ts`, using the file's existing fake `GmailPort` pattern — a message carrying one signature logo and one real PDF must produce exactly one document:
 
@@ -315,12 +315,14 @@ it("ingests the real attachment and not the signature logo", async () => {
 
 Note the skip happens in the real Gmail port (`gmail-auth.ts`), not in `ingestRawEmail`, so this test asserts the *contract* the port now upholds: what reaches `ingestRawEmail` no longer contains body images. If `gmail.test.ts` has no `fakeMessage` helper, follow whatever construction the existing tests in that file use.
 
-- [ ] **Step 7: Run the worker suite**
+**DEVIATION (executed 2026-08-20):** the test above was not added as written. `gmail.test.ts` has no `fakeMessage` and no `ingestRawEmail` — it drives `pollGmail` with a fake `GmailPort` — and a fake port that hands over only a PDF proves nothing about the skip: it merely restates the existing "ingests raw email + attachment" test. To actually prove the port skips it, the `walk` inside `realGmailPort` was extracted verbatim into an exported `collectAttachments(payload, fetchBytes)` in `gmail-auth.ts` (behaviour-preserving; `realGmailPort` now passes an attachment-fetching callback), and four tests were added to `gmail-auth.test.ts`: a payload holding one signature logo and one real PDF yields only the PDF, recursion into a skipped part's children still happens, a headerless part is kept, and a part with no declared mime falls back to `application/octet-stream`.
+
+- [x] **Step 7: Run the worker suite**
 
 Run: `env -u NODE_ENV pnpm --filter worker test`
 Expected: PASS — all pre-existing gmail tests included.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/worker/src/gmail-parts.ts apps/worker/src/gmail-parts.test.ts \

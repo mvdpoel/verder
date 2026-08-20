@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { google, type Auth } from "googleapis";
 import type { GmailMessage, GmailPort } from "./gmail";
+import { isInlineBodyImage } from "./gmail-parts";
 
 interface OAuthCreds {
   installed?: { client_id: string; client_secret: string };
@@ -57,19 +58,13 @@ export async function realGmailPort(): Promise<GmailPort> {
       const full = await gmail.users.messages.get({ userId: "me", id, format: "full" });
       const headers = Object.fromEntries((full.data.payload?.headers ?? [])
         .map((h) => [h.name!.toLowerCase(), h.value ?? ""]));
-      const attachments: GmailMessage["attachments"] = [];
-      const walk = async (part: NonNullable<typeof full.data.payload>) => {
-        for (const p of part.parts ?? []) {
-          if (p.filename && p.body?.attachmentId) {
+      const attachments = full.data.payload
+        ? await collectAttachments(full.data.payload, async (attachmentId) => {
             const att = await gmail.users.messages.attachments.get({
-              userId: "me", messageId: id, id: p.body.attachmentId });
-            attachments.push({ filename: p.filename, mime: p.mimeType ?? "application/octet-stream",
-              data: Buffer.from(att.data.data!, "base64url") });
-          }
-          if (p.parts) await walk(p);
-        }
-      };
-      if (full.data.payload) await walk(full.data.payload);
+              userId: "me", messageId: id, id: attachmentId });
+            return Buffer.from(att.data.data!, "base64url");
+          })
+        : [];
       const bodyPart = findTextPart(full.data.payload);
       return {
         id, threadId: full.data.threadId!, from: headers.from ?? "", to: headers.to ?? "",
@@ -80,6 +75,45 @@ export async function realGmailPort(): Promise<GmailPort> {
       };
     },
   };
+}
+
+// The Gmail payload tree, narrowed to what the walk actually reads. Declaring
+// it structurally keeps this function testable without a googleapis client.
+export interface MessagePart {
+  filename?: string | null;
+  mimeType?: string | null;
+  body?: { attachmentId?: string | null } | null;
+  headers?: { name?: string | null; value?: string | null }[] | null;
+  parts?: MessagePart[] | null;
+}
+
+/**
+ * Walk a message's part tree and promote the parts that are genuine
+ * attachments to vault documents.
+ *
+ * A part earns a document only if it has a filename, has downloadable bytes,
+ * and is NOT an image the HTML body embeds by `cid:` — see isInlineBodyImage.
+ * The recursion runs regardless of the skip: a skipped part may still have
+ * children worth keeping.
+ */
+export async function collectAttachments(
+  payload: MessagePart,
+  fetchBytes: (attachmentId: string) => Promise<Buffer>,
+): Promise<GmailMessage["attachments"]> {
+  const attachments: GmailMessage["attachments"] = [];
+  const walk = async (part: MessagePart) => {
+    for (const p of part.parts ?? []) {
+      if (p.filename && p.body?.attachmentId && !isInlineBodyImage(p.headers)) {
+        attachments.push({
+          filename: p.filename, mime: p.mimeType ?? "application/octet-stream",
+          data: await fetchBytes(p.body.attachmentId),
+        });
+      }
+      if (p.parts) await walk(p);
+    }
+  };
+  await walk(payload);
+  return attachments;
 }
 
 function findTextPart(payload: unknown): string | null {
