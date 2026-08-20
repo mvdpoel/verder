@@ -84,12 +84,39 @@ function cap(raw: string): { text: string; charCount: number; truncated: boolean
   return { text: cps.slice(0, MAX_TEXT_CHARS).join(""), charCount: cps.length, truncated: true };
 }
 
+/**
+ * What the BYTES say this file is, when the recorded mime says nothing useful.
+ *
+ * Documents arrive from mail attachments and NAS scans, and the mime that gets
+ * recorded is whatever the source claimed. Production held a bank statement
+ * called `mutov566567741_01042026-30072026.pdf`, recorded as
+ * `application/octet-stream`, which extraction therefore refused to read — an
+ * ABN AMRO transaction export, exactly the kind of document the registry cares
+ * about, invisible to search because of a content-type header.
+ *
+ * Magic bytes only, and only consulted when the mime is uninformative: a
+ * recorded `application/pdf` is still trusted as before.
+ */
+function sniffMime(buf: Buffer): string | null {
+  if (buf.subarray(0, 5).toString("latin1") === "%PDF-") return "application/pdf";
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buf.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return "image/jpeg";
+  return null;
+}
+
+const UNINFORMATIVE_MIMES = new Set(["application/octet-stream", "binary/octet-stream", ""]);
+
 export async function extractDocumentText(
-  mime: string, buf: Buffer,
+  recordedMime: string, buf: Buffer,
   deps: { ocr?: OcrPort; rasterize?: typeof rasterizePdf } = {},
 ): Promise<ExtractedText> {
   const ocr = deps.ocr ?? realOcrPort();
   const rasterize = deps.rasterize ?? rasterizePdf;
+  const mime = UNINFORMATIVE_MIMES.has(recordedMime)
+    ? (sniffMime(buf) ?? recordedMime)
+    : recordedMime;
   try {
     if (mime === "application/pdf") {
       const pdfParse = (await import("pdf-parse")).default;

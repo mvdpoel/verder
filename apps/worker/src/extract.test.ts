@@ -77,6 +77,27 @@ describe("extractDocumentText", () => {
     expect(out.error).toContain("pdftoppm ENOENT");
   });
 
+  it("reads a PDF recorded as application/octet-stream, by its bytes", async () => {
+    // Production held `mutov566567741_01042026-30072026.pdf` — an ABN AMRO
+    // transaction export — recorded as application/octet-stream, so extraction
+    // refused it and a bank statement stayed invisible to search because of a
+    // content-type header. The bytes always said %PDF-.
+    const out = await extractDocumentText("application/octet-stream",
+      await fixture("text-letter.pdf"), { ocr: stubOcr("SHOULD NOT RUN") });
+    expect(out.extractor).toBe("pdf-parse");
+    expect(out.text).toContain("dossiernummer");
+  });
+
+  it("still trusts a recorded mime that is informative", async () => {
+    // Sniffing is a fallback, never an override: a declared image/png goes
+    // straight to OCR without the bytes getting a vote.
+    const seen: Buffer[] = [];
+    const out = await extractDocumentText("image/png", await fixture("scan-letter.png"),
+      { ocr: stubOcr("Ziggo", seen) });
+    expect(out.extractor).toBe("ocr-image");
+    expect(seen).toHaveLength(1);
+  });
+
   it("resolves tesseract's recognize under both module shapes", async () => {
     // The real port resolves this out of tesseract.js. Whether the named export
     // sits on the namespace or on `.default` depends on which build the runtime
