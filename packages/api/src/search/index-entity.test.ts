@@ -332,4 +332,41 @@ describe("indexEntity", () => {
     expect(result).toEqual({ chunks: 0, embedded: 0, unchanged: 0 });
     expect(await chunkRows(ghost)).toHaveLength(0);
   });
+
+  it("refreshes status on EVERY chunk of a discarded document, not just the first", async () => {
+    // The status line renders into the top of the body, so only chunk 0's text
+    // changes when a document is discarded. Every later chunk keeps the same
+    // source_hash — and the re-embed skip used to skip the status column with
+    // it, leaving chunk 1..n stamped "inbox" forever. retrieve() reads ALL
+    // chunks, so one stale row is enough to put a discarded document back in
+    // search results.
+    const marker = randomUUID();
+    const doc = await makeDocument(marker, longLetter(marker));
+    await indexEntity({ db, embed: fakeEmbed().port }, "document", doc.id);
+    const before = await chunkRows(doc.id);
+    expect(before.length).toBeGreaterThan(1);
+    expect(before.every((r) => r.status === "inbox")).toBe(true);
+
+    // Exactly what documents.update does when Martin clicks Discard.
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.documentStatusChanges).values({
+        documentId: doc.id, status: "discarded", title: `Brief Ziggo ${marker}.pdf` });
+      await appendLedgerEvent(tx, {
+        eventType: "document.updated", entityType: "document", entityId: doc.id,
+        payload: { id: doc.id, status: "discarded",
+          title: `Brief Ziggo ${marker}.pdf`, docType: null } });
+    });
+
+    const { spy, port } = fakeEmbed();
+    const result = await indexEntity({ db, embed: port }, "document", doc.id);
+
+    const after = await chunkRows(doc.id);
+    expect(after).toHaveLength(before.length);
+    expect(after.map((r) => r.status)).toEqual(after.map(() => "discarded"));
+    // Only the chunk whose text actually changed is re-embedded: a status flip
+    // must not cost a GPU pass over a 40-page PDF.
+    expect(spy.mock.calls.flatMap(([batch]) => batch)).toHaveLength(1);
+    expect(result.embedded).toBe(1);
+    expect(result.unchanged).toBe(before.length - 1);
+  });
 });

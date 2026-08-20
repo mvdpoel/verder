@@ -176,7 +176,11 @@ export async function loadAndRender(
  * Brings search_chunks in line with one entity's current content.
  *
  * Re-embeds ONLY chunks whose source_hash changed (or whose previous embedding
- * failed), upserts them on (entity_type, entity_id, chunk_index), and deletes
+ * failed). A chunk whose text is identical but whose denormalized status or
+ * date has moved is rewritten WITHOUT re-embedding — source_hash covers title
+ * and body, and the status renders into the top of the body only, so a
+ * multi-chunk record would otherwise keep a stale status on every chunk but the
+ * first. It upserts them on (entity_type, entity_id, chunk_index), and deletes
  * chunks past the new chunk count so a shortened record leaves no orphans
  * behind. When the source row is gone, loadAndRender returns [] and every chunk
  * for that entity is deleted — which is also what `reindex --prune` relies on.
@@ -207,6 +211,9 @@ export async function indexEntity(
   const byIndex = new Map(existing.map((c) => [c.chunkIndex, c]));
 
   const pending: RenderedChunk[] = [];
+  // Chunks whose TEXT is unchanged but whose denormalized status (or date) has
+  // moved. They must not be re-embedded — but they must be rewritten.
+  const metadataOnly: RenderedChunk[] = [];
   let unchanged = 0;
   for (const chunk of rendered) {
     const prev = byIndex.get(chunk.chunkIndex);
@@ -214,9 +221,28 @@ export async function indexEntity(
     // A NULL embedding means a previous attempt failed, so it is retried.
     if (prev && prev.sourceHash === chunk.sourceHash && prev.embedding !== null) {
       unchanged++;
+      // …with one exception. source_hash covers title + body, and the status
+      // renders into the TOP of the body only, so discarding a document that
+      // chunked into five pieces changes chunk 0's text and nothing else. The
+      // remaining four keep their hash — and used to keep their stale status
+      // with it, while retrieve() reads EVERY chunk and collapses to the best
+      // one. A single stale row was enough to hand a discarded document back
+      // in search results. Refresh the columns, skip the GPU.
+      if (prev.status !== chunk.status
+        || (prev.occurredAt?.getTime() ?? null) !== (chunk.occurredAt?.getTime() ?? null)) {
+        metadataOnly.push(chunk);
+      }
       continue;
     }
     pending.push(chunk);
+  }
+
+  for (const chunk of metadataOnly) {
+    await deps.db.update(schema.searchChunks)
+      .set({ status: chunk.status, occurredAt: chunk.occurredAt, indexedAt: new Date() })
+      .where(and(eq(schema.searchChunks.entityType, chunk.entityType),
+        eq(schema.searchChunks.entityId, chunk.entityId),
+        eq(schema.searchChunks.chunkIndex, chunk.chunkIndex)));
   }
 
   let vectors: (number[] | null)[] = [];
