@@ -2,14 +2,18 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { verifyChain, type ChainEvent } from "@verder/core";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { storeFile } from "../storage";
+import { makeLedgerRecompute, resolveDocumentUpdatedHashes } from "../verification";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+// The admin role is the only one that CAN update an evidence table — the app
+// and worker grants forbid it. Tamper tests need it to prove verification bites.
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
 
 describe("documents router", () => {
   let db: Db; let userId: string; let vaultDir: string;
@@ -167,6 +171,52 @@ describe("documents router", () => {
     const doc = await seedDocument({ title: "image.png", mime: "image/png" });
     await caller().documents.update({ id: doc.id, status: "discarded" });
     await expect(verifyLedger()).resolves.toMatchObject({ ok: true });
+  });
+
+  it("runFullVerification's recompute dispatch covers document.updated events", async () => {
+    // Without this dispatch line the whole discard feature is unauditable:
+    // an UPDATE on document_status_changes flips a document's EFFECTIVE status
+    // — hiding a court decision from the vault list, the queue and search —
+    // while /verify keeps reporting ok, because the recompute fell through to
+    // `return e.payloadHash` and echoed the stored hash back. Same lesson as
+    // task.status and registry.decision: an untested dispatch line is a hole.
+    const doc = await seedDocument({ title: "Beschikking.pdf", mime: "application/pdf" });
+    await caller().documents.update({ id: doc.id, status: "filed", title: "Beschikking.pdf" });
+    const [change] = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id));
+    const rows = await db.select().from(schema.ledgerEvents)
+      .orderBy(asc(schema.ledgerEvents.seq));
+    const ev = rows.find((e) => e.eventType === "document.updated" && e.entityId === doc.id)!;
+    const event: ChainEvent = { seq: ev.seq, eventType: ev.eventType,
+      entityType: ev.entityType, entityId: ev.entityId,
+      payloadHash: ev.payloadHash, prevHash: ev.prevHash, eventHash: ev.eventHash };
+    const ctx = async () => ({ linkedLater: new Map<string, Set<string>>(),
+      resolvedLinkHash: new Map<number, string>(),
+      resolvedStatusHash: await resolveDocumentUpdatedHashes(db, rows) });
+
+    // Green: the dispatch recomputes the exact stored payload hash.
+    expect(await makeLedgerRecompute(db, vaultDir, await ctx())(event)).toBe(ev.payloadHash);
+
+    // Tampered: the admin role edits the evidence row behind the ledger's back.
+    const admin = createDb(ADMIN_URL);
+    try {
+      await admin.db.execute(sql`UPDATE document_status_changes
+        SET status = 'discarded' WHERE id = ${change.id}`);
+      // The effective status really did change — this is the attack, not a
+      // hypothetical: the document is now hidden from every surface.
+      expect((await caller().documents.get({ id: doc.id })).effectiveStatus).toBe("discarded");
+      expect(await makeLedgerRecompute(db, vaultDir, await ctx())(event)).not.toBe(ev.payloadHash);
+      await admin.db.execute(sql`UPDATE document_status_changes
+        SET status = ${change.status} WHERE id = ${change.id}`);
+      expect(await makeLedgerRecompute(db, vaultDir, await ctx())(event)).toBe(ev.payloadHash);
+    } finally {
+      await admin.pool.end();
+    }
+
+    // An event whose status-change row cannot be resolved at all is flagged,
+    // never silently passed through.
+    const ghost: ChainEvent = { ...event, seq: -1 };
+    expect(await makeLedgerRecompute(db, vaultDir, await ctx())(ghost)).not.toBe(ev.payloadHash);
   });
 
   it("omits discarded documents from the vault list by default", async () => {

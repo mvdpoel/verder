@@ -206,7 +206,8 @@ describe("task status changes", () => {
     const [ev] = await db.select().from(schema.ledgerEvents)
       .where(eq(schema.ledgerEvents.entityId, change.id));
     const recompute = makeLedgerRecompute(db, "/nonexistent-vault", {
-      linkedLater: new Map(), resolvedLinkHash: new Map() });
+      linkedLater: new Map(), resolvedLinkHash: new Map(),
+      resolvedStatusHash: new Map() });
     const event: ChainEvent = { seq: ev.seq, eventType: ev.eventType,
       entityType: ev.entityType, entityId: ev.entityId,
       payloadHash: ev.payloadHash, prevHash: ev.prevHash, eventHash: ev.eventHash };
