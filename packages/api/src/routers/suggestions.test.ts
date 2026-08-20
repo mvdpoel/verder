@@ -539,6 +539,62 @@ describe("suggestions router", () => {
     expect((after.finalPayload as Record<string, unknown>).retrievedRefs).toBeUndefined();
   });
 
+  // --- discarded documents drop out of the queue (Task 5) --------------------
+
+  async function makeDocument(title: string, mime: string) {
+    const [doc] = await db.insert(schema.documents).values({
+      sha256: randomSha(), sizeBytes: 4096, mime, title,
+      source: "email-attachment", receivedAt: new Date(),
+    }).returning();
+    return doc;
+  }
+
+  async function makeDocumentMetaSuggestion(documentId: string) {
+    const [s] = await db.insert(schema.suggestions).values({
+      kind: "document-meta", documentId, model: "qwen3.5:9b", promptVersion: "entry-v1",
+      proposed: { title: "image.png" },
+    }).returning();
+    return s;
+  }
+
+  it("omits suggestions whose document has been discarded", async () => {
+    const junk = await makeDocument("image.png", "image/png");
+    const junkSuggestion = await makeDocumentMetaSuggestion(junk.id);
+    const keep = await makeDocument("Beschikking.pdf", "application/pdf");
+    const keepSuggestion = await makeDocumentMetaSuggestion(keep.id);
+
+    await caller().documents.update({ id: junk.id, status: "discarded" });
+    // The trap: discard lives in document_status_changes and is never written
+    // back, so the column still reads "inbox" — only the EFFECTIVE status knows.
+    const [row] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.id, junk.id));
+    expect(row.status).toBe("inbox");
+
+    const ids = (await caller().suggestions.list({ status: "pending" })).map((s) => s.id);
+    expect(ids).toContain(keepSuggestion.id);
+    expect(ids).not.toContain(junkSuggestion.id);
+  });
+
+  it("keeps suggestions that have no document at all", async () => {
+    const s = await makeSuggestion(); // kind: "log-entry", documentId null
+    const list = await caller().suggestions.list({ status: "pending" });
+    expect(list.map((x) => x.id)).toContain(s.id);
+    // Most pending suggestions carry no document; filtering must not touch them.
+    expect(list.some((x) => x.documentId === null)).toBe(true);
+  });
+
+  it("brings a suggestion back when the discard is undone", async () => {
+    const doc = await makeDocument("image.png", "image/png");
+    const s = await makeDocumentMetaSuggestion(doc.id);
+    await caller().documents.update({ id: doc.id, status: "discarded" });
+    expect((await caller().suggestions.list({ status: "pending" })).map((x) => x.id))
+      .not.toContain(s.id);
+
+    await caller().documents.update({ id: doc.id, status: "inbox" });
+    expect((await caller().suggestions.list({ status: "pending" })).map((x) => x.id))
+      .toContain(s.id);
+  });
+
   it("list flags a document request and approving links the picked document to the entry", async () => {
     const [raw] = await db.insert(schema.rawEmails).values({
       gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-doc",

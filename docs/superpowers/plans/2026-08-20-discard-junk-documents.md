@@ -514,7 +514,7 @@ every entity type that has no status at all."
 - Consumes: Task 1's `discarded` status.
 - Produces: `suggestions.list` omits suggestions whose linked document is discarded.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("omits suggestions whose document has been discarded", async () => {
@@ -536,23 +536,33 @@ it("keeps suggestions that have no document at all", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+**DEVIATION (executed 2026-08-20):** rewritten against the harness `suggestions.test.ts` actually has. There is no `seedDocument` and no `seedSuggestion` — the file inserts fixtures directly with its own local `make*` helpers — so local `makeDocument(title, mime)` and `makeDocumentMetaSuggestion(documentId)` were added in the same style (`randomSha()` for the sha, `source: "email-attachment"`). `suggestions.list({})` also needs `{ status: "pending" }`: the input has a default, but the tRPC caller's input type is not optional. Both exact-set assertions are impossible here: this suite shares one persistent database with every other test file, evidence tables are never truncated, and this file itself leaves ~12 pending suggestions behind, so `toEqual([keep.id])` and `toHaveLength(1)` were written as `toContain` / `not.toContain` on suggestion ids, which is what the filter actually promises. `kind: "entry"` is not a value of `suggestion_kind` (the enum has `log-entry`); the existing `makeSuggestion()` helper already produces a `log-entry` with `documentId` null, so it was reused.
+
+**Two assertions added beyond the plan:** the first test now also asserts `documents.status` still reads `"inbox"` after the discard — that pins the trap in the test itself, so an implementation reading `s.document.status` fails loudly rather than passing by luck. And a third test was added covering undo: discarding removes the suggestion from the queue, un-discarding brings it back, which is the property that makes discard safe to click.
+
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test suggestions`
 Expected: FAIL — the discarded document's suggestion is still listed.
 
-- [ ] **Step 3: Implement**
+Observed: 2 of the 3 new tests failed, both with `AssertionError: expected [ …(12) ] to not include '795aa1ae-…'` — exactly that reason. The "no document at all" test passed pre-implementation, as it must: it is the guard that the fix does not over-filter, so its job is to keep passing after Step 3.
+
+- [x] **Step 3: Implement**
 
 In `packages/api/src/routers/suggestions.ts`, the `list` procedure already resolves each suggestion's `document`. After the `Promise.all` that builds the enriched rows, filter out any row whose document is discarded — resolve the *effective* status with `effectiveDocument`, not the raw `documents.status` column, because discard is recorded in `document_status_changes` and never written back to `documents`.
 
 That last point is the trap in this task: `s.document.status` is the ingest-time default and will read `"inbox"` forever.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+**As executed:** rather than resolve the effective status a second time beside the raw row, the `document` field itself now *is* `effectiveDocument(ctx.db, s.documentId)`. That is strictly additive for consumers — `effectiveDocument` spreads the whole document row and adds `effectiveStatus` / `effectiveTitle` / `effectiveDocType` — so `suggestion-card.tsx`, which reads `sha256`, `mime`, `title`, `sizeBytes`, is unaffected, and it removes the possibility of the raw `.status` being read off this row at all. The filter is `enriched.filter((s) => s.document?.effectiveStatus !== "discarded")`: a suggestion with no document has `document === null`, `undefined !== "discarded"`, and is kept.
+
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test suggestions`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+Observed: 32/32 pass. Full `@verder/api` suite 248/248 across 30 files; `@verder/api` typecheck clean. `web` typecheck still fails on `vault/[id]/page.tsx(19,9)` — verified pre-existing at HEAD by stashing, introduced by Task 1's enum widening and fixed by Task 6 Step 5, which widens the `document-meta-form` status prop.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/routers/suggestions.ts packages/api/src/routers/suggestions.test.ts

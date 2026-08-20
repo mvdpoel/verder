@@ -6,6 +6,7 @@ import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";
+import { effectiveDocument } from "./documents";
 import { debtFields, itemFields } from "./registry";
 import { taskFields } from "./tasks";
 import { documentRequestText } from "../search/document-request";
@@ -51,7 +52,7 @@ export const suggestionsRouter = router({
     const rows = await ctx.db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.status, input.status))
       .orderBy(desc(schema.suggestions.createdAt));
-    return Promise.all(rows.map(async (s) => ({
+    const enriched = await Promise.all(rows.map(async (s) => ({
       ...s,
       // Pure and cheap: decided here so the card only calls the deep-retrieval
       // procedure for suggestions that actually ask for a document.
@@ -60,11 +61,14 @@ export const suggestionsRouter = router({
         ? (await ctx.db.select().from(schema.rawEmails)
             .where(eq(schema.rawEmails.id, s.rawEmailId)))[0] ?? null
         : null,
-      document: s.documentId
-        ? (await ctx.db.select().from(schema.documents)
-            .where(eq(schema.documents.id, s.documentId)))[0] ?? null
-        : null,
+      // effectiveDocument, never the raw row: a discard is APPENDED to
+      // document_status_changes and never written back, so documents.status
+      // keeps reading "inbox" forever.
+      document: s.documentId ? await effectiveDocument(ctx.db, s.documentId) : null,
     })));
+    // Martin already judged this one junk; asking him to file it again is the
+    // whole bug. Suggestions with no document at all are untouched.
+    return enriched.filter((s) => s.document?.effectiveStatus !== "discarded");
   }),
 
   approveEntry: protectedProcedure.input(z.object({
