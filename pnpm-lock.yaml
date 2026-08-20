@@ -35,6 +35,9 @@ importers:
       '@verder/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@verder/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@verder/db':
         specifier: workspace:*
         version: link:../../packages/db
