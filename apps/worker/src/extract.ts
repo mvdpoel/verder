@@ -28,10 +28,31 @@ export const MAX_TEXT_CHARS = 1_000_000;
 
 export interface OcrPort { ocrImage(png: Buffer): Promise<string> }
 
+type Recognize = (img: Buffer, langs: string) => Promise<{ data: { text: string } }>;
+
+/**
+ * tesseract.js ships both an ESM and a CJS build, and which one a `import()`
+ * resolves to differs between the Mac dev environment and the node:22-slim
+ * container. Under the CJS shape the named exports live on `.default`, so
+ * destructuring `recognize` straight off the namespace yields undefined and the
+ * call dies with "recognize is not a function".
+ *
+ * That failure is invisible in normal running: extractDocumentText catches it
+ * and returns extractor "none", so the document is still indexed — on its
+ * filename alone. It shipped to production exactly that way, and nine scanned
+ * letters came back with zero characters while the backfill reported 0 failures.
+ * Hence the interop fallback, and the explicit throw: an OCR path that cannot
+ * find its OCR must say so, not quietly return nothing.
+ */
 export function realOcrPort(): OcrPort {
   return {
     async ocrImage(png) {
-      const { recognize } = await import("tesseract.js");
+      const mod = await import("tesseract.js") as unknown as
+        { recognize?: Recognize; default?: { recognize?: Recognize } };
+      const recognize = mod.recognize ?? mod.default?.recognize;
+      if (typeof recognize !== "function") {
+        throw new Error("tesseract.js: no recognize export (ESM/CJS interop)");
+      }
       return (await recognize(png, "nld+eng")).data.text;
     },
   };

@@ -31,12 +31,22 @@ export async function extractMissingTexts(
   deps: { db: Db; vaultDir: string; onProgress?: (done: number, total: number) => void },
   opts: { limit?: number } = {},
 ): Promise<ExtractBackfillResult> {
+  // Two populations: documents with no text row at all, AND documents whose row
+  // says extractor 'none' on a mime we CAN read. The second exists because a
+  // failed extraction is stored as 'none' with empty text, and storeDocumentText
+  // short-circuits on a matching sha256 — so a fixed extractor would never get a
+  // second chance at them. That is not hypothetical: an ESM/CJS interop bug left
+  // nine production scans stored as 'none' with zero characters. Retrying an
+  // unsupported mime (octet-stream) costs nothing; it returns 'none' immediately.
   const rows = await deps.db.select({
     id: schema.documents.id, sha256: schema.documents.sha256, mime: schema.documents.mime,
+    staleTextId: schema.documentTexts.documentId,
   })
     .from(schema.documents)
     .leftJoin(schema.documentTexts, eq(schema.documentTexts.documentId, schema.documents.id))
-    .where(isNull(schema.documentTexts.documentId))
+    .where(sql`${schema.documentTexts.documentId} IS NULL OR (
+      ${schema.documentTexts.extractor} = 'none'
+      AND (${schema.documents.mime} LIKE 'image/%' OR ${schema.documents.mime} = 'application/pdf'))`)
     .orderBy(sql`${schema.documents.receivedAt} ASC`)
     .limit(opts.limit ?? 100_000);
 
@@ -44,6 +54,12 @@ export async function extractMissingTexts(
   for (const [i, doc] of rows.entries()) {
     try {
       const buf = await readFile(readFilePath(deps.vaultDir, doc.sha256));
+      if (doc.staleTextId) {
+        // Clear the 'none' row so storeDocumentText cannot short-circuit on the
+        // unchanged sha256. Derived data — deleting it loses nothing.
+        await deps.db.delete(schema.documentTexts)
+          .where(eq(schema.documentTexts.documentId, doc.id));
+      }
       const stored = await storeDocumentText({ db: deps.db }, doc, buf);
       if (stored.reused) out.reused++; else out.extracted++;
     } catch {

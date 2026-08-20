@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { extractDocumentText, rasterizePdf, type OcrPort } from "./extract";
+import { extractDocumentText, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
 
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 
@@ -75,6 +75,19 @@ describe("extractDocumentText", () => {
     expect(out.extractor).toBe("none");
     expect(out.text).toBe("");
     expect(out.error).toContain("pdftoppm ENOENT");
+  });
+
+  it("resolves tesseract's recognize under both module shapes", async () => {
+    // The real port resolves this out of tesseract.js. Whether the named export
+    // sits on the namespace or on `.default` depends on which build the runtime
+    // picks — the Mac and the node:22-slim container disagreed, which is how
+    // nine scanned letters reached production with zero extracted characters.
+    const port = realOcrPort();
+    expect(typeof port.ocrImage).toBe("function");
+    const mod = await import("tesseract.js") as unknown as
+      { recognize?: unknown; default?: { recognize?: unknown } };
+    const resolved = mod.recognize ?? mod.default?.recognize;
+    expect(typeof resolved).toBe("function");
   });
 
   // Opt-in: downloads nld+eng training data on first run. Run once by hand with
