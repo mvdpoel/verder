@@ -72,8 +72,8 @@ DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
 ```
 
 Migrations run from the host checkout as the admin role (`verder`), never
-from the containers. The drizzle journal currently contains twenty-one
-migrations — `0000` (schema) through `0020` — and covers everything
+from the containers. The drizzle journal currently contains twenty-two
+migrations — `0000` (schema) through `0021` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
@@ -125,6 +125,13 @@ in one pass:
   must be applied before deploying a web/worker build that can detect
   spreadsheets** — without it an Excel import parses fine and then fails on
   `invalid input value for enum tx_source`
+- `0021_discarded_doc_status` — `doc_status` enum gains `discarded`, so a junk
+  document (an email signature logo) can be discarded by APPENDING a
+  `document_status_changes` row instead of being deleted. Additive only, same
+  as `0020`: `ALTER TYPE ... ADD VALUE` rewrites no row, so the append-only
+  evidence guarantee is untouched. **Apply it before deploying a web/worker
+  build that can discard** — without it every Discard click fails on
+  `invalid input value for enum doc_status`
 
 ### 2.2 Change the role passwords from the dev defaults
 
@@ -237,6 +244,20 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
 ```
 
 Then check `/verify`: the hash chain still verifies and index health is green.
+
+After deploying junk-document discard, backfill the signature images that were
+filed before it — they stay in the vault and in the ledger, they just stop
+appearing in the vault list, the queue and search:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+  pnpm --filter worker discard-signature-images   # idempotent; one ledger event each
+```
+
+It prints every document it touches before touching it, and a re-run appends
+nothing. Nothing is deleted: no vault file is unlinked and no `documents` row
+is removed, so `/verify` must still be green afterwards — check it: the hash
+chain must still verify.
 
 ## Restore procedure
 
