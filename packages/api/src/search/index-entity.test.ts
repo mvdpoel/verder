@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { and, asc, eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { sha256Hex, type SearchEntityType } from "@verder/core";
 import { appendLedgerEvent } from "../ledger";
@@ -8,7 +8,8 @@ import { ingestDocument } from "../routers/documents";
 import { insertEntry } from "../routers/entries";
 import { decide } from "../registry-decide";
 import { setTaskStatus } from "../task-decide";
-import { loadAndRender } from "./index-entity";
+import { EMBED_DIMENSIONS, type EmbedPort } from "./embed";
+import { indexEntity, loadAndRender } from "./index-entity";
 
 // verder_worker, not verder_app: the derived-index grants give the app role
 // SELECT only on document_texts and search_chunks — writing them is the
@@ -236,5 +237,99 @@ describe("loadAndRender — related values and effective status", () => {
       expect(chunks[0].body, c.type).toContain(c.contains);
       expect(chunks[0].status, c.type).toBeNull();
     }
+  });
+});
+
+/** A fake embedding client that records every text it is handed. */
+function fakeEmbed() {
+  const spy = vi.fn(async (texts: string[]) =>
+    texts.map(() => Array.from({ length: EMBED_DIMENSIONS }, (_, i) => (i === 0 ? 1 : 0))));
+  return { spy, port: { embed: spy } satisfies EmbedPort };
+}
+
+const chunkRows = (entityId: string) =>
+  db.select().from(schema.searchChunks)
+    .where(and(eq(schema.searchChunks.entityType, "document"),
+      eq(schema.searchChunks.entityId, entityId)))
+    .orderBy(asc(schema.searchChunks.chunkIndex));
+
+describe("indexEntity", () => {
+  it("upserts every chunk and embeds each one exactly once, with the document prefix", async () => {
+    const marker = randomUUID();
+    const doc = await makeDocument(marker, longLetter(marker));
+    const { spy, port } = fakeEmbed();
+
+    const result = await indexEntity({ db, embed: port }, "document", doc.id);
+
+    expect(result.chunks).toBeGreaterThan(1);
+    expect(result.embedded).toBe(result.chunks);
+    expect(result.unchanged).toBe(0);
+    const rows = await chunkRows(doc.id);
+    expect(rows).toHaveLength(result.chunks);
+    expect(rows.map((r) => r.chunkIndex)).toEqual(rows.map((_, i) => i));
+    expect(rows.every((r) => r.embedding !== null)).toBe(true);
+    expect(rows.every((r) => r.embedAttempts === 0)).toBe(true);
+    expect(rows.every((r) => r.status === "inbox")).toBe(true);
+    const texts = spy.mock.calls.flatMap(([batch]) => batch);
+    expect(texts).toHaveLength(result.chunks);
+    expect(texts.every((t) => t.startsWith("search_document: "))).toBe(true);
+    // Chunks are indexed, not evidence: nothing is appended to the ledger.
+    const ledger = await db.select().from(schema.ledgerEvents)
+      .where(eq(schema.ledgerEvents.eventType, "search.indexed"));
+    expect(ledger).toHaveLength(0);
+  });
+
+  it("makes zero embed calls when the rendered content is unchanged", async () => {
+    const marker = randomUUID();
+    const doc = await makeDocument(marker, longLetter(marker));
+    await indexEntity({ db, embed: fakeEmbed().port }, "document", doc.id);
+    const before = await chunkRows(doc.id);
+
+    const { spy, port } = fakeEmbed();
+    const result = await indexEntity({ db, embed: port }, "document", doc.id);
+
+    // The whole point of source_hash: re-indexing an untouched record costs no
+    // GPU time at all, so the 60 s drain can run forever without loading Ollama.
+    expect(spy).not.toHaveBeenCalled();
+    expect(result.embedded).toBe(0);
+    expect(result.unchanged).toBe(result.chunks);
+    const after = await chunkRows(doc.id);
+    expect(after.map((r) => r.indexedAt.getTime()))
+      .toEqual(before.map((r) => r.indexedAt.getTime()));
+  });
+
+  it("deletes the orphan tail chunks when the source text shrinks", async () => {
+    const marker = randomUUID();
+    const doc = await makeDocument(marker, longLetter(marker));
+    await indexEntity({ db, embed: fakeEmbed().port }, "document", doc.id);
+    expect((await chunkRows(doc.id)).length).toBeGreaterThan(1);
+
+    // A re-scan of the same document that extracts far less text: the trailing
+    // chunks would otherwise haunt results forever with text that is gone.
+    await db.update(schema.documentTexts)
+      .set({ text: `KORT-${marker}: één regel.`, charCount: 24 })
+      .where(eq(schema.documentTexts.documentId, doc.id));
+
+    const result = await indexEntity({ db, embed: fakeEmbed().port }, "document", doc.id);
+
+    expect(result.chunks).toBe(1);
+    const rows = await chunkRows(doc.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].chunkIndex).toBe(0);
+    expect(rows[0].body).toContain(`KORT-${marker}`);
+  });
+
+  it("removes every chunk when the source row is gone", async () => {
+    const ghost = randomUUID();
+    await db.insert(schema.searchChunks).values({
+      entityType: "document", entityId: ghost, chunkIndex: 0,
+      title: "Verdwenen document", body: "Deze brief bestaat niet meer.",
+      occurredAt: null, status: "inbox", sourceHash: "0".repeat(64),
+    });
+
+    const result = await indexEntity({ db, embed: fakeEmbed().port }, "document", ghost);
+
+    expect(result).toEqual({ chunks: 0, embedded: 0, unchanged: 0 });
+    expect(await chunkRows(ghost)).toHaveLength(0);
   });
 });

@@ -1,6 +1,7 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { chunkBody, sourceHash, type SearchEntityType } from "@verder/core";
 import { schema, type Db } from "@verder/db";
+import { asDocument, type EmbedPort } from "./embed";
 import { effectiveStatus } from "../registry-decide";
 import { effectiveTaskStatus } from "../task-decide";
 import { effectiveDocument } from "../routers/documents";
@@ -169,4 +170,90 @@ export async function loadAndRender(
     // covering the whole entity would hide which chunk actually changed.
     sourceHash: sourceHash(rendered.title, body),
   }));
+}
+
+/**
+ * Brings search_chunks in line with one entity's current content.
+ *
+ * Re-embeds ONLY chunks whose source_hash changed (or whose previous embedding
+ * failed), upserts them on (entity_type, entity_id, chunk_index), and deletes
+ * chunks past the new chunk count so a shortened record leaves no orphans
+ * behind. When the source row is gone, loadAndRender returns [] and every chunk
+ * for that entity is deleted — which is also what `reindex --prune` relies on.
+ *
+ * UPDATE and DELETE here are legal and deliberate: the index is DERIVED, not
+ * evidence. It appends no ledger events, and `reindex` rebuilds all of it from
+ * the source records.
+ *
+ * A failing embedding client never throws out of this function: the chunk still
+ * lands, with embedding NULL and embed_attempts incremented, and stays findable
+ * by full text until a later pass succeeds. Callers read the failure count as
+ * `chunks - embedded - unchanged`.
+ */
+export async function indexEntity(
+  deps: { db: Db; embed: EmbedPort },
+  entityType: SearchEntityType, entityId: string,
+): Promise<{ chunks: number; embedded: number; unchanged: number }> {
+  const rendered = await loadAndRender(deps.db, entityType, entityId);
+  const existing = await deps.db.select().from(schema.searchChunks)
+    .where(and(eq(schema.searchChunks.entityType, entityType),
+      eq(schema.searchChunks.entityId, entityId)));
+  const byIndex = new Map(existing.map((c) => [c.chunkIndex, c]));
+
+  const pending: RenderedChunk[] = [];
+  let unchanged = 0;
+  for (const chunk of rendered) {
+    const prev = byIndex.get(chunk.chunkIndex);
+    // Identical text that already carries a vector is left completely alone.
+    // A NULL embedding means a previous attempt failed, so it is retried.
+    if (prev && prev.sourceHash === chunk.sourceHash && prev.embedding !== null) {
+      unchanged++;
+      continue;
+    }
+    pending.push(chunk);
+  }
+
+  let vectors: (number[] | null)[] = [];
+  if (pending.length > 0) {
+    try {
+      vectors = await deps.embed.embed(
+        pending.map((c) => asDocument(`${c.title}\n${c.body}`)));
+    } catch {
+      // Ollama down: index the chunks lexically now, retry the vectors later.
+      vectors = [];
+    }
+  }
+
+  let embedded = 0;
+  for (const [i, chunk] of pending.entries()) {
+    const embedding = vectors[i] ?? null;
+    await deps.db.insert(schema.searchChunks).values({
+      entityType: chunk.entityType, entityId: chunk.entityId,
+      chunkIndex: chunk.chunkIndex, title: chunk.title, body: chunk.body,
+      occurredAt: chunk.occurredAt, status: chunk.status,
+      embedding, sourceHash: chunk.sourceHash,
+      embedAttempts: embedding ? 0 : 1, indexedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [schema.searchChunks.entityType, schema.searchChunks.entityId,
+        schema.searchChunks.chunkIndex],
+      set: {
+        title: chunk.title, body: chunk.body, occurredAt: chunk.occurredAt,
+        status: chunk.status, embedding, sourceHash: chunk.sourceHash,
+        // Failed attempts keep counting up so index health can surface a chunk
+        // that never embeds; a success resets the counter.
+        embedAttempts: embedding ? 0 : sql`${schema.searchChunks.embedAttempts} + 1`,
+        indexedAt: new Date(),
+      },
+    });
+    if (embedding) embedded++;
+  }
+
+  if (existing.some((c) => c.chunkIndex >= rendered.length)) {
+    await deps.db.delete(schema.searchChunks).where(and(
+      eq(schema.searchChunks.entityType, entityType),
+      eq(schema.searchChunks.entityId, entityId),
+      gte(schema.searchChunks.chunkIndex, rendered.length)));
+  }
+
+  return { chunks: rendered.length, embedded, unchanged };
 }
