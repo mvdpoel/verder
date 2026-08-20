@@ -19,7 +19,7 @@ export const paymentChannelEnum = pgEnum("payment_channel", ["direct-debit", "pa
 export const discoverySourceEnum = pgEnum("discovery_source", ["manual", "bank", "paypal", "apple", "email"]);
 export const itemStatusEnum = pgEnum("item_status", ["identified", "mandatory", "allowed", "requested", "to-cancel", "canceled"]);
 export const debtStatusEnum = pgEnum("debt_status", ["identified", "acknowledged", "disputed", "in-settlement", "settled"]);
-export const txSourceEnum = pgEnum("tx_source", ["abn-camt053", "abn-tsv", "paypal-csv"]);
+export const txSourceEnum = pgEnum("tx_source", ["abn-camt053", "abn-tsv", "paypal-csv", "abn-xls"]);
 
 export const ledgerEvents = pgTable("ledger_events", {
   seq: bigint("seq", { mode: "number" }).primaryKey(),

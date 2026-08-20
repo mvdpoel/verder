@@ -23,6 +23,38 @@ function abnTsvFixture(): Buffer {
   return Buffer.from(raw.toString("latin1").replaceAll("123456789", RUN), "latin1");
 }
 
+/**
+ * Same freshness trick for the BIFF8 workbook, but a binary container cannot be
+ * round-tripped through a string: BIFF8 stores labels as UTF-16LE, so the
+ * account-number token is patched IN PLACE with an equal-length replacement.
+ * Length-preserving means no offset in the OLE2 container moves. The account
+ * number is column 0, which `abnRowToParsed` ignores, so nothing this test
+ * asserts on changes.
+ */
+function abnXlsFixture(): Buffer {
+  const buf = Buffer.from(
+    readFileSync(new URL("../../../parsers/fixtures/abn.xls", import.meta.url)));
+  const from = Buffer.from("123456789", "utf16le");
+  const to = Buffer.from(RUN.slice(-9), "utf16le"); // 9 chars in, 9 chars out
+  for (let i = buf.indexOf(from); i !== -1; i = buf.indexOf(from, i + 1)) to.copy(buf, i);
+  return buf;
+}
+
+/**
+ * The OOXML workbook is a ZIP, whose entries carry CRC32s — patching a cell
+ * would corrupt it. Freshness comes from the ZIP end-of-central-directory
+ * COMMENT instead: trailing bytes the format reserves for exactly this, which
+ * change the sha256 without touching a single sheet byte.
+ */
+function abnXlsxFixture(): Buffer {
+  const raw = readFileSync(new URL("../../../parsers/fixtures/abn.xlsx", import.meta.url));
+  const note = Buffer.from(`run-${RUN}`);
+  const buf = Buffer.concat([raw, note]);
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  buf.writeUInt16LE(note.length, eocd + 20); // EOCD comment length
+  return buf;
+}
+
 describe("registry.import", () => {
   let db: Db;
   let userId: string;
@@ -145,5 +177,49 @@ describe("registry.import", () => {
     const rows = await db.select().from(schema.transactions)
       .where(eq(schema.transactions.statementSha256, sha256));
     expect(rows.filter((r) => r.parseError)).toHaveLength(1);
+  });
+
+  it("ingests ABN's Excel export, recording the mime the bytes actually are", async () => {
+    const buf = abnXlsFixture();
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    // The real file arrives from ABN AMRO named .xlsx while being BIFF8 inside.
+    const res = await caller().registry.import.ingest({
+      sha256, filename: "abn.amro.afschriften.vanaf.april.2026.xlsx" });
+
+    expect(res.source).toBe("abn-xls");
+    expect(res.inserted).toBe(5); // 4 parsed rows + 1 parse-error row
+    expect(res.errors).toBe(1);
+
+    const [doc] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.sha256, sha256));
+    expect(doc.mime).toBe("application/vnd.ms-excel"); // NOT the .xlsx mime
+  });
+
+  it("records a genuine .xlsx under the OOXML mime, not the .xls one", async () => {
+    const buf = abnXlsxFixture();
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    const res = await caller().registry.import.ingest({ sha256, filename: "statement.xlsx" });
+    expect(res.source).toBe("abn-xls");
+    expect(res.inserted).toBe(5);
+
+    const [doc] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.sha256, sha256));
+    // one source, two containers: the mime follows the bytes
+    expect(doc.mime)
+      .toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  });
+
+  it("registers an unreadable workbook as evidence before failing", async () => {
+    // OLE2 magic, but not a workbook behind it.
+    const buf = Buffer.concat([
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(512)]);
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    // A parser that throws is a bad upload, not a server fault: 400, not 500.
+    await expect(caller().registry.import.ingest({ sha256, filename: "broken.xls" }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const [doc] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.sha256, sha256));
+    expect(doc).toBeDefined(); // bytes on record beat clean failures
   });
 });

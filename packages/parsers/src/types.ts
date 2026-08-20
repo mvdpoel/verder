@@ -1,3 +1,5 @@
+import { isSpreadsheetMime, sniffContainer } from "./sniff";
+
 /** One normalized statement line. Amounts are signed integer cents: debits negative. */
 export interface ParsedRow {
   rowIndex: number;
@@ -15,15 +17,23 @@ export interface ParseResult {
   errors: { rowIndex: number; raw: string; message: string }[];
 }
 
-export type StatementSource = "abn-camt053" | "abn-tsv" | "paypal-csv";
+export type StatementSource = "abn-camt053" | "abn-tsv" | "paypal-csv" | "abn-xls";
 
 /**
- * Best-effort format sniff from the filename plus the first bytes of the file.
- * Content wins over extension; returns null when neither is conclusive.
+ * Best-effort format sniff from the filename plus the file's bytes. Content
+ * wins over extension; returns null when neither is conclusive.
+ *
+ * Takes the WHOLE buffer — a spreadsheet is only identifiable from its
+ * container, and a ZIP scatters its entry names through the file.
  */
-export function detectSource(filename: string, head: Buffer): StatementSource | null {
+export function detectSource(filename: string, bytes: Buffer): StatementSource | null {
+  // Binary containers first: an OLE2 or OOXML file is not text, and running the
+  // text heuristics over it can only produce a wrong answer.
+  const container = sniffContainer(bytes);
+  if (container && isSpreadsheetMime(container)) return "abn-xls";
+
   const name = filename.toLowerCase();
-  let text = head.toString("utf8");
+  let text = bytes.toString("utf8");
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // UTF-8 BOM (PayPal)
 
   if (text.includes("BkToCstmrStmt") || /^\s*<\?xml/.test(text) || name.endsWith(".xml")) {

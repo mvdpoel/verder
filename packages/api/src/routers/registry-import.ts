@@ -4,8 +4,8 @@ import { TRPCError } from "@trpc/server";
 import { desc, eq, sql } from "drizzle-orm";
 import { schema } from "@verder/db";
 import {
-  detectSource, parseAbnTsv, parseCamt053, parsePaypalCsv,
-  type ParseResult, type StatementSource,
+  detectSource, parseAbnSheet, parseAbnTsv, parseCamt053, parsePaypalCsv, sniffContainer,
+  XLS_MIME, type ParseResult, type StatementSource,
 } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { readFilePath } from "../storage";
@@ -26,13 +26,24 @@ const PARSERS: Record<StatementSource, (buf: Buffer) => ParseResult> = {
   "abn-camt053": parseCamt053,
   "abn-tsv": parseAbnTsv,
   "paypal-csv": parsePaypalCsv,
+  "abn-xls": parseAbnSheet,
 };
 
-const MIME: Record<StatementSource, string> = {
+const FIXED_MIME: Record<Exclude<StatementSource, "abn-xls">, string> = {
   "abn-camt053": "application/xml",
   "abn-tsv": "text/tab-separated-values",
   "paypal-csv": "text/csv",
 };
+
+/**
+ * abn-xls covers two containers, so its mime comes from the bytes rather than
+ * the source: recording a genuine .xlsx as application/vnd.ms-excel would hand
+ * the preview and the extractor a type that contradicts the file itself.
+ */
+function mimeFor(source: StatementSource, buf: Buffer): string {
+  if (source !== "abn-xls") return FIXED_MIME[source];
+  return sniffContainer(buf) ?? XLS_MIME;
+}
 
 export const registryImportRouter = router({
   ingest: protectedProcedure.input(z.object({
@@ -48,23 +59,33 @@ export const registryImportRouter = router({
         message: "File is not in the vault yet — upload it first" });
     }
 
-    const source = detectSource(input.filename, buf.subarray(0, 1024));
+    const source = detectSource(input.filename, buf);
 
     // Evidence first: register the document (idempotent by sha256, ledger
     // event in the same transaction) before judging the format.
     await ctx.db.transaction((tx) => ingestDocument(tx, {
       sha256: input.sha256, sizeBytes: buf.length,
-      mime: source ? MIME[source] : "application/octet-stream",
+      mime: source ? mimeFor(source, buf) : "application/octet-stream",
       title: input.filename, source: "upload",
       receivedAt: new Date(), docType: "bank-statement",
     }));
 
     if (!source) {
       throw new TRPCError({ code: "BAD_REQUEST",
-        message: "Unrecognized statement format (expected ABN CAMT.053 XML, ABN TSV, or PayPal CSV)" });
+        message: "Unrecognized statement format (expected ABN CAMT.053 XML, ABN TSV, ABN Excel, or PayPal CSV)" });
     }
 
-    const parsed = PARSERS[source](buf);
+    // A corrupt workbook throws where the text parsers never did. The document
+    // is already registered above; turn the failure into a clear 400.
+    let parsed: ParseResult;
+    try {
+      parsed = PARSERS[source](buf);
+    } catch (err) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Could not read this ${source} file: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
     // Malformed rows are kept, never dropped: parseError + raw text.
     const values = [
       ...parsed.rows.map((r) => ({
