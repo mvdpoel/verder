@@ -944,7 +944,7 @@ the preview and the extractor downstream."
 - Consumes: `readWorkbook`, `sniffContainer`, `isSpreadsheetMime`, `UNINFORMATIVE_MIMES` (Tasks 1–2).
 - Produces: `Extractor` union gains `"sheet"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `apps/worker/src/extract.test.ts`:
 
@@ -994,12 +994,12 @@ describe("extractDocumentText (spreadsheets)", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter worker test extract`
 Expected: FAIL — `expected "sheet" but got "none"`.
 
-- [ ] **Step 3: Implement the sheet extractor**
+- [x] **Step 3: Implement the sheet extractor**
 
 In `apps/worker/src/extract.ts`:
 
@@ -1033,18 +1033,18 @@ if (isSpreadsheetMime(mime)) {
 }
 ```
 
-- [ ] **Step 4: Add the worker's dependency on parsers, if absent**
+- [x] **Step 4: Add the worker's dependency on parsers, if absent**
 
 `apps/worker/package.json` already lists `"@verder/parsers": "workspace:*"`. Confirm:
 Run: `grep '@verder/parsers' apps/worker/package.json`
 Expected: one match. If missing, add it and re-run `env -u NODE_ENV pnpm install`.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter worker test extract`
 Expected: PASS — new cases plus every pre-existing extraction test (PDF, OCR, sniffing).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/worker/src/extract.ts apps/worker/src/extract.test.ts
