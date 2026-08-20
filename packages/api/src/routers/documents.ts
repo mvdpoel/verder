@@ -30,13 +30,18 @@ export async function ingestDocument(tx: Db, input: {
 export async function effectiveDocument(db: Db, id: string) {
   const [doc] = await db.select().from(schema.documents).where(eq(schema.documents.id, id));
   if (!doc) throw new Error("Document not found");
-  const [latest] = await db.select().from(schema.documentStatusChanges)
+  // Two rows, not one: the second is what the latest change replaced, which is
+  // what "Undo discard" has to restore. Undoing always to "inbox" would
+  // silently unfile a filed document discarded by mistake.
+  const changes = await db.select().from(schema.documentStatusChanges)
     .where(eq(schema.documentStatusChanges.documentId, id))
-    .orderBy(desc(schema.documentStatusChanges.createdAt)).limit(1);
+    .orderBy(desc(schema.documentStatusChanges.createdAt)).limit(2);
+  const latest = changes[0];
   return { ...doc,
     effectiveStatus: latest?.status ?? doc.status,
     effectiveTitle: latest?.title ?? doc.title,
-    effectiveDocType: latest?.docType ?? doc.docType };
+    effectiveDocType: latest?.docType ?? doc.docType,
+    previousStatus: changes[1]?.status ?? doc.status };
 }
 
 /** Enough to see what a statement is; far short of hanging the tab on a big one. */
@@ -150,6 +155,21 @@ export const documentsRouter = router({
     title: z.string().optional(), docType: z.string().optional(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
+      // A transition that would change nothing observable appends nothing.
+      // Spec: discarding an already-discarded document is a no-op, not an
+      // error — and the Discard button is one click Martin can land twice. The
+      // append-only record is here to say what he did; two rows for one
+      // decision would have it claim he discarded the same document twice.
+      // A real edit (same status, new title) is NOT swallowed: the comparison
+      // is against what appending would actually produce.
+      const [doc] = await tx.select().from(schema.documents)
+        .where(eq(schema.documents.id, input.id));
+      if (doc) {
+        const current = await effectiveDocument(tx, input.id);
+        if (current.effectiveStatus === input.status
+          && current.effectiveTitle === (input.title ?? doc.title)
+          && current.effectiveDocType === (input.docType ?? doc.docType)) return current;
+      }
       await tx.insert(schema.documentStatusChanges).values({
         documentId: input.id, status: input.status,
         title: input.title, docType: input.docType });

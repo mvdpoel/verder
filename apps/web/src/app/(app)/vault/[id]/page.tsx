@@ -16,7 +16,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           sizeBytes: d.sizeBytes }} />
       </div>
       <DocumentMetaForm doc={{ id: d.id, title: d.effectiveTitle, docType: d.effectiveDocType,
-        status: d.effectiveStatus }} entries={entries.map((e) => ({ id: e.id, summary: e.summary }))} />
+        status: d.effectiveStatus, previousStatus: d.previousStatus }} entries={entries.map((e) => ({ id: e.id, summary: e.summary }))} />
     </div>
   );
 }

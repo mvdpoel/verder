@@ -167,6 +167,49 @@ describe("documents router", () => {
     expect(changes.map((c) => c.status)).toEqual(["discarded", "inbox"]);
   });
 
+  it("discarding an already-discarded document is a no-op, not a second event", async () => {
+    // Spec: "Discarding an already-discarded document is a no-op, not an
+    // error." Two clicks on one button are one human decision, and the
+    // append-only record exists to say exactly what Martin did — not to claim
+    // he discarded the same document twice.
+    const doc = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: doc.id, status: "discarded", title: "image.png" });
+    const events = (await db.select().from(schema.ledgerEvents)).length;
+
+    const again = await caller().documents.update({
+      id: doc.id, status: "discarded", title: "image.png" });
+
+    expect(again.effectiveStatus).toBe("discarded");
+    expect((await db.select().from(schema.ledgerEvents)).length).toBe(events);
+    const changes = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id));
+    expect(changes).toHaveLength(1);
+  });
+
+  it("still appends when the same status arrives with an edited title", async () => {
+    // The no-op must not swallow a real correction: only a transition that
+    // would change nothing observable is skipped.
+    const doc = await seedDocument({ title: "scan_002", mime: "image/png" });
+    await caller().documents.update({ id: doc.id, status: "filed", title: "Huurcontract" });
+    const events = (await db.select().from(schema.ledgerEvents)).length;
+
+    const edited = await caller().documents.update({
+      id: doc.id, status: "filed", title: "Huurcontract 2026", docType: "contract" });
+
+    expect(edited.effectiveTitle).toBe("Huurcontract 2026");
+    expect((await db.select().from(schema.ledgerEvents)).length).toBe(events + 1);
+  });
+
+  it("remembers the status a discard interrupted, so undo can restore it", async () => {
+    const doc = await seedDocument({ title: "Beschikking.pdf", mime: "application/pdf" });
+    await caller().documents.update({ id: doc.id, status: "filed", title: "Beschikking.pdf" });
+    await caller().documents.update({ id: doc.id, status: "discarded", title: "Beschikking.pdf" });
+
+    const d = await caller().documents.get({ id: doc.id });
+    expect(d.effectiveStatus).toBe("discarded");
+    expect(d.previousStatus).toBe("filed");
+  });
+
   it("leaves the ledger chain verifying after a discard", async () => {
     const doc = await seedDocument({ title: "image.png", mime: "image/png" });
     await caller().documents.update({ id: doc.id, status: "discarded" });
