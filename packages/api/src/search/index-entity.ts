@@ -185,10 +185,16 @@ export async function loadAndRender(
  * evidence. It appends no ledger events, and `reindex` rebuilds all of it from
  * the source records.
  *
- * A failing embedding client never throws out of this function: the chunk still
- * lands, with embedding NULL and embed_attempts incremented, and stays findable
- * by full text until a later pass succeeds. Callers read the failure count as
- * `chunks - embedded - unchanged`.
+ * An embedding FAILURE never throws out of this function. EmbedPort signals a
+ * failure per text with `null` (realEmbedPort already retried three times), so a
+ * dead Ollama yields chunks that land with embedding NULL and embed_attempts
+ * incremented, and stay findable by full text until a later pass succeeds.
+ * Callers read the failure count as `chunks - embedded - unchanged`.
+ *
+ * A THROW from the port is a different thing entirely — a crashed client, a bug
+ * — and is deliberately NOT caught here: it propagates so the caller can isolate
+ * the fault to this one entity (search.drain retains its outbox row and records
+ * an `error` run) instead of silently indexing it vector-less forever.
  */
 export async function indexEntity(
   deps: { db: Db; embed: EmbedPort },
@@ -215,13 +221,11 @@ export async function indexEntity(
 
   let vectors: (number[] | null)[] = [];
   if (pending.length > 0) {
-    try {
-      vectors = await deps.embed.embed(
-        pending.map((c) => asDocument(`${c.title}\n${c.body}`)));
-    } catch {
-      // Ollama down: index the chunks lexically now, retry the vectors later.
-      vectors = [];
-    }
+    // Ollama down is NOT an exception: the port returns null per text and the
+    // chunks below land lexically, to be re-embedded on a later pass. A throw
+    // here is a crashed client, so it is left to propagate to the caller.
+    vectors = await deps.embed.embed(
+      pending.map((c) => asDocument(`${c.title}\n${c.body}`)));
   }
 
   let embedded = 0;
