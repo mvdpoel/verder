@@ -128,7 +128,7 @@ export const documentsRouter = router({
     }),
 
   update: protectedProcedure.input(z.object({
-    id: z.string().uuid(), status: z.enum(["inbox", "filed"]),
+    id: z.string().uuid(), status: z.enum(["inbox", "filed", "discarded"]),
     title: z.string().optional(), docType: z.string().optional(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {

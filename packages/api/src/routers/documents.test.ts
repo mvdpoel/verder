@@ -2,6 +2,8 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { asc, eq } from "drizzle-orm";
+import { verifyChain, type ChainEvent } from "@verder/core";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -22,6 +24,21 @@ describe("documents router", () => {
   const caller = () => appRouter.createCaller(createContext({ db, userId }));
   const anonCaller = () => appRouter.createCaller(createContext({ db, userId: null }));
   const sha = () => crypto.randomUUID().replaceAll("-", "").padEnd(64, "a");
+  const seedDocument = (over: { title: string; mime: string }) =>
+    caller().documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      source: "upload", receivedAt: new Date(), ...over });
+  const allEvents = async (): Promise<ChainEvent[]> => {
+    const rows = await db.select().from(schema.ledgerEvents)
+      .orderBy(asc(schema.ledgerEvents.seq));
+    return rows.map((e) => ({ seq: e.seq, eventType: e.eventType,
+      entityType: e.entityType, entityId: e.entityId,
+      payloadHash: e.payloadHash, prevHash: e.prevHash, eventHash: e.eventHash }));
+  };
+  // Chain linkage only: other test files register documents whose vault files
+  // never existed, so whole-chain runFullVerification cannot be asserted green
+  // here without truncating — and evidence tables are never truncated by new
+  // tests (the same reasoning as task-decide.test.ts / registry-decide.test.ts).
+  const verifyLedger = async () => verifyChain(await allEvents(), (e) => e.payloadHash);
 
   it("registers an upload idempotently", async () => {
     const c = caller();
@@ -114,6 +131,42 @@ describe("documents router", () => {
       title: "letter.pdf", source: "upload", receivedAt: new Date() });
     await expect(caller().documents.sheetPreview({ sha256 }))
       .rejects.toThrow(/not a spreadsheet/i);
+  });
+
+  it("discards a document by appending a status change and a ledger event", async () => {
+    const doc = await seedDocument({ title: "image.png", mime: "image/png" });
+
+    const before = await db.select().from(schema.ledgerEvents);
+    const updated = await caller().documents.update({ id: doc.id, status: "discarded" });
+    expect(updated.effectiveStatus).toBe("discarded");
+
+    const after = await db.select().from(schema.ledgerEvents);
+    expect(after.length).toBe(before.length + 1);
+
+    // The bytes and the row are untouched — discard is not deletion.
+    const [row] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.id, doc.id));
+    expect(row).toBeDefined();
+    expect(row.sha256).toBe(doc.sha256);
+  });
+
+  it("undoes a discard by appending another status change", async () => {
+    const doc = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: doc.id, status: "discarded" });
+    const restored = await caller().documents.update({ id: doc.id, status: "inbox" });
+    expect(restored.effectiveStatus).toBe("inbox");
+
+    // Both transitions survive as history; nothing is overwritten.
+    const changes = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id))
+      .orderBy(asc(schema.documentStatusChanges.createdAt));
+    expect(changes.map((c) => c.status)).toEqual(["discarded", "inbox"]);
+  });
+
+  it("leaves the ledger chain verifying after a discard", async () => {
+    const doc = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: doc.id, status: "discarded" });
+    await expect(verifyLedger()).resolves.toMatchObject({ ok: true });
   });
 
   it("rejects an unauthenticated caller", async () => {

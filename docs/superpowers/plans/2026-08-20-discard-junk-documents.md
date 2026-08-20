@@ -49,7 +49,7 @@
 - Consumes: the existing `documents.update` procedure and `appendLedgerEvent`.
 - Produces: `docStatusEnum` = `["inbox", "filed", "discarded"]`; `documents.update({ id, status: "discarded" })`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `packages/api/src/routers/documents.test.ts`, following the file's existing `caller()` helper:
 
@@ -92,12 +92,12 @@ it("leaves the ledger chain verifying after a discard", async () => {
 
 Import `verifyLedger` from `../verification` — check its exported name there and use the real one.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents`
 Expected: FAIL — zod rejects `"discarded"`, which is not in the `update` input enum.
 
-- [ ] **Step 3: Widen the schema enum**
+- [x] **Step 3: Widen the schema enum**
 
 In `packages/db/src/schema.ts` line 8:
 
@@ -105,7 +105,7 @@ In `packages/db/src/schema.ts` line 8:
 export const docStatusEnum = pgEnum("doc_status", ["inbox", "filed", "discarded"]);
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 Create `packages/db/drizzle/0021_discarded_doc_status.sql`:
 
@@ -123,7 +123,7 @@ ALTER TYPE "public"."doc_status" ADD VALUE 'discarded';
 
 Register it in `packages/db/drizzle/meta/_journal.json` following the exact shape of the `0020_abn_xls_tx_source` entry (same keys, `idx` incremented, new `tag`, and a `when` timestamp). Generate the snapshot the way 0020's was produced rather than hand-writing it — check whether `pnpm --filter @verder/db generate` produces `meta/0021_snapshot.json`, and use it if so.
 
-- [ ] **Step 5: Accept the new status in the API**
+- [x] **Step 5: Accept the new status in the API**
 
 In `packages/api/src/routers/documents.ts` line 131:
 
@@ -131,12 +131,12 @@ In `packages/api/src/routers/documents.ts` line 131:
     id: z.string().uuid(), status: z.enum(["inbox", "filed", "discarded"]),
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents && env -u NODE_ENV pnpm --filter @verder/db test`
 Expected: PASS, including the pre-existing document tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/db/src/schema.ts packages/db/drizzle/ \
