@@ -16,9 +16,18 @@ BACKUP_DIR=${BACKUP_DIR:-/mnt/nas/verder-backups}
 
 mkdir -p "$BACKUP_DIR"
 
-# 1. Postgres dump (30-day retention).
+# 1. Postgres dump (30-day retention). search_chunks DATA is excluded: it is
+#    the largest table, fully derived, and rebuildable with `reindex` — the
+#    table DDL and its GIN/HNSW indexes are still in the dump, only the rows
+#    are dropped. A restore therefore yields an empty index, which is why the
+#    restore procedure in docs/deploy.md ends in a reindex step.
+#    --exclude-table-data is schema-qualified on purpose: a bare
+#    `search_chunks` is a pattern that would match across schemas.
+#    document_texts is deliberately KEPT — OCR is expensive and its rows are
+#    not cheaply rebuildable.
 "${COMPOSE[@]}" exec -T postgres \
-  pg_dump -U verder verder | gzip > "$BACKUP_DIR/db-$STAMP.sql.gz"
+  pg_dump -U verder --exclude-table-data=public.search_chunks verder \
+  | gzip > "$BACKUP_DIR/db-$STAMP.sql.gz"
 find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete
 
 # 2. Vault mirror. Files are content-addressed and never mutated, so --delete
