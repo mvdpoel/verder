@@ -349,7 +349,7 @@ with malformed headers is kept — over-skipping loses evidence."
 - Consumes: Task 1's `discarded` status.
 - Produces: `documents.list({ status?, limit?, includeDiscarded?: boolean })` — discarded excluded unless `includeDiscarded` is true.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("omits discarded documents from the vault list by default", async () => {
@@ -378,12 +378,16 @@ it("still filters by an explicit status", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+**DEVIATION (executed 2026-08-20):** the third test's `expect(list.map((d) => d.id)).toEqual([filed.id])` cannot hold. This suite shares one persistent database with every other test file and evidence tables are never truncated, so the pre-existing "update() files a document" test at `documents.test.ts:67` leaves another filed document behind. Written instead as `toContain(filed.id)` plus `expect(list.every((d) => d.effectiveStatus === "filed")).toBe(true)`, which is what the explicit-status filter actually promises: ours is present, and nothing unfiled leaks through.
+
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents`
 Expected: FAIL — the discarded document appears in the default list.
 
-- [ ] **Step 3: Implement**
+Observed: 1 of the 3 new tests failed, and for exactly that reason — `AssertionError: expected [ …(84) ] to not include '82d80bf9-…'`. The other two passed pre-implementation: zod strips the unknown `includeDiscarded` key rather than rejecting it, so test 2 was trivially satisfied by the unfiltered list, and test 3 asserts a filter that already worked. They become meaningful once the input accepts the flag.
+
+- [x] **Step 3: Implement**
 
 In `packages/api/src/routers/documents.ts`, change the `list` procedure:
 
@@ -405,12 +409,12 @@ In `packages/api/src/routers/documents.ts`, change the `list` procedure:
   }),
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test documents`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/routers/documents.ts packages/api/src/routers/documents.test.ts

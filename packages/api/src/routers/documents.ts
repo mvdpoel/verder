@@ -53,13 +53,19 @@ export const documentsRouter = router({
     ctx.db.transaction((tx) => ingestDocument(tx, input))),
 
   list: protectedProcedure.input(z.object({
-    status: z.enum(["inbox", "filed"]).optional(),
+    status: z.enum(["inbox", "filed", "discarded"]).optional(),
     limit: z.number().int().min(1).max(200).default(50),
+    // Discarded documents stay reachable by direct URL and by asking for them
+    // here; they are only kept out of the surfaces Martin scans.
+    includeDiscarded: z.boolean().default(false),
   })).query(async ({ ctx, input }) => {
     const rows = await ctx.db.select().from(schema.documents)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
     const effective = await Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
-    return input.status ? effective.filter((d) => d.effectiveStatus === input.status) : effective;
+    if (input.status) return effective.filter((d) => d.effectiveStatus === input.status);
+    return input.includeDiscarded
+      ? effective
+      : effective.filter((d) => d.effectiveStatus !== "discarded");
   }),
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))

@@ -169,6 +169,36 @@ describe("documents router", () => {
     await expect(verifyLedger()).resolves.toMatchObject({ ok: true });
   });
 
+  it("omits discarded documents from the vault list by default", async () => {
+    const keep = await seedDocument({ title: "Beschikking.pdf", mime: "application/pdf" });
+    const junk = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: junk.id, status: "discarded" });
+
+    const list = await caller().documents.list({ limit: 100 });
+    expect(list.map((d) => d.id)).toContain(keep.id);
+    expect(list.map((d) => d.id)).not.toContain(junk.id);
+  });
+
+  it("returns discarded documents when explicitly asked", async () => {
+    const junk = await seedDocument({ title: "image.png", mime: "image/png" });
+    await caller().documents.update({ id: junk.id, status: "discarded" });
+
+    const list = await caller().documents.list({ limit: 100, includeDiscarded: true });
+    expect(list.map((d) => d.id)).toContain(junk.id);
+  });
+
+  it("still filters by an explicit status", async () => {
+    const filed = await seedDocument({ title: "Plan.pdf", mime: "application/pdf" });
+    await caller().documents.update({ id: filed.id, status: "filed" });
+    const list = await caller().documents.list({ status: "filed", limit: 100 });
+    // Not toEqual([filed.id]): this suite shares one persistent database with
+    // every other test file, and evidence tables are never truncated, so other
+    // filed documents legitimately co-exist. What the filter must guarantee is
+    // that ours is present and that nothing unfiled leaks through.
+    expect(list.map((d) => d.id)).toContain(filed.id);
+    expect(list.every((d) => d.effectiveStatus === "filed")).toBe(true);
+  });
+
   it("rejects an unauthenticated caller", async () => {
     // asserting the CODE, not merely "it threw": an unknown sha would throw
     // NOT_FOUND too, which would pass a bare toThrow() without proving auth.
