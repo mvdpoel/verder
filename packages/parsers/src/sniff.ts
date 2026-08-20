@@ -10,8 +10,12 @@
  * Buffer.includes is a memmem scan.
  */
 
-export const XLS_MIME = "application/vnd.ms-excel";
-export const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+import { isSpreadsheetMime, XLS_MIME, XLSX_MIME } from "./sheet-mimes";
+
+// The vocabulary itself lives in ./sheet-mimes so client bundles can ask "is
+// this a spreadsheet?" without dragging Buffer and SheetJS along; sniffing —
+// which needs both — re-exports it so server callers still have one import.
+export { isSpreadsheetMime, XLS_MIME, XLSX_MIME };
 
 const OLE2 = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 const ZIP = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
@@ -21,10 +25,6 @@ const JPEG = Buffer.from([0xff, 0xd8, 0xff]);
 /** Mimes that carry no information, so the bytes get the final word. */
 export const UNINFORMATIVE_MIMES: ReadonlySet<string> =
   new Set(["application/octet-stream", "binary/octet-stream", ""]);
-
-export function isSpreadsheetMime(mime: string): boolean {
-  return mime === XLS_MIME || mime === XLSX_MIME;
-}
 
 export function sniffContainer(buf: Buffer): string | null {
   if (buf.subarray(0, 5).toString("latin1") === "%PDF-") return "application/pdf";

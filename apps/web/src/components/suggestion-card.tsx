@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc-client";
 import { formatEuro } from "@/components/registry-list";
 import { RetrievedRefs } from "@/components/retrieved-refs";
 import { AlreadyHaveThis } from "@/components/already-have-this";
+import { DocumentPreview } from "@/components/document-preview";
 
 type Proposed = { occurredAt: string; channel: string; direction: "inbound" | "outbound";
   summary: string; details: string; participantNames: string[];
@@ -257,11 +258,9 @@ function DocMetaCard({ s }: { s: Suggestion }) {
         {`Scanned document “${s.document.title}”`}
         {s.model && <span> · suggested by {s.model}</span>}
       </p>
-      {s.document.mime.startsWith("image/")
-        ? <img src={`/api/files/${s.document.sha256}`} alt={s.document.title}
-            className="max-h-48 border rounded" />
-        : <iframe src={`/api/files/${s.document.sha256}`} className="w-full h-48 border rounded"
-            title={s.document.title} />}
+      <DocumentPreview
+        doc={{ sha256: s.document.sha256, title: s.document.title, mime: s.document.mime }}
+        height="short" />
       <label className="block text-sm">Title<input className="w-full border rounded p-2"
         value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="block text-sm">Type<input className="w-full border rounded p-2"
