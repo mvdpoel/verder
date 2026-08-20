@@ -13,6 +13,8 @@ import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
 import { sendPush } from "./push";
+import { realEmbedPort } from "@verder/api/src/search/embed";
+import { drainOnce } from "./search-drain";
 
 const url = process.env.WORKER_DATABASE_URL
   ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -89,6 +91,16 @@ await boss.work("receipts.resolve", async ([job]) => {
   await resolveAggregator({ db, gmail, llm,
     vaultDir: process.env.VAULT_DIR ?? "./vault-files" },
     (job.data as { suggestionId: string }).suggestionId);
+});
+
+// Search index freshness: the fourteen triggers fill search_outbox and this is
+// its only consumer. Every minute is pg-boss's finest cron granularity and the
+// spec's 60 s target.
+const embed = realEmbedPort();
+await boss.createQueue("search.drain");
+await boss.schedule("search.drain", "* * * * *");
+await boss.work("search.drain", async () => {
+  await drainOnce({ db, embed });
 });
 
 console.log("worker up");
