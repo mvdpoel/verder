@@ -263,8 +263,12 @@ magic bytes.
 - `detectSource`: OLE2 → `abn-xls`; OOXML-with-`xl/` → `abn-xls`; a plain zip and
   a `.docx` → `null`, not a statement.
 - `sniffMime`: the same cases, plus the existing PDF/PNG/JPEG cases unregressed.
-- `document-preview`: a render test per branch, including the row cap and the
-  fallback card.
+- Preview branch selection: the repo has no component render tests and no
+  testing-library (`apps/web/vitest.config.ts` runs `environment: "node"`); the
+  established pattern is to lift the decision into a pure module and test that —
+  see `search-kinds.ts`, `index-health-state.ts`, `palette.ts`. So `previewKind`
+  and the row-cap arithmetic are unit-tested, and the JSX stays thin enough to
+  read. Adding a component-testing stack is out of scope for this change.
 - Ingest: an `.xls` upload produces rows, is idempotent on re-upload, and a
   corrupt workbook still registers the document and its ledger event.
 
