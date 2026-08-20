@@ -224,6 +224,35 @@ describe("retrieve (fast mode)", () => {
     expect(out.hits[0].href).toBe("/milestones");
   });
 
+  it("returns nothing when no word matches and every vector is far away", async () => {
+    const w = testWindow();
+    const entityId = crypto.randomUUID();
+    await insertChunk(writer, { entityType: "document", entityId, title: "Zorgpolis 2026",
+      body: "polisblad zorgverzekering eigen risico", occurredAt: w.start,
+      embedding: oneHot(5) });
+    // Nothing we hold: no shared lexeme, and an orthogonal vector (cosine distance
+    // 1.0). Nearest-neighbour search always returns SOMETHING, so without a
+    // relevance floor this asks "do we have a lasagne recipe?" and gets back a
+    // health-insurance policy stated with a straight face.
+    const out = await retrieve({ db, embed: fixedEmbed(oneHot(400)) },
+      { q: "recept lasagne bolognese", from: w.from, to: w.to });
+    expect(out.hits).toEqual([]);
+  });
+
+  it("keeps a keyword hit even when its vector is far from the query", async () => {
+    const w = testWindow();
+    const entityId = crypto.randomUUID();
+    await insertChunk(writer, { entityType: "document", entityId, title: "Opzegbrief",
+      body: "opzegging van het abonnement", occurredAt: w.start, embedding: oneHot(7) });
+    // The floor gates the fuzzy branch only. A chunk that literally contains the
+    // word is a real hit however far apart the vectors are — otherwise the floor
+    // would quietly cost us exact-term recall, which is the one thing full text is for.
+    const out = await retrieve({ db, embed: fixedEmbed(oneHot(400)) },
+      { q: "opzegging", from: w.from, to: w.to });
+    expect(out.hits.map((h) => h.entityId)).toEqual([entityId]);
+    expect(out.hits[0].matchedBy).toBe("keyword");
+  });
+
   it("paginates with an opaque string cursor", async () => {
     const w = testWindow();
     const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];

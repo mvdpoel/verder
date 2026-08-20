@@ -20,6 +20,25 @@ import { RERANK_PROMPT_VERSION, type RerankPort } from "./rerank";
  */
 
 const CANDIDATES = 50;
+/**
+ * Cosine-distance ceiling for the SEMANTIC branch. Nearest-neighbour search has no
+ * notion of "no match" — it always hands back its k closest rows — so without a floor
+ * a query for something we simply do not have comes back with five confident-looking
+ * documents. That is worst exactly where it matters most: "do we already have this?"
+ * must be able to answer no.
+ *
+ * 0.45 is measured, not guessed. On the retrieval-eval corpus (40 fixtures, real
+ * nomic-embed-text vectors, no test stubs) the worst TRUE positive sits at 0.383
+ * (`huurovereenkomst kale huur opzegtermijn`) and the closest unrelated query at
+ * 0.473 (`trainingsschema hardlopen halve marathon`). 0.45 sits in that gap, leaning
+ * toward recall: it is 0.067 clear of the worst real hit and 0.023 under the nearest
+ * false one. Re-measure with EVAL_KEEP=1 if the embedding model ever changes — this
+ * number belongs to nomic-embed-text and to no other model.
+ *
+ * The LEXICAL branch is deliberately NOT gated: a chunk that literally contains the
+ * word is a real hit however far apart the vectors are.
+ */
+const SEMANTIC_MAX_DISTANCE = 0.45;
 /** A filtered search post-filters ANN output, so a narrow slice needs a wider sweep
  * or it comes back empty. Left at the pgvector default when nothing is filtered. */
 const EF_SEARCH_FILTERED = 100;
@@ -179,6 +198,7 @@ export async function retrieve(
       SELECT c.id, c.entity_type, c.entity_id
       FROM search_chunks c
       WHERE ${where} AND c.embedding IS NOT NULL
+        AND (c.embedding <=> ${vecLiteral}::vector) <= ${sql.raw(String(SEMANTIC_MAX_DISTANCE))}
       ORDER BY c.embedding <=> ${vecLiteral}::vector
       LIMIT ${sql.raw(String(CANDIDATES))}`)).rows as CandidateRow[];
     return { lex: lexRows, sem: semRows };

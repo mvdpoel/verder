@@ -219,7 +219,15 @@ try {
     + ` prompt=${RERANK_PROMPT_VERSION}`);
 } finally {
   await pool.end();
-  const cleanup = createDb(ADMIN_URL);
-  await cleanup.db.execute(sql.raw(`DROP DATABASE IF EXISTS ${EVAL_DB} WITH (FORCE)`));
-  await cleanup.pool.end();
+  // EVAL_KEEP=1 leaves the fixture database behind. The whole point of this
+  // corpus is that it is clean — real nomic embeddings, no test stubs — so it is
+  // the only honest place to measure ranking behaviour by hand.
+  if (process.env.EVAL_KEEP === "1") {
+    console.log(`\nkept ${EVAL_DB} (EVAL_KEEP=1) — drop it with:`
+      + `\n  docker exec verder-postgres-1 psql -U verder -d postgres -c 'DROP DATABASE ${EVAL_DB} WITH (FORCE)'`);
+  } else {
+    const cleanup = createDb(ADMIN_URL);
+    await cleanup.db.execute(sql.raw(`DROP DATABASE IF EXISTS ${EVAL_DB} WITH (FORCE)`));
+    await cleanup.pool.end();
+  }
 }
