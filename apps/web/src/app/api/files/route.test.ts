@@ -98,6 +98,28 @@ describe("GET /api/files/[sha256]", () => {
     expect(res.headers.get("content-disposition")).toContain("inline");
   });
 
+  it("does not brick a document whose stored mime contains a newline", async () => {
+    // The mime is the sender's header text; a bare CR makes the Headers
+    // constructor throw, and that throw used to fall through to a 500 — the
+    // document could never be viewed or downloaded again.
+    const { sha256 } = await storeFile(vaultDir, Buffer.from("%PDF-1.4\nx"));
+    registerDoc({ sha256, mime: "text/html\r\nX-Injected: 1", title: "bijlage" });
+    const res = await GET(new Request("http://localhost/api/files/x"),
+      { params: Promise.resolve({ sha256 }) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-injected")).toBeNull();
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+    expect(res.headers.get("content-disposition")).toContain("attachment");
+  });
+
+  it("keeps the base type when the stored mime carries parameters", async () => {
+    const { sha256 } = await storeFile(vaultDir, Buffer.from("%PDF-1.4\nx"));
+    registerDoc({ sha256, mime: "application/pdf; charset=binary", title: "letter.pdf" });
+    const res = await GET(new Request("http://localhost/api/files/x"),
+      { params: Promise.resolve({ sha256 }) });
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+  });
+
   it("never lets a title inject a header", async () => {
     const buf = Buffer.from("%PDF-1.4\nx");
     const { sha256 } = await storeFile(vaultDir, buf);

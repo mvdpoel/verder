@@ -6,6 +6,22 @@ import { effectiveMime } from "@verder/parsers";
 import { serverCaller } from "@/lib/trpc-server";
 import { servesInline } from "@/components/preview-kind";
 
+/** RFC 9110 token/token, the only shape a Content-Type may have here. */
+const SAFE_MIME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+\/[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+
+/**
+ * The stored mime is sender-supplied text that nothing validates at ingest.
+ * A bare CR or LF in it makes the Headers constructor throw — inside the try,
+ * where only TRPCError is handled — so that document could never be viewed or
+ * downloaded again. Header INJECTION is impossible either way (the constructor
+ * refuses), but bricking a document is not acceptable either. Parameters are
+ * dropped: the base type is all any preview decision uses.
+ */
+function safeMime(mime: string): string {
+  const base = mime.split(";", 1)[0].trim();
+  return SAFE_MIME.test(base) ? base : "application/octet-stream";
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ sha256: string }> }) {
   const { sha256 } = await params;
   try {
@@ -15,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ sha256:
     // The stored mime is whatever the source claimed. When it says nothing,
     // the bytes decide — otherwise a spreadsheet recorded as octet-stream is
     // downloaded by the browser no matter what the page wanted to do with it.
-    const mime = effectiveMime(doc.mime, buf);
+    const mime = safeMime(effectiveMime(doc.mime, buf));
     // RFC 5987 encoding: a title is user-controlled text and must never be
     // able to inject a header or break out of the quoted filename. The
     // EFFECTIVE title, because Content-Disposition beats the <a download>
