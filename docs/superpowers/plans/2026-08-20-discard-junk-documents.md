@@ -587,7 +587,7 @@ so documents.status still reads inbox forever."
 
 **Testing note:** this repo has no component render tests and no testing-library (`apps/web/vitest.config.ts` sets `environment: "node"`). Lift the decision into a pure function and test that — the pattern used by `preview-kind.ts`, `search-kinds.ts`, `palette.ts`. Do not add a component-testing stack.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `apps/web/src/components/document-meta-form.test.ts`:
 
@@ -610,12 +610,12 @@ describe("discardAction", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `env -u NODE_ENV pnpm --filter web test document-meta-form`
 Expected: FAIL — cannot resolve `./document-meta-form-actions`.
 
-- [ ] **Step 3: Write the pure module**
+- [x] **Step 3: Write the pure module**
 
 Create `apps/web/src/components/document-meta-form-actions.ts`:
 
@@ -633,12 +633,12 @@ export function discardAction(status: DocStatus): { label: string; next: DocStat
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `env -u NODE_ENV pnpm --filter web test document-meta-form`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Wire the button**
+- [x] **Step 5: Wire the button**
 
 In `apps/web/src/components/document-meta-form.tsx`:
 
@@ -649,12 +649,18 @@ In `apps/web/src/components/document-meta-form.tsx`:
 
 In `apps/web/src/app/(app)/vault/[id]/page.tsx`, the form already receives `status: d.effectiveStatus`; confirm the prop type change compiles and that `effectiveStatus` is passed rather than `d.status`.
 
-- [ ] **Step 6: Typecheck and build**
+**As executed:** `page.tsx` needed no edit — it already passes `status: d.effectiveStatus` (line 19), and widening the prop is exactly what fixed the `'"discarded"' is not assignable to type '"inbox" | "filed"'` error Task 1's enum widening had left there. `env -u NODE_ENV pnpm --filter web typecheck` is clean again.
+
+**DEVIATION (executed 2026-08-20):** the discard button sends the current metadata along — `update.mutate({ id: doc.id, status: action.next, title: doc.title, docType: doc.docType ?? undefined })` — not the plan's status-only `{ id, status: action.next }`. `effectiveDocument` (`documents.ts:30-39`) reads `effectiveTitle: latest?.title ?? doc.title` from **only the latest** `document_status_changes` row, so a status-only discard of a document whose title had been corrected at filing time would silently revert the displayed title to the ingest-time one, and undo would revert it a second time. The correction is never lost from the append-only history, but the vault would show the wrong title — and on a *reversible* action that is unacceptable. It sends `doc.title`/`doc.docType` (the props, i.e. the server's effective values) rather than the local form state, so pressing Discard does not quietly commit unsaved edits to the title field.
+
+Also, the two buttons were wrapped in a `flex items-center gap-2` row rather than left as the previous block-level layout, so the primary and the quiet secondary sit side by side as the plan describes. Note the consequence of hiding "File it"/"Save changes" on a discarded document, as the plan requires: the title and type inputs then have no save path, so metadata edits mean undoing the discard first. That is the intended shape — a discarded document is not one you curate.
+
+- [x] **Step 6: Typecheck and build**
 
 Run: `env -u NODE_ENV pnpm --filter web typecheck && env -u NODE_ENV pnpm --filter web build`
 Expected: both succeed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/components/document-meta-form-actions.ts \
