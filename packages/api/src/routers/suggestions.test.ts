@@ -511,4 +511,29 @@ describe("suggestions router", () => {
       .where(eq(schema.tasks.title, p.title));
     expect(rows).toHaveLength(0);
   });
+
+  it("list returns retrievedRefs and the refs never affect the edit diff", async () => {
+    const s = await makeTaskSuggestion();
+    await db.update(schema.suggestions).set({
+      retrievedRefs: [{ entityType: "document",
+        entityId: "44444444-4444-4444-4444-444444444444",
+        title: "Loonstrook juni", score: 0.03, snippet: "…loonstrook…" }],
+    }).where(eq(schema.suggestions.id, s.id));
+    const listed = (await caller().suggestions.list({ status: "pending" }))
+      .find((row) => row.id === s.id);
+    expect(listed?.retrievedRefs).toHaveLength(1);
+
+    const p = s.proposed as { title: string; details: string };
+    await caller().suggestions.approveTask({
+      id: s.id,
+      task: { title: p.title, details: p.details, dueAt: new Date("2026-09-01") },
+    });
+    const [after] = await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.id, s.id));
+    // Citations are provenance, not a proposal: an unedited approval stays
+    // "approved" even though retrievedRefs is populated, and finalPayload
+    // records only what was actually stored.
+    expect(after.status).toBe("approved");
+    expect((after.finalPayload as Record<string, unknown>).retrievedRefs).toBeUndefined();
+  });
 });
