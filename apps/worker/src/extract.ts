@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { isSpreadsheetMime, readWorkbook, sniffContainer, UNINFORMATIVE_MIMES } from "@verder/parsers";
+import { effectiveMime, isSpreadsheetMime, readWorkbook } from "@verder/parsers";
 
 const run = promisify(execFile);
 
@@ -97,9 +97,7 @@ export async function extractDocumentText(
   // therefore refused to read — a bank statement invisible to search because of
   // a content-type header. So: the bytes get consulted, but ONLY when the
   // recorded mime says nothing. A recorded `application/pdf` is still trusted.
-  const mime = UNINFORMATIVE_MIMES.has(recordedMime)
-    ? (sniffContainer(buf) ?? recordedMime)
-    : recordedMime;
+  const mime = effectiveMime(recordedMime, buf);
   try {
     if (mime === "application/pdf") {
       const pdfParse = (await import("pdf-parse")).default;

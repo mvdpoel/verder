@@ -52,6 +52,41 @@ describe("extractMissingTexts", () => {
     await pool.end();
   });
 
+  it("retries a spreadsheet that an earlier version of the extractor gave up on", async () => {
+    // The exact production document this feature exists for: ABN's "Excel"
+    // export, recorded as application/octet-stream, extracted BEFORE the
+    // spreadsheet reader existed and therefore stored as extractor 'none' with
+    // zero characters. storeDocumentText short-circuits on an unchanged
+    // sha256, so unless the backfill picks this row up again it stays
+    // invisible to search forever — and docs/deploy.md tells the operator this
+    // command is what fixes it.
+    const { db, pool } = createDb(DB_URL);
+    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-sheet-"));
+    const raw = await readFile(
+      new URL("../../../packages/parsers/fixtures/abn.xlsx", import.meta.url));
+    // Unique bytes per run, in the ZIP's end-of-central-directory comment.
+    const note = Buffer.from(`run-${crypto.randomUUID()}`);
+    const buf = Buffer.concat([raw, note]);
+    buf.writeUInt16LE(note.length, buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) + 20);
+    const { sha256 } = await storeFile(vaultDir, buf);
+    const doc = await db.transaction((tx) => ingestDocument(tx, {
+      sha256, sizeBytes: buf.length, mime: "application/octet-stream",
+      title: `abn-${Date.now()}.xlsx`, source: "email-attachment", receivedAt: new Date(),
+    }));
+    await db.insert(schema.documentTexts).values({
+      documentId: doc.id, sha256, text: "", charCount: 0,
+      extractor: "none", truncated: false,
+    });
+
+    await extractMissingTexts({ db, vaultDir });
+
+    const [row] = await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id));
+    expect(row.extractor).toBe("sheet");
+    expect(row.text).toContain("Ziggo Services BV");
+    await pool.end();
+  });
+
   it("counts a missing vault file as failed and keeps going", async () => {
     const { db, pool } = createDb(DB_URL);
     const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-"));

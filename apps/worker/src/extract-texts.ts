@@ -1,8 +1,19 @@
-import { isNull, eq, sql } from "drizzle-orm";
+import { inArray, isNull, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
+import { UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME } from "@verder/parsers";
 import { readFile } from "node:fs/promises";
 import { storeDocumentText } from "./document-text";
+
+/**
+ * Non-image mimes worth a SECOND extraction attempt when the first stored
+ * 'none'. Derived from the extractor's own vocabulary rather than spelled out,
+ * so teaching extraction a new container cannot leave the backfill behind —
+ * which is exactly how ABN's Excel export stayed invisible to search.
+ */
+const RETRYABLE_MIMES: string[] = [
+  "application/pdf", XLS_MIME, XLSX_MIME, ...UNINFORMATIVE_MIMES,
+];
 
 export interface ExtractBackfillResult {
   scanned: number; extracted: number; reused: number; failed: number;
@@ -32,12 +43,18 @@ export async function extractMissingTexts(
   opts: { limit?: number } = {},
 ): Promise<ExtractBackfillResult> {
   // Two populations: documents with no text row at all, AND documents whose row
-  // says extractor 'none' on a mime we CAN read. The second exists because a
-  // failed extraction is stored as 'none' with empty text, and storeDocumentText
-  // short-circuits on a matching sha256 — so a fixed extractor would never get a
-  // second chance at them. That is not hypothetical: an ESM/CJS interop bug left
-  // nine production scans stored as 'none' with zero characters. Retrying an
-  // unsupported mime (octet-stream) costs nothing; it returns 'none' immediately.
+  // says extractor 'none' on a mime we might now be able to read. The second
+  // exists because a failed extraction is stored as 'none' with empty text, and
+  // storeDocumentText short-circuits on a matching sha256 — so a fixed or newly
+  // taught extractor would never get a second chance at them. That is not
+  // hypothetical twice over: an ESM/CJS interop bug left nine production scans
+  // stored as 'none' with zero characters, and ABN's "Excel" export sat at
+  // 'none' because nothing could read a workbook yet.
+  //
+  // The uninformative mimes are in the list precisely BECAUSE they say nothing:
+  // extraction sniffs the bytes now, so 'application/octet-stream' is no longer
+  // a reason to give up — it is the mime the ABN export is recorded under. The
+  // retry is cheap: unreadable bytes return 'none' again immediately.
   const rows = await deps.db.select({
     id: schema.documents.id, sha256: schema.documents.sha256, mime: schema.documents.mime,
     staleTextId: schema.documentTexts.documentId,
@@ -46,7 +63,8 @@ export async function extractMissingTexts(
     .leftJoin(schema.documentTexts, eq(schema.documentTexts.documentId, schema.documents.id))
     .where(sql`${schema.documentTexts.documentId} IS NULL OR (
       ${schema.documentTexts.extractor} = 'none'
-      AND (${schema.documents.mime} LIKE 'image/%' OR ${schema.documents.mime} = 'application/pdf'))`)
+      AND (${schema.documents.mime} LIKE 'image/%'
+        OR ${inArray(schema.documents.mime, RETRYABLE_MIMES)}))`)
     .orderBy(sql`${schema.documents.receivedAt} ASC`)
     .limit(opts.limit ?? 100_000);
 

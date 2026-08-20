@@ -156,10 +156,34 @@ describe("extractDocumentText (spreadsheets)", () => {
   });
 
   it("records the reason instead of throwing when the workbook will not open", async () => {
+    // Recorded as a spreadsheet, and the bytes are a lie: SheetJS throws, and
+    // the document stays findable by its title with the reason on record.
     const broken = Buffer.concat([
-      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(512)]);
-    const out = await extractDocumentText("application/octet-stream", broken);
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      Buffer.from("Workbook", "utf16le"), Buffer.alloc(512)]);
+    const out = await extractDocumentText("application/vnd.ms-excel", broken);
     expect(out.extractor).toBe("none");
     expect(out.error).toBeTruthy();
+  });
+
+  it("does not treat every legacy Office file as a spreadsheet", async () => {
+    // OLE2 is the container for .doc and .msg too. Sniffing it as Excel would
+    // put the wrong reason in worker_runs and the wrong mime on the file route.
+    const doc = Buffer.concat([
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      Buffer.from("WordDocument", "utf16le"), Buffer.alloc(512)]);
+    const out = await extractDocumentText("application/octet-stream", doc);
+    expect(out.extractor).toBe("none");
+    expect(out.error).toBeUndefined(); // nothing failed; there was nothing to read
+  });
+
+  it("refuses a workbook that announces more data than the reader will take", async () => {
+    // A 300-byte file claiming to inflate to 3 GB. The reason is recorded and
+    // the worker survives — before the guard, this class of file was an OOM.
+    const bomb = await readFile(
+      new URL("../../../packages/parsers/fixtures/inflation-bomb.xlsx", import.meta.url));
+    const out = await extractDocumentText("application/octet-stream", bomb);
+    expect(out.extractor).toBe("none");
+    expect(out.error).toMatch(/expands/);
   });
 });
