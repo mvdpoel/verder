@@ -86,6 +86,18 @@ export const registryImportRouter = router({
         message: `Could not read this ${source} file: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
+    // A file the parser understood NOTHING of is the wrong kind of file, not a
+    // statement full of broken lines. Detection can only tell a spreadsheet
+    // from a Word document — a household budget workbook looks exactly like a
+    // statement to it, and every row of one fails the ABN row contract. Left
+    // to run, that writes one parse-error transaction per row into a table
+    // with no DELETE grant: permanent junk evidence, and a phantom statement
+    // in "Past imports" forever. The document stays registered above; only the
+    // rows are refused.
+    if (parsed.rows.length === 0 && parsed.errors.length > 0) {
+      throw new TRPCError({ code: "BAD_REQUEST",
+        message: `This ${source} file has no readable statement rows — ${parsed.errors.length} line${parsed.errors.length === 1 ? "" : "s"} could not be read. It is stored in the vault, but nothing was imported.` });
+    }
     // Malformed rows are kept, never dropped: parseError + raw text.
     const values = [
       ...parsed.rows.map((r) => ({

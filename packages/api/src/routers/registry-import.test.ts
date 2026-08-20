@@ -46,14 +46,17 @@ function abnXlsFixture(): Buffer {
  * COMMENT instead: trailing bytes the format reserves for exactly this, which
  * change the sha256 without touching a single sheet byte.
  */
-function abnXlsxFixture(): Buffer {
-  const raw = readFileSync(new URL("../../../parsers/fixtures/abn.xlsx", import.meta.url));
-  const note = Buffer.from(`run-${RUN}`);
+function zipWithComment(name: string, salt = ""): Buffer {
+  const raw = readFileSync(new URL(`../../../parsers/fixtures/${name}`, import.meta.url));
+  const note = Buffer.from(`run-${RUN}${salt}`);
   const buf = Buffer.concat([raw, note]);
   const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
   buf.writeUInt16LE(note.length, eocd + 20); // EOCD comment length
   return buf;
 }
+
+/** `salt` makes a second, distinct copy: two tests must not share a sha256. */
+const abnXlsxFixture = (salt = "") => zipWithComment("abn.xlsx", salt);
 
 describe("registry.import", () => {
   let db: Db;
@@ -209,6 +212,38 @@ describe("registry.import", () => {
       .toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   });
 
+  it("imports the same Excel export twice without duplicating a transaction", async () => {
+    const buf = abnXlsxFixture("-idempotency");
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    const first = await caller().registry.import.ingest({ sha256, filename: "abn.xlsx" });
+    const again = await caller().registry.import.ingest({ sha256, filename: "abn.xlsx" });
+
+    expect(first.inserted).toBe(5);
+    expect(again.inserted).toBe(0);
+    expect(again.skipped).toBe(5); // (statementSha256, rowIndex) is the key
+    const rows = await db.select().from(schema.transactions)
+      .where(eq(schema.transactions.statementSha256, sha256));
+    expect(rows).toHaveLength(5);
+  });
+
+  it("refuses a workbook that is a spreadsheet but not a statement", async () => {
+    // A household budget is a perfectly good .xlsx. Importing it used to write
+    // one permanent parse-error transaction per row — transactions has no
+    // DELETE grant, so junk evidence never comes back out.
+    const { sha256 } = await storeFile(
+      process.env.VAULT_DIR!, zipWithComment("huishoudboekje.xlsx"));
+
+    await expect(caller().registry.import.ingest({ sha256, filename: "huishoudboekje.xlsx" }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const rows = await db.select().from(schema.transactions)
+      .where(eq(schema.transactions.statementSha256, sha256));
+    expect(rows).toHaveLength(0); // nothing entered the registry
+    const [doc] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.sha256, sha256));
+    expect(doc).toBeDefined(); // but the bytes are still on record
+  });
+
   it("registers an unreadable workbook as evidence before failing", async () => {
     // OLE2 magic, but not a workbook behind it.
     const buf = Buffer.concat([
@@ -221,5 +256,12 @@ describe("registry.import", () => {
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.sha256, sha256));
     expect(doc).toBeDefined(); // bytes on record beat clean failures
+
+    // Evidence is only evidence with its ledger event: the document row and
+    // the event are written in one transaction, and a failure after them must
+    // not leave the chain missing a link.
+    const events = await db.select().from(schema.ledgerEvents)
+      .where(eq(schema.ledgerEvents.entityId, doc.id));
+    expect(events.map((e) => e.eventType)).toContain("document.ingested");
   });
 });

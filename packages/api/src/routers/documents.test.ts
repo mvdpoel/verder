@@ -60,7 +60,7 @@ describe("documents router", () => {
     expect(raw.title).toBe("scan_001"); // evidence row never mutated
   });
 
-  it("returns capped rows for a spreadsheet, reporting the true total", async () => {
+  it("returns capped rows for a spreadsheet, and says it capped them", async () => {
     const buf = Buffer.from(readFileSync(
       new URL("../../../parsers/fixtures/abn.xls", import.meta.url)));
     const { sha256 } = await storeFile(vaultDir, buf);
@@ -71,10 +71,39 @@ describe("documents router", () => {
     const preview = await caller().documents.sheetPreview({ sha256, maxRows: 3 });
     expect(preview.sheetName).toBe("Sheet0");
     expect(preview.rows).toHaveLength(3);
-    expect(preview.totalRows).toBe(6);
     expect(preview.totalSheets).toBe(1);
     expect(preview.truncated).toBe(true);
     expect(preview.rows[0][0]).toBe("Rekeningnummer");
+  });
+
+  it("stops reading at the cap instead of parsing the whole workbook first", async () => {
+    // The cap has to bound the WORK, not just the response: XLSX.read is
+    // synchronous, so a hostile workbook parsed in full stalls every request
+    // this server is handling. Asserting the row count is not enough — a
+    // reader that parsed everything and sliced afterwards passes that. The
+    // fixture declares a 20 000-row grid holding two cells; a reader that
+    // honours the declaration materializes 20 000 rows.
+    const bomb = Buffer.from(readFileSync(
+      new URL("../../../parsers/fixtures/dimension-bomb.xlsx", import.meta.url)));
+    const { sha256 } = await storeFile(vaultDir, bomb);
+    await caller().documents.registerUpload({
+      sha256, sizeBytes: 1, mime: "application/octet-stream",
+      title: "bomb.xlsx", source: "upload", receivedAt: new Date() });
+    const t0 = Date.now();
+    const preview = await caller().documents.sheetPreview({ sha256, maxRows: 200 });
+    expect(preview.rows).toHaveLength(2);
+    expect(preview.truncated).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(5_000);
+  }, 20_000);
+
+  it("says NOT_FOUND when the row exists but the bytes are gone", async () => {
+    // An orphan row is a diagnosable 404, not a 500 with a masked message.
+    const sha256 = sha();
+    await caller().documents.registerUpload({
+      sha256, sizeBytes: 10, mime: "application/vnd.ms-excel",
+      title: "vanished.xls", source: "upload", receivedAt: new Date() });
+    await expect(caller().documents.sheetPreview({ sha256 }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("refuses a document that is not a spreadsheet", async () => {

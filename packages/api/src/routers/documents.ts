@@ -3,10 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
-import {
-  isSpreadsheetMime, readWorkbook, sniffContainer, UNINFORMATIVE_MIMES,
-  type SheetData,
-} from "@verder/parsers";
+import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { readFilePath, relPathFor } from "../storage";
@@ -84,33 +81,42 @@ export const documentsRouter = router({
       .where(eq(schema.documents.sha256, input.sha256));
     if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
 
-    const buf = await readFile(
-      readFilePath(process.env.VAULT_DIR ?? "./vault-files", input.sha256));
+    let buf: Buffer;
+    try {
+      buf = await readFile(
+        readFilePath(process.env.VAULT_DIR ?? "./vault-files", input.sha256));
+    } catch {
+      // A row whose bytes are missing is an orphan, not a server fault: the
+      // ingest path calls that a 404, and so does this.
+      throw new TRPCError({ code: "NOT_FOUND", message: "File is not in the vault" });
+    }
     // The stored mime is whatever the source claimed — ABN's export arrives as
     // octet-stream — so fall back to the bytes, exactly as extraction does.
-    const mime = UNINFORMATIVE_MIMES.has(doc.mime)
-      ? (sniffContainer(buf) ?? doc.mime)
-      : doc.mime;
-    if (!isSpreadsheetMime(mime)) {
+    if (!isSpreadsheetMime(effectiveMime(doc.mime, buf))) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Document is not a spreadsheet" });
     }
 
     let sheets: SheetData[];
     try {
-      sheets = readWorkbook(buf);
+      // One row past the cap: enough to know the sheet continues, and the cap
+      // is handed to the READER so it bounds the parse itself. Slicing after a
+      // full parse would leave a hostile workbook free to stall the server —
+      // XLSX.read is synchronous, so its cost is every request's cost.
+      sheets = readWorkbook(buf, { maxRows: input.maxRows + 1 });
     } catch (err) {
       throw new TRPCError({ code: "BAD_REQUEST",
         message: `Could not read this workbook: ${err instanceof Error ? err.message : String(err)}` });
     }
     if (sheets.length === 0) {
-      return { sheetName: "", rows: [], totalRows: 0, totalSheets: 0, truncated: false };
+      return { sheetName: "", rows: [], totalSheets: 0, truncated: false };
     }
     const first = sheets[0];
     return {
       sheetName: first.name,
       rows: first.rows.slice(0, input.maxRows),
-      totalRows: first.rows.length,
       totalSheets: sheets.length,
+      // No true total: knowing it would mean parsing the whole workbook, which
+      // is exactly the work the cap exists to refuse.
       truncated: first.rows.length > input.maxRows,
     };
   }),
