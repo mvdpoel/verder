@@ -33,6 +33,7 @@ const NL: Record<string, string> = {
   monthly: "per maand", quarterly: "per kwartaal", yearly: "per jaar",
   irregular: "onregelmatig", "direct-debit": "automatische incasso",
   invoice: "factuur", inbox: "postvak in", filed: "gearchiveerd",
+  discarded: "weggegooid",
 };
 
 export function nlLabel(value: string): string {

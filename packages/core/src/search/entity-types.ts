@@ -7,11 +7,16 @@ export const SEARCH_ENTITY_TYPES = ["document", "entry", "email", "financial_ite
 export type SearchEntityType = (typeof SEARCH_ENTITY_TYPES)[number];
 
 /**
- * Every status a search result can carry, deduped across the four vocabularies
- * that exist in the app: doc_status, TASK_STATUSES, item_status, debt_status.
- * search_chunks.status is denormalized, so a status filter is one WHERE clause
- * against one column instead of a per-entity-type subquery — which is what makes
- * "the filter rail offers a status the router rejects" impossible.
+ * Every status a search result can OFFER as a filter, deduped across the four
+ * vocabularies that exist in the app: doc_status, TASK_STATUSES, item_status,
+ * debt_status. search_chunks.status is denormalized, so a status filter is one
+ * WHERE clause against one column instead of a per-entity-type subquery — which
+ * is what makes "the filter rail offers a status the router rejects" impossible.
+ *
+ * ONE deliberate omission: doc_status also has `discarded` (migration 0021).
+ * retrieve.ts excludes discarded chunks unconditionally — that is the whole
+ * point of discarding one — so offering it here would be a filter guaranteed to
+ * return nothing. Adding it needs a browse-discarded surface first.
  */
 export const SEARCH_STATUSES = [
   "inbox", "filed",                                            // documents

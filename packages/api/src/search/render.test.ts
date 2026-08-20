@@ -64,6 +64,18 @@ describe("renderers", () => {
     expect(r.status).toBe("inbox");
   });
 
+  it("labels a discarded document in Dutch, like every other status", () => {
+    // doc_status gained a third value; the index is built for Dutch queries
+    // (to_tsvector('dutch', …)), so an untranslated status leaves the Dutch
+    // word with nothing to match on the moment discarded documents become
+    // browsable.
+    const r = renderDocument({ title: "image.png", docType: null,
+      mime: "image/png", receivedAt: new Date("2026-08-19T10:00:00Z") },
+      { status: "discarded", text: "" });
+    expect(r.body).toContain("Status: discarded (weggegooid).");
+    expect(r.status).toBe("discarded");
+  });
+
   it("renders a logbook entry with its participants and no status", () => {
     const r = renderEntry({ summary: "VerderGroep vraagt paspoort",
       details: "Kopie paspoort opsturen.", channel: "email", direction: "inbound",

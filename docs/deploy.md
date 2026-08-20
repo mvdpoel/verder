@@ -259,6 +259,13 @@ nothing. Nothing is deleted: no vault file is unlinked and no `documents` row
 is removed, so `/verify` must still be green afterwards — check it: the hash
 chain must still verify.
 
+It is scoped to the population it was measured against: `created_at` before
+2026-08-21, and only documents still sitting in the inbox. `image.png` is also
+the filename Gmail, Apple Mail and Outlook give a pasted-from-clipboard
+screenshot sent as a genuine attachment — which the port filter correctly keeps
+— so without those bounds a later re-run (after a restore, say) would discard
+real evidence, including documents already filed by hand.
+
 ## Restore procedure
 
 Both the dump and the restore must run on a **pgvector-capable image**

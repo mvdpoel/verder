@@ -800,7 +800,7 @@ Matches on title because the disposition header is gone post-hoc."
 - Modify: `CLAUDE.md`
 - Modify: `docs/deploy.md`
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 ```bash
 env -u NODE_ENV pnpm -r test
@@ -809,7 +809,14 @@ env -u NODE_ENV pnpm -r build
 ```
 Expected: all green. Do not proceed on a failure.
 
-- [ ] **Step 2: Prove the append-only law was not weakened**
+**Observed (2026-08-20, re-run after the review-fix round):** all green.
+`pnpm -r test` — core 28/28, parsers 118/118, db 39/39, auth 1/1, api 257/257,
+web 59/59, worker 109 passed + 1 skipped; 71 test files, no failures. Note the
+scope line reads "7 of 8 workspace projects" and packages/db IS included in it.
+`pnpm -r typecheck` — all 7 projects Done, zero errors.
+`pnpm -r build` — all Done; `next build` compiled successfully.
+
+- [x] **Step 2: Prove the append-only law was not weakened**
 
 Run: `git diff main...HEAD -- packages/db/drizzle/ | grep -iE "DROP|DELETE|REVOKE|UPDATE .*documents"`
 Expected: no matches. The only schema change is the additive `ALTER TYPE`.
@@ -817,7 +824,16 @@ Expected: no matches. The only schema change is the additive `ALTER TYPE`.
 Run: `git diff main...HEAD | grep -nE "\.delete\(|DROP TABLE|unlink|rm -rf"`
 Expected: no matches in source. Nothing is deleted anywhere in this change.
 
-- [ ] **Step 3: Confirm the migration is additive and registered**
+**Observed (2026-08-20):** neither grep is literally empty, and every match was
+attributed rather than assumed. The schema grep matches one SQL *comment*
+("must not delete it: documents is append-only") plus the `"onDelete"` and
+`"revoked"` JSON keys that a full drizzle snapshot regenerates for pre-existing
+tables; restricted to added non-comment lines in `*.sql` it is empty (exit 1).
+The deletion grep matches three lines, all prose in `docs/deploy.md` and this
+plan (including the proof command itself). A per-file scan over every changed
+`.ts`/`.tsx`/`.sql` file returns zero matches.
+
+- [x] **Step 3: Confirm the migration is additive and registered**
 
 Run: `cat packages/db/drizzle/0021_discarded_doc_status.sql`
 Expected: a single `ALTER TYPE ... ADD VALUE 'discarded';` plus comments.
@@ -825,7 +841,7 @@ Expected: a single `ALTER TYPE ... ADD VALUE 'discarded';` plus comments.
 Run: `python3 -c "import json;print([e['tag'] for e in json.load(open('packages/db/drizzle/meta/_journal.json'))['entries']][-2:])"`
 Expected: ends with `0021_discarded_doc_status`.
 
-- [ ] **Step 4: Update the docs**
+- [x] **Step 4: Update the docs**
 
 Add to `CLAUDE.md`, in the homelab bullet after the spreadsheet-support sentence:
 
@@ -856,7 +872,7 @@ filed before it:
 Then check /verify: the hash chain must still verify.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md docs/deploy.md
