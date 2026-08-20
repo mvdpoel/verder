@@ -75,6 +75,29 @@ describe("pollGmail", () => {
     await pool.end();
   });
 
+  it("records the parts the port skipped in the gmail worker run", async () => {
+    // The skip is the one irreversible step in the whole pipeline: pollGmail
+    // short-circuits on a seen gmailMessageId, so a message whose attachment
+    // was wrongly skipped is never fetched again. It has to leave a trace
+    // somewhere Martin can read — worker_runs is where every other gmail
+    // anomaly already surfaces.
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const id = `m-skip-${Date.now()}`;
+    const msg = { ...makeMsg(id),
+      skippedParts: [{ filename: "image.png", mime: "image/png", contentId: "<ii_abc>" }] };
+    await pollGmail({ db, vaultDir, enqueueSuggest: async () => {},
+      gmail: { listMessageIds: async () => [id], getMessage: async () => msg } });
+
+    const runs = await db.select().from(schema.workerRuns);
+    const detail = runs.filter((r) => r.worker === "gmail")
+      .map((r) => JSON.stringify(r.detail))
+      .filter((d) => d.includes(id));
+    expect(detail.length).toBeGreaterThan(0);
+    expect(detail.some((d) => d.includes("image.png") && d.includes("ii_abc"))).toBe(true);
+    await pool.end();
+  });
+
   it("isolates a failing message so healthy messages still ingest", async () => {
     const { db, pool } = createDb(URL);
     const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));

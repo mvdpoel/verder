@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { google, type Auth } from "googleapis";
-import type { GmailMessage, GmailPort } from "./gmail";
+import type { GmailMessage, GmailPort, SkippedPart } from "./gmail";
 import { isInlineBodyImage } from "./gmail-parts";
 
 interface OAuthCreds {
@@ -58,13 +58,13 @@ export async function realGmailPort(): Promise<GmailPort> {
       const full = await gmail.users.messages.get({ userId: "me", id, format: "full" });
       const headers = Object.fromEntries((full.data.payload?.headers ?? [])
         .map((h) => [h.name!.toLowerCase(), h.value ?? ""]));
-      const attachments = full.data.payload
+      const { attachments, skipped } = full.data.payload
         ? await collectAttachments(full.data.payload, async (attachmentId) => {
             const att = await gmail.users.messages.attachments.get({
               userId: "me", messageId: id, id: attachmentId });
             return Buffer.from(att.data.data!, "base64url");
           })
-        : [];
+        : { attachments: [], skipped: [] };
       const bodyPart = findTextPart(full.data.payload);
       return {
         id, threadId: full.data.threadId!, from: headers.from ?? "", to: headers.to ?? "",
@@ -72,6 +72,7 @@ export async function realGmailPort(): Promise<GmailPort> {
         sentAt: new Date(Number(full.data.internalDate)),
         bodyText: bodyPart ? Buffer.from(bodyPart, "base64url").toString("utf8") : "",
         raw: Buffer.from(raw.data.raw!, "base64url"), attachments,
+        skippedParts: skipped,
       };
     },
   };
@@ -95,25 +96,41 @@ export interface MessagePart {
  * and is NOT an image the HTML body embeds by `cid:` — see isInlineBodyImage.
  * The recursion runs regardless of the skip: a skipped part may still have
  * children worth keeping.
+ *
+ * Every skip is REPORTED, not merely performed. A skipped part never becomes a
+ * document, never reaches the queue and never reaches search, and pollGmail
+ * short-circuits on a seen gmailMessageId, so a wrong skip is not repairable by
+ * re-polling. If nothing recorded it, the failure mode would be a document
+ * Martin never learns arrived — undiscoverable by construction. The caller
+ * writes `skipped` into the gmail worker run.
  */
 export async function collectAttachments(
   payload: MessagePart,
   fetchBytes: (attachmentId: string) => Promise<Buffer>,
-): Promise<GmailMessage["attachments"]> {
+): Promise<{ attachments: GmailMessage["attachments"]; skipped: SkippedPart[] }> {
   const attachments: GmailMessage["attachments"] = [];
+  const skipped: SkippedPart[] = [];
   const walk = async (part: MessagePart) => {
     for (const p of part.parts ?? []) {
-      if (p.filename && p.body?.attachmentId && !isInlineBodyImage(p.headers)) {
-        attachments.push({
-          filename: p.filename, mime: p.mimeType ?? "application/octet-stream",
-          data: await fetchBytes(p.body.attachmentId),
-        });
+      if (p.filename && p.body?.attachmentId) {
+        if (isInlineBodyImage(p)) {
+          skipped.push({
+            filename: p.filename, mime: p.mimeType ?? "application/octet-stream",
+            contentId: p.headers?.find((x) => x.name?.toLowerCase() === "content-id")?.value
+              ?? null,
+          });
+        } else {
+          attachments.push({
+            filename: p.filename, mime: p.mimeType ?? "application/octet-stream",
+            data: await fetchBytes(p.body.attachmentId),
+          });
+        }
       }
       if (p.parts) await walk(p);
     }
   };
   await walk(payload);
-  return attachments;
+  return { attachments, skipped };
 }
 
 function findTextPart(payload: unknown): string | null {

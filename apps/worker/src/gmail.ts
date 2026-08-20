@@ -4,10 +4,19 @@ import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
 
+/** A message part the port refused to promote to a document — see
+ *  isInlineBodyImage. Reported so a wrong skip is visible the same day rather
+ *  than never: the part is gone from every surface and re-polling will not
+ *  fetch it again. */
+export interface SkippedPart {
+  filename: string; mime: string; contentId: string | null;
+}
+
 export interface GmailMessage {
   id: string; threadId: string; from: string; to: string; subject: string;
   sentAt: Date; bodyText: string; raw: Buffer;
   attachments: { filename: string; mime: string; data: Buffer }[];
+  skippedParts?: SkippedPart[];
 }
 export interface GmailPort {
   listMessageIds(query: string): Promise<string[]>;
@@ -58,6 +67,10 @@ export async function pollGmail(deps: {
   const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
   let ingested = 0;
   const failures: { id: string; message: string }[] = [];
+  // Parts the port refused to promote. `scanned` counts messages, not parts, so
+  // without this a heuristic that reads a sender's mailer wrongly would drop
+  // documents with nothing anomalous anywhere to look at.
+  const skippedParts: (SkippedPart & { messageId: string })[] = [];
   try {
     const partyEmails = (await deps.db.select().from(schema.parties))
       .map((p) => p.email).filter((e): e is string => !!e);
@@ -77,6 +90,7 @@ export async function pollGmail(deps: {
           continue;
         }
         const msg = await deps.gmail.getMessage(id);
+        for (const p of msg.skippedParts ?? []) skippedParts.push({ ...p, messageId: id });
         const relevant = [...senders, ...partyEmails]
           .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
         if (!relevant) continue;
@@ -88,7 +102,7 @@ export async function pollGmail(deps: {
       }
     }
     await recordRun(deps.db, "gmail", failures.length ? "error" : "ok",
-      { ingested, scanned: ids.length, failures });
+      { ingested, scanned: ids.length, failures, skippedParts });
   } catch (err) {
     await recordRun(deps.db, "gmail", "error", { message: String(err) });
     throw err;
