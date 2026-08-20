@@ -7,16 +7,23 @@ import * as schema from "./schema";
 // that role has NO INSERT grant on search_outbox (Task 2) — the SECURITY
 // DEFINER function is the only thing that makes these rows land.
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+// WORKER role: document_texts is the one table below that the app role cannot
+// write (migration 0016 gives it SELECT only) because extraction is the
+// worker's job. Its trigger therefore has to be exercised as the worker.
+const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
 describe("search_outbox triggers", () => {
   let db: Db;
   let pool: ReturnType<typeof createDb>["pool"];
+  let workerDb: Db;
+  let workerPool: ReturnType<typeof createDb>["pool"];
   let userId: string;
 
   const sha = () => crypto.randomUUID().replaceAll("-", "").padEnd(64, "a");
 
   beforeAll(async () => {
     ({ db, pool } = createDb(APP_URL));
+    ({ db: workerDb, pool: workerPool } = createDb(WORKER_URL));
     const [u] = await db.insert(schema.users)
       .values({ email: `outbox${Date.now()}@test.local`, name: "Martin" }).returning();
     userId = u.id;
@@ -24,6 +31,7 @@ describe("search_outbox triggers", () => {
 
   afterAll(async () => {
     await pool.end();
+    await workerPool.end();
   });
 
   // The dev database is shared by every test file, so every assertion is scoped
@@ -119,6 +127,21 @@ describe("search_outbox triggers", () => {
     await db.insert(schema.documentStatusChanges).values({
       documentId: doc.id, status: "filed", title: "Beschikking rechtbank",
       docType: "beschikking",
+    });
+    expect(await outboxFor("document", doc.id)).toHaveLength(2);
+  });
+
+  it("refreshes the parent document when its extracted text lands", async () => {
+    const doc = await makeDocument();
+    expect(await outboxFor("document", doc.id)).toHaveLength(1);
+    // Extraction is asynchronous — the document is indexed on title and metadata
+    // first, and its OCR/PDF text arrives later. Without this trigger the text
+    // this whole sub-project exists to make searchable would sit in
+    // document_texts referenced by no chunk. Found on the production backfill:
+    // 18 documents indexed, 0 document_texts rows.
+    await workerDb.insert(schema.documentTexts).values({
+      documentId: doc.id, sha256: doc.sha256, text: "Uw dossiernummer is 24-1187.",
+      extractor: "pdf-parse", charCount: 28,
     });
     expect(await outboxFor("document", doc.id)).toHaveLength(2);
   });

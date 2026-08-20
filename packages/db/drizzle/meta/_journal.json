@@ -134,6 +134,13 @@
       "when": 1787228437751,
       "tag": "0018_retrieved_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787234633719,
+      "tag": "0019_document_text_trigger",
+      "breakpoints": true
     }
   ]
 }

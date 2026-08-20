@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "backfill": "tsx src/ops/backfill-gmail.ts",
+    "extract-texts": "tsx src/ops/extract-texts.ts",
     "reindex": "tsx src/ops/reindex.ts"
   },
   "dependencies": {
