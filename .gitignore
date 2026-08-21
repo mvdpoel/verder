@@ -12,3 +12,6 @@ next-env.d.ts
 *.traineddata
 *.tsbuildinfo
 .gstack/
+
+# superpowers brainstorming companion
+.superpowers/
