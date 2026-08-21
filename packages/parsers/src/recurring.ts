@@ -128,7 +128,14 @@ export function detectRecurring(
 
     const amounts = sorted.map((r) => r.amountCents);
     const typicalAmountCents = median(amounts);
-    if (groupBy !== "mandate") {
+    // Income is not a subscription. A charge that swings 40% is probably a
+    // different charge, but a SALARY legitimately swings: a part-month at each
+    // end of a job change, hours, a bonus. Measured on Martin's real statement,
+    // TrueFullstaq paid € 648,00 / € 2.660,68 / € 1.118,65 in three consecutive
+    // months — a genuine monthly salary that this gate rejected outright,
+    // rendering April and May as € 0,00 income. For credits the signal is the
+    // counterparty plus the cadence; the amount is left to the caller.
+    if (groupBy !== "mandate" && !wantCredits) {
       // every charge within 40% of the median (integer math: |a−m|/|m| ≤ 4/10)
       const ok = amounts.every(
         (a) => Math.abs(a - typicalAmountCents) * 10 <= Math.abs(typicalAmountCents) * 4

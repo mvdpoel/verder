@@ -104,7 +104,17 @@ describe("incomeLines", () => {
   // group: its 30/28-day gaps read as monthly, and at 23.7% below the median it
   // sits inside detectRecurring's 40% similarity band (571_040 <= 965_216).
   // The eviction pass is what takes it back out again.
-  it("drops a vakantiegeld paid from the employer's own IBAN", () => {
+  // RULE CHANGED 2026-08-21, on evidence. This test used to assert that a
+  // vakantiegeld from the employer's own IBAN was EVICTED from the line and
+  // disclosed as incidenteel. Measured against Martin's real statement, the
+  // eviction machinery could not survive the shape real salary actually has:
+  // his employer paid € 648,00 / € 2.660,68 / € 1.118,65 in three consecutive
+  // months (the last a part-month — he changed jobs on 10 June), and an
+  // amount-sensitive rule rendered April and May as € 0,00 income. See
+  // money-series.real.test.ts. Money from a counterparty that pays on a cadence
+  // is now counted as that line's income whatever its size; what it must NOT do
+  // is set the figure projected forward.
+  it("counts a vakantiegeld as income but never projects from it", () => {
     const rows = [
       credit("a", "2026-03-25T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
       credit("b", "2026-04-24T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
@@ -112,7 +122,10 @@ describe("incomeLines", () => {
     ];
     const lines = incomeLines(rows);
     expect(lines).toHaveLength(1);
-    expect(lines[0].transactionIds).not.toContain("v");
+    // It arrived, so it is income in its month.
+    expect(lines[0].transactionIds).toContain("v");
+    // But a full period of this line pays € 2.413,04, not the € 1.842,00 one-off.
+    expect(lines[0].typicalAmountCents).toBe(241_304);
     // …and the line keeps the salary's name, not the one-off's. detectRecurring
     // names a group after its LAST row, which would have read
     // "TrueFullstaq BV vakantiegeld" on a chart of fixed income.

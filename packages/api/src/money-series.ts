@@ -118,14 +118,22 @@ export function outSeries(
 }
 
 /**
- * How far a new counterparty's amount may sit from the old one and still count
- * as the same income continuing. 0.25 is a GUESS: it is wide enough for the
- * pay change Martin actually had in June 2026 and narrow enough that a toeslag
- * cannot be swallowed by a salary. Re-measure against the real ABN export
- * before trusting it — a wrong value fails visibly (one line splits in two, or
- * two lines merge into one), never silently.
+ * How far a new counterparty's full-period amount may sit from the old one and
+ * still count as the same income continuing.
+ *
+ * MEASURED, no longer a guess. Martin's own job change, 10 June 2026:
+ * TrueFullstaq's full period was € 2.660,68 and Saurens Marketing's is
+ * € 3.556,42 — a 33,7% raise. The original 0.25 refused to link them, so the
+ * chart told him his income had ended and something smaller had begun. 1/2
+ * clears that with room, and the link still requires the same cadence, the old
+ * line to have stopped, and the new one to start within one cadence of it —
+ * three conditions a toeslag arriving beside a salary cannot satisfy.
+ *
+ * Held as an integer ratio, not a float: the comparison is in cents, and
+ * detectRecurring one package over deliberately does the same.
  */
-export const INCOME_CONTINUATION_TOLERANCE = 0.25;
+export const INCOME_CONTINUATION_TOLERANCE_NUM = 1;
+export const INCOME_CONTINUATION_TOLERANCE_DEN = 2;
 
 const DAY_MS = 86_400_000;
 /** How far apart a matched pair may sit before it stops looking like one move. */
@@ -170,59 +178,35 @@ const CADENCE_DAYS: Record<RecurringCandidate["cadence"], number> = {
 };
 
 /**
- * How far a credit may sit from its group's median before it stops looking like
- * the same line and starts looking like a one-off inside it. 15% is a GUESS,
- * the same discipline as INCOME_CONTINUATION_TOLERANCE: wide enough for the
- * month-to-month drift of a real salary, narrow enough to catch a vakantiegeld
- * paid from the employer's own IBAN. Re-measure against Martin's real ABN
- * export. It is held as whole percent so the comparison stays integer cents.
+ * What a FULL period of this line pays — the figure worth projecting, and the
+ * one worth comparing across a job change. Part-months sit below it and must
+ * not drag it down: the mean of Martin's part-month June (€ 2.487,71) and his
+ * full July (€ 3.556,42) is € 3.022,06, which under-reported his income by
+ * € 534,36 a month on the first implementation.
  *
- * Note what this rule deliberately does NOT test: whether the row sits off the
- * group's cadence. Vakantiegeld is paid in the salary run — 28 days after the
- * previous salary — so it lands exactly ON cadence, which is precisely why
- * detectRecurring swallows it. Requiring both would evict nothing.
+ * Rule: take the largest amount the line has ever paid, keep every amount
+ * within FULL_PERIOD_BAND_PCT of it, and return their median. One unusually
+ * large payment therefore cannot set the figure on its own unless it is the
+ * only full period there is.
  */
-export const INCOME_OUTLIER_TOLERANCE_PCT = 15;
+const FULL_PERIOD_BAND_PCT = 15;
+
+function fullPeriodAmount(amounts: number[]): number {
+  if (amounts.length === 0) return 0;
+  const max = Math.max(...amounts);
+  const full = amounts.filter((a) => (max - a) * 100 <= max * FULL_PERIOD_BAND_PCT);
+  const sorted = [...full].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : Math.trunc((sorted[mid - 1] + sorted[mid]) / 2);
+}
 
 const toDetectInput = (t: MoneyTx) => ({
   id: t.id, rowIndex: 0, bookedAt: t.bookedAt, amountCents: t.amountCents,
   counterpartyName: t.counterpartyName, counterpartyIban: t.counterpartyIban,
   description: null, mandateId: t.mandateId, accountIban: t.accountIban,
 });
-
-/**
- * Credits that ride inside a recurring group but are not part of it: a
- * vakantiegeld or a 13e maand, paid from the same IBAN, on the same cadence,
- * for a different amount. They are evicted here so they fall through to
- * `incidentalCents` — disclosed, never counted as fixed income.
- *
- * Two guards keep this from eating real income: a group of two has no majority
- * to be an outlier against, and the survivors must still read as the same
- * recurring line (same cadence, still ≥2 rows). If evicting would destroy the
- * line, nothing is evicted and the group stands as detectRecurring found it.
- */
-function evictOneOffCredits(credits: MoneyTx[], found: RecurringCandidate[]): Set<string> {
-  const byId = new Map(credits.map((t) => [t.id, t]));
-  const evicted = new Set<string>();
-  for (const c of found) {
-    if (c.transactionIds.length < 3) continue;
-    const median = c.typicalAmountCents;
-    const outliers = c.transactionIds.filter((id) => {
-      const amount = byId.get(id)?.amountCents ?? median;
-      return Math.abs(amount - median) * 100 > median * INCOME_OUTLIER_TOLERANCE_PCT;
-    });
-    if (outliers.length === 0) continue;
-    if (c.transactionIds.length - outliers.length < 2) continue;
-    const survivors = c.transactionIds
-      .filter((id) => !outliers.includes(id))
-      .map((id) => byId.get(id))
-      .filter((t): t is MoneyTx => t !== undefined);
-    const again = detectRecurring(survivors.map(toDetectInput), { direction: "credit" });
-    if (again.length !== 1 || again[0].cadence !== c.cadence) continue;
-    for (const id of outliers) evicted.add(id);
-  }
-  return evicted;
-}
 
 /**
  * The name a line is shown under: the one most of its rows carry, not the one
@@ -248,15 +232,13 @@ function modalName(rows: MoneyTx[], fallback: string): string {
  */
 export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
   const { internal } = splitInternalTransfers(txs);
-  const all = txs.filter((t) => !t.parseError && t.amountCents > 0 && !internal.has(t.id));
-  const first = detectRecurring(all.map(toDetectInput), { direction: "credit" });
-  const evicted = evictOneOffCredits(all, first);
-  // Re-detecting on the survivors is what recomputes the median, the cadence
-  // and the line's first/last date without the one-off in them.
-  const credits = evicted.size === 0 ? all : all.filter((t) => !evicted.has(t.id));
-  const found = evicted.size === 0
-    ? first
-    : detectRecurring(credits.map(toDetectInput), { direction: "credit" });
+  const credits = txs.filter((t) => !t.parseError && t.amountCents > 0 && !internal.has(t.id));
+  // No eviction. Money from a counterparty that pays you on a cadence IS that
+  // line's income, whatever the amount: a part-month at either end of a job
+  // change is salary, not a footnote. "Recurring only" is enforced by the
+  // COUNTERPARTY having a cadence — a one-off from a stranger (a
+  // belastingteruggave) still never reaches a bar.
+  const found = detectRecurring(credits.map(toDetectInput), { direction: "credit" });
 
   const byId = new Map(credits.map((t) => [t.id, t]));
   const lines: IncomeLine[] = found
@@ -267,7 +249,9 @@ export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
         c.counterpartyName ?? c.key
       )],
       cadence: c.cadence,
-      typicalAmountCents: c.typicalAmountCents,
+      typicalAmountCents: fullPeriodAmount(
+        c.transactionIds.map((id) => byId.get(id)?.amountCents ?? 0)
+      ),
       firstAt: c.firstAt, lastAt: c.lastAt, transactionIds: [...c.transactionIds],
     }))
     .sort((a, b) => a.firstAt.getTime() - b.firstAt.getTime());
@@ -282,8 +266,11 @@ export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
       if (!b) continue;
       const gapDays = (b.firstAt.getTime() - a.lastAt.getTime()) / DAY_MS;
       const withinOneCadence = gapDays > 0 && gapDays <= CADENCE_DAYS[a.cadence] * 1.5;
+      // Full period against full period, so a ramp-in month on either side of
+      // the switch cannot break the link. Integer cents, no float.
       const sizeDelta = Math.abs(b.typicalAmountCents - a.typicalAmountCents);
-      const similar = sizeDelta <= a.typicalAmountCents * INCOME_CONTINUATION_TOLERANCE;
+      const similar = sizeDelta * INCOME_CONTINUATION_TOLERANCE_DEN
+        <= a.typicalAmountCents * INCOME_CONTINUATION_TOLERANCE_NUM;
       if (!withinOneCadence || !similar || a.lastAt >= b.firstAt) continue;
       a.labels = [...a.labels, ...b.labels];
       a.transactionIds = [...a.transactionIds, ...b.transactionIds];
