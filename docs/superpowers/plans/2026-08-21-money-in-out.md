@@ -54,7 +54,7 @@
 - Consumes: nothing.
 - Produces: `schema.transactions.accountIban` — `text("account_iban")`, nullable, no default.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/db/src/registry-schema.test.ts`:
 
@@ -82,12 +82,12 @@ it("transactions carry the account the statement belongs to", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/db test -- registry-schema`
 Expected: FAIL — `accountIban` is not a known property / column `account_iban` does not exist.
 
-- [ ] **Step 3: Add the column to the schema**
+- [x] **Step 3: Add the column to the schema**
 
 In `packages/db/src/schema.ts`, inside `transactions` (after `mandateId`, before `statementSha256`):
 
@@ -99,7 +99,7 @@ In `packages/db/src/schema.ts`, inside `transactions` (after `mandateId`, before
   accountIban: text("account_iban"),
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 Create `packages/db/drizzle/0022_transactions_account_iban.sql`:
 
@@ -125,12 +125,12 @@ Register it in `packages/db/drizzle/meta/_journal.json` by appending to `entries
   }
 ```
 
-- [ ] **Step 5: Apply it and run the test**
+- [x] **Step 5: Apply it and run the test**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/db migrate && env -u NODE_ENV pnpm --filter @verder/db test -- registry-schema`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/db/src/schema.ts packages/db/drizzle/0022_transactions_account_iban.sql packages/db/drizzle/meta/_journal.json packages/db/src/registry-schema.test.ts

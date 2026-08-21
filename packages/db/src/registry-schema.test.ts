@@ -92,6 +92,28 @@ describe("registry schema", () => {
     ).rejects.toThrow(/permission denied/);
   });
 
+  it("transactions carry the account the statement belongs to", async () => {
+    const [row] = await db.insert(schema.transactions).values({
+      source: "abn-camt053",
+      bookedAt: new Date("2026-07-25T00:00:00Z"),
+      amountCents: 241_304,
+      accountIban: "NL91ABNA0417164300",
+      statementSha256: `acct-${Date.now()}`,
+      rowIndex: 0,
+    }).returning();
+    expect(row.accountIban).toBe("NL91ABNA0417164300");
+
+    // Nullable: a PayPal export has no account IBAN and must still import.
+    const [unknown] = await db.insert(schema.transactions).values({
+      source: "paypal-csv",
+      bookedAt: new Date("2026-07-25T00:00:00Z"),
+      amountCents: -1_200,
+      statementSha256: `acct-null-${Date.now()}`,
+      rowIndex: 0,
+    }).returning();
+    expect(unknown.accountIban).toBeNull();
+  });
+
   it("CHECK rejects a decision with both or neither target set", async () => {
     const [item] = await db.insert(schema.financialItems).values({
       name: "KPN", category: "telecom", amountCents: 4500,

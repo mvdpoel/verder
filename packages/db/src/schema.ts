@@ -196,6 +196,11 @@ export const transactions = pgTable("transactions", {
   counterpartyIban: text("counterparty_iban"),
   description: text("description"),
   mandateId: text("mandate_id"),
+  // Which account the statement belongs to — NOT the counterparty. Under
+  // bewind the same person's money moves between a beheerrekening and a
+  // leefgeldrekening; charting them as one stream draws a collapse that
+  // never happened. NULL means the export did not reveal it (PayPal).
+  accountIban: text("account_iban"),
   statementSha256: text("statement_sha256").notNull(),
   rowIndex: integer("row_index").notNull(),
   parseError: boolean("parse_error").notNull().default(false),
