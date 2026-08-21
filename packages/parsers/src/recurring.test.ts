@@ -297,6 +297,29 @@ describe("detectRecurring — direction", () => {
     expect(line.chargeCount).toBe(3);
   });
 
+  it("finds a weekly credit line, but only in the credit direction", () => {
+    // VerderGroep pays leefgeld weekly. Weekly is deliberately credit-only:
+    // `registry-mine` writes a candidate's cadence straight into the
+    // `billing_cycle` enum, which has no `weekly` value, and this sub-project
+    // adds no migration. A weekly DEBIT therefore stays unrecognised, exactly
+    // as before this option existed.
+    const weekly = (i: number, day: string, cents: number) => ({
+      ...salary(i, day, cents),
+      counterpartyName: "VerderGroep leefgeld", counterpartyIban: "NL10VERD0001112223",
+    });
+    const credits = [
+      weekly(0, "2026-08-07T00:00:00Z", 25_000),
+      weekly(1, "2026-08-14T00:00:00Z", 25_000),
+      weekly(2, "2026-08-21T00:00:00Z", 25_000),
+    ];
+    const [line] = detectRecurring(credits, { direction: "credit" });
+    expect(line.cadence).toBe("weekly");
+    expect(line.typicalAmountCents).toBe(25_000);
+
+    const debits = credits.map((c) => ({ ...c, amountCents: -c.amountCents }));
+    expect(detectRecurring(debits)).toEqual([]);
+  });
+
   it("still ignores credits mixed into a debit-direction call", () => {
     const debits = [
       { ...salary(0, "2026-03-25T00:00:00Z", -4_999), counterpartyName: "Netflix" },

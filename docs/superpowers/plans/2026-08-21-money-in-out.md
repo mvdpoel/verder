@@ -394,6 +394,20 @@ git add packages/parsers/src/recurring.ts packages/parsers/src/index.ts packages
 git commit -m "feat(parsers): detect recurring credits, not only charges"
 ```
 
+- [x] **Step 7: Review correction — a weekly cadence (2026-08-21)**
+
+`cadenceOf` knew only monthly (25–35 d), quarterly (80–100 d) and yearly
+(350–380 d). VerderGroep pays leefgeld **weekly**, so a 7-day gap returned
+`null` and the leefgeldrekening had no income line at all — which quietly
+contradicts spec §Money in rule 3. A 5–9 day `weekly` band was added, **only in
+the credit direction**: `registry-mine` writes `c.cadence` into the
+`billing_cycle` Postgres enum (`monthly | quarterly | yearly | irregular`), and
+this sub-project promised no migration beyond 0022. A weekly *debit* therefore
+stays unrecognised, exactly as before, and `billingCycleOf` in `registry-mine.ts`
+maps an (unreachable) weekly to `irregular` so the widened type cannot turn into
+a runtime INSERT failure. Covered by *"finds a weekly credit line, but only in
+the credit direction"*, which asserts both halves.
+
 ---
 
 ### Task 5: Months, coverage and the costs side
@@ -836,6 +850,28 @@ git add packages/api/src/money-series.ts packages/api/src/money-series.test.ts
 git commit -m "feat(api): income lines that survive a change of employer"
 ```
 
+- [x] **Step 6: Review correction — evicting a one-off from inside a group (2026-08-21)**
+
+Step 1's own fixture (a vakantiegeld from the employer's **own** IBAN) did not
+pass: `detectRecurring` groups by mandate ▸ IBAN ▸ name, the 30/28-day gaps read
+as monthly, and 23.7% below the median sits inside the 40% similarity band — so
+the one-off was counted as fixed income and, because a group is named after its
+LAST row, relabelled three months of salary "TrueFullstaq BV vakantiegeld". Both
+violate the spec's scope table and §Money in rule 5.
+
+`evictOneOffCredits` now drops a credit further than
+`INCOME_OUTLIER_TOLERANCE_PCT` (**15**, whole percent so the comparison stays
+integer cents, and a guess-until-measured constant in the same discipline as
+`INCOME_CONTINUATION_TOLERANCE`) from its group's median, then re-detects on the
+survivors so the median, cadence and first/last dates are recomputed without it.
+Two guards keep it from eating real income: a group of two evicts nothing, and
+the survivors must still read as the same cadence. `modalName` takes the label
+from the most frequent counterparty name instead of the last row.
+
+Three tests cover it: the vakantiegeld fixture (now passing, `.fails` removed,
+plus a label assertion), *"keeps a line whose amounts genuinely drift"* (±6%
+pay changes evict nothing), and *"never evicts a row out of a pair"*.
+
 ---
 
 ### Task 7: The full series, projection and account split
@@ -981,13 +1017,22 @@ export function buildMoneySeries(input: {
     byAccount.set(key, [...(byAccount.get(key) ?? []), t]);
   }
 
-  // Contracted costs are a property of the registry, not of an account: they
-  // are projected onto whichever account is currently paying them.
+  // CORRECTED AFTER REVIEW — the original plan computed ONE projectedOut over
+  // all items and wrote it into every account's projected[], which double-counts
+  // the contracted total the moment a second account exists (and the second
+  // account is the whole reason this dimension exists). Contracted costs are
+  // attributed to the account that pays them — see `accountOfItems` in the
+  // shipped module — and an account that pays no contract projects 0.
   const liveItems = input.items.filter((i) => i.status !== "canceled");
-  const projectedOut = liveItems.reduce((sum, i) => sum + i.monthlyCents, 0);
-  const projectedOutAfterCancel = liveItems
-    .filter((i) => i.status !== "to-cancel")
-    .reduce((sum, i) => sum + i.monthlyCents, 0);
+  const itemAccount = accountOfItems(input.transactions, liveItems);
+  const projectedOutByAccount = new Map<string, { out: number; afterCancel: number }>();
+  for (const item of liveItems) {
+    const key = itemAccount.get(item.id) ?? "";
+    const bucket = projectedOutByAccount.get(key) ?? { out: 0, afterCancel: 0 };
+    bucket.out += item.monthlyCents;
+    if (item.status !== "to-cancel") bucket.afterCancel += item.monthlyCents;
+    projectedOutByAccount.set(key, bucket);
+  }
 
   const series: AccountSeries[] = [];
   for (const [accountKey, txs] of byAccount) {
@@ -1029,16 +1074,16 @@ export function buildMoneySeries(input: {
       // A line with nothing in the last complete month has stopped: a job that
       // ended must not keep paying on a chart.
       const active = lines.filter((l) => monthKey(l.lastAt) >= lastCompleteMonth);
-      const inCents = active.reduce((s, l) =>
-        s + (l.cadence === "monthly" ? l.typicalAmountCents
-          : l.cadence === "quarterly" ? Math.trunc(l.typicalAmountCents / 3)
-          : Math.trunc(l.typicalAmountCents / 12)), 0);
+      // CORRECTED AFTER REVIEW — `weekly` was added to the cadence switch too
+      // (52 payments over 12 months, truncated to integer cents).
+      const inCents = active.reduce((s, l) => s + monthlyFromCadence(l), 0);
+      const out = projectedOutByAccount.get(accountKey) ?? { out: 0, afterCancel: 0 };
       for (let n = 1; n <= horizon; n++) {
         projected.push({
           month: addMonths(lastCompleteMonth, n),
           inCents,
-          outCents: projectedOut,
-          outAfterCancelCents: projectedOutAfterCancel,
+          outCents: out.out,
+          outAfterCancelCents: out.afterCancel,
         });
       }
     }
@@ -1063,6 +1108,36 @@ Expected: PASS (11 tests).
 git add packages/api/src/money-series.ts packages/api/src/money-series.test.ts
 git commit -m "feat(api): the full monthly series, per account, with a projection"
 ```
+
+- [x] **Step 6: Review corrections (2026-08-21)**
+
+A review gate rejected Tasks 4–7 on three findings; all three are fixed and
+covered by tests that were watched failing first.
+
+1. **Projection was broadcast, not attributed** (above). Two new tests:
+   *"projects each account's own contracted costs, never the registry twice"*
+   asserts the two accounts' projections sum to the registry total exactly once,
+   and *"projects an item nobody has been seen paying onto the account that
+   pays"* pins the evidence-free fallback. Without the fallback an item with no
+   linked debit — a registry seeded from the mail before its first statement —
+   would project onto no account at all and silently understate the total.
+2. **Weekly cadence.** `cadenceOf` gained a 5–9 day band, **credit direction
+   only**: `registry-mine` writes a candidate's cadence straight into the
+   `billing_cycle` Postgres enum, which has no `weekly` value, and this
+   sub-project adds no migration beyond 0022. `billingCycleOf` in
+   `registry-mine.ts` degrades an (unreachable) weekly to `irregular` so the
+   type widening cannot become a runtime INSERT failure. The `.fails` on
+   *"detects a weekly leefgeld line"* is gone and the two-account fixture is
+   back to the plan's original weekly pair.
+3. **Vakantiegeld inside the salary group.** `evictOneOffCredits` drops a credit
+   more than `INCOME_OUTLIER_TOLERANCE_PCT` (15%) from its group's median, and
+   the line's label is now the group's *most frequent* counterparty name rather
+   than its last row's. The review's suggested AND — amount outlier **and** off
+   cadence — cannot work here and was not implemented: vakantiegeld is paid in
+   the salary run, 28 days after the previous salary, so it sits exactly ON
+   cadence, which is why detectRecurring swallowed it in the first place. Two
+   guards replace it: a group of two evicts nothing (no majority to be an
+   outlier against), and the survivors must still detect as the same cadence.
 
 ---
 

@@ -23,6 +23,18 @@ const llmRegistrySchema = z.object({
 
 type TxRow = typeof schema.transactions.$inferSelect;
 
+/**
+ * A candidate's cadence into the `billing_cycle` enum. `weekly` is unreachable
+ * here — `detectRecurring` only ever emits it in the credit direction and this
+ * miner asks for debits — but the enum has no `weekly` value, so it degrades to
+ * `irregular` rather than failing at INSERT if that ever changes.
+ */
+function billingCycleOf(
+  cadence: RecurringCandidate["cadence"]
+): (typeof schema.billingCycleEnum.enumValues)[number] {
+  return cadence === "weekly" ? "irregular" : cadence;
+}
+
 function basePayload(c: RecurringCandidate, sourceById: Map<string, TxRow["source"]>) {
   const sources = c.transactionIds.map((id) => sourceById.get(id));
   const viaPaypalCsv = sources.some((s) => s === "paypal-csv");
@@ -136,7 +148,7 @@ export async function mineRegistry(deps: {
             ? { ...base, creditorName: parsed.name, claimedCents: Math.abs(c.typicalAmountCents),
                 references: null }
             : { ...base, name: parsed.name, category: parsed.category,
-                amountCents: Math.abs(c.typicalAmountCents), billingCycle: c.cadence };
+                amountCents: Math.abs(c.typicalAmountCents), billingCycle: billingCycleOf(c.cadence) };
           const [s] = await deps.db.insert(schema.suggestions).values({
             kind, model, promptVersion: REGISTRY_PROMPT_VERSION, proposed }).returning();
           suggestionId = s.id;
@@ -147,7 +159,7 @@ export async function mineRegistry(deps: {
             kind: "registry-item", model, promptVersion: REGISTRY_PROMPT_VERSION,
             status: "needs-manual",
             proposed: { ...base, name: c.counterpartyName ?? c.key, category: "other",
-              amountCents: Math.abs(c.typicalAmountCents), billingCycle: c.cadence } }).returning();
+              amountCents: Math.abs(c.typicalAmountCents), billingCycle: billingCycleOf(c.cadence) } }).returning();
           suggestionId = s.id;
           failures.push({ key: c.key, message: `classify: ${String(err)}` });
         }

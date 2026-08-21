@@ -13,7 +13,7 @@ export interface RecurringCandidate {
   counterpartyName: string | null;
   counterpartyIban: string | null;
   mandateId: string | null;
-  cadence: "monthly" | "quarterly" | "yearly";
+  cadence: "weekly" | "monthly" | "quarterly" | "yearly";
   /** median of the group's amounts, integer cents — negative in the debit direction, positive in the credit direction */
   typicalAmountCents: number;
   chargeCount: number;
@@ -50,7 +50,18 @@ function median(values: number[]): number {
   return Math.trunc((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
-function cadenceOf(medianGapDays: number): RecurringCandidate["cadence"] | null {
+/**
+ * Weekly is recognised in the CREDIT direction only. VerderGroep pays leefgeld
+ * every week, so income needs it; charges do not, and `registry-mine` writes a
+ * candidate's cadence straight into the `billing_cycle` Postgres enum, which
+ * has no `weekly` value. Emitting weekly for a debit would mean a migration in
+ * a sub-project that promised none, and would fail at INSERT time rather than
+ * here. A weekly debit therefore stays unrecognised, exactly as before.
+ */
+function cadenceOf(
+  medianGapDays: number, wantCredits: boolean
+): RecurringCandidate["cadence"] | null {
+  if (wantCredits && medianGapDays >= 5 && medianGapDays <= 9) return "weekly";
   if (medianGapDays >= 25 && medianGapDays <= 35) return "monthly";
   if (medianGapDays >= 80 && medianGapDays <= 100) return "quarterly";
   if (medianGapDays >= 350 && medianGapDays <= 380) return "yearly";
@@ -112,7 +123,7 @@ export function detectRecurring(
     for (let i = 1; i < sorted.length; i++) {
       gaps.push((sorted[i].bookedAt.getTime() - sorted[i - 1].bookedAt.getTime()) / DAY_MS);
     }
-    const cadence = cadenceOf(median(gaps));
+    const cadence = cadenceOf(median(gaps), wantCredits);
     if (!cadence) continue;
 
     const amounts = sorted.map((r) => r.amountCents);

@@ -99,23 +99,12 @@ describe("incomeLines", () => {
     expect(lines[0].transactionIds).not.toContain("v");
   });
 
-  // KNOWN GAP — this is the plan's own fixture and its assertions, unchanged,
-  // marked `.fails` because the module does NOT yet do this. Vakantiegeld is
-  // paid by the employer from the SAME IBAN as the salary, and detectRecurring
-  // groups by mandate ▸ IBAN ▸ name, so "v" joins the salary group: its 30/28-day
-  // gaps read as monthly, and at 23.7% below the median it sits inside
-  // detectRecurring's 40% similarity band (571_040 <= 965_216). Two visible
-  // symptoms: the row is counted as fixed income instead of surfacing in
-  // `incidentalCents`, and the line is labelled "TrueFullstaq BV vakantiegeld"
-  // because the group's name is taken from its last row.
-  //
-  // The spec (§Money in, rule 1) asserts detectRecurring "already implements
-  // exactly the needed rule"; for this case it does not, and rules 1 and 5
-  // contradict each other. Closing it needs a derivation rule that is in
-  // neither the spec nor the plan, with a threshold nobody has measured against
-  // Martin's real ABN export — so it is raised rather than guessed at here.
-  // When it is fixed, THIS TEST WILL FAIL and the `.fails` must be removed.
-  it.fails("drops a vakantiegeld paid from the employer's own IBAN", () => {
+  // Vakantiegeld is paid by the employer from the SAME IBAN as the salary, and
+  // detectRecurring groups by mandate ▸ IBAN ▸ name, so "v" joins the salary
+  // group: its 30/28-day gaps read as monthly, and at 23.7% below the median it
+  // sits inside detectRecurring's 40% similarity band (571_040 <= 965_216).
+  // The eviction pass is what takes it back out again.
+  it("drops a vakantiegeld paid from the employer's own IBAN", () => {
     const rows = [
       credit("a", "2026-03-25T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
       credit("b", "2026-04-24T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
@@ -124,6 +113,33 @@ describe("incomeLines", () => {
     const lines = incomeLines(rows);
     expect(lines).toHaveLength(1);
     expect(lines[0].transactionIds).not.toContain("v");
+    // …and the line keeps the salary's name, not the one-off's. detectRecurring
+    // names a group after its LAST row, which would have read
+    // "TrueFullstaq BV vakantiegeld" on a chart of fixed income.
+    expect(lines[0].labels).toEqual(["TrueFullstaq BV"]);
+  });
+
+  it("keeps a line whose amounts genuinely drift, evicting nothing", () => {
+    // 6% either side of the median: a pay rise, not a one-off. Evicting here
+    // would understate the income bar and invent an incidenteel that is not one.
+    const rows = [
+      credit("a", "2026-03-25T00:00:00Z", 227_000, "TrueFullstaq BV", "NL02ABNA0123456789"),
+      credit("b", "2026-04-24T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
+      credit("c", "2026-05-25T00:00:00Z", 255_000, "TrueFullstaq BV", "NL02ABNA0123456789"),
+    ];
+    const lines = incomeLines(rows);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].transactionIds).toEqual(["a", "b", "c"]);
+  });
+
+  it("never evicts a row out of a pair — two rows are the whole evidence", () => {
+    // A group of two has no majority to be an outlier against: whichever row
+    // you call the one-off, the other one is equally far from the median.
+    const rows = [
+      credit("a", "2026-03-25T00:00:00Z", 241_304, "TrueFullstaq BV", "NL02ABNA0123456789"),
+      credit("v", "2026-04-24T00:00:00Z", 184_200, "TrueFullstaq BV", "NL02ABNA0123456789"),
+    ];
+    expect(incomeLines(rows)[0].transactionIds).toEqual(["a", "v"]);
   });
 });
 
@@ -156,10 +172,10 @@ describe("buildMoneySeries", () => {
            counterpartyIban: "NL02ABNA0123456789", accountIban: "NL91ABNA0417164300" }),
       tx({ id: "b", bookedAt: "2026-07-25T00:00:00Z", amountCents: 241_304,
            counterpartyIban: "NL02ABNA0123456789", accountIban: "NL91ABNA0417164300" }),
-      // Monthly, not the plan's weekly pair — see the `.fails` test below for why.
+      // VerderGroep pays leefgeld weekly.
       tx({ id: "c", bookedAt: "2026-08-07T00:00:00Z", amountCents: 25_000,
            counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
-      tx({ id: "d", bookedAt: "2026-09-07T00:00:00Z", amountCents: 25_000,
+      tx({ id: "d", bookedAt: "2026-08-14T00:00:00Z", amountCents: 25_000,
            counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
     ];
     const series = buildMoneySeries({ transactions: rows, items });
@@ -172,18 +188,7 @@ describe("buildMoneySeries", () => {
     expect(leefgeld.incomeLines[0].transactionIds).toEqual(["c", "d"]);
   });
 
-  // KNOWN GAP — the plan's own fixture for the test above, with its assertion,
-  // marked `.fails` because the module does NOT do this. VerderGroep pays
-  // leefgeld WEEKLY, and `cadenceOf` in @verder/parsers recognises only
-  // monthly (25–35 d), quarterly (80–100 d) and yearly (350–380 d): a 7-day gap
-  // returns null, so the group is discarded and the leefgeldrekening shows no
-  // income line at all. The spec (§Money in, rule 3) says leefgeld "needs no
-  // special case… detected like any other income line"; against the real
-  // cadence that is not true today. Adding a weekly cadence changes
-  // detectRecurring for the DEBIT direction too — every existing registry
-  // caller — so it is raised rather than slipped in here.
-  // When it is fixed, THIS TEST WILL FAIL and the `.fails` must be removed.
-  it.fails("detects a weekly leefgeld line", () => {
+  it("detects a weekly leefgeld line", () => {
     const rows = [
       tx({ id: "c", bookedAt: "2026-08-07T00:00:00Z", amountCents: 25_000,
            counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
@@ -191,7 +196,73 @@ describe("buildMoneySeries", () => {
            counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
     ];
     const [leefgeld] = buildMoneySeries({ transactions: rows, items });
-    expect(leefgeld.incomeLines).toHaveLength(1); // the leefgeld line, weekly-ish
+    expect(leefgeld.incomeLines).toHaveLength(1);
+    expect(leefgeld.incomeLines[0].cadence).toBe("weekly");
+  });
+
+  it("projects a weekly line as a monthly figure, in integer cents", () => {
+    // €250 a week is not €250 a month: 52 payments across 12 months.
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-08-01T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+      tx({ id: "b", bookedAt: "2026-08-08T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+      tx({ id: "c", bookedAt: "2026-08-15T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+      tx({ id: "d", bookedAt: "2026-08-31T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+    ];
+    const [leefgeld] = buildMoneySeries({ transactions: rows, items: [], horizonMonths: 1 });
+    expect(leefgeld.lastCompleteMonth).toBe("2026-08");
+    expect(leefgeld.projected[0].inCents).toBe(108_333); // trunc(25_000 * 52 / 12)
+  });
+
+  it("projects each account's own contracted costs, never the registry twice", () => {
+    // The whole reason the account dimension exists: after the handover the
+    // beheerrekening pays the contracts and the leefgeldrekening pays groceries.
+    // Broadcasting the registry total to both would show a bewindvoerder a cost
+    // projection of roughly twice the contracted total.
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -21_000,
+           financialItemId: "i1", accountIban: "NL91ABNA0417164300" }),
+      tx({ id: "b", bookedAt: "2026-06-30T00:00:00Z", amountCents: -9_600,
+           financialItemId: "i2", accountIban: "NL91ABNA0417164300" }),
+      tx({ id: "c", bookedAt: "2026-06-01T00:00:00Z", amountCents: -4_000,
+           accountIban: "NL44RABO0555444333" }),
+      tx({ id: "d", bookedAt: "2026-06-30T00:00:00Z", amountCents: -3_500,
+           accountIban: "NL44RABO0555444333" }),
+    ];
+    const series = buildMoneySeries({ transactions: rows, items, horizonMonths: 1 });
+    const beheer = series.find((s) => s.accountIban === "NL91ABNA0417164300")!;
+    const leefgeld = series.find((s) => s.accountIban === "NL44RABO0555444333")!;
+    expect(beheer.projected[0].outCents).toBe(30_600);
+    expect(beheer.projected[0].outAfterCancelCents).toBe(21_000);
+    // Groceries are real debits but no contract: nothing to project.
+    expect(leefgeld.projected[0].outCents).toBe(0);
+    expect(leefgeld.projected[0].outAfterCancelCents).toBe(0);
+    // The registry total, counted once across the accounts.
+    expect(beheer.projected[0].outCents + leefgeld.projected[0].outCents).toBe(30_600);
+  });
+
+  it("projects an item nobody has been seen paying onto the account that pays", () => {
+    // A registry seeded from the mail before a single statement links to it.
+    // Dropping it would understate the projection; the account with the debits
+    // is the only evidence there is about who will pay it.
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -12_000,
+           accountIban: "NL91ABNA0417164300" }),
+      tx({ id: "b", bookedAt: "2026-06-30T00:00:00Z", amountCents: -8_000,
+           accountIban: "NL91ABNA0417164300" }),
+      tx({ id: "c", bookedAt: "2026-06-01T00:00:00Z", amountCents: -1_000,
+           accountIban: "NL44RABO0555444333" }),
+      tx({ id: "d", bookedAt: "2026-06-30T00:00:00Z", amountCents: -900,
+           accountIban: "NL44RABO0555444333" }),
+    ];
+    const series = buildMoneySeries({ transactions: rows, items, horizonMonths: 1 });
+    const beheer = series.find((s) => s.accountIban === "NL91ABNA0417164300")!;
+    const leefgeld = series.find((s) => s.accountIban === "NL44RABO0555444333")!;
+    expect(beheer.projected[0].outCents).toBe(30_600);
+    expect(leefgeld.projected[0].outCents).toBe(0);
   });
 
   it("projects costs without canceled items and shows the to-cancel saving", () => {

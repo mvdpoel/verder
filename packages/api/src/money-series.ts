@@ -166,8 +166,80 @@ export function splitInternalTransfers(
 
 /** Cadence in days, for deciding whether one line picks up where another stopped. */
 const CADENCE_DAYS: Record<RecurringCandidate["cadence"], number> = {
-  monthly: 30, quarterly: 91, yearly: 365,
+  weekly: 7, monthly: 30, quarterly: 91, yearly: 365,
 };
+
+/**
+ * How far a credit may sit from its group's median before it stops looking like
+ * the same line and starts looking like a one-off inside it. 15% is a GUESS,
+ * the same discipline as INCOME_CONTINUATION_TOLERANCE: wide enough for the
+ * month-to-month drift of a real salary, narrow enough to catch a vakantiegeld
+ * paid from the employer's own IBAN. Re-measure against Martin's real ABN
+ * export. It is held as whole percent so the comparison stays integer cents.
+ *
+ * Note what this rule deliberately does NOT test: whether the row sits off the
+ * group's cadence. Vakantiegeld is paid in the salary run — 28 days after the
+ * previous salary — so it lands exactly ON cadence, which is precisely why
+ * detectRecurring swallows it. Requiring both would evict nothing.
+ */
+export const INCOME_OUTLIER_TOLERANCE_PCT = 15;
+
+const toDetectInput = (t: MoneyTx) => ({
+  id: t.id, rowIndex: 0, bookedAt: t.bookedAt, amountCents: t.amountCents,
+  counterpartyName: t.counterpartyName, counterpartyIban: t.counterpartyIban,
+  description: null, mandateId: t.mandateId, accountIban: t.accountIban,
+});
+
+/**
+ * Credits that ride inside a recurring group but are not part of it: a
+ * vakantiegeld or a 13e maand, paid from the same IBAN, on the same cadence,
+ * for a different amount. They are evicted here so they fall through to
+ * `incidentalCents` — disclosed, never counted as fixed income.
+ *
+ * Two guards keep this from eating real income: a group of two has no majority
+ * to be an outlier against, and the survivors must still read as the same
+ * recurring line (same cadence, still ≥2 rows). If evicting would destroy the
+ * line, nothing is evicted and the group stands as detectRecurring found it.
+ */
+function evictOneOffCredits(credits: MoneyTx[], found: RecurringCandidate[]): Set<string> {
+  const byId = new Map(credits.map((t) => [t.id, t]));
+  const evicted = new Set<string>();
+  for (const c of found) {
+    if (c.transactionIds.length < 3) continue;
+    const median = c.typicalAmountCents;
+    const outliers = c.transactionIds.filter((id) => {
+      const amount = byId.get(id)?.amountCents ?? median;
+      return Math.abs(amount - median) * 100 > median * INCOME_OUTLIER_TOLERANCE_PCT;
+    });
+    if (outliers.length === 0) continue;
+    if (c.transactionIds.length - outliers.length < 2) continue;
+    const survivors = c.transactionIds
+      .filter((id) => !outliers.includes(id))
+      .map((id) => byId.get(id))
+      .filter((t): t is MoneyTx => t !== undefined);
+    const again = detectRecurring(survivors.map(toDetectInput), { direction: "credit" });
+    if (again.length !== 1 || again[0].cadence !== c.cadence) continue;
+    for (const id of outliers) evicted.add(id);
+  }
+  return evicted;
+}
+
+/**
+ * The name a line is shown under: the one most of its rows carry, not the one
+ * its newest row happens to carry. detectRecurring names a group after its LAST
+ * row, so a single differently-worded credit ("TrueFullstaq BV vakantiegeld")
+ * would relabel three months of salary. Ties go to the earliest row's name.
+ */
+function modalName(rows: MoneyTx[], fallback: string): string {
+  const counts = new Map<string, number>();
+  for (const r of [...rows].sort((a, b) => a.bookedAt.getTime() - b.bookedAt.getTime())) {
+    if (!r.counterpartyName) continue;
+    counts.set(r.counterpartyName, (counts.get(r.counterpartyName) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [name, n] of counts) if (best === null || n > (counts.get(best) ?? 0)) best = name;
+  return best ?? fallback;
+}
 
 /**
  * Recurring credits, with successor lines folded into their predecessor.
@@ -176,19 +248,25 @@ const CADENCE_DAYS: Record<RecurringCandidate["cadence"], number> = {
  */
 export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
   const { internal } = splitInternalTransfers(txs);
-  const credits = txs.filter((t) => !t.parseError && t.amountCents > 0 && !internal.has(t.id));
-  const found = detectRecurring(
-    credits.map((t) => ({
-      id: t.id, rowIndex: 0, bookedAt: t.bookedAt, amountCents: t.amountCents,
-      counterpartyName: t.counterpartyName, counterpartyIban: t.counterpartyIban,
-      description: null, mandateId: t.mandateId, accountIban: t.accountIban,
-    })),
-    { direction: "credit" }
-  );
+  const all = txs.filter((t) => !t.parseError && t.amountCents > 0 && !internal.has(t.id));
+  const first = detectRecurring(all.map(toDetectInput), { direction: "credit" });
+  const evicted = evictOneOffCredits(all, first);
+  // Re-detecting on the survivors is what recomputes the median, the cadence
+  // and the line's first/last date without the one-off in them.
+  const credits = evicted.size === 0 ? all : all.filter((t) => !evicted.has(t.id));
+  const found = evicted.size === 0
+    ? first
+    : detectRecurring(credits.map(toDetectInput), { direction: "credit" });
 
+  const byId = new Map(credits.map((t) => [t.id, t]));
   const lines: IncomeLine[] = found
     .map((c) => ({
-      key: c.key, labels: [c.counterpartyName ?? c.key], cadence: c.cadence,
+      key: c.key,
+      labels: [modalName(
+        c.transactionIds.map((id) => byId.get(id)).filter((t): t is MoneyTx => t !== undefined),
+        c.counterpartyName ?? c.key
+      )],
+      cadence: c.cadence,
       typicalAmountCents: c.typicalAmountCents,
       firstAt: c.firstAt, lastAt: c.lastAt, transactionIds: [...c.transactionIds],
     }))
@@ -246,6 +324,63 @@ function monthRange(from: string, to: string): string[] {
   return out;
 }
 
+/** The map key an account is filed under; "" is the unknown account. */
+const accountKeyOf = (t: MoneyTx) => t.accountIban ?? "";
+
+/**
+ * Which account pays each contracted item, decided from evidence: the account
+ * of the most recent debit carrying that item's id.
+ *
+ * The registry total must be attributed, not broadcast. Adding every item to
+ * every account's projection double-counts the whole contracted total the
+ * moment a second account exists — and a second account is the entire reason
+ * this dimension exists, because under bewind the beheerrekening pays the
+ * contracts while the leefgeldrekening pays groceries.
+ *
+ * An item nobody has been seen paying has no evidence behind it. Dropping it
+ * would understate the projection (a registry seeded from the mail before its
+ * first statement arrives would project nothing at all), so it falls back to
+ * the account with the largest debit volume — the one demonstrably paying the
+ * bills. That fallback is a GUESS, and it corrects itself the moment one real
+ * debit links the item to an account.
+ */
+function accountOfItems(txs: MoneyTx[], liveItems: MoneyItem[]): Map<string, string> {
+  const latest = new Map<string, { at: number; account: string }>();
+  const debitVolume = new Map<string, number>();
+  const rowVolume = new Map<string, number>();
+  for (const t of txs) {
+    if (t.parseError) continue;
+    const account = accountKeyOf(t);
+    rowVolume.set(account, (rowVolume.get(account) ?? 0) + Math.abs(t.amountCents));
+    if (t.amountCents >= 0) continue;
+    debitVolume.set(account, (debitVolume.get(account) ?? 0) + Math.abs(t.amountCents));
+    if (!t.financialItemId) continue;
+    const at = t.bookedAt.getTime();
+    const prev = latest.get(t.financialItemId);
+    // Ties break on the account key so the answer never depends on row order.
+    if (!prev || at > prev.at || (at === prev.at && account < prev.account)) {
+      latest.set(t.financialItemId, { at, account });
+    }
+  }
+  const [fallback] = [...rowVolume.keys()].sort((a, b) =>
+    (debitVolume.get(b) ?? 0) - (debitVolume.get(a) ?? 0) ||
+    (rowVolume.get(b) ?? 0) - (rowVolume.get(a) ?? 0) ||
+    a.localeCompare(b));
+  return new Map(liveItems.map((i) => [i.id, latest.get(i.id)?.account ?? fallback ?? ""]));
+}
+
+/** A line's cadence amount expressed per month, in integer cents. */
+function monthlyFromCadence(line: IncomeLine): number {
+  switch (line.cadence) {
+    // 52 payments spread over 12 months — not 4, which would understate a
+    // weekly leefgeld by roughly a month a year.
+    case "weekly": return Math.trunc((line.typicalAmountCents * 52) / 12);
+    case "monthly": return line.typicalAmountCents;
+    case "quarterly": return Math.trunc(line.typicalAmountCents / 3);
+    case "yearly": return Math.trunc(line.typicalAmountCents / 12);
+  }
+}
+
 /**
  * One series per account. Accounts are never merged: under bewind the same
  * person's money moves between a beheerrekening and a leefgeldrekening, and a
@@ -258,17 +393,22 @@ export function buildMoneySeries(input: {
   const horizon = input.horizonMonths ?? DEFAULT_HORIZON_MONTHS;
   const byAccount = new Map<string, MoneyTx[]>();
   for (const t of input.transactions) {
-    const key = t.accountIban ?? "";
+    const key = accountKeyOf(t);
     byAccount.set(key, [...(byAccount.get(key) ?? []), t]);
   }
 
-  // Contracted costs are a property of the registry, not of an account: they
-  // are projected onto whichever account is currently paying them.
+  // Contracted costs are projected onto the account that pays them, once. An
+  // account that pays no contract projects zero costs, not the registry total.
   const liveItems = input.items.filter((i) => i.status !== "canceled");
-  const projectedOut = liveItems.reduce((sum, i) => sum + i.monthlyCents, 0);
-  const projectedOutAfterCancel = liveItems
-    .filter((i) => i.status !== "to-cancel")
-    .reduce((sum, i) => sum + i.monthlyCents, 0);
+  const itemAccount = accountOfItems(input.transactions, liveItems);
+  const projectedOutByAccount = new Map<string, { out: number; afterCancel: number }>();
+  for (const item of liveItems) {
+    const key = itemAccount.get(item.id) ?? "";
+    const bucket = projectedOutByAccount.get(key) ?? { out: 0, afterCancel: 0 };
+    bucket.out += item.monthlyCents;
+    if (item.status !== "to-cancel") bucket.afterCancel += item.monthlyCents;
+    projectedOutByAccount.set(key, bucket);
+  }
 
   const series: AccountSeries[] = [];
   for (const [accountKey, txs] of byAccount) {
@@ -310,16 +450,14 @@ export function buildMoneySeries(input: {
       // A line with nothing in the last complete month has stopped: a job that
       // ended must not keep paying on a chart.
       const active = lines.filter((l) => monthKey(l.lastAt) >= lastCompleteMonth);
-      const inCents = active.reduce((s, l) =>
-        s + (l.cadence === "monthly" ? l.typicalAmountCents
-          : l.cadence === "quarterly" ? Math.trunc(l.typicalAmountCents / 3)
-          : Math.trunc(l.typicalAmountCents / 12)), 0);
+      const inCents = active.reduce((s, l) => s + monthlyFromCadence(l), 0);
+      const out = projectedOutByAccount.get(accountKey) ?? { out: 0, afterCancel: 0 };
       for (let n = 1; n <= horizon; n++) {
         projected.push({
           month: addMonths(lastCompleteMonth, n),
           inCents,
-          outCents: projectedOut,
-          outAfterCancelCents: projectedOutAfterCancel,
+          outCents: out.out,
+          outAfterCancelCents: out.afterCancel,
         });
       }
     }
