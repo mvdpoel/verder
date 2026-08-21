@@ -1351,11 +1351,11 @@ git commit -m "feat(api): money router — series and month detail, derived on r
 - Consumes: `money.series` and `money.month` (Task 8) through `serverCaller()`.
 - Produces: a page at `/money`, and `MoneyChart` — a client component taking `{ series, focusCategory }`.
 
-- [ ] **Step 1: Load the dataviz skill**
+- [x] **Step 1: Load the dataviz skill**
 
 Before writing any colour, invoke the `dataviz` skill and take the categorical palette from it. Categories are `energy`, `insurance`, `telecom`, `streaming`, `software`, `housing`, `other`, `overig` — eight bands that must stay distinguishable in both light and dark themes.
 
-- [ ] **Step 2: Write the chart component**
+- [x] **Step 2: Write the chart component**
 
 Create `apps/web/src/components/money-chart.tsx` as a `"use client"` component rendering inline SVG — no chart library, matching the repo's zero-runtime-dependency habit on the web side. Requirements, each of which is visible in the markup:
 
@@ -1365,7 +1365,7 @@ Create `apps/web/src/components/money-chart.tsx` as a `"use client"` component r
 - a second dashed outline in the projection for `outAfterCancelCents`, labelled `na opzeggen`;
 - the legend renders each category as a `<Link href={`/money?cat=${category}`}>` so focus is a URL, not client state; the active category renders as a link back to `/money`.
 
-- [ ] **Step 3: Write the page**
+- [x] **Step 3: Write the page**
 
 Create `apps/web/src/app/(app)/money/page.tsx` as a server component following `timeline/page.tsx`:
 
@@ -1407,14 +1407,14 @@ The **disclosures block** sits under the chart and lists, for the visible months
 
 Add `/money` to the nav, labelled **Geld**, next to Registry.
 
-- [ ] **Step 4: Verify it renders against the dev database**
+- [x] **Step 4: Verify it renders against the dev database**
 
 Run: `env -u NODE_ENV pnpm --filter web build`
 Expected: build succeeds.
 
 Then run the dev server, log in as martin@vanderpoel.pro / devpass, and confirm `/money` shows the empty state on a clean dev DB (the empty state is the state production is in, so it is the one that must be right).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/app/\(app\)/money apps/web/src/components/money-chart.tsx apps/web/src/components
