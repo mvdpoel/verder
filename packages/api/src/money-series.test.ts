@@ -278,6 +278,27 @@ describe("buildMoneySeries", () => {
     expect(series.projected[0].outAfterCancelCents).toBe(21_000);
   });
 
+  it("projects from the last COMPLETE month, so the projection overlaps a partial one", () => {
+    // The normal shape of real data: the newest statement ends mid-month, so
+    // July is real but partial and June is the last complete month — which
+    // puts the first projected month ON TOP of a month that already has bank
+    // rows. That is correct here (a partial month is not a base to project
+    // from), and it is exactly why the chart must not draw both: see
+    // apps/web/src/lib/money-columns.ts.
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "b", bookedAt: "2026-06-30T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "c", bookedAt: "2026-07-01T00:00:00Z", amountCents: -1_000, statementSha256: "stmt-b" }),
+      tx({ id: "d", bookedAt: "2026-07-14T00:00:00Z", amountCents: -1_000, statementSha256: "stmt-b" }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items: [], horizonMonths: 3 });
+    expect(series.months.map((m) => `${m.month}:${m.coverage}`)).toEqual([
+      "2026-06:complete", "2026-07:partial",
+    ]);
+    expect(series.lastCompleteMonth).toBe("2026-06");
+    expect(series.projected.map((p) => p.month)).toEqual(["2026-07", "2026-08", "2026-09"]);
+  });
+
   it("reports a month with no rows as none, not zero", () => {
     const rows = [
       tx({ id: "a", bookedAt: "2026-05-01T00:00:00Z", amountCents: -1_000 }),

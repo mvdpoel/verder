@@ -7,6 +7,7 @@ import {
   AFTER_CANCEL_INK, BASELINE_INK, CATEGORY_COLOR, CATEGORY_LABEL, CATEGORY_ORDER,
   GRID_INK, INCOME_INK, MUTED_INK, euro, euroShort, monthLabel,
 } from "./money-format";
+import { moneyColumns } from "@/lib/money-columns";
 
 /**
  * The /money chart. Inline SVG, no chart library — the web app has no runtime
@@ -52,43 +53,18 @@ function niceCeil(cents: number): number {
   return Math.ceil(10 * pow);
 }
 
-type Column =
-  | {
-      kind: "actual";
-      account: string | null;
-      month: string;
-      coverage: "complete" | "partial" | "none";
-      inCents: number;
-      outByCategory: { category: string; cents: number }[];
-      outCents: number;
-    }
-  | {
-      kind: "projected";
-      account: string | null;
-      month: string;
-      inCents: number;
-      outCents: number;
-      outAfterCancelCents: number;
-    };
-
-function toColumns(series: AccountSeries[]): Column[] {
-  const cols: Column[] = [];
-  for (const s of series) {
-    for (const m of s.months) {
-      cols.push({
-        kind: "actual", account: s.accountIban, month: m.month, coverage: m.coverage,
-        inCents: m.inCents, outByCategory: m.outByCategory, outCents: m.outCents,
-      });
-    }
-    for (const p of s.projected) {
-      cols.push({
-        kind: "projected", account: s.accountIban, month: p.month,
-        inCents: p.inCents, outCents: p.outCents, outAfterCancelCents: p.outAfterCancelCents,
-      });
-    }
-  }
-  return cols;
-}
+/**
+ * Which columns to draw is a rule, not a rendering detail, so it lives in
+ * `@/lib/money-columns` where it is unit-tested without React — most of all
+ * the part that keeps a partial newest month from being drawn twice.
+ *
+ * The key is kind-qualified as well as account- and month-qualified. Month and
+ * account alone were the key, and an actual and a projected column for the
+ * same month collided: a React warning, an unreliable reconciliation, and one
+ * `selected` highlight lighting up two columns.
+ */
+const columnKey = (col: { kind: string; account: string | null; month: string }) =>
+  `${col.kind}-${col.account}-${col.month}`;
 
 export function MoneyChart({
   series,
@@ -116,7 +92,7 @@ export function MoneyChart({
   // <pattern id="money-hatch"> on the same page silently wins for both charts.
   const hatchId = compact ? "money-hatch-compact" : "money-hatch";
 
-  const columns = toColumns(series);
+  const columns = moneyColumns(series);
   if (columns.length === 0) return null;
 
   const accountName = (iban: string | null) =>
@@ -254,15 +230,18 @@ export function MoneyChart({
 
             {columns.map((col, i) => {
               const left = x(i);
+              // Only a real month can be selected: the drill panel below the
+              // chart shows bank rows, and a projection has none.
               const isSelected =
                 selected != null &&
+                col.kind === "actual" &&
                 selected.month === col.month &&
                 (selected.account ?? null) === (col.account ?? null);
 
               if (col.kind === "actual" && col.coverage === "none") {
                 // A gap, not a zero. There is nothing to draw here on purpose.
                 return (
-                  <g key={`${col.account}-${col.month}`}>
+                  <g key={columnKey(col)}>
                     <line
                       x1={left + COL_W / 2}
                       x2={left + COL_W / 2}
@@ -434,33 +413,39 @@ export function MoneyChart({
                 }
               }
 
-              return <g key={`${col.account}-${col.month}`}>{nodes}</g>;
+              return <g key={columnKey(col)}>{nodes}</g>;
             })}
           </svg>
 
           {/* Month labels double as the drill targets: clicking a month opens
               the panel below the chart. HTML links, so this is real navigation
               with real keyboard focus rather than an SVG click handler.
-              Compact has no drill, so there the same labels are plain text. */}
+              Compact has no drill, so there the same labels are plain text —
+              and neither has a projected month: the panel lists bank rows, and
+              for a month that has not happened yet it would answer "geen
+              uitgaven in deze maand", which is a statement about the future
+              dressed up as a fact about the ledger. */}
           <div className="flex" style={{ paddingLeft: AXIS_W }}>
             {columns.map((col, i) => {
               const isSelected =
                 selected != null &&
+                col.kind === "actual" &&
                 selected.month === col.month &&
                 (selected.account ?? null) === (col.account ?? null);
+              const drillable = !compact && col.kind === "actual";
               const href =
                 `/money?month=${col.month}` +
                 (col.account ? `&account=${encodeURIComponent(col.account)}` : "") +
                 (focusCategory ? `&cat=${encodeURIComponent(focusCategory)}` : "");
               const className =
                 `block truncate px-1 py-1 text-center text-[10px] ${
-                  compact ? "" : "hover:bg-slate-100"
+                  drillable ? "hover:bg-slate-100" : ""
                 } ${boundaries.includes(i) ? "border-l border-slate-300" : ""} ${
                   isSelected ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-500"
                 } ${col.kind === "projected" ? "italic" : ""}`;
-              return compact ? (
+              return !drillable ? (
                 <span
-                  key={`${col.account}-${col.month}`}
+                  key={columnKey(col)}
                   style={{ width: COL_W }}
                   className={className}
                 >
@@ -468,7 +453,7 @@ export function MoneyChart({
                 </span>
               ) : (
                 <Link
-                  key={`${col.account}-${col.month}`}
+                  key={columnKey(col)}
                   href={href}
                   style={{ width: COL_W }}
                   className={className}
