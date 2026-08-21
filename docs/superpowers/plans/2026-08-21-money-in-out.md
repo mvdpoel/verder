@@ -1151,7 +1151,7 @@ covered by tests that were watched failing first.
 - Consumes: `buildMoneySeries` (Task 7), `monthlyCents` from `./registry`, `effectiveStatus` from `../registry-decide`, `schema.transactions.accountIban` (Task 1).
 - Produces: `money.series()` → `{ series: AccountSeries[]; accountLabels: Record<string, string> }`, and `money.month({ accountIban, month })` → the drill payload.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `packages/api/src/routers/money.test.ts`, following the `timeline.test.ts` shape:
 
@@ -1218,12 +1218,12 @@ describe("money router", () => {
 
 > If the local `documents` / `document_status_changes` insert shapes differ from the above, copy them verbatim from `packages/api/src/routers/documents.test.ts` — do not invent columns.
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money`
 Expected: FAIL — `money` is not a property of the router.
 
-- [ ] **Step 3: Write the router**
+- [x] **Step 3: Write the router**
 
 Create `packages/api/src/routers/money.ts`:
 
@@ -1327,12 +1327,12 @@ import { moneyRouter } from "./routers/money";
   money: moneyRouter,
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/routers/money.ts packages/api/src/routers/money.test.ts packages/api/src/root.ts
