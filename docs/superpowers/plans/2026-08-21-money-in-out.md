@@ -643,7 +643,7 @@ export function splitInternalTransfers(txs: MoneyTx[]): { internal: Set<string>;
 export function incomeLines(txs: MoneyTx[]): IncomeLine[];
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/api/src/money-series.test.ts`:
 
@@ -709,12 +709,12 @@ describe("splitInternalTransfers", () => {
 });
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: FAIL — `incomeLines` and `splitInternalTransfers` are not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `packages/api/src/money-series.ts`:
 
@@ -824,12 +824,12 @@ export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/money-series.ts packages/api/src/money-series.test.ts

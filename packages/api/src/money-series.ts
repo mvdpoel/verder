@@ -7,6 +7,8 @@
  * reported as positive magnitudes on both sides of the chart.
  */
 
+import { detectRecurring, type RecurringCandidate } from "@verder/parsers";
+
 export interface MoneyTx {
   id: string; accountIban: string | null; bookedAt: Date; amountCents: number;
   counterpartyName: string | null; counterpartyIban: string | null;
@@ -113,4 +115,106 @@ export function outSeries(
           : a.category.localeCompare(b.category)),
     ])
   );
+}
+
+/**
+ * How far a new counterparty's amount may sit from the old one and still count
+ * as the same income continuing. 0.25 is a GUESS: it is wide enough for the
+ * pay change Martin actually had in June 2026 and narrow enough that a toeslag
+ * cannot be swallowed by a salary. Re-measure against the real ABN export
+ * before trusting it — a wrong value fails visibly (one line splits in two, or
+ * two lines merge into one), never silently.
+ */
+export const INCOME_CONTINUATION_TOLERANCE = 0.25;
+
+const DAY_MS = 86_400_000;
+/** How far apart a matched pair may sit before it stops looking like one move. */
+const INTERNAL_WINDOW_DAYS = 5;
+/** How far apart the two legs' amounts may sit: 1%, in integer math. */
+const INTERNAL_AMOUNT_TOLERANCE = 0.01;
+
+export interface IncomeLine {
+  key: string; labels: string[];
+  cadence: RecurringCandidate["cadence"];
+  typicalAmountCents: number; firstAt: Date; lastAt: Date; transactionIds: string[];
+}
+
+/**
+ * Money that left and came straight back (or the reverse) is not income. Both
+ * legs must name the same counterparty IBAN, sit within five days, and match
+ * in size to within 1%. Only the CREDIT leg is returned: the debit leg is a
+ * real payment out of this account and stays in the costs bar.
+ */
+export function splitInternalTransfers(
+  txs: MoneyTx[]
+): { internal: Set<string>; internalCents: number } {
+  const debits = txs.filter((t) => !t.parseError && t.amountCents < 0 && t.counterpartyIban);
+  const internal = new Set<string>();
+  let internalCents = 0;
+  for (const credit of txs) {
+    if (credit.parseError || credit.amountCents <= 0 || !credit.counterpartyIban) continue;
+    const match = debits.find((d) =>
+      d.counterpartyIban === credit.counterpartyIban &&
+      Math.abs(d.bookedAt.getTime() - credit.bookedAt.getTime()) <= INTERNAL_WINDOW_DAYS * DAY_MS &&
+      Math.abs(Math.abs(d.amountCents) - credit.amountCents) * 100 <=
+        credit.amountCents * (INTERNAL_AMOUNT_TOLERANCE * 100)
+    );
+    if (match) { internal.add(credit.id); internalCents += credit.amountCents; }
+  }
+  return { internal, internalCents };
+}
+
+/** Cadence in days, for deciding whether one line picks up where another stopped. */
+const CADENCE_DAYS: Record<RecurringCandidate["cadence"], number> = {
+  monthly: 30, quarterly: 91, yearly: 365,
+};
+
+/**
+ * Recurring credits, with successor lines folded into their predecessor.
+ * A job change replaces the counterparty entirely; without this, the months
+ * either side of the switch show no income at all.
+ */
+export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
+  const { internal } = splitInternalTransfers(txs);
+  const credits = txs.filter((t) => !t.parseError && t.amountCents > 0 && !internal.has(t.id));
+  const found = detectRecurring(
+    credits.map((t) => ({
+      id: t.id, rowIndex: 0, bookedAt: t.bookedAt, amountCents: t.amountCents,
+      counterpartyName: t.counterpartyName, counterpartyIban: t.counterpartyIban,
+      description: null, mandateId: t.mandateId, accountIban: t.accountIban,
+    })),
+    { direction: "credit" }
+  );
+
+  const lines: IncomeLine[] = found
+    .map((c) => ({
+      key: c.key, labels: [c.counterpartyName ?? c.key], cadence: c.cadence,
+      typicalAmountCents: c.typicalAmountCents,
+      firstAt: c.firstAt, lastAt: c.lastAt, transactionIds: [...c.transactionIds],
+    }))
+    .sort((a, b) => a.firstAt.getTime() - b.firstAt.getTime());
+
+  // Fold successors into predecessors, oldest first, so a chain of two job
+  // changes collapses into one line rather than two.
+  for (let i = 0; i < lines.length; i++) {
+    const a = lines[i];
+    if (!a) continue;
+    for (let j = i + 1; j < lines.length; j++) {
+      const b = lines[j];
+      if (!b) continue;
+      const gapDays = (b.firstAt.getTime() - a.lastAt.getTime()) / DAY_MS;
+      const withinOneCadence = gapDays > 0 && gapDays <= CADENCE_DAYS[a.cadence] * 1.5;
+      const sizeDelta = Math.abs(b.typicalAmountCents - a.typicalAmountCents);
+      const similar = sizeDelta <= a.typicalAmountCents * INCOME_CONTINUATION_TOLERANCE;
+      if (!withinOneCadence || !similar || a.lastAt >= b.firstAt) continue;
+      a.labels = [...a.labels, ...b.labels];
+      a.transactionIds = [...a.transactionIds, ...b.transactionIds];
+      a.lastAt = b.lastAt;
+      // The running line's amount is what will be projected forward.
+      a.typicalAmountCents = b.typicalAmountCents;
+      a.cadence = b.cadence;
+      lines[j] = undefined as unknown as IncomeLine;
+    }
+  }
+  return lines.filter(Boolean);
 }
