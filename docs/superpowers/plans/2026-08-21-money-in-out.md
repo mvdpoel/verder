@@ -427,7 +427,7 @@ export function coverageForMonths(txs: MoneyTx[], months: string[]): Map<string,
 export function outSeries(txs: MoneyTx[], items: MoneyItem[]): Map<string, MonthSeries["outByCategory"]>;
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `packages/api/src/money-series.test.ts`:
 
@@ -481,12 +481,12 @@ describe("outSeries", () => {
 });
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: FAIL — module `./money-series` not found.
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Create `packages/api/src/money-series.ts`:
 
@@ -609,12 +609,12 @@ export function outSeries(
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/money-series.ts packages/api/src/money-series.test.ts
