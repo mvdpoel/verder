@@ -63,5 +63,13 @@ export function abnRowToParsed(cols: string[], rowIndex: number): ParsedRow {
   }
   const amountCents = decimalToCents(cols[6]);
   const description = cols.slice(7).join("\t").trim() || null;
-  return { rowIndex, bookedAt, amountCents, description, ...extract(description ?? "") };
+  return {
+    rowIndex,
+    bookedAt,
+    amountCents,
+    description,
+    // cols[0] is the account this export was taken from (see the column map above).
+    accountIban: cols[0]?.trim() || null,
+    ...extract(description ?? ""),
+  };
 }

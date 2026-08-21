@@ -71,6 +71,7 @@ export async function mineRegistry(deps: {
       id: t.id, rowIndex: t.rowIndex, bookedAt: t.bookedAt, amountCents: t.amountCents,
       counterpartyName: t.counterpartyName, counterpartyIban: t.counterpartyIban,
       description: t.description, mandateId: t.mandateId, source: t.source,
+      accountIban: t.accountIban,
     })));
 
     // Existing-item identity: mandates/IBANs live on already-linked transactions

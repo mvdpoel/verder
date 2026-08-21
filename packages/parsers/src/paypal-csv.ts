@@ -105,6 +105,7 @@ export function parsePaypalCsv(buf: Buffer): ParseResult {
         counterpartyIban: null,
         description: `paypal:${type} ${txId}`.trim(),
         mandateId: null,
+        accountIban: null, // a PayPal activity export names no bank account
       });
     } catch (err) {
       errors.push({

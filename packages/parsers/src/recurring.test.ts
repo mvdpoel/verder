@@ -25,6 +25,8 @@ function tx(
     counterpartyIban: opts.iban ?? null,
     description: null,
     mandateId: opts.mandate ?? null,
+    // Recurring detection never reads the account; these fixtures leave it null.
+    accountIban: null,
     ...(opts.source ? { source: opts.source } : {}),
   };
 }

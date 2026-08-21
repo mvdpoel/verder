@@ -9,6 +9,12 @@ export interface ParsedRow {
   counterpartyIban: string | null;
   description: string | null;
   mandateId: string | null;
+  /**
+   * The account THIS statement belongs to — not the counterparty. CAMT carries
+   * it once per Stmt and it is copied onto each row; the ABN exports repeat it
+   * in column 0 of every row; PayPal has no such thing and yields null.
+   */
+  accountIban: string | null;
 }
 
 export interface ParseResult {

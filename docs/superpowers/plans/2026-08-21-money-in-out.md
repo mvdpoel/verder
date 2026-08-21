@@ -149,7 +149,7 @@ git commit -m "feat(db): transactions remember which account they came from"
 - Consumes: nothing from Task 1 (parsers do not touch the database).
 - Produces: `ParsedRow.accountIban: string | null` on every row from every parser.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/parsers/src/camt053.test.ts`:
 
@@ -176,12 +176,12 @@ it("reads the account from the first column", () => {
 });
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test`
 Expected: FAIL — `accountIban` does not exist on `ParsedRow`.
 
-- [ ] **Step 3: Add the field to the row type**
+- [x] **Step 3: Add the field to the row type**
 
 In `packages/parsers/src/types.ts`, inside `ParsedRow` after `mandateId`:
 
@@ -194,7 +194,7 @@ In `packages/parsers/src/types.ts`, inside `ParsedRow` after `mandateId`:
   accountIban: string | null;
 ```
 
-- [ ] **Step 4: Read it in the CAMT parser**
+- [x] **Step 4: Read it in the CAMT parser**
 
 In `packages/parsers/src/camt053.ts`, inside the `for (const stmt of stmtList)` loop, before the entries loop:
 
@@ -206,7 +206,7 @@ In `packages/parsers/src/camt053.ts`, inside the `for (const stmt of stmtList)` 
 
 Then add `accountIban,` to the object literal pushed into `rows`.
 
-- [ ] **Step 5: Read it in the shared ABN row mapper**
+- [x] **Step 5: Read it in the shared ABN row mapper**
 
 In `packages/parsers/src/abn-rows.ts`, inside `abnRowToParsed`, add to the returned object:
 
@@ -221,12 +221,12 @@ In `packages/parsers/src/paypal-csv.ts`, add `accountIban: null,` to each constr
     accountIban: null, // a PayPal activity export names no bank account
 ```
 
-- [ ] **Step 6: Run the parser suite**
+- [x] **Step 6: Run the parser suite**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test`
 Expected: PASS, including every pre-existing test (a missing `accountIban` on any constructed row is a type error, so the compiler finds the ones tests do not).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/parsers/src

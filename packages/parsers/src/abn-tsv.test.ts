@@ -68,6 +68,10 @@ describe("parseAbnTsv", () => {
     );
   });
 
+  it("reads the account from the first column", () => {
+    expect(result.rows[0].accountIban).toBe(fixture.toString("latin1").split("\t")[0]);
+  });
+
   it("lists the malformed line with its raw text instead of throwing", () => {
     const err = result.errors[0];
     expect(err.rowIndex).toBe(4);

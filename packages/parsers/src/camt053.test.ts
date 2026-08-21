@@ -60,6 +60,15 @@ describe("parseCamt053", () => {
   it("throws loudly on a file that is not CAMT.053 at all", () => {
     expect(() => parseCamt053(Buffer.from("this is not xml"))).toThrow();
   });
+
+  it("carries the statement's own account onto every row", () => {
+    expect(result.rows.length).toBeGreaterThan(0);
+    const accounts = new Set(result.rows.map((r) => r.accountIban));
+    expect(accounts.size).toBe(1);
+    // The statement account, never a counterparty's.
+    expect([...accounts][0]).toMatch(/^NL\d{2}[A-Z]{4}\d{10}$/);
+    expect([...accounts][0]).not.toBe(result.rows[0].counterpartyIban);
+  });
 });
 
 /** Minimal CAMT.053 document wrapper for hand-built Ntry snippets. */
