@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  coverageForMonths, incomeLines, monthKey, outSeries, splitInternalTransfers,
-  type MoneyTx,
+  buildMoneySeries, coverageForMonths, incomeLines, monthKey, outSeries,
+  splitInternalTransfers, type MoneyTx,
 } from "./money-series";
 
 // bookedAt is Omit-ted from the Partial before the override: intersecting
@@ -140,5 +140,87 @@ describe("splitInternalTransfers", () => {
     const { internal, internalCents } = splitInternalTransfers(rows);
     expect([...internal]).toEqual(["back"]);
     expect(internalCents).toBe(50_000);
+  });
+});
+
+describe("buildMoneySeries", () => {
+  const items = [
+    { id: "i1", name: "Vattenfall", category: "energy", monthlyCents: 21_000, status: "allowed" },
+    { id: "i2", name: "IPTV Totaal", category: "streaming", monthlyCents: 9_600, status: "to-cancel" },
+    { id: "i3", name: "Oude sportschool", category: "other", monthlyCents: 3_000, status: "canceled" },
+  ];
+
+  it("splits accounts and never draws one series through both", () => {
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-25T00:00:00Z", amountCents: 241_304,
+           counterpartyIban: "NL02ABNA0123456789", accountIban: "NL91ABNA0417164300" }),
+      tx({ id: "b", bookedAt: "2026-07-25T00:00:00Z", amountCents: 241_304,
+           counterpartyIban: "NL02ABNA0123456789", accountIban: "NL91ABNA0417164300" }),
+      // Monthly, not the plan's weekly pair — see the `.fails` test below for why.
+      tx({ id: "c", bookedAt: "2026-08-07T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+      tx({ id: "d", bookedAt: "2026-09-07T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+    ];
+    const series = buildMoneySeries({ transactions: rows, items });
+    expect(series.map((s) => s.accountIban).sort())
+      .toEqual(["NL44RABO0555444333", "NL91ABNA0417164300"]);
+    const leefgeld = series.find((s) => s.accountIban === "NL44RABO0555444333")!;
+    expect(leefgeld.incomeLines).toHaveLength(1); // the leefgeld line
+    expect(leefgeld.months.every((m) => m.month >= "2026-08")).toBe(true);
+    // The salary never leaks into the leefgeld account's own series.
+    expect(leefgeld.incomeLines[0].transactionIds).toEqual(["c", "d"]);
+  });
+
+  // KNOWN GAP — the plan's own fixture for the test above, with its assertion,
+  // marked `.fails` because the module does NOT do this. VerderGroep pays
+  // leefgeld WEEKLY, and `cadenceOf` in @verder/parsers recognises only
+  // monthly (25–35 d), quarterly (80–100 d) and yearly (350–380 d): a 7-day gap
+  // returns null, so the group is discarded and the leefgeldrekening shows no
+  // income line at all. The spec (§Money in, rule 3) says leefgeld "needs no
+  // special case… detected like any other income line"; against the real
+  // cadence that is not true today. Adding a weekly cadence changes
+  // detectRecurring for the DEBIT direction too — every existing registry
+  // caller — so it is raised rather than slipped in here.
+  // When it is fixed, THIS TEST WILL FAIL and the `.fails` must be removed.
+  it.fails("detects a weekly leefgeld line", () => {
+    const rows = [
+      tx({ id: "c", bookedAt: "2026-08-07T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+      tx({ id: "d", bookedAt: "2026-08-14T00:00:00Z", amountCents: 25_000,
+           counterpartyIban: "NL10VERD0001112223", accountIban: "NL44RABO0555444333" }),
+    ];
+    const [leefgeld] = buildMoneySeries({ transactions: rows, items });
+    expect(leefgeld.incomeLines).toHaveLength(1); // the leefgeld line, weekly-ish
+  });
+
+  it("projects costs without canceled items and shows the to-cancel saving", () => {
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -21_000, financialItemId: "i1" }),
+      tx({ id: "b", bookedAt: "2026-06-30T00:00:00Z", amountCents: -9_600, financialItemId: "i2" }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items, horizonMonths: 2 });
+    expect(series.lastCompleteMonth).toBe("2026-06");
+    expect(series.projected).toHaveLength(2);
+    // canceled i3 is gone entirely; to-cancel i2 counts until it is cancelled
+    expect(series.projected[0].outCents).toBe(30_600);
+    expect(series.projected[0].outAfterCancelCents).toBe(21_000);
+  });
+
+  it("reports a month with no rows as none, not zero", () => {
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-05-01T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "b", bookedAt: "2026-05-31T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "c", bookedAt: "2026-07-01T00:00:00Z", amountCents: -1_000, statementSha256: "s2" }),
+      tx({ id: "d", bookedAt: "2026-07-31T00:00:00Z", amountCents: -1_000, statementSha256: "s2" }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items: [] });
+    expect(series.months.find((m) => m.month === "2026-06")!.coverage).toBe("none");
+    expect(series.months.find((m) => m.month === "2026-06")!.outCents).toBe(0);
+    expect(series.lastCompleteMonth).toBe("2026-07");
+  });
+
+  it("returns nothing at all for an empty database", () => {
+    expect(buildMoneySeries({ transactions: [], items: [] })).toEqual([]);
   });
 });

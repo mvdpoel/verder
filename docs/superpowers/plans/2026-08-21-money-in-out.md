@@ -863,7 +863,7 @@ export function buildMoneySeries(input: {
 }): AccountSeries[];
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/api/src/money-series.test.ts`:
 
@@ -928,12 +928,12 @@ describe("buildMoneySeries", () => {
 });
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: FAIL — `buildMoneySeries` is not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `packages/api/src/money-series.ts`:
 
@@ -1052,12 +1052,12 @@ export function buildMoneySeries(input: {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- money-series`
 Expected: PASS (11 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/money-series.ts packages/api/src/money-series.test.ts

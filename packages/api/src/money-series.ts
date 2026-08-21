@@ -218,3 +218,116 @@ export function incomeLines(txs: MoneyTx[]): IncomeLine[] {
   }
   return lines.filter(Boolean);
 }
+
+export interface ProjectedMonth {
+  month: string; inCents: number; outCents: number; outAfterCancelCents: number;
+}
+
+export interface AccountSeries {
+  accountIban: string | null;
+  months: MonthSeries[];
+  projected: ProjectedMonth[];
+  incomeLines: IncomeLine[];
+  /** Newest month wholly inside the statement coverage — the projection's base. */
+  lastCompleteMonth: string | null;
+}
+
+const DEFAULT_HORIZON_MONTHS = 3;
+
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const total = (y * 12) + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+function monthRange(from: string, to: string): string[] {
+  const out: string[] = [];
+  for (let m = from; m <= to; m = addMonths(m, 1)) out.push(m);
+  return out;
+}
+
+/**
+ * One series per account. Accounts are never merged: under bewind the same
+ * person's money moves between a beheerrekening and a leefgeldrekening, and a
+ * single stream would draw a collapse at the handover that never happened.
+ * Rows with no account (PayPal, unreadable rows) form their own series.
+ */
+export function buildMoneySeries(input: {
+  transactions: MoneyTx[]; items: MoneyItem[]; horizonMonths?: number;
+}): AccountSeries[] {
+  const horizon = input.horizonMonths ?? DEFAULT_HORIZON_MONTHS;
+  const byAccount = new Map<string, MoneyTx[]>();
+  for (const t of input.transactions) {
+    const key = t.accountIban ?? "";
+    byAccount.set(key, [...(byAccount.get(key) ?? []), t]);
+  }
+
+  // Contracted costs are a property of the registry, not of an account: they
+  // are projected onto whichever account is currently paying them.
+  const liveItems = input.items.filter((i) => i.status !== "canceled");
+  const projectedOut = liveItems.reduce((sum, i) => sum + i.monthlyCents, 0);
+  const projectedOutAfterCancel = liveItems
+    .filter((i) => i.status !== "to-cancel")
+    .reduce((sum, i) => sum + i.monthlyCents, 0);
+
+  const series: AccountSeries[] = [];
+  for (const [accountKey, txs] of byAccount) {
+    const monthsPresent = [...new Set(txs.map((t) => monthKey(t.bookedAt)))].sort();
+    const months = monthRange(monthsPresent[0], monthsPresent[monthsPresent.length - 1]);
+    const coverage = coverageForMonths(txs, months);
+    const outByMonth = outSeries(txs, input.items);
+    const lines = incomeLines(txs);
+    const { internal } = splitInternalTransfers(txs);
+    const countedIn = new Set(lines.flatMap((l) => l.transactionIds));
+
+    const monthSeries: MonthSeries[] = months.map((month) => {
+      const rows = txs.filter((t) => monthKey(t.bookedAt) === month);
+      const outByCategory = outByMonth.get(month) ?? [];
+      return {
+        month,
+        coverage: coverage.get(month) ?? "none",
+        inCents: rows.filter((t) => countedIn.has(t.id))
+          .reduce((s, t) => s + t.amountCents, 0),
+        outCents: outByCategory.reduce((s, c) => s + c.cents, 0),
+        outByCategory,
+        // Disclosed, never counted: vakantiegeld, a 13e maand, an OpsMate
+        // invoice. The footnote is how the month still reconciles.
+        incidentalCents: rows
+          .filter((t) => !t.parseError && t.amountCents > 0 &&
+            !countedIn.has(t.id) && !internal.has(t.id))
+          .reduce((s, t) => s + t.amountCents, 0),
+        internalCents: rows.filter((t) => internal.has(t.id))
+          .reduce((s, t) => s + t.amountCents, 0),
+        parseErrorRows: rows.filter((t) => t.parseError).length,
+      };
+    });
+
+    const lastCompleteMonth =
+      [...monthSeries].reverse().find((m) => m.coverage === "complete")?.month ?? null;
+
+    const projected: ProjectedMonth[] = [];
+    if (lastCompleteMonth) {
+      // A line with nothing in the last complete month has stopped: a job that
+      // ended must not keep paying on a chart.
+      const active = lines.filter((l) => monthKey(l.lastAt) >= lastCompleteMonth);
+      const inCents = active.reduce((s, l) =>
+        s + (l.cadence === "monthly" ? l.typicalAmountCents
+          : l.cadence === "quarterly" ? Math.trunc(l.typicalAmountCents / 3)
+          : Math.trunc(l.typicalAmountCents / 12)), 0);
+      for (let n = 1; n <= horizon; n++) {
+        projected.push({
+          month: addMonths(lastCompleteMonth, n),
+          inCents,
+          outCents: projectedOut,
+          outAfterCancelCents: projectedOutAfterCancel,
+        });
+      }
+    }
+
+    series.push({
+      accountIban: accountKey === "" ? null : accountKey,
+      months: monthSeries, projected, incomeLines: lines, lastCompleteMonth,
+    });
+  }
+  return series.sort((a, b) => (a.accountIban ?? "").localeCompare(b.accountIban ?? ""));
+}
