@@ -275,3 +275,36 @@ describe("detectRecurring — aggregators", () => {
     expect(out[0].aggregator).toBeNull();
   });
 });
+
+describe("detectRecurring — direction", () => {
+  const salary = (i: number, day: string, cents: number): Tx => ({
+    id: `s${i}`, rowIndex: i, bookedAt: new Date(day), amountCents: cents,
+    counterpartyName: "TrueFullstaq BV", counterpartyIban: "NL02ABNA0123456789",
+    description: "salaris", mandateId: null, accountIban: "NL91ABNA0417164300",
+  });
+
+  it("finds recurring credits when asked, and ignores them by default", () => {
+    const rows = [
+      salary(0, "2026-03-25T00:00:00Z", 241_304),
+      salary(1, "2026-04-24T00:00:00Z", 241_304),
+      salary(2, "2026-05-25T00:00:00Z", 241_304),
+    ];
+    expect(detectRecurring(rows)).toEqual([]); // default: debits only
+
+    const [line] = detectRecurring(rows, { direction: "credit" });
+    expect(line.cadence).toBe("monthly");
+    expect(line.typicalAmountCents).toBe(241_304);
+    expect(line.chargeCount).toBe(3);
+  });
+
+  it("still ignores credits mixed into a debit-direction call", () => {
+    const debits = [
+      { ...salary(0, "2026-03-25T00:00:00Z", -4_999), counterpartyName: "Netflix" },
+      { ...salary(1, "2026-04-25T00:00:00Z", -4_999), counterpartyName: "Netflix" },
+    ];
+    const rows = [...debits, salary(9, "2026-04-24T00:00:00Z", 241_304)];
+    const found = detectRecurring(rows);
+    expect(found).toHaveLength(1);
+    expect(found[0].typicalAmountCents).toBe(-4_999);
+  });
+});

@@ -3,7 +3,10 @@ export { detectSource, type ParsedRow, type ParseResult, type StatementSource } 
 export { parseCamt053 } from "./camt053";
 export { parseAbnTsv } from "./abn-tsv";
 export { parsePaypalCsv } from "./paypal-csv";
-export { detectRecurring, normalizeName, type RecurringCandidate } from "./recurring";
+export {
+  detectRecurring, normalizeName,
+  type DetectRecurringOptions, type RecurringCandidate,
+} from "./recurring";
 export { parseAbnSheet, type ParseAbnSheetOptions } from "./abn-sheet";
 export {
   MAX_SHEET_ROWS, MAX_WORKBOOK_BYTES, MAX_WORKBOOK_INFLATED_BYTES, readWorkbook,

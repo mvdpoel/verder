@@ -14,7 +14,7 @@ export interface RecurringCandidate {
   counterpartyIban: string | null;
   mandateId: string | null;
   cadence: "monthly" | "quarterly" | "yearly";
-  /** median of charge amounts (negative, integer cents) */
+  /** median of the group's amounts, integer cents — negative in the debit direction, positive in the credit direction */
   typicalAmountCents: number;
   chargeCount: number;
   firstAt: Date;
@@ -57,9 +57,23 @@ function cadenceOf(medianGapDays: number): RecurringCandidate["cadence"] | null 
   return null;
 }
 
-export function detectRecurring(txs: InputTx[]): RecurringCandidate[] {
-  // Only debits are charges; refunds/credits never count and never skew amounts.
-  const charges = txs.filter((t) => t.amountCents < 0);
+export interface DetectRecurringOptions {
+  /**
+   * Which side to group. Debits are charges (the default, and what every
+   * caller before the money page wanted); credits are income. Defaults to
+   * "debit" so existing callers cannot change behaviour by accident.
+   */
+  direction?: "debit" | "credit";
+}
+
+export function detectRecurring(
+  txs: InputTx[],
+  opts: DetectRecurringOptions = {}
+): RecurringCandidate[] {
+  const wantCredits = opts.direction === "credit";
+  // One side only: a refund must never skew a charge group, and a charge must
+  // never skew an income line.
+  const charges = txs.filter((t) => (wantCredits ? t.amountCents > 0 : t.amountCents < 0));
 
   const groups = new Map<
     string,

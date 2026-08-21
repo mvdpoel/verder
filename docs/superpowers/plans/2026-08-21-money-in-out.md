@@ -304,7 +304,7 @@ git commit -m "feat(api): imports remember the account, not just the statement"
 - Consumes: nothing.
 - Produces: `detectRecurring(txs: InputTx[], opts?: { direction?: "debit" | "credit" }): RecurringCandidate[]`, defaulting to `"debit"`. In credit direction, `typicalAmountCents` is **positive**.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/parsers/src/recurring.test.ts`:
 
@@ -341,12 +341,12 @@ it("still ignores credits mixed into a debit-direction call", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test -- recurring`
 Expected: FAIL — `detectRecurring` takes one argument; the credit call returns `[]`.
 
-- [ ] **Step 3: Add the option**
+- [x] **Step 3: Add the option**
 
 In `packages/parsers/src/recurring.ts`, replace the signature and the filter:
 
@@ -371,7 +371,7 @@ export function detectRecurring(
 
 Nothing else in the function changes: the median, cadence and 40% similarity rules are sign-agnostic because they compare against `Math.abs(typicalAmountCents)`.
 
-- [ ] **Step 4: Export the option type**
+- [x] **Step 4: Export the option type**
 
 In `packages/parsers/src/index.ts`, extend the recurring export:
 
@@ -382,12 +382,12 @@ export {
 } from "./recurring";
 ```
 
-- [ ] **Step 5: Run the suite**
+- [x] **Step 5: Run the suite**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/parsers test`
 Expected: PASS, all pre-existing recurring tests included.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/parsers/src/recurring.ts packages/parsers/src/index.ts packages/parsers/src/recurring.test.ts
