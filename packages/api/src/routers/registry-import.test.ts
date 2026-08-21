@@ -58,6 +58,18 @@ function zipWithComment(name: string, salt = ""): Buffer {
 /** `salt` makes a second, distinct copy: two tests must not share a sha256. */
 const abnXlsxFixture = (salt = "") => zipWithComment("abn.xlsx", salt);
 
+/**
+ * CAMT.053 freshness: the GrpHdr MsgId is a free-text reference the row parser
+ * never reads, so swapping the run id into it changes the sha256 while leaving
+ * every Stmt — including its Acct/Id/IBAN — byte-identical.
+ */
+function camtFixture(): Buffer {
+  const raw = readFileSync(
+    new URL("../../../parsers/fixtures/abn.camt053.xml", import.meta.url));
+  return Buffer.from(
+    raw.toString("utf8").replaceAll("ABNANL2A-2026-08-01-0001", `MSG-${RUN}`), "utf8");
+}
+
 describe("registry.import", () => {
   let db: Db;
   let userId: string;
@@ -242,6 +254,29 @@ describe("registry.import", () => {
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.sha256, sha256));
     expect(doc).toBeDefined(); // but the bytes are still on record
+  });
+
+  it("stores the account each imported row belongs to", async () => {
+    const buf = camtFixture();
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    await caller().registry.import.ingest({ sha256, filename: "camt053-sample.xml" });
+
+    const rows = await db.select({
+      accountIban: schema.transactions.accountIban,
+      counterpartyIban: schema.transactions.counterpartyIban,
+      parseError: schema.transactions.parseError,
+    })
+      .from(schema.transactions)
+      .where(eq(schema.transactions.statementSha256, sha256));
+    expect(rows.length).toBeGreaterThan(0);
+
+    const parsed = rows.filter((r) => !r.parseError);
+    expect(parsed.length).toBeGreaterThan(0);
+    // Every readable row names the STATEMENT's account, never a counterparty's.
+    expect(parsed.every((r) => r.accountIban === "NL77ABNA0574908765")).toBe(true);
+    expect(parsed.some((r) => r.counterpartyIban === "NL77ABNA0574908765")).toBe(false);
+    // An unreadable row vouches for no account: null puts it in the unknown bucket.
+    expect(rows.filter((r) => r.parseError).every((r) => r.accountIban === null)).toBe(true);
   });
 
   it("registers an unreadable workbook as evidence before failing", async () => {

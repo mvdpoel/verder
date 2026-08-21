@@ -104,8 +104,12 @@ export const registryImportRouter = router({
         source, bookedAt: r.bookedAt, amountCents: r.amountCents,
         counterpartyName: r.counterpartyName, counterpartyIban: r.counterpartyIban,
         description: r.description, mandateId: r.mandateId,
+        accountIban: r.accountIban,
         statementSha256: input.sha256, rowIndex: r.rowIndex,
       })),
+      // Deliberately no accountIban on error rows: an unreadable row has no
+      // trustworthy account, and null correctly puts it in the unknown-account
+      // bucket rather than vouching for one.
       ...parsed.errors.map((e) => ({
         source, bookedAt: new Date(), amountCents: 0,
         statementSha256: input.sha256, rowIndex: e.rowIndex,

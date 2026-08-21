@@ -245,7 +245,7 @@ git commit -m "feat(parsers): every statement row names the account it came from
 - Consumes: `schema.transactions.accountIban` (Task 1), `ParsedRow.accountIban` (Task 2).
 - Produces: imported transactions with `accountIban` populated.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/api/src/routers/registry-import.test.ts`:
 
@@ -265,12 +265,12 @@ it("stores the account each imported row belongs to", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- registry-import`
 Expected: FAIL — every `accountIban` is `null`.
 
-- [ ] **Step 3: Pass it through**
+- [x] **Step 3: Pass it through**
 
 In `packages/api/src/routers/registry-import.ts`, in the `parsed.rows.map(...)` literal, add:
 
@@ -280,12 +280,12 @@ In `packages/api/src/routers/registry-import.ts`, in the `parsed.rows.map(...)` 
 
 Leave the `parsed.errors.map(...)` literal alone: an unreadable row has no trustworthy account, and `null` correctly puts it in the unknown-account bucket rather than vouching for one.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `env -u NODE_ENV pnpm --filter @verder/api test -- registry-import`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/routers/registry-import.ts packages/api/src/routers/registry-import.test.ts
