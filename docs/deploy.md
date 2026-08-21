@@ -132,6 +132,12 @@ in one pass:
   evidence guarantee is untouched. **Apply it before deploying a web/worker
   build that can discard** — without it every Discard click fails on
   `invalid input value for enum doc_status`
+- `0022_transactions_account_iban` — nullable `transactions.account_iban`, the
+  account a statement row belongs to, so `/money` can keep the beheerrekening
+  and the leefgeldrekening apart. Additive with no default and no backfill;
+  old code ignores the column. **Apply it before deploying a web/worker build
+  that serves `/money`** — without it every `money.series` query fails on an
+  unknown column
 
 ### 2.2 Change the role passwords from the dev defaults
 
@@ -265,6 +271,12 @@ the filename Gmail, Apple Mail and Outlook give a pasted-from-clipboard
 screenshot sent as a genuine attachment — which the port filter correctly keeps
 — so without those bounds a later re-run (after a restore, say) would discard
 real evidence, including documents already filed by hand.
+
+Money in/out needs no backfill: `account_iban` is populated by the importer
+from the next statement onward, and any row imported before it simply shows up
+under "unknown account". Re-import a statement to fill it in — the import is
+idempotent on (statementSha256, rowIndex), so drop those rows first if you
+want them re-read.
 
 ## Restore procedure
 

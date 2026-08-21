@@ -1433,20 +1433,20 @@ git commit -m "feat(web): the money page — in, out, and what is left"
 - Consumes: `money.series` (Task 8).
 - Produces: a compact six-month block linking to `/money`.
 
-- [ ] **Step 1: Write the dashboard block**
+- [x] **Step 1: Write the dashboard block**
 
 Create `apps/web/src/components/dashboard-money.tsx`: the last six months of the account with the newest data, income and costs only, no drill, wrapped in a link to `/money`. Reuse `MoneyChart` in a `compact` mode rather than drawing a second chart — one chart implementation, two sizes.
 
-- [ ] **Step 2: Mount it on the dashboard**
+- [x] **Step 2: Mount it on the dashboard**
 
 Add the block to `apps/web/src/app/(app)/dashboard/page.tsx` beside the existing registry tile.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `env -u NODE_ENV pnpm --filter web build && env -u NODE_ENV pnpm -r test`
 Expected: build succeeds; the whole workspace suite passes.
 
-- [ ] **Step 4: Update the docs**
+- [x] **Step 4: Update the docs**
 
 Add to `CLAUDE.md`, in the homelab bullet after the junk-document-discard sentence:
 
@@ -1486,7 +1486,7 @@ idempotent on (statementSha256, rowIndex), so drop those rows first if you
 want them re-read.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/components/dashboard-money.tsx apps/web/src/app/\(app\)/dashboard/page.tsx CLAUDE.md docs/deploy.md

@@ -32,16 +32,13 @@ const GRID = GRID_INK;
 const BASELINE = BASELINE_INK;
 const MUTED = MUTED_INK;
 
-// Geometry. Pixels, not money.
-const COL_W = 52;
-const BAR_W = 18;
-const IN_X = 5;
-const OUT_X = IN_X + BAR_W + 4; // a 4px surface gap between the pair
-const AXIS_W = 68;
-const PLOT_H = 220;
-const TOP_PAD = 14;
-const BASE_Y = TOP_PAD + PLOT_H;
-const SEG_GAP = 2; // the skill's 2px surface gap between stacked segments
+// Geometry. Pixels, not money. Two sizes of the same chart: the full one on
+// /money and a compact one on the dashboard — a second chart implementation
+// would be a second set of bugs and a second reading of the same numbers.
+const GEOMETRY = {
+  full: { COL_W: 52, BAR_W: 18, IN_X: 5, PAIR_GAP: 4, AXIS_W: 68, PLOT_H: 220, TOP_PAD: 14, SEG_GAP: 2 },
+  compact: { COL_W: 34, BAR_W: 11, IN_X: 3, PAIR_GAP: 3, AXIS_W: 46, PLOT_H: 96, TOP_PAD: 10, SEG_GAP: 1 },
+} as const;
 
 /** A "nice" axis top so the ticks are readable numbers. */
 function niceCeil(cents: number): number {
@@ -98,12 +95,27 @@ export function MoneyChart({
   accountLabels,
   focusCategory,
   selected,
+  compact = false,
 }: {
   series: AccountSeries[];
   accountLabels: Record<string, string>;
   focusCategory?: string;
   selected?: { account: string | null; month: string } | null;
+  /**
+   * Dashboard size: smaller geometry, and NO links of its own — the whole
+   * block is wrapped in one link to /money, and an <a> inside an <a> is
+   * invalid HTML that React will not render. The marks are identical.
+   */
+  compact?: boolean;
 }) {
+  const { COL_W, BAR_W, IN_X, PAIR_GAP, AXIS_W, PLOT_H, TOP_PAD, SEG_GAP } =
+    GEOMETRY[compact ? "compact" : "full"];
+  const OUT_X = IN_X + BAR_W + PAIR_GAP; // a surface gap between the pair
+  const BASE_Y = TOP_PAD + PLOT_H;
+  // SVG ids are document-global, so the two sizes must not share one: a second
+  // <pattern id="money-hatch"> on the same page silently wins for both charts.
+  const hatchId = compact ? "money-hatch-compact" : "money-hatch";
+
   const columns = toColumns(series);
   if (columns.length === 0) return null;
 
@@ -126,7 +138,7 @@ export function MoneyChart({
 
   const width = AXIS_W + columns.length * COL_W;
   const height = BASE_Y + 10;
-  const ticks = [0, 1, 2, 3, 4].map((n) => Math.round((top / 4) * n));
+  const ticks = (compact ? [0, 2, 4] : [0, 1, 2, 3, 4]).map((n) => Math.round((top / 4) * n));
 
   // Where one account's columns end and the next account's begin.
   const boundaries: number[] = [];
@@ -156,12 +168,16 @@ export function MoneyChart({
   const x = (i: number) => AXIS_W + i * COL_W;
 
   return (
-    <div className="rounded border bg-white p-4">
+    <div className={compact ? "" : "rounded border bg-white p-4"}>
       <div className="overflow-x-auto">
         <div style={{ width }}>
           {/* Account strip. The bewind handover is a boundary, never a line
               drawn through: the same person's money moving from a
-              beheerrekening to a leefgeldrekening is not a collapse. */}
+              beheerrekening to a leefgeldrekening is not a collapse.
+              A compact chart of a single account already gets its name from
+              the block around it, so the strip only appears there when there
+              is actually a boundary to explain. */}
+          {(!compact || spans.length > 1) && (
           <div className="flex text-xs" style={{ paddingLeft: AXIS_W }}>
             {spans.map((s) => (
               <div
@@ -176,6 +192,7 @@ export function MoneyChart({
               </div>
             ))}
           </div>
+          )}
 
           <svg
             width={width}
@@ -189,7 +206,7 @@ export function MoneyChart({
                   Tone-on-tone: the band keeps its own colour and reads as
                   "mogelijk incompleet" rather than as a different category. */}
               <pattern
-                id="money-hatch"
+                id={hatchId}
                 width="6"
                 height="6"
                 patternUnits="userSpaceOnUse"
@@ -307,7 +324,7 @@ export function MoneyChart({
                           width={BAR_W}
                           height={inH}
                           rx="4"
-                          fill="url(#money-hatch)"
+                          fill={`url(#${hatchId})`}
                         />
                       )}
                       <title>
@@ -340,7 +357,7 @@ export function MoneyChart({
                           width={BAR_W}
                           height={Math.max(1, bandH - SEG_GAP)}
                           rx="2"
-                          fill="url(#money-hatch)"
+                          fill={`url(#${hatchId})`}
                         />
                       )}
                       <title>
@@ -423,7 +440,8 @@ export function MoneyChart({
 
           {/* Month labels double as the drill targets: clicking a month opens
               the panel below the chart. HTML links, so this is real navigation
-              with real keyboard focus rather than an SVG click handler. */}
+              with real keyboard focus rather than an SVG click handler.
+              Compact has no drill, so there the same labels are plain text. */}
           <div className="flex" style={{ paddingLeft: AXIS_W }}>
             {columns.map((col, i) => {
               const isSelected =
@@ -434,16 +452,26 @@ export function MoneyChart({
                 `/money?month=${col.month}` +
                 (col.account ? `&account=${encodeURIComponent(col.account)}` : "") +
                 (focusCategory ? `&cat=${encodeURIComponent(focusCategory)}` : "");
-              return (
+              const className =
+                `block truncate px-1 py-1 text-center text-[10px] ${
+                  compact ? "" : "hover:bg-slate-100"
+                } ${boundaries.includes(i) ? "border-l border-slate-300" : ""} ${
+                  isSelected ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-500"
+                } ${col.kind === "projected" ? "italic" : ""}`;
+              return compact ? (
+                <span
+                  key={`${col.account}-${col.month}`}
+                  style={{ width: COL_W }}
+                  className={className}
+                >
+                  {monthLabel(col.month)}
+                </span>
+              ) : (
                 <Link
                   key={`${col.account}-${col.month}`}
                   href={href}
                   style={{ width: COL_W }}
-                  className={`block truncate px-1 py-1 text-center text-[10px] hover:bg-slate-100 ${
-                    boundaries.includes(i) ? "border-l border-slate-300" : ""
-                  } ${isSelected ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-500"} ${
-                    col.kind === "projected" ? "italic" : ""
-                  }`}
+                  className={className}
                 >
                   {monthLabel(col.month)}
                 </Link>
@@ -455,7 +483,13 @@ export function MoneyChart({
 
       {/* Legend. Identity is never colour alone: every band is named, and its
           total over the shown months is spelled out — which is also the relief
-          the palette's contrast warning asks for. */}
+          the palette's contrast warning asks for.
+
+          The compact block leaves it out on purpose: it is a pointer to
+          /money, and colour without a name is not identity, so the dashboard
+          block names the account and nothing else, and /money — one click
+          away — is where a band gets a name and a number. */}
+      {!compact && (
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <span className="flex items-center gap-1.5 text-slate-600">
           <span
@@ -489,7 +523,9 @@ export function MoneyChart({
           );
         })}
       </div>
+      )}
 
+      {!compact && (
       <p className="mt-3 text-xs text-slate-500">
         Gevuld = echte bankregels · gearceerd = mogelijk incompleet · gestippeld =
         verwacht uit de registratie · <span className="italic">geen data</span> = geen
@@ -497,6 +533,7 @@ export function MoneyChart({
         <span style={{ color: AFTER_CANCEL_INK }}>Groen gestippeld</span> is{" "}
         <em>na opzeggen</em>: wat de nog op te zeggen abonnementen zouden schelen.
       </p>
+      )}
     </div>
   );
 }

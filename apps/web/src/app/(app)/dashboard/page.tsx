@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { EnablePush } from "@/components/enable-push";
+import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
 import { WsnpTimeline } from "@/components/wsnp-timeline";
 import { KIND_BADGE, KIND_LABEL } from "@/components/timeline-kinds";
@@ -47,6 +48,10 @@ export default async function DashboardPage() {
           <p className="text-3xl font-bold">{taskStats.openCount}</p>
           <p>tasks open · {taskStats.overdueCount} overdue · {taskStats.waitingOnOthersCount} waiting on others</p></Link>
       </div>
+      {/* Next to the registry tile, which counts the contracts: this shows what
+          they actually cost against what comes in. A chart, not a stat, so it
+          sits under the tile row rather than inside it. */}
+      <DashboardMoney />
       <section>
         <h2 className="font-semibold mb-2">System health</h2>
         <ul className="text-sm space-y-1">
