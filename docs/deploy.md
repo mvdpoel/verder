@@ -265,6 +265,43 @@ nothing. Nothing is deleted: no vault file is unlinked and no `documents` row
 is removed, so `/verify` must still be green afterwards — check it: the hash
 chain must still verify.
 
+After deploying the case map (sub-project 6), the migration does more than add
+tables — it also drops the two retired search triggers and deletes the chunks
+and outbox rows for the entity kinds the map replaced. Order matters more here
+than usual, because the blast radius is not only `/timeline`: the dashboard
+calls `milestones.timeline()` (which now selects from `tracks`) and every
+logbook entry page calls `tracks.map()`, so an image deployed ahead of the
+migration takes down the landing page too.
+
+```bash
+# 1. migration FIRST, from the homelab HOST
+ssh homelab 'cd ~/apps/verder && pnpm --filter @verder/db migrate'
+# 2. then rsync the tree and rebuild web + worker
+# 3. index the two new entity kinds (track, stop)
+ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker reindex'
+# 4. verify — this sub-project appends NO ledger events, so the event count
+#    must not move at all. If it does, something wrote evidence that should not.
+ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
+```
+
+`reindex --prune` does **not** remove the retired `milestone` and
+`timeline_event` chunks — it walks `SEARCH_ENTITY_TYPES` and a retired kind is
+no longer in it, so it never visits them. Migration 0023's `DELETE` is the only
+thing that clears them; do not rely on prune for it.
+
+Between step 1 and step 2 there is a short window where the seeded `track` and
+`stop` outbox rows are queued and the *old* worker image does not know those
+entity kinds. It records `search.drain` as `error` until the new image lands and
+then heals itself. Expect it; it is bounded, unlike the failure the migration
+removes.
+
+If a dev database ever loses its map (the test suite truncates evidence tables
+and the cascade reaches `stops`), restore it with
+`pnpm --filter @verder/db seed-map` — idempotent, and safe to run against a
+database that already has one.
+
 It is scoped to the population it was measured against: `created_at` before
 2026-08-21, and only documents still sitting in the inbox. `image.png` is also
 the filename Gmail, Apple Mail and Outlook give a pasted-from-clipboard
