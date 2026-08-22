@@ -1,4 +1,5 @@
 import { decimalToCents } from "./money";
+import { normalizeAccount } from "./iban";
 import type { ParsedRow } from "./types";
 
 /**
@@ -17,6 +18,9 @@ import type { ParsedRow } from "./types";
  *   - label format:  "Naam: X  IBAN: NLxx...  Machtiging: Y"
  *   - slash format:  "/TRTP/SEPA .../NAME/X/MARF/Y/IBAN/NLxx.../..."
  */
+
+/** Both ABN exports come from ABN AMRO, so a bare account number is theirs. */
+const ABN_BANK_CODE = "ABNA";
 
 const NAME_LABEL = /(?:Naam|Name):\s*(.+?)(?:\s{2,}|$)/;
 const IBAN_LABEL = /IBAN:\s*([A-Z]{2}\d{2}[A-Z0-9]+)/;
@@ -69,7 +73,10 @@ export function abnRowToParsed(cols: string[], rowIndex: number): ParsedRow {
     amountCents,
     description,
     // cols[0] is the account this export was taken from (see the column map above).
-    accountIban: cols[0]?.trim() || null,
+    // Column 0 is the legacy nine-digit rekeningnummer, NOT an IBAN — ABN's
+    // own CAMT export of the same account says NL12ABNA0566567741 where this
+    // says 566567741. Normalize, or one account becomes two on /money.
+    accountIban: normalizeAccount(cols[0], ABN_BANK_CODE),
     ...extract(description ?? ""),
   };
 }

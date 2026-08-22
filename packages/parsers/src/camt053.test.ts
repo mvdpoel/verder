@@ -185,3 +185,25 @@ describe("detectSource (camt053)", () => {
     expect(detectSource("export.dat", fixture.subarray(0, 512))).toBe("abn-camt053");
   });
 });
+
+describe("a statement that never names its own account", () => {
+  it("yields null rather than throwing or borrowing a counterparty's IBAN", () => {
+    // doc() builds a <Stmt> with no <Acct>. The spec requires this shape to
+    // parse: the rows land under "unknown account" on /money, which is honest,
+    // where guessing an account would be a lie that groups real money wrongly.
+    const result = parseCamt053(doc(`
+  <Ntry>
+    <Amt Ccy="EUR">12.50</Amt>
+    <CdtDbtInd>DBIT</CdtDbtInd>
+    <BookgDt><Dt>2026-07-01</Dt></BookgDt>
+    <NtryDtls><TxDtls>
+      <RltdPties><Cdtr><Nm>Alpha</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>NL66INGB0007654321</IBAN></Id></CdtrAcct>
+      </RltdPties>
+    </TxDtls></NtryDtls>
+  </Ntry>`));
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].accountIban).toBeNull();
+    expect(result.rows[0].counterpartyIban).toBe("NL66INGB0007654321");
+  });
+});

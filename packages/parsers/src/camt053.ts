@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { normalizeAccount } from "./iban";
 import { decimalToCents } from "./money";
 import type { ParseResult, ParsedRow } from "./types";
 
@@ -66,7 +67,8 @@ export function parseCamt053(buf: Buffer): ParseResult {
   for (const stmt of stmtList) {
     // Stmt/Acct/Id/IBAN is the statement's own account. A statement without one
     // is still parsed — the rows just carry null and surface as "unknown account".
-    const accountIban = text(path(asNode(stmt), "Acct", "Id", "IBAN"));
+    const accountIban = normalizeAccount(
+      text(path(asNode(stmt), "Acct", "Id", "IBAN")), "ABNA");
 
     const entries = (asNode(stmt)?.["Ntry"] ?? []) as unknown[];
     if (!Array.isArray(entries)) continue;

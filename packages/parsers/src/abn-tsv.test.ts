@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseAbnTsv } from "./abn-tsv";
 import { detectSource } from "./types";
+import { ibanCheckDigits } from "./iban";
 
 const fixture = readFileSync(new URL("../fixtures/abn.tsv", import.meta.url));
 
@@ -68,8 +69,22 @@ describe("parseAbnTsv", () => {
     );
   });
 
-  it("reads the account from the first column", () => {
-    expect(result.rows[0].accountIban).toBe(fixture.toString("latin1").split("\t")[0]);
+  it("reads the account from the first column AS AN IBAN", () => {
+    // Column 0 holds ABN's legacy rekeningnummer, so the assertion that matters
+    // is not "it equals column 0" — that only restates the implementation and
+    // can never fail. It is that the value is the IBAN of that same account,
+    // spelled exactly as ABN's own CAMT.053 export of it would spell it.
+    const legacy = fixture.toString("latin1").split("\t")[0];
+    expect(legacy).toMatch(/^\d{1,10}$/);
+    expect(result.rows[0].accountIban).toBe(
+      `NL${ibanCheckDigits(`ABNA${legacy.padStart(10, "0")}`)}ABNA${legacy.padStart(10, "0")}`
+    );
+    expect(result.rows[0].accountIban).toMatch(/^NL\d{2}ABNA\d{10}$/);
+  });
+
+  it("gives every row of one export the same account", () => {
+    const accounts = new Set(result.rows.map((r) => r.accountIban));
+    expect(accounts.size).toBe(1);
   });
 
   it("lists the malformed line with its raw text instead of throwing", () => {

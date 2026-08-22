@@ -121,3 +121,17 @@ describe("parseAbnSheet (header absent)", () => {
     expect(result.rows[0].counterpartyName).toBe("Test BV");
   });
 });
+
+describe("the account, in either container", () => {
+  it("normalizes the legacy rekeningnummer to one IBAN for .xls and .xlsx alike", () => {
+    // ABN heads a statement "56.65.67.741" and its CAMT export of the same
+    // account says NL12ABNA0566567741. Both spreadsheet containers must land
+    // on the IBAN spelling, or one account renders as two on /money.
+    for (const name of ["abn.xls", "abn.xlsx"]) {
+      const rows = parseAbnSheet(fixture(name)).rows;
+      expect(rows.length, name).toBeGreaterThan(0);
+      expect(rows[0].accountIban, name).toMatch(/^NL\d{2}ABNA\d{10}$/);
+      expect(new Set(rows.map((r) => r.accountIban)).size, name).toBe(1);
+    }
+  });
+});
