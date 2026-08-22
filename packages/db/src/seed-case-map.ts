@@ -35,6 +35,25 @@ const GOAL_TITLE = ROOT_TITLE;
 /** Room for every stop between the anchors, so nothing ever needs a renumber. */
 const GOAL_ORDER = 1_000_000;
 
+/**
+ * The main line's own stations, between the two anchors (migration 0024).
+ *
+ * The road to Einde bewindvoering needs the two facts that shape the case: that
+ * Martin APPLIED for bewindvoering, and that he is IN it. Undated on purpose —
+ * nobody recorded when either happened, and the map lays out structurally, so
+ * an undated station costs nothing and an invented date would be a claim.
+ *
+ * "bewindvoering" is `open`, not `done`: it is the period he is in rather than
+ * a thing that finished. It therefore holds "waar het nu op wacht" until a side
+ * track carries an open stop further right, which is exactly the handover
+ * intended — the headline follows the furthest-right open stop.
+ */
+const SPINE_SEED = [
+  { title: "Aanvraag bewindvoering", orderIndex: 100, state: "done" },
+  { title: "bewindvoering", orderIndex: 200, state: "open" },
+] as const satisfies readonly { title: string; orderIndex: number;
+  state: (typeof schema.stopStateEnum.enumValues)[number] }[];
+
 const WSNP_TITLE = "WSNP";
 const WSNP_NOTE = "De zes fases van de wettelijke schuldsanering.";
 
@@ -59,6 +78,8 @@ export type EnsureCaseMapResult = {
   startStop: boolean;
   goalStop: boolean;
   wsnpTrack: boolean;
+  /** The main-line stations that were missing and got put back. */
+  spineStops: string[];
   /** The stages that had no stop at all and got their synthetic one back. */
   stageStops: string[];
 };
@@ -66,7 +87,7 @@ export type EnsureCaseMapResult = {
 export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
   const created: EnsureCaseMapResult = {
     rootTrack: false, startStop: false, goalStop: false,
-    wsnpTrack: false, stageStops: [],
+    wsnpTrack: false, spineStops: [], stageStops: [],
   };
 
   // The root is the track with no parent, and a unique index allows exactly
@@ -106,6 +127,17 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
       kind: "process", state: "expected",
     }).returning();
     created.goalStop = true;
+  }
+
+  // The main line's own stations. Guarded on title, like everything else here,
+  // so a database that already has them is left alone.
+  for (const station of SPINE_SEED) {
+    if (await stopOnRoot(station.title)) continue;
+    await db.insert(schema.stops).values({
+      trackId: root.id, orderIndex: station.orderIndex, title: station.title,
+      kind: "process", state: station.state,
+    });
+    created.spineStops.push(station.title);
   }
 
   // WSNP is a procedure INSIDE the goal of ending bewindvoering, not the same

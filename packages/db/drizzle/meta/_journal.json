@@ -169,6 +169,13 @@
       "when": 1787412407836,
       "tag": "0023_timeline_tracks",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787498807836,
+      "tag": "0024_case_map_spine",
+      "breakpoints": true
     }
   ]
 }

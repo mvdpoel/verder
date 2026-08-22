@@ -105,7 +105,7 @@ describe("tracks and stops", () => {
     const created = await ensureCaseMap(db);
     expect(created).toEqual({
       rootTrack: false, startStop: false, goalStop: false,
-      wsnpTrack: false, stageStops: [],
+      wsnpTrack: false, spineStops: [], stageStops: [],
     });
     const after = await db.select({ n: sql<number>`count(*)::int` }).from(schema.stops);
     expect(after[0].n).toBe(before[0].n);
@@ -174,4 +174,35 @@ describe("tracks and stops", () => {
       await db.delete(schema.tracks).where(eq(schema.tracks.id, side.id));
     }
   });
+
+  it("runs the main line Start -> aanvraag -> bewindvoering -> ... -> Einde", async () => {
+    // The spine is what the page is FOR: the road to the end of the
+    // bewindvoering, with the two facts that shape it on the way. Asserted as
+    // relative order, never as absolute order_index values, because migration
+    // 0024 renumbers whatever 0023 had already copied in between the anchors.
+    const [root] = await db.select().from(schema.tracks)
+      .where(isNull(schema.tracks.parentTrackId));
+    const line = (await db.select().from(schema.stops)
+      .where(eq(schema.stops.trackId, root.id)))
+      .sort((a, b) => a.orderIndex - b.orderIndex);
+    const at = (title: string) => line.findIndex((s) => s.title === title);
+
+    expect(at("Start")).toBe(0);
+    expect(at("Aanvraag bewindvoering")).toBeGreaterThan(at("Start"));
+    expect(at("bewindvoering")).toBeGreaterThan(at("Aanvraag bewindvoering"));
+    // The goal is the far right of the line, always — nothing is ever added
+    // after it, which is what the 1000000 slot is for.
+    expect(at("Einde bewindvoering")).toBe(line.length - 1);
+
+    const station = (title: string) => line.find((s) => s.title === title)!;
+    // Undated on purpose: nobody recorded when either happened, and this app
+    // does not invent a date for Martin's own case.
+    expect(station("Aanvraag bewindvoering").happenedAt).toBeNull();
+    expect(station("Aanvraag bewindvoering").state).toBe("done");
+    // "loopt nog" — the period he is in, not a thing that finished.
+    expect(station("bewindvoering").state).toBe("open");
+    expect(station("bewindvoering").happenedAt).toBeNull();
+    expect(station("Einde bewindvoering").state).toBe("expected");
+  });
+
 });
