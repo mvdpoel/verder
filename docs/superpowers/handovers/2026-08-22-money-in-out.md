@@ -1,9 +1,28 @@
 # Handover — Money In / Money Out (sub-project 5)
 
 **Written:** 2026-08-22
-**State:** built, tested, pushed to `origin/main` at `bd0e617`. **Not deployed.**
-**Spec:** `docs/superpowers/specs/2026-08-21-money-in-out-design.md`
-**Plan:** `docs/superpowers/plans/2026-08-21-money-in-out.md`
+**State:** ~~built, tested, pushed to `origin/main` at `bd0e617`. **Not deployed.**~~
+**CLOSED 2026-08-22** at `175b0fe` — every item below is done and the feature is
+deployed (migration 0022 applied from the host, web+worker rebuilt,
+`nightly-verify` OK on 47 events / 18 files). 696 tests green.
+**Spec:** `docs/superpowers/specs/2026-08-21-money-in-out-design.md` — amended to match
+**Plan:** `docs/superpowers/plans/2026-08-21-money-in-out.md` — amended to match
+
+Two things did NOT go the way this document proposed, both on evidence:
+
+- **Item 4's `fullPeriodAmount` fallback is REFUSED.** It was implemented and
+  measured against the oracle: on Martin's own TrueFullstaq line it returns
+  € 883,32 instead of € 2.660,68, breaks the continuation link to Saurens, and
+  projects € 4.439,74 by counting a job he had already left. The hole and those
+  numbers are now recorded in the comment on the function, and the triple is
+  pinned by a test so a future rewrite has to face them.
+- **Item 3's router-level empty state** is asserted against a stubbed `Db`, not
+  the shared dev database, and `money.test.ts` says so in as many words. The
+  page's own empty-state branch is still covered by no test.
+
+The one open item that is not code — the statement named
+"incl. huurbetaling 1 augustus" that contains no August rent payment — is
+**still open**, and is the most consequential thing left on this page.
 
 ## Where things stand
 
