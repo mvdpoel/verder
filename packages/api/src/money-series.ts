@@ -22,33 +22,60 @@ export interface MoneyItem {
 
 export type Coverage = "complete" | "partial" | "none";
 
+/**
+ * One credit that was kept OUT of the income bar, in the shape the page needs
+ * to name it. A total on its own is not a disclosure: a reader who sees
+ * "€ 1.697,63 incidenteel" cannot check it, and Martin cannot tell a
+ * belastingteruggave from a credit the rules got wrong. The list is what makes
+ * the month reconcile in public.
+ */
+export interface DisclosedRow {
+  id: string; bookedAt: Date; amountCents: number; counterpartyName: string | null;
+}
+
 export interface MonthSeries {
   month: string; coverage: Coverage;
   inCents: number; outCents: number;
   outByCategory: { category: string; cents: number }[];
   incidentalCents: number; internalCents: number; parseErrorRows: number;
+  /** The rows behind `internalCents`, oldest first. Sums to it, by construction. */
+  internalRows: DisclosedRow[];
+  /** The rows behind `incidentalCents`, oldest first. Sums to it, by construction. */
+  incidentalRows: DisclosedRow[];
 }
 
 /** Debits with no registry item behind them pool here. */
 export const UNCATEGORIZED = "overig";
 
-const MONTH_FMT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit",
+const DAY_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit",
 });
+
+/** "2026-07-31" in Amsterdam time. en-CA is ISO order, so string compare is chronological. */
+export function dayKey(d: Date): string {
+  return DAY_FMT.format(d);
+}
 
 /** "2026-07" in Amsterdam time — a 23:30 UTC booking on 31 July is August here. */
 export function monthKey(d: Date): string {
-  return MONTH_FMT.format(d).slice(0, 7);
+  return dayKey(d).slice(0, 7);
 }
 
-/** [start, endExclusive) of a "YYYY-MM" as UTC instants of the Amsterdam month. */
-function monthBounds(month: string): { start: Date; end: Date } {
+/**
+ * The Amsterdam calendar day after this one. The key is already Amsterdam-local,
+ * so this is civil-date arithmetic and UTC is only being used as a calendar —
+ * no offset and no 23-hour DST night can shift the answer, because no instant
+ * is ever formed.
+ */
+function nextDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+/** First and last Amsterdam calendar day of a "YYYY-MM". Day 0 of the next month is this one's last. */
+function monthDayBounds(month: string): { first: string; last: string } {
   const [y, m] = month.split("-").map(Number);
-  // Amsterdam is UTC+1/+2; building from UTC midnight and letting monthKey
-  // decide membership keeps this free of a timezone library.
-  const start = new Date(Date.UTC(y, m - 1, 1));
-  const end = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
-  return { start, end };
+  return { first: `${month}-01`, last: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) };
 }
 
 /**
@@ -57,35 +84,47 @@ function monthBounds(month: string): { start: Date; end: Date } {
  * statement covering all of June whose first booking is the 4th reads as
  * partial), which is the safe direction: it says "possibly incomplete" when
  * unsure and never claims completeness it cannot support.
+ *
+ * The arithmetic is in Amsterdam CALENDAR DAYS, not instants. Two reasons, both
+ * measured: a period split across two statements (1–15 and 16–30 June) ABUTS
+ * rather than overlaps, and merging on overlap alone reported a fully covered
+ * June as partial; and comparing UTC instants against a month bucketed by
+ * monthKey — which is Amsterdam — disagreed by the UTC offset, so a statement
+ * whose first booking is 01:00 UTC on the 1st failed a `<= UTC midnight` test
+ * for a month it demonstrably starts in. Invisible while every parser produces
+ * date-only midnight bookings, and a lie the moment one does not.
  */
 export function coverageForMonths(txs: MoneyTx[], months: string[]): Map<string, Coverage> {
-  const ranges = new Map<string, { from: Date; to: Date }>();
+  const ranges = new Map<string, { from: string; to: string }>();
   for (const t of txs) {
     if (t.parseError) continue; // an unreadable row's date is not evidence of coverage
+    const day = dayKey(t.bookedAt);
     const r = ranges.get(t.statementSha256);
-    if (!r) ranges.set(t.statementSha256, { from: t.bookedAt, to: t.bookedAt });
+    if (!r) ranges.set(t.statementSha256, { from: day, to: day });
     else {
-      if (t.bookedAt < r.from) r.from = t.bookedAt;
-      if (t.bookedAt > r.to) r.to = t.bookedAt;
+      if (day < r.from) r.from = day;
+      if (day > r.to) r.to = day;
     }
   }
   const merged = [...ranges.values()]
-    .sort((a, b) => a.from.getTime() - b.from.getTime())
-    .reduce<{ from: Date; to: Date }[]>((acc, r) => {
+    // Ties break on `to` so the merge never depends on statement insertion order.
+    .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
+    .reduce<{ from: string; to: string }[]>((acc, r) => {
       const last = acc[acc.length - 1];
-      if (last && r.from.getTime() <= last.to.getTime()) {
+      // Abutting counts: a statement starting the day after the previous one
+      // ended leaves no day unaccounted for between them.
+      if (last && r.from <= nextDay(last.to)) {
         if (r.to > last.to) last.to = r.to;
-      } else acc.push({ from: new Date(r.from), to: new Date(r.to) });
+      } else acc.push({ ...r });
       return acc;
     }, []);
 
   const out = new Map<string, Coverage>();
   for (const month of months) {
-    const { start, end } = monthBounds(month);
-    const lastDay = new Date(end.getTime() - 86_400_000);
+    const { first, last } = monthDayBounds(month);
     const hasRows = txs.some((t) => monthKey(t.bookedAt) === month);
     if (!hasRows) { out.set(month, "none"); continue; }
-    const complete = merged.some((r) => r.from <= start && r.to >= lastDay);
+    const complete = merged.some((r) => r.from <= first && r.to >= last);
     out.set(month, complete ? "complete" : "partial");
   }
   return out;
@@ -138,8 +177,14 @@ export const INCOME_CONTINUATION_TOLERANCE_DEN = 2;
 const DAY_MS = 86_400_000;
 /** How far apart a matched pair may sit before it stops looking like one move. */
 const INTERNAL_WINDOW_DAYS = 5;
-/** How far apart the two legs' amounts may sit: 1%, in integer math. */
-const INTERNAL_AMOUNT_TOLERANCE = 0.01;
+/**
+ * How far apart the two legs' amounts may sit: 1%, held as an integer ratio.
+ * The old form multiplied a 0.01 float back up by 100 to get there; money math
+ * in this repo never touches a float, and detectRecurring one package over
+ * spells its 40% band the same way.
+ */
+const INTERNAL_AMOUNT_TOLERANCE_NUM = 1;
+const INTERNAL_AMOUNT_TOLERANCE_DEN = 100;
 
 export interface IncomeLine {
   key: string; labels: string[];
@@ -152,22 +197,51 @@ export interface IncomeLine {
  * legs must name the same counterparty IBAN, sit within five days, and match
  * in size to within 1%. Only the CREDIT leg is returned: the debit leg is a
  * real payment out of this account and stays in the costs bar.
+ *
+ * A matched debit is CONSUMED — the same discipline resolveDocumentUpdatedHashes
+ * in verification.ts had to learn, for the same reason: without it one row
+ * vouches for two. Here that meant a single € 500 transfer out disqualifying
+ * TWO € 500 credits, so one debit erased € 1.000 of income and the disclosure
+ * claimed twice what had moved. Understating income is the failure this whole
+ * file exists to prevent, so the pairing must be one-to-one.
+ *
+ * Credits are walked oldest-first (id breaks the tie) and each takes the
+ * NEAREST-IN-TIME unclaimed leg, tie-broken on debit id: a transfer out and
+ * straight back is the pair a reader would draw, and neither the answer nor
+ * the disclosure may depend on the order rows came out of the database.
  */
 export function splitInternalTransfers(
   txs: MoneyTx[]
 ): { internal: Set<string>; internalCents: number } {
   const debits = txs.filter((t) => !t.parseError && t.amountCents < 0 && t.counterpartyIban);
+  const credits = txs
+    .filter((t) => !t.parseError && t.amountCents > 0 && t.counterpartyIban)
+    .sort((a, b) => a.bookedAt.getTime() - b.bookedAt.getTime() || a.id.localeCompare(b.id));
+
+  const consumed = new Set<string>();
   const internal = new Set<string>();
   let internalCents = 0;
-  for (const credit of txs) {
-    if (credit.parseError || credit.amountCents <= 0 || !credit.counterpartyIban) continue;
-    const match = debits.find((d) =>
-      d.counterpartyIban === credit.counterpartyIban &&
-      Math.abs(d.bookedAt.getTime() - credit.bookedAt.getTime()) <= INTERNAL_WINDOW_DAYS * DAY_MS &&
-      Math.abs(Math.abs(d.amountCents) - credit.amountCents) * 100 <=
-        credit.amountCents * (INTERNAL_AMOUNT_TOLERANCE * 100)
-    );
-    if (match) { internal.add(credit.id); internalCents += credit.amountCents; }
+  for (const credit of credits) {
+    let best: MoneyTx | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const d of debits) {
+      if (consumed.has(d.id)) continue;
+      if (d.counterpartyIban !== credit.counterpartyIban) continue;
+      const gap = Math.abs(d.bookedAt.getTime() - credit.bookedAt.getTime());
+      if (gap > INTERNAL_WINDOW_DAYS * DAY_MS) continue;
+      const sizeDelta = Math.abs(Math.abs(d.amountCents) - credit.amountCents);
+      if (sizeDelta * INTERNAL_AMOUNT_TOLERANCE_DEN >
+        credit.amountCents * INTERNAL_AMOUNT_TOLERANCE_NUM) continue;
+      if (gap < bestGap || (gap === bestGap && best !== null && d.id < best.id)) {
+        best = d;
+        bestGap = gap;
+      }
+    }
+    if (best) {
+      consumed.add(best.id);
+      internal.add(credit.id);
+      internalCents += credit.amountCents;
+    }
   }
   return { internal, internalCents };
 }
@@ -188,10 +262,30 @@ const CADENCE_DAYS: Record<RecurringCandidate["cadence"], number> = {
  * within FULL_PERIOD_BAND_PCT of it, and return their median. One unusually
  * large payment therefore cannot set the figure on its own unless it is the
  * only full period there is.
+ *
+ * THE KNOWN HOLE: a lump vakantiegeld larger than the monthly salary is alone
+ * in the top band and so sets it, and the line would be projected forward at
+ * holiday pay. It does not touch Martin — Saurens pays his 8% monthly, inside
+ * the € 5.250 gross — but it is real for anyone whose employer pays it in May.
+ *
+ * THE OBVIOUS FIX IS REFUSED, ON EVIDENCE. Falling back to the median of the
+ * rest when exactly one amount sits in the top band and the line has ≥3 rows
+ * was proposed and MEASURED against money-series.real.test.ts, which is a
+ * transcript of Martin's real statement. TrueFullstaq's line is
+ * [64_800, 266_068, 111_865] — one amount in the top band, three rows, exactly
+ * the trigger — and the fallback returns € 883,32 instead of € 2.660,68. The
+ * continuation link to Saurens Marketing then fails its size test (the delta,
+ * € 2.673,10, is far outside half of € 883,32), the chart splits into a line
+ * that stopped and a smaller one that started, and the projection turns into
+ * € 4.439,74 by counting a job he had already left. Telling Martin his income
+ * ended and something smaller began is the precise failure this file was
+ * written to prevent, so the hole stays open until there is a rule that closes
+ * it without touching a real part-month. A future rewrite has to face those
+ * numbers: money-series.test.ts pins the triple.
  */
 const FULL_PERIOD_BAND_PCT = 15;
 
-function fullPeriodAmount(amounts: number[]): number {
+export function fullPeriodAmount(amounts: number[]): number {
   if (amounts.length === 0) return 0;
   const max = Math.max(...amounts);
   const full = amounts.filter((a) => (max - a) * 100 <= max * FULL_PERIOD_BAND_PCT);
@@ -368,6 +462,16 @@ function monthlyFromCadence(line: IncomeLine): number {
   }
 }
 
+/** The disclosure needs the row's identity and nothing else; the rest stays server-side. */
+const disclosedRow = (t: MoneyTx): DisclosedRow => ({
+  id: t.id, bookedAt: t.bookedAt, amountCents: t.amountCents,
+  counterpartyName: t.counterpartyName,
+});
+
+/** Oldest first, id breaking the tie: a list under a chart must not reshuffle between reads. */
+const byBookedAtThenId = (a: DisclosedRow, b: DisclosedRow) =>
+  a.bookedAt.getTime() - b.bookedAt.getTime() || a.id.localeCompare(b.id);
+
 /**
  * One series per account. Accounts are never merged: under bewind the same
  * person's money moves between a beheerrekening and a leefgeldrekening, and a
@@ -381,7 +485,11 @@ export function buildMoneySeries(input: {
   const byAccount = new Map<string, MoneyTx[]>();
   for (const t of input.transactions) {
     const key = accountKeyOf(t);
-    byAccount.set(key, [...(byAccount.get(key) ?? []), t]);
+    // Push, never rebuild: copying the bucket per row is O(n²), and three years
+    // of statements is the load this page was designed for.
+    const bucket = byAccount.get(key);
+    if (bucket) bucket.push(t);
+    else byAccount.set(key, [t]);
   }
 
   // Contracted costs are projected onto the account that pays them, once. An
@@ -399,7 +507,17 @@ export function buildMoneySeries(input: {
 
   const series: AccountSeries[] = [];
   for (const [accountKey, txs] of byAccount) {
-    const monthsPresent = [...new Set(txs.map((t) => monthKey(t.bookedAt)))].sort();
+    // The x-axis comes from the rows that could be READ. An import error is
+    // stored with the moment of import, not the booking it failed to parse, so
+    // one unreadable line otherwise stretches this account's chart from the
+    // statement to today: months of hatched emptiness that never happened, on
+    // a page about whether the money is enough. An account with nothing BUT
+    // unreadable rows keeps its import-dated range — a failed import must be
+    // visible, not silently absent.
+    const dated = txs.filter((t) => !t.parseError);
+    const monthsPresent = [
+      ...new Set((dated.length > 0 ? dated : txs).map((t) => monthKey(t.bookedAt))),
+    ].sort();
     const months = monthRange(monthsPresent[0], monthsPresent[monthsPresent.length - 1]);
     const coverage = coverageForMonths(txs, months);
     const outByMonth = outSeries(txs, input.items);
@@ -410,6 +528,14 @@ export function buildMoneySeries(input: {
     const monthSeries: MonthSeries[] = months.map((month) => {
       const rows = txs.filter((t) => monthKey(t.bookedAt) === month);
       const outByCategory = outByMonth.get(month) ?? [];
+      // Disclosed, never counted: vakantiegeld, a 13e maand, an OpsMate
+      // invoice, and money that only moved between Martin's own accounts. The
+      // footnote is how the month still reconciles — so the TOTALS are summed
+      // from these lists rather than filtered a second time. Two predicates
+      // for one figure is how a disclosure quietly stops adding up.
+      const incidental = rows.filter((t) =>
+        !t.parseError && t.amountCents > 0 && !countedIn.has(t.id) && !internal.has(t.id));
+      const internalRows = rows.filter((t) => internal.has(t.id));
       return {
         month,
         coverage: coverage.get(month) ?? "none",
@@ -417,14 +543,10 @@ export function buildMoneySeries(input: {
           .reduce((s, t) => s + t.amountCents, 0),
         outCents: outByCategory.reduce((s, c) => s + c.cents, 0),
         outByCategory,
-        // Disclosed, never counted: vakantiegeld, a 13e maand, an OpsMate
-        // invoice. The footnote is how the month still reconciles.
-        incidentalCents: rows
-          .filter((t) => !t.parseError && t.amountCents > 0 &&
-            !countedIn.has(t.id) && !internal.has(t.id))
-          .reduce((s, t) => s + t.amountCents, 0),
-        internalCents: rows.filter((t) => internal.has(t.id))
-          .reduce((s, t) => s + t.amountCents, 0),
+        incidentalCents: incidental.reduce((s, t) => s + t.amountCents, 0),
+        internalCents: internalRows.reduce((s, t) => s + t.amountCents, 0),
+        internalRows: internalRows.map(disclosedRow).sort(byBookedAtThenId),
+        incidentalRows: incidental.map(disclosedRow).sort(byBookedAtThenId),
         parseErrorRows: rows.filter((t) => t.parseError).length,
       };
     });

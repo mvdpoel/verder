@@ -58,6 +58,18 @@ export const CATEGORY_LABEL: Record<string, string> = {
 };
 
 /**
+ * How often an income line pays, in Dutch. It sits beside CATEGORY_LABEL
+ * because it is the same kind of thing: the vocabulary the page reads a machine
+ * value out in. Same shape too — `Record<string, string>`, so a cadence added
+ * to `detectRecurring` later falls back to its own key at the call site instead
+ * of rendering "undefined" beside an amount.
+ */
+export const CADENCE_LABEL: Record<string, string> = {
+  weekly: "wekelijks", monthly: "maandelijks",
+  quarterly: "per kwartaal", yearly: "jaarlijks",
+};
+
+/**
  * Income is not a ninth category — it is the other side of the chart — so it
  * does not take a categorical slot (the skill's rule: a 9th series is never a
  * generated hue). It gets the palette's secondary ink: achromatic, and

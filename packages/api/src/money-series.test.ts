@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildMoneySeries, coverageForMonths, incomeLines, monthKey, outSeries,
-  splitInternalTransfers, type MoneyTx,
+  buildMoneySeries, coverageForMonths, dayKey, fullPeriodAmount, incomeLines,
+  monthKey, outSeries, splitInternalTransfers, type MoneyTx,
 } from "./money-series";
 
 // bookedAt is Omit-ted from the Partial before the override: intersecting
@@ -36,6 +36,45 @@ describe("coverageForMonths", () => {
     expect(cov.get("2026-06")).toBe("complete");
     expect(cov.get("2026-07")).toBe("partial"); // statement starts on the 10th
     expect(cov.get("2026-05")).toBe("none");    // no rows at all — not zero
+  });
+
+  it("merges statements that abut, leaving no day unaccounted for", () => {
+    // A period exported in two halves — 1–15 and 16–30 June. They never
+    // overlap, so a strict-overlap merge reported a fully covered June as
+    // partial and hatched a month Martin has every row of.
+    const txs = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -100 }),
+      tx({ id: "b", bookedAt: "2026-06-15T00:00:00Z", amountCents: -100 }),
+      tx({ id: "c", bookedAt: "2026-06-16T00:00:00Z", amountCents: -100, statementSha256: "stmt-b" }),
+      tx({ id: "d", bookedAt: "2026-06-30T00:00:00Z", amountCents: -100, statementSha256: "stmt-b" }),
+    ];
+    expect(coverageForMonths(txs, ["2026-06"]).get("2026-06")).toBe("complete");
+  });
+
+  it("does not bridge a real gap between two statements", () => {
+    // One day missing in the middle is one day of bookings nobody can see.
+    const txs = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -100 }),
+      tx({ id: "b", bookedAt: "2026-06-14T00:00:00Z", amountCents: -100 }),
+      tx({ id: "c", bookedAt: "2026-06-16T00:00:00Z", amountCents: -100, statementSha256: "stmt-b" }),
+      tx({ id: "d", bookedAt: "2026-06-30T00:00:00Z", amountCents: -100, statementSha256: "stmt-b" }),
+    ];
+    expect(coverageForMonths(txs, ["2026-06"]).get("2026-06")).toBe("partial");
+  });
+
+  it("bounds coverage by Amsterdam calendar days, not UTC instants", () => {
+    // 01:00 UTC on 1 July is 03:00 in Amsterdam: the month's first day, which
+    // the old instant arithmetic compared against UTC midnight and so called
+    // July partial. 23:30 UTC on 31 July is already 1 August here — the day
+    // monthKey files it under, so August has rows and cannot yet be complete.
+    expect(dayKey(new Date("2026-07-31T23:30:00Z"))).toBe("2026-08-01");
+    const txs = [
+      tx({ id: "a", bookedAt: "2026-07-01T01:00:00Z", amountCents: -100 }),
+      tx({ id: "b", bookedAt: "2026-07-31T23:30:00Z", amountCents: -100 }),
+    ];
+    const cov = coverageForMonths(txs, ["2026-07", "2026-08"]);
+    expect(cov.get("2026-07")).toBe("complete");
+    expect(cov.get("2026-08")).toBe("partial");
   });
 });
 
@@ -169,6 +208,38 @@ describe("splitInternalTransfers", () => {
     const { internal, internalCents } = splitInternalTransfers(rows);
     expect([...internal]).toEqual(["back"]);
     expect(internalCents).toBe(50_000);
+  });
+
+  it("spends a debit once: one transfer out cannot disqualify two credits", () => {
+    // € 500 left the account and € 500 came back — one move. The second € 500,
+    // five days later, has no leg to match and is income. The old `find`
+    // consumed nothing, so this shape erased € 1.000 of income and disclosed
+    // € 1.000 as internal, of which only half had ever moved.
+    const rows = [
+      tx({ id: "out", bookedAt: "2026-07-01T00:00:00Z", amountCents: -50_000,
+           counterpartyIban: "NL55ABNA0999888777" }),
+      tx({ id: "back", bookedAt: "2026-07-02T00:00:00Z", amountCents: 50_000,
+           counterpartyIban: "NL55ABNA0999888777" }),
+      tx({ id: "again", bookedAt: "2026-07-05T00:00:00Z", amountCents: 50_000,
+           counterpartyIban: "NL55ABNA0999888777" }),
+    ];
+    const { internal, internalCents } = splitInternalTransfers(rows);
+    expect([...internal]).toEqual(["back"]); // the nearest-in-time leg, not the first found
+    expect(internalCents).toBe(50_000);
+  });
+});
+
+describe("fullPeriodAmount", () => {
+  it("pins TrueFullstaq's real triple — the median of the rest is refused here", () => {
+    // Martin's TrueFullstaq line, in cents, from money-series.real.test.ts:
+    // € 648,00 / € 2.660,68 / € 1.118,65. Exactly one amount sits in the top
+    // band and the line has three rows, which is the trigger the handover
+    // proposed falling back to the median of the rest on. MEASURED: that
+    // returns 88_332, the continuation link to Saurens Marketing then fails
+    // its size test, and the oracle's projection goes from € 3.556,42 to
+    // € 4.439,74 by keeping a job Martin had already left. See the comment on
+    // fullPeriodAmount. A rewrite that changes this number owes an answer here.
+    expect(fullPeriodAmount([64_800, 266_068, 111_865])).toBe(266_068);
   });
 });
 
@@ -323,6 +394,69 @@ describe("buildMoneySeries", () => {
     expect(series.months.find((m) => m.month === "2026-06")!.coverage).toBe("none");
     expect(series.months.find((m) => m.month === "2026-06")!.outCents).toBe(0);
     expect(series.lastCompleteMonth).toBe("2026-07");
+  });
+
+  it("lists the rows behind every disclosed figure, not just their total", () => {
+    // A total cannot be checked. The page has to be able to name the € 500 that
+    // only moved between Martin's own accounts and the teruggave that is real
+    // money but not fixed income — otherwise the excluded rows are invisible
+    // and the month does not reconcile in public.
+    const rows = [
+      tx({ id: "s1", bookedAt: "2026-06-25T00:00:00Z", amountCents: 241_304,
+           counterpartyName: "Saurens Marketing B.V.", counterpartyIban: "NL02REVO6821156565" }),
+      tx({ id: "out", bookedAt: "2026-07-05T00:00:00Z", amountCents: -50_000,
+           counterpartyName: "M van der Poel spaarrekening",
+           counterpartyIban: "NL55ABNA0999888777" }),
+      tx({ id: "back", bookedAt: "2026-07-07T00:00:00Z", amountCents: 50_000,
+           counterpartyName: "M van der Poel spaarrekening",
+           counterpartyIban: "NL55ABNA0999888777" }),
+      tx({ id: "refund", bookedAt: "2026-07-10T00:00:00Z", amountCents: 166_549,
+           counterpartyName: "BELASTINGDIENST", counterpartyIban: "NL86INGB0002445588" }),
+      tx({ id: "s2", bookedAt: "2026-07-25T00:00:00Z", amountCents: 241_304,
+           counterpartyName: "Saurens Marketing B.V.", counterpartyIban: "NL02REVO6821156565" }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items: [] });
+    const july = series.months.find((m) => m.month === "2026-07")!;
+    const sum = (l: { amountCents: number }[]) => l.reduce((s, r) => s + r.amountCents, 0);
+
+    expect(july.internalRows.map((r) => r.id)).toEqual(["back"]);
+    expect(sum(july.internalRows)).toBe(july.internalCents);
+    expect(july.internalRows[0].counterpartyName).toBe("M van der Poel spaarrekening");
+
+    expect(july.incidentalRows.map((r) => r.id)).toEqual(["refund"]);
+    expect(sum(july.incidentalRows)).toBe(july.incidentalCents);
+    expect(july.incidentalCents).toBe(166_549);
+
+    // The salary is income, so it appears in neither disclosure.
+    expect(july.inCents).toBe(241_304);
+  });
+
+  it("takes an account's month range from the rows it can read", () => {
+    // An import error is stored with the moment of import. Without this, one
+    // unreadable line drags the chart from June to December — six months of
+    // hatched nothing on a page about whether the money is enough.
+    const rows = [
+      tx({ id: "a", bookedAt: "2026-06-01T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "b", bookedAt: "2026-06-30T00:00:00Z", amountCents: -1_000 }),
+      tx({ id: "bad", bookedAt: "2026-12-19T09:12:00Z", amountCents: 0, parseError: true }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items: [] });
+    expect(series.months.map((m) => m.month)).toEqual(["2026-06"]);
+    expect(series.lastCompleteMonth).toBe("2026-06");
+  });
+
+  it("still shows an account whose every row is unreadable", () => {
+    // A statement of nothing but unreadable lines is a failed import, and a
+    // failed import has to be visible: dropping the account would hide it.
+    const rows = [
+      tx({ id: "bad1", bookedAt: "2026-12-19T09:12:00Z", amountCents: 0, parseError: true }),
+      tx({ id: "bad2", bookedAt: "2026-12-19T09:12:00Z", amountCents: 0, parseError: true }),
+    ];
+    const [series] = buildMoneySeries({ transactions: rows, items: [] });
+    expect(series.months.map((m) => m.month)).toEqual(["2026-12"]);
+    expect(series.months[0].parseErrorRows).toBe(2);
+    // No readable booking bounds the period, so nothing is claimed complete.
+    expect(series.months[0].coverage).toBe("partial");
   });
 
   it("returns nothing at all for an empty database", () => {

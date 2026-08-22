@@ -17,10 +17,11 @@ const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 // row/error counts and parsed fields stay exactly those of the fixture.
 const RUN = Date.now().toString();
 
-function abnTsvFixture(): Buffer {
+/** `salt` makes a second, distinct copy: two tests must not share a sha256. */
+function abnTsvFixture(salt = ""): Buffer {
   const raw = readFileSync(new URL("../../../parsers/fixtures/abn.tsv", import.meta.url));
   // latin1 round-trip preserves the 0xE9 'é' byte the fixture exercises
-  return Buffer.from(raw.toString("latin1").replaceAll("123456789", RUN), "latin1");
+  return Buffer.from(raw.toString("latin1").replaceAll("123456789", RUN + salt), "latin1");
 }
 
 /**
@@ -275,8 +276,42 @@ describe("registry.import", () => {
     // Every readable row names the STATEMENT's account, never a counterparty's.
     expect(parsed.every((r) => r.accountIban === "NL77ABNA0574908765")).toBe(true);
     expect(parsed.some((r) => r.counterpartyIban === "NL77ABNA0574908765")).toBe(false);
-    // An unreadable row vouches for no account: null puts it in the unknown bucket.
-    expect(rows.filter((r) => r.parseError).every((r) => r.accountIban === null)).toBe(true);
+    // And so does every row of this file: a statement names one account, so an
+    // unreadable line out of it belongs to that account too.
+    expect(rows.every((r) => r.accountIban === "NL77ABNA0574908765")).toBe(true);
+  });
+
+  it("an unreadable row inherits the statement's account and sits inside its period", async () => {
+    // Both defaults an error row used to carry were wrong. accountIban null
+    // put a phantom "onbekende rekening" card on /money; bookedAt new Date()
+    // dated it in whatever month the upload happened, forever. The unreadable
+    // line came out of the same file as the readable ones — that is evidence.
+    const buf = abnTsvFixture("-errorrow");
+    const { sha256 } = await storeFile(process.env.VAULT_DIR!, buf);
+    await caller().registry.import.ingest({ sha256, filename: "abn-juli.tsv" });
+
+    const rows = await db.select().from(schema.transactions)
+      .where(eq(schema.transactions.statementSha256, sha256))
+      .orderBy(schema.transactions.rowIndex);
+    const readable = rows.filter((r) => !r.parseError);
+    const errors = rows.filter((r) => r.parseError);
+    expect(readable.length).toBe(4);
+    expect(errors).toHaveLength(1);
+
+    // One account across the whole file, error row included.
+    const account = readable[0].accountIban;
+    expect(account).toBeTruthy();
+    expect(readable.every((r) => r.accountIban === account)).toBe(true);
+    expect(errors[0].accountIban).toBe(account);
+
+    // Dated inside the period the statement actually covers — the earliest
+    // readable booking, not the upload timestamp.
+    const bookings = readable.map((r) => r.bookedAt.getTime());
+    expect(errors[0].bookedAt.getTime()).toBe(Math.min(...bookings));
+    expect(errors[0].bookedAt.getTime()).toBeLessThanOrEqual(Math.max(...bookings));
+    expect(errors[0].bookedAt.toISOString()).toBe("2026-07-01T00:00:00.000Z");
+    // The raw text still holds the truth about a row whose real date is unknown.
+    expect(errors[0].rawRow).toContain("kapot");
   });
 
   it("registers an unreadable workbook as evidence before failing", async () => {

@@ -98,6 +98,29 @@ export const registryImportRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST",
         message: `This ${source} file has no readable statement rows — ${parsed.errors.length} line${parsed.errors.length === 1 ? "" : "s"} could not be read. It is stored in the vault, but nothing was imported.` });
     }
+    // What an unreadable line still tells us: it came out of THIS statement
+    // file, alongside the readable ones. That is evidence, and it beats both
+    // of the defaults this used to carry.
+    //
+    // The account: adopt the statement's own account when every readable row
+    // names the same one — an ABN export is one account per file. Rows that
+    // disagree, or a source with no account at all (PayPal), keep null and
+    // land in the unknown-account bucket, which vouches for nothing.
+    //
+    // The date: the EARLIEST readable booking of this import, not new Date().
+    // The import timestamp reported the row in whatever month someone happened
+    // to press upload, so one bad line invented a permanent "onbekende
+    // rekening" card on /money, dated today, forever. This is a PLACEHOLDER
+    // that puts the row inside the period the statement actually covers;
+    // rawRow keeps the truth about a row whose real date is unknown. A
+    // readable row is always there to take it from: a file with zero readable
+    // rows is refused above.
+    const accounts = new Set(parsed.rows.map((r) => r.accountIban));
+    const errorAccountIban = accounts.size === 1 ? [...accounts][0] : null;
+    const earliestBookedAt = parsed.rows.length > 0
+      ? new Date(Math.min(...parsed.rows.map((r) => r.bookedAt.getTime())))
+      : new Date();
+
     // Malformed rows are kept, never dropped: parseError + raw text.
     const values = [
       ...parsed.rows.map((r) => ({
@@ -107,11 +130,9 @@ export const registryImportRouter = router({
         accountIban: r.accountIban,
         statementSha256: input.sha256, rowIndex: r.rowIndex,
       })),
-      // Deliberately no accountIban on error rows: an unreadable row has no
-      // trustworthy account, and null correctly puts it in the unknown-account
-      // bucket rather than vouching for one.
       ...parsed.errors.map((e) => ({
-        source, bookedAt: new Date(), amountCents: 0,
+        source, bookedAt: earliestBookedAt, amountCents: 0,
+        accountIban: errorAccountIban,
         statementSha256: input.sha256, rowIndex: e.rowIndex,
         parseError: true, rawRow: e.raw,
       })),

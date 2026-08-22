@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "./ledger";
 import { isValidTransition } from "./registry-status";
@@ -64,6 +64,45 @@ export async function effectiveStatus(
     .where(where)
     .orderBy(desc(schema.ledgerEvents.seq)).limit(1);
   return latest?.status ?? "identified";
+}
+
+/**
+ * effectiveStatus for many financial items in ONE query.
+ *
+ * Every surface that lists the registry used to call effectiveStatus per row —
+ * /money does it on both procedures, and money.series runs on every dashboard
+ * render because the compact money block sits on the home page. One query per
+ * item is fine at today's registry size and is not fine at three years of it.
+ *
+ * MUST STAY IN LOCKSTEP WITH effectiveStatus: same join, same "latest" (the
+ * ledger seq of the registry.decision event, never createdAt — see the comment
+ * above for why), same "identified" default for an item nobody has decided on.
+ * DISTINCT ON keeps one row per item and Postgres requires the ORDER BY to
+ * lead with the DISTINCT ON expression, so the seq ordering is the tiebreaker
+ * behind it — which is exactly the LIMIT 1 the single-item version does.
+ *
+ * The returned Map has an entry for EVERY id asked about, so a caller never
+ * has to re-apply the default and the two functions cannot drift on it.
+ */
+export async function effectiveStatuses(
+  db: Db, financialItemIds: string[]
+): Promise<Map<string, string>> {
+  const statuses = new Map(financialItemIds.map((id) => [id, "identified"]));
+  if (financialItemIds.length === 0) return statuses;
+  const rows = await db
+    .selectDistinctOn([schema.registryDecisions.financialItemId], {
+      financialItemId: schema.registryDecisions.financialItemId,
+      status: schema.registryDecisions.status,
+    })
+    .from(schema.registryDecisions)
+    .innerJoin(schema.ledgerEvents, and(
+      eq(schema.ledgerEvents.entityId, schema.registryDecisions.id),
+      eq(schema.ledgerEvents.eventType, "registry.decision"),
+    ))
+    .where(inArray(schema.registryDecisions.financialItemId, financialItemIds))
+    .orderBy(schema.registryDecisions.financialItemId, desc(schema.ledgerEvents.seq));
+  for (const r of rows) if (r.financialItemId) statuses.set(r.financialItemId, r.status);
+  return statuses;
 }
 
 /**

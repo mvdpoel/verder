@@ -8,21 +8,20 @@ import {
   GRID_INK, INCOME_INK, MUTED_INK, euro, euroShort, monthLabel,
 } from "./money-format";
 import { moneyColumns } from "@/lib/money-columns";
+import {
+  accountBoundaries, accountSpans, columnKey, columnMarks, drillHref, legendHref,
+} from "@/lib/money-marks";
 
 /**
  * The /money chart. Inline SVG, no chart library — the web app has no runtime
  * dependencies beyond Next/React and this keeps it that way.
  *
- * Reading order of the marks, all four of which are visually distinct:
- *   solid fill   → a real month, statements cover all of it
- *   hatched fill → a real month whose statements do not provably cover it
- *   dashed outline → a projection from the registry, not a bank row
- *   a gap reading "geen data" → no rows at all. NEVER a zero-height bar:
- *                              "we don't know" and "nothing happened" are
- *                              different facts and must not look the same.
- *
- * Money is integer cents everywhere. The only division here is pixel geometry
- * (cents → bar height) and display formatting, neither of which is money.
+ * This file draws; it does not decide. Which columns exist is `moneyColumns`,
+ * and which marks a column gets — filled or outlined, hatched or not, dimmed
+ * or not, and the gap that is never a zero-height bar — is `columnMarks`, both
+ * unit-tested in `@/lib` without React. What is left here is geometry, and
+ * geometry is pixels: money is integer cents everywhere, and the only division
+ * below is cents → bar height and display formatting, neither of which is money.
  */
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -53,19 +52,6 @@ function niceCeil(cents: number): number {
   return Math.ceil(10 * pow);
 }
 
-/**
- * Which columns to draw is a rule, not a rendering detail, so it lives in
- * `@/lib/money-columns` where it is unit-tested without React — most of all
- * the part that keeps a partial newest month from being drawn twice.
- *
- * The key is kind-qualified as well as account- and month-qualified. Month and
- * account alone were the key, and an actual and a projected column for the
- * same month collided: a React warning, an unreliable reconciliation, and one
- * `selected` highlight lighting up two columns.
- */
-const columnKey = (col: { kind: string; account: string | null; month: string }) =>
-  `${col.kind}-${col.account}-${col.month}`;
-
 export function MoneyChart({
   series,
   accountLabels,
@@ -92,6 +78,9 @@ export function MoneyChart({
   // <pattern id="money-hatch"> on the same page silently wins for both charts.
   const hatchId = compact ? "money-hatch-compact" : "money-hatch";
 
+  // Which columns to draw is a rule, not a rendering detail, so it lives in
+  // `@/lib/money-columns` where it is unit-tested without React — most of all
+  // the part that keeps a partial newest month from being drawn twice.
   const columns = moneyColumns(series);
   if (columns.length === 0) return null;
 
@@ -116,18 +105,8 @@ export function MoneyChart({
   const height = BASE_Y + 10;
   const ticks = (compact ? [0, 2, 4] : [0, 1, 2, 3, 4]).map((n) => Math.round((top / 4) * n));
 
-  // Where one account's columns end and the next account's begin.
-  const boundaries: number[] = [];
-  for (let i = 1; i < columns.length; i++) {
-    if (columns[i].account !== columns[i - 1].account) boundaries.push(i);
-  }
-  // Account name spans, for the header strip above the plot.
-  const spans: { account: string | null; from: number; count: number }[] = [];
-  for (let i = 0; i < columns.length; i++) {
-    const last = spans[spans.length - 1];
-    if (last && last.account === columns[i].account) last.count += 1;
-    else spans.push({ account: columns[i].account, from: i, count: 1 });
-  }
+  const boundaries = accountBoundaries(columns);
+  const spans = accountSpans(columns);
 
   const categoriesPresent = CATEGORY_ORDER.filter((c) =>
     columns.some((col) => col.kind === "actual" && col.outByCategory.some((b) => b.category === c))
@@ -238,8 +217,11 @@ export function MoneyChart({
                 selected.month === col.month &&
                 (selected.account ?? null) === (col.account ?? null);
 
-              if (col.kind === "actual" && col.coverage === "none") {
-                // A gap, not a zero. There is nothing to draw here on purpose.
+              const marks = columnMarks(col, focusCategory);
+
+              // A gap, not a zero. There is nothing to draw here on purpose —
+              // see `columnMarks` for why a bar of height zero would be a lie.
+              if (marks[0]?.kind === "gap") {
                 return (
                   <g key={columnKey(col)}>
                     <line
@@ -281,84 +263,82 @@ export function MoneyChart({
                 );
               }
 
-              if (col.kind === "actual") {
-                const hatched = col.coverage === "partial";
-                const inH = h(col.inCents);
-                if (inH > 0) {
+              // The cost bands stack from the baseline up, in the order
+              // `columnMarks` hands them over.
+              let cursor = 0;
+
+              for (const mark of marks) {
+                if (mark.kind === "gap") continue; // returned above; never stacked
+                // A mark thinner than one pixel is not drawn. That is geometry
+                // and not a judgement: `columnMarks` has already decided there
+                // is money here, and the gap above is the only mark that means
+                // "no data".
+                const markH = h(mark.cents);
+                if (markH <= 0) continue;
+
+                if (mark.kind === "income") {
                   nodes.push(
                     <g key="in">
                       <rect
                         x={left + IN_X}
-                        y={BASE_Y - inH}
+                        y={BASE_Y - markH}
                         width={BAR_W}
-                        height={inH}
+                        height={markH}
                         rx="4"
                         fill={INCOME_INK}
-                        opacity={focusCategory ? 0.35 : 1}
+                        opacity={mark.dimmed ? 0.35 : 1}
                       />
-                      {hatched && (
+                      {mark.hatched && (
                         <rect
                           x={left + IN_X}
-                          y={BASE_Y - inH}
+                          y={BASE_Y - markH}
                           width={BAR_W}
-                          height={inH}
+                          height={markH}
                           rx="4"
                           fill={`url(#${hatchId})`}
                         />
                       )}
                       <title>
-                        {`${monthLabel(col.month)} — vast inkomen ${euro(col.inCents)}`}
+                        {`${monthLabel(col.month)} — vast inkomen ${euro(mark.cents)}`}
                       </title>
                     </g>
                   );
-                }
-
-                let cursor = 0;
-                for (const band of col.outByCategory) {
-                  const bandH = h(band.cents);
-                  if (bandH <= 0) continue;
-                  const y = BASE_Y - cursor - bandH;
-                  const dimmed = focusCategory != null && focusCategory !== band.category;
+                } else if (mark.kind === "band") {
+                  const y = BASE_Y - cursor - markH;
                   nodes.push(
-                    <g key={`out-${band.category}`}>
+                    <g key={`out-${mark.category}`}>
                       <rect
                         x={left + OUT_X}
                         y={y}
                         width={BAR_W}
-                        height={Math.max(1, bandH - SEG_GAP)}
+                        height={Math.max(1, markH - SEG_GAP)}
                         rx="2"
-                        fill={dimmed ? GRID : (CATEGORY_COLOR[band.category] ?? MUTED)}
+                        fill={mark.dimmed ? GRID : (CATEGORY_COLOR[mark.category] ?? MUTED)}
                       />
-                      {hatched && !dimmed && (
+                      {mark.hatched && (
                         <rect
                           x={left + OUT_X}
                           y={y}
                           width={BAR_W}
-                          height={Math.max(1, bandH - SEG_GAP)}
+                          height={Math.max(1, markH - SEG_GAP)}
                           rx="2"
                           fill={`url(#${hatchId})`}
                         />
                       )}
                       <title>
-                        {`${monthLabel(col.month)} — ${CATEGORY_LABEL[band.category] ?? band.category} ${euro(band.cents)}`}
+                        {`${monthLabel(col.month)} — ${CATEGORY_LABEL[mark.category] ?? mark.category} ${euro(mark.cents)}`}
                       </title>
                     </g>
                   );
-                  cursor += bandH;
-                }
-              } else {
-                // Projected: outline only. Nothing here is a bank row.
-                const inH = h(col.inCents);
-                const outH = h(col.outCents);
-                const afterH = h(col.outAfterCancelCents);
-                if (inH > 0) {
+                  cursor += markH;
+                } else if (mark.kind === "projected-income") {
                   nodes.push(
                     <g key="pin">
                       <rect
                         x={left + IN_X + 0.5}
-                        y={BASE_Y - inH}
+                        y={BASE_Y - markH}
                         width={BAR_W - 1}
-                        height={inH}
+                        height={markH}
                         rx="4"
                         fill="none"
                         stroke={INCOME_INK}
@@ -366,19 +346,18 @@ export function MoneyChart({
                         strokeDasharray="4 3"
                       />
                       <title>
-                        {`${monthLabel(col.month)} — verwacht vast inkomen ${euro(col.inCents)}`}
+                        {`${monthLabel(col.month)} — verwacht vast inkomen ${euro(mark.cents)}`}
                       </title>
                     </g>
                   );
-                }
-                if (outH > 0) {
+                } else if (mark.kind === "projected-out") {
                   nodes.push(
                     <g key="pout">
                       <rect
                         x={left + OUT_X + 0.5}
-                        y={BASE_Y - outH}
+                        y={BASE_Y - markH}
                         width={BAR_W - 1}
-                        height={outH}
+                        height={markH}
                         rx="4"
                         fill="none"
                         stroke={MUTED}
@@ -386,19 +365,18 @@ export function MoneyChart({
                         strokeDasharray="4 3"
                       />
                       <title>
-                        {`${monthLabel(col.month)} — verwachte vaste lasten ${euro(col.outCents)}`}
+                        {`${monthLabel(col.month)} — verwachte vaste lasten ${euro(mark.cents)}`}
                       </title>
                     </g>
                   );
-                }
-                if (afterH > 0) {
+                } else if (mark.kind === "projected-after-cancel") {
                   nodes.push(
                     <g key="pafter">
                       <rect
                         x={left + OUT_X + 3.5}
-                        y={BASE_Y - afterH}
+                        y={BASE_Y - markH}
                         width={BAR_W - 7}
-                        height={afterH}
+                        height={markH}
                         rx="3"
                         fill="none"
                         stroke={AFTER_CANCEL_INK}
@@ -406,7 +384,7 @@ export function MoneyChart({
                         strokeDasharray="2 2"
                       />
                       <title>
-                        {`${monthLabel(col.month)} — na opzeggen ${euro(col.outAfterCancelCents)}`}
+                        {`${monthLabel(col.month)} — na opzeggen ${euro(mark.cents)}`}
                       </title>
                     </g>
                   );
@@ -420,11 +398,8 @@ export function MoneyChart({
           {/* Month labels double as the drill targets: clicking a month opens
               the panel below the chart. HTML links, so this is real navigation
               with real keyboard focus rather than an SVG click handler.
-              Compact has no drill, so there the same labels are plain text —
-              and neither has a projected month: the panel lists bank rows, and
-              for a month that has not happened yet it would answer "geen
-              uitgaven in deze maand", which is a statement about the future
-              dressed up as a fact about the ledger. */}
+              `drillHref` decides which columns get one — compact has no drill,
+              and neither has a projected month. */}
           <div className="flex" style={{ paddingLeft: AXIS_W }}>
             {columns.map((col, i) => {
               const isSelected =
@@ -432,18 +407,14 @@ export function MoneyChart({
                 col.kind === "actual" &&
                 selected.month === col.month &&
                 (selected.account ?? null) === (col.account ?? null);
-              const drillable = !compact && col.kind === "actual";
-              const href =
-                `/money?month=${col.month}` +
-                (col.account ? `&account=${encodeURIComponent(col.account)}` : "") +
-                (focusCategory ? `&cat=${encodeURIComponent(focusCategory)}` : "");
+              const href = drillHref(col, { compact, focusCategory });
               const className =
                 `block truncate px-1 py-1 text-center text-[10px] ${
-                  drillable ? "hover:bg-slate-100" : ""
+                  href ? "hover:bg-slate-100" : ""
                 } ${boundaries.includes(i) ? "border-l border-slate-300" : ""} ${
                   isSelected ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-500"
                 } ${col.kind === "projected" ? "italic" : ""}`;
-              return !drillable ? (
+              return href == null ? (
                 <span
                   key={columnKey(col)}
                   style={{ width: COL_W }}
@@ -489,7 +460,7 @@ export function MoneyChart({
           return (
             <Link
               key={category}
-              href={active ? "/money" : `/money?cat=${category}`}
+              href={legendHref(category, focusCategory)}
               className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100 ${
                 active ? "font-semibold text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
               }`}

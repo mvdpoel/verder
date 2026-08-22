@@ -2,7 +2,9 @@ import { asc, desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createDb, schema, type Db } from "@verder/db";
 import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@verder/core";
-import { decide, effectiveStatus, registryDecisionPayload } from "./registry-decide";
+import {
+  decide, effectiveStatus, effectiveStatuses, registryDecisionPayload,
+} from "./registry-decide";
 import { registryDecisionPayloadHash } from "./verification";
 
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
@@ -101,6 +103,28 @@ describe("registry decisions", () => {
     await db.transaction((tx) => decide(tx, userId, { financialItemId: item.id,
       status: "to-cancel", explanation: "Cheaper provider found." }));
     expect(await effectiveStatus(db, { financialItemId: item.id })).toBe("to-cancel");
+  });
+
+  it("effectiveStatuses answers for many items in one query, agreeing with effectiveStatus", async () => {
+    // The batched form exists to kill an N+1 on /money and the dashboard. It
+    // is only allowed to exist if it cannot disagree with the single-item
+    // function — including on the "identified" default for an item nobody has
+    // decided on, and on which of two decisions counts as the latest.
+    const decided = await mkItem("Waternet");
+    await db.transaction((tx) => decide(tx, userId, { financialItemId: decided.id,
+      status: "allowed", explanation: "Water is a basic need." }));
+    await db.transaction((tx) => decide(tx, userId, { financialItemId: decided.id,
+      status: "to-cancel", explanation: "Moving house." }));
+    const untouched = await mkItem("Fitnessabonnement");
+
+    const map = await effectiveStatuses(db, [decided.id, untouched.id]);
+    expect(map.get(decided.id)).toBe(await effectiveStatus(db, { financialItemId: decided.id }));
+    expect(map.get(decided.id)).toBe("to-cancel");
+    expect(map.get(untouched.id)).toBe(await effectiveStatus(db, { financialItemId: untouched.id }));
+    expect(map.get(untouched.id)).toBe("identified");
+    // Every id asked about gets an answer, so no caller re-applies the default.
+    expect(map.size).toBe(2);
+    expect(await effectiveStatuses(db, [])).toEqual(new Map());
   });
 
   it("debt decisions follow the debt matrix", async () => {

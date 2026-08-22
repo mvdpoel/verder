@@ -19,7 +19,24 @@
 - **This sub-project appends no `ledger_events` and creates no evidence.** If a task seems to need one, stop — the design is being violated.
 - **Months are Europe/Amsterdam calendar months**, formatted `YYYY-MM`.
 - **Tone in UI copy:** toward Martin, reporting and never judging. Dutch labels for money concepts the bank and VerderGroep use (`vast inkomen`, `incidenteel`, `leefgeld`, `geen data`, `mogelijk incompleet`, `na opzeggen`); English for app chrome, matching the existing pages.
-- **`INCOME_CONTINUATION_TOLERANCE = 0.25`**, a named constant whose comment states the value is a guess until measured against Martin's real ABN export.
+- **`INCOME_CONTINUATION_TOLERANCE = 0.25`**, a named constant whose comment states the value is a guess until measured against Martin's real ABN export. — *Superseded during execution; see the section below.*
+
+## What changed during execution (added 2026-08-22)
+
+Every `[x]` below was really done, in the order shown. What the steps print is the code that was **proposed**; four rules were then measured against Martin's real ABN statement and changed underneath the plan. Where a step's code and the tree disagree, the tree is right, and the reasons live in the spec and in `packages/api/src/money-series.real.test.ts` — the oracle, which is a transcript of his real credits cross-checked against the July payslip to the cent. **No income rule may be re-tuned without measuring against it.**
+
+1. **The Task 6 and Task 7 fixtures were replaced, and the plan still prints the originals under a tick.**
+   - Task 6 Step 1's *"drops a one-off credit"* prints a vakantiegeld from the employer's **own** IBAN. In the tree that fixture is a belastingteruggave from its own payer — a one-off from a stranger, which never forms a group of two and so never becomes a line. The vakantiegeld case moved to a new test, *"counts a vakantiegeld as income but never projects from it"*.
+   - Task 6 Step 6 and Task 7 Step 6 describe `evictOneOffCredits` and `INCOME_OUTLIER_TOLERANCE_PCT = 15`. **Neither exists any more** — grep finds no occurrence of either name. The eviction pass could not survive the shape real salary has (see 2), and was removed rather than widened.
+   - Task 7's four `buildMoneySeries` tests are now twelve; the weekly-projection, per-account-projection, projection-overlap, disclosure-rows and unreadable-row fixtures are all in the tree and none of them are in the plan.
+
+2. **`detectRecurring`'s amount gate is SKIPPED for credits** (commit `14fc32a`). The 40% similarity band is right for a subscription and wrong for a wage: TrueFullstaq paid € 648,00 / € 2.660,68 / € 1.118,65 in three consecutive months — a genuine monthly salary ending in a part-month, because Martin left on 10 June — and the gate threw the group away, drawing **€ 0,00 income for April and May** in months where € 5.006,31 arrived. "Recurring only" is now enforced by the **counterparty** having a cadence, never by the amounts being stable.
+
+3. **`INCOME_CONTINUATION_TOLERANCE = 0.25` is gone.** It is `INCOME_CONTINUATION_TOLERANCE_NUM / _DEN` = **1/2**, an integer ratio the way `detectRecurring` spells its own bands, and **measured** rather than guessed: 0.25 refused Martin's own June 2026 job change, a 33,7% raise from € 2.660,68 to € 3.556,42, so the chart reported his income as ended. The rule also compares **`fullPeriodAmount`, not the two medians** — a part-month is normal at both ends of a job change and drags a median down. The obvious fix for that rule's known hole is refused on measurement; the spec records the numbers, and `money-series.test.ts` pins the triple.
+
+4. **Task 9 Step 4's manual check of the `/money` empty state could not have happened as written.** The dev postgres is shared between every suite in the repo and always holds transactions, so a "clean dev DB" was not available to look at — and emptying it would have meant deleting from an append-only table to make a page look right. What is actually asserted now: `money-series.test.ts` *"returns nothing at all for an empty database"* (the pure module, no DB), and `money.test.ts` asserts `series: []`, `accountLabels: {}` and an empty month drill against a **stubbed `Db`**, with a comment saying plainly that this is a claim about the two procedures and not about the page. The page's `series.length === 0` branch — which is the state production is in — is covered by no test. Worth knowing before the first deploy.
+
+5. **Smaller drift, where a step's text is now simply wrong:** Task 3 Step 3 says to leave the `parsed.errors.map(...)` literal alone, but an error row now inherits the statement's account when every readable row agrees and takes that import's earliest readable booking, because `new Date()` invented a permanent "onbekende rekening" card dated today. Task 5's coverage arithmetic is in Amsterdam calendar **days** and abutting statements merge. `splitInternalTransfers` **consumes** a matched debit, so one transfer out cannot disqualify two credits. Task 8's router batches statuses through the new `effectiveStatuses`, selects named columns instead of `SELECT *`, and narrows `money.month` in SQL over a window two days wider than the month while `monthKey` still decides membership in JS. The chart's decisions were pulled out into `money-columns.ts`, `money-marks.ts` and `money-disclosures.ts` so they can be tested without React; `/money` gained an income-lines section, per-row disclosures, and the two notes the header needed (the asymmetric `blijft over`, and that the account cards must not be added).
 
 ## File Structure
 
@@ -1516,7 +1533,7 @@ git commit -m "feat(web): money on the dashboard, and the notes that go with it"
 | Drill: month → categories → items → rows → vault | 8, 9 |
 | Category focus in the URL | 9 |
 | Four bar states + `geen data` | 9 |
-| Empty state | 9 (asserted in 7's unit test and checked in 9's step 4) |
+| Empty state | 9 (asserted in 7's unit test; step 4's manual check did not happen — see *What changed during execution* §4) |
 | Dashboard block | 10 |
 | Transactions survive their document's discard | 8 |
 | Docs and deploy ordering | 10 |
