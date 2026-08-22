@@ -5,7 +5,7 @@ import {
 // Shared search constants. Deliberately NOT a "use client" module: both the
 // server-rendered /search page and the client command palette import it, and
 // exports of a client module reach server components as client references
-// instead of their values (same reason as components/timeline-kinds.ts).
+// instead of their values (same reason as components/money-format.ts).
 //
 // The import is the /search/entity-types subpath, not the @verder/core barrel:
 // the barrel re-exports hash.ts, whose node:crypto import cannot be resolved in
@@ -18,8 +18,8 @@ export const ENTITY_LABEL: Record<SearchEntityType, string> = {
   financial_item: "Registry item",
   debt: "Debt",
   task: "Task",
-  milestone: "Milestone",
-  timeline_event: "Key event",
+  track: "Spoor",
+  stop: "Halte",
   party: "Party",
 };
 
@@ -30,8 +30,8 @@ export const ENTITY_BADGE: Record<SearchEntityType, string> = {
   financial_item: "bg-indigo-100 text-indigo-800",
   debt: "bg-red-100 text-red-700",
   task: "bg-violet-100 text-violet-800",
-  milestone: "bg-teal-100 text-teal-800",
-  timeline_event: "bg-orange-100 text-orange-800",
+  track: "bg-teal-100 text-teal-800",
+  stop: "bg-orange-100 text-orange-800",
   party: "bg-slate-100 text-slate-700",
 };
 

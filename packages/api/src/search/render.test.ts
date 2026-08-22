@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { euro, nlLabel, stripQuotedReply } from "./render";
 import {
   renderDebt, renderDocument, renderEmail, renderEntry, renderFinancialItem,
-  renderMilestone, renderParty, renderTask, renderTimelineEvent,
+  renderParty, renderStop, renderTask, renderTrack,
 } from "./render";
 
 describe("stripQuotedReply", () => {
@@ -149,27 +149,6 @@ describe("renderers", () => {
     expect(r.status).toBe("in-progress");
   });
 
-  it("renders a milestone, falling back to the expected date, with no filterable status", () => {
-    const r = renderMilestone({ title: "Toelating WSNP", stage: "wsnp-start", done: false,
-      happenedAt: null, expectedAt: new Date("2026-10-01T00:00:00Z"), note: "Zitting gepland." });
-    expect(r.body).toContain("Fase: wsnp-start (start WSNP).");
-    expect(r.body).toContain("Status: open.");
-    expect(r.body).toContain("Zitting gepland.");
-    expect(r.occurredAt).toEqual(new Date("2026-10-01T00:00:00Z"));
-    // done/open is prose, not one of SEARCH_STATUSES: a status filter of "open"
-    // must return tasks, not milestones.
-    expect(r.status).toBeNull();
-  });
-
-  it("renders a timeline event with no note as a title-only body", () => {
-    const r = renderTimelineEvent({ title: "Intakegesprek", kind: "meeting", note: null,
-      happenedAt: new Date("2026-08-05T13:00:00Z") });
-    expect(r.title).toBe("Intakegesprek");
-    expect(r.body).toContain("Gebeurtenis: Intakegesprek.");
-    expect(r.body).toContain("Soort: meeting (gesprek).");
-    expect(r.status).toBeNull();
-  });
-
   it("renders a party", () => {
     const r = renderParty({ name: "VerderGroep", kind: "organization",
       organization: "VerderGroep B.V.", email: "info@verdergroep.nl", phone: "0800-1234",
@@ -178,6 +157,61 @@ describe("renderers", () => {
     expect(r.body).toContain("Soort: organization (organisatie).");
     expect(r.body).toContain("E-mail: info@verdergroep.nl.");
     expect(r.body).toContain("Bewindvoerder.");
+    expect(r.status).toBeNull();
+  });
+});
+
+describe("renderTrack / renderStop", () => {
+  it("renders a track that merged back differently from one that ended", () => {
+    const merged = renderTrack({
+      title: "WSNP-aanvraag", status: "done", note: null,
+      mergesBack: true, droppedMerge: false,
+    });
+    const ended = renderTrack({
+      title: "Ontruiming", status: "ended", note: null,
+      mergesBack: false, droppedMerge: false,
+    });
+    expect(merged.body).toContain("teruggekomen op de hoofdlijn");
+    expect(ended.body).toContain("geëindigd");
+    // A track that ended is not a failure and the text must not read as one.
+    expect(ended.body).not.toMatch(/mislukt|niet afgemaakt/i);
+  });
+
+  it("indexes a REFUSED merge the way the map draws it: ending, not merged back", () => {
+    // merges_at_stop_id points backwards, so buildTrackMap drops the edge and
+    // /timeline draws the spoor as ending. The index has to agree, or one Dutch
+    // query contradicts the picture beside it.
+    const refused = renderTrack({
+      title: "Ontruiming", status: "ended", note: null,
+      mergesBack: true, droppedMerge: true,
+    });
+    expect(refused.body).toContain("geëindigd op zichzelf");
+    expect(refused.body).not.toContain("teruggekomen op de hoofdlijn");
+  });
+
+  it("dates a stop by what happened, falling back to what is expected", () => {
+    const done = renderStop({
+      title: "Intake Almere", kind: "meeting", state: "done", note: null,
+      happenedAt: new Date("2026-06-19T00:00:00Z"), expectedAt: null,
+      stage: null, trackTitle: "WSNP-aanvraag",
+    });
+    expect(done.occurredAt?.toISOString().slice(0, 10)).toBe("2026-06-19");
+    expect(done.body).toContain("WSNP-aanvraag");
+
+    const expected = renderStop({
+      title: "Uitspraak", kind: "process", state: "expected", note: null,
+      happenedAt: null, expectedAt: new Date("2026-09-01T00:00:00Z"),
+      stage: null, trackTitle: "WSNP-aanvraag",
+    });
+    expect(expected.occurredAt?.toISOString().slice(0, 10)).toBe("2026-09-01");
+    expect(expected.body).toContain("verwacht");
+  });
+
+  it("gives neither a SEARCH_STATUSES status — they are display aids", () => {
+    const r = renderStop({
+      title: "x", kind: "other", state: "open", note: null, happenedAt: null,
+      expectedAt: null, stage: null, trackTitle: "t",
+    });
     expect(r.status).toBeNull();
   });
 });

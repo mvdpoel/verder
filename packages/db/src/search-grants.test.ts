@@ -83,8 +83,12 @@ describe("knowledge-base index grants", () => {
 
   it("lets the app role read the index but never write it", async () => {
     const entityId = crypto.randomUUID();
+    // A LIVE entity kind. entity_type is opaque to a grant, but this suite runs
+    // in parallel with tracks-schema.test.ts, which asserts that no chunk of a
+    // retired kind ('milestone', 'timeline_event') is left anywhere — a fixture
+    // labelled with one of those would fail that test on timing alone.
     const [chunk] = await worker.insert(schema.searchChunks).values({
-      entityType: "milestone", entityId, chunkIndex: 0,
+      entityType: "stop", entityId, chunkIndex: 0,
       title: "Toelating WSNP", body: "Zitting gepland.", sourceHash: "c".repeat(64),
     }).returning();
 
@@ -95,7 +99,7 @@ describe("knowledge-base index grants", () => {
     // The web app searches the index; only the worker maintains it.
     await expect(
       app.insert(schema.searchChunks).values({
-        entityType: "milestone", entityId, chunkIndex: 1,
+        entityType: "stop", entityId, chunkIndex: 1,
         title: "Verboden", body: "verboden", sourceHash: "d".repeat(64),
       }),
     ).rejects.toThrow(/permission denied for table search_chunks/);

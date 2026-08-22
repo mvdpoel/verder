@@ -58,7 +58,13 @@ describe("search_outbox triggers", () => {
     return entry;
   };
 
-  it("enqueues exactly one row per insert on each of the nine entity tables", async () => {
+  // `tracks` and `stops` are covered in tracks-schema.test.ts instead — they are
+  // the only indexed tables that cannot be reached without the seeded map, and
+  // that suite already owns the seed. `milestones` and `timeline_events` are
+  // NOT covered anywhere any more: sub-project 6 retired both entity kinds and
+  // migration 0023 drops their triggers, so a row here would be a job
+  // search.drain can never complete.
+  it("enqueues exactly one row per insert on each indexed entity table", async () => {
     const [party] = await db.insert(schema.parties)
       .values({ kind: "organization", name: `VerderGroep ${crypto.randomUUID()}` }).returning();
     expect(await outboxFor("party", party.id)).toHaveLength(1);
@@ -92,26 +98,21 @@ describe("search_outbox triggers", () => {
       .values({ title: "Kopie paspoort opsturen", createdBy: userId }).returning();
     expect(await outboxFor("task", task.id)).toHaveLength(1);
 
+    // A retired kind must NOT enqueue: 0023 dropped both triggers, because
+    // loadAndRender throws on a type that left SEARCH_ENTITY_TYPES and the
+    // drain would retry that row every 60 s forever.
     const [milestone] = await db.insert(schema.milestones)
       .values({ stage: "onboarding", title: "Onboarding gestart (outbox test)" }).returning();
-    expect(await outboxFor("milestone", milestone.id)).toHaveLength(1);
+    expect(await outboxFor("milestone", milestone.id)).toHaveLength(0);
 
     const [event] = await db.insert(schema.timelineEvents).values({
       title: "Verzoek verstuurd naar de rechtbank",
       happenedAt: new Date("2026-08-01T12:00:00Z"), kind: "process",
     }).returning();
-    expect(await outboxFor("timeline_event", event.id)).toHaveLength(1);
+    expect(await outboxFor("timeline_event", event.id)).toHaveLength(0);
   });
 
   it("enqueues a second row when an entity row is UPDATEd", async () => {
-    const [event] = await db.insert(schema.timelineEvents).values({
-      title: "Tyop in het onderwerp", happenedAt: new Date("2026-08-02T09:00:00Z"),
-    }).returning();
-    expect(await outboxFor("timeline_event", event.id)).toHaveLength(1);
-    await db.update(schema.timelineEvents).set({ title: "Typo in het onderwerp" })
-      .where(eq(schema.timelineEvents.id, event.id));
-    expect(await outboxFor("timeline_event", event.id)).toHaveLength(2);
-
     const [task] = await db.insert(schema.tasks)
       .values({ title: "Bankafschrift zoeken", createdBy: userId }).returning();
     expect(await outboxFor("task", task.id)).toHaveLength(1);

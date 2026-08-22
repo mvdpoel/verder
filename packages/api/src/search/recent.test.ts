@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { LINKABLE_ENTITY_TYPES, entityHref, recentEntities } from "./recent";
 
@@ -11,8 +12,8 @@ describe("entityHref", () => {
     expect(entityHref("financial_item", ID)).toBe(`/registry/${ID}`);
     expect(entityHref("debt", ID)).toBe(`/registry/debts/${ID}`);
     expect(entityHref("task", ID)).toBe(`/tasks/${ID}`);
-    expect(entityHref("milestone", ID)).toBe("/milestones");
-    expect(entityHref("timeline_event", ID)).toBe("/timeline");
+    expect(entityHref("track", ID)).toBe("/timeline");
+    expect(entityHref("stop", ID)).toBe(`/timeline?stop=${ID}`);
   });
 
   it("covers the whole linkable list, so no row can render without a target", () => {
@@ -83,5 +84,28 @@ describe("recentEntities", () => {
     for (const r of rows) {
       expect(LINKABLE_ENTITY_TYPES as readonly string[]).toContain(r.entityType);
     }
+  });
+
+  it("skips a chunk left behind by a retired entity kind", async () => {
+    // entity_type is TEXT, and the milestone/timeline_event chunks written before
+    // sub-project 6 outlive the swap — `reindex --prune` walks the CURRENT
+    // vocabulary and never visits them. entityHref has no case for one, so it
+    // would hand the palette a row whose href is undefined.
+    const [probe] = await worker.insert(schema.searchChunks).values({
+      entityType: "milestone", entityId: crypto.randomUUID(), chunkIndex: 0,
+      title: "Palette probe retired kind", body: "Mijlpaal uit een vorige versie",
+      sourceHash: crypto.randomUUID(),
+    }).returning();
+
+    const rows = await recentEntities(app, 8);
+    expect(rows.some((r) => r.title === "Palette probe retired kind")).toBe(false);
+    for (const r of rows) expect(r.href).toMatch(/^\//);
+
+    // The dev database is shared, and tracks-schema.test.ts asserts that
+    // migration 0023's DELETE holds: NO chunk of a retired kind anywhere. This
+    // probe must not outlive its own test, or it fails that one on the next
+    // run. search_chunks is derived, so deleting from it is legal.
+    await worker.delete(schema.searchChunks)
+      .where(eq(schema.searchChunks.id, probe.id));
   });
 });

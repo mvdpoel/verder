@@ -4,7 +4,7 @@ import { EnablePush } from "@/components/enable-push";
 import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
 import { WsnpTimeline } from "@/components/wsnp-timeline";
-import { KIND_BADGE, KIND_LABEL } from "@/components/timeline-kinds";
+import { noOpenTracksLine } from "@/lib/track-marks";
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
@@ -13,15 +13,64 @@ export default async function DashboardPage() {
   const taskStats = await caller.tasks.stats();
   const timeline = await caller.milestones.timeline();
   const clearedBlockers = await caller.registry.clearedBlockers();
-  const keyEvents = await caller.timeline.recent({ limit: 5 });
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
+  const { map } = await caller.tracks.map();
+  // One line per open spoor: its furthest stop that is not done yet, or its
+  // last stop if everything on it is done. `.at(-1)` rather than an index,
+  // because a spoor with no haltes yet is a real state and the type should say
+  // so instead of promising a stop that isn't there.
+  const openTracks = map.tracks
+    .filter((t) => t.status === "open" && t.parentTrackId !== null)
+    .map((t) => {
+      const own = map.stops.filter((s) => s.trackId === t.id)
+        .sort((a, b) => a.column - b.column);
+      return { track: t, stop: own.find((s) => s.state !== "done") ?? own.at(-1) };
+    });
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Hi Martin 👋 — here's where things stand</h1>
         <EnablePush />
       </div>
+      {/* Where the case stands, in one line per open spoor. The dashboard shows
+          LESS than /timeline on purpose: no map, no evidence, no problems — it
+          points at the page that has them. */}
+      <section>
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="font-semibold">Waar de zaak staat</h2>
+          <Link className="text-sm text-slate-500 hover:underline" href="/timeline">
+            de hele kaart →
+          </Link>
+        </div>
+        {openTracks.length === 0 ? (
+          // Names the outcomes that actually happened. "alles is afgerond"
+          // asserted afgerond over a spoor whose status is `ended` — a
+          // different, equally clean outcome that the rest of this work keeps
+          // carefully apart.
+          <p className="text-sm text-slate-500">
+            {noOpenTracksLine(map.tracks
+              .filter((t) => t.parentTrackId !== null)
+              .map((t) => t.status))}
+          </p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {openTracks.map(({ track, stop }) => (
+              <li key={track.id} className="flex flex-wrap gap-x-2 rounded border bg-white p-3">
+                <span className="font-medium">{track.title}</span>
+                <span className="text-slate-600">
+                  {stop ? stop.title : "nog geen halte"}
+                </span>
+                {stop?.id === map.currentStopId && (
+                  <span className="ml-auto text-xs font-medium text-green-700">
+                    wacht op jou
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <WsnpTimeline stages={timeline.stages} countdown={timeline.countdown} />
       {clearedBlockers.length > 0 && (
         <section className="space-y-2">
@@ -62,26 +111,11 @@ export default async function DashboardPage() {
           {stats.lastWorkerRuns.length === 0 && <li>🟡 Watchers haven't reported yet.</li>}
         </ul>
       </section>
-      <section>
-        <div className="flex items-baseline justify-between mb-2">
-          <h2 className="font-semibold">Recent key events</h2>
-          <Link className="text-sm text-slate-500 hover:underline" href="/timeline">full timeline →</Link>
-        </div>
-        {keyEvents.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No key events yet — <Link className="hover:underline" href="/timeline">add the moments that matter</Link>.
-          </p>
-        ) : (
-          <ul className="space-y-1">{keyEvents.map((e) => (
-            <li key={e.id} className="text-sm">
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind] ?? KIND_BADGE.other}`}>
-                {KIND_LABEL[e.kind] ?? e.kind}
-              </span>{" "}
-              <Link className="hover:underline" href="/timeline">{e.title}</Link>
-              <span className="text-xs text-slate-500"> · {new Date(e.happenedAt).toLocaleDateString("nl-NL")}</span>
-            </li>))}</ul>
-        )}
-      </section>
+      {/* "Recent key events" used to live here, reading the flat timeline that
+          this sub-project replaced. It is gone rather than re-pointed at stops:
+          the block at the top already says where every open spoor stands, and a
+          second, date-ordered list of stops would be the dashboard telling the
+          same story twice — once without the map that gives it its meaning. */}
       <section>
         <h2 className="font-semibold mb-2">Recently logged</h2>
         <ul className="space-y-1">{recent.map((e) => (

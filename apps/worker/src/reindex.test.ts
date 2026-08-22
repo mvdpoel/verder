@@ -149,11 +149,11 @@ describe("runReindex", () => {
     try {
       const embed = countingEmbed();
       await runReindex({ db, embed: embed.port },
-        { entity: "milestone", since: null, prune: false });
+        { entity: "track", since: null, prune: false });
       const runs = await db.select().from(schema.workerRuns)
         .where(eq(schema.workerRuns.worker, "reindex"));
       expect(runs.some((r) => r.status === "ok"
-        && (r.detail as Record<string, unknown> | null)?.entityType === "milestone")).toBe(true);
+        && (r.detail as Record<string, unknown> | null)?.entityType === "track")).toBe(true);
     } finally {
       await pool.end();
     }

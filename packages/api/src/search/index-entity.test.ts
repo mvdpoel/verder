@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { sha256Hex, type SearchEntityType } from "@verder/core";
 import { appendLedgerEvent } from "../ledger";
@@ -199,7 +199,7 @@ describe("loadAndRender — related values and effective status", () => {
     expect(chunks[0].body).toContain(`DOS-${marker}`);
   });
 
-  it("renders e-mails, milestones, timeline events and parties with a null status", async () => {
+  it("renders e-mails, sporen, haltes and parties with a null status", async () => {
     const marker = randomUUID();
     const [email] = await db.insert(schema.rawEmails).values({
       gmailMessageId: `msg-${marker}`, gmailThreadId: `thr-${marker}`,
@@ -208,13 +208,21 @@ describe("loadAndRender — related values and effective status", () => {
       rawRfc822Sha256: sha256Hex(`raw-${marker}`),
       bodyText: "Uw abonnement is opgezegd per 1 oktober.",
     }).returning();
-    const [milestone] = await db.insert(schema.milestones).values({
-      stage: "wsnp-start", title: `Toelating WSNP ${marker}`,
-      expectedAt: new Date("2026-10-01T00:00:00Z"), note: "Zitting gepland.",
+    // The main line is shared with every other suite and only one may exist, so
+    // this fixture branches off it instead of creating a second root.
+    const [root] = await db.select().from(schema.tracks)
+      .where(isNull(schema.tracks.parentTrackId));
+    const [anchor] = await db.select({ id: schema.stops.id }).from(schema.stops)
+      .where(eq(schema.stops.trackId, root.id)).orderBy(asc(schema.stops.orderIndex));
+    const [track] = await db.insert(schema.tracks).values({
+      title: `Ontruiming ${marker}`, status: "ended",
+      parentTrackId: root.id, branchesAtStopId: anchor.id,
+      note: "Aanzegging afgehandeld.",
     }).returning();
-    const [event] = await db.insert(schema.timelineEvents).values({
-      title: `Intakegesprek ${marker}`, kind: "meeting",
-      happenedAt: new Date("2026-08-05T13:00:00Z"),
+    const [stop] = await db.insert(schema.stops).values({
+      trackId: track.id, orderIndex: 0, title: `Intakegesprek ${marker}`,
+      kind: "meeting", state: "expected",
+      expectedAt: new Date("2026-10-01T00:00:00Z"), note: "Zitting gepland.",
     }).returning();
     const [party] = await db.insert(schema.parties).values({
       kind: "organization", name: `Bewind ${marker}`, email: "info@verdergroep.nl",
@@ -223,10 +231,12 @@ describe("loadAndRender — related values and effective status", () => {
     const cases: { type: SearchEntityType; id: string; title: string; contains: string }[] = [
       { type: "email", id: email.id, title: `Opzegging bevestigd ${marker}`,
         contains: "Uw abonnement is opgezegd per 1 oktober." },
-      { type: "milestone", id: milestone.id, title: `Toelating WSNP ${marker}`,
-        contains: "Zitting gepland." },
-      { type: "timeline_event", id: event.id, title: `Intakegesprek ${marker}`,
-        contains: `Intakegesprek ${marker}` },
+      // A track that ended is a clean outcome, and its indexed text says so.
+      { type: "track", id: track.id, title: `Ontruiming ${marker}`,
+        contains: "geëindigd op zichzelf" },
+      // The spoor title is read live off the track, never copied onto the halte.
+      { type: "stop", id: stop.id, title: `Intakegesprek ${marker}`,
+        contains: `Spoor: Ontruiming ${marker}.` },
       { type: "party", id: party.id, title: `Bewind ${marker}`,
         contains: "info@verdergroep.nl" },
     ];

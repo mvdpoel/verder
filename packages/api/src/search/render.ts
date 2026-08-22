@@ -24,6 +24,10 @@ const NL: Record<string, string> = {
   settled: "afgewikkeld",
   "in-progress": "in behandeling", waiting: "wachtend", done: "afgerond",
   dropped: "vervallen",
+  // track_status. "geëindigd" is a clean outcome — the side track was handled
+  // and closed — so it is labelled, never left as a bare English token that
+  // Martin's Dutch query cannot reach.
+  ended: "geëindigd",
   application: "aanvraag", accepted: "toegelaten", onboarding: "intake",
   "wsnp-start": "start WSNP", settlement: "regeling", "clean-slate": "schone lei",
   call: "telefoon", meeting: "gesprek", email: "e-mail", voicemail: "voicemail",
@@ -196,36 +200,53 @@ export function renderTask(task: {
   };
 }
 
-export function renderMilestone(m: {
-  title: string; stage: string; done: boolean; happenedAt: Date | null;
-  expectedAt: Date | null; note: string | null;
+export function renderTrack(t: {
+  title: string; status: string; note: string | null;
+  mergesBack: boolean;
+  /** The map REFUSED this track's merge (it pointed backwards) and draws the
+   *  track as ending. buildTrackMap decides it; this function is told. */
+  droppedMerge: boolean;
 }): Rendered {
-  const at = m.happenedAt ?? m.expectedAt;
+  // A merges_at_stop_id that the map dropped is a pointer, not a drawn line:
+  // the track renders as ending on /timeline. Indexing it as "teruggekomen op
+  // de hoofdlijn" would make one Dutch query contradict the picture next to it,
+  // so the DRAWN outcome wins over the stored pointer.
+  const mergesBack = t.mergesBack && !t.droppedMerge;
   return {
-    title: m.title,
+    title: t.title,
     body: lines(
-      field("Mijlpaal", m.title),
-      field("Fase", nlLabel(m.stage)),
-      field("Status", m.done ? "afgerond" : "open"),
-      field("Datum", day(at)),
-      m.note?.trim() || null),
-    occurredAt: at,
-    // A milestone's done/open flag is not one of SEARCH_STATUSES; it stays prose
-    // in the body so a status filter cannot half-match it.
+      field("Spoor", t.title),
+      field("Status", nlLabel(t.status)),
+      // A track that ended is a clean outcome — handled and closed — and the
+      // indexed text must not read as an unfinished one.
+      field("Verloop", mergesBack
+        ? "teruggekomen op de hoofdlijn (was een voorwaarde voor het einddoel)"
+        : "geëindigd op zichzelf"),
+      t.note?.trim() || null),
+    occurredAt: null,
     status: null,
   };
 }
 
-export function renderTimelineEvent(e: {
-  title: string; kind: string; note: string | null; happenedAt: Date;
+export function renderStop(s: {
+  title: string; kind: string; state: string; note: string | null;
+  happenedAt: Date | null; expectedAt: Date | null; stage: string | null;
+  trackTitle: string;
 }): Rendered {
+  const at = s.happenedAt ?? s.expectedAt;
   return {
-    title: e.title,
+    title: s.title,
     body: lines(
-      field("Gebeurtenis", e.title),
-      field("Soort", nlLabel(e.kind)),
-      e.note?.trim() || null),
-    occurredAt: e.happenedAt,
+      field("Halte", s.title),
+      field("Spoor", s.trackTitle),
+      field("Soort", nlLabel(s.kind)),
+      field("Status", s.state === "expected" ? "verwacht" : nlLabel(s.state)),
+      field("Fase", s.stage ? nlLabel(s.stage) : null),
+      field("Datum", day(at)),
+      s.note?.trim() || null),
+    occurredAt: at,
+    // done/open/expected are not SEARCH_STATUSES: they stay prose in the body
+    // so a status filter cannot half-match them. Same rule milestones followed.
     status: null,
   };
 }

@@ -24,8 +24,11 @@ const SOURCES: Record<SearchEntityType, { table: string; sinceColumn: string }> 
   financial_item: { table: "financial_items", sinceColumn: "created_at" },
   debt:           { table: "debts",           sinceColumn: "created_at" },
   task:           { table: "tasks",           sinceColumn: "created_at" },
-  milestone:      { table: "milestones",      sinceColumn: "created_at" },
-  timeline_event: { table: "timeline_events", sinceColumn: "happened_at" },
+  // A stop can be EXPECTED and therefore undated, so --since filters both of
+  // these on created_at: happened_at is NULL for exactly the rows a partial
+  // backfill must not silently skip.
+  track:          { table: "tracks",          sinceColumn: "created_at" },
+  stop:           { table: "stops",           sinceColumn: "created_at" },
   party:          { table: "parties",         sinceColumn: "created_at" },
 };
 

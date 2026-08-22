@@ -4,7 +4,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, ensureCaseMap, schema, type Db } from "@verder/db";
 import { sha256Hex } from "@verder/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -34,6 +34,13 @@ describe("verify router", () => {
     const [u] = await db.insert(schema.users)
       .values({ email: `v${Date.now()}@test.local`, name: "Martin" }).returning();
     userId = u.id;
+    // Put the case map back. stops.entry_id and stops.document_id reference two
+    // of the tables truncated above, so the CASCADE takes every stop, and then
+    // every track (tracks reference stops through branches_at_stop_id).
+    // MEASURED: 6 tracks and 12 stops to zero in one run of this file. The seed
+    // otherwise lives only inside migration 0023, which never runs again — so
+    // without this the dev app is left with no map and no way to get one back.
+    await ensureCaseMap(db);
   });
   const caller = () => appRouter.createCaller(createContext({ db, userId }));
 

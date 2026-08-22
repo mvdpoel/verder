@@ -3,6 +3,11 @@ import Link from "next/link";
 // Presentational (server-safe) WSNP timeline strip for the dashboard.
 // Renders milestones.timeline() output — the derivation itself is pure and
 // lives in @verder/api (wsnp-timeline.ts); this file only draws it.
+//
+// The rows behind it are now the WSNP TRACK's stops, not the milestones table.
+// The view types below keep saying "milestone" on purpose: they mirror
+// deriveTimeline's output, and deriveTimeline is deliberately unchanged so the
+// 547-day rule still answers exactly what it answered before.
 
 export const STAGE_LABEL: Record<string, string> = {
   application: "Application",
@@ -58,7 +63,11 @@ function dotDate(m: TimelineMilestoneView): string | null {
  * Six-stage strip, left to right: done (green check), current (accent ring),
  * future (muted), empty (dashed). Milestone dots with dates under the current
  * stage; countdown chip once a done wsnp-start milestone sets the clock.
- * The whole strip links to /milestones for maintenance.
+ *
+ * The strip links to /timeline, not /milestones: what it draws are the haltes
+ * on the WSNP spoor, and that is where they are edited. /milestones still edits
+ * the old table, which nothing on this strip reads any more — sending Martin
+ * there would be sending him somewhere his edits do nothing.
  */
 export function WsnpTimeline({ stages, countdown }: {
   stages: TimelineStageView[];
@@ -66,7 +75,7 @@ export function WsnpTimeline({ stages, countdown }: {
 }) {
   const current = stages.find((s) => s.state === "current") ?? null;
   return (
-    <Link href="/milestones" className="block rounded border bg-white p-4 hover:bg-slate-50">
+    <Link href="/timeline" className="block rounded border bg-white p-4 hover:bg-slate-50">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">The road to a clean slate</h2>
         {countdown && (

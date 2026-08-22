@@ -5,9 +5,10 @@ import { asDocument, type EmbedPort } from "./embed";
 import { effectiveStatus } from "../registry-decide";
 import { effectiveTaskStatus } from "../task-decide";
 import { effectiveDocument } from "../routers/documents";
+import { buildTrackMap, type StopRow, type TrackRow } from "../track-map";
 import {
   renderDebt, renderDocument, renderEmail, renderEntry, renderFinancialItem,
-  renderMilestone, renderParty, renderTask, renderTimelineEvent, type Rendered,
+  renderParty, renderStop, renderTask, renderTrack, type Rendered,
 } from "./render";
 
 /**
@@ -42,6 +43,33 @@ async function partyName(db: Db, partyId: string | null): Promise<string | null>
   const [party] = await db.select({ name: schema.parties.name }).from(schema.parties)
     .where(eq(schema.parties.id, partyId));
   return party?.name ?? null;
+}
+
+/**
+ * Did the map REFUSE this track's merge?
+ *
+ * A merge that points backwards would close a cycle, so buildTrackMap drops the
+ * edge and the track DRAWS as ending. Indexing it as "teruggekomen op de
+ * hoofdlijn" would make search contradict the map, so the answer is taken from
+ * buildTrackMap itself rather than from a second copy of the rule — the whole
+ * decision depends on the other tracks' stops, which no local check can see.
+ *
+ * Only asked when a merge pointer exists at all: a track that simply ends
+ * cannot have a refused merge, and stays at one query. A track the map does not
+ * draw at all (an ancestry cycle) keeps its stored pointer, which is the same
+ * answer this gave before.
+ */
+async function mergeWasRefused(
+  db: Db, track: { id: string; mergesAtStopId: string | null },
+): Promise<boolean> {
+  if (!track.mergesAtStopId) return false;
+  const [tracks, stops] = await Promise.all([
+    db.select().from(schema.tracks).orderBy(asc(schema.tracks.createdAt)),
+    db.select().from(schema.stops)
+      .orderBy(asc(schema.stops.trackId), asc(schema.stops.orderIndex)),
+  ]);
+  const map = buildTrackMap({ tracks: tracks as TrackRow[], stops: stops as StopRow[] });
+  return map.tracks.find((t) => t.id === track.id)?.droppedMerge ?? false;
 }
 
 /** null when the entity's row is gone — the caller turns that into []. */
@@ -127,15 +155,26 @@ async function renderRow(
         assigneeName: await partyName(db, task.assigneePartyId),
       });
     }
-    case "milestone": {
-      const [milestone] = await db.select().from(schema.milestones)
-        .where(eq(schema.milestones.id, entityId));
-      return milestone ? renderMilestone(milestone) : null;
+    case "track": {
+      const [track] = await db.select().from(schema.tracks)
+        .where(eq(schema.tracks.id, entityId));
+      if (!track) return null;
+      return renderTrack({
+        ...track,
+        mergesBack: track.mergesAtStopId !== null,
+        droppedMerge: await mergeWasRefused(db, track),
+      });
     }
-    case "timeline_event": {
-      const [event] = await db.select().from(schema.timelineEvents)
-        .where(eq(schema.timelineEvents.id, entityId));
-      return event ? renderTimelineEvent(event) : null;
+    case "stop": {
+      const [stop] = await db.select().from(schema.stops)
+        .where(eq(schema.stops.id, entityId));
+      if (!stop) return null;
+      // The track's title is part of what makes a stop findable: "intake" alone
+      // is ambiguous, "intake op het WSNP-aanvraag spoor" is not. It is read
+      // live and never copied onto the stop — a stop asserts nothing of its own.
+      const [track] = await db.select({ title: schema.tracks.title })
+        .from(schema.tracks).where(eq(schema.tracks.id, stop.trackId));
+      return renderStop({ ...stop, trackTitle: track?.title ?? "" });
     }
     case "party": {
       const [party] = await db.select().from(schema.parties)

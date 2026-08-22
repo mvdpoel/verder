@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
+import { asc, eq, isNull, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { createDb, schema, type Db } from "@verder/db";
 import { assertSafeToTruncate } from "@verder/api/src/test-db-guard";
@@ -73,6 +73,24 @@ function sha256Fixture(): string {
   return crypto.randomUUID().replace(/-/g, "").padEnd(64, "0");
 }
 
+/** The main line and its first anchor, as migration 0023 seeded them into this
+ *  freshly created eval database. Every track and stop fixture hangs off it —
+ *  a second root is refused by tracks_single_root_uq, and rightly so. */
+let mainLineCache: { rootId: string; anchorId: string } | null = null;
+async function mainLine(db: Db): Promise<{ rootId: string; anchorId: string }> {
+  if (mainLineCache) return mainLineCache;
+  const [root] = await db.select().from(schema.tracks)
+    .where(isNull(schema.tracks.parentTrackId));
+  const [anchor] = await db.select({ id: schema.stops.id }).from(schema.stops)
+    .where(eq(schema.stops.trackId, root.id)).orderBy(asc(schema.stops.orderIndex));
+  mainLineCache = { rootId: root.id, anchorId: anchor.id };
+  return mainLineCache;
+}
+
+/** Well past the seeded anchors (0…18 and 1000000), so a fixture halte never
+ *  lands between two of them and changes the seeded line's reading order. */
+let nextStopOrder = 2000000;
+
 /**
  * One fixture record → one real row in its real table, so `indexEntity` reads
  * and renders exactly what production reads and renders. Only entity types
@@ -124,18 +142,26 @@ async function insertFixture(
       }).returning();
       return { entityType: "party", entityId: p.id };
     }
-    case "milestone": {
-      const [m] = await db.insert(schema.milestones).values({
-        stage: (c.stage ?? "application") as "application",
-        title: c.title, note: c.body, happenedAt: at, done: true,
+    case "track": {
+      const { rootId, anchorId } = await mainLine(db);
+      // A side track that ENDED: a clean outcome, and the shape the renderer
+      // has to describe without making it sound like a failure.
+      const [t] = await db.insert(schema.tracks).values({
+        title: c.title, note: c.body, status: "ended",
+        parentTrackId: rootId, branchesAtStopId: anchorId,
       }).returning();
-      return { entityType: "milestone", entityId: m.id };
+      return { entityType: "track", entityId: t.id };
     }
-    case "timeline_event": {
-      const [t] = await db.insert(schema.timelineEvents).values({
-        title: c.title, happenedAt: at, kind: "process", note: c.body,
+    case "stop": {
+      // Fixture haltes hang off the main line the migration seeded, so the
+      // renderer resolves a real spoor title instead of an empty string.
+      const { rootId } = await mainLine(db);
+      const [s] = await db.insert(schema.stops).values({
+        trackId: rootId, orderIndex: nextStopOrder++, title: c.title, note: c.body,
+        kind: "process", state: "done", happenedAt: at,
+        stage: (c.stage ?? null) as "application" | null,
       }).returning();
-      return { entityType: "timeline_event", entityId: t.id };
+      return { entityType: "stop", entityId: s.id };
     }
     case "financial_item": {
       const [f] = await db.insert(schema.financialItems).values({

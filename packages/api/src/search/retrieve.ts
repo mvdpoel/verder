@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
-import { rrfFuse, type SearchEntityType, type SearchStatus } from "@verder/core";
+import {
+  rrfFuse, SEARCH_ENTITY_TYPES, type SearchEntityType, type SearchStatus,
+} from "@verder/core";
 import { asQuery, type EmbedPort } from "./embed";
 import { RERANK_PROMPT_VERSION, type RerankPort } from "./rerank";
 
@@ -50,9 +52,10 @@ const RERANK_TOP_N = 20;
  * beside the other jobs on the dashboard's system-health list. */
 const RERANK_WORKER_NAME = "search-rerank";
 
-/** Where a hit sends the reader. milestones, timeline events, raw emails and parties
- * have no detail route in this application (verified against apps/web/src/app/(app)) —
- * they link to the screen they live on. */
+/** Where a hit sends the reader. Tracks, raw emails and parties have no detail route
+ * in this application (verified against apps/web/src/app/(app)) — they link to the
+ * screen they live on. A stop has no page either, but the map selects one from the
+ * query string, so a hit can still land on the halte itself. */
 const HREF: Record<SearchEntityType, (id: string) => string> = {
   document: (id) => `/vault/${id}`,
   entry: (id) => `/logbook/${id}`,
@@ -60,10 +63,24 @@ const HREF: Record<SearchEntityType, (id: string) => string> = {
   financial_item: (id) => `/registry/${id}`,
   debt: (id) => `/registry/debts/${id}`,
   task: (id) => `/tasks/${id}`,
-  milestone: () => "/milestones",
-  timeline_event: () => "/timeline",
+  track: () => "/timeline",
+  stop: (id) => `/timeline?stop=${encodeURIComponent(id)}`,
   party: () => "/logbook",
 };
+
+/**
+ * search_chunks.entity_type is a TEXT column, so it can hold a kind this build no
+ * longer knows: sub-project 6 retired `milestone` and `timeline_event`, and their
+ * chunks survive the swap — `reindex --prune` walks SEARCH_ENTITY_TYPES and never
+ * visits a retired kind, so nothing deletes them. One such row reaching the loop
+ * below would look up HREF[...] and find undefined, and the whole query would 500
+ * rather than one row being wrong. Gating both candidate queries on the vocabulary
+ * this build actually has is the floor under that.
+ *
+ * The values are the closed SEARCH_ENTITY_TYPES tuple — identifiers this repo owns,
+ * never anything a user typed — so the array literal is safe to build by hand.
+ */
+const INDEXED_TYPES = `{${SEARCH_ENTITY_TYPES.join(",")}}`;
 
 export type SearchHit = {
   entityType: SearchEntityType;
@@ -178,7 +195,8 @@ export async function retrieve(
   // drop every one of them. The predicate lives in this shared `where`, so it gates the
   // lexical and the semantic candidate query alike.
   const where = sql`
-    (${types}::text[] IS NULL OR c.entity_type = ANY(${types}::text[]))
+    c.entity_type = ANY(${INDEXED_TYPES}::text[])
+    AND (${types}::text[] IS NULL OR c.entity_type = ANY(${types}::text[]))
     AND (${from}::timestamptz IS NULL OR c.occurred_at >= ${from}::timestamptz)
     AND (${to}::timestamptz IS NULL OR c.occurred_at <= ${to}::timestamptz)
     AND (${status}::text IS NULL OR c.status = ${status}::text)

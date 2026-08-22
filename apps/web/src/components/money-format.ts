@@ -3,8 +3,8 @@
  *
  * This file has NO "use client" on purpose: the server page and the client
  * chart both need these, and a function exported from a client module cannot be
- * called on the server — only rendered. Same reason `timeline-kinds.ts` and
- * `search-kinds.ts` exist.
+ * called on the server — only rendered. Same reason `search-kinds.ts` and
+ * `track-marks.ts` exist.
  *
  * ---------------------------------------------------------------------------
  * Palette — from the `dataviz` skill's reference categorical palette.

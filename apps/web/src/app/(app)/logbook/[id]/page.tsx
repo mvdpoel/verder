@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
-import { AddToTimeline } from "@/components/add-to-timeline";
 
 export default async function EntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
   const e = await caller.entries.get({ id });
   const parties = await caller.parties.list();
-  const onTimeline = await caller.timeline.forEntry({ entryId: id });
+  // Is this entry already a halte on the map? A halte belongs to a spoor, and
+  // choosing the spoor is a decision this page cannot make for Martin — so it
+  // reports the link and sends him to the map to make one, instead of the old
+  // one-click "add to timeline" that a flat list could get away with.
+  const { map } = await caller.tracks.map();
+  const onMap = map.stops.find((s) => s.entryId === id) ?? null;
+  const onMapTrack = onMap ? map.tracks.find((t) => t.id === onMap.trackId) : null;
   const nameOf = (pid: string) => parties.find((p) => p.id === pid)?.name ?? pid;
   return (
     <article className="max-w-2xl space-y-4">
@@ -34,9 +39,21 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
         </ul>
       </section>
       <section className="space-y-3 border-t pt-4">
-        <AddToTimeline entryId={e.id} summary={e.summary}
-          occurredAt={new Date(e.occurredAt).toISOString()} channel={e.channel}
-          alreadyOnTimeline={onTimeline.length > 0} />
+        {onMap ? (
+          <p className="text-sm text-slate-600">
+            ✓ On the map as a halte —{" "}
+            <Link className="underline" href={`/timeline?stop=${encodeURIComponent(onMap.id)}`}>
+              {onMap.title}
+            </Link>
+            {onMapTrack ? ` (${onMapTrack.title})` : ""}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-600">
+            Not on the map yet. A halte belongs to a spoor, so you add it there —{" "}
+            <Link className="underline" href="/timeline">De zaak</Link>. This entry
+            stays the evidence either way.
+          </p>
+        )}
         {!e.supersededBy && (
           <div>
             <Link href={`/logbook/new?correct=${e.id}`} className="inline-block rounded border px-4 py-2">Correct this entry</Link>

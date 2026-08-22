@@ -238,7 +238,7 @@ describe("retrieve (fast mode)", () => {
   it("returns a semantic-only hit with the chunk head as its snippet", async () => {
     const w = testWindow();
     const entityId = crypto.randomUUID();
-    await insertChunk(writer, { entityType: "milestone", entityId, title: "Zitting",
+    await insertChunk(writer, { entityType: "stop", entityId, title: "Zitting",
       body: "toelating tot de wettelijke schuldsanering", occurredAt: w.start,
       embedding: oneHot(23) });
     // The query shares no lexeme with the body, so only the vector branch can find it.
@@ -248,7 +248,37 @@ describe("retrieve (fast mode)", () => {
     expect(out.hits[0].matchedBy).toBe("semantic");
     expect(out.hits[0].snippet).toBe("toelating tot de wettelijke schuldsanering");
     expect(out.hits[0].snippet).not.toContain("«");
-    expect(out.hits[0].href).toBe("/milestones");
+    expect(out.hits[0].href).toBe(`/timeline?stop=${entityId}`);
+  });
+
+  it("ignores a chunk left behind by a retired entity kind instead of crashing on it", async () => {
+    // entity_type is TEXT, and the milestone/timeline_event chunks written before
+    // sub-project 6 survive the swap: `reindex --prune` walks the CURRENT
+    // vocabulary and never visits a kind that is no longer in it. HREF has no
+    // entry for one, so a single such row reaching the hit loop would take the
+    // WHOLE query down with "HREF[...] is not a function" — not one bad row.
+    const w = testWindow();
+    const retired = crypto.randomUUID();
+    const kept = crypto.randomUUID();
+    await insertChunk(writer, { entityType: "milestone", entityId: retired,
+      title: "Zitting mijlpaal", body: "toelating tot de wettelijke schuldsanering",
+      occurredAt: w.start, embedding: oneHot(31) });
+    await insertChunk(writer, { entityType: "stop", entityId: kept,
+      title: "Zitting halte", body: "toelating tot de wettelijke schuldsanering",
+      occurredAt: w.start, embedding: oneHot(31) });
+
+    const out = await retrieve({ db, embed: fixedEmbed(oneHot(31)) },
+      { q: "toelating schuldsanering", from: w.from, to: w.to });
+    expect(out.hits.map((h) => h.entityId)).toEqual([kept]);
+    expect(out.hits[0].href).toBe(`/timeline?stop=${kept}`);
+
+    // Every other fixture here may be left behind — this one may not. The dev
+    // database is shared, and tracks-schema.test.ts asserts that migration
+    // 0023's DELETE holds: NO chunk of a retired kind anywhere. A probe that
+    // outlives its own test would fail that assertion on the next run, which is
+    // exactly what it did before this line existed. search_chunks is derived,
+    // so deleting from it is legal.
+    await writer.execute(sql`DELETE FROM search_chunks WHERE entity_id = ${retired}::uuid`);
   });
 
   it("returns nothing when no word matches and every vector is far away", async () => {

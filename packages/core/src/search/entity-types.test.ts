@@ -5,7 +5,7 @@ describe("SEARCH_ENTITY_TYPES", () => {
   it("is the nine indexed entity types, in the order the schema and the UI use", () => {
     expect([...SEARCH_ENTITY_TYPES]).toEqual([
       "document", "entry", "email", "financial_item", "debt",
-      "task", "milestone", "timeline_event", "party"]);
+      "task", "track", "stop", "party"]);
   });
 });
 

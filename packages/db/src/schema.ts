@@ -285,6 +285,55 @@ export const timelineEvents = pgTable("timeline_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// --- timeline tracks (sub-project 6) ---
+// The case as a metro map. tracks + stops REPLACE timeline_events and the
+// milestone model: the main line is simply the track with no parent, and a
+// side track either merges back into its parent (it was a prerequisite for
+// Einde bewindvoering) or it ends.
+//
+// Both tables are editable display aids, deliberately NOT ledgered — exactly
+// what timeline_events and milestones already were. A stop asserts nothing; it
+// points at the evidence, which stays in log_entries, documents and tasks.
+
+export const trackStatusEnum = pgEnum("track_status", ["open", "done", "ended"]);
+export const stopStateEnum = pgEnum("stop_state", ["done", "open", "expected"]);
+
+export const tracks = pgTable("tracks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  status: trackStatusEnum("status").notNull().default("open"),
+  // NULL = the main line. A unique index on a constant expression, filtered to
+  // these rows, allows exactly one of them to exist.
+  parentTrackId: uuid("parent_track_id"),
+  // Where it leaves the parent; NULL iff parentTrackId is NULL (check constraint).
+  branchesAtStopId: uuid("branches_at_stop_id"),
+  // The stop on the parent it feeds into; NULL = it just ends, which is a real
+  // outcome and not an unfinished one.
+  mergesAtStopId: uuid("merges_at_stop_id"),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const stops = pgTable("stops", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  trackId: uuid("track_id").notNull().references(() => tracks.id),
+  orderIndex: integer("order_index").notNull(),
+  title: text("title").notNull(),
+  kind: timelineEventKindEnum("kind").notNull().default("other"),
+  state: stopStateEnum("state").notNull().default("done"),
+  // NULL for a stop that has not happened yet — which is the point of an
+  // expected stop, and the reason the map is laid out structurally.
+  happenedAt: timestamp("happened_at", { withTimezone: true }),
+  expectedAt: timestamp("expected_at", { withTimezone: true }),
+  // NULL, or a WSNP stage — what makes a stop a big named station.
+  stage: wsnpStageEnum("stage"),
+  entryId: uuid("entry_id").references(() => logEntries.id),
+  taskId: uuid("task_id").references(() => tasks.id),
+  documentId: uuid("document_id").references(() => documents.id),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("stops_track_order_idx").on(t.trackId, t.orderIndex)]);
+
 // --- searchable knowledge base (sub-project 4) ---
 // DERIVED tables, deliberately NOT evidence. They hold no facts: only a
 // rebuildable lookup FOR the facts that live in the evidence tables. They
