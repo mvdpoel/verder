@@ -26,9 +26,13 @@
 1. **`parties.ingest_mail` as written could not work.** The spec specifies a plain boolean column on `parties`, but `verder_app` holds `INSERT, SELECT` only — there is no UPDATE with which to toggle it. Task 1 uses a **column-level grant** instead: `GRANT UPDATE (ingest_mail) ON parties TO verder_app`. Postgres then enforces that name, email, kind and notes stay immutable while the one non-evidence flag is editable. `ingest_mail` is deliberately **not** added to the `party.created` ledger payload, so toggling it cannot affect the chain.
 2. **`addMonths` and `monthDayBounds` are private** in `money-series.ts` (lines 396 and 76). The spec says to reuse them rather than re-derive; Task 2 exports them with a characterisation test first.
 
-## Open decision, assumed rather than settled
+## Settled: `profile_attributes` is an editable fact table
 
-The spec's carried-over question — whether `profile_attributes` should be append-only like `document_facts` — has not been answered. **This plan assumes EDITABLE** (`SELECT, INSERT, UPDATE`, no DELETE), on the reasoning that the golden rule exists to capture model-vs-Martin disagreement and nothing but Martin ever writes this table. If append-only is wanted instead, the change is confined to Task 7: drop `UPDATE` from its grant, add a `supersedes_id` column and a `documentFactPayload`-style ledger event, and add a verification branch. Decide before Task 1 is committed — after that it is a second migration.
+The spec carried one open question into this plan — whether `profile_attributes` should be append-only like `document_facts`. **Martin decided on 2026-08-27: editable** (`SELECT, INSERT, UPDATE`, no DELETE).
+
+The reasoning, so a later reader does not reopen it: the golden rule exists to record *model-vs-Martin disagreement*, and there is no model here to disagree with — this table is human-write-only by construction. Append-only would buy ceremony with no counterparty, and the person paying for it would be Martin correcting his own typo'd BSN. `document_facts` is append-only for the opposite reason: a model proposed it, so what was proposed and what was approved both have to survive.
+
+A changed address is still a new row with a later `valid_from`; `correct` is for typos.
 
 ---
 
@@ -1699,7 +1703,7 @@ git add CLAUDE.md && git commit -m "docs: record the kennisbank slice 2 deploy"
 
 **Spec coverage.** `employments` → Tasks 1, 5. `party_links` → Tasks 1, 6. `parties.ingest_mail` → Tasks 1, 6, 7. `profile_attributes` → Tasks 1, 6. `dossier-series.ts` with four states and `unexpected` → Task 3. openstaand/historisch split → Task 4. The deferred `source_employment_id` FK from 0025 → Task 1. The "evidence sets the horizon" rule → Task 5. Amsterdam date reuse → Task 2.
 
-**Deviations from the spec, both deliberate and both argued above:** the column-level grant on `parties` (the spec's plain boolean could not be written), and `profile_attributes` assumed editable pending Martin's decision.
+**One deviation from the spec, deliberate and argued above:** the column-level grant on `parties`, because the spec's plain boolean could not be written against an append-only table. `profile_attributes` being editable is no longer a deviation — it is the spec's open question, decided.
 
 **Deferred to slice 3** (`accounts` → `accountLabels`, the reconciliation join table, the vakantiegeld exclusion in `fullPeriodAmount`) and to **sub-project 7** (outbound mail ingestion — `pollGmail` still tests `msg.from` only, so Martin's sent mail is still invisible; Task 7 gates *which* parties count, not *which direction*).
 

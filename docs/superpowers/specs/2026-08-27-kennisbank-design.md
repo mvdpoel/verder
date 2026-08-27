@@ -675,9 +675,20 @@ band in `fullPeriodAmount`. That closes the gap deliberately left open at `money
 in the only way that file accepts — the fix is *evidential*, not amount-shaped, so it can never
 touch a real part-month, which is exactly why the obvious fallback was rejected on measurement.
 
-## Open question carried into the plan
+## Decided 2026-08-27: `profile_attributes` stays an editable fact table
 
-`profile_attributes` is specified as an editable fact table, on the reasoning that the golden rule
-exists to capture model-vs-Martin disagreement and there is no model here to disagree with. If the
-append-only treatment given to `document_facts` should extend to it, that is a one-line change to
-its grants plus a ledger branch — decide before migration 0026 is written.
+The one question this spec left open — whether the append-only treatment given to `document_facts`
+should extend to `profile_attributes` — is settled: it does not.
+
+The two tables differ in the thing that matters. `document_facts` holds a *model's reading* that
+Martin approved, so what was proposed, what was approved and any later correction all have to
+survive independently; that is the golden rule, and append-only is how it is enforced.
+`profile_attributes` is human-write-only by construction — no mining job, no suggestion kind, no
+LLM anywhere near it — so there is no disagreement to record. Append-only there would buy ceremony
+with no counterparty, and the person paying for it would be Martin fixing his own typo'd BSN on a
+tired evening.
+
+Grants are therefore `SELECT, INSERT, UPDATE` for `verder_app`, no DELETE, and no grant at all for
+the worker. A changed address is still a new row with a later `valid_from` — the old one stays —
+while `correct` exists for typos. `/verify` says nothing about this table, which is honest: it
+could never have proved a hand-typed value right anyway.
