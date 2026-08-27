@@ -226,10 +226,72 @@ Run it once by hand first: `./ops/nightly.sh`.
 
 ## 7. Upgrading an existing deployment
 
+### 7.0 Syncing the tree — the canonical rsync
+
+Every runbook below says "sync the checkout" and this is what that means. There
+is no GitHub key on the homelab, so the tree is pushed from the Mac with rsync.
+
+**The exclude list is the entire safety mechanism.** `--delete` is required —
+without it a file deleted in the repo lives on in `~/apps/verder` and the Docker
+`next build` fails on a stale file importing something that no longer exists.
+But rsync does **not** read `.gitignore`: a path being git-ignored protects it
+from nothing here. Use this command, and only ever add to the list:
+
+```bash
+# ALWAYS dry-run first and read every `deleting` line.
+# Plain --dry-run without -v/--info=del prints NOTHING, which reads as
+# "no deletions" and is not the same thing.
+rsync -avn --delete --info=del \
+  --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' \
+  --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod' \
+  --exclude 'secrets' --exclude 'vault-files' \
+  ./ homelab:~/apps/verder/
+
+# Then the real run: same flags, drop the -n.
+rsync -av --delete \
+  --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' \
+  --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod' \
+  --exclude 'secrets' --exclude 'vault-files' \
+  ./ homelab:~/apps/verder/
+```
+
+Why each of the three dangerous ones is there, measured 2026-08-27 — a dry run
+carrying only `.git`, `node_modules` and `nightly.log` printed:
+
+```
+deleting secrets/role-passwords
+deleting secrets/gmail-token.json
+deleting secrets/gmail-oauth.json
+deleting .env.prod
+```
+
+That is the Gmail integration and every database role password, destroyed by one
+command. `vault-files/` is the dev vault and must never be shipped over the
+production one. `nightly.log` is written into `~/apps/verder/` itself and exists
+on the homelab only, so `--delete` without it erases the whole history of
+nightly backup and verify runs — on 2026-08-22 the dry run printed exactly one
+line, `deleting nightly.log`, which is the only warning there is.
+
+Afterwards, confirm the secrets survived:
+
+```bash
+ssh homelab 'ls ~/apps/verder/secrets/ && ls -l ~/apps/verder/.env.prod'
+```
+
+**Note this is NOT the Syncthing folder.** Syncthing keeps `~/Workspace` in step
+bidirectionally across MacbookPro, aios and homelab (excluding `.git` and
+`node_modules` via `~/Workspace/.stignore`), so `homelab:~/Workspace/mp/verder`
+is usually current on its own. Production deliberately does not run from there:
+`.env.prod`, `secrets/` and the vault live under `~/apps/verder`, and a
+bidirectionally-synced production directory would replicate those secrets to
+three machines and let a half-saved edit on any of them reach a build.
+
+### 7.1 Order of operations
+
 Order matters: migrate first, then rebuild, then backfill.
 
 ```bash
-# 1. Sync the checkout, then migrate from the HOST as the admin role
+# 1. Sync the checkout (see 7.0), then migrate from the HOST as the admin role
 DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
   pnpm --filter @verder/db migrate
 
