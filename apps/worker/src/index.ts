@@ -9,6 +9,7 @@ import { realGmailPort } from "./gmail-auth";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
+import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 import { storeDocumentText } from "./document-text";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
@@ -72,6 +73,26 @@ await boss.work("nas.scan", async () => {
   await scanNasFolder({ db, scanDir: process.env.NAS_SCAN_DIR ?? "/mnt/nas/scans",
     vaultDir: process.env.VAULT_DIR ?? "./vault-files",
     enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); } });
+});
+
+// Extraction-coverage sweep: gmail.poll and documents.registerUpload cannot
+// enqueue docmeta themselves (the web app holds no pg-boss connection), so the
+// backlog is swept instead. Bounded per tick: each document costs an OCR pass
+// and a 120 s LLM call, and the GPU is shared with the evals.
+const DOCMETA_SWEEP_BATCH = 5;
+// A document stays "pending" until its docmeta job writes document_texts, so
+// without the guard every tick re-enqueues the batch that is still being worked
+// on. See makeEnqueueGuard: enqueue rate is not drain rate.
+const admitDocMeta = makeEnqueueGuard();
+await boss.createQueue("docmeta.sweep");
+await boss.schedule("docmeta.sweep", "* * * * *");
+await boss.work("docmeta.sweep", async () => {
+  const pending = await pendingDocMeta(db, DOCMETA_SWEEP_BATCH);
+  const ids = admitDocMeta(pending, Date.now());
+  for (const documentId of ids) await boss.send("suggest.docmeta", { documentId });
+  // Both numbers, so a log that reads `pending: 5, enqueued: 0` is legible as
+  // "the batch is still being worked" rather than as a stalled sweep.
+  await recordRun(db, "docmeta-sweep", "ok", { pending: pending.length, enqueued: ids.length });
 });
 
 // Registry mining sweep: no direct enqueue from web — the cron sweeps all

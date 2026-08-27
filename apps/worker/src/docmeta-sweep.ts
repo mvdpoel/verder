@@ -41,3 +41,36 @@ export async function pendingDocMeta(db: Db, limit: number): Promise<string[]> {
   `)).rows as { id: string }[];
   return rows.map((r) => r.id);
 }
+
+/** One hour: generously past a slow OCR plus a 120 s LLM call, and past pg-boss's
+ *  own 15-minute job expiry, so a document is only ever re-offered once the job
+ *  that owned it can no longer be running. */
+export const DOCMETA_ENQUEUE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * A per-process memory of what the sweep has already enqueued.
+ *
+ * WHY THIS EXISTS: pendingDocMeta stops returning a document only once
+ * suggest.docmeta has written its document_texts row, and that job costs an OCR
+ * pass plus a 120 s LLM call. Without this guard a sweep ticking every minute
+ * re-enqueues the same five documents on every tick while the first is still
+ * running: the queue grows by five jobs a minute and drains at roughly one
+ * every two, so the eighteen-document backlog becomes hundreds of redundant
+ * OCR+LLM passes on a GPU that is already shared with the evals — which is the
+ * contention that aborts eval runs today. Enqueue rate is not drain rate, and
+ * only the second one is bounded by the batch size.
+ *
+ * In-process and not a table: a document that is genuinely stuck becomes
+ * eligible again after the TTL, and a worker restart costs at most one repeated
+ * round. Neither is worth a migration in a slice that deliberately ships
+ * without one. `now` is a parameter so the cool-down is testable without clocks.
+ */
+export function makeEnqueueGuard(ttlMs: number = DOCMETA_ENQUEUE_TTL_MS) {
+  const seen = new Map<string, number>();
+  return function admit(ids: string[], now: number): string[] {
+    for (const [id, at] of seen) if (now - at >= ttlMs) seen.delete(id);
+    const fresh = ids.filter((id) => !seen.has(id));
+    for (const id of fresh) seen.set(id, now);
+    return fresh;
+  };
+}

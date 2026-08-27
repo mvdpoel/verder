@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createDb, schema, type Db } from "@verder/db";
-import { pendingDocMeta } from "./docmeta-sweep";
+import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 
 // The worker role, not the app role: document_texts is the worker's table
 // (0016 grants verder_app SELECT only, deliberately — the web app searches the
@@ -44,5 +44,25 @@ describe("pendingDocMeta", () => {
 
   it("honours the limit", async () => {
     expect((await pendingDocMeta(db, 2)).length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("makeEnqueueGuard", () => {
+  it("admits a document the first time and refuses it on the next tick", () => {
+    const admit = makeEnqueueGuard(60_000);
+    expect(admit(["a", "b"], 0)).toEqual(["a", "b"]);
+    expect(admit(["a", "b"], 1_000)).toEqual([]);
+  });
+
+  it("admits a document that is new on a later tick", () => {
+    const admit = makeEnqueueGuard(60_000);
+    admit(["a"], 0);
+    expect(admit(["a", "b"], 1_000)).toEqual(["b"]);
+  });
+
+  it("admits a document again once the cool-down has passed", () => {
+    const admit = makeEnqueueGuard(60_000);
+    admit(["a"], 0);
+    expect(admit(["a"], 60_001)).toEqual(["a"]);
   });
 });
