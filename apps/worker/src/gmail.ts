@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
@@ -59,6 +59,48 @@ export async function ingestRawEmail(
   });
 }
 
+/**
+ * The instant a Gmail 429 tells us to come back, pulled out of the error text.
+ *
+ * Google puts it in the message rather than in a Retry-After header:
+ * `User-rate limit exceeded.  Retry after 2026-08-22T21:26:14.735Z`. Returns
+ * null for any other failure, which is what keeps an ordinary network blip from
+ * silently muting the poller.
+ */
+export function retryAfterFrom(err: unknown): Date | null {
+  const m = /Retry after (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/.exec(String(err));
+  if (!m) return null;
+  const when = new Date(m[1]);
+  return Number.isNaN(when.getTime()) ? null : when;
+}
+
+/**
+ * The retry instant the last `gmail` run recorded, if it is still in the future.
+ *
+ * WHY THIS EXISTS. A Gmail user-rate limit is account-wide and every attempt
+ * against it RESETS the deadline to a fresh fifteen minutes. With `gmail.poll`
+ * scheduled every three minutes the cron alone re-arms the lockout five times
+ * per window, so one 429 becomes a permanent one and mail ingestion stays down
+ * until somebody notices a `worker_runs` row. Measured on 2026-08-22: a stair of
+ * errors marching 20:42→20:57, 20:45→21:00, 20:48→21:03, 20:51→21:06, and the
+ * only cure was stopping the container by hand.
+ *
+ * So the deadline has to survive between polls, and `worker_runs` is where it
+ * lives — no new table for one timestamp. The skip records itself CARRYING THE
+ * SAME instant forward, because this reads the latest run: a skip that dropped
+ * it would clear the memory and the next tick would poll straight into the
+ * limit again.
+ */
+async function rateLimitedUntil(db: Db): Promise<Date | null> {
+  const [last] = await db.select({ detail: schema.workerRuns.detail })
+    .from(schema.workerRuns).where(eq(schema.workerRuns.worker, "gmail"))
+    .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+  const raw = (last?.detail as { retryAfter?: unknown } | null)?.retryAfter;
+  if (typeof raw !== "string") return null;
+  const when = new Date(raw);
+  return !Number.isNaN(when.getTime()) && when > new Date() ? when : null;
+}
+
 export async function pollGmail(deps: {
   db: Db; gmail: GmailPort; vaultDir: string;
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
@@ -71,6 +113,17 @@ export async function pollGmail(deps: {
   // without this a heuristic that reads a sender's mailer wrongly would drop
   // documents with nothing anomalous anywhere to look at.
   const skippedParts: (SkippedPart & { messageId: string })[] = [];
+
+  // Honour a live rate-limit deadline before touching the API at all. Recorded
+  // as `ok`, not `error`: waiting out a limit correctly is the poller working,
+  // and a stream of red rows would bury the failure that actually needs a human.
+  const until = await rateLimitedUntil(deps.db);
+  if (until) {
+    await recordRun(deps.db, "gmail", "ok",
+      { skipped: "rate-limited", retryAfter: until.toISOString() });
+    return { ingested: 0 };
+  }
+
   try {
     const partyEmails = (await deps.db.select().from(schema.parties))
       .map((p) => p.email).filter((e): e is string => !!e);
@@ -104,7 +157,14 @@ export async function pollGmail(deps: {
     await recordRun(deps.db, "gmail", failures.length ? "error" : "ok",
       { ingested, scanned: ids.length, failures, skippedParts });
   } catch (err) {
-    await recordRun(deps.db, "gmail", "error", { message: String(err) });
+    // A rate limit is remembered so the next tick skips instead of re-arming
+    // it. Everything else stays a plain error with no deadline attached, which
+    // is what stops a transient network failure from muting the poller.
+    const retryAfter = retryAfterFrom(err);
+    await recordRun(deps.db, "gmail", "error", {
+      message: String(err),
+      ...(retryAfter ? { retryAfter: retryAfter.toISOString() } : {}),
+    });
     throw err;
   }
   return { ingested };

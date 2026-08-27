@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
-import { pollGmail, type GmailPort } from "./gmail";
+import { pollGmail, retryAfterFrom, type GmailPort } from "./gmail";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -123,6 +123,86 @@ describe("pollGmail", () => {
     const errorRuns = runs.filter((r) => r.worker === "gmail" && r.status === "error"
       && JSON.stringify(r.detail).includes(badId));
     expect(errorRuns.length).toBeGreaterThan(0);
+    await pool.end();
+  });
+});
+
+describe("Gmail rate-limit backoff", () => {
+  const RATE_LIMIT = (iso: string) =>
+    new Error(`User-rate limit exceeded.  Retry after ${iso}`);
+
+  it("reads the retry instant out of the error text, and only out of a 429", () => {
+    expect(retryAfterFrom(RATE_LIMIT("2026-08-22T21:26:14.735Z"))?.toISOString())
+      .toBe("2026-08-22T21:26:14.735Z");
+    // Anything else must NOT set a deadline — a network blip that muted the
+    // poller for fifteen minutes would be a worse bug than the one this fixes.
+    expect(retryAfterFrom(new Error("socket hang up"))).toBeNull();
+    expect(retryAfterFrom(new Error("Retry after soon"))).toBeNull();
+  });
+
+  it("records the deadline on a 429, then SKIPS the next poll instead of re-arming it", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const soon = new Date(Date.now() + 15 * 60_000).toISOString();
+    let listCalls = 0;
+    const limited: GmailPort = {
+      listMessageIds: async () => { listCalls++; throw RATE_LIMIT(soon); },
+      getMessage: async () => { throw new Error("unreachable"); },
+    };
+    const deps = { db, gmail: limited, vaultDir, enqueueSuggest: async () => {} };
+
+    await expect(pollGmail(deps)).rejects.toThrow(/User-rate limit/);
+    expect(listCalls).toBe(1);
+
+    // The whole point: the second poll must not touch the API at all. Every
+    // attempt against a live limit pushes the deadline out another fifteen
+    // minutes, which is how one 429 became permanent in production.
+    const second = await pollGmail(deps);
+    expect(second.ingested).toBe(0);
+    expect(listCalls).toBe(1);
+
+    // ...and the skip carries the deadline forward. Reading the LATEST run is
+    // how the memory works, so a skip that dropped it would let the very next
+    // tick poll straight back into the limit.
+    const third = await pollGmail(deps);
+    expect(listCalls).toBe(1);
+    expect(third.ingested).toBe(0);
+
+    const [latest] = await db.select().from(schema.workerRuns)
+      .where(eq(schema.workerRuns.worker, "gmail"))
+      .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+    expect(latest.status).toBe("ok");          // waiting correctly is not a failure
+    expect((latest.detail as { retryAfter: string }).retryAfter).toBe(soon);
+    await pool.end();
+  });
+
+  it("polls again once the deadline has passed", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const past = new Date(Date.now() - 1000).toISOString();
+    await db.insert(schema.workerRuns).values({
+      worker: "gmail", status: "error",
+      detail: { message: "old", retryAfter: past },
+    });
+    const id = `m-after-${Date.now()}`;
+    const result = await pollGmail({ db, gmail: fakeGmail(id), vaultDir,
+      enqueueSuggest: async () => {} });
+    expect(result.ingested).toBe(1);
+    await pool.end();
+  });
+
+  it("does not mute the poller on an ordinary failure", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    let listCalls = 0;
+    const flaky: GmailPort = {
+      listMessageIds: async () => { listCalls++; throw new Error("socket hang up"); },
+      getMessage: async () => { throw new Error("unreachable"); },
+    };
+    const deps = { db, gmail: flaky, vaultDir, enqueueSuggest: async () => {} };
+    await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
+    await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
+    expect(listCalls).toBe(2);                 // tried again, as it should
     await pool.end();
   });
 });

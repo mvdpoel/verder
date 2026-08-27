@@ -15,3 +15,6 @@ next-env.d.ts
 
 # superpowers brainstorming companion
 .superpowers/
+
+# Serena MCP server workspace cache
+.serena/
