@@ -18,6 +18,7 @@
     "backfill": "tsx src/ops/backfill-gmail.ts",
     "extract-texts": "tsx src/ops/extract-texts.ts",
     "discard-signature-images": "tsx src/ops/discard-signature-images.ts",
+    "case-history": "tsx src/ops/case-history.ts",
     "reindex": "tsx src/ops/reindex.ts"
   },
   "dependencies": {

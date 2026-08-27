@@ -309,6 +309,122 @@ screenshot sent as a genuine attachment — which the port filter correctly keep
 — so without those bounds a later re-run (after a restore, say) would discard
 real evidence, including documents already filed by hand.
 
+### Reconstructing the case history from the mailbox
+
+`pnpm --filter worker case-history` writes the case as it actually ran onto the
+map and the task list: the parties, the main line's stations, seven side tracks
+and thirty tasks including the finished ones. It changes no schema, so there is
+nothing to migrate — but the worker **image** has to be rebuilt, because the
+script is baked in.
+
+It is idempotent by title, and it **converges**: the seed describes the map it
+wants and the script moves what exists into that shape. `stops` and `tracks`
+have INSERT and UPDATE and no DELETE, so that is always a rename and a move,
+never a delete-and-recreate — which is exactly why a restructure is safe here
+at all, and why the renames in `STOP_RENAMES`/`TRACK_RENAMES` run *first*: every
+other guard keys on the title, so a late rename would leave the old row and
+insert a second one beside it that nothing can remove.
+
+Structure belongs to the seed; content belongs to Martin. On a stop that already
+exists the script writes only its track, its position and any still-null
+evidence link. It never touches `state`, `kind`, `note` or `happened_at` — those
+are the fields the editor lets him change, and a backfill that reverted his
+edits on every run would be worse than no backfill. The same rule gives the
+`SPINE_DATES` block its guard: a date is filled in only where the column is
+still null.
+
+Two invariants worth knowing before editing the seed, both asserted by
+`case-history.test.ts`: **stop titles are unique across the whole map** (the
+lookup is map-wide, so two tracks claiming one title would drag the row back and
+forth on every run), and **every `open` stop is work waiting on Martin** (the
+map's headline is the furthest-right open stop, and an open stop that waits on
+somebody else silently steals it). The result's `strandedOnSpine` is the guard
+that the main line stayed bare — four stops, nothing else.
+
+```bash
+# 1. rsync + rebuild the worker image (no migration; nothing schema-side moved)
+ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+  -f docker-compose.prod.yml up -d --build worker'
+# 2. the reconstruction — creates the parties the backfill then needs
+ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker case-history'
+# 3. the mail, INCLUDING Martin's own sent mail — see the trap below
+# 4. run case-history again to link the newly ingested attachments
+```
+
+Its ledger footprint is stated in the file header and must be checked against
+the event count afterwards: one `party.created` per genuinely new party, one
+`task.status` per task that is not plain open, and **nothing at all** for
+tracks, stops or the tasks themselves (`tasks.create` appends no event; a plain
+open task carries no status row). Measured on the first production run:
+47 → 73 events, which is 4 + 22, and `nightly-verify` green on 73.
+
+**THE TRAP, and it is the reason the vault looked thin.** `pollGmail` decides
+relevance on `msg.from` against `RELEVANT_SENDERS` plus every `parties.email` —
+so Martin's own sent mail matched nothing and was never ingested, and with it
+every attachment he ever *sent*. That is the whole moratorium package of
+sixteen files, the passport copy, the payslips, the policies, the BKR summary.
+Fifty inbound emails were stored and not one outbound one. Widen the filter for
+the run only, and scope the query so it cannot pull in unrelated business mail:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T \
+  -e RELEVANT_SENDERS="@verdergroep.nl,@verderbewindmidden.nl,martin@vanderpoel.pro" \
+  -e BACKFILL_QUERY="after:2026/04/01 (to:verdergroep.nl OR to:verderbewindmidden.nl \
+OR from:verdergroep.nl OR from:verderbewindmidden.nl OR to:info@hafkamp.nl \
+OR from:stamdeurwaarders.nl OR from:collections.trustandlaw.nl)" \
+  worker pnpm --filter worker backfill
+```
+
+Run `case-history` **before** this, not after: it creates Hafkamp, Stam and
+Trust and Law as parties, which widens the relevance filter permanently and is
+the real fix rather than a one-off env override. Their mail was invisible to
+this app until then — which is exactly how a Stam sommation that refers to an
+existing *vonnis* sat in Gmail for five weeks reaching no surface of the system.
+
+**A `429 User-rate limit exceeded` here does not heal on its own — you have to
+stop the worker.** The limit is account-wide, and every attempt against it
+resets the retry deadline to a fresh fifteen minutes. `gmail.poll` is scheduled
+`*/3 * * * *`, so the cron alone re-arms the lockout five times per window and
+the account never recovers; `worker_runs` fills with a stair of `error` rows
+whose retry instants keep marching forward in step with the cron. Measured on
+2026-08-22: 20:42 → 20:57, 20:45 → 21:00, 20:48 → 21:03, 20:51 → 21:06, with
+three attempts per cron tick. Normal mail ingestion is down for the duration,
+not just the backfill.
+
+The way out is a genuinely quiet window:
+
+```bash
+# 1. stop ALL Gmail traffic — the cron is the thing keeping the lockout alive
+docker compose --env-file .env.prod -f docker-compose.prod.yml stop worker
+# 2. wait past the LAST retry instant in worker_runs, plus a margin
+# 3. run the backfill in a one-off container, with the service still down
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm -T \
+  -e RELEVANT_SENDERS=... -e BACKFILL_QUERY=... worker pnpm --filter worker backfill
+# 4. bring the worker back
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d worker
+```
+
+Nothing partial is left behind when it does trip: the limit hits
+`listMessageIds` before any ingest, and the backfill is idempotent on
+`gmail_message_id` regardless.
+
+Worth knowing, and currently unfixed: `pollGmail` has no backoff. It records the
+failure and the cron simply tries again three minutes later, which is what turns
+one 429 into a permanent one. Honouring the `Retry-After` instant the error
+already carries — skipping the poll until it passes — would make this
+self-healing.
+
+Each newly ingested email enqueues a `suggest.entry` job, so a backfill of this
+size puts a few dozen LLM jobs on the GPU and fills the review queue. That is
+the designed path, not a side effect: the suggestions are how the mail becomes
+log entries, and Martin approves them one by one.
+
+Note also that `pollGmail` short-circuits on a message id it has already seen,
+so re-running the backfill will **not** collect attachments from the fifty
+emails ingested earlier. Those were already fully processed; the gap was only
+ever the outbound half.
+
 Money in/out needs no backfill: `account_iban` is populated by the importer
 from the next statement onward, and any row imported before it simply shows up
 under "unknown account". Re-import a statement to fill it in — the import is

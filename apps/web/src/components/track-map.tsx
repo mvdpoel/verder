@@ -75,12 +75,21 @@ export function TrackMap({
                 stroke={t.lane === 0 ? INK : RAIL}
                 strokeWidth={t.lane === 0 ? 3 : 2}
               />
-              <text
-                x={PAD_X - 12} y={lane + 4} textAnchor="end"
-                fontSize="11" fill={t.lane === 0 ? INK : MUTED}
-              >
-                {t.title}
-              </text>
+              {/* Side tracks get their name in the gutter. The MAIN LINE does
+                  not: its rail starts at column 0, so its name would land
+                  immediately left of the Start node and read as that stop's
+                  label — "Einde bewindvoering · Start" as one phrase, which is
+                  the opposite of what the map means. The main line is already
+                  named by the heading above it, by its own goal stop at the far
+                  right, and by the Sporen list on /timeline. */}
+              {t.parentTrackId !== null && (
+                <text
+                  x={PAD_X - 12} y={lane + 4} textAnchor="end"
+                  fontSize="11" fill={MUTED}
+                >
+                  {t.title}
+                </text>
+              )}
               {/* A spoor that finished is a CLEAN outcome — handled and closed —
                   so it gets a cap, not a frayed end. AFGEROND and GEËINDIGD are
                   different facts and the editor makes Martin choose between
