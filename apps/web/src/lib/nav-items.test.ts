@@ -11,6 +11,13 @@ describe("NAV_ITEMS", () => {
     }
   });
 
+  it("offers a way to reach security settings", () => {
+    // Passkeys, devices and the password all live on /settings/security. It is
+    // reachable only from the sidebar, so a missing entry means the only way
+    // to revoke a device is to type the URL from memory.
+    expect(NAV_ITEMS.map((i) => i.href)).toContain("/settings/security");
+  });
+
   it("offers De zaak, which is where that work happens now", () => {
     expect(NAV_ITEMS).toContainEqual({ label: "De zaak", href: "/timeline" });
   });

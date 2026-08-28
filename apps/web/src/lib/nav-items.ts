@@ -31,4 +31,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "De zaak", href: "/timeline" },
   { label: "Review queue", href: "/queue" },
   { label: "Verify", href: "/verify" },
+  { label: "Instellingen", href: "/settings/security" },
 ];
