@@ -193,9 +193,39 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
 
 ## 4. Tunnel
 
-Point the existing cloudflared tunnel hostname at `http://localhost:3000`
-and (recommended) put Cloudflare Access in front of the hostname as a second
-factor in front of better-auth.
+Point the existing cloudflared tunnel hostname at `http://localhost:3000`.
+
+Cloudflare Access is deliberately **not** used any more. The app authenticates
+its own users: a passkey (Touch ID / Face ID) with a password fallback, and a
+"trust this device for 30 days" choice that decides the session length. Access
+added a second email-code ceremony on top of a login screen that already
+existed, and delivered those codes to the same mailbox the worker polls for
+case correspondence.
+
+Two things replace what Access was quietly providing:
+
+- **A Cloudflare rate-limiting rule** on the hostname, matching
+  `starts_with(http.request.uri.path, "/api/auth/")`, at 10 requests per
+  minute per IP. The password endpoint is now reachable from the open
+  internet and must not be grindable.
+- **`advanced.ipAddress.ipAddressHeaders`** in `packages/auth`, set to
+  `["cf-connecting-ip", "x-forwarded-for"]`. Everything arrives through the
+  tunnel, so better-auth's default of `x-forwarded-for` alone would let a
+  client prepend a value and hand itself a fresh rate-limit bucket per
+  request. Cloudflare sets and overwrites `cf-connecting-ip`.
+
+Two environment variables in `.env.prod` drive the passkey:
+
+| Variable | Value |
+| --- | --- |
+| `PASSKEY_RP_ID` | `<your-tunnel-hostname>` (no scheme, no path) |
+| `PASSKEY_RP_NAME` | `Verder` |
+
+A passkey is cryptographically bound to its `rpID`, so one registered against
+`localhost` in development will never work in production. Register the
+production passkey against the production hostname, and confirm it signs you
+in **before** removing the Access application — otherwise the only remaining
+door is the password, under a policy that has just changed.
 
 ## 5. Nightly cron
 
