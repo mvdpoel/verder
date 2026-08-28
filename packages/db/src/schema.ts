@@ -478,3 +478,33 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
     .$onUpdate(() => new Date()),
 }, (t) => [index("verification_identifier_idx").on(t.identifier)]);
+
+// A registered WebAuthn credential. Managed by @better-auth/passkey, so the
+// drizzle PROPERTY names must match the plugin's field names exactly — the
+// drizzle adapter resolves schemaModel[field], not schemaModel[column]. The
+// SQL column names stay snake_case like every other table here.
+//
+// Not an evidence table: no ledger event, not read by /verify. `aaguid`
+// identifies the authenticator MODEL, never the device or the user, and Apple
+// zeroes it under the default attestation flow — which is why the passkey is
+// named by hand at registration.
+export const passkey = pgTable("passkey", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  // The plugin declares this `number`, so it must be an integer for the
+  // adapter. A WebAuthn signature counter is a uint32 and could in principle
+  // overflow int4; Apple and Google passkeys — the only ones in play — report
+  // 0 and never increment. Revisit only if a hardware key is ever registered.
+  counter: integer("counter").notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: boolean("backed_up").notNull(),
+  transports: text("transports"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  aaguid: text("aaguid"),
+}, (t) => [
+  index("passkey_user_id_idx").on(t.userId),
+  index("passkey_credential_id_idx").on(t.credentialID),
+]);
