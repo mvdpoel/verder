@@ -10,6 +10,11 @@ export function getAuth(): ReturnType<typeof createAuth> {
     secret: process.env.AUTH_SECRET!,
     baseURL: process.env.APP_URL ?? "http://localhost:3000",
     trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+    // A passkey is bound to its rpID, so one registered against localhost
+    // will never work against verder.vanderpoel.pro. That is WebAuthn
+    // behaving correctly; the production passkey is registered in production.
+    rpID: process.env.PASSKEY_RP_ID ?? "localhost",
+    rpName: process.env.PASSKEY_RP_NAME ?? "Verder",
   });
   return g.__verderAuth;
 }

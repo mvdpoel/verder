@@ -1,1 +1,14 @@
-{ "extends": "../../tsconfig.base.json", "include": ["src"] }
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // This package is consumed as TypeScript source (`main: ./src/index.ts`)
+    // and never emits .d.ts — `build` is `tsc --noEmit`. With declaration
+    // emit on, the passkey plugin's inferred return type trips TS2742: under
+    // pnpm the types it reaches (@better-auth/core/db/adapter, zod/v4/core,
+    // @simplewebauthn/server) live under peer-hashed .pnpm paths that cannot
+    // be named from here. apps/web already turns declaration off for the same
+    // reason it is meaningless there.
+    "declaration": false
+  },
+  "include": ["src"]
+}
