@@ -33,7 +33,18 @@ await boss.work("heartbeat", async () => { await recordRun(db, "heartbeat", "ok"
 
 await boss.createQueue("gmail.poll");
 await boss.createQueue("suggest.entry");
-await boss.schedule("gmail.poll", "*/3 * * * *");
+// STOPPED 2026-08-29. Gmail polling is deliberately unscheduled: the account
+// sat in an account-level rate limit that EVERY attempt re-armed for another
+// fifteen minutes, so a 3-minute cron could never let it expire — measured at
+// 378 rate-limited skips in 24 hours, last successful poll 00:07. The ingest
+// path is being rewired onto JMAP, so rather than time a quiet window the
+// schedule is simply off.
+//
+// The queue and its worker stay registered, so `boss.send("gmail.poll")` still
+// runs one poll by hand. To resume, restore the line below AND note that
+// removing it here does NOT delete an existing row in `pgboss.schedule` — that
+// was deleted separately, and re-adding the call is what recreates it.
+// await boss.schedule("gmail.poll", "*/3 * * * *");
 await boss.work("gmail.poll", async () => {
   const gmail = await realGmailPort();
   await pollGmail({ db, gmail, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
