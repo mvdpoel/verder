@@ -4,7 +4,7 @@
 
 **Goal:** Get mail flowing into the dossier again by standing up Stalwart on the homelab, importing the Gmail archive into it, and having the worker ingest over JMAP instead of the Gmail API.
 
-**Architecture:** Stalwart runs as a fourth compose service on the homelab with its metadata store on NVMe and its blob store on a configurable path. A new `MailPort` interface replaces the query-based `GmailPort` with a cursor-based `changedSince(cursor)`, which is what JMAP's `Email/changes` actually offers. `pollMail` reuses the existing `ingestRawEmail` transaction wholesale, so evidence handling, the vault write and the outbox repair are unchanged. Nothing here appends a ledger event.
+**Architecture:** Stalwart runs as a fourth compose service on the homelab with its metadata store and its blob store both on `/mnt/data` — local ext4 on NVMe with 342 GB free. They stay two settable paths, but in phase 1 they point at the same local volume. A new `MailPort` interface replaces the query-based `GmailPort` with a cursor-based `changedSince(cursor)`, which is what JMAP's `Email/changes` actually offers. `pollMail` reuses the existing `ingestRawEmail` transaction wholesale, so evidence handling, the vault write and the outbox repair are unchanged. Nothing here appends a ledger event.
 
 **Tech Stack:** TypeScript, Node 22, pnpm 10, Drizzle, pg-boss, vitest, Docker Compose, Stalwart Mail Server, Vandelay (JMAP migration CLI), Google Takeout.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Phase 1 touches **no MX record and no DNS** for mail. Delivery keeps going to Gmail throughout.
-- **NEVER put Stalwart's metadata store on NFS.** Metadata on NVMe, blobs on a configurable path.
+- **NEVER put Stalwart's metadata store on NFS.** Both stores live on `/mnt/data` (local NVMe, 342 GB free), so the rule is never approached rather than merely respected. `/` has only 40 GB free and is not the volume for this.
 - **Never rewrite a historical `raw_emails.gmail_message_id`.** It is also `documents.source_ref`, and the case map's third level derives from it.
 - Evidence tables stay append-only. This work appends **zero** `ledger_events` rows; `nightly-verify`'s chain head must be unchanged after every deploy.
 - Run all builds and tests with `env -u NODE_ENV` — the shell exports `NODE_ENV=development`, which breaks `next build`.
@@ -855,8 +855,8 @@ Create the mailbox account and an API token. **The exact admin command is versio
 ```
 JMAP_BASE_URL=http://stalwart:8080
 JMAP_TOKEN=<the token>
-STALWART_DATA_DIR=/srv/verder/stalwart/data
-STALWART_BLOB_DIR=/srv/verder/stalwart/blobs
+STALWART_DATA_DIR=/mnt/data/verder/stalwart/data
+STALWART_BLOB_DIR=/mnt/data/verder/stalwart/blobs
 ```
 
 - [ ] **Step 4: Verify the endpoint answers**
@@ -888,28 +888,28 @@ git commit -m "feat(ops): run Stalwart on the homelab, JMAP only, loopback-bound
 
 In the browser: Google Takeout → Mail only → `.mbox`, or the Admin console's Data Export. Neither touches IMAP or the Gmail API, so neither is affected by the rate limit. Expect 72 hours, up to 14 days.
 
-**Before starting, answer open question 1** — read the Gmail size at `one.google.com/storage`. If it exceeds ~30 GB, point `STALWART_BLOB_DIR` at the NAS mount before importing rather than after.
+Read the Gmail size at `one.google.com/storage` while you wait, for the record — but it no longer gates anything: `/mnt/data` has 342 GB free and the estimate is ~30 GB. Stage the `.mbox` on `/mnt/data` too, NOT on `/`, which has 40 GB free and would need the archive twice over during the import.
 
 - [ ] **Step 2: Get the archive onto the homelab**
 
 For Takeout, download and `scp`. For Data Export, pull it straight from the bucket:
 
 ```bash
-ssh homelab 'gcloud storage cp -r gs://<export-bucket>/<path> /srv/verder/mail-import/'
+ssh homelab 'gcloud storage cp -r gs://<export-bucket>/<path> /mnt/data/verder/mail-import/'
 ```
 
 - [ ] **Step 3: Dry-run the import**
 
 ```bash
 ssh homelab 'vandelay import takeout --dry-run \
-  --path /srv/verder/mail-import martin.sqlite'
+  --path /mnt/data/verder/mail-import martin.sqlite'
 ```
 Expected: a message count and no errors. Note the count — Task 8 checks against it.
 
 - [ ] **Step 4: Import for real, then verify**
 
 ```bash
-ssh homelab 'vandelay import takeout --path /srv/verder/mail-import martin.sqlite && \
+ssh homelab 'vandelay import takeout --path /mnt/data/verder/mail-import martin.sqlite && \
   vandelay export --url http://localhost:8080 --token "$JMAP_TOKEN" martin.sqlite'
 ```
 

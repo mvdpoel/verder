@@ -59,8 +59,20 @@ Measured this session, not assumed. Everything else in this spec is a proposal.
   Takeout and the Workspace Data Export tool both produce `.mbox`; Data Export
   lands in a Cloud Storage bucket you pull with `gcloud storage`. Stalwart's own
   migration CLI, **Vandelay**, imports Google Takeout `.mbox` directly.
-- **Homelab disk: 203 GB, 39 GB free (81% used).** The NAS has 2.9 TB free.
-- **Martin's Gmail size is still unknown.** See Open questions.
+- **The homelab has three local volumes, not one.** The `203 GB / 37 GiB free`
+  figure is the ROOT partition only, and reading it as "the machine" is what
+  first pointed this design at the NAS. The real inventory (`df -H`, decimal, as
+  the machine reports it):
+
+  | Mount | Device | Size | Free | Holds |
+  | --- | --- | --- | --- | --- |
+  | `/` | Kingston p5 | 221 GB | **40 GB** (82%) | OS, Postgres, verder vault |
+  | `/mnt/data` | Kingston p2 | 790 GB | **342 GB** (55%) | docker, ollama-models, airteq-voice |
+  | `/mnt/ai` | Lexar 2 TB | 2.1 TB | **351 GB** (83%) | HuggingFace cache, k3 |
+  | `/mnt/nas-download` | NAS, NFS | 7.3 TB | 2.9 TB | backups |
+
+  ~690 GB of free LOCAL NVMe. Mailbox capacity is not a constraint here.
+- **Martin's Gmail size: ~30 GB, his estimate, not measured.** See Open questions.
 
 ## 1. Topology
 
@@ -113,10 +125,21 @@ from each message's own date, pruned nightly, so the window slides rather than
 filling up. Junk from 2019
 cannot reach TransIP whatever the cleanup sub-project does or does not delete.
 
-**Split Stalwart's metadata store from its blob store.** Metadata is small and
-latency-sensitive and goes on the NVMe; blobs go on a path that can point at the
-NAS mount with 2.9 TB free. **NEVER put the metadata store on NFS** — that is
-how a mail database corrupts.
+**The whole store goes on `/mnt/data`** — metadata and blobs both, local ext4 on
+NVMe, 342 GB free. At Martin's estimated ~30 GB that is under a tenth of the
+volume, and the cleanup sub-project only shrinks it. `/mnt/ai` has comparable
+free space but sits at 83% behind a HuggingFace cache that grows without asking;
+`/mnt/data` is the calmer neighbour.
+
+The metadata/blob split stays in the config as two settable paths, because phase
+2 may want it and it costs nothing — but in phase 1 both point at the same local
+volume. **NEVER put the metadata store on NFS** — that is how a mail database
+corrupts. Keeping the whole store local means that rule is never approached
+rather than merely respected.
+
+The honest limit: `/mnt/data` is a second partition on the SAME physical disk as
+`/`. That is capacity, not redundancy — one dead Kingston takes root and the mail
+store together. The backup fan-out below is what covers that, which is its job.
 
 **Five backup targets, grouped honestly:**
 
@@ -285,10 +308,16 @@ arrives at a domain with no SPF, no DKIM and no DMARC.
 
 ## Open questions
 
-1. **How large is the Gmail mailbox?** Unresolved — the Gmail API exposes no
-   aggregate byte count and the worker's token is `gmail.readonly`, so no Drive
-   API. The figure lives at `one.google.com/storage`. It decides whether the home
-   archive fits the 39 GB of free NVMe or needs the NAS blob path from day one.
+1. **How large is the Gmail mailbox?** Martin's estimate is ~30 GB; still not
+   measured, because the Gmail API exposes no aggregate byte count and the
+   worker's token is `gmail.readonly`, so no Drive API. The figure lives at
+   `one.google.com/storage`. **It no longer decides anything structural** —
+   `/mnt/data` has 342 GB free and swallows the estimate ten times over. What it
+   still sizes is the BACKUP fan-out: a 30 GB store means a ~30 GB weekly Maildir
+   export encrypted to Dropbox and TransIP Stack every generation, which is the
+   strongest argument for running the mailbox cleanup BEFORE the import rather
+   than before phase 3. Note also that "mailboxes" may span `dytechsolutions.nl`,
+   which is out of scope, so the in-scope figure may be well under 30 GB.
 2. **Does TransIP allow inbound port 25 on the k8s LoadBalancer?** Their
    published block is explicitly about OUTGOING mail ports. Unverified, and
    phase 2 gate.
