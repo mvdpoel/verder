@@ -120,7 +120,9 @@ export type DebtFacts = {
   id: string;
   creditorName: string;
   principalCents: number | null;
-  claimedCents: number;
+  // The KvK aanmaning names no total — a debt CAN be uneditable-proof against
+  // that, never uneditable because of it. Mirrors principalCents exactly.
+  claimedCents: number | null;
   references_: string | null;
   origin: string | null;
   originStory: string | null;
@@ -132,18 +134,19 @@ export function DebtFactsForm({ debt }: { debt: DebtFacts }) {
   const [form, setForm] = useState({
     creditorName: debt.creditorName,
     principal: debt.principalCents === null ? "" : centsToInput(debt.principalCents),
-    claimed: centsToInput(debt.claimedCents),
+    claimed: debt.claimedCents === null ? "" : centsToInput(debt.claimedCents),
     references: debt.references_ ?? "",
     origin: debt.origin ?? "",
     originStory: debt.originStory ?? "",
   });
   const principalCents = form.principal.trim() === "" ? null : euroToCents(form.principal);
-  const claimedCents = euroToCents(form.claimed);
+  const claimedCents = form.claimed.trim() === "" ? null : euroToCents(form.claimed);
   const principalOk = form.principal.trim() === "" || principalCents !== null;
+  const claimedOk = form.claimed.trim() === "" || claimedCents !== null;
   const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
 
   const save = () => {
-    if (!form.creditorName || claimedCents === null || !principalOk) return;
+    if (!form.creditorName || !principalOk || !claimedOk) return;
     update.mutate({
       id: debt.id,
       creditorName: form.creditorName,
@@ -164,10 +167,9 @@ export function DebtFactsForm({ debt }: { debt: DebtFacts }) {
         <label className="block text-sm">Principal (€)<input className="w-full border rounded p-2" placeholder="what it started as"
           value={form.principal} onChange={(e) => set({ principal: e.target.value })} />
           {!principalOk && <span className="text-xs text-red-600">Use a plain amount like 12,50</span>}</label>
-        <label className="block text-sm">Claimed (€)<input className="w-full border rounded p-2"
+        <label className="block text-sm">Claimed (€)<input className="w-full border rounded p-2" placeholder="leave empty if the notice states none"
           value={form.claimed} onChange={(e) => set({ claimed: e.target.value })} />
-          {form.claimed && claimedCents === null &&
-            <span className="text-xs text-red-600">Use a plain amount like 12,50</span>}</label>
+          {!claimedOk && <span className="text-xs text-red-600">Use a plain amount like 12,50</span>}</label>
         <label className="block text-sm">References<input className="w-full border rounded p-2" placeholder="dossier / invoice nr"
           value={form.references} onChange={(e) => set({ references: e.target.value })} /></label>
       </div>
@@ -180,7 +182,7 @@ export function DebtFactsForm({ debt }: { debt: DebtFacts }) {
       </div>
       {update.error && <p className="text-sm text-red-600">{update.error.message}</p>}
       <button className="rounded bg-slate-900 text-white px-4 py-2 disabled:opacity-50"
-        disabled={!form.creditorName || claimedCents === null || !principalOk || update.isPending} onClick={save}>
+        disabled={!form.creditorName || !principalOk || !claimedOk || update.isPending} onClick={save}>
         Save facts
       </button>
     </section>

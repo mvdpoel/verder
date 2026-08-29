@@ -15,11 +15,28 @@ export type RegistryItemRow = {
   monthlyCents: number;
 };
 
+export type DebtPartyRole = "eiser" | "incasso" | "deurwaarder" | "gemachtigde";
+
+export type RegistryDebtPartyRow = {
+  partyId: string;
+  name: string;
+  organization: string | null;
+  role: DebtPartyRole;
+  note: string | null;
+};
+
 export type RegistryDebtRow = {
   id: string;
   creditorName: string;
-  claimedCents: number;
+  claimedCents: number | null;
   effectiveStatus: string;
+  // Who is chasing this debt (eiser) and who is acting for them
+  // (incasso/deurwaarder/gemachtigde) — Task 2's debt_parties edge.
+  parties: RegistryDebtPartyRow[];
+  // Whether Martin has told Verder about this debt yet. null means not yet —
+  // reported calmly, never as a warning: three creditors are already chasing
+  // him and this screen's job is to state what is recorded, not to alarm.
+  reportedToVerderAt: Date | null;
 };
 
 export const ITEM_STATUS_ORDER = [
@@ -56,8 +73,14 @@ const ITEM_GROUP_LABEL: Record<string, string> = {
   canceled: "Canceled — done and dusted",
 };
 
-/** €-format integer cents without float arithmetic. */
-export function formatEuro(cents: number): string {
+/**
+ * €-format integer cents without float arithmetic. `null` means the notice
+ * never stated an amount (the KvK aanmaning is the real example) — rendering
+ * that as €0,00 would put a number in front of Martin that no creditor ever
+ * claimed, so it renders as text instead.
+ */
+export function formatEuro(cents: number | null): string {
+  if (cents === null) return "amount unknown";
   const sign = cents < 0 ? "-" : "";
   const abs = Math.abs(cents);
   return `${sign}€${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
@@ -167,17 +190,33 @@ export function RegistryDebtsList({ debts }: { debts: RegistryDebtRow[] }) {
     - DEBT_STATUS_ORDER.indexOf(b.effectiveStatus as (typeof DEBT_STATUS_ORDER)[number]));
   return (
     <ul className="space-y-2">
-      {ordered.map((debt) => (
-        <li key={debt.id} className="rounded border bg-white p-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Link href={`/registry/debts/${debt.id}`} className="font-medium hover:underline truncate">
-              {debt.creditorName}
-            </Link>
-            <StatusBadge status={debt.effectiveStatus} kind="debt" />
-          </div>
-          <span className="shrink-0 text-sm text-slate-500">claimed {formatEuro(debt.claimedCents)}</span>
-        </li>
-      ))}
+      {ordered.map((debt) => {
+        const eiserNames = debt.parties.filter((p) => p.role === "eiser").map((p) => p.name);
+        const intermediaries = debt.parties.filter((p) => p.role !== "eiser")
+          .map((p) => `${p.role}: ${p.name}`);
+        return (
+          <li key={debt.id} className="rounded border bg-white p-3 space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Link href={`/registry/debts/${debt.id}`} className="font-medium hover:underline truncate">
+                  {debt.creditorName}
+                </Link>
+                <StatusBadge status={debt.effectiveStatus} kind="debt" />
+              </div>
+              <span className="shrink-0 text-sm text-slate-500">
+                {debt.claimedCents === null ? "amount unknown" : `claimed ${formatEuro(debt.claimedCents)}`}
+              </span>
+            </div>
+            {(eiserNames.length > 0 || intermediaries.length > 0 || !debt.reportedToVerderAt) && (
+              <p className="text-xs text-slate-500">
+                {eiserNames.length > 0 && <>eiser: {eiserNames.join(", ")}</>}
+                {intermediaries.length > 0 && <>{eiserNames.length > 0 && " · "}{intermediaries.join(" · ")}</>}
+                {!debt.reportedToVerderAt && <>{(eiserNames.length > 0 || intermediaries.length > 0) && " · "}not reported to Verder yet</>}
+              </p>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

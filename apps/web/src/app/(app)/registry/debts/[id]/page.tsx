@@ -2,6 +2,7 @@ import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { DecisionForm } from "@/components/decision-form";
 import { DebtFactsForm } from "@/components/item-facts-form";
+import { DebtPartiesForm } from "@/components/debt-parties-form";
 import { DecisionTimeline, StatusBadge, formatEuro } from "@/components/registry-list";
 
 export default async function RegistryDebtPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +12,11 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
   const vaultDocs = await caller.documents.list({ limit: 100 });
   const docTitles = new Map(debt.documents.map((d) => [d.id, d.title]));
   const blocker = debt.decisions[0]?.blockerNote;
-  const feesCents = debt.principalCents === null ? null : debt.claimedCents - debt.principalCents;
+  // Both sides of the subtraction have to be known amounts — the KvK debt
+  // states no claimed total, and computing fees against `null` would either
+  // throw or silently coerce to NaN.
+  const feesCents = debt.principalCents === null || debt.claimedCents === null
+    ? null : debt.claimedCents - debt.principalCents;
 
   return (
     <div className="space-y-6">
@@ -56,7 +61,7 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
               )}
           </section>
           <section>
-            <h2 className="font-semibold mb-2">Linked documents</h2>
+            <h2 className="font-semibold mb-2">Documents via decisions &amp; the logbook</h2>
             {debt.documents.length === 0
               ? <p className="text-sm text-slate-600">No documents linked yet.</p>
               : (
@@ -69,6 +74,13 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
                 </ul>
               )}
           </section>
+          <DebtPartiesForm
+            debtId={debt.id}
+            parties={debt.parties}
+            debtDocuments={debt.debtDocuments}
+            reportedToVerderAt={debt.reportedToVerderAt}
+            reportedViaEntryId={debt.reportedViaEntryId}
+          />
         </div>
         <div className="space-y-6">
           <DecisionForm kind="debt" targetId={debt.id}

@@ -21,6 +21,8 @@ export function EntryForm({ correctId }: { correctId?: string }) {
     actionItems: [] as { description: string; clarity: "clear" | "ambiguous" | "already-provided" }[],
   });
   const [newParty, setNewParty] = useState("");
+  const [newPartyParentId, setNewPartyParentId] = useState("");
+  const organizations = parties.data?.filter((p) => p.kind === "organization") ?? [];
 
   // Pre-fill once when correcting
   const o = original.data;
@@ -68,8 +70,21 @@ export function EntryForm({ correctId }: { correctId?: string }) {
         <div className="flex gap-2 mt-2">
           <input className="border rounded p-2 flex-1" placeholder="Add a person or organization"
             value={newParty} onChange={(e) => setNewParty(e.target.value)} />
+          {/* A contact person is a person whose parent is the organization. This
+              is not cosmetic: pollGmail builds its relevance filter from
+              parties.email, so recording a contact's address is what makes
+              their mail start being ingested. */}
+          <select className="border rounded p-2" value={newPartyParentId}
+            onChange={(e) => setNewPartyParentId(e.target.value)}
+            aria-label="Parent organisation">
+            <option value="">No parent organisation</option>
+            {organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
           <button type="button" className="rounded border px-3"
-            onClick={() => { if (newParty) { createParty.mutate({ kind: "person", name: newParty }); setNewParty(""); } }}>Add</button>
+            onClick={() => { if (newParty) {
+              createParty.mutate({ kind: "person", name: newParty, parentPartyId: newPartyParentId || null });
+              setNewParty(""); setNewPartyParentId("");
+            } }}>Add</button>
         </div>
       </fieldset>
       <fieldset>

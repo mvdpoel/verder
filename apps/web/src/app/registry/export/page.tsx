@@ -49,7 +49,15 @@ export default async function RegistryExportPage() {
   const toCancelMonthlyCents = report.items
     .filter((i) => i.status === "to-cancel")
     .reduce((sum, i) => sum + i.monthlyCents, 0);
-  const claimedTotalCents = report.debts.reduce((sum, d) => sum + d.claimedCents, 0);
+  // Some notices (the KvK aanmaning) state no total. Summing only the known
+  // amounts while presenting the result as THE total would report a smaller
+  // debt burden than the notices actually state — so the total is disclosed
+  // alongside how many debts it does not cover, the same discipline the money
+  // page's disclosure blocks enforce.
+  const debtsWithClaimedAmount = report.debts.filter((d) => d.claimedCents !== null);
+  const claimedTotalCents = debtsWithClaimedAmount
+    .reduce((sum, d) => sum + (d.claimedCents as number), 0);
+  const debtsWithoutClaimedAmount = report.debts.length - debtsWithClaimedAmount.length;
 
   return (
     <main className="mx-auto max-w-3xl p-8 print:p-0 bg-white text-black">
@@ -129,17 +137,24 @@ export default async function RegistryExportPage() {
                 <tr key={debt.id}>
                   <td className={td}>{debt.creditorName}</td>
                   <td className={td}>{debt.principalCents == null ? "—" : formatEuro(debt.principalCents)}</td>
-                  <td className={td}>{formatEuro(debt.claimedCents)}</td>
+                  <td className={td}>{debt.claimedCents == null ? "—" : formatEuro(debt.claimedCents)}</td>
                   <td className={td}>{debt.references ?? "—"}</td>
                   <td className={td}>{DEBT_STATUS_LABEL[debt.status] ?? debt.status}</td>
                 </tr>
               ))}
               <tr className="font-semibold">
-                <td className="border-t-2 border-black py-1 pr-4">Totaal gevorderd</td>
+                <td className="border-t-2 border-black py-1 pr-4">Totaal gevorderd (bekende bedragen)</td>
                 <td className="border-t-2 border-black py-1" />
                 <td className="border-t-2 border-black py-1 pr-4">{formatEuro(claimedTotalCents)}</td>
                 <td className="border-t-2 border-black py-1" colSpan={2} />
               </tr>
+              {debtsWithoutClaimedAmount > 0 && (
+                <tr>
+                  <td className="py-1 pr-4 text-xs text-gray-600" colSpan={5}>
+                    Waarvan {debtsWithoutClaimedAmount} schuld{debtsWithoutClaimedAmount === 1 ? "" : "en"} zonder vermeld bedrag, niet in dit totaal meegeteld
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
