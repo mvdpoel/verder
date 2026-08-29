@@ -358,6 +358,53 @@ describe("registry router", () => {
   });
 
   describe("debt parties and documents", () => {
+    it("list() carries the eiser/intermediary/reported projection in one grouped query", async () => {
+      // Not the real creditors' names — see the comment below on
+      // case-debts.ts's name-based dedup.
+      const eiserName = `Wehkamp Testfixture ${crypto.randomUUID()}`;
+      const deurwaarderName = `GGN Testfixture ${crypto.randomUUID()}`;
+      const c = caller();
+      const withParties = await c.registry.debts.create({
+        creditorName: eiserName, claimedCents: 45000,
+      });
+      const eiser = await c.parties.create({ kind: "organization", name: eiserName });
+      const deurwaarder = await c.parties.create({ kind: "organization", name: deurwaarderName });
+      await c.registry.debts.linkParty({
+        debtId: withParties.id, partyId: eiser.id, role: "eiser",
+      });
+      await c.registry.debts.linkParty({
+        debtId: withParties.id, partyId: deurwaarder.id, role: "deurwaarder",
+      });
+      await c.registry.debts.setReported({
+        debtId: withParties.id, reportedAt: new Date("2026-09-01T10:00:00Z"),
+      });
+      // The empty case matters just as much: a debt with no linked party and
+      // not yet reported must render an empty array, never throw or drop the
+      // row (this is also the shape of most of the seeded test fixtures).
+      const bare = await c.registry.debts.create({
+        creditorName: `Bare Testfixture ${crypto.randomUUID()}`, claimedCents: null,
+      });
+
+      const list = await c.registry.debts.list();
+      const withPartiesRow = list.find((d) => d.id === withParties.id);
+      const bareRow = list.find((d) => d.id === bare.id);
+
+      expect(withPartiesRow?.parties.map((p) => [p.role, p.name])).toEqual(
+        expect.arrayContaining([
+          ["eiser", eiserName],
+          ["deurwaarder", deurwaarderName],
+        ]));
+      expect(withPartiesRow?.reportedToVerderAt).not.toBeNull();
+      // list()'s effectiveStatus must still agree with get()'s
+      // decisions[0]?.status — the new projection must not disturb it.
+      const got = await c.registry.debts.get({ id: withParties.id });
+      expect(withPartiesRow?.effectiveStatus).toBe(got.effectiveStatus);
+
+      expect(bareRow?.parties).toEqual([]);
+      expect(bareRow?.reportedToVerderAt).toBeNull();
+      expect(bareRow?.claimedCents).toBeNull();
+    });
+
     it("returns the creditor and the intermediary with their roles", async () => {
       // Not the real creditors' names: case-debts.ts's applyCaseDebts dedups a
       // debt/party BY NAME, so a fixture literally named "PLM Investments II

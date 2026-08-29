@@ -199,12 +199,44 @@ const itemsRouter = router({
 });
 
 const debtsRouter = router({
+  /**
+   * List view for /registry's debts tab. Carries the eiser/intermediary
+   * summary and the reported-to-Verder marker the list actually renders,
+   * resolved for the WHOLE list in one grouped query — never a per-row
+   * `debts.get()` call, which just moves the N+1 into the server and does
+   * not scale past a handful of debts (this becomes fifty once notices are
+   * ingested automatically). `reportedToVerderAt` is already a column on
+   * `debts` and needs no extra query; only the party projection does.
+   * `effectiveStatus` is untouched — same per-debt ledger lookup as before,
+   * so it keeps agreeing with `get()`'s `decisions[0]?.status`.
+   */
   list: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(schema.debts)
       .orderBy(desc(schema.debts.createdAt));
+    const debtIds = rows.map((d) => d.id);
+    const partyRows = debtIds.length
+      ? await ctx.db.select({
+          debtId: schema.debtParties.debtId,
+          partyId: schema.parties.id,
+          name: schema.parties.name,
+          organization: schema.parties.organization,
+          role: schema.debtParties.role,
+          note: schema.debtParties.note,
+        }).from(schema.debtParties)
+          .innerJoin(schema.parties, eq(schema.parties.id, schema.debtParties.partyId))
+          .where(inArray(schema.debtParties.debtId, debtIds))
+          .orderBy(asc(schema.debtParties.role), asc(schema.parties.name))
+      : [];
+    const partiesByDebt = new Map<string, Omit<(typeof partyRows)[number], "debtId">[]>();
+    for (const { debtId, ...party } of partyRows) {
+      const list = partiesByDebt.get(debtId);
+      if (list) list.push(party);
+      else partiesByDebt.set(debtId, [party]);
+    }
     return Promise.all(rows.map(async (debt) => ({
       ...debt,
       effectiveStatus: await effectiveStatus(ctx.db, { debtId: debt.id }),
+      parties: partiesByDebt.get(debt.id) ?? [],
     })));
   }),
 

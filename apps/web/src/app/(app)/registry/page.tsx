@@ -9,15 +9,9 @@ export default async function RegistryPage({ searchParams }: {
   const caller = await serverCaller();
   const stats = await caller.registry.stats();
   const items = tab === "items" ? await caller.registry.items.list() : [];
-  // debts.list() carries no party projection (Task 2's interface only added
-  // that to .get()). The debt count here is small (three seeded creditors),
-  // so fetching each one's parties/reportedToVerderAt via .get() is cheap and
-  // keeps the eiser/intermediary/not-reported summary honest without adding
-  // a new list-shaped endpoint.
-  const debtSummaries = tab === "debts" ? await caller.registry.debts.list() : [];
-  const debts = tab === "debts"
-    ? await Promise.all(debtSummaries.map((d) => caller.registry.debts.get({ id: d.id })))
-    : [];
+  // debts.list() carries its own eiser/intermediary/reported-to-Verder
+  // projection, resolved server-side in one grouped query — no per-row fetch.
+  const debts = tab === "debts" ? await caller.registry.debts.list() : [];
 
   const tabClass = (active: boolean) =>
     `rounded px-3 py-1.5 text-sm ${active ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`;
