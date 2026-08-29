@@ -3,12 +3,17 @@ import { eq, inArray } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { ingestDocument } from "@verder/api/src/routers/documents";
+import { settleDocumentTexts } from "../test-support/document-texts";
 import { documentIdsByTitle } from "./seed-documents";
 
 // The admin role: this helper is called from the backfill scripts, which run as
 // `verder`, and `documents`/`document_status_changes` are append-only for the
 // app and worker roles anyway.
 const URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+// Tags every fixture this run ingests, so the settle helper and the guard at the
+// bottom can both scope to THIS run. New per run: `documents` is append-only and
+// the dev database is never truncated.
+const RUN_REF = `test:seed-documents:${crypto.randomUUID()}`;
 
 describe("documentIdsByTitle", () => {
   const { db, pool } = createDb(URL);
@@ -31,16 +36,19 @@ describe("documentIdsByTitle", () => {
    * production does for a document it cannot read — `storeDocumentText` records
    * every attempt including extractor "none", which is what makes the sweep
    * converge — so the fixture leaves the queue as it found it.
+   *
+   * The row is written by the SHARED helper rather than inline. This file got
+   * the rule right first and three others got it wrong, which is the argument
+   * for one spelling: `settleDocumentTexts` carries the reasoning, including
+   * why it is an INSERT and never a DELETE, and a fifth ingest test now has one
+   * obvious thing to copy instead of a pattern to rediscover.
    */
   const seed = async (title: string, receivedAt = new Date()) => {
     const doc = await db.transaction((tx) => ingestDocument(tx, {
       sha256: sha(), sizeBytes: 10, mime: "application/pdf",
-      source: "email-attachment", title, receivedAt,
+      source: "email-attachment", sourceRef: RUN_REF, title, receivedAt,
     }));
-    await db.insert(schema.documentTexts).values({
-      documentId: doc.id, sha256: doc.sha256, text: "",
-      extractor: "none", charCount: 0, truncated: false,
-    }).onConflictDoNothing();
+    await settleDocumentTexts(db, RUN_REF);
     return doc;
   };
 
@@ -141,5 +149,13 @@ describe("documentIdsByTitle", () => {
     // And the rows are still there — a discard is never a delete.
     expect(await db.select().from(schema.documents)
       .where(inArray(schema.documents.id, [a.id, b.id]))).toHaveLength(2);
+  });
+
+  it("leaves the docmeta sweep's backlog exactly as it found it", async () => {
+    // Already true before the shared helper replaced the inline insert — this
+    // file is the one that had the rule right. Pinned as an assertion so it
+    // stays true when someone adds a fixture that forgets to seed through
+    // `seed()`.
+    expect(await settleDocumentTexts(db, RUN_REF)).toBe(0);
   });
 });

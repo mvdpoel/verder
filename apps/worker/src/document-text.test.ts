@@ -5,11 +5,16 @@ import { createDb, schema, type Db } from "@verder/db";
 import { sha256Hex } from "@verder/core";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeDocumentText } from "./document-text";
+import { settleDocumentTexts } from "./test-support/document-texts";
 
 // NOT named URL: the fixture helper below constructs a real URL, and a const
 // named URL would shadow the global and blow up with "URL is not a constructor".
 const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
+// Tags every fixture this run ingests, so the guard at the bottom can ask about
+// THIS run and nothing else. New per run: `documents` is append-only and the
+// dev database is never truncated.
+const RUN_REF = `test:document-text:${crypto.randomUUID()}`;
 
 async function insertDoc(db: Db, buf: Buffer) {
   // Unique bytes per run: the vault is content-addressed and documents.sha256
@@ -17,7 +22,8 @@ async function insertDoc(db: Db, buf: Buffer) {
   const unique = Buffer.concat([buf, Buffer.from(`\n% ${crypto.randomUUID()}\n`)]);
   return { doc: await db.transaction((tx) => ingestDocument(tx, {
     sha256: sha256Hex(unique), sizeBytes: unique.length, mime: "application/pdf",
-    title: `brief-${Date.now()}.pdf`, source: "nas-scan", receivedAt: new Date() })), unique };
+    title: `brief-${Date.now()}.pdf`, source: "nas-scan", sourceRef: RUN_REF,
+    receivedAt: new Date() })), unique };
 }
 
 describe("storeDocumentText", () => {
@@ -94,6 +100,20 @@ describe("storeDocumentText", () => {
       .where(eq(schema.workerRuns.worker, "extract"));
     expect(runs.some((r) => r.status === "error"
       && (r.detail as Record<string, unknown> | null)?.documentId === doc.id)).toBe(true);
+    await pool.end();
+  });
+
+  it("leaves the docmeta sweep's backlog exactly as it found it", async () => {
+    // Zero owing, and NOT because this file settles anything by hand — because
+    // storeDocumentText writes a row for EVERY attempt, extractor "none" and an
+    // error included. That is the contract the whole sweep converges on: a
+    // document it cannot read is never handed back to it a second time. Measured
+    // both before and after the settle helper reached the other files in this
+    // suite, this file's backlog delta was already 0, so this assertion is not a
+    // fix — it is the contract, pinned where it will fail loudly if
+    // storeDocumentText ever learns to skip a row on some failure path.
+    const { db, pool } = createDb(DB_URL);
+    expect(await settleDocumentTexts(db, RUN_REF)).toBe(0);
     await pool.end();
   });
 });

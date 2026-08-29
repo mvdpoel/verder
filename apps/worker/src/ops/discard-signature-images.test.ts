@@ -4,9 +4,14 @@ import { verifyChain, type ChainEvent } from "@verder/core";
 import { createDb, schema } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument, ingestDocument } from "@verder/api/src/routers/documents";
+import { settleDocumentTexts } from "../test-support/document-texts";
 import { discardSignatureImages, SIGNATURE_IMAGE_INGESTED_BEFORE } from "./discard-signature-images";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+// Tags every fixture this run ingests, so the guard at the bottom can ask "did
+// this run leave anything owing?" about THIS run and nothing else. New per run,
+// because `documents` is append-only and the dev database is never truncated.
+const RUN_REF = `test:discard-signature-images:${crypto.randomUUID()}`;
 
 describe("discardSignatureImages", () => {
   const { db, pool } = createDb(URL);
@@ -14,10 +19,26 @@ describe("discardSignatureImages", () => {
   const other = createDb(URL);
   afterAll(async () => { await pool.end(); await other.pool.end(); });
   const sha = () => crypto.randomUUID().replaceAll("-", "").padEnd(64, "a");
-  const seedDocument = (over: {
+  /**
+   * A fixture document, plus the `document_texts` row a real extraction would
+   * have left behind. The second half is not decoration: `documents` is
+   * append-only and this dev database is never truncated, so a fixture with no
+   * text row is a permanent squatter at the front of `pendingDocMeta`'s
+   * `ORDER BY created_at ASC LIMIT 50`. This file seeds ten of them, and
+   * measured before this line it moved the backlog by exactly ten EVERY RUN —
+   * which is how a real document gets pushed off that page and
+   * `docmeta-sweep.test.ts` goes red for reasons that have nothing to do with
+   * the sweep. Nothing here reads document_texts, so settling at seed time is
+   * safe; the shared helper explains why this is an INSERT and never a DELETE.
+   */
+  const seedDocument = async (over: {
     title: string; mime: string; source: "upload" | "email-attachment";
-  }) => db.transaction((tx) => ingestDocument(tx, {
-    sha256: sha(), sizeBytes: 10, receivedAt: new Date(), ...over }));
+  }) => {
+    const doc = await db.transaction((tx) => ingestDocument(tx, {
+      sha256: sha(), sizeBytes: 10, receivedAt: new Date(), sourceRef: RUN_REF, ...over }));
+    await settleDocumentTexts(db, RUN_REF);
+    return doc;
+  };
   // Every test that seeds a fresh fixture passes its own `before`, so the
   // suite cannot start failing once the default cutoff is in the past.
   const RUN = { before: new Date(Date.now() + 60_000) };
@@ -157,7 +178,8 @@ describe("discardSignatureImages", () => {
     const [junk] = await db.transaction(async (tx) => {
       const rows = await tx.insert(schema.documents).values({
         sha256: sha(), sizeBytes: 10, mime: "image/png", title: "image.png",
-        source: "email-attachment", receivedAt: antique, createdAt: antique,
+        source: "email-attachment", sourceRef: RUN_REF,
+        receivedAt: antique, createdAt: antique,
       }).returning();
       await appendLedgerEvent(tx, {
         eventType: "document.ingested", entityType: "document", entityId: rows[0].id,
@@ -166,6 +188,7 @@ describe("discardSignatureImages", () => {
           source: rows[0].source, sourceRef: null, receivedAt: antique.toISOString() } });
       return rows;
     });
+    await settleDocumentTexts(db, RUN_REF);
     const scoped = { before: new Date(antique.getTime() + 1) };
     const before = await ledgerCount();
 
@@ -191,5 +214,12 @@ describe("discardSignatureImages", () => {
       source: "email-attachment" });
     await discardSignatureImages(db, RUN);
     await expect(verifyLedger()).resolves.toMatchObject({ ok: true });
+  });
+
+  it("leaves the docmeta sweep's backlog exactly as it found it", async () => {
+    // The guard, and it FAILS the moment a test above seeds a fixture without
+    // settling it — which is the whole failure mode: silent, cumulative, and
+    // paid for by a different suite entirely.
+    expect(await settleDocumentTexts(db, RUN_REF)).toBe(0);
   });
 });
