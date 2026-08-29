@@ -190,6 +190,13 @@
       "when": 1787985593402,
       "tag": "0026_vertical_case_timeline",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788001814246,
+      "tag": "0027_debt_record",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
 export const channelEnum = pgEnum("channel", ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]);
 export const directionEnum = pgEnum("direction", ["inbound", "outbound", "internal"]);
@@ -47,6 +47,11 @@ export const parties = pgTable("parties", {
   email: text("email"),
   phone: text("phone"),
   notes: text("notes"),
+  // A contact person is a `person` whose parent is the `organization`. Reusing
+  // parties rather than a contacts table has a payoff: pollGmail builds its
+  // relevance filter from parties.email, so recording a contact person's
+  // address makes their mail start being ingested.
+  parentPartyId: uuid("parent_party_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -180,12 +185,40 @@ export const debts = pgTable("debts", {
   creditorPartyId: uuid("creditor_party_id").references(() => parties.id),
   creditorName: text("creditor_name").notNull(),
   principalCents: integer("principal_cents"),
-  claimedCents: integer("claimed_cents").notNull(),
+  claimedCents: integer("claimed_cents"),
   references_: text("references"),
   origin: text("origin"),
   originStory: text("origin_story"),
+  // Whether Verder knows. NOT a status: it is orthogonal to
+  // identified→acknowledged→disputed→…, since a debt can be disputed and
+  // reported, or acknowledged and not. The entry link means "Verder knows" is
+  // always answerable with "here is the message that told them".
+  reportedToVerderAt: timestamp("reported_to_verder_at", { withTimezone: true }),
+  reportedViaEntryId: uuid("reported_via_entry_id").references(() => logEntries.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const debtPartyRoleEnum = pgEnum("debt_party_role",
+  ["eiser", "incasso", "deurwaarder", "gemachtigde"]);
+
+// The edge `debts` never had. `eiser` is who the money is owed to; the other
+// three are who is acting for them. Not constrained to one eiser per debt: a
+// notice naming two claimants is a real thing, and refusing to record it would
+// lose the notice rather than the confusion.
+export const debtParties = pgTable("debt_parties", {
+  debtId: uuid("debt_id").notNull().references(() => debts.id),
+  partyId: uuid("party_id").notNull().references(() => parties.id),
+  role: debtPartyRoleEnum("role").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [unique("debt_party_uq").on(t.debtId, t.partyId, t.role)]);
+
+// Mirrors entry_documents. Until now a document could only hang off a DECISION,
+// so the sommation that arrived before any decision had nowhere to go.
+export const debtDocuments = pgTable("debt_documents", {
+  debtId: uuid("debt_id").notNull().references(() => debts.id),
+  documentId: uuid("document_id").notNull().references(() => documents.id),
+}, (t) => [unique("debt_document_uq").on(t.debtId, t.documentId)]);
 
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
