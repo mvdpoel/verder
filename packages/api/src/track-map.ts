@@ -164,6 +164,62 @@ function instantOf(s: StopRow): number | null {
   return Number.isNaN(at) ? null : at;
 }
 
+/**
+ * A debt episode is a NON-ROOT track whose title starts with "Vordering " or
+ * "Vonnis ". This is a NAMING CONVENTION, not a schema fact — there is no
+ * column that records a track being about a creditor's claim — and it holds
+ * only because every debt-notice spoor the next slice creates is titled this
+ * way. The root is excluded unconditionally and first: a root track is the
+ * case itself and can never be an episode, whatever it happens to be called.
+ */
+export function isDebtEpisodeTrack(
+  track: { title: string; parentTrackId: string | null },
+): boolean {
+  if (track.parentTrackId === null) return false;
+  return track.title.startsWith("Vordering ") || track.title.startsWith("Vonnis ");
+}
+
+/**
+ * Filters debt episodes OUT OF THE INPUT to `buildTrackMap`, never out of its
+ * output. `CaseMap` is not a bag of rows: bands, edges, rowCount, laneCount and
+ * currentStopId are all computed from row and lane positions, so deleting rows
+ * from the finished object would leave bands claiming rows that no longer
+ * exist, gaps in the row sequence, sparse lanes, and possibly a currentStopId
+ * pointing at a stop that is gone. Filtering the input keeps every one of
+ * those derivations honest.
+ *
+ * The trigger stop on the hoofdlijn that a hidden spoor branched from is
+ * dropped too — the spec calls for hiding "the debt triggers and their
+ * spoors", not just the spoors — found STRUCTURALLY via `branchesAtStopId`,
+ * never by matching the stop's title: that would be the app guessing a fact
+ * about Martin's case rather than reading the pointer he set.
+ *
+ * KNOWN LIMITATION: a debt track whose `branchesAtStopId` is NULL leaves its
+ * trigger stop on the trunk. Migration 0026 made that pointer semantic-only
+ * and NULL on most spoors, so this is the honest failure mode — better than a
+ * title guess at what the trigger stop is called.
+ */
+export function filterDebtEpisodes(
+  input: { tracks: TrackRow[]; stops: StopRow[] },
+  hide: boolean,
+): { tracks: TrackRow[]; stops: StopRow[]; hiddenTrackCount: number } {
+  if (!hide) return { tracks: input.tracks, stops: input.stops, hiddenTrackCount: 0 };
+
+  const hiddenTrackIds = new Set(
+    input.tracks.filter(isDebtEpisodeTrack).map((t) => t.id));
+  const hiddenTriggerStopIds = new Set(
+    input.tracks
+      .filter((t) => hiddenTrackIds.has(t.id) && t.branchesAtStopId !== null)
+      .map((t) => t.branchesAtStopId!));
+
+  return {
+    tracks: input.tracks.filter((t) => !hiddenTrackIds.has(t.id)),
+    stops: input.stops.filter((s) =>
+      !hiddenTrackIds.has(s.trackId) && !hiddenTriggerStopIds.has(s.id)),
+    hiddenTrackCount: hiddenTrackIds.size,
+  };
+}
+
 export function buildTrackMap(input: {
   tracks: TrackRow[]; stops: StopRow[];
 }): CaseMap {

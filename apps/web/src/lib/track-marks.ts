@@ -194,3 +194,19 @@ export function stopHref(stopId: string, currentSelection: string | null): strin
     ? "/timeline"
     : `/timeline?stop=${encodeURIComponent(stopId)}`;
 }
+
+/**
+ * The link that folds schuldeisersmeldingen away, or brings them back.
+ *
+ * Same rule as `stopHref`: the setting lives in the URL so the view stays
+ * linkable. It toggles `?schuldeisers=verborgen` — default is SHOWN, so the
+ * param exists only when hiding — and preserves the selected halte, when
+ * there is one, so toggling visibility never drops what Martin was looking at.
+ */
+export function schuldeisersHref(hidden: boolean, currentStop: string | null): string {
+  const params = new URLSearchParams();
+  if (currentStop) params.set("stop", currentStop);
+  if (!hidden) params.set("schuldeisers", "verborgen");
+  const qs = params.toString();
+  return qs ? `/timeline?${qs}` : "/timeline";
+}

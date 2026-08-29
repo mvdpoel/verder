@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  caseTopRows, noOpenTracksLine, stopHref, stopMark, stopWhenLabel, trackTerminus,
+  caseTopRows, noOpenTracksLine, schuldeisersHref, stopHref, stopMark, stopWhenLabel,
+  trackTerminus,
 } from "@/lib/track-marks";
 
 const stop = (over: Partial<Parameters<typeof stopMark>[0]> = {}) => ({
@@ -140,6 +141,18 @@ describe("stopHref", () => {
 
   it("encodes an id that would otherwise break the query string", () => {
     expect(stopHref("a b&c", null)).toBe("/timeline?stop=a%20b%26c");
+  });
+});
+
+describe("schuldeisersHref", () => {
+  it("links to hiding when shown, and back to /timeline when hiding", () => {
+    expect(schuldeisersHref(false, null)).toBe("/timeline?schuldeisers=verborgen");
+    expect(schuldeisersHref(true, null)).toBe("/timeline");
+  });
+
+  it("preserves the selected halte across the toggle", () => {
+    expect(schuldeisersHref(false, "abc")).toBe("/timeline?stop=abc&schuldeisers=verborgen");
+    expect(schuldeisersHref(true, "abc")).toBe("/timeline?stop=abc");
   });
 });
 

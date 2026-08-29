@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, ilike, inArray, isNull, max, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
-import { buildTrackMap, type StopRow, type TrackRow } from "../track-map";
+import { buildTrackMap, filterDebtEpisodes, type StopRow, type TrackRow } from "../track-map";
 import {
   effectiveTaskStatuses, latestDocumentChange, resolveStopEvidence, type StopEvidence,
 } from "../track-evidence";
@@ -125,24 +125,34 @@ export const tracksRouter = router({
   /**
    * The whole map plus the evidence behind every stop. One query per table and
    * one batched evidence resolution — never one per stop.
+   *
+   * `hideDebtEpisodes` filters the ROWS handed to `buildTrackMap`, never the
+   * `CaseMap` it returns — see `filterDebtEpisodes`'s own comment for why a
+   * post-hoc filter would leave bands and lanes pointing at rows that no
+   * longer exist. `hiddenDebtTrackCount` is returned so the page can say how
+   * many spoors it folded away rather than let them disappear silently.
    */
-  map: protectedProcedure.query(async ({ ctx }) => {
-    const [tracks, stops] = await Promise.all([
-      ctx.db.select().from(schema.tracks).orderBy(asc(schema.tracks.createdAt)),
-      ctx.db.select().from(schema.stops)
-        .orderBy(asc(schema.stops.trackId), asc(schema.stops.orderIndex)),
-    ]);
-    const map = buildTrackMap({
-      tracks: tracks as TrackRow[], stops: stops as StopRow[],
-    });
-    const evidence = await resolveStopEvidence(ctx.db, map.stops.map((s) => ({
-      id: s.id, entryId: s.entryId, taskId: s.taskId, documentId: s.documentId,
-    })));
-    return {
-      map,
-      evidence: Object.fromEntries(evidence) as Record<string, StopEvidence>,
-    };
-  }),
+  map: protectedProcedure
+    .input(z.object({ hideDebtEpisodes: z.boolean().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const [tracks, stops] = await Promise.all([
+        ctx.db.select().from(schema.tracks).orderBy(asc(schema.tracks.createdAt)),
+        ctx.db.select().from(schema.stops)
+          .orderBy(asc(schema.stops.trackId), asc(schema.stops.orderIndex)),
+      ]);
+      const filtered = filterDebtEpisodes({
+        tracks: tracks as TrackRow[], stops: stops as StopRow[],
+      }, input?.hideDebtEpisodes ?? false);
+      const map = buildTrackMap(filtered);
+      const evidence = await resolveStopEvidence(ctx.db, map.stops.map((s) => ({
+        id: s.id, entryId: s.entryId, taskId: s.taskId, documentId: s.documentId,
+      })));
+      return {
+        map,
+        evidence: Object.fromEntries(evidence) as Record<string, StopEvidence>,
+        hiddenDebtTrackCount: filtered.hiddenTrackCount,
+      };
+    }),
 
   /**
    * What a halte can be linked to. Without this the third level of the map —

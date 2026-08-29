@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { TrackMap } from "@/components/track-map";
-import { STOP_STATE_LABEL, TRACK_STATUS_LABEL, stopHref } from "@/lib/track-marks";
+import { STOP_STATE_LABEL, TRACK_STATUS_LABEL, schuldeisersHref, stopHref } from "@/lib/track-marks";
 import { AddTrackForm, TrackEditor } from "@/components/track-editor";
 import { AddStopForm, StopEditor } from "@/components/stop-editor";
 
@@ -25,11 +25,12 @@ import { AddStopForm, StopEditor } from "@/components/stop-editor";
 export default async function TimelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ stop?: string }>;
+  searchParams: Promise<{ stop?: string; schuldeisers?: string }>;
 }) {
-  const { stop } = await searchParams;
+  const { stop, schuldeisers } = await searchParams;
+  const hideDebtEpisodes = schuldeisers === "verborgen";
   const caller = await serverCaller();
-  const { map, evidence } = await caller.tracks.map();
+  const { map, evidence, hiddenDebtTrackCount } = await caller.tracks.map({ hideDebtEpisodes });
 
   const selected = stop && map.stops.some((s) => s.id === stop) ? stop : null;
   const current = map.stops.find((s) => s.id === map.currentStopId) ?? null;
@@ -48,6 +49,19 @@ export default async function TimelinePage({
           een brief — en komt daarna terug op de hoofdlijn of eindigt op zichzelf.
           Wat nog moet gebeuren staat er niet op: deze kaart laat zien wat er is
           gebeurd.
+        </p>
+        {/* The setting lives in the URL, same rule as ?stop=, so the view stays
+            linkable. The count is said out loud so nothing disappears silently. */}
+        <p className="mt-2 text-sm">
+          <Link href={schuldeisersHref(hideDebtEpisodes, selected)}
+            className="text-slate-600 hover:underline">
+            {hideDebtEpisodes ? "schuldeisersmeldingen tonen" : "schuldeisersmeldingen verbergen"}
+          </Link>
+          {hideDebtEpisodes && (
+            <span className="ml-2 text-slate-500">
+              ({hiddenDebtTrackCount} {hiddenDebtTrackCount === 1 ? "spoor" : "sporen"} verborgen)
+            </span>
+          )}
         </p>
       </div>
 

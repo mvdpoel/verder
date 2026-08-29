@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildTrackMap, type StopRow, type TrackRow } from "./track-map";
+import {
+  buildTrackMap, filterDebtEpisodes, isDebtEpisodeTrack, type StopRow, type TrackRow,
+} from "./track-map";
 
 const track = (over: Partial<TrackRow> & { id: string; title: string }): TrackRow => ({
   status: "open", parentTrackId: null, branchesAtStopId: null,
@@ -344,5 +346,93 @@ describe("buildTrackMap totality", () => {
     expect(map.stops.find((s) => s.id === "kapot")!.bandKey).toBe("onbekend");
     expect(map.problems.map((p) => p.kind)).toContain("date-out-of-range");
     expect(rowOf(map, "s4")).toBe(0);
+  });
+});
+
+describe("isDebtEpisodeTrack", () => {
+  it("treats a non-root 'Vordering ' track as a debt episode", () => {
+    expect(isDebtEpisodeTrack(track({ id: "kvk", title: "Vordering KvK",
+      parentTrackId: "root" }))).toBe(true);
+  });
+
+  it("treats a non-root 'Vonnis ' track as a debt episode", () => {
+    expect(isDebtEpisodeTrack(track({ id: "cak", title: "Vonnis Het CAK",
+      parentTrackId: "root" }))).toBe(true);
+  });
+
+  it("never treats the root as an episode, whatever it is called", () => {
+    // A root track is the case itself and can never be an episode.
+    expect(isDebtEpisodeTrack(track({ id: "root", title: "Vordering KvK",
+      parentTrackId: null }))).toBe(false);
+  });
+
+  it("leaves an ordinary side track alone", () => {
+    expect(isDebtEpisodeTrack(track({ id: "ontr", title: "Ontruiming Woonhave",
+      parentTrackId: "root" }))).toBe(false);
+  });
+});
+
+describe("filterDebtEpisodes", () => {
+  const rootStop = stop({ id: "s1", trackId: "root",
+    title: "Aanmelding bij Verder", orderIndex: 100 });
+  const kvkTrack = track({ id: "kvk", title: "Vordering KvK",
+    parentTrackId: "root", branchesAtStopId: "trig-kvk" });
+  const triggerStop = stop({ id: "trig-kvk", trackId: "root",
+    title: "KvK vraagt geld", orderIndex: 200 });
+  const kvkStop = stop({ id: "s2", trackId: "kvk",
+    title: "KvK — verwerkt als vordering", orderIndex: 100 });
+  const ontrTrack = track({ id: "ontr", title: "Ontruiming Woonhave",
+    parentTrackId: "root" });
+  const ontrStop = stop({ id: "s3", trackId: "ontr",
+    title: "Woonhave akkoord", orderIndex: 100 });
+
+  function fixture() {
+    return {
+      tracks: [track({ id: "root", title: "Bewindvoering" }), kvkTrack, ontrTrack],
+      stops: [rootStop, triggerStop, kvkStop, ontrStop],
+    };
+  }
+
+  it("keeps everything when nothing is hidden", () => {
+    const out = filterDebtEpisodes(fixture(), false);
+    expect(out.tracks).toHaveLength(3);
+    expect(out.stops).toHaveLength(4);
+    expect(out.hiddenTrackCount).toBe(0);
+  });
+
+  it("drops the debt spoor, its stops and its trigger stop when hidden", () => {
+    const out = filterDebtEpisodes(fixture(), true);
+    expect(out.tracks.map((t) => t.id)).toEqual(["root", "ontr"]);
+    expect(out.stops.map((s) => s.id)).toEqual(["s1", "s3"]);
+    expect(out.hiddenTrackCount).toBe(1);
+  });
+
+  it("never hides the hoofdlijn, whatever it is called", () => {
+    // A root track is the case itself and can never be an episode.
+    const odd = { tracks: [track({ id: "root", title: "Vordering KvK" })],
+      stops: [] };
+    const out = filterDebtEpisodes(odd, true);
+    expect(out.tracks).toHaveLength(1);
+    expect(out.hiddenTrackCount).toBe(0);
+  });
+
+  it("leaves the trigger stop on the trunk when branchesAtStopId is null "
+    + "(known limitation, not a title guess)", () => {
+    const f = fixture();
+    f.tracks[1] = { ...kvkTrack, branchesAtStopId: null };
+    const out = filterDebtEpisodes(f, true);
+    // The spoor and its own stop are still gone...
+    expect(out.tracks.map((t) => t.id)).toEqual(["root", "ontr"]);
+    expect(out.stops.map((s) => s.id)).not.toContain("s2");
+    // ...but the trigger stays, because there is no pointer to find it by.
+    expect(out.stops.map((s) => s.id)).toContain("trig-kvk");
+  });
+
+  it("still renders a gap-free map through buildTrackMap after filtering", () => {
+    const filtered = filterDebtEpisodes(fixture(), true);
+    const map = buildTrackMap(filtered);
+    expect(map.problems).toEqual([]);
+    expect(map.rowCount).toBe(map.stops.length);
+    expect(new Set(map.stops.map((s) => s.row)).size).toBe(map.rowCount);
   });
 });
