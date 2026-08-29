@@ -13,7 +13,7 @@
  * Nothing here appends a ledger event except the party creation path, which is
  * case-history's existing one. Debts and both link tables are not evidence.
  */
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 
@@ -89,8 +89,13 @@ export async function applyCaseDebts(db: Db): Promise<{
   for (const d of DEBT_SEED) for (const p of d.parties) seedParties.set(p.name, p);
 
   for (const p of seedParties.values()) {
+    // Oldest wins under duplicates — the same rule stopAnywhere and the task
+    // lookup in case-history.ts use, and the reason it matters here: without an
+    // orderBy, LIMIT 1 on a name with more than one row has no stability
+    // guarantee, and two runs could bind to two different rows.
     const [seen] = await db.select().from(schema.parties)
-      .where(sql`lower(${schema.parties.name}) = lower(${p.name})`).limit(1);
+      .where(sql`lower(${schema.parties.name}) = lower(${p.name})`)
+      .orderBy(asc(schema.parties.createdAt), asc(schema.parties.id)).limit(1);
     if (seen) {
       partyIdByName.set(p.name, seen.id);
       continue;
@@ -121,7 +126,8 @@ export async function applyCaseDebts(db: Db): Promise<{
   // --- debts, never updating amounts on an existing row -----------------------
   for (const seed of DEBT_SEED) {
     let [debt] = await db.select().from(schema.debts)
-      .where(eq(schema.debts.creditorName, seed.creditorName)).limit(1);
+      .where(eq(schema.debts.creditorName, seed.creditorName))
+      .orderBy(asc(schema.debts.createdAt), asc(schema.debts.id)).limit(1);
     if (!debt) {
       const eiser = seed.parties.find((p) => p.role === "eiser")!;
       [debt] = await db.insert(schema.debts).values({

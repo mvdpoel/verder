@@ -34,7 +34,12 @@ describe("debt record", () => {
   it("carries a creditor and the intermediary collecting for them", async () => {
     const d = await aDebt(262315);
     const [eiser] = await db.insert(schema.parties)
-      .values({ kind: "organization", name: "PLM Investments II B.V." }).returning();
+      // Not the real creditor's name: applyCaseDebts (case-debts.ts) dedups a
+      // debt/party BY NAME, so a fixture literally named "PLM Investments II
+      // B.V." would make that seed bind to this test row forever, in any dev
+      // database this suite has run against.
+      .values({ kind: "organization", name: `PLM Investments Testfixture ${crypto.randomUUID()}` })
+      .returning();
     const [incasso] = await db.insert(schema.parties)
       .values({ kind: "organization", name: "Trust and Law" }).returning();
     await db.insert(schema.debtParties).values([

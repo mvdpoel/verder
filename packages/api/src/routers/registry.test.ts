@@ -359,15 +359,21 @@ describe("registry router", () => {
 
   describe("debt parties and documents", () => {
     it("returns the creditor and the intermediary with their roles", async () => {
+      // Not the real creditors' names: case-debts.ts's applyCaseDebts dedups a
+      // debt/party BY NAME, so a fixture literally named "PLM Investments II
+      // B.V." or "Trust and Law Incassoservices" would make that seed bind to
+      // this test's rows forever, in any dev database this suite has run in.
+      const eiserName = `PLM Investments Testfixture ${crypto.randomUUID()}`;
+      const incassoName = `Trust and Law Testfixture ${crypto.randomUUID()}`;
       const c = caller();
       const debt = await c.registry.debts.create({
-        creditorName: "PLM Investments II B.V.", claimedCents: 262315,
+        creditorName: eiserName, claimedCents: 262315,
       });
       const eiser = await c.parties.create({
-        kind: "organization", name: "PLM Investments II B.V.",
+        kind: "organization", name: eiserName,
       });
       const incasso = await c.parties.create({
-        kind: "organization", name: "Trust and Law Incassoservices",
+        kind: "organization", name: incassoName,
       });
       await c.registry.debts.linkParty({
         debtId: debt.id, partyId: eiser.id, role: "eiser",
@@ -380,8 +386,8 @@ describe("registry router", () => {
       const got = await c.registry.debts.get({ id: debt.id });
       expect(got.parties.map((p) => [p.role, p.name])).toEqual(
         expect.arrayContaining([
-          ["eiser", "PLM Investments II B.V."],
-          ["incasso", "Trust and Law Incassoservices"],
+          ["eiser", eiserName],
+          ["incasso", incassoName],
         ]));
     });
 
@@ -401,9 +407,12 @@ describe("registry router", () => {
     });
 
     it("accepts a debt whose notice stated no total", async () => {
+      // Not the real creditor's name — see the comment above on case-debts.ts's
+      // name-based dedup.
       const c = caller();
       const debt = await c.registry.debts.create({
-        creditorName: "Kamer van Koophandel", claimedCents: null,
+        creditorName: `Kamer van Koophandel Testfixture ${crypto.randomUUID()}`,
+        claimedCents: null,
       });
       expect((await c.registry.debts.get({ id: debt.id })).claimedCents).toBeNull();
     });
@@ -411,7 +420,7 @@ describe("registry router", () => {
     it("records that Verder was told, and lets it be taken back", async () => {
       const c = caller();
       const debt = await c.registry.debts.create({
-        creditorName: "Het CAK", claimedCents: 114161,
+        creditorName: `Het CAK Testfixture ${crypto.randomUUID()}`, claimedCents: 114161,
       });
       expect((await c.registry.debts.get({ id: debt.id })).reportedToVerderAt)
         .toBeNull();
@@ -429,7 +438,7 @@ describe("registry router", () => {
     it("records the entry it was reported via, and clears it too on undo", async () => {
       const c = caller();
       const debt = await c.registry.debts.create({
-        creditorName: "Het CAK", claimedCents: 114161,
+        creditorName: `Het CAK Testfixture ${crypto.randomUUID()}`, claimedCents: 114161,
       });
       const entry = await c.entries.create({
         occurredAt: new Date("2026-09-01T10:00:00Z"), channel: "email",

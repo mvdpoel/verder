@@ -41,3 +41,82 @@ describe("case debts seed", () => {
     expect(names).toContain("Stam Gerechtsdeurwaarders");
   });
 });
+
+// --- applyCaseDebts against the database --------------------------------------
+//
+// Everything above asserts the shape of the static seed. This is the part that
+// actually exercises the dedup and the idempotency this task exists for — the
+// admin connection is the same one case-history.ts's entry point uses (the
+// script needs to write ledger_events, parties, debts, debt_parties and
+// debt_documents in one run).
+import { beforeAll, describe as describeDb, expect as expectDb, it as itDb } from "vitest";
+import { asc, eq, sql } from "drizzle-orm";
+import { createDb, schema, type Db } from "@verder/db";
+import { applyCaseDebts } from "./case-debts";
+
+const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+
+describeDb("applyCaseDebts (database)", () => {
+  let db: Db;
+  beforeAll(() => { db = createDb(ADMIN_URL).db; });
+
+  itDb("converges: a second run reports nothing new", async () => {
+    await applyCaseDebts(db);
+    const second = await applyCaseDebts(db);
+    expectDb(second.debts).toEqual([]);
+    expectDb(second.debtParties).toEqual([]);
+    expectDb(second.debtDocLinks).toEqual([]);
+  });
+
+  itDb("leaves exactly one row for each of the five seed party names", async () => {
+    // Exact string match, not case-insensitive: the case-insensitive-collision
+    // test below deliberately leaves a differently-cased duplicate behind for
+    // one of these names, and that is a separate concern from this one — did
+    // the seed itself insert its own exact name only once.
+    await applyCaseDebts(db);
+    const names = new Set<string>();
+    for (const d of DEBT_SEED) for (const p of d.parties) names.add(p.name);
+    for (const name of names) {
+      const rows = await db.select().from(schema.parties)
+        .where(eq(schema.parties.name, name));
+      expectDb(rows, name).toHaveLength(1);
+    }
+  });
+
+  itDb("dedups case-insensitively: a pre-existing differently-cased row is reused, " +
+    "not duplicated", async () => {
+    // "KAMER VAN KOOPHANDEL" collides, case-insensitively, with the seed's
+    // "Kamer van Koophandel". Reuse it across test runs rather than inserting a
+    // fresh copy every time this suite runs — the same idempotency discipline
+    // the seed itself is held to.
+    const variant = "KAMER VAN KOOPHANDEL";
+    const [existingVariant] = await db.select().from(schema.parties)
+      .where(eq(schema.parties.name, variant)).limit(1);
+    if (!existingVariant) {
+      await db.insert(schema.parties).values({ kind: "organization", name: variant });
+    }
+    const before = await db.select().from(schema.parties)
+      .where(sql`lower(${schema.parties.name}) = lower(${variant})`);
+    expectDb(before.length).toBeGreaterThanOrEqual(1);
+
+    await applyCaseDebts(db);
+
+    const after = await db.select().from(schema.parties)
+      .where(sql`lower(${schema.parties.name}) = lower(${variant})`);
+    expectDb(after).toHaveLength(before.length);
+  });
+
+  itDb("never sets reportedToVerderAt, and appends no debt-ish ledger event", async () => {
+    await applyCaseDebts(db);
+    for (const seed of DEBT_SEED) {
+      const [debt] = await db.select().from(schema.debts)
+        .where(eq(schema.debts.creditorName, seed.creditorName))
+        .orderBy(asc(schema.debts.createdAt), asc(schema.debts.id)).limit(1);
+      expectDb(debt, seed.creditorName).toBeDefined();
+      expectDb(debt.reportedToVerderAt, seed.creditorName).toBeNull();
+    }
+    const debtish = await db.select().from(schema.ledgerEvents)
+      .where(sql`${schema.ledgerEvents.entityType} ILIKE '%debt%'`);
+    expectDb(debtish).toEqual([]);
+  });
+});
