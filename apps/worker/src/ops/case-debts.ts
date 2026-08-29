@@ -74,6 +74,25 @@ export const DEBT_SEED: DebtSeed[] = [
   },
 ];
 
+/**
+ * Case-insensitive party lookup by name — the whole reason this file does not
+ * dedup on email. Oldest wins under duplicates, the same convention
+ * `stopAnywhere` and the task lookup in case-history.ts use: without the
+ * orderBy, LIMIT 1 on a name with more than one row has no stability
+ * guarantee, and two runs could bind to two different rows.
+ *
+ * Exported (not inlined in applyCaseDebts) so the case-insensitivity claim can
+ * be tested directly, against a row the test creates and cleans up itself,
+ * rather than through applyCaseDebts — whose own seed accumulates exact-case
+ * rows that would make a same-case lookup pass the test for the wrong reason.
+ */
+export async function findPartyByNameCI(db: Db, name: string) {
+  const [row] = await db.select().from(schema.parties)
+    .where(sql`lower(${schema.parties.name}) = lower(${name})`)
+    .orderBy(asc(schema.parties.createdAt), asc(schema.parties.id)).limit(1);
+  return row;
+}
+
 export async function applyCaseDebts(db: Db): Promise<{
   debts: string[]; parties: string[];
   debtParties: string[]; debtDocLinks: string[];
@@ -89,13 +108,7 @@ export async function applyCaseDebts(db: Db): Promise<{
   for (const d of DEBT_SEED) for (const p of d.parties) seedParties.set(p.name, p);
 
   for (const p of seedParties.values()) {
-    // Oldest wins under duplicates — the same rule stopAnywhere and the task
-    // lookup in case-history.ts use, and the reason it matters here: without an
-    // orderBy, LIMIT 1 on a name with more than one row has no stability
-    // guarantee, and two runs could bind to two different rows.
-    const [seen] = await db.select().from(schema.parties)
-      .where(sql`lower(${schema.parties.name}) = lower(${p.name})`)
-      .orderBy(asc(schema.parties.createdAt), asc(schema.parties.id)).limit(1);
+    const seen = await findPartyByNameCI(db, p.name);
     if (seen) {
       partyIdByName.set(p.name, seen.id);
       continue;

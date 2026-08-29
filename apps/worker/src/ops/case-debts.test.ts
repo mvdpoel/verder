@@ -52,7 +52,7 @@ describe("case debts seed", () => {
 import { beforeAll, describe as describeDb, expect as expectDb, it as itDb } from "vitest";
 import { asc, eq, sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
-import { applyCaseDebts } from "./case-debts";
+import { applyCaseDebts, findPartyByNameCI } from "./case-debts";
 
 const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
 
@@ -83,27 +83,24 @@ describeDb("applyCaseDebts (database)", () => {
     }
   });
 
-  itDb("dedups case-insensitively: a pre-existing differently-cased row is reused, " +
-    "not duplicated", async () => {
-    // "KAMER VAN KOOPHANDEL" collides, case-insensitively, with the seed's
-    // "Kamer van Koophandel". Reuse it across test runs rather than inserting a
-    // fresh copy every time this suite runs — the same idempotency discipline
-    // the seed itself is held to.
-    const variant = "KAMER VAN KOOPHANDEL";
-    const [existingVariant] = await db.select().from(schema.parties)
-      .where(eq(schema.parties.name, variant)).limit(1);
-    if (!existingVariant) {
-      await db.insert(schema.parties).values({ kind: "organization", name: variant });
+  itDb("finds a differently-cased row it did not create, and cleans up after " +
+    "itself", async () => {
+    // Tests findPartyByNameCI directly rather than through applyCaseDebts: the
+    // seed's own runs accumulate exact-case rows for its own names, so a plain
+    // eq() lookup would find those and pass this test for the wrong reason (see
+    // fix-round-2 notes in the report — this is exactly what happened here
+    // before). A fresh, randomly-named row this test creates and deletes itself
+    // is the only way to make the case-insensitivity claim actually falsifiable
+    // and leave nothing behind.
+    const base = `Findpartytest ${crypto.randomUUID()}`;
+    const [inserted] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: base.toUpperCase() }).returning();
+    try {
+      const found = await findPartyByNameCI(db, base.toLowerCase());
+      expectDb(found?.id).toBe(inserted.id);
+    } finally {
+      await db.delete(schema.parties).where(eq(schema.parties.id, inserted.id));
     }
-    const before = await db.select().from(schema.parties)
-      .where(sql`lower(${schema.parties.name}) = lower(${variant})`);
-    expectDb(before.length).toBeGreaterThanOrEqual(1);
-
-    await applyCaseDebts(db);
-
-    const after = await db.select().from(schema.parties)
-      .where(sql`lower(${schema.parties.name}) = lower(${variant})`);
-    expectDb(after).toHaveLength(before.length);
   });
 
   itDb("never sets reportedToVerderAt, and appends no debt-ish ledger event", async () => {
