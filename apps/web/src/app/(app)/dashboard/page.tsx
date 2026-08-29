@@ -3,7 +3,6 @@ import { serverCaller } from "@/lib/trpc-server";
 import { EnablePush } from "@/components/enable-push";
 import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
-import { WsnpTimeline } from "@/components/wsnp-timeline";
 import { noOpenTracksLine } from "@/lib/track-marks";
 
 export default async function DashboardPage() {
@@ -11,7 +10,6 @@ export default async function DashboardPage() {
   const stats = await caller.dashboard.stats();
   const registry = await caller.registry.stats();
   const taskStats = await caller.tasks.stats();
-  const timeline = await caller.milestones.timeline();
   const clearedBlockers = await caller.registry.clearedBlockers();
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
@@ -71,7 +69,6 @@ export default async function DashboardPage() {
           </ul>
         )}
       </section>
-      <WsnpTimeline stages={timeline.stages} countdown={timeline.countdown} />
       {clearedBlockers.length > 0 && (
         <section className="space-y-2">
           {clearedBlockers.map((b) => (

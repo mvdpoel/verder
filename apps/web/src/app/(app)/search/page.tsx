@@ -25,8 +25,8 @@ export default async function SearchPage({ searchParams }: {
       <div>
         <h1 className="text-2xl font-bold">Search</h1>
         <p className="text-slate-600 mt-1">
-          Everything in the dossier — documents, logbook, e-mail, registry, tasks,
-          milestones — in one place. Every result says why it matched.
+          Everything in the dossier — documents, logbook, e-mail, registry, tasks
+          — in one place. Every result says why it matched.
         </p>
       </div>
 

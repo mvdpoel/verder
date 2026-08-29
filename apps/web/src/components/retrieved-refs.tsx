@@ -5,7 +5,7 @@ import Link from "next/link";
 export const ENTITY_LABEL: Record<string, string> = {
   document: "Document", entry: "Logbook entry", email: "Email",
   financial_item: "Subscription", debt: "Debt", task: "Task",
-  milestone: "Milestone", timeline_event: "Key event", party: "Party",
+  timeline_event: "Key event", party: "Party",
 };
 
 export function hrefForEntity(entityType: string, entityId: string): string | null {
@@ -14,7 +14,6 @@ export function hrefForEntity(entityType: string, entityId: string): string | nu
   if (entityType === "task") return `/tasks/${entityId}`;
   if (entityType === "financial_item") return `/registry/${entityId}`;
   if (entityType === "debt") return `/registry/debts/${entityId}`;
-  if (entityType === "milestone") return "/milestones";
   if (entityType === "timeline_event") return "/timeline";
   return null;
 }

@@ -6,7 +6,6 @@ import { suggestionsRouter } from "./routers/suggestions";
 import { verifyRouter } from "./routers/verify";
 import { registryRouter } from "./routers/registry";
 import { registryImportRouter } from "./routers/registry-import";
-import { milestonesRouter } from "./routers/milestones";
 import { tracksRouter } from "./routers/tracks";
 import { tasksRouter } from "./routers/tasks";
 import { dashboardRouter } from "./routers/dashboard";
@@ -23,7 +22,6 @@ export const appRouter = router({
   // Task 5 keeps import separate from registry.ts; merged here so procedures
   // surface as registry.import.* (the path later tasks depend on).
   registry: mergeRouters(registryRouter, router({ import: registryImportRouter })),
-  milestones: milestonesRouter,
   tracks: tracksRouter,
   tasks: tasksRouter,
   dashboard: dashboardRouter,

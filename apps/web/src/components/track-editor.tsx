@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc-client";
 /**
  * Create and edit a spoor. Tracks are an editable display aid (NOT ledgered) —
  * the evidence stays in the logbook and the vault — so editing here is as
- * low-ceremony as fixing a typo, exactly like the milestone editor.
+ * low-ceremony as fixing a typo.
  */
 
 type StopOption = { id: string; title: string; trackId: string };
