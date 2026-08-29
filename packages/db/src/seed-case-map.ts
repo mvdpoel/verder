@@ -98,9 +98,26 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
     created.rootTrack = true;
   }
 
-  const stopOnRoot = async (title: string) => {
+  /**
+   * By title, ANYWHERE on the map — never scoped to the root.
+   *
+   * THE BUG THIS FIXES, measured in production 2026-08-29: a root-scoped
+   * lookup cannot see a stop that is on its way TO the spine. `case-history`
+   * promotes a trigger off its spoor onto the hoofdlijn and calls this function
+   * first; the stop was still on the spoor, the lookup found nothing, and this
+   * seed inserted a second copy — which `writeStop` then sat beside when it
+   * moved the original up. Two `Deurwaarder zegt de ontruiming aan`, one with
+   * its note and one without.
+   *
+   * Map-wide, and SKIP rather than move: this function restores a skeleton, it
+   * does not restructure. If the stop exists at all, some other hand owns where
+   * it lives, and the only thing that matters here is not creating a second
+   * one. Stop titles are unique across the whole map (case-history.test.ts
+   * asserts it), which is what makes the title safe to ask with.
+   */
+  const stopAnywhere = async (title: string) => {
     const [s] = await db.select().from(schema.stops)
-      .where(and(eq(schema.stops.trackId, root.id), eq(schema.stops.title, title)))
+      .where(eq(schema.stops.title, title))
       .orderBy(asc(schema.stops.createdAt), asc(schema.stops.id)).limit(1);
     return s;
   };
@@ -108,7 +125,7 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
   // The main line's own stations. Guarded on title, like everything else here,
   // so a database that already has them is left alone.
   for (const station of SPINE_SEED) {
-    if (await stopOnRoot(station.title)) continue;
+    if (await stopAnywhere(station.title)) continue;
     await db.insert(schema.stops).values({
       trackId: root.id, orderIndex: station.orderIndex, title: station.title,
       kind: "process", state: "done", happenedAt: station.happenedAt,

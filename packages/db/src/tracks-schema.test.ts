@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { createDb, ensureCaseMap, schema, type Db } from "./index";
+import { CASE_MAP_SPINE_SEED, createDb, ensureCaseMap, schema, type Db } from "./index";
 
 // ADMIN role: this suite is about the CONSTRAINTS and TRIGGERS the map depends
 // on (one root, no poisoned index queue) and about what the seed puts back
@@ -49,10 +49,19 @@ describe("tracks and stops", () => {
       "bewindvoering"]) {
       expect(spine.map((s) => s.title), title).not.toContain(title);
     }
-    // The seed's own fifteen, and every one of them `done`: all fifteen have
-    // happened, and nothing this function writes is ever `expected` again.
+    // Seven, and every one of them `done`. Seven because a spoor is one
+    // episode: the trigger belongs here on the hoofdlijn and the ANSWERING of
+    // it belongs on the spoor that answers it. So the line carries the
+    // aanmelding, the beschikking, the handover, and the four moments
+    // something arrived — never the work that followed.
+    expect(spine).toHaveLength(7);
     expect(spine.find((s) => s.title === "Aanmelding bij Verder")).toBeDefined();
-    expect(spine.find((s) => s.title === "Stukken aanleveren")).toBeDefined();
+    expect(spine.find((s) => s.title === "Stukken opgevraagd door Regio 3")).toBeDefined();
+    // The answering lives on a spoor, so it may never be seeded onto the trunk.
+    for (const answered of ["Stukken aanleveren", "Verzoek onderbewindstelling ingediend",
+      "Opstart van het dossier afgerond"]) {
+      expect(spine.map((s) => s.title), answered).not.toContain(answered);
+    }
     expect(spine.filter((s) => s.state === "expected")).toEqual([]);
   });
 
@@ -76,6 +85,39 @@ describe("tracks and stops", () => {
         .where(eq(schema.searchOutbox.entityId, side.id));
       await db.delete(schema.tracks).where(eq(schema.tracks.id, side.id));
     }
+  });
+
+  it("ensureCaseMap does not duplicate a spine stop that is still on a spoor", async () => {
+    // THE PRODUCTION BUG, 2026-08-29. `case-history` promotes a trigger off its
+    // spoor onto the hoofdlijn, and calls ensureCaseMap first. With a
+    // root-scoped lookup the stop was invisible — still on the spoor — so a
+    // second copy was inserted, and the original was moved up beside it. Two
+    // rows for one fact, and `stops` has no DELETE to clean up after that.
+    await ensureCaseMap(db);
+    const [root] = await db.select().from(schema.tracks)
+      .where(isNull(schema.tracks.parentTrackId));
+    const [spoor] = await db.insert(schema.tracks).values({
+      title: "Tijdelijk spoor", status: "open", parentTrackId: root.id,
+    }).returning();
+    // Take a spine stop off the trunk and park it on the spoor, exactly the
+    // state case-history is in when it calls ensureCaseMap mid-restructure.
+    const title = CASE_MAP_SPINE_SEED[0].title;
+    await db.update(schema.stops).set({ trackId: spoor.id })
+      .where(eq(schema.stops.title, title));
+
+    const created = await ensureCaseMap(db);
+
+    expect(created.spineStops, "re-created a stop that was only moved").toEqual([]);
+    const rows = await db.select().from(schema.stops)
+      .where(eq(schema.stops.title, title));
+    expect(rows, `"${title}" exists twice`).toHaveLength(1);
+
+    // Put the map back: this suite shares one database and the next test reads
+    // the spine. Restoring here rather than in an afterEach keeps the mutation
+    // and its repair in one place, where the next reader can see both.
+    await db.update(schema.stops).set({ trackId: root.id })
+      .where(eq(schema.stops.title, title));
+    await db.delete(schema.tracks).where(eq(schema.tracks.id, spoor.id));
   });
 
   it("ensureCaseMap creates nothing on a database that already has the map", async () => {
@@ -180,12 +222,15 @@ describe("tracks and stops", () => {
 
     expect(at("Aanmelding bij Verder")).toBe(0);
     expect(at("Beschikking: onder bewind gesteld"))
-      .toBeGreaterThan(at("Verzoek onderbewindstelling ingediend"));
+      .toBeGreaterThan(at("Aanmelding bij Verder"));
     expect(at("Dossier naar Team Opstart"))
       .toBeGreaterThan(at("Beschikking: onder bewind gesteld"));
-    // The newest thing waiting on Martin is the far end of the line — and the
-    // map begins at the aanmelding, so nothing sits before it any more.
-    expect(at("Stukken aanleveren")).toBe(line.length - 1);
+    // The newest thing that LANDED is the far end of the line — the request
+    // from Regio 3, not the stukken that answered it. Those sit on the spoor
+    // that answers it, which is the whole point of the episode rule.
+    expect(at("Stukken opgevraagd door Regio 3")).toBe(line.length - 1);
+    expect(at("Verzoek onderbewindstelling ingediend"), "answering is not a trigger")
+      .toBe(-1);
 
     // Nothing on this line is a claim about the future: 0026 deleted every
     // expected stop, and the seed writes `done` only.

@@ -177,7 +177,7 @@ export const STOP_RENAMES = [
  * nothing manages, which is exactly what the test below refuses, so the entry
  * comes out rather than staying as a harmless-looking no-op.
  */
-export const TRACK_RENAMES: readonly { from: string; to: string }[] = [
+export const TRACK_RENAMES: readonly { from: string; to: string; status: TrackStatus }[] = [
   // The episode restructure empties both of these: Moratorium and
   // Schuldhulpverlening Almere were never separate matters, they were two of
   // the parties working on ONE ontruiming, and their stops move onto that
@@ -187,8 +187,15 @@ export const TRACK_RENAMES: readonly { from: string; to: string }[] = [
   // ledger event, so a row is a container and repurposing one is honest —
   // this is the "rename-and-move, never delete-and-recreate" rule doing
   // exactly the work it exists for.
-  { from: "Moratorium", to: "Opstartstukken" },
-  { from: "Schuldhulpverlening Almere", to: "Bijzondere bijstand" },
+  // `status` is part of the rename, and it has to be: a repurposed row still
+  // carries the OLD subject's status, and nothing else here would overwrite it
+  // — `status` is Martin's to edit, so the seed leaves it alone on every
+  // existing track. Measured in production 2026-08-29: Opstartstukken and
+  // Bijzondere bijstand both came out `ended`, inherited from the Moratorium
+  // and Schuldhulpverlening rows they reuse. A rename is the one moment the
+  // old status is provably meaningless.
+  { from: "Moratorium", to: "Opstartstukken", status: "done" },
+  { from: "Schuldhulpverlening Almere", to: "Bijzondere bijstand", status: "open" },
 ];
 
 /**
@@ -751,9 +758,9 @@ export async function applyCaseHistory(
   // second one under the new name — two stops for one fact, and no way to
   // delete either.
   for (const r of TRACK_RENAMES) {
-    const res = await db.update(schema.tracks).set({ title: r.to })
+    const res = await db.update(schema.tracks).set({ title: r.to, status: r.status })
       .where(eq(schema.tracks.title, r.from)).returning({ id: schema.tracks.id });
-    if (res.length) out.renamed.push(`track:${r.from} → ${r.to}`);
+    if (res.length) out.renamed.push(`track:${r.from} → ${r.to} (${r.status})`);
   }
   for (const r of STOP_RENAMES) {
     const res = await db.update(schema.stops).set({ title: r.to })

@@ -250,6 +250,20 @@ describe("case-history seed", () => {
     }
   });
 
+  it("gives every renamed track the status of what it becomes", () => {
+    // A rename REPURPOSES a row, and the row still carries the old subject's
+    // status. Nothing else in this script overwrites `status` — it is Martin's
+    // to edit — so the rename is the only place that can set it. Measured in
+    // production: Opstartstukken and Bijzondere bijstand both came out `ended`,
+    // inherited from the Moratorium and Schuldhulpverlening rows they reuse.
+    for (const r of TRACK_RENAMES) {
+      const target = TRACK_SEED.find((t) => t.title === r.to);
+      expect(target, `rename target "${r.to}" is in no seed`).toBeDefined();
+      expect(r.status, `rename "${r.from}" → "${r.to}" carries the wrong status`)
+        .toBe(target!.status);
+    }
+  });
+
   it("never branches a track at a stop that lives on another track", () => {
     // `branchesAt`/`mergesAt` resolve against the ROOT only. The restructure
     // moved "Beschikking: onder bewind gesteld" onto the Aanvraag track, so a
