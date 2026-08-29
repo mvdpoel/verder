@@ -72,8 +72,8 @@ DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
 ```
 
 Migrations run from the host checkout as the admin role (`verder`), never
-from the containers. The drizzle journal currently contains twenty-two
-migrations — `0000` (schema) through `0021` — and covers everything
+from the containers. The drizzle journal currently contains thirty
+migrations — `0000` (schema) through `0029` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
@@ -102,8 +102,10 @@ in one pass:
 - `0013_timeline_grants` — `timeline_events` grants (editable display aid:
   UPDATE allowed, DELETE never)
 - `0014_vector_extension` — `CREATE EXTENSION IF NOT EXISTS vector`. Requires
-  the `pgvector/pgvector:pg17` image; a stock `postgres:17` fails here and
-  every later migration cascades
+  the `pgvector/pgvector:pg17-trixie` image; a stock `postgres:17` fails here
+  and every later migration cascades. THE `-trixie` SUFFIX IS NOT OPTIONAL: it
+  is the only pgvector tag built against prod's glibc 2.41, and the bare
+  `:pg17` tag downgrades the collation provider underneath the ledger
 - `0015_knowledge_base` — `document_texts`, `search_chunks`, `search_outbox`,
   the GIN index on `tsv` and the HNSW cosine index on `embedding`
 - `0016_search_grants` — index grants. FIRST tables in this project with
@@ -167,11 +169,22 @@ row, then sign-up stays disabled (`ALLOW_SIGNUP` unset).
 ### 2.4 Build and start the full stack
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build postgres web worker
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 ```
 
 `web` listens on `127.0.0.1:3000` only; the tunnel is the sole way in.
+
+**The services are named on purpose.** A bare `up -d` would also start
+`stalwart`, and the mail service has a first-start ritual of its own: three host
+directories that must exist and be owned by uid 2000, and a setup wizard that
+decides where the mail store lives. Starting it before §8 is not dangerous —
+with no `config.json` it comes up in bootstrap mode on an in-memory store and
+writes nothing (§8.4) — and if the host directories are not there yet it simply
+refuses to start, because all three of its bind mounts carry
+`create_host_path: false`: `invalid mount config for type "bind": bind source
+path does not exist`. That message is this document telling you to go to §8.3.
+Bring mail up through §8, not through this step.
 
 ## 3. Gmail one-time auth
 
@@ -366,7 +379,9 @@ ahead of the migration takes down the landing page too.
 
 ```bash
 # 1. migration FIRST, from the homelab HOST
-ssh homelab 'cd ~/apps/verder && pnpm --filter @verder/db migrate'
+ssh homelab 'cd ~/apps/verder && set -a && source ./.env.prod && set +a && \
+  DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
+  pnpm --filter @verder/db migrate'   # bare, without DATABASE_URL, dies on 28P01
 # 2. then rsync the tree and rebuild web + worker
 # 3. index the two new entity kinds (track, stop)
 ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
@@ -411,7 +426,9 @@ columns and rows the old schema does not have.
 
 ```bash
 # 1. migration FIRST, from the homelab HOST
-ssh homelab 'cd ~/apps/verder && pnpm --filter @verder/db migrate'
+ssh homelab 'cd ~/apps/verder && set -a && source ./.env.prod && set +a && \
+  DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
+  pnpm --filter @verder/db migrate'   # bare, without DATABASE_URL, dies on 28P01
 # 2. then rsync the tree (with the full --exclude list) and rebuild web + worker
 # 3. verify — 0026 appends NO ledger events, so the event count and the chain
 #    HEAD must both be unchanged. A moved head means something wrote evidence.
@@ -561,11 +578,603 @@ under "unknown account". Re-import a statement to fill it in — the import is
 idempotent on (statementSha256, rowIndex), so drop those rows first if you
 want them re-read.
 
+## 8. Stalwart: eigen mail over JMAP (phase 1)
+
+Phase 1 of the mail rearchitecture runs a mailbox on the homelab and gives the
+worker a JMAP client for it. **It changes nothing about how mail arrives**, and
+**it does not switch mail ingestion on** — see §8.8 before you plan an evening
+around it. No MX record is touched and no DNS is changed; the mailbox is filled
+once from a Google Takeout export and read by the worker from then on. Gmail
+polling stays unscheduled — see the rate-limit runbook in §7 for why it cannot
+simply be restarted.
+
+One file describes the service: the `stalwart` block in
+`docker-compose.prod.yml`. **This repo ships no Stalwart configuration file, and
+nothing in `ops/stalwart/` is mounted into the container.** That directory
+contains exactly two things — `config.json.example`, a disaster-recovery copy of
+the one file Stalwart keeps on disk and writes itself, and a `README.md` saying
+what it is for. There is no `config.toml` here and there never was one: the
+directory arrives with this changeset (`git log -- ops/stalwart` is empty), so
+nothing stale is waiting on the homelab for the rsync to clean up. §8.1 is about
+the shape of the product, not about a file this repo lost.
+
+**It does ship two migrations**, which are not optional and must run before the
+images are rebuilt — §8.4.
+
+### 8.0 Provenance: what is read, what is measured
+
+This project keeps read-from-source and measured-against-a-running-thing apart,
+and a mail server is not where to start blurring them. A passage in the previous
+draft of this section was headed "one measured trap" and had in fact only been
+read. So:
+
+**MEASURED (by this session, locally):**
+
+- `docker compose -f docker-compose.prod.yml --env-file <file> config` renders
+  the whole file with **all four `STALWART_*` variables absent**: the three
+  paths take the production defaults below and `STALWART_RECOVERY_ADMIN` renders
+  as `null`, i.e. is simply not passed. `docker compose … ps` against the same
+  file exits 0. This is what protects `ops/nightly.sh` (§8.4).
+- `stalwartlabs/stalwart:v0.16.19` exists on Docker Hub, pushed 2026-08-24,
+  linux/amd64 + linux/arm64, manifest list
+  `sha256:0bb2e1fa01ce8dfc8d8dc1006ed11bd7359be6144fd0f8a950b0c7bf5e9a9b6c`
+  (`https://hub.docker.com/v2/repositories/stalwartlabs/stalwart/tags/v0.16.19`).
+  The old image name `stalwartlabs/mail-server` has no tag newer than 2023.
+- `ops/stalwart/config.json.example` parses as JSON.
+- **`create_host_path: false` does what §8.4 claims.** Two one-container compose
+  files differing only in that flag, Docker 29.1.3 / Compose v5.0.0-desktop.1:
+  with it, `up` fails with `invalid mount config for type "bind": bind source
+  path does not exist: <path>` and nothing appears on the host; without it, the
+  host directory is created silently. Re-rendering `docker-compose.prod.yml`
+  after adding the flag changes only the three `bind:` blocks — `config` still
+  renders and `ps` still exits 0 with every `STALWART_*` variable absent.
+- **The two migrations are load-bearing for `web`/`worker`** (§8.4): rendering
+  drizzle's `select().from(rawEmails)` from `packages/db/src/schema.ts` in this
+  tree emits a column list ending in `"source"`, which does not exist in the
+  database until `0028_raw_emails_source.sql` runs. That one is about this
+  repository, not about Stalwart, and it is measured.
+
+**READ FROM SOURCE**, at `github.com/stalwartlabs/stalwart` ref `v0.16.19`
+(commit `a0cf06f868e4d658d0a1943abb086e6b73ae5c73`, 2026-08-24) — every claim
+below about how *Stalwart* behaves, with the file and line it came from. Where
+the website and the tag disagree, the tag wins and the disagreement is called
+out.
+
+**MEASURED AGAINST A RUNNING SERVER: nothing.** No Stalwart has ever started in
+this project. §8.9 is the list to confirm on the first start; correct this
+section the same day if any of it turns out differently.
+
+### 8.1 Version, and why the config file is gone
+
+`stalwartlabs/stalwart:v0.16.19`, pinned. Never `:latest` on the service that
+holds the archive: Stalwart is pre-1.0, its on-disk format is still moving, and
+the 11.49 GB import happens once and must land in the version we keep.
+
+The plan named `v0.11.5` (never released) and an earlier draft of this section
+`v0.11.8` under the old image name `stalwartlabs/mail-server`, which upstream
+abandoned. **Do not go back**: 0.12 rewrote the configuration model and 0.16
+finished the job.
+
+What changed, and it is the whole of §8:
+
+| | 0.11 | **0.16.19** |
+| --- | --- | --- |
+| Config file | `config.toml`, the entire configuration | `config.json`, **only** the data-store connection |
+| Format | TOML | JSON (`serde_json::from_str::<DataStore>`, `crates/store/src/registry/local.rs:71-80`) |
+| Everything else | in that file | in a **registry inside the data store**, edited via `/admin` or the JMAP management API |
+| Entrypoint | shell script running `--init` when the config was absent | the bare binary: `ENTRYPOINT ["/usr/local/bin/stalwart"]`, `CMD ["--config", "/etc/stalwart/config.json"]` (`Dockerfile:45-46`) — **there is no entrypoint script and no `--init`** |
+| Paths | `/opt/stalwart-mail/{etc,data,blobs}` | `/etc/stalwart` and `/var/lib/stalwart` (`Dockerfile:32-40`) |
+| Runs as | root | uid/gid **2000** (`Dockerfile:32-38`) |
+
+`grep -rni toml` over `crates/**` at that tag returns nothing and no workspace
+`Cargo.toml` depends on a `toml` crate. **A TOML file mounted into this image is
+inert.** That is why the TOML-shaped configuration the mail plan drafted against
+0.11 was dropped rather than ported — and to be exact about the history, dropped
+before it was ever committed: no `ops/stalwart/config.toml` exists in this
+repository's history, so there is no leftover of it anywhere.
+
+The 0.11 trap this section used to warn about — "the entrypoint runs `--init`
+only when the config file is absent, so mounting ours skips the generated admin
+password and leaves no way in" — **does not exist in 0.16, and its replacement
+runs the other way round.** With no `config.json`, Stalwart starts in
+**bootstrap mode**: an in-memory ephemeral store, one HTTP listener on port
+8080, and a one-time random `admin` password printed to the log
+(`crates/store/src/build/registry.rs:38-67`). Finishing the setup wizard is what
+*writes* `config.json`. So the danger is no longer "no way in" but "the file you
+must not lose" — see `STALWART_ETC_DIR` in §8.3.
+
+### 8.2 What the compose service does, and the one variable that matters
+
+The whole service is in `docker-compose.prod.yml` with the citations inline.
+Three things are worth repeating here.
+
+**`STALWART_PUBLIC_URL=http://stalwart:8080` decides whether JMAP works at
+all.** The session object's `apiUrl` / `downloadUrl` / `uploadUrl` are built
+from a *configured* base URL and never from the request:
+`crates/common/src/config/network.rs:437-442` sets `url_https` to
+`registry.public_url()` — this variable, verbatim,
+`crates/store/src/registry/local.rs:56-65` — and otherwise to
+`https://{hostname}` with no port, where the hostname falls back to the
+container's own (`crates/common/src/config/network.rs:199-204`).
+`crates/jmap-proto/src/request/capability.rs:379-388` then formats every URL off
+it. Unset, a worker that authenticates perfectly reads back
+`apiUrl = "https://<random container id>/jmap/"` and posts its first real method
+call into nothing. This is the 0.11 hostname trap, still here, wearing an env
+var instead of a config key.
+
+**Phase 1 does not claim there is no SMTP listener — it claims none is
+published.** The first time 0.16 leaves bootstrap mode it inserts smtp/25,
+submissions/465, imaps/993, pop3s/995, sieve/4190, https/443 and http/8080 into
+the registry as safe defaults (`crates/common/src/manager/defaults.rs:462-491`).
+They exist inside the container. Compose publishes **only**
+`127.0.0.1:8080:8080`, so nothing outside the host can reach any of them, and no
+MX record points here. Deleting the unwanted listeners in `/admin` is tidier;
+not publishing them is what makes it safe.
+
+**JMAP on plain HTTP over that 8080 listener is fine.** The default `http`
+listener is created with `tls_implicit: false`
+(`crates/common/src/manager/defaults.rs:473`), and
+`crates/common/src/network/listen.rs:46` accepts such a connection in the clear.
+`/.well-known/jmap` answers **307 → `/jmap/session`**
+(`crates/http/src/request.rs:272-277`), which `fetch` follows by default and
+which is same-origin, so the `Authorization` header survives.
+
+### 8.3 Host directories — `chown 2000:2000`, not `$USER`
+
+The store goes on `/mnt/data` — local NVMe, ~342 GB free (measured on the
+homelab) — for all three directories. Nothing goes on the NAS mount: an
+NFS-backed mail database is how a mail store corrupts, and keeping the whole
+store local means that line is never approached rather than merely respected.
+
+```bash
+ssh homelab 'sudo mkdir -p /mnt/data/verder/stalwart/{etc,data,blobs} && \
+  sudo chown -R 2000:2000 /mnt/data/verder/stalwart && \
+  sudo chmod 750 /mnt/data/verder/stalwart/etc'
+```
+
+Run it before anything starts `stalwart`. If those directories are missing the
+container refuses to start rather than creating them — all three bind mounts
+carry `create_host_path: false` — so a missing `bind source path does not exist`
+is this step, not a broken image.
+
+**`2000:2000`, not `$USER`.** The image creates a `stalwart` user with uid and
+gid 2000 and runs as it (`Dockerfile:32-38`). Docker will happily create a
+missing bind-mount source as `root`, and the container then cannot write a byte
+— which on a first start looks like a crash loop with a permissions line buried
+in it.
+
+| Variable | Production value |
+| --- | --- |
+| `STALWART_ETC_DIR` | `/mnt/data/verder/stalwart/etc` → `/etc/stalwart`. **New in 0.16 and load-bearing.** Stalwart writes `config.json` here itself when the wizard finishes (`crates/store/src/registry/local.rs:91-105`). Lose it and the server starts in bootstrap mode offering to build a second store beside the good one. It is a writable *directory*, never a read-only file mount |
+| `STALWART_DATA_DIR` | `/mnt/data/verder/stalwart/data` → `/var/lib/stalwart`. The RocksDB holding the registry (all configuration) and all mail metadata |
+| `STALWART_BLOB_DIR` | `/mnt/data/verder/stalwart/blobs` → `/var/lib/stalwart/blobs`. Used **only** if you point the wizard's Storage screen at a Filesystem blob store on exactly that path; leave it on "Use data store" and blobs go into the RocksDB above, which is still on `/mnt/data` and still correct. Kept separately settable because phase 2 may want the split |
+| `STALWART_RECOVERY_ADMIN` | `admin:<plaintext password>`, e.g. `admin:$(openssl rand -hex 24)`. Honoured on **every** start and not only during setup (`crates/common/src/auth/authentication.rs:85-89`), compared as plaintext when it carries no hash prefix (`crates/directory/src/core/secret.rs:240-243`), and an empty secret can never authenticate. **Leaving it unset is safe** (§8.4) |
+| `JMAP_BASE_URL` | `http://stalwart:8080` — the worker reaches it over the compose network |
+| `JMAP_USER` / `JMAP_APP_PASSWORD` | the mailbox address and its app password, minted in §8.6. These two legitimately arrive late: they cannot exist before the account does |
+
+`STALWART_PUBLIC_URL`, `STALWART_HOSTNAME` and `STALWART_HEALTHCHECK_URL` are
+literals in the compose file, not `.env.prod` entries. Phase 2 replaces the
+first two with the real FQDN.
+
+### 8.4 Ordering: rsync, **migrate**, rebuild — and why the nightly cron is safe
+
+**This changeset ships two migrations, and the images must not be rebuilt before
+they run.** Same trap as 0020 through 0027, and it is not confined to mail:
+
+| Migration | What it does |
+| --- | --- |
+| `packages/db/drizzle/0028_raw_emails_source.sql` | adds `raw_emails.source`, `NOT NULL DEFAULT 'gmail'`, plus the `raw_emails_source_check` constraint. Additive: every historical row is labelled and no `gmail_message_id` is rewritten |
+| `packages/db/drizzle/0029_raw_emails_sha256_idx.sql` | non-unique btree index on `raw_emails.raw_rfc822_sha256`, which the JMAP poller's content dedup needs before the first post-import sync |
+
+`packages/db/src/schema.ts` now carries `source` in the `rawEmails` model, and a
+bare drizzle `select()` enumerates every column in the model. **Measured this
+session** by rendering the query:
+
+```
+select "id", "gmail_message_id", "gmail_thread_id", "from_addr", "to_addr",
+       "subject", "sent_at", "raw_rfc822_sha256", "body_text", "fetched_at",
+       "suggest_queued_at", "source" from "raw_emails"
+```
+
+So `web` and `worker` images built from this tree against a database that has
+not seen 0028 fail with `column raw_emails.source does not exist` on every one
+of these, none of which is mail code:
+
+- `/queue` (`packages/api/src/routers/suggestions.ts`)
+- `search.drain` on `raw_email` chunks (`packages/api/src/search/index-entity.ts`)
+- `suggest.entry` (`apps/worker/src/ollama.ts`)
+- task mining (`apps/worker/src/task-mine.ts`)
+- the receipts poller (`apps/worker/src/receipts.ts`)
+
+**rsync first, then migrate from the HOST, then rebuild.** The rsync is first
+because the two `.sql` files do not exist on the homelab until you send them,
+and it is safe to be first because rsync only writes files — the running
+containers keep the old images, so the migration still lands ahead of any new
+code. Do not reorder these three.
+
+```bash
+# 1. Host directories (§8.3) and the .env.prod block (§8.3 for what each
+#    variable means, §8.6 for the copy-pasteable block). Order against the
+#    rsync does not matter — see below.
+
+# 2. rsync the tree with the canonical command from §7.0 (--delete, full
+#    exclude list). This is what puts the new docker-compose.prod.yml AND
+#    packages/db/drizzle/0028_*.sql / 0029_*.sql on the homelab.
+
+# 3. Migrations, from the homelab HOST, as the admin role — exactly the
+#    spelling in §7.1. The bare `pnpm --filter @verder/db migrate` falls back
+#    to the dev default and dies on 28P01 auth_failed, so DATABASE_URL is not
+#    optional and $POSTGRES_PASSWORD has to come out of .env.prod:
+ssh homelab                       # steps 3-5 all run inside this session
+cd ~/apps/verder
+set -a; source ./.env.prod; set +a
+DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
+  pnpm --filter @verder/db migrate     # applies 0028 then 0029, each once
+
+# 4. Only now the app containers:
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build web worker
+
+# 5. And only now mail. `stalwart` touches no database, so this step is
+#    independent of 3 and 4 — it is last so that one pass through this section
+#    leaves the app correct before anything new is started:
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d stalwart
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f stalwart
+```
+
+Afterwards `/verify` should be green and the ledger event count unchanged:
+**nothing in this changeset appends a `ledger_events` row.**
+
+**On writing `.env.prod` before or after the rsync: it does not matter, and an
+earlier draft of this section claimed otherwise.** The canonical rsync excludes
+`.env.prod` outright (§7.0), so it can never disturb the file; and the window in
+which the homelab holds a compose file naming variables its `.env.prod` lacks is
+harmless, which is the measurement below. `JMAP_USER` and `JMAP_APP_PASSWORD`
+legitimately arrive later still — they cannot exist before the account does
+(§8.6).
+
+That window used to be fatal. `ops/nightly.sh` shares this compose file and runs
+`docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres
+pg_dump …` as its first line under `set -euo pipefail`.
+
+Compose interpolates the **whole file, every service**, on every command, before
+it looks at which service you named — so a `${VAR:?}` marker in the `stalwart`
+service would abort commands with nothing to do with mail: `gzip` still creates a
+zero-byte `db-<date>.sql.gz` that looks like a backup, and `set -e` then skips
+the vault mirror, `nightly-verify` and `model-check`. Every night, until someone
+notices.
+
+**Measured, this session, with all four `STALWART_*` variables absent:** the file
+renders completely; the three paths take the defaults in the table above and
+`STALWART_RECOVERY_ADMIN` renders as `null`, i.e. is not passed to the container.
+`docker compose … ps` against it exits 0 — re-measured after the
+`create_host_path: false` change, which alters only the three rendered mounts and
+nothing about interpolation. The rule that keeps it that way: **nothing in the
+`stalwart` service may use `${VAR:?}`** — defaults for the paths, bare
+pass-through for the secret.
+
+The cron is safe for a second reason as well: it only ever runs `exec` against
+`postgres` and `worker`, never `up`, so it neither starts `stalwart` nor notices
+that it is down (§8.10).
+
+**Do not reach for a bare `up -d` anywhere in this section.** It would start
+`stalwart` ahead of the mkdir/chown, and the three bind mounts now carry
+`create_host_path: false` precisely so that fails loudly — `bind source path does
+not exist: /mnt/data/verder/stalwart/etc` — instead of leaving three root-owned
+directories that uid 2000 cannot write. Measured locally, both with and without
+the flag; the reasoning is on the mounts in `docker-compose.prod.yml`. The flag
+says nothing about ownership: a path that exists but is root-owned still passes,
+so §8.3's `chown 2000:2000` is still yours to run.
+
+**Starting `stalwart` without `STALWART_RECOVERY_ADMIN` set is safe**, which is
+new in 0.16. It is why a stray start is untidy rather than damaging (§2.4) and
+why the restore procedure can bring it up deliberately without hunting for a
+password first. With no `config.json` yet the server enters bootstrap
+mode on an **ephemeral, in-memory** store and prints a one-time random admin
+password to the log (`crates/store/src/build/registry.rs:43-67`). Nothing is
+written and nothing is corrupted; you only have to read the log instead of
+knowing the password in advance. Setting the variable means you never have to.
+
+### 8.5 First start: the setup wizard
+
+On a fresh install `/etc/stalwart` is empty, so Stalwart comes up in bootstrap
+mode: one HTTP listener on 8080 and the WebUI on it at `/admin`.
+
+**You need an SSH tunnel to reach it, and this is the only interactive step in
+phase 1 — if you skip the tunnel, phase 1 stops here.** Compose publishes
+`127.0.0.1:8080:8080`, loopback on the homelab, exactly like `web` on 3000:
+there is no URL that reaches `/admin` from the MacBook, and no tunnel hostname
+points at it. `http://<homelab>:8080/admin` is connection-refused by design.
+Open the forward from the Mac and leave the session running for as long as you
+are in the WebUI:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 homelab
+```
+
+Then browse **`http://127.0.0.1:8080/admin`** on the Mac. (`homelab` is the
+alias in `~/.ssh/config`; the `127.0.0.1` in the middle is resolved on the
+homelab, so it is that host's loopback and not your own. If something on the Mac
+already holds 8080, use `-L 8081:127.0.0.1:8080` and browse `:8081` — the port
+on your side is free choice, the one on the far side is not.)
+
+Log in as `admin` with the password from `STALWART_RECOVERY_ADMIN`, or the
+one-time one from the log.
+
+*Unverified, with a ready fallback:* the WebUI is being reached on an origin
+(`127.0.0.1:8080`) that is not `STALWART_PUBLIC_URL` (`http://stalwart:8080`).
+If the browser ends up posting at `http://stalwart:8080/…` and failing, do not
+change `STALWART_PUBLIC_URL` — that variable is what makes JMAP work at all
+(§8.2). Add `127.0.0.1 stalwart` to the **Mac's** `/etc/hosts` and browse
+`http://stalwart:8080/admin` instead: the same forward answers, and now the
+origin matches.
+
+The wizard has five screens (server identity, storage, account directory,
+logging, DNS) and a confirmation. What matters for us:
+
+- **Server identity** — hostname `stalwart` for phase 1 (it is what
+  `STALWART_HOSTNAME` and `STALWART_PUBLIC_URL` already say). No TLS certificate
+  and no DKIM: phase 1 publishes no port that would use them.
+- **Storage** — data store **RocksDB at `/var/lib/stalwart/data`**. That is the
+  value `ops/stalwart/config.json.example` records, and it is the one thing the
+  wizard writes to disk. For blobs either leave "Use data store" (simplest;
+  blobs land in the RocksDB, still on `/mnt/data`) or choose **Filesystem at
+  `/var/lib/stalwart/blobs`**, which is the mount `STALWART_BLOB_DIR` provides.
+  Decide before importing 11.49 GB, not after.
+- **Account directory** — **internal**. In 0.16 that is simply the absence of an
+  external one: the `Directory` object covers only LDAP, SQL and OIDC
+  (`crates/registry/src/schema/structs.rs:927-932`), and
+  `crates/directory/src/core/config.rs:42-56` leaves the default directory
+  `None` unless `Authentication.directoryId` names one. **No directory or
+  principal block is required for the server to start** — that question, from
+  the 0.11 era, no longer has a subject.
+- **Logging** — console. Unlike 0.11 no tracer block is needed to get output;
+  the bootstrap and startup banners are unconditional
+  (`crates/common/src/manager/boot.rs:168-190`).
+
+Finishing writes `/etc/stalwart/config.json`, creates the permanent
+administrator, and restarts into normal mode.
+
+**The wizard is not baked into the image.** `/admin` is downloaded on first
+start from
+`https://github.com/stalwartlabs/webui/releases/latest/download/webui.zip`
+(`crates/common/src/manager/defaults.rs:58-76`), and `stalwart-cli` is **not**
+in the image any more — upstream moved it to its own repository and does not
+ship it in Docker (github.com/stalwartlabs/stalwart/discussions/3013). So if the
+container has no outbound internet, there is no wizard and no CLI, and the way
+through is to write `/etc/stalwart/config.json` by hand from
+`ops/stalwart/config.json.example`, restart, and do the rest via `/admin` once
+the bundle can be fetched, or via `stalwart-cli` installed on the host. This is
+the most likely single cause of an unusable first `up -d`; §8.9 checks it first.
+
+### 8.6 Create the account and mint the app password
+
+Through the same SSH forward as §8.5 (`ssh -L 8080:127.0.0.1:8080 homelab`, then
+`http://127.0.0.1:8080/…` on the Mac) — both screens below sit on that same
+loopback-only listener.
+
+In `/admin`, as the administrator: create the domain `vanderpoel.pro`, then an
+account for `martin@vanderpoel.pro`.
+
+Then mint the credential the worker uses. **App passwords are issued by the
+account holder, not by an administrator** — upstream is explicit that admins can
+view and revoke them but not create them
+(`https://stalw.art/docs/auth/authentication/app-password/`). So sign in to the
+self-service portal at `http://127.0.0.1:8080/account` **as that account**,
+through the same forward, and create one under Credentials › App Passwords. The value looks like `app_…`
+(`crates/common/src/auth/credential.rs:86-91`).
+
+- Leave `expiresAt` empty. That is the whole reason this is an app password and
+  not an OAuth token: `expiresAt` is optional
+  (`crates/registry/src/schema/structs.rs:4626-4641`), and a credential with no
+  expiry cannot die silently on a Tuesday.
+- `allowedIps` is available on the same object and is a cheap extra fence if you
+  want one.
+- Note the account default is at most 5 app passwords
+  (`max_app_passwords: Some(5)`, `structs_impl.rs:3435`).
+
+**Why an app password and not a bearer token, confirmed against this tag.** An
+OAuth access token expires after `access_token_expiry`, whose default is
+3 600 000 ms — one hour (`structs_impl.rs:30626`). An `API_…` API key is a
+management credential and upstream states it "cannot be used to log in over
+IMAP, POP3, JMAP mail, SMTP submission, or any CalDAV, CardDAV, or WebDAV
+service" (`https://stalw.art/docs/auth/authentication/api-key/`). App passwords
+are what upstream names for exactly this job.
+
+**HTTP Basic is accepted on the JMAP routes.** `/jmap` POST and `/jmap/session`
+both call `authenticate_headers` (`crates/http/src/request.rs:87-90, 212-220`),
+which decodes a `Basic` header into `Credentials::Basic`
+(`crates/http/src/auth/authenticate.rs:54-61`); the authenticator then parses an
+`app_…` secret as an app password and validates it against the account
+(`crates/common/src/auth/authentication.rs:143-167`). There is no
+`allow_api_access`-style gate any more — that symbol does not exist at this tag.
+This is read from source; §8.9 item 4 is the two-minute confirmation, and if it
+comes back 401 the credential decision has to be re-made rather than quietly
+swapped for OAuth.
+
+Add to `~/apps/verder/.env.prod` (mode 600, never committed):
+
+```
+# written in §8.3, before the rsync
+STALWART_RECOVERY_ADMIN=admin:<the administrator password>
+STALWART_ETC_DIR=/mnt/data/verder/stalwart/etc
+STALWART_DATA_DIR=/mnt/data/verder/stalwart/data
+STALWART_BLOB_DIR=/mnt/data/verder/stalwart/blobs
+JMAP_BASE_URL=http://stalwart:8080
+# added here, after the account exists
+JMAP_USER=martin@vanderpoel.pro
+JMAP_APP_PASSWORD=app_…
+```
+
+`JMAP_*` reach the worker through its `env_file`, so restart it to pick them up
+— but read §8.8 first about what that does and does not start:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d worker
+```
+
+### 8.7 Verify the endpoint answers
+
+```bash
+ssh homelab 'curl -sSL -u "martin@vanderpoel.pro:app_…" \
+  http://127.0.0.1:8080/.well-known/jmap | head -c 400'
+```
+
+`-L` matters: `/.well-known/jmap` is a 307 to `/jmap/session`
+(`crates/http/src/request.rs:272-277`). Same-origin, so curl keeps the
+credentials.
+
+Expect JSON with `apiUrl`, `downloadUrl` and a `primaryAccounts` entry for
+`urn:ietf:params:jmap:mail` — RFC 8620 §2 requires those keys. **Read the actual
+`apiUrl` out of that response.** It must be `http://stalwart:8080/jmap/`. If it
+says `https://` anything, `STALWART_PUBLIC_URL` did not take effect and the
+worker will fail on its first method call while its session fetch looks perfect
+(§8.2).
+
+Nothing on the host resolves `stalwart`, so a JMAP client run **on the homelab**
+rather than inside the compose network needs one line in `/etc/hosts`:
+
+```
+127.0.0.1 stalwart
+```
+
+Setting `STALWART_PUBLIC_URL` to `localhost` instead is not the fix: it would
+break the worker, which cannot reach the host's loopback from its own container.
+
+An unauthenticated liveness check, useful when you only want to know the process
+is up (`crates/http/src/request.rs:526-535`):
+
+```bash
+ssh homelab 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/healthz/live'
+```
+
+### 8.8 **Phase 1 ends here, and mail does NOT start flowing**
+
+Read this before setting an evening aside for it. **Setting `JMAP_USER` /
+`JMAP_APP_PASSWORD` and restarting the worker starts nothing.**
+
+Phase 1 ends with **Stalwart running and its mailbox EMPTY**:
+
+- The JMAP client, port and poll logic exist under `apps/worker/src/mail/`, with
+  tests. `pollMail` has **no call site**: `apps/worker/src/index.ts` is
+  unmodified — it imports `pollGmail` and nothing from `./mail` — no queue is
+  registered for it, no cron schedules it. Measured: `grep -rn
+  'JMAP_BASE_URL|makeJmapPort|openSession|pollMail'` over `apps/` and
+  `packages/`, excluding `apps/worker/src/mail/`, returns exactly one line, and
+  it is a comment in `gmail.ts`.
+- **The archive import is Task 7** of `docs/superpowers/plans/2026-08-29-mail-phase-1-jmap.md`
+  — the 11.49 GB Google Takeout `.mbox` into Stalwart. Until it runs, the
+  mailbox holds zero messages.
+- **The worker wiring is Task 8**, a separate session: registering the queue,
+  scheduling it, and deciding what a `mail` row in `worker_runs` looks like.
+
+So after §8.7 the honest expectation is:
+
+- `docker compose ps` shows `stalwart` **up**. Whether it also reports
+  `healthy` at that moment is **unverified** and should not be planned on. The
+  image's healthcheck is `STALWART_HEALTHCHECK_URL` → `/healthz/live`
+  (`Dockerfile:42-44`), read from source; nobody has watched that endpoint while
+  the server is still in bootstrap mode on an ephemeral store, and the source
+  shows the server behaves differently before the wizard has run. Expect
+  `healthy`; treat `starting` or `unhealthy` as a thing to check (§8.9 item 9),
+  not as a reason to tear the store down.
+- `/.well-known/jmap` answers with a session object.
+- `worker_runs` has **no `mail` rows at all**, and will not get any. That is
+  correct, not a fault. An empty `worker_runs` after §8.6 is what success looks
+  like at the end of phase 1.
+- Nothing new appears in the vault, on `/queue`, or in `documents`.
+
+Do not go looking for an ingestion failure that has not been built yet.
+
+### 8.9 Confirm on the first start — the read-vs-measured list
+
+Every item is cheap, and every one of them is currently an assumption.
+
+1. **The WebUI is reachable — through the SSH forward.** With
+   `ssh -L 8080:127.0.0.1:8080 homelab` open, `http://127.0.0.1:8080/admin`
+   renders on the Mac. Read the failure correctly, because two very different
+   faults look similar:
+   - **connection refused / nothing listening** → *not* the bundle. Either the
+     forward is not open, or `stalwart` is not running, or the port is not
+     published. `http://<homelab>:8080/admin` without the forward is always
+     refused; that is the design (§8.5), not a fault.
+   - **it connects but 404s, hangs or serves an empty page** → *now* suspect the
+     bundle download (§8.5): `/admin` is fetched from GitHub at first start and
+     `stalwart-cli` is not in the image, so with no outbound internet there is
+     neither wizard nor CLI.
+
+   The discriminator is one line on the homelab itself, which needs no forward:
+
+   ```bash
+   ssh homelab 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/admin'
+   ```
+
+   A code means the server is up and the question is the bundle; a curl error
+   means the server or the port is the problem.
+2. **The container logs at all**, and the bootstrap banner appears
+   (`docker compose logs stalwart`). If it is silent, everything below is being
+   judged blind.
+3. **`STALWART_RECOVERY_ADMIN` logs in** — and still logs in *after* the wizard
+   has finished and the server restarted into normal mode. Source says it is
+   honoured on every start; if it is not, the administrator account created by
+   the wizard is the only way in and its password had better be recorded.
+4. **HTTP Basic + `app_…` is accepted on JMAP** (§8.7). A 401 here invalidates
+   the credential decision — say so loudly rather than reaching for OAuth: the
+   whole point of choosing an app password was that OAuth's 1 h access token
+   turns into a silent ingestion death.
+5. **`apiUrl` is `http://stalwart:8080/jmap/`** and not an `https://` URL built
+   from the container id (§8.2).
+6. **The blob mount is the one being written.** If you chose the Filesystem blob
+   store, write a message and confirm bytes land in
+   `/mnt/data/verder/stalwart/blobs` on the host; `docker compose exec stalwart
+   df -h /var/lib/stalwart /var/lib/stalwart/blobs` should show two distinct
+   mounts. The nested bind mount is expected to work — Docker orders mounts by
+   destination depth — but expected is not observed.
+7. **`config.json` exists on the host** at
+   `/mnt/data/verder/stalwart/etc/config.json` after the wizard, and matches
+   `ops/stalwart/config.json.example`. If it differs, update the example — it is
+   the disaster-recovery copy.
+8. **The unwanted listeners.** `/admin` › Network › Listeners shows smtp/25 and
+   friends. Confirm none of them is published (`docker compose port stalwart 25`
+   should fail), and delete the ones you do not want.
+9. **Does the container ever report `healthy`, and when?** Record it in
+   bootstrap mode (before the wizard) *and* after the wizard has restarted the
+   server into normal mode — those are two different states and only the second
+   has any source-level reason to answer:
+
+   ```bash
+   ssh homelab 'docker inspect --format "{{.State.Health.Status}}" $(docker compose \
+     --env-file ~/apps/verder/.env.prod -f ~/apps/verder/docker-compose.prod.yml \
+     ps -q stalwart)'
+   ssh homelab 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/healthz/live'
+   ```
+
+   If `/healthz/live` answers 200 by hand while compose says `unhealthy`, the
+   healthcheck URL is wrong, not the server — and §8.8's expectation is the
+   thing to correct.
+
+### 8.10 What is not covered yet
+
+`ops/nightly.sh` backs up postgres and the vault. Measured by reading it: its
+steps are `pg_dump`, an additive `rsync` of `$VAULT_HOST_DIR`, and
+`nightly-verify` / `model-check` inside the worker container. **None of them
+touches the Stalwart store**, so `/mnt/data/verder/stalwart` is unbacked — the
+Takeout `.mbox` is the only second copy of the archive until that changes. Keep
+the export. A future backup step must cover `etc/` as well as the store:
+`config.json` is small and losing it is worse than it looks (§8.3).
+
+Nor does the cron know the mail service exists: it never runs `up`, only `exec`
+against `postgres` and `worker`, so a stopped or broken `stalwart` can never turn
+a nightly run red. That cuts both ways.
+
+
 ## Restore procedure
 
 Both the dump and the restore must run on a **pgvector-capable image**
-(`pgvector/pgvector:pg17`): the dump contains `CREATE EXTENSION IF NOT EXISTS
-vector`, and a stock `postgres:17` fails on that line and cascades.
+(`pgvector/pgvector:pg17-trixie`, the exact tag prod runs — see §2.1): the dump
+contains `CREATE EXTENSION IF NOT EXISTS vector`, and a stock `postgres:17`
+fails on that line and cascades. Restoring onto the bare `:pg17` tag instead
+would succeed and then sit under the ledger with a different collation
+provider, which is worse than failing.
 
 1. Stop web + worker (leave postgres up):
    ```bash
@@ -598,9 +1207,38 @@ vector`, and a stock `postgres:17` fails on that line and cascades.
    outbox depth draining, embedding failures at zero.
 5. Start everything and verify:
    ```bash
-   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d postgres web worker
    docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
      pnpm --filter worker nightly-verify
    ```
    Confirm the run is green (exit 0) and the Verify page agrees before
    trusting the restored system.
+
+   **`stalwart` is deliberately not in that list, and this is the step where it
+   matters most.** Nothing in this backup contains the mail store (§8.10): the
+   dump is postgres, the mirror is the vault. If the disk that held
+   `/mnt/data/verder/stalwart` is the disk that failed, starting `stalwart` here
+   would find an empty `/etc/stalwart`, come up in bootstrap mode and offer to
+   build a brand-new mailbox — which is not what you want to discover at 02:00.
+
+   So bring it back deliberately, after the three above are green:
+
+   ```bash
+   # Does the store still exist, and is it still owned by uid 2000?
+   ssh homelab 'ls -la /mnt/data/verder/stalwart/ /mnt/data/verder/stalwart/etc/'
+   ```
+
+   - **`etc/config.json` and `data/` are both there** → start it and check
+     §8.7: `up -d stalwart`.
+   - **`data/` survived but `etc/config.json` is gone** → copy
+     `ops/stalwart/config.json.example` to
+     `/mnt/data/verder/stalwart/etc/config.json`, `chown 2000:2000` it, then
+     start. Do **not** run the wizard: it would build a second store beside the
+     good one.
+   - **The store is gone** → this is a rebuild, not a restore. Re-run §8 from
+     §8.3 and re-import the Takeout archive (Task 7 of the mail plan). If the
+     directories themselves went with the disk, `up -d stalwart` will refuse to
+     start (`create_host_path: false`) until §8.3's mkdir/chown has been run —
+     which is the intended answer, not an extra obstacle: a mail service that
+     silently invented an empty store here is exactly what you do not want at
+     02:00.

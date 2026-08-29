@@ -1,7 +1,17 @@
 # Production stack for the homelab.
 # Run every compose command with the prod env file so ${...} substitution and
-# container env come from one place:
-#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+# container env come from one place — AND NAME THE SERVICES:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d postgres web worker
+#
+# NOT a bare `up -d`. That also starts `stalwart`, which has a first-start
+# ritual of its own: three host directories that must exist and be owned by
+# uid 2000, and a setup wizard that decides where the mail store lives. Mail is
+# brought up deliberately, through docs/deploy.md §8, never as a side effect of
+# a command aimed at the app:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d stalwart
+# The three stalwart bind mounts carry `create_host_path: false` so a bare
+# `up -d` fails loudly instead of leaving root-owned directories behind — the
+# reasoning is on the mounts themselves.
 services:
   postgres:
     # -trixie, not the bare :pg17 tag — same PostgreSQL build (17.11-1.pgdg13+2)
@@ -44,6 +54,168 @@ services:
       - "./secrets:/repo/secrets"
     depends_on:
       postgres: { condition: service_healthy }
+
+  stalwart:
+    # PIN THE TAG. Never :latest on the service that holds the mail archive —
+    # Stalwart is pre-1.0, its on-disk format is still moving, and an unattended
+    # pull could land a version that will not open the store. The archive is
+    # imported ONCE; it must land in the version we keep.
+    #
+    # v0.16.19 is the current release: published 2026-08-24, verified present on
+    # Docker Hub (manifest list sha256:0bb2e1fa01ce8dfc8d8dc1006ed11bd7359be614
+    # 4fd0f8a950b0c7bf5e9a9b6c). The OLD image name stalwartlabs/mail-server is
+    # abandoned — its newest tag is from 2023 — and v0.11.5, which the mail plan
+    # named, was never released at all.
+    #
+    # 0.16 IS A DIFFERENT PRODUCT TO CONFIGURE. There is no config.toml: the
+    # only file on disk is /etc/stalwart/config.json, which holds just the data
+    # store connection, and everything else — listeners, blob store, directory,
+    # accounts — lives in a registry INSIDE that store and is edited through
+    # /admin or the JMAP management API. Read from the tag's source:
+    # Dockerfile:45-46 (ENTRYPOINT is the bare binary, CMD is
+    # `--config /etc/stalwart/config.json`; there is no entrypoint script and so
+    # no `--init`) and crates/store/src/registry/local.rs:71-80
+    # (serde_json::from_str::<DataStore>). See ops/stalwart/README.md and
+    # docs/deploy.md §8.
+    image: stalwartlabs/stalwart:v0.16.19
+    restart: unless-stopped
+    # NOTHING IN THIS SERVICE MAY USE `${VAR:?}`. Compose interpolates the WHOLE
+    # file on EVERY command, for every service, before it looks at which service
+    # you named — so a `:?` here aborts commands that have nothing to do with
+    # mail. The documented deploy order sends the tree over with rsync BEFORE
+    # .env.prod is edited, and ops/nightly.sh (03:30 cron, `set -euo pipefail`)
+    # opens with `docker compose --env-file .env.prod -f docker-compose.prod.yml
+    # exec -T postgres pg_dump … | gzip > $BACKUP_DIR/db-$STAMP.sql.gz`.
+    # Measured locally with the STALWART_* variables absent: a `:?` there dies on
+    # `error while interpolating services.stalwart.volumes.[]: required variable
+    # STALWART_DATA_DIR is missing a value`, leaving a zero-byte db-<date>.sql.gz
+    # that looks like a backup, and `set -e` then skips the vault mirror,
+    # nightly-verify and model-check. Every night, until someone notices. A
+    # compose file that lands ahead of its variables must be HARMLESS: defaults
+    # for the paths, pass-through for the secret.
+    environment:
+      # THE ONE VARIABLE THAT DECIDES WHETHER JMAP WORKS AT ALL.
+      #
+      # The JMAP session object's apiUrl / downloadUrl / uploadUrl are built
+      # from a CONFIGURED base url, never from the request. Read from source:
+      # crates/common/src/config/network.rs:437-442 sets url_https to
+      # registry.public_url() — i.e. this variable, verbatim
+      # (crates/store/src/registry/local.rs:56-65) — and otherwise to
+      # `https://{hostname}` with no port; crates/jmap-proto/src/request/
+      # capability.rs:379-388 then formats every url off it.
+      #
+      # So with this unset, a worker that authenticates perfectly reads back
+      # apiUrl = "https://<random container id>/jmap/" and posts its first real
+      # method call into nothing. That is the 0.11 hostname trap, still here,
+      # wearing an env var instead of a config key.
+      - STALWART_PUBLIC_URL=http://stalwart:8080
+      # Same name the worker resolves over the compose network. Also the node
+      # identity: without it gethostname() returns the container id, and the
+      # node-id lease keys on hostname (crates/store/src/build/registry.rs:
+      # 108-135), so every `up -d --force-recreate` looks like a NEW node and
+      # takes a fresh node id until the one-hour stale timeout reclaims it.
+      # Phase 2 replaces both this and the url above with the real FQDN.
+      - STALWART_HOSTNAME=stalwart
+      # The image healthcheck tries https://127.0.0.1:443/healthz/live first and
+      # falls back to http on 8080 (Dockerfile:42-44). Phase 1 publishes only
+      # 8080 and has no certificate, so point it straight at the endpoint that
+      # can answer. /healthz/live is served before authentication and is exempt
+      # from the endpoint ACL for loopback callers (crates/http/src/request.rs:
+      # 72-81, 526-535).
+      - STALWART_HEALTHCHECK_URL=http://127.0.0.1:8080/healthz/live
+      # Bare name, not `${STALWART_RECOVERY_ADMIN:-…}`: Compose passes the value
+      # from --env-file/the shell when it is there and passes NOTHING when it is
+      # not. Deliberately no default — a password published in git is not a
+      # password.
+      #
+      # Format is `admin:<plaintext>`; it is honoured on EVERY start, not only
+      # in bootstrap mode (crates/common/src/auth/authentication.rs:85-89), and
+      # the secret is compared as plaintext when it carries no hash prefix
+      # (crates/directory/src/core/secret.rs:240-243) — an EMPTY secret can
+      # never authenticate.
+      #
+      # LEAVING IT UNSET IS SAFE, which is new and is why the first-deploy and
+      # restore steps in docs/deploy.md may start this service unconditionally:
+      # with no config.json yet, Stalwart enters bootstrap mode on an EPHEMERAL
+      # store and prints a one-time random admin password to the log
+      # (crates/store/src/build/registry.rs:43-67). Nothing is written and
+      # nothing is corrupted; you just have to read the log instead of knowing
+      # the password in advance.
+      - STALWART_RECOVERY_ADMIN
+    volumes:
+      # /mnt/data is local NVMe, ~342 GB free. NOTHING here goes on the NAS
+      # mount: an NFS-backed mail database is how a mail store corrupts, and
+      # keeping the whole store local means that line is never approached rather
+      # than merely respected. The defaults below ARE the phase-1 production
+      # paths, so an unset variable is the documented layout and not a broken
+      # file.
+      #
+      # ALL THREE DIRECTORIES MUST BE chown 2000:2000 ON THE HOST. The image
+      # creates and runs as an unprivileged `stalwart` user, uid/gid 2000
+      # (Dockerfile:32-38). Left to itself Docker would create a missing
+      # bind-mount source as root, and the container could not write a byte.
+      #
+      # HENCE `create_host_path: false` ON ALL THREE, which is the only reason
+      # they are in long syntax. MEASURED locally (Docker 29.1.3 / Compose
+      # v5.0.0-desktop.1, two one-container compose files differing only in this
+      # flag): with the flag, `up` refuses with `invalid mount config for type
+      # "bind": bind source path does not exist: <path>` and NOTHING is created
+      # on the host; without it, the host directory is created silently. On the
+      # homelab the daemon runs as root, so "silently" means root-owned, and
+      # uid 2000 then cannot write its own store — a crash loop with the reason
+      # buried in it. The flag turns that into one line naming the exact path,
+      # which is docs/deploy.md §8.3 telling you to run the mkdir/chown.
+      #
+      # It also guards the worse case: a typo in STALWART_DATA_DIR. Without the
+      # flag Docker creates the typo'd path, Stalwart finds an empty
+      # /etc/stalwart, enters bootstrap mode and offers to build a SECOND store
+      # beside the good one. With it, the typo cannot start.
+      #
+      # What it does NOT do: it says nothing about ownership. A path that exists
+      # but is root-owned still passes — the chown in §8.3 stays the operator's
+      # job. And it changes nothing about interpolation: `docker compose config`
+      # with all four STALWART_* variables absent still renders and still exits
+      # 0, so ops/nightly.sh is unaffected (measured this session, same as the
+      # `${VAR:?}` rule above).
+      #
+      # /etc/stalwart is NEW in 0.16 and is load-bearing: Stalwart writes
+      # config.json there itself at the end of the setup wizard
+      # (crates/store/src/registry/local.rs:91-105). Lose it and the server
+      # starts in bootstrap mode offering to build a second store beside the
+      # good one. It must be a WRITABLE DIRECTORY — never a read-only file
+      # mount, which is what phase 1's first draft did against 0.11.
+      - type: bind
+        source: "${STALWART_ETC_DIR:-/mnt/data/verder/stalwart/etc}"
+        target: /etc/stalwart
+        bind: { create_host_path: false }
+      # The data store: the registry (all configuration) and all mail metadata.
+      - type: bind
+        source: "${STALWART_DATA_DIR:-/mnt/data/verder/stalwart/data}"
+        target: /var/lib/stalwart
+        bind: { create_host_path: false }
+      # Blobs, kept separately settable because phase 2 may want to split them.
+      # This is a NESTED bind mount inside the one above; Docker mounts by
+      # destination depth so the parent lands first. It is only used if the
+      # wizard's Storage screen is pointed at a Filesystem blob store on exactly
+      # this path — leave it on "Use data store" and blobs go into the RocksDB
+      # above, which is still on /mnt/data and still correct. Verify which you
+      # got before importing 11.49 GB, not after (docs/deploy.md §8.9).
+      - type: bind
+        source: "${STALWART_BLOB_DIR:-/mnt/data/verder/stalwart/blobs}"
+        target: /var/lib/stalwart/blobs
+        bind: { create_host_path: false }
+    ports:
+      # Bound to loopback like the web app: JMAP reaches the world through the
+      # cloudflared tunnel, never directly.
+      #
+      # Phase 1 touches no MX record and no DNS. It does NOT claim there is no
+      # SMTP listener: 0.16 inserts smtp/25, submissions/465, imaps/993,
+      # pop3s/995, sieve/4190 and https/443 into the registry as safe defaults
+      # the first time it leaves bootstrap mode (crates/common/src/manager/
+      # defaults.rs:466-473). They exist inside the container and NONE of them
+      # is published here, so nothing outside this host can reach them. Deleting
+      # them in /admin is tidier; not publishing them is what makes it safe.
+      - "127.0.0.1:8080:8080"
 
 volumes:
   pgdata:
