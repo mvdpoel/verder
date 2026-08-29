@@ -7,12 +7,10 @@
  * `track-marks.ts` exist.
  *
  * ---------------------------------------------------------------------------
- * Palette — from the `dataviz` skill's reference categorical palette.
+ * THE PALETTE THAT USED TO LIVE HERE IS GONE, and it is worth saying why.
  *
- * The eight hues are assigned in the skill's FIXED slot order to the categories
- * in the order they are stacked (alphabetical with `overig` last — see
- * `outSeries` in packages/api/src/money-series.ts), so stack-adjacency is
- * exactly the adjacent pairlist the palette was validated on:
+ * `CATEGORY_COLOR` held eight categorical hues validated by the `dataviz`
+ * skill against a WHITE surface:
  *
  *   node scripts/validate_palette.js \
  *     "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" \
@@ -21,15 +19,21 @@
  *     worst adjacent CVD ΔE 9.1 PASS · worst adjacent normal-vision ΔE 19.6 PASS
  *     contrast WARN on aqua/yellow/magenta (2.8 / 2.2 / 2.7 against white)
  *
- * That contrast WARN obliges "relief": visible labels or a table view. Both are
- * present — the legend names every band with its total, and the drill panel
- * lists the categories and the bank rows behind them as a table.
+ * The app is no longer on a white surface, and two of that palette's dark steps
+ * (#d95926 orange, #c98500 yellow) land on top of `--color-attn` — which would
+ * spend the one colour this app reserves for "waiting on Martin" on a cost bar.
+ * So `money-chart.tsx` draws the bands in a single-hue steel ramp of its own and
+ * no longer imports a colour from here; the six exports that fed it
+ * (`CATEGORY_COLOR`, `INCOME_INK`, `AFTER_CANCEL_INK`, `GRID_INK`,
+ * `BASELINE_INK`, `MUTED_INK`) had no callers left and are removed rather than
+ * kept as a light-surface palette nothing renders.
  *
- * The app is committed to a single light surface (`bg-slate-50` on <body>,
- * `bg-white` cards; there is no theme toggle and no `dark:` variant anywhere in
- * apps/web), so these are the skill's LIGHT steps. Its dark steps for the same
- * eight hues are recorded beside each one, so adding a theme later is a
- * per-token swap rather than a re-design.
+ * OPEN QUESTION FOR A HUMAN, not a leftover to clean up: the steel ramp is a
+ * SEQUENTIAL scale carrying a CATEGORICAL variable, which is normally wrong. It
+ * holds here only because the stack order is fixed by `CATEGORY_ORDER` and the
+ * legend and the drill table name every band — the same relief the original
+ * palette's contrast WARN already obliged. Re-measuring eight dark hues that
+ * dodge amber, against `--surface "#04070d"`, is the proper fix.
  * ---------------------------------------------------------------------------
  */
 
@@ -38,18 +42,6 @@ export const CATEGORY_ORDER = [
   "energy", "housing", "insurance", "other",
   "software", "streaming", "telecom", "overig",
 ] as const;
-
-/** Slot n of the reference palette → the nth category in stack order. */
-export const CATEGORY_COLOR: Record<string, string> = {
-  energy: "#2a78d6",    // slot 1 blue     (dark step #3987e5)
-  housing: "#eb6834",   // slot 2 orange   (dark step #d95926)
-  insurance: "#1baf7a", // slot 3 aqua     (dark step #199e70)
-  other: "#eda100",     // slot 4 yellow   (dark step #c98500)
-  software: "#e87ba4",  // slot 5 magenta  (dark step #d55181)
-  streaming: "#008300", // slot 6 green    (dark step #008300)
-  telecom: "#4a3aa7",   // slot 7 violet   (dark step #9085e9)
-  overig: "#e34948",    // slot 8 red      (dark step #e66767)
-};
 
 export const CATEGORY_LABEL: Record<string, string> = {
   energy: "energie", housing: "wonen", insurance: "verzekering",
@@ -68,20 +60,6 @@ export const CADENCE_LABEL: Record<string, string> = {
   weekly: "wekelijks", monthly: "maandelijks",
   quarterly: "per kwartaal", yearly: "jaarlijks",
 };
-
-/**
- * Income is not a ninth category — it is the other side of the chart — so it
- * does not take a categorical slot (the skill's rule: a 9th series is never a
- * generated hue). It gets the palette's secondary ink: achromatic, and
- * therefore safe against all eight hues under every kind of colour vision.
- */
-export const INCOME_INK = "#52514e";
-/** Status "good" from the skill's reserved palette; never reused for a series. */
-export const AFTER_CANCEL_INK = "#0ca30c";
-
-export const GRID_INK = "#e1e0d9";
-export const BASELINE_INK = "#c3c2b7";
-export const MUTED_INK = "#898781";
 
 /** Integer-cents euro formatting. No float ever touches the amount. */
 export function euro(cents: number): string {

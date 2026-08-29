@@ -1,18 +1,34 @@
 import { serverCaller } from "@/lib/trpc-server";
 import { SuggestionCard } from "@/components/suggestion-card";
+import { Empty, PageTitle } from "@/components/ui";
 
+/**
+ * Everything on this page is AI output awaiting Martin's verdict, so nothing on
+ * it is allowed to look like a fact already in the record: the cards carry the
+ * system's own cyan, and the page itself stays out of the way — one light
+ * heading, one line of explanation, then the proposals.
+ *
+ * The list keeps a reading measure rather than filling the width. A suggestion
+ * is a form you read and correct, and a 1400px-wide input is not one.
+ */
 export default async function QueuePage() {
   const caller = await serverCaller();
   const pending = await caller.suggestions.list({ status: "pending" });
   const manual = await caller.suggestions.list({ status: "needs-manual" });
   const all = [...pending, ...manual];
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-2">Review queue</h1>
-      <p className="text-slate-600 mb-6">{all.length
-        ? `${all.length} suggestion${all.length > 1 ? "s" : ""} waiting — you decide what becomes part of the record.`
-        : "Queue is empty. Everything's handled — take a breather. ☕"}</p>
-      <ul className="space-y-4 max-w-2xl">{all.map((s) => <SuggestionCard key={s.id} s={s} />)}</ul>
+    <div className="flex max-w-2xl flex-col gap-7">
+      <PageTitle>Review queue</PageTitle>
+      {all.length ? (
+        <>
+          <p className="text-sm font-light leading-relaxed text-ink-mute">
+            {`${all.length} suggestion${all.length > 1 ? "s" : ""} waiting — you decide what becomes part of the record.`}
+          </p>
+          <ul className="flex flex-col gap-4">{all.map((s) => <SuggestionCard key={s.id} s={s} />)}</ul>
+        </>
+      ) : (
+        <Empty title="Queue is empty. Everything's handled — take a breather. ☕" />
+      )}
     </div>
   );
 }

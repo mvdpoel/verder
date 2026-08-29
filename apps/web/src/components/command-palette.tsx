@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
+import { cx, Empty, Label, Micro, Panel } from "@/components/ui";
 import { ENTITY_LABEL } from "@/components/search-kinds";
 import { flatOrder, groupHits, nextIndex, type PaletteHit } from "@/lib/palette";
 
@@ -86,48 +87,83 @@ export function CommandPalette() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/30 p-4" onClick={() => setOpen(false)}>
-      <div className="mx-auto max-w-xl rounded border bg-white shadow-lg"
-        onClick={(e) => e.stopPropagation()}>
-        <input ref={inputRef} value={q}
-          placeholder="Search everything — ⇧Enter for all results"
-          className="w-full border-b p-3 outline-none"
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault();
-              setCursor((c) => nextIndex(flat.length, c, e.key as "ArrowDown" | "ArrowUp"));
-            } else if (e.key === "Enter" && e.shiftKey) {
-              e.preventDefault();
-              seeAll();
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              openHit(flat[cursor]);
-            }
-          }} />
-        <div className="max-h-96 overflow-y-auto p-2">
+    // Same scrim-and-panel as `Dialog`: the palette floats over the whole app,
+    // and the blur is what stops the page behind it competing with the list.
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center p-6 pt-[12vh]"
+      onClick={() => setOpen(false)}
+    >
+      <div className="absolute inset-0 bg-scrim backdrop-blur-[3px]" aria-hidden="true" />
+      <Panel
+        lit
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-xl shadow-[var(--shadow-lift)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/*
+          The focus ring lives on this row rather than on the input: the panel
+          clips its own overflow, so an outline drawn around a full-width input
+          would be cut off on three sides. A cyan underline says the same thing
+          and survives.
+        */}
+        <div className="flex items-center gap-[12px] border-b border-hairline px-[18px] transition-colors focus-within:border-signal/60">
+          <svg
+            width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"
+            className="shrink-0 text-ink-dim" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M16.5 16.5 L21 21" />
+          </svg>
+          <input ref={inputRef} value={q}
+            placeholder="Search everything — ⇧Enter for all results"
+            className="w-full bg-transparent py-[15px] font-display text-[15px] font-light text-ink outline-none placeholder:text-ink-dim"
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                setCursor((c) => nextIndex(flat.length, c, e.key as "ArrowDown" | "ArrowUp"));
+              } else if (e.key === "Enter" && e.shiftKey) {
+                e.preventDefault();
+                seeAll();
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                openHit(flat[cursor]);
+              }
+            }} />
+        </div>
+        <div className="max-h-96 overflow-y-auto p-[10px]">
           {!searching && (
-            <p className="px-2 py-1 text-xs text-slate-500">Recently updated</p>
+            // An untyped palette is not an empty result: it is the shelf of what
+            // moved last, and it says so before the first group.
+            <Micro className="px-[10px] pb-[8px]">Recently updated</Micro>
           )}
           {groups.length === 0 && (
-            <p className="px-2 py-3 text-sm text-slate-500">
-              {results.isFetching || recent.isFetching
-                ? "Searching…"
-                : "Nothing found — try fewer words."}
-            </p>
+            results.isFetching || recent.isFetching ? (
+              <Micro className="px-[10px] py-[16px]">Searching…</Micro>
+            ) : (
+              <div className="px-[6px] py-[8px]">
+                <Empty title="Nothing found — try fewer words." />
+              </div>
+            )
           )}
           {groups.map((g) => (
-            <div key={g.entityType} className="py-1">
-              <p className="px-2 text-xs font-medium text-slate-500">
+            <div key={g.entityType} className="pb-[10px]">
+              <Label className="px-[10px] pb-[6px]">
                 {ENTITY_LABEL[g.entityType as keyof typeof ENTITY_LABEL] ?? g.entityType}
-              </p>
+              </Label>
               <ul>
                 {g.hits.map((h) => {
                   const i = flat.indexOf(h);
                   return (
                     <li key={`${h.entityType}:${h.entityId}`}>
                       <button
-                        className={`w-full rounded px-2 py-1.5 text-left text-sm ${i === cursor ? "bg-slate-100" : ""}`}
+                        className={cx(
+                          "w-full rounded-chip px-[10px] py-[9px] text-left text-[13.5px] font-light transition-colors",
+                          i === cursor
+                            ? "bg-signal/10 text-ink-bright"
+                            : "text-ink-soft hover:text-ink-bright",
+                        )}
                         onMouseEnter={() => setCursor(i)}
                         onClick={() => openHit(h)}>{h.title}</button>
                     </li>
@@ -137,11 +173,15 @@ export function CommandPalette() {
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-slate-500">
-          <span>↑↓ to move · Enter to open · ⇧Enter for all · Esc to close</span>
-          <button className="hover:underline" onClick={seeAll}>see all results →</button>
+        <div className="flex items-center justify-between gap-4 border-t border-hairline px-[18px] py-[12px]">
+          <span className="font-mono text-[10px] tracking-[0.12em] text-ink-dim">
+            ↑↓ to move · Enter to open · ⇧Enter for all · Esc to close
+          </span>
+          <button
+            className="shrink-0 font-mono text-[10px] tracking-[0.16em] uppercase text-signal transition-colors hover:text-signal-link"
+            onClick={seeAll}>see all results →</button>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }

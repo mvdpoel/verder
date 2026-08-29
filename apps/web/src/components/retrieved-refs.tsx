@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Chip, TextLink } from "@/components/ui";
 
 // Entity type → the screen that shows that record. Types with no detail screen
 // (raw emails, parties) render as plain text rather than a dead link.
@@ -30,26 +30,43 @@ function isRefArray(value: unknown): value is Ref[] {
     && typeof (r as Ref).score === "number");
 }
 
-/** What retrieval put in front of the model when this suggestion was built. */
+/**
+ * What retrieval put in front of the model when this suggestion was built.
+ *
+ * Citations are SUPPORTING evidence, so the whole block stays quieter than the
+ * proposal it hangs under: a mono micro disclosure that is closed by default,
+ * scores in the faintest ink there is, and the title carrying the only colour —
+ * cyan, because a citation you can open is the system pointing at itself.
+ */
 export function RetrievedRefs({ refs }: { refs: unknown }) {
   if (!isRefArray(refs) || refs.length === 0) return null;
   return (
     <details>
-      <summary className="cursor-pointer text-sm">
+      <summary className="cursor-pointer font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim transition-colors hover:text-signal">
         The model saw these ({refs.length})
       </summary>
-      <ul className="space-y-2 mt-2">
+      <ul className="mt-[12px] flex flex-col gap-[11px]">
         {refs.map((r) => {
           const href = hrefForEntity(r.entityType, r.entityId);
-          const title = <span className="font-medium">{r.title}</span>;
+          const title = href
+            ? (
+              <TextLink href={href} className="text-[13px] font-light">
+                {r.title}
+              </TextLink>
+            )
+            : <span className="text-[13px] font-light text-ink-soft">{r.title}</span>;
           return (
-            <li key={`${r.entityType}:${r.entityId}`} className="text-xs text-slate-600">
-              <span className="rounded px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">
-                {ENTITY_LABEL[r.entityType] ?? r.entityType}
-              </span>{" "}
-              {href ? <Link href={href} className="underline">{title}</Link> : title}
-              <span className="text-slate-400"> · score {r.score.toFixed(3)}</span>
-              {r.snippet && <p className="text-slate-500 mt-0.5">{r.snippet}</p>}
+            <li key={`${r.entityType}:${r.entityId}`} className="flex flex-col gap-[4px]">
+              <div className="flex flex-wrap items-center gap-[9px]">
+                <Chip tone="faint">{ENTITY_LABEL[r.entityType] ?? r.entityType}</Chip>
+                {title}
+                <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint">
+                  · score {r.score.toFixed(3)}
+                </span>
+              </div>
+              {r.snippet && (
+                <p className="text-xs font-light leading-relaxed text-ink-dim">{r.snippet}</p>
+              )}
             </li>
           );
         })}

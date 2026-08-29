@@ -1,6 +1,7 @@
 import {
   SEARCH_STATUSES, type SearchEntityType, type SearchStatus,
 } from "@verder/core/search/entity-types";
+import type { ChipTone } from "./ui/chip";
 
 // Shared search constants. Deliberately NOT a "use client" module: both the
 // server-rendered /search page and the client command palette import it, and
@@ -10,6 +11,10 @@ import {
 // The import is the /search/entity-types subpath, not the @verder/core barrel:
 // the barrel re-exports hash.ts, whose node:crypto import cannot be resolved in
 // the browser bundle the ⌘K palette pulls this module into.
+//
+// `ChipTone` is imported as a TYPE only, so nothing from components/ui — least
+// of all the "use client" dialog the barrel re-exports — ends up in this
+// module's runtime graph.
 
 export const ENTITY_LABEL: Record<SearchEntityType, string> = {
   document: "Document",
@@ -23,26 +28,44 @@ export const ENTITY_LABEL: Record<SearchEntityType, string> = {
   party: "Party",
 };
 
-export const ENTITY_BADGE: Record<SearchEntityType, string> = {
-  document: "bg-emerald-100 text-emerald-800",
-  entry: "bg-sky-100 text-sky-800",
-  email: "bg-amber-100 text-amber-800",
-  financial_item: "bg-indigo-100 text-indigo-800",
-  debt: "bg-red-100 text-red-700",
-  task: "bg-violet-100 text-violet-800",
-  track: "bg-teal-100 text-teal-800",
-  stop: "bg-orange-100 text-orange-800",
-  party: "bg-slate-100 text-slate-700",
+/**
+ * The tone of the chip carrying a record's TYPE — and it is the same tone for
+ * all nine on purpose.
+ *
+ * This palette spends colour on meaning: amber is "waiting on you", cyan is the
+ * system's own voice, mint is "healthy", steel is "it happened". A record type
+ * is none of those, so the nine-colour rainbow this map used to hold was borrowing
+ * exactly the colours that have to stay reliable elsewhere — an amber chip on
+ * every e-mail hit is enough to make amber stop meaning anything. The chip's own
+ * word ("DOCUMENT", "HALTE") already tells the types apart; the map stays so a
+ * type that ever DOES earn a tone has one place to say so.
+ */
+export const ENTITY_BADGE: Record<SearchEntityType, ChipTone> = {
+  document: "faint",
+  entry: "faint",
+  email: "faint",
+  financial_item: "faint",
+  debt: "faint",
+  task: "faint",
+  track: "faint",
+  stop: "faint",
+  party: "faint",
 };
 
 // Why a result matched — the point is that Martin can see it, not guess it.
 export const MATCH_LABEL: Record<"keyword" | "semantic" | "both", string> = {
   keyword: "keyword", semantic: "semantic", both: "keyword + semantic",
 };
-export const MATCH_BADGE: Record<"keyword" | "semantic" | "both", string> = {
-  keyword: "bg-slate-100 text-slate-600",
-  semantic: "bg-purple-100 text-purple-700",
-  both: "bg-green-100 text-green-700",
+/**
+ * The distinction worth a colour here is whether the MEANING half of the index
+ * had a hand in the hit — that is the system reading rather than matching, and
+ * cyan is the system's voice. A literal keyword hit is unremarkable and stays in
+ * the ink ramp; the labels carry the rest of the difference.
+ */
+export const MATCH_BADGE: Record<"keyword" | "semantic" | "both", ChipTone> = {
+  keyword: "mute",
+  semantic: "signal",
+  both: "signal",
 };
 
 // Statuses are per entity type, so picking one implicitly narrows the results

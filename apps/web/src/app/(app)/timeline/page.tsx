@@ -4,6 +4,7 @@ import { TrackMap } from "@/components/track-map";
 import { STOP_STATE_LABEL, TRACK_STATUS_LABEL, schuldeisersHref, stopHref } from "@/lib/track-marks";
 import { AddTrackForm, TrackEditor } from "@/components/track-editor";
 import { AddStopForm, StopEditor } from "@/components/stop-editor";
+import { Label, Notice, PageTitle, Panel, TextLink } from "@/components/ui";
 
 /**
  * De zaak als verticale metrokaart: het nieuwste bovenaan, per maand omlaag.
@@ -19,7 +20,9 @@ import { AddStopForm, StopEditor } from "@/components/stop-editor";
  *
  * The page OPENS ON WHAT IS WAITING. That block sits above the map because it
  * is the question this page is opened to answer; the map is the context for the
- * answer, not the answer itself.
+ * answer, not the answer itself. It is the page's ONE lit panel and the page's
+ * only amber, for the same reason: on this screen there is exactly one thing
+ * waiting on Martin, and it is that.
  */
 
 export default async function TimelinePage({
@@ -37,12 +40,15 @@ export default async function TimelinePage({
   const shown = map.stops.find((s) => s.id === selected) ?? current;
   const shownTrack = shown ? map.tracks.find((t) => t.id === shown.trackId) : null;
   const shownEvidence = shown ? evidence[shown.id] : null;
+  const currentTrack = current ? map.tracks.find((t) => t.id === current.trackId) : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">De zaak</h1>
-        <p className="mt-1 text-slate-600">
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-3">
+        <PageTitle className="leading-tight">
+          De zaak
+        </PageTitle>
+        <p className="max-w-3xl text-[13.5px] font-light leading-relaxed text-ink-mute">
           Het nieuwste staat bovenaan. De hoofdlijn is hoe de bewindvoering zelf
           is gelopen — van de aanmelding bij Verder tot waar het nu staat. Een
           zijspoor begint zodra er iets binnenkomt — een mail, een telefoontje,
@@ -52,171 +58,202 @@ export default async function TimelinePage({
         </p>
         {/* The setting lives in the URL, same rule as ?stop=, so the view stays
             linkable. The count is said out loud so nothing disappears silently. */}
-        <p className="mt-2 text-sm">
-          <Link href={schuldeisersHref(hideDebtEpisodes, selected)}
-            className="text-slate-600 hover:underline">
+        <p className="font-mono text-[10px] tracking-[0.16em] uppercase">
+          <TextLink
+            href={schuldeisersHref(hideDebtEpisodes, selected)}>
             {hideDebtEpisodes ? "schuldeisersmeldingen tonen" : "schuldeisersmeldingen verbergen"}
-          </Link>
+          </TextLink>
           {hideDebtEpisodes && (
-            <span className="ml-2 text-slate-500">
+            <span className="ml-2 text-ink-dim">
               ({hiddenDebtTrackCount} {hiddenDebtTrackCount === 1 ? "spoor" : "sporen"} verborgen)
             </span>
           )}
         </p>
-      </div>
+      </header>
 
       {/* What is waiting on Martin, said before the map rather than hidden in
           it. The link selects that halte; it never clears the selection, so
           this block always leads somewhere. */}
       {current ? (
-        <Link
-          href={stopHref(current.id, null)}
-          className="block rounded border border-l-4 border-l-green-600 bg-white p-4 hover:bg-slate-50"
-        >
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Waar het nu op wacht
-          </p>
-          <p className="mt-1 font-medium">{current.title}</p>
-          <p className="text-sm text-slate-600">
-            {map.tracks.find((t) => t.id === current.trackId)?.title}
-          </p>
+        <Link href={stopHref(current.id, null)} className="block">
+          <Panel lit className="p-[26px] transition-colors hover:border-signal/40">
+            <Label className="text-attn">Waar het nu op wacht</Label>
+            {/* Spoor above the halte, the way the hero on the dashboard reads:
+                the small line names the context, the big line names the thing. */}
+            <p className="mt-[14px] text-[19px] font-light leading-tight text-signal">
+              {currentTrack?.title}
+            </p>
+            <p className="mt-[5px] text-[34px] font-extralight leading-[1.08] tracking-[-0.015em] text-ink-bright">
+              {current.title}
+            </p>
+          </Panel>
         </Link>
       ) : (
-        <div className="rounded border bg-white p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Waar het nu op wacht
-          </p>
+        <Panel className="p-[26px]">
+          {/* No amber here: nothing is waiting, so the label carries no urgency. */}
+          <Label>Waar het nu op wacht</Label>
           {/* Reports, never judges: nothing open is a state of the case, not a
               gap in the bookkeeping. */}
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-3 max-w-2xl text-[13.5px] font-light leading-relaxed text-ink-mute">
             Er staat op dit moment geen halte open. Zodra er iets binnenkomt of
             je zet een halte op “loopt nog”, staat het hier.
           </p>
-        </div>
+        </Panel>
       )}
 
       <TrackMap map={map} selected={selected} />
 
       {shown && (
-        <section className="rounded border bg-white p-4">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="font-semibold">{shown.title}</h2>
-            <span className="text-sm text-slate-500">
-              {shownTrack?.title} · {STOP_STATE_LABEL[shown.state] ?? shown.state}
-              {shown.happenedAt
-                ? ` · ${new Date(shown.happenedAt).toLocaleDateString("nl-NL")}`
-                : ""}
-            </span>
-            {selected && (
-              <Link href="/timeline" className="ml-auto text-sm text-slate-500 hover:underline">
-                sluiten
-              </Link>
-            )}
-          </div>
-          {shown.note && <p className="mt-2 text-sm text-slate-600">{shown.note}</p>}
-
-          {shown.datesOutOfOrder && (
-            <p className="mt-2 text-sm text-red-700">
-              De datum van deze halte ligt vóór de halte ervoor. De kaart tekent de
-              volgorde zoals hij is ingevoerd — meestal betekent dit dat deze halte
-              op een ander spoor thuishoort.
-            </p>
-          )}
-
-          {/* The third level: the entry, the task, the mail and its files.
-              Derived on read, so it cannot go stale — and REAL links, so this
-              is reachable with a keyboard, the lesson /money's month labels
-              already learned. */}
-          <div className="mt-3 space-y-2 text-sm">
-            {shownEvidence?.entry && (
-              <Link className="block text-slate-600 hover:underline"
-                href={`/logbook/${shownEvidence.entry.id}`}>
-                → logboek: {shownEvidence.entry.summary}
-              </Link>
-            )}
-            {shownEvidence?.task && (
-              <Link className="block text-slate-600 hover:underline"
-                href={`/tasks/${shownEvidence.task.id}`}>
-                → taak: {shownEvidence.task.title} ({shownEvidence.task.status})
-              </Link>
-            )}
-            {/* Not a link: the app has no page for a raw e-mail. The files that
-                came off it are listed under it, and those do have one. */}
-            {shownEvidence?.email && (
-              <p className="text-slate-600">
-                → e-mail: {shownEvidence.email.subject}{" "}
-                <span className="text-xs text-slate-400">
-                  van {shownEvidence.email.fromAddr}
-                </span>
+        <section>
+          <Panel className="p-[26px]">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+              <h2 className="text-[19px] font-light leading-tight text-ink-bright">{shown.title}</h2>
+              <span className="micro">
+                {shownTrack?.title} · {STOP_STATE_LABEL[shown.state] ?? shown.state}
+                {shown.happenedAt
+                  ? ` · ${new Date(shown.happenedAt).toLocaleDateString("nl-NL")}`
+                  : ""}
+              </span>
+              {selected && (
+                <TextLink
+                  href="/timeline"
+                  className="ml-auto font-mono text-[10px] tracking-[0.16em] uppercase">
+                  sluiten
+                </TextLink>
+              )}
+            </div>
+            {shown.note && (
+              <p className="mt-3 max-w-3xl text-[13.5px] font-light leading-relaxed text-ink-mute">
+                {shown.note}
               </p>
             )}
-            {shownEvidence?.documents.map((d) => (
-              <Link key={d.id} className="block text-slate-600 hover:underline"
-                href={`/vault/${d.id}`}>
-                → bestand: {d.title}
-              </Link>
-            ))}
-            {shownEvidence &&
-              !shownEvidence.entry && !shownEvidence.task &&
-              !shownEvidence.email && shownEvidence.documents.length === 0 && (
-              <p className="text-slate-500">
-                Verwacht — nog niets achter deze halte. Zodra er een mail, een taak
-                of een document aan hangt staat het hier.
-              </p>
-            )}
-          </div>
 
-          {/* `links` is only there so a koppeling that falls outside the
-              picker's page of candidates still shows its own name. The editor
-              saves IDs and nothing else. */}
-          <div className="mt-3">
-            {/* keyed on the halte: selecting another one must give a fresh
-                form. Without it React keeps the editor's state across the
-                switch and Opslaan would write the previous halte's title —
-                and now its koppelingen — onto this one. */}
-            <StopEditor key={shown.id} stop={shown} links={shownEvidence ?? null} />
-          </div>
+            {/* Amber, and one of the two places on this page that earns it: a
+                date that contradicts the halte before it is Martin's to fix,
+                and the map will keep drawing it wrong until he does. */}
+            {shown.datesOutOfOrder && (
+              <Notice tone="attn" className="mt-4">
+                De datum van deze halte ligt vóór de halte ervoor. De kaart tekent de
+                volgorde zoals hij is ingevoerd — meestal betekent dit dat deze halte
+                op een ander spoor thuishoort.
+              </Notice>
+            )}
+
+            {/* The third level: the entry, the task, the mail and its files.
+                Derived on read, so it cannot go stale — and REAL links, so this
+                is reachable with a keyboard, the lesson /money's month labels
+                already learned. */}
+            <div className="mt-4 flex flex-col gap-2">
+              {shownEvidence?.entry && (
+                <TextLink
+                  className="block text-[13.5px] font-light"
+                  href={`/logbook/${shownEvidence.entry.id}`}>
+                  → logboek: {shownEvidence.entry.summary}
+                </TextLink>
+              )}
+              {shownEvidence?.task && (
+                <TextLink
+                  className="block text-[13.5px] font-light"
+                  href={`/tasks/${shownEvidence.task.id}`}>
+                  → taak: {shownEvidence.task.title} ({shownEvidence.task.status})
+                </TextLink>
+              )}
+              {/* Not a link: the app has no page for a raw e-mail. The files that
+                  came off it are listed under it, and those do have one. Steel,
+                  not cyan, because cyan on this page is the way onward. */}
+              {shownEvidence?.email && (
+                <p className="text-[13.5px] font-light text-ink-soft">
+                  → e-mail: {shownEvidence.email.subject}{" "}
+                  <span className="micro">van {shownEvidence.email.fromAddr}</span>
+                </p>
+              )}
+              {shownEvidence?.documents.map((d) => (
+                <TextLink
+                  key={d.id}
+                  className="block text-[13.5px] font-light"
+                  href={`/vault/${d.id}`}>
+                  → bestand: {d.title}
+                </TextLink>
+              ))}
+              {shownEvidence &&
+                !shownEvidence.entry && !shownEvidence.task &&
+                !shownEvidence.email && shownEvidence.documents.length === 0 && (
+                <p className="max-w-2xl text-[13px] font-light leading-relaxed text-ink-label">
+                  Verwacht — nog niets achter deze halte. Zodra er een mail, een taak
+                  of een document aan hangt staat het hier.
+                </p>
+              )}
+            </div>
+
+            {/* `links` is only there so a koppeling that falls outside the
+                picker's page of candidates still shows its own name. The editor
+                saves IDs and nothing else. */}
+            <div className="mt-5">
+              {/* keyed on the halte: selecting another one must give a fresh
+                  form. Without it React keeps the editor's state across the
+                  switch and Opslaan would write the previous halte's title —
+                  and now its koppelingen — onto this one. */}
+              <StopEditor key={shown.id} stop={shown} links={shownEvidence ?? null} />
+            </div>
+          </Panel>
         </section>
       )}
 
       {/* TrackMap draws nothing when there is no hoofdlijn, so the page — not
-          the drawing — is what says why. */}
+          the drawing — is what says why. This block is deliberately NOT amber:
+          it reports what the drawing could not resolve, which is a fact about
+          the map and not a job sitting in Martin's queue. */}
       {map.problems.length > 0 && (
-        <section className="rounded border border-amber-300 bg-amber-50 p-4">
-          <h2 className="font-semibold">Wat de kaart niet kon tekenen</h2>
-          <ul className="mt-2 space-y-1 text-sm text-slate-700">
-            {map.problems.map((p, n) => <li key={n}>{p.detail}</li>)}
-          </ul>
+        <section>
+          <Panel className="p-[26px]">
+            <Label as="h2">Wat de kaart niet kon tekenen</Label>
+            <ul className="mt-3 flex flex-col gap-2">
+              {map.problems.map((p, n) => (
+                <li key={n} className="text-[13px] font-light leading-relaxed text-ink-mute">
+                  {p.detail}
+                </li>
+              ))}
+            </ul>
+          </Panel>
         </section>
       )}
 
-      <section className="rounded border bg-white p-4">
-        <h2 className="font-semibold">Sporen</h2>
-        <ul className="mt-2 space-y-2">
-          {map.tracks.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-baseline gap-2 text-sm">
-              <span className="font-medium">{t.title}</span>
-              <span className="text-slate-500">
-                {t.parentTrackId === null
-                  ? "hoofdlijn"
-                  : t.mergesBack
-                    ? "komt terug op de hoofdlijn"
-                    : "eindigt op zichzelf"}
-                {/* The status in words. The map draws afgerond and geëindigd
-                    with different caps, and this is where that difference is
-                    readable without a mouse — they are different facts and the
-                    spoor editor asks Martin to choose between them. */}
-                {" · "}
-                {TRACK_STATUS_LABEL[t.status] ?? t.status}
-              </span>
-              <span className="ml-auto flex flex-wrap gap-2">
-                <AddStopForm trackId={t.id} />
-                <TrackEditor track={t} stops={map.stops} />
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3"><AddTrackForm stops={map.stops} /></div>
+      <section>
+        <Panel className="p-[26px]">
+          <Label as="h2">Sporen</Label>
+          <ul className="mt-3">
+            {map.tracks.map((t) => (
+              <li key={t.id} className="border-b border-hairline py-[13px] last:border-0">
+                {/* A div and not a span around the two editors: both expand into
+                    a block form in place, and a block inside a span is not
+                    something a browser is obliged to lay out sanely. */}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                  <span className="text-sm text-ink-soft">{t.title}</span>
+                  {/* A span and not <Micro>: this sits on the same baseline as
+                      the title, and Micro is a block. */}
+                  <span className="micro">
+                    {t.parentTrackId === null
+                      ? "hoofdlijn"
+                      : t.mergesBack
+                        ? "komt terug op de hoofdlijn"
+                        : "eindigt op zichzelf"}
+                    {/* The status in words. The map draws afgerond and geëindigd
+                        with different caps, and this is where that difference is
+                        readable without a mouse — they are different facts and the
+                        spoor editor asks Martin to choose between them. */}
+                    {" · "}
+                    {TRACK_STATUS_LABEL[t.status] ?? t.status}
+                  </span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <AddStopForm trackId={t.id} />
+                    <TrackEditor track={t} stops={map.stops} />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4"><AddTrackForm stops={map.stops} /></div>
+        </Panel>
       </section>
     </div>
   );

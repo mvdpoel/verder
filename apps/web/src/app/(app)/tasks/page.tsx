@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { TaskList } from "@/components/task-list";
+import { buttonClass, PageTitle, Panel, Tabs } from "@/components/ui";
 
 const TABS = [
   ["open", "Open"],
@@ -16,26 +17,25 @@ export default async function TasksPage({ searchParams }: {
   const caller = await serverCaller();
   const tasks = await caller.tasks.list({ filter: tab });
 
-  const tabClass = (active: boolean) =>
-    `rounded px-3 py-1.5 text-sm ${active ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`;
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Tasks</h1>
-        <Link href="/tasks/new" className="rounded bg-slate-900 text-white px-4 py-2">+ Add</Link>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-[10px]">
+          <PageTitle>Tasks</PageTitle>
+          <p className="max-w-lg text-[13.5px] font-light leading-relaxed text-ink-mute">
+            One step at a time — every task here has a tamper-proof status trail.
+          </p>
+        </div>
+        {/* The one thing to press on this screen, so the one glowing button. */}
+        <Link href="/tasks/new" className={buttonClass("primary")}>+ Add</Link>
       </div>
-      <p className="text-slate-600">
-        One step at a time — every task here has a tamper-proof status trail.
-      </p>
-      <nav className="flex gap-2 border-b pb-2">
-        {TABS.map(([key, label]) => (
-          <Link key={key} href={`/tasks?tab=${key}`} className={tabClass(tab === key)}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <TaskList tasks={tasks} />
+      <Tabs
+        items={TABS.map(([key, label]) => ({ key, label, href: `/tasks?tab=${key}` }))}
+        active={tab}
+      />
+      <Panel lit className="p-[26px]">
+        <TaskList tasks={tasks} />
+      </Panel>
     </div>
   );
 }

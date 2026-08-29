@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Button, Empty, Field, Input, Label, Micro, Notice, Panel, Row } from "@/components/ui";
 
 /**
  * Passkeys are named by hand because nothing can name them automatically:
@@ -45,50 +46,61 @@ export function PasskeyManager() {
     refetch();
   }
 
+  const empty = !isPending && (passkeys?.length ?? 0) === 0;
+
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Je passkeys</h2>
-      <p className="text-sm text-slate-600">
-        Een passkey is de vingerafdruk of Face ID van dit apparaat. Er valt niets te
-        onthouden en niets te verliezen aan een phishingmail.
-      </p>
+    <Panel lit className="p-[26px]">
+      <div className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-[10px]">
+          <Label as="h2">Je passkeys</Label>
+          <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
+            Een passkey is de vingerafdruk of Face ID van dit apparaat. Er valt niets te
+            onthouden en niets te verliezen aan een phishingmail.
+          </p>
+        </div>
 
-      {isPending && <p className="text-sm text-slate-500">Laden…</p>}
+        {isPending && <Micro>Laden…</Micro>}
 
-      {!isPending && (passkeys?.length ?? 0) === 0 && (
-        <p className="text-sm text-slate-500">Nog geen passkeys. Voeg er hieronder een toe.</p>
-      )}
+        {empty && <Empty title="Nog geen passkeys. Voeg er hieronder een toe." />}
 
-      <ul className="divide-y border rounded">
-        {passkeys?.map((pk) => (
-          <li key={pk.id} className="flex items-center justify-between p-3">
-            <span>
-              <span className="font-medium">{pk.name ?? "Naamloos apparaat"}</span>
-              <span className="block text-xs text-slate-500">
-                toegevoegd {pk.createdAt ? new Date(pk.createdAt).toLocaleDateString("nl-NL") : "—"}
-              </span>
-            </span>
-            <button onClick={() => remove(pk.id)} className="text-sm text-red-600 underline">
-              Verwijderen
-            </button>
-          </li>
-        ))}
-      </ul>
+        {!empty && (
+          // `Row as="li"`: the rows are the list's own children, so the hairline
+          // it draws under all but the last one lands where it is meant to.
+          <ul className="flex flex-col">
+            {passkeys?.map((pk) => (
+              <Row
+                as="li"
+                key={pk.id}
+                state="done"
+                title={pk.name ?? "Naamloos apparaat"}
+                kicker={`toegevoegd ${pk.createdAt ? new Date(pk.createdAt).toLocaleDateString("nl-NL") : "—"}`}
+                meta={
+                  <Button variant="danger" size="sm" onClick={() => remove(pk.id)}>
+                    Verwijderen
+                  </Button>
+                }
+              />
+            ))}
+          </ul>
+        )}
 
-      <div className="flex gap-2">
-        <input
-          className="flex-1 border rounded p-2" placeholder="Naam, bijv. MacBook of iPhone"
-          value={name} onChange={(e) => setName(e.target.value)}
-        />
-        <button
-          onClick={add} disabled={busy}
-          className="rounded bg-slate-900 text-white px-4 disabled:opacity-50"
-        >
-          Passkey toevoegen
-        </button>
+        <div className="flex flex-col gap-[10px] sm:flex-row sm:items-end">
+          {/* The placeholder became the label: a placeholder disappears on the
+              first keystroke, and then the field has no name on it. */}
+          <Field className="grow" label="Naam, bijv. MacBook of iPhone" htmlFor="passkey-name">
+            <Input id="passkey-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Button variant="primary" onClick={add} disabled={busy}>
+            Passkey toevoegen
+          </Button>
+        </div>
+
+        {error && (
+          <div role="alert">
+            <Notice tone="attn">{error}</Notice>
+          </div>
+        )}
       </div>
-
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </section>
+    </Panel>
   );
 }

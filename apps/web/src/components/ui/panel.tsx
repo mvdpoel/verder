@@ -2,6 +2,16 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cx } from "./cx";
 
 /**
+ * The elements a box in this system is allowed to be. Deliberately a closed
+ * list and not `ElementType`: a landmark, a list item or a plain div covers
+ * every case on these screens, and anything wider invites a `<Panel as="a">`
+ * that would need its own focus and hover behaviour to be honest.
+ */
+type BoxElement = "div" | "section" | "article" | "aside" | "li";
+/** The elements a small-caps label is allowed to be — see `Label`. */
+type LabelElement = "div" | "h1" | "h2" | "h3" | "h4" | "legend" | "span";
+
+/**
  * The glass panel — the only box in this system. `.panel` lives in globals.css
  * because the gradient and the two-tone border do not write themselves sanely as
  * separate utilities.
@@ -9,23 +19,45 @@ import { cx } from "./cx";
  * `lit` turns on the light streak along the top edge. That is for the panel that
  * LEADS the page — one per screen. On everything it stops being an accent and
  * becomes wallpaper.
+ *
+ * `as` exists because a panel is very often a landmark: three sections on
+ * /money and two blocks on /registry were written as a bare
+ * `<section className="panel …">` purely because this component could only be a
+ * `<div>`, and a hand-copied `.panel` class is a panel that stops tracking this
+ * one the moment the gradient changes.
  */
 export function Panel({
+  as: Element = "div",
   lit = false,
   className,
   children,
   ...rest
-}: HTMLAttributes<HTMLDivElement> & { lit?: boolean }) {
+}: HTMLAttributes<HTMLElement> & { as?: BoxElement; lit?: boolean }) {
   return (
-    <div className={cx("panel overflow-hidden", lit && "panel-edge", className)} {...rest}>
+    <Element className={cx("panel overflow-hidden", lit && "panel-edge", className)} {...rest}>
       {children}
-    </div>
+    </Element>
   );
 }
 
-/** The small caps label above a block. */
-export function Label({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx("lbl", className)}>{children}</div>;
+/**
+ * The small caps label above a block.
+ *
+ * `as` is what keeps the look and the document outline from being mutually
+ * exclusive. Most block titles in this app ARE headings, and a screen reader
+ * navigates by them — so before this prop existed every one of them was written
+ * as a raw `<h2 className="lbl">` against the globals.css class, which is the
+ * same style spelled a second way in twenty files. `as="legend"` covers the
+ * fieldset case for the same reason.
+ */
+export function Label({
+  as: Element = "div", className, children,
+}: {
+  as?: LabelElement;
+  className?: string;
+  children: ReactNode;
+}) {
+  return <Element className={cx("lbl", className)}>{children}</Element>;
 }
 
 /** Mono micro: dates, channels, statuses — everything that has been measured. */
@@ -37,10 +69,15 @@ export function Micro({ className, children }: { className?: string; children: R
  * A panel's head: label left, the way onward right. Same height everywhere, so
  * panels sitting next to each other start on one line.
  */
-export function PanelHead({ label, aside }: { label: ReactNode; aside?: ReactNode }) {
+export function PanelHead({ label, labelAs, aside }: {
+  label: ReactNode;
+  /** Forwarded to `Label` — a panel's title is usually a real heading. */
+  labelAs?: LabelElement;
+  aside?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between">
-      <Label>{label}</Label>
+      <Label as={labelAs}>{label}</Label>
       {aside ? (
         <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-signal">{aside}</div>
       ) : null}

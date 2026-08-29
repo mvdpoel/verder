@@ -3,6 +3,7 @@ import { serverCaller } from "@/lib/trpc-server";
 import { MoneyChart } from "@/components/money-chart";
 import { euro } from "@/components/money-format";
 import { DASHBOARD_MONTHS, dashboardMoneySlice } from "@/lib/dashboard-money-slice";
+import { Empty, Label, Panel, PanelHead } from "@/components/ui";
 
 /**
  * The money block on the dashboard: half a year of one account, in and out,
@@ -23,16 +24,17 @@ export async function DashboardMoney() {
 
   if (!slice) {
     return (
-      <section>
-        <h2 className="mb-2 font-semibold">Geld in en uit</h2>
-        <p className="text-sm text-slate-500">
-          Nog geen afschriften ingelezen —{" "}
-          <Link className="hover:underline" href="/registry/import">
-            importeer een bankafschrift
-          </Link>{" "}
-          en dit overzicht bouwt zichzelf op.
-        </p>
-      </section>
+      <Panel className="p-[26px]">
+        <div className="flex flex-col gap-4">
+          <Label as="h2">Geld in en uit</Label>
+          <Empty title="Nog geen afschriften ingelezen">
+            <Link className="text-signal hover:text-signal-link" href="/registry/import">
+              importeer een bankafschrift
+            </Link>{" "}
+            en dit overzicht bouwt zichzelf op.
+          </Empty>
+        </div>
+      </Panel>
     );
   }
 
@@ -43,30 +45,35 @@ export async function DashboardMoney() {
   const shown = { ...slice.account, months: slice.months, projected: [] };
 
   return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="font-semibold">Geld in en uit</h2>
-        <Link className="text-sm text-slate-500 hover:underline" href="/money">
-          alle maanden en rekeningen →
+    <Panel className="p-[26px]">
+      <div className="flex flex-col gap-4">
+        <PanelHead
+          labelAs="h2"
+          label="Geld in en uit"
+          aside={
+            <Link className="hover:text-signal-link" href="/money">
+              alle maanden en rekeningen →
+            </Link>
+          }
+        />
+        {/* One link around the block, so the compact chart carries no links of
+            its own — see MoneyChart's `compact` prop. */}
+        <Link href="/money" className="flex flex-col gap-3">
+          <div className="micro truncate" title={accountName}>
+            {accountName} ·{" "}
+            {slice.months.length === 1
+              ? "laatste maand"
+              : `laatste ${Math.min(DASHBOARD_MONTHS, slice.months.length)} maanden`}
+          </div>
+          <MoneyChart series={[shown]} accountLabels={accountLabels} compact />
+          {/* The month's own figures, mono and tabular so the two amounts line
+              up under each other from one render to the next. */}
+          <div className="font-mono text-[10px] tracking-[0.12em] tabular-nums text-ink-dim">
+            {last.month}: {euro(last.inCents)} vast inkomen · {euro(last.outCents)} uitgaven
+            {last.coverage !== "complete" && " · mogelijk incompleet"}
+          </div>
         </Link>
       </div>
-      {/* One link around the block, so the compact chart carries no links of
-          its own — see MoneyChart's `compact` prop. */}
-      <Link href="/money" className="block rounded border bg-white p-4 hover:bg-slate-50">
-        <p className="truncate text-xs text-slate-500" title={accountName}>
-          {accountName} ·{" "}
-          {slice.months.length === 1
-            ? "laatste maand"
-            : `laatste ${Math.min(DASHBOARD_MONTHS, slice.months.length)} maanden`}
-        </p>
-        <div className="mt-2">
-          <MoneyChart series={[shown]} accountLabels={accountLabels} compact />
-        </div>
-        <p className="mt-2 text-xs text-slate-500" style={{ fontVariantNumeric: "tabular-nums" }}>
-          {last.month}: {euro(last.inCents)} vast inkomen · {euro(last.outCents)} uitgaven
-          {last.coverage !== "complete" && " · mogelijk incompleet"}
-        </p>
-      </Link>
-    </section>
+    </Panel>
   );
 }

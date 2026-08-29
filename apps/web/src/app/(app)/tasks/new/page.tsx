@@ -1,11 +1,12 @@
 import { TaskForm } from "@/components/task-form";
 import { taskFormOptions } from "../form-options";
+import { PageTitle } from "@/components/ui";
 
 export default async function NewTaskPage() {
   const options = await taskFormOptions();
   return (
-    <div className="max-w-xl space-y-4">
-      <h1 className="text-2xl font-bold">Add a task</h1>
+    <div className="flex max-w-xl flex-col gap-6">
+      <PageTitle>Add a task</PageTitle>
       <TaskForm options={options} />
     </div>
   );

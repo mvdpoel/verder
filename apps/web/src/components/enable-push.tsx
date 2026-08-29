@@ -1,5 +1,6 @@
 "use client";
 import { trpc } from "@/lib/trpc-client";
+import { Button } from "@/components/ui";
 
 // pushManager.subscribe wants the VAPID key as raw bytes in older browsers;
 // converting the base64url string is universally safe.
@@ -17,12 +18,14 @@ export function EnablePush() {
   const subscribe = trpc.push.subscribe.useMutation();
   if (!key.data) return null;
   return (
-    <button className="rounded border px-3 py-1 text-sm" onClick={async () => {
+    // Ghost, never primary: this sits on the dashboard next to the one thing
+    // that screen actually wants pressed, and a second glow cancels the first.
+    <Button variant="ghost" size="sm" onClick={async () => {
       const reg = await navigator.serviceWorker.register("/sw.js");
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key.data!) });
       const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
       subscribe.mutate(json);
-    }}>🔔 Notify me when something needs review</button>
+    }}>🔔 Notify me when something needs review</Button>
   );
 }

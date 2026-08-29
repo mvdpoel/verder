@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Button, Field, Input, Label, Notice, Panel } from "@/components/ui";
 
 /**
  * The seed script skips a user that already exists, so without this form the
@@ -50,46 +51,59 @@ export function ChangePassword() {
   }
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Wachtwoord wijzigen</h2>
-      <p className="text-sm text-slate-600">
-        Het wachtwoord is je terugvaloptie als je geen passkey bij de hand hebt. Minstens
-        12 tekens.
-      </p>
-      <form className="space-y-3 max-w-sm" onSubmit={submit}>
-        {/*
-          Visible labels, not placeholders. A placeholder disappears on the first
-          keystroke, so a filled-in form shows two identical dot-rows with nothing
-          saying which is which — and this form is reached most often by someone
-          who has just been handed a new password, i.e. exactly the person who
-          will read it as "new" + "confirm" and be told their password is wrong.
-        */}
-        <div>
-          <label htmlFor="current-password" className="block text-sm font-medium text-slate-700 mb-1">
-            Huidig wachtwoord
-          </label>
-          <input
-            id="current-password"
-            className="w-full border rounded p-2" type="password"
-            autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)}
-          />
+    <Panel className="p-[26px]">
+      <div className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-[10px]">
+          <Label as="h2">Wachtwoord wijzigen</Label>
+          <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
+            Het wachtwoord is je terugvaloptie als je geen passkey bij de hand hebt. Minstens
+            12 tekens.
+          </p>
         </div>
-        <div>
-          <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1">
-            Nieuw wachtwoord <span className="font-normal text-slate-500">(minstens 12 tekens)</span>
-          </label>
-          <input
-            id="new-password"
-            className="w-full border rounded p-2" type="password"
-            autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)}
-          />
-        </div>
-        <button disabled={busy} className="rounded bg-slate-900 text-white px-4 py-2 disabled:opacity-50">
-          Wachtwoord wijzigen
-        </button>
-      </form>
-      {message && <p className="text-green-700 text-sm">{message}</p>}
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </section>
+
+        <form className="flex max-w-sm flex-col gap-[14px]" onSubmit={submit}>
+          {/*
+            Visible labels, not placeholders. A placeholder disappears on the first
+            keystroke, so a filled-in form shows two identical dot-rows with nothing
+            saying which is which — and this form is reached most often by someone
+            who has just been handed a new password, i.e. exactly the person who
+            will read it as "new" + "confirm" and be told their password is wrong.
+          */}
+          <Field label="Huidig wachtwoord" htmlFor="current-password">
+            <Input
+              id="current-password" type="password"
+              autoComplete="current-password" value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </Field>
+          <Field
+            label={<>Nieuw wachtwoord <span className="text-ink-dim">(minstens 12 tekens)</span></>}
+            htmlFor="new-password"
+          >
+            <Input
+              id="new-password" type="password"
+              autoComplete="new-password" value={next}
+              onChange={(e) => setNext(e.target.value)}
+            />
+          </Field>
+          {/* Ghost, not primary: the one glowing button on this screen adds a
+              passkey. `Button` defaults to type="button", so a submit says so. */}
+          <Button type="submit" disabled={busy} className="self-start">
+            Wachtwoord wijzigen
+          </Button>
+        </form>
+
+        {message && (
+          <div role="status">
+            <Notice tone="ok">{message}</Notice>
+          </div>
+        )}
+        {error && (
+          <div role="alert">
+            <Notice tone="attn">{error}</Notice>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
+import { buttonClass, Empty, Notice, PageTitle, TextLink } from "@/components/ui";
 import { SearchFilters } from "@/components/search-filters";
 import { SearchResults } from "@/components/search-results";
 import {
@@ -21,10 +22,12 @@ export default async function SearchPage({ searchParams }: {
   const notice = result ? semanticNotice(result) : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Search</h1>
-        <p className="text-slate-600 mt-1">
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-[10px]">
+        <PageTitle>
+          Search
+        </PageTitle>
+        <p className="max-w-2xl text-[14.5px] font-light leading-relaxed text-ink-mute">
           Everything in the dossier — documents, logbook, e-mail, registry, tasks
           — in one place. Every result says why it matched.
         </p>
@@ -33,34 +36,34 @@ export default async function SearchPage({ searchParams }: {
       <SearchFilters parsed={parsed}
         parties={parties.map((p) => ({ id: p.id, name: p.name }))} />
 
-      {notice && (
-        <p className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
-          {notice}
-        </p>
-      )}
+      {/*
+        Half the index being unreachable is the system reporting on itself, not
+        something waiting on Martin — the notice says in so many words that
+        nothing is lost — so it is cyan and never amber.
+      */}
+      {notice && <Notice tone="signal">{notice}</Notice>}
 
       {result ? (
         <>
           <SearchResults hits={result.hits} />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-[18px]">
             {result.nextCursor && (
-              <Link className="inline-block rounded border px-4 py-2 hover:bg-slate-100"
+              <Link className={buttonClass("ghost", "sm")}
                 href={buildSearchHref(parsed, { cursor: result.nextCursor })}>
                 More results →
               </Link>
             )}
             {parsed.cursor && (
-              <Link className="text-sm text-slate-500 hover:underline"
+              <TextLink
+                className="font-mono text-[10px] tracking-[0.14em] uppercase"
                 href={buildSearchHref(parsed, { cursor: null })}>
                 back to the first page
-              </Link>
+              </TextLink>
             )}
           </div>
         </>
       ) : (
-        <p className="text-slate-500">
-          Type something above — or press ⌘K anywhere in the app.
-        </p>
+        <Empty title="Type something above — or press ⌘K anywhere in the app." />
       )}
     </div>
   );

@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@verder/api";
 import {
-  AFTER_CANCEL_INK, BASELINE_INK, CATEGORY_COLOR, CATEGORY_LABEL, CATEGORY_ORDER,
-  GRID_INK, INCOME_INK, MUTED_INK, euro, euroShort, monthLabel,
+  CATEGORY_LABEL, CATEGORY_ORDER, euro, euroShort, monthLabel,
 } from "./money-format";
 import { moneyColumns } from "@/lib/money-columns";
 import {
   accountBoundaries, accountSpans, columnKey, columnMarks, drillHref, legendHref,
 } from "@/lib/money-marks";
+import { Panel, TOKEN } from "@/components/ui";
 
 /**
  * The /money chart. Inline SVG, no chart library — the web app has no runtime
@@ -28,9 +29,58 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 type MoneySeriesOutput = RouterOutputs["money"]["series"];
 export type AccountSeries = MoneySeriesOutput["series"][number];
 
-const GRID = GRID_INK;
-const BASELINE = BASELINE_INK;
-const MUTED = MUTED_INK;
+/**
+ * The chart's palette, out of `TOKEN` — the one place the drawing colours live,
+ * shared with the map on /timeline. An SVG `fill` chosen in JS cannot be a
+ * Tailwind class, and this file used to carry its own transcription of the token
+ * list; so did `track-map.tsx`, and two transcriptions of one palette is how a
+ * palette starts drifting.
+ *
+ * Money coming IN is the system's own cyan; money going OUT is steel, the
+ * colour this app uses for "it happened". Spending is deliberately NOT amber:
+ * amber says one thing here — something is waiting on Martin — and a cost bar
+ * is not that.
+ *
+ * The eight cost bands used to be eight validated categorical hues on a white
+ * surface (the palette and its measurements are still recorded in
+ * `money-format.ts`). Two of those hues, the orange and the yellow, land on top
+ * of `--color-attn` on this field and would spend the one colour the app
+ * reserves — so on the dark ground the bands become a single-hue steel ramp,
+ * lightest at the bottom of the stack and darkest at the top. Identity then
+ * comes from the legend, which names every band with its total, and from the
+ * drill table under the chart. Both were already there: the original palette
+ * carried a contrast warning that obliged exactly the same relief.
+ */
+const BAND_INK: Record<string, string> = {
+  energy: TOKEN.inkSoft,
+  housing: TOKEN.steel,
+  insurance: "#a1c2da", // between steel and steel-dim; the ramp needs a step here
+  other: TOKEN.steelDim,
+  software: "#7a9fbb", // between steel-dim and ink-faint
+  streaming: "#6a8ba7", // idem
+  telecom: "#5b7793", // idem
+  overig: TOKEN.inkFaint,
+};
+
+const INCOME_INK = TOKEN.signal;
+const OUT_INK = TOKEN.steelDim;
+/** The footnote calls it green; the token calls it okay. Same colour. */
+const AFTER_CANCEL_INK = TOKEN.okay;
+/** A band the reader has asked to look past: steel, but far enough back to be read past. */
+const DIMMED_INK = `${TOKEN.steelDim}30`;
+const GRID = TOKEN.edge;
+const BASELINE = TOKEN.edgeStrong;
+/** Axis names and specifications; the token comment for ink-faint says so literally. */
+const AXIS_INK = TOKEN.inkFaint;
+const MUTED = TOKEN.inkDim;
+/**
+ * The hatch is the GROUND, scoring the bar away. On the old white surface it
+ * was white for the same reason; inverting the page inverts the hatch, and a
+ * light hatch here would read as a band of its own rather than as an absence.
+ */
+const HATCH_INK = TOKEN.void;
+/** The selected column's wash. Cyan, because selection is the system answering. */
+const SELECTED_INK = TOKEN.signal;
 
 // Geometry. Pixels, not money. Two sizes of the same chart: the full one on
 // /money and a compact one on the dashboard — a second chart implementation
@@ -122,8 +172,19 @@ export function MoneyChart({
 
   const x = (i: number) => AXIS_W + i * COL_W;
 
+  /*
+   * The chart is what /money leads with, so there it is that page's one lit
+   * panel. On the dashboard the block around it is already a panel, so the
+   * compact form is a bare div — glass inside glass doubles the gradient.
+   *
+   * The full form goes through `Panel lit` rather than writing `.panel
+   * panel-edge` out by hand: a copied class list is a panel that stops tracking
+   * the primitive the moment the gradient changes.
+   */
+  const Frame = compact ? PlainFrame : LitPanelFrame;
+
   return (
-    <div className={compact ? "" : "rounded border bg-white p-4"}>
+    <Frame>
       <div className="overflow-x-auto">
         <div style={{ width }}>
           {/* Account strip. The bewind handover is a boundary, never a line
@@ -133,13 +194,13 @@ export function MoneyChart({
               the block around it, so the strip only appears there when there
               is actually a boundary to explain. */}
           {(!compact || spans.length > 1) && (
-          <div className="flex text-xs" style={{ paddingLeft: AXIS_W }}>
+          <div className="flex" style={{ paddingLeft: AXIS_W }}>
             {spans.map((s) => (
               <div
                 key={`${s.account}-${s.from}`}
                 style={{ width: s.count * COL_W }}
-                className={`truncate px-1 pb-1 font-medium text-slate-600 ${
-                  s.from > 0 ? "border-l border-slate-300" : ""
+                className={`lbl truncate px-1 pb-[6px] ${
+                  s.from > 0 ? "border-l border-edge" : ""
                 }`}
                 title={accountName(s.account)}
               >
@@ -167,7 +228,7 @@ export function MoneyChart({
                 patternUnits="userSpaceOnUse"
                 patternTransform="rotate(45)"
               >
-                <line x1="0" y1="0" x2="0" y2="6" stroke="#ffffff" strokeWidth="2.5" />
+                <line x1="0" y1="0" x2="0" y2="6" stroke={HATCH_INK} strokeWidth="2.5" />
               </pattern>
             </defs>
 
@@ -185,9 +246,10 @@ export function MoneyChart({
                   x={AXIS_W - 8}
                   y={BASE_Y - h(t) + 4}
                   textAnchor="end"
-                  fontSize="10"
-                  fill={MUTED}
-                  style={{ fontVariantNumeric: "tabular-nums" }}
+                  fontSize="9.5"
+                  fill={AXIS_INK}
+                  className="font-mono"
+                  style={{ fontVariantNumeric: "tabular-nums", letterSpacing: "0.06em" }}
                 >
                   {euroShort(t)}
                 </text>
@@ -201,7 +263,7 @@ export function MoneyChart({
                 x2={x(i)}
                 y1={TOP_PAD - 6}
                 y2={BASE_Y}
-                stroke={MUTED}
+                stroke={AXIS_INK}
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
@@ -229,16 +291,18 @@ export function MoneyChart({
                       x2={left + COL_W / 2}
                       y1={TOP_PAD}
                       y2={BASE_Y}
-                      stroke={GRID}
+                      stroke={BASELINE}
                       strokeWidth="1"
                       strokeDasharray="2 4"
                     />
                     <text
                       x={left + COL_W / 2}
                       y={BASE_Y - 8}
-                      fontSize="10"
+                      fontSize="9.5"
                       fill={MUTED}
                       textAnchor="start"
+                      className="font-mono"
+                      style={{ letterSpacing: "0.12em" }}
                       transform={`rotate(-90 ${left + COL_W / 2} ${BASE_Y - 8})`}
                     >
                       geen data
@@ -257,8 +321,8 @@ export function MoneyChart({
                     y={TOP_PAD - 6}
                     width={COL_W - 2}
                     height={PLOT_H + 6}
-                    fill="#0b0b0b"
-                    opacity="0.05"
+                    fill={SELECTED_INK}
+                    opacity="0.07"
                   />
                 );
               }
@@ -296,6 +360,10 @@ export function MoneyChart({
                           height={markH}
                           rx="4"
                           fill={`url(#${hatchId})`}
+                          /* The hatch dims with the bar it scores. It is the
+                             ground colour now, so at full strength on a dimmed
+                             bar it would be the loudest thing in the column. */
+                          opacity={mark.dimmed ? 0.35 : 1}
                         />
                       )}
                       <title>
@@ -313,7 +381,7 @@ export function MoneyChart({
                         width={BAR_W}
                         height={Math.max(1, markH - SEG_GAP)}
                         rx="2"
-                        fill={mark.dimmed ? GRID : (CATEGORY_COLOR[mark.category] ?? MUTED)}
+                        fill={mark.dimmed ? DIMMED_INK : (BAND_INK[mark.category] ?? OUT_INK)}
                       />
                       {mark.hatched && (
                         <rect
@@ -344,6 +412,7 @@ export function MoneyChart({
                         stroke={INCOME_INK}
                         strokeWidth="1.5"
                         strokeDasharray="4 3"
+                        opacity="0.75"
                       />
                       <title>
                         {`${monthLabel(col.month)} — verwacht vast inkomen ${euro(mark.cents)}`}
@@ -360,9 +429,10 @@ export function MoneyChart({
                         height={markH}
                         rx="4"
                         fill="none"
-                        stroke={MUTED}
+                        stroke={OUT_INK}
                         strokeWidth="1.5"
                         strokeDasharray="4 3"
+                        opacity="0.75"
                       />
                       <title>
                         {`${monthLabel(col.month)} — verwachte vaste lasten ${euro(mark.cents)}`}
@@ -409,17 +479,16 @@ export function MoneyChart({
                 (selected.account ?? null) === (col.account ?? null);
               const href = drillHref(col, { compact, focusCategory });
               const className =
-                `block truncate px-1 py-1 text-center text-[10px] ${
-                  href ? "hover:bg-slate-100" : ""
-                } ${boundaries.includes(i) ? "border-l border-slate-300" : ""} ${
-                  isSelected ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-500"
+                `block truncate px-1 py-[6px] text-center font-mono text-[9.5px] tracking-[0.12em] uppercase transition-colors ${
+                  href ? "hover:text-signal" : ""
+                } ${boundaries.includes(i) ? "border-l border-edge" : ""} ${
+                  isSelected ? "bg-signal/10 text-ink-bright" : "text-ink-dim"
                 } ${col.kind === "projected" ? "italic" : ""}`;
               return href == null ? (
                 <span
                   key={columnKey(col)}
                   style={{ width: COL_W }}
-                  className={className}
-                >
+                  className={className}>
                   {monthLabel(col.month)}
                 </span>
               ) : (
@@ -427,8 +496,7 @@ export function MoneyChart({
                   key={columnKey(col)}
                   href={href}
                   style={{ width: COL_W }}
-                  className={className}
-                >
+                  className={className}>
                   {monthLabel(col.month)}
                 </Link>
               );
@@ -439,17 +507,18 @@ export function MoneyChart({
 
       {/* Legend. Identity is never colour alone: every band is named, and its
           total over the shown months is spelled out — which is also the relief
-          the palette's contrast warning asks for.
+          the palette's contrast warning asks for, and the relief a single-hue
+          ramp needs even more.
 
           The compact block leaves it out on purpose: it is a pointer to
           /money, and colour without a name is not identity, so the dashboard
           block names the account and nothing else, and /money — one click
           away — is where a band gets a name and a number. */}
       {!compact && (
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <span className="flex items-center gap-1.5 text-slate-600">
+      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline pt-4 text-[11.5px] font-light">
+        <span className="flex items-center gap-[7px] text-ink-mute">
           <span
-            className="inline-block h-3 w-3 rounded-sm"
+            className="inline-block h-[10px] w-[10px] rounded-[1px]"
             style={{ backgroundColor: INCOME_INK }}
             aria-hidden
           />
@@ -461,18 +530,20 @@ export function MoneyChart({
             <Link
               key={category}
               href={legendHref(category, focusCategory)}
-              className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100 ${
-                active ? "font-semibold text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
+              className={`flex items-center gap-[7px] rounded-chip border px-[7px] py-[3px] transition-colors ${
+                active
+                  ? "border-edge-strong text-ink-bright"
+                  : "border-transparent text-ink-mute hover:text-ink-bright"
               }`}
               title={active ? "Toon weer alle categorieën" : `Alleen ${CATEGORY_LABEL[category] ?? category}`}
             >
               <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{ backgroundColor: CATEGORY_COLOR[category] }}
+                className="inline-block h-[10px] w-[10px] rounded-[1px]"
+                style={{ backgroundColor: BAND_INK[category] ?? OUT_INK }}
                 aria-hidden
               />
               {CATEGORY_LABEL[category] ?? category}
-              <span className="text-slate-400" style={{ fontVariantNumeric: "tabular-nums" }}>
+              <span className="font-mono text-[10px] text-ink-dim" style={{ fontVariantNumeric: "tabular-nums" }}>
                 {euro(categoryTotal(category))}
               </span>
             </Link>
@@ -482,14 +553,24 @@ export function MoneyChart({
       )}
 
       {!compact && (
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 max-w-3xl text-[12px] font-light leading-relaxed text-ink-label">
         Gevuld = echte bankregels · gearceerd = mogelijk incompleet · gestippeld =
         verwacht uit de registratie · <span className="italic">geen data</span> = geen
         afschrift voor die maand.{" "}
-        <span style={{ color: AFTER_CANCEL_INK }}>Groen gestippeld</span> is{" "}
+        <span className="text-okay">Groen gestippeld</span> is{" "}
         <em>na opzeggen</em>: wat de nog op te zeggen abonnementen zouden schelen.
       </p>
       )}
-    </div>
+    </Frame>
   );
+}
+
+/** The dashboard's frame: nothing, because the block around it is the panel. */
+function PlainFrame({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+/** /money's frame: the page's one lit panel. */
+function LitPanelFrame({ children }: { children: ReactNode }) {
+  return <Panel lit className="p-[26px]">{children}</Panel>;
 }

@@ -50,8 +50,7 @@ export function Dialog({
         lit
         role="dialog"
         aria-modal="true"
-        className="relative w-full max-w-lg shadow-[var(--shadow-lift)]"
-      >
+        className="relative w-full max-w-lg shadow-[var(--shadow-lift)]">
         <div className="flex flex-col gap-4 p-[26px]">
           {kicker ? <Label className="text-attn">{kicker}</Label> : null}
           <h2 className="text-xl font-light text-ink-bright">{title}</h2>

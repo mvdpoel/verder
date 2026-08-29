@@ -1,4 +1,5 @@
 import { SEARCH_ENTITY_TYPES } from "@verder/core";
+import { Button, Field, Input, Label, Panel, Select } from "@/components/ui";
 import { ENTITY_LABEL, STATUS_FILTERS } from "./search-kinds";
 import type { ParsedSearch } from "@/lib/search-url";
 
@@ -7,50 +8,69 @@ import type { ParsedSearch } from "@/lib/search-url";
 // search needs in order to reproduce itself. The cursor is deliberately not a
 // field: changing a filter starts a new search at the first page.
 
+/**
+ * The type filter reads as a row of chips that light up when they are on, but it
+ * is still nine real checkboxes inside a GET form — the toggle is CSS (`has-`)
+ * over the checked state, so it costs no JavaScript and keeps the keyboard and
+ * screen-reader behaviour the browser already gives. The box itself stays
+ * visible: if `has-` ever fails to compile, the checked state is still readable.
+ */
+const TYPE_CHIP = [
+  "inline-flex cursor-pointer items-center gap-[8px] rounded-chip border border-edge",
+  "px-[10px] py-[6px] font-mono text-[9.5px] tracking-[0.14em] uppercase",
+  "text-ink-dim transition-colors hover:border-edge-strong hover:text-ink-soft",
+  "has-[:checked]:border-signal/45 has-[:checked]:text-signal",
+].join(" ");
+
 export function SearchFilters({ parsed, parties }: {
   parsed: ParsedSearch; parties: { id: string; name: string }[];
 }) {
   return (
-    <form method="get" action="/search" className="rounded border bg-white p-4 space-y-3">
-      <label className="block text-sm">Search
-        <input name="q" defaultValue={parsed.q} placeholder="opzegging Ziggo"
-          className="w-full border rounded p-2" />
-      </label>
-      <fieldset className="space-y-1">
-        <legend className="text-sm">Type</legend>
-        <div className="flex flex-wrap gap-3">
-          {SEARCH_ENTITY_TYPES.map((t) => (
-            <label key={t} className="text-sm flex items-center gap-1">
-              <input type="checkbox" name="type" value={t}
-                defaultChecked={parsed.entityTypes.includes(t)} />
-              {ENTITY_LABEL[t]}
-            </label>
-          ))}
+    <Panel lit>
+      <form method="get" action="/search" className="flex flex-col gap-[22px] p-[26px]">
+        <Field label="Search" htmlFor="search-q">
+          <Input id="search-q" name="q" defaultValue={parsed.q} placeholder="opzegging Ziggo" />
+        </Field>
+
+        <fieldset className="flex flex-col gap-[10px]">
+          <Label as="legend">Type</Label>
+          <div className="flex flex-wrap gap-[8px]">
+            {SEARCH_ENTITY_TYPES.map((t) => (
+              <label key={t} className={TYPE_CHIP}>
+                <input type="checkbox" name="type" value={t}
+                  className="size-[13px] accent-signal"
+                  defaultChecked={parsed.entityTypes.includes(t)} />
+                {ENTITY_LABEL[t]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-[16px] sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="From" htmlFor="search-from">
+            <Input id="search-from" type="date" name="from" defaultValue={parsed.from} />
+          </Field>
+          <Field label="To" htmlFor="search-to">
+            <Input id="search-to" type="date" name="to" defaultValue={parsed.to} />
+          </Field>
+          <Field label="Party" htmlFor="search-party">
+            <Select id="search-party" name="party" defaultValue={parsed.partyId}>
+              <option value="">Anyone</option>
+              {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status" htmlFor="search-status">
+            <Select id="search-status" name="status" defaultValue={parsed.status}>
+              <option value="">Any status</option>
+              {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select>
+          </Field>
         </div>
-      </fieldset>
-      <div className="flex flex-wrap gap-3">
-        <label className="text-sm">From
-          <input type="date" name="from" defaultValue={parsed.from}
-            className="block border rounded p-2" />
-        </label>
-        <label className="text-sm">To
-          <input type="date" name="to" defaultValue={parsed.to}
-            className="block border rounded p-2" />
-        </label>
-        <label className="text-sm">Party
-          <select name="party" defaultValue={parsed.partyId} className="block border rounded p-2">
-            <option value="">Anyone</option>
-            {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
-        <label className="text-sm">Status
-          <select name="status" defaultValue={parsed.status} className="block border rounded p-2">
-            <option value="">Any status</option>
-            {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-        </label>
-      </div>
-      <button type="submit" className="rounded bg-slate-900 text-white px-4 py-2">Search</button>
-    </form>
+
+        <div className="flex items-center">
+          <Button type="submit" variant="primary">Search</Button>
+        </div>
+      </form>
+    </Panel>
   );
 }

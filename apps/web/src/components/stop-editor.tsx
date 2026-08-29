@@ -1,8 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { type LinkOption, linkId, linkOptionList } from "@/lib/stop-links";
+import {
+  Button,
+  Field,
+  FormError,
+  Input,
+  Label,
+  Micro,
+  Panel,
+  Select,
+  Textarea,
+} from "@/components/ui";
 
 /**
  * Create and edit a halte.
@@ -20,6 +31,10 @@ import { type LinkOption, linkId, linkOptionList } from "@/lib/stop-links";
  * and the files hanging off a halte. They store an ID and nothing else: no
  * title, no date, no status is copied across, so a halte can be AHEAD of
  * reality but can never contradict it. Each one clears back to "geen".
+ *
+ * This is the page's ONE primary button: /timeline renders exactly one halte
+ * editor (keyed on the selected stop), so the glow cannot end up doubled the
+ * way it would on the per-spoor editors.
  */
 
 type StopData = {
@@ -72,51 +87,63 @@ export function AddStopForm({ trackId }: { trackId: string }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [state, setState] = useState("done");
+  const ids = useId();
   const create = trpc.tracks.createStop.useMutation({
     onSuccess: () => { setOpen(false); setTitle(""); router.refresh(); },
   });
 
   if (!open) {
     return (
-      <button className="text-xs text-blue-600 hover:underline" onClick={() => setOpen(true)}>
+      <Button variant="quiet" size="sm" onClick={() => setOpen(true)}>
         + halte
-      </button>
+      </Button>
     );
   }
   return (
-    <span className="flex flex-wrap items-center gap-2">
-      <input
-        className="rounded border px-2 py-1 text-sm"
-        placeholder="Wat gebeurde er?"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <select
-        className="rounded border px-2 py-1 text-sm"
-        value={state}
-        onChange={(e) => setState(e.target.value)}
-      >
-        {STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-      </select>
-      <button
-        className="rounded bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40"
-        disabled={!title.trim() || create.isPending}
-        onClick={() => create.mutate({
-          trackId, title: title.trim(),
-          state: state as "done" | "open" | "expected",
-        })}
-      >
-        Toevoegen
-      </button>
-      <button className="text-sm text-slate-500" onClick={() => setOpen(false)}>
-        annuleren
-      </button>
-      {/* Without this a refused insert just does nothing and the halte
-          silently never appears. Span, not p: this row is inline. */}
-      {create.error && (
-        <span className="w-full text-sm text-red-700">{create.error.message}</span>
-      )}
-    </span>
+    <Panel className="mt-2 w-full p-[18px]">
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+          <Field label="Halte" htmlFor={`${ids}-title`}>
+            <Input
+              id={`${ids}-title`}
+              placeholder="Wat gebeurde er?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </Field>
+          <Field label="Status" htmlFor={`${ids}-state`}>
+            <Select
+              id={`${ids}-state`}
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+            >
+              {STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select>
+          </Field>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            disabled={!title.trim() || create.isPending}
+            onClick={() => create.mutate({
+              trackId, title: title.trim(),
+              state: state as "done" | "open" | "expected",
+            })}
+          >
+            Toevoegen
+          </Button>
+          <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
+            annuleren
+          </Button>
+        </div>
+        {/* Without this a refused insert just does nothing and the halte
+            silently never appears. Amber for the same reason `Field` puts its
+            error there: a form that will not save is waiting on Martin. */}
+        {create.error && (
+          <FormError>{create.error.message}</FormError>
+        )}
+      </div>
+    </Panel>
   );
 }
 
@@ -132,6 +159,7 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
     documentId: stop.documentId ?? "",
   });
   const [search, setSearch] = useState("");
+  const ids = useId();
   // Only while the editor is open: /timeline renders one of these per selected
   // halte and there is no reason to fetch candidates nobody asked for.
   const options = trpc.tracks.linkOptions.useQuery(
@@ -144,9 +172,9 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
 
   if (!open) {
     return (
-      <button className="text-xs text-slate-500 hover:underline" onClick={() => setOpen(true)}>
+      <Button variant="quiet" size="sm" onClick={() => setOpen(true)}>
         halte bewerken
-      </button>
+      </Button>
     );
   }
   const linkedDoc = links?.documents.find((d) => d.id === stop.documentId);
@@ -154,143 +182,163 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
     ? { id: linkedDoc.id, label: linkedDoc.title }
     : null;
   return (
-    <div className="space-y-2 rounded border p-3">
-      <input
-        className="w-full rounded border px-2 py-1 text-sm"
-        value={form.title}
-        onChange={(e) => setForm({ ...form, title: e.target.value })}
-      />
-      <div className="flex flex-wrap gap-2">
-        <select
-          className="rounded border px-2 py-1 text-sm"
-          value={form.state}
-          onChange={(e) => setForm({ ...form, state: e.target.value })}
-        >
-          {STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        <select
-          className="rounded border px-2 py-1 text-sm"
-          value={form.kind}
-          onChange={(e) => setForm({ ...form, kind: e.target.value })}
-        >
-          {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-        </select>
-        <label className="text-xs text-slate-600">
-          gebeurd op
-          <input type="date" className="ml-1 rounded border px-2 py-1 text-sm"
-            value={form.happenedAt}
-            onChange={(e) => setForm({ ...form, happenedAt: e.target.value })} />
-        </label>
-      </div>
-      <textarea
-        className="w-full rounded border px-2 py-1 text-sm"
-        value={form.note}
-        onChange={(e) => setForm({ ...form, note: e.target.value })}
-      />
+    <Panel className="p-[18px]">
+      <div className="flex flex-col gap-4">
+        <Field label="Titel" htmlFor={`${ids}-title`}>
+          <Input
+            id={`${ids}-title`}
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Status" htmlFor={`${ids}-state`}>
+            <Select
+              id={`${ids}-state`}
+              value={form.state}
+              onChange={(e) => setForm({ ...form, state: e.target.value })}
+            >
+              {STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Soort" htmlFor={`${ids}-kind`}>
+            <Select
+              id={`${ids}-kind`}
+              value={form.kind}
+              onChange={(e) => setForm({ ...form, kind: e.target.value })}
+            >
+              {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="gebeurd op" htmlFor={`${ids}-date`}>
+            <Input
+              id={`${ids}-date`}
+              type="date"
+              value={form.happenedAt}
+              onChange={(e) => setForm({ ...form, happenedAt: e.target.value })}
+            />
+          </Field>
+        </div>
+        <Field label="Notitie" htmlFor={`${ids}-note`}>
+          <Textarea
+            id={`${ids}-note`}
+            rows={3}
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+          />
+        </Field>
 
-      {/* The third level: wat hangt er achter deze halte. Only IDs are saved —
-          the name, the date and the status you see here are read live again on
-          every render of the kaart. */}
-      <fieldset className="space-y-2 rounded border border-dashed p-2">
-        <legend className="px-1 text-xs text-slate-600">Wat hangt hieraan?</legend>
-        <input
-          className="w-full rounded border px-2 py-1 text-sm"
-          placeholder="Zoeken in logboek, taken en bestanden…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <label className="block text-xs text-slate-600">
-          Logboek
-          <select
-            className="mt-1 w-full rounded border px-2 py-1 text-sm"
-            value={form.entryId}
-            onChange={(e) => setForm({ ...form, entryId: e.target.value })}
-          >
-            <option value="">— geen —</option>
-            {linkOptionList(
-              (options.data?.entries ?? []).map((e) => ({
-                id: e.id, label: `${e.summary} · ${nlDate(e.occurredAt)}`,
-              })),
-              links?.entry ? { id: links.entry.id, label: links.entry.summary } : null,
-            ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="block text-xs text-slate-600">
-          Taak
-          <select
-            className="mt-1 w-full rounded border px-2 py-1 text-sm"
-            value={form.taskId}
-            onChange={(e) => setForm({ ...form, taskId: e.target.value })}
-          >
-            <option value="">— geen —</option>
-            {linkOptionList(
-              (options.data?.tasks ?? []).map((t) => ({
-                id: t.id, label: `${t.title} (${t.status})`,
-              })),
-              links?.task ? { id: links.task.id, label: links.task.title } : null,
-            ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="block text-xs text-slate-600">
-          Bestand
-          <select
-            className="mt-1 w-full rounded border px-2 py-1 text-sm"
-            value={form.documentId}
-            onChange={(e) => setForm({ ...form, documentId: e.target.value })}
-          >
-            <option value="">— geen —</option>
-            {linkOptionList(
-              (options.data?.documents ?? []).map((d) => ({
-                id: d.id, label: `${d.title} · ${nlDate(d.receivedAt)}`,
-              })),
-              // The document this halte points at itself, if the search did not
-              // return it. The other files in `links.documents` came off the
-              // mail or the entry — they are derived, not linkable.
-              currentDocument,
-            ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </label>
-        {options.isLoading && (
-          <p className="text-xs text-slate-400">Bezig met ophalen…</p>
-        )}
-        {/* Without this, a failed lookup looks exactly like "er is niets om aan
-            te koppelen" — and Martin would go build the halte's evidence again. */}
-        {options.error && (
-          <p className="text-xs text-red-700">
-            Kon de koppelingen niet ophalen: {options.error.message}
-          </p>
-        )}
-      </fieldset>
+        {/* The third level: wat hangt er achter deze halte. Only IDs are saved —
+            the name, the date and the status you see here are read live again on
+            every render of the kaart. */}
+        <fieldset className="flex flex-col gap-4 rounded-panel border border-dashed border-edge-strong p-4">
+          {/* The real <legend>, carrying the system's label type: it names the
+              group for a screen reader as well as for the eye, which a <div>
+              styled the same way would not. */}
+          <Label as="legend" className="px-1">Wat hangt hieraan?</Label>
+          <Field label="Zoeken" htmlFor={`${ids}-search`}>
+            <Input
+              id={`${ids}-search`}
+              placeholder="Zoeken in logboek, taken en bestanden…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Field>
+          <Field label="Logboek" htmlFor={`${ids}-entry`}>
+            <Select
+              id={`${ids}-entry`}
+              value={form.entryId}
+              onChange={(e) => setForm({ ...form, entryId: e.target.value })}
+            >
+              <option value="">— geen —</option>
+              {linkOptionList(
+                (options.data?.entries ?? []).map((e) => ({
+                  id: e.id, label: `${e.summary} · ${nlDate(e.occurredAt)}`,
+                })),
+                links?.entry ? { id: links.entry.id, label: links.entry.summary } : null,
+              ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Taak" htmlFor={`${ids}-task`}>
+            <Select
+              id={`${ids}-task`}
+              value={form.taskId}
+              onChange={(e) => setForm({ ...form, taskId: e.target.value })}
+            >
+              <option value="">— geen —</option>
+              {linkOptionList(
+                (options.data?.tasks ?? []).map((t) => ({
+                  id: t.id, label: `${t.title} (${t.status})`,
+                })),
+                links?.task ? { id: links.task.id, label: links.task.title } : null,
+              ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Bestand" htmlFor={`${ids}-document`}>
+            <Select
+              id={`${ids}-document`}
+              value={form.documentId}
+              onChange={(e) => setForm({ ...form, documentId: e.target.value })}
+            >
+              <option value="">— geen —</option>
+              {linkOptionList(
+                (options.data?.documents ?? []).map((d) => ({
+                  id: d.id, label: `${d.title} · ${nlDate(d.receivedAt)}`,
+                })),
+                // The document this halte points at itself, if the search did not
+                // return it. The other files in `links.documents` came off the
+                // mail or the entry — they are derived, not linkable.
+                currentDocument,
+              ).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </Select>
+          </Field>
+          {options.isLoading && <Micro>Bezig met ophalen…</Micro>}
+          {/* Without this, a failed lookup looks exactly like "er is niets om aan
+              te koppelen" — and Martin would go build the halte's evidence again.
+              Cyan and NOT amber: a lookup that failed is the system reporting on
+              itself, and the halte still saves. Amber would claim Martin owes
+              this list something, which is the one thing amber may never do —
+              the same call `already-have-this.tsx` and the search notice make. */}
+          {options.error && (
+            <p className="text-[12px] font-light leading-relaxed text-signal">
+              Kon de koppelingen niet ophalen: {options.error.message}
+            </p>
+          )}
+        </fieldset>
 
-      <div className="flex gap-2">
-        <button
-          className="rounded bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40"
-          disabled={!form.title.trim() || update.isPending}
-          onClick={() => update.mutate({
-            id: stop.id, title: form.title.trim(),
-            kind: form.kind as "process" | "mail" | "call" | "meeting" | "document" | "other",
-            state: form.state as "done" | "open" | "expected",
-            happenedAt: fromDateInput(form.happenedAt),
-            // `expectedAt` is deliberately NOT sent. The column and the router
-            // field still exist, and an undefined field is left untouched by
-            // the update — so an old expected date is preserved in the row and
-            // simply never shown, rather than being quietly erased by an editor
-            // that no longer asks about it.
-            note: form.note.trim() || null,
-            // Empty string is "geen": explicit null, so a link can be REMOVED.
-            // `undefined` would leave the old one in place forever.
-            entryId: linkId(form.entryId),
-            taskId: linkId(form.taskId),
-            documentId: linkId(form.documentId),
-          })}
-        >
-          Opslaan
-        </button>
-        <button className="text-sm text-slate-500" onClick={() => setOpen(false)}>
-          annuleren
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!form.title.trim() || update.isPending}
+            onClick={() => update.mutate({
+              id: stop.id, title: form.title.trim(),
+              kind: form.kind as "process" | "mail" | "call" | "meeting" | "document" | "other",
+              state: form.state as "done" | "open" | "expected",
+              happenedAt: fromDateInput(form.happenedAt),
+              // `expectedAt` is deliberately NOT sent. The column and the router
+              // field still exist, and an undefined field is left untouched by
+              // the update — so an old expected date is preserved in the row and
+              // simply never shown, rather than being quietly erased by an editor
+              // that no longer asks about it.
+              note: form.note.trim() || null,
+              // Empty string is "geen": explicit null, so a link can be REMOVED.
+              // `undefined` would leave the old one in place forever.
+              entryId: linkId(form.entryId),
+              taskId: linkId(form.taskId),
+              documentId: linkId(form.documentId),
+            })}
+          >
+            Opslaan
+          </Button>
+          <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
+            annuleren
+          </Button>
+        </div>
+        {update.error && (
+          <FormError>{update.error.message}</FormError>
+        )}
       </div>
-      {update.error && <p className="text-sm text-red-700">{update.error.message}</p>}
-    </div>
+    </Panel>
   );
 }

@@ -31,10 +31,20 @@ export function Dot({ state, className }: { state: DotState; className?: string 
  * The standard row: dot, title with a mono kicker under it, and on the right
  * whatever has been measured about it. The separator is a hairline UNDER every
  * row but the last — hence `last:border-0` rather than a line on top.
+ *
+ * `as="li"` exists because `last:border-0` only fires between SIBLINGS. A list
+ * a screen reader can count ("list, 9 items") needs a real `<ul>`/`<li>`, and
+ * a `Row` wrapped one `<li>` deep is always the last child of its own wrapper —
+ * so every separator disappeared. Three files worked around that with the
+ * arbitrary variant `[&>li:last-child>div]:border-b-0` on the `<ul>`, which
+ * breaks silently the moment this component stops rendering a single top-level
+ * `<div>`; a fourth put the hairline on the `<li>` by hand. Rendering the `<li>`
+ * HERE makes the rows siblings again and the rule works as written.
  */
 export function Row({
-  state, title, kicker, meta, metaTone = "dim", className,
+  as: Element = "div", state, title, kicker, meta, metaTone = "dim", className,
 }: {
+  as?: "div" | "li";
   state?: DotState;
   title: ReactNode;
   kicker?: ReactNode;
@@ -43,7 +53,7 @@ export function Row({
   className?: string;
 }) {
   return (
-    <div className={cx("flex items-center gap-4 border-b border-hairline py-[13px] last:border-0", className)}>
+    <Element className={cx("flex items-center gap-4 border-b border-hairline py-[13px] last:border-0", className)}>
       {state ? <Dot state={state} /> : null}
       <div className="min-w-0 grow">
         <div className="text-sm text-ink-soft">{title}</div>
@@ -61,6 +71,6 @@ export function Row({
           {meta}
         </div>
       ) : null}
-    </div>
+    </Element>
   );
 }

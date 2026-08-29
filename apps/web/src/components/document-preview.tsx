@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc-client";
+import { buttonClass } from "@/components/ui";
 import { needsSniffing, previewKind, rowCountLabel } from "./preview-kind";
 
 export interface PreviewDoc {
@@ -13,6 +14,13 @@ export interface PreviewDoc {
 
 const FRAME = { tall: "h-[70vh]", short: "h-48" } as const;
 
+/**
+ * The quiet frame around a rendered document. A PDF page and a photographed
+ * letter are white, and a white rectangle dropped straight onto this field has
+ * no edge at all — it reads as a hole rather than as a page.
+ */
+const PAGE = "rounded-panel border border-edge";
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const units = ["kB", "MB", "GB"];
@@ -23,8 +31,7 @@ function formatBytes(bytes: number): string {
 
 function DownloadLink({ doc }: { doc: PreviewDoc }) {
   return (
-    <a href={`/api/files/${doc.sha256}`} download={doc.title}
-      className="inline-block rounded border px-3 py-1 text-sm">
+    <a href={`/api/files/${doc.sha256}`} download={doc.title} className={buttonClass("ghost", "sm")}>
       Download
     </a>
   );
@@ -32,9 +39,9 @@ function DownloadLink({ doc }: { doc: PreviewDoc }) {
 
 function FileCard({ doc, reason }: { doc: PreviewDoc; reason?: string }) {
   return (
-    <div className="rounded border p-4 space-y-2">
-      <p className="text-sm font-medium break-all">{doc.title}</p>
-      <p className="text-xs text-slate-500">
+    <div className={`${PAGE} flex flex-col items-start gap-[10px] p-[18px]`}>
+      <p className="break-all text-[13.5px] font-light text-ink-soft">{doc.title}</p>
+      <p className="micro">
         {doc.mime || "unknown type"}
         {doc.sizeBytes !== undefined && ` · ${formatBytes(doc.sizeBytes)}`}
         {` · ${reason ?? "no preview available"}`}
@@ -48,14 +55,16 @@ function SheetTable({ doc, height, fallback }: {
   doc: PreviewDoc; height: keyof typeof FRAME; fallback?: ReactNode;
 }) {
   const q = trpc.documents.sheetPreview.useQuery({ sha256: doc.sha256 });
-  if (q.isPending) return <p className="text-sm text-slate-500">Reading spreadsheet…</p>;
+  if (q.isPending) return <p className="micro">Reading spreadsheet…</p>;
   if (q.error) {
     // When we only GUESSED this was a spreadsheet (the stored mime said
     // nothing), a refusal is the answer to the guess, not an error to report.
     if (fallback) return <>{fallback}</>;
     return (
-      <div className="rounded border p-4 space-y-2">
-        <p className="text-sm text-slate-600">This spreadsheet could not be read: {q.error.message}</p>
+      // Not amber: nothing here waits on Martin. The file is intact and the
+      // download beside the message is the whole way out.
+      <div className={`${PAGE} flex flex-col items-start gap-[10px] p-[18px]`}>
+        <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">This spreadsheet could not be read: {q.error.message}</p>
         <DownloadLink doc={doc} />
       </div>
     );
@@ -63,24 +72,26 @@ function SheetTable({ doc, height, fallback }: {
   const { rows, totalSheets, sheetName, truncated } = q.data;
   const label = rowCountLabel(rows.length, truncated);
   return (
-    <div className="space-y-2">
-      <div className={`${FRAME[height]} overflow-auto rounded border`}>
-        <table className="min-w-full text-xs">
+    <div className="flex flex-col items-start gap-3">
+      <div className={`${FRAME[height]} ${PAGE} w-full overflow-auto`}>
+        <table className="min-w-full border-collapse">
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className={i === 0 ? "" : "border-t"}>
+              <tr key={i} className={i === 0 ? "" : "border-t border-hairline"}>
                 {row.map((cell, j) => (
                   // sticky belongs on the CELLS: browsers do not honour
                   // position:sticky on a <tr>, so a sticky row scrolls away.
-                  <td key={j} className={`whitespace-nowrap px-2 py-1 align-top ${
-                    i === 0 ? "sticky top-0 bg-slate-100 font-medium" : ""}`}>{cell}</td>
+                  // The header's background has to be OPAQUE (`bg-void`, not a
+                  // panel tint) or the rows scroll through it.
+                  <td key={j} className={`whitespace-nowrap px-[10px] py-[6px] align-top font-mono text-[11px] ${
+                    i === 0 ? "sticky top-0 bg-void text-ink-label" : "text-ink-soft"}`}>{cell}</td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="micro">
         {sheetName}
         {totalSheets > 1 && ` · sheet 1 of ${totalSheets}`}
         {label && ` · ${label}`}
@@ -101,16 +112,16 @@ export function DocumentPreview({ doc, height = "tall" }: {
   switch (previewKind(doc.mime)) {
     case "image":
       return (
-        <div className="space-y-2">
+        <div className="flex flex-col items-start gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- vault files are served by our own auth-gated route; next/image optimization would bypass it */}
-          <img src={`/api/files/${doc.sha256}`} alt={doc.title} className="max-w-full border rounded" />
+          <img src={`/api/files/${doc.sha256}`} alt={doc.title} className={`${PAGE} max-w-full`} />
           <DownloadLink doc={doc} />
         </div>
       );
     case "pdf":
       return (
-        <div className="space-y-2">
-          <iframe src={`/api/files/${doc.sha256}`} className={`w-full ${FRAME[height]} border rounded`}
+        <div className="flex flex-col items-start gap-3">
+          <iframe src={`/api/files/${doc.sha256}`} className={`w-full ${FRAME[height]} ${PAGE}`}
             title={doc.title} />
           <DownloadLink doc={doc} />
         </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonClass, Empty, PageTitle, Panel, Row } from "@/components/ui";
 import { serverCaller } from "@/lib/trpc-server";
 
 export default async function LogbookPage() {
@@ -6,22 +7,40 @@ export default async function LogbookPage() {
   const entries = await caller.entries.list({ limit: 100 });
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Logbook</h1>
-        <Link href="/logbook/new" className="rounded bg-slate-900 text-white px-4 py-2">+ Log a contact moment</Link>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
+        <PageTitle className="leading-none">
+          Logbook
+        </PageTitle>
+        <Link href="/logbook/new" className={buttonClass("primary")}>
+          + Log a contact moment
+        </Link>
       </div>
-      {entries.length === 0 && <p>Nothing logged yet — your first entry is one click away. 💪</p>}
-      <ul className="space-y-3">
-        {entries.map((e) => (
-          <li key={e.id} className="rounded border bg-white p-4">
-            <Link href={`/logbook/${e.id}`} className="font-medium hover:underline">{e.summary}</Link>
-            <p className="text-sm text-slate-500">
-              {e.channel} · {e.direction} · {new Date(e.occurredAt).toLocaleString("nl-NL")}
-              {e.supersedesId && " · correction"}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {entries.length === 0 ? (
+        <Empty title="Nothing logged yet — your first entry is one click away. 💪" />
+      ) : (
+        <Panel lit className="px-[26px] py-[6px]">
+          {entries.map((e) => (
+            <Row
+              key={e.id}
+              /*
+               * Steel, always: every entry is something that already happened.
+               * A log row is never "waiting on Martin", so no row here may be
+               * amber — that mark belongs to the tasks and stops that are.
+               */
+              state="done"
+              title={
+                <Link
+                  href={`/logbook/${e.id}`}
+                  className="transition-colors hover:text-signal-link">
+                  {e.summary}
+                </Link>
+              }
+              kicker={`${e.channel} · ${e.direction} · ${new Date(e.occurredAt).toLocaleString("nl-NL")}`}
+              meta={e.supersedesId ? "correction" : undefined}
+            />
+          ))}
+        </Panel>
+      )}
     </div>
   );
 }

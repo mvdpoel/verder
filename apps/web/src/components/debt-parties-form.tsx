@@ -1,18 +1,58 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import type { DebtPartyRole } from "./registry-list";
+import {
+  Button,
+  Chip,
+  Field,
+  Input,
+  Label,
+  Micro,
+  Panel,
+  Select,
+  TextLink,
+  type ChipTone,
+} from "@/components/ui";
 
 // Editable edges for a debt: who is chasing it, what paperwork proves it, and
 // whether Verder has been told. None of this is evidence (debts/debt_parties/
 // debt_documents are display facts, not the ledger) so link/unlink/reported
 // are plain mutations, same mutation-plus-router.refresh() pattern as
 // item-facts-form.tsx. It reports, it does not judge: an unreported debt
-// reads as a neutral fact, never a warning.
+// reads as a neutral fact, never a warning — which is why nothing in here is
+// amber, not even "Not reported to Verder yet".
 
 const ROLES: DebtPartyRole[] = ["eiser", "incasso", "deurwaarder", "gemachtigde"];
+
+/**
+ * The claimant is the party that actually owns the claim; the rest are acting
+ * for someone. Giving the eiser the stronger chip is the whole reason a debt
+ * gained a party TABLE — "Trust and Law collecting for PLM Investments" used
+ * to be prose in a note.
+ */
+const ROLE_TONE = (role: DebtPartyRole): ChipTone => (role === "eiser" ? "mute" : "faint");
+
+/** The small × that removes a link. Icon-only, so it carries its own label. */
+function RemoveButton({ label, disabled, onClick }: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="shrink-0 rounded-chip px-[6px] font-mono text-[13px] leading-none text-ink-dim transition-colors hover:text-attn disabled:opacity-40 disabled:pointer-events-none"
+      disabled={disabled}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
+      ×
+    </button>
+  );
+}
 
 export type DebtPartyLink = {
   partyId: string;
@@ -77,105 +117,110 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
 
   return (
     <>
-      <section className="rounded border bg-white p-4 space-y-3">
-        <h2 className="font-semibold">Parties</h2>
+      <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
+        <Label as="h2">Parties</Label>
         {parties.length === 0
-          ? <p className="text-sm text-slate-600">No parties linked yet.</p>
+          ? <p className="text-[13px] font-light text-ink-label">No parties linked yet.</p>
           : (
-            <ul className="space-y-1">
+            <ul>
               {parties.map((p) => (
-                <li key={`${p.partyId}-${p.role}`} className="flex items-center justify-between gap-2 text-sm">
-                  <span>
-                    <span className="font-medium">{p.role}</span>: {p.name}
-                    {p.organization && <span className="text-slate-500"> ({p.organization})</span>}
-                    {p.note && <span className="text-slate-500"> — {p.note}</span>}
+                <li
+                  key={`${p.partyId}-${p.role}`}
+                  className="flex items-center gap-3 border-b border-hairline py-[11px] last:border-0">
+                  <Chip tone={ROLE_TONE(p.role)}>{p.role}</Chip>
+                  <span className="min-w-0 grow text-[13.5px] font-light text-ink-soft">
+                    {p.name}
+                    {p.organization && <span className="text-ink-mute"> ({p.organization})</span>}
+                    {p.note && <span className="text-ink-mute"> — {p.note}</span>}
                   </span>
-                  <button type="button" className="text-slate-400 hover:text-red-600"
+                  <RemoveButton
+                    label={`Remove ${p.name} as ${p.role}`}
                     disabled={unlinkParty.isPending}
                     onClick={() => unlinkParty.mutate({ debtId, partyId: p.partyId, role: p.role })}
-                    aria-label={`Remove ${p.name} as ${p.role}`}>
-                    ×
-                  </button>
+                  />
                 </li>
               ))}
             </ul>
           )}
-        <div className="flex flex-wrap gap-2 items-end">
-          <label className="text-sm">Party
-            <select className="block border rounded p-2" value={newPartyId}
+        <div className="flex flex-wrap items-end gap-[14px]">
+          <Field label="Party" htmlFor="parties-party" className="min-w-[180px] grow">
+            <Select id="parties-party" value={newPartyId}
               onChange={(e) => setNewPartyId(e.target.value)}>
               <option value="">Choose…</option>
               {allParties.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Role
-            <select className="block border rounded p-2" value={newRole}
+            </Select>
+          </Field>
+          <Field label="Role" htmlFor="parties-role" className="min-w-[130px]">
+            <Select id="parties-role" value={newRole}
               onChange={(e) => setNewRole(e.target.value as DebtPartyRole)}>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Note
-            <input className="block border rounded p-2" placeholder="optional"
+            </Select>
+          </Field>
+          <Field label="Note" htmlFor="parties-note" className="min-w-[160px] grow">
+            <Input id="parties-note" placeholder="optional"
               value={newNote} onChange={(e) => setNewNote(e.target.value)} />
-          </label>
-          <button type="button" className="rounded border px-3 py-2 disabled:opacity-50"
+          </Field>
+          <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={!newPartyId || linkParty.isPending} onClick={addParty}>
             Add
-          </button>
+          </Button>
         </div>
-      </section>
+      </Panel>
 
-      <section className="rounded border bg-white p-4 space-y-3">
-        <h2 className="font-semibold">Paperwork</h2>
+      <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
+        <Label as="h2">Paperwork</Label>
         {debtDocuments.length === 0
-          ? <p className="text-sm text-slate-600">No documents filed against this debt yet.</p>
+          ? <p className="text-[13px] font-light text-ink-label">No documents filed against this debt yet.</p>
           : (
-            <ul className="space-y-1">
+            <ul>
               {debtDocuments.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-2 text-sm">
-                  <Link href={`/vault/${d.id}`} className="underline truncate">{d.title}</Link>
-                  <button type="button" className="text-slate-400 hover:text-red-600"
+                <li key={d.id} className="flex items-center gap-3 border-b border-hairline py-[11px] last:border-0">
+                  <TextLink
+                    href={`/vault/${d.id}`}
+                    className="min-w-0 grow truncate text-[13.5px] font-light">
+                    {d.title}
+                  </TextLink>
+                  <RemoveButton
+                    label={`Unlink ${d.title}`}
                     disabled={unlinkDocument.isPending}
                     onClick={() => unlinkDocument.mutate({ debtId, documentId: d.id })}
-                    aria-label={`Unlink ${d.title}`}>
-                    ×
-                  </button>
+                  />
                 </li>
               ))}
             </ul>
           )}
-        <div className="flex gap-2 items-end">
-          <label className="text-sm">Document
-            <select className="block border rounded p-2" value={newDocId}
+        <div className="flex flex-wrap items-end gap-[14px]">
+          <Field label="Document" htmlFor="parties-document" className="min-w-[200px] grow">
+            <Select id="parties-document" value={newDocId}
               onChange={(e) => setNewDocId(e.target.value)}>
               <option value="">Choose…</option>
               {availableDocuments.map((d) => <option key={d.id} value={d.id}>{d.effectiveTitle}</option>)}
-            </select>
-          </label>
-          <button type="button" className="rounded border px-3 py-2 disabled:opacity-50"
+            </Select>
+          </Field>
+          <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={!newDocId || linkDocument.isPending} onClick={addDocument}>
             Link
-          </button>
+          </Button>
         </div>
-      </section>
+      </Panel>
 
-      <section className="rounded border bg-white p-4 space-y-3">
-        <h2 className="font-semibold">Verder</h2>
+      <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
+        <Label as="h2">Verder</Label>
         {/* Calm, not alarmed: an unreported debt is a fact to record, not a
             warning — Martin is the person this is about. */}
         {reportedToVerderAt
           ? (
-            <p className="text-sm text-slate-600">
+            <Micro>
               Reported to Verder on {new Date(reportedToVerderAt).toLocaleDateString("nl-NL")}
               {reportedViaEntryId && (
-                <> · <Link href={`/logbook/${reportedViaEntryId}`} className="underline">see the entry</Link></>
+                <> · <TextLink href={`/logbook/${reportedViaEntryId}`}>see the entry</TextLink></>
               )}
-            </p>
+            </Micro>
           )
-          : <p className="text-sm text-slate-600">Not reported to Verder yet.</p>}
-        <div className="flex flex-wrap gap-2 items-end">
-          <label className="text-sm">Via entry (optional)
-            <select className="block border rounded p-2" value={reportEntryId}
+          : <Micro>Not reported to Verder yet.</Micro>}
+        <div className="flex flex-wrap items-end gap-[14px]">
+          <Field label="Via entry (optional)" htmlFor="parties-entry" className="min-w-[240px] grow">
+            <Select id="parties-entry" value={reportEntryId}
               onChange={(e) => setReportEntryId(e.target.value)}>
               <option value="">No specific entry</option>
               {entries.data?.map((e) => (
@@ -183,20 +228,20 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
                   {new Date(e.occurredAt).toLocaleDateString("nl-NL")} — {e.summary}
                 </option>
               ))}
-            </select>
-          </label>
-          <button type="button" className="rounded bg-slate-900 text-white px-3 py-2 disabled:opacity-50"
+            </Select>
+          </Field>
+          <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={setReported.isPending} onClick={markReported}>
             {reportedToVerderAt ? "Update reported date" : "Mark reported today"}
-          </button>
+          </Button>
           {reportedToVerderAt && (
-            <button type="button" className="rounded border px-3 py-2 disabled:opacity-50"
+            <Button variant="quiet" size="sm" className="mb-[1px]"
               disabled={setReported.isPending} onClick={clearReported}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
-      </section>
+      </Panel>
     </>
   );
 }

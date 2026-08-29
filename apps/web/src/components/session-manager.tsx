@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Button, Label, Micro, Notice, Panel, Row } from "@/components/ui";
 
 type SessionRow = {
   id: string;
@@ -35,34 +36,52 @@ export function SessionManager() {
   }
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Je apparaten</h2>
-      <p className="text-sm text-slate-600">
-        Elk apparaat waarop je bent ingelogd. Herken je er een niet? Trek hem in — daarna
-        is een passkey of je wachtwoord weer nodig.
-      </p>
+    <Panel className="p-[26px]">
+      <div className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-[10px]">
+          <Label as="h2">Je apparaten</Label>
+          <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
+            Elk apparaat waarop je bent ingelogd. Herken je er een niet? Trek hem in — daarna
+            is een passkey of je wachtwoord weer nodig.
+          </p>
+        </div>
 
-      {sessions === null && <p className="text-sm text-slate-500">Laden…</p>}
+        {sessions === null && <Micro>Laden…</Micro>}
 
-      <ul className="divide-y border rounded">
-        {sessions?.map((s) => (
-          <li key={s.id} className="flex items-center justify-between p-3">
-            <span>
-              <span className="font-medium">{describeAgent(s.userAgent)}</span>
-              <span className="block text-xs text-slate-500">
-                {s.ipAddress || "onbekend IP"} · verloopt{" "}
-                {new Date(s.expiresAt).toLocaleString("nl-NL")}
-              </span>
-            </span>
-            <button onClick={() => revoke(s.token)} className="text-sm text-red-600 underline">
-              Intrekken
-            </button>
-          </li>
-        ))}
-      </ul>
+        {/* No empty state: this page is being read FROM a session, so the list
+            is never empty, and inventing copy for a state that cannot happen
+            is worse than leaving the gap. */}
+        {sessions !== null && sessions.length > 0 && (
+          <ul className="flex flex-col">
+            {sessions.map((s) => (
+              /*
+                A live session is a cyan ring, not a filled steel dot: it is
+                still running rather than something that happened. Amber would
+                claim the device is waiting on Martin, which it is not.
+              */
+              <Row
+                as="li"
+                key={s.id}
+                state="open"
+                title={describeAgent(s.userAgent)}
+                kicker={`${s.ipAddress || "onbekend IP"} · verloopt ${new Date(s.expiresAt).toLocaleString("nl-NL")}`}
+                meta={
+                  <Button variant="danger" size="sm" onClick={() => revoke(s.token)}>
+                    Intrekken
+                  </Button>
+                }
+              />
+            ))}
+          </ul>
+        )}
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </section>
+        {error && (
+          <div role="alert">
+            <Notice tone="attn">{error}</Notice>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }
 

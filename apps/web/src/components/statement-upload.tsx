@@ -1,7 +1,7 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Panel, TextLink } from "@/components/ui";
 
 type IngestSummary = {
   statementSha256: string; inserted: number; skipped: number; errors: number; source: string;
@@ -38,36 +38,49 @@ export function StatementUpload() {
   };
 
   return (
-    <div className="space-y-4">
-      <label className="block rounded border-2 border-dashed p-8 text-center cursor-pointer bg-white"
+    <div className="space-y-5">
+      {/*
+        The input is `sr-only` and not `hidden`: a `display: none` control is
+        not focusable, which left the whole drop zone unreachable from the
+        keyboard. `focus-within` puts the same cyan edge on the label that the
+        input would have shown itself.
+      */}
+      <label
+        className="block cursor-pointer rounded-panel border border-dashed border-edge-strong bg-field p-8 text-center text-[13.5px] font-light text-ink-mute transition-colors hover:border-signal/50 hover:text-ink-soft focus-within:border-signal"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}>
-        {busy ? "Reading your statement…"
+        {busy
+          ? <span className="micro animate-breathe">Reading your statement…</span>
           : "Drop a bank or PayPal statement here (ABN CAMT.053, ABN TSV, ABN Excel, PayPal CSV) or click to choose"}
-        <input type="file" multiple className="hidden" onChange={(e) => void upload(e.target.files)} />
+        <input type="file" multiple className="sr-only" onChange={(e) => void upload(e.target.files)} />
       </label>
       {results.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {results.map((r, i) => (
-            <li key={`${r.filename}-${i}`} className="rounded border bg-white p-3 text-sm">
-              <span className="font-medium">{r.filename}</span>
+            <Panel as="li" key={`${r.filename}-${i}`} className="p-[18px] text-[13px] font-light">
+              <span className="font-mono text-[11.5px] tracking-[0.06em] text-ink-soft">{r.filename}</span>
               {r.summary ? (
                 <>
-                  <span className="text-slate-600">
+                  <span className="text-ink-mute">
                     {" — "}{r.summary.inserted} transaction{r.summary.inserted === 1 ? "" : "s"} imported
                     {r.summary.skipped > 0 && `, ${r.summary.skipped} already known`}
                     {r.summary.errors > 0 && `, ${r.summary.errors} row${r.summary.errors === 1 ? "" : "s"} we couldn't read (kept safely, nothing lost)`}
                     {" · "}{r.summary.source}
                   </span>
-                  <span className="block text-slate-600 mt-1">
+                  <span className="mt-2 block leading-relaxed text-ink-mute">
                     Recurring charges show up in the{" "}
-                    <Link href="/queue" className="underline">review queue</Link> within a couple of minutes.
+                    <TextLink href="/queue">review queue</TextLink> within a couple of minutes.
                   </span>
                 </>
               ) : (
-                <span className="text-red-700"> — {r.error}</span>
+                /* Amber, and this is the documented exception to "amber means
+                   waiting on Martin": an upload that failed is literally
+                   waiting on him to try it again. Left inline rather than moved
+                   into `FormError`: the em dash joins it to the filename above,
+                   and a block would break the sentence. */
+                <span className="text-attn"> — {r.error}</span>
               )}
-            </li>
+            </Panel>
           ))}
         </ul>
       )}

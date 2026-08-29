@@ -33,6 +33,15 @@
   --color-hairline-lit: #8cc3f017;/* the grid behind a tile row (9%) */
   --color-field: #060b1480;       /* input control */
   --color-scrim: #020408b8;       /* scrim under a dialog */
+  /*
+   * The panel's own gradient, flattened to one opaque colour. Anything that has
+   * to KNOCK OUT a background from inside a panel — a band label sitting over
+   * the rails on the map — needs the panel's colour, not the page's, and a
+   * translucent token cannot hide what is behind it. The gradient runs from
+   * about #0d141d at the top to #060a11 at the bottom; this is the middle of it,
+   * which disappears at every height a label is likely to sit.
+   */
+  --color-plate: #0a0f18;
 
   /* ── text ──────────────────────────────────────────────────────────────── */
   --color-ink-bright: #f0f7fc;    /* headings */

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
+import { Button, Field, Input, Notice, PageTitle, Panel, Select } from "@/components/ui";
 
 const CATEGORIES = ["energy", "insurance", "telecom", "streaming", "software", "housing", "other"] as const;
 const CYCLES = ["monthly", "quarterly", "yearly", "irregular"] as const;
@@ -29,6 +30,7 @@ export function RegistryItemForm() {
     noticePeriod: "",
   });
   const amountCents = euroToCents(form.amount);
+  const amountError = form.amount !== "" && amountCents === null;
 
   const submit = () => {
     if (amountCents === null || !form.name) return;
@@ -45,36 +47,63 @@ export function RegistryItemForm() {
   };
 
   return (
-    <div className="max-w-xl space-y-4">
-      <h1 className="text-2xl font-bold">Add to the registry</h1>
-      <p className="text-sm text-slate-600">A subscription or running contract — getting it on the list is the win here.</p>
-      <label className="block">Name<input className="w-full border rounded p-2" placeholder="e.g. Eneco energie"
-        value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-      <div className="grid grid-cols-3 gap-3">
-        <label className="block">Category<select className="w-full border rounded p-2" value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value as typeof form.category })}>
-          {CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
-        <label className="block">Amount (€)<input className="w-full border rounded p-2" placeholder="12,50"
-          value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-          {form.amount && amountCents === null &&
-            <span className="text-xs text-red-600">Use a plain amount like 12,50</span>}</label>
-        <label className="block">Billing cycle<select className="w-full border rounded p-2" value={form.billingCycle}
-          onChange={(e) => setForm({ ...form, billingCycle: e.target.value as typeof form.billingCycle })}>
-          {CYCLES.map((c) => <option key={c}>{c}</option>)}</select></label>
+    <div className="flex max-w-xl flex-col gap-7">
+      <div className="flex flex-col gap-[10px]">
+        <PageTitle>Add to the registry</PageTitle>
+        <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
+          A subscription or running contract — getting it on the list is the win here.
+        </p>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <label className="block">Payment channel<select className="w-full border rounded p-2" value={form.paymentChannel}
-          onChange={(e) => setForm({ ...form, paymentChannel: e.target.value as typeof form.paymentChannel })}>
-          {CHANNELS.map((c) => <option key={c}>{c}</option>)}</select></label>
-        <label className="block">Account / customer nr<input className="w-full border rounded p-2"
-          value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} /></label>
-        <label className="block">Notice period<input className="w-full border rounded p-2" placeholder="e.g. 1 month"
-          value={form.noticePeriod} onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })} /></label>
-      </div>
-      <button className="rounded bg-slate-900 text-white px-6 py-2 disabled:opacity-50"
-        disabled={!form.name || amountCents === null || create.isPending} onClick={submit}>
-        Add to registry
-      </button>
+      <Panel lit>
+        <div className="flex flex-col gap-[18px] p-[26px]">
+          <Field label="Name" htmlFor="new-item-name">
+            <Input id="new-item-name" placeholder="e.g. Eneco energie"
+              value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <div className="grid gap-[18px] sm:grid-cols-3">
+            <Field label="Category" htmlFor="new-item-category">
+              <Select id="new-item-category" value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value as typeof form.category })}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </Select>
+            </Field>
+            <Field label="Amount (€)" htmlFor="new-item-amount"
+              error={amountError ? "Use a plain amount like 12,50" : undefined}>
+              <Input id="new-item-amount" inputMode="decimal" placeholder="12,50" invalid={amountError}
+                className="font-mono" value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            </Field>
+            <Field label="Billing cycle" htmlFor="new-item-cycle">
+              <Select id="new-item-cycle" value={form.billingCycle}
+                onChange={(e) => setForm({ ...form, billingCycle: e.target.value as typeof form.billingCycle })}>
+                {CYCLES.map((c) => <option key={c}>{c}</option>)}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid gap-[18px] sm:grid-cols-3">
+            <Field label="Payment channel" htmlFor="new-item-channel">
+              <Select id="new-item-channel" value={form.paymentChannel}
+                onChange={(e) => setForm({ ...form, paymentChannel: e.target.value as typeof form.paymentChannel })}>
+                {CHANNELS.map((c) => <option key={c}>{c}</option>)}
+              </Select>
+            </Field>
+            <Field label="Account / customer nr" htmlFor="new-item-account">
+              <Input id="new-item-account" className="font-mono" value={form.accountNumber}
+                onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} />
+            </Field>
+            <Field label="Notice period" htmlFor="new-item-notice">
+              <Input id="new-item-notice" placeholder="e.g. 1 month" value={form.noticePeriod}
+                onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })} />
+            </Field>
+          </div>
+          <div className="flex pt-1">
+            <Button variant="primary"
+              disabled={!form.name || amountCents === null || create.isPending} onClick={submit}>
+              Add to registry
+            </Button>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }

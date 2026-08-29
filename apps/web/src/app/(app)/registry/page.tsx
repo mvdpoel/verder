@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { formatEuro, RegistryDebtsList, RegistryItemsList } from "@/components/registry-list";
+import { buttonClass, PageTitle, Tabs } from "@/components/ui";
 
 export default async function RegistryPage({ searchParams }: {
   searchParams: Promise<{ tab?: string }> }) {
@@ -13,28 +14,35 @@ export default async function RegistryPage({ searchParams }: {
   // projection, resolved server-side in one grouped query — no per-row fetch.
   const debts = tab === "debts" ? await caller.registry.debts.list() : [];
 
-  const tabClass = (active: boolean) =>
-    `rounded px-3 py-1.5 text-sm ${active ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`;
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Registry</h1>
-        <div className="flex gap-2">
-          <Link href="/registry/new" className="rounded bg-slate-900 text-white px-4 py-2">+ Add</Link>
-          <Link href="/registry/import" className="rounded border px-4 py-2 hover:bg-slate-100">Import statement</Link>
-          <Link href="/registry/export" className="rounded border px-4 py-2 hover:bg-slate-100">Export report</Link>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div className="flex min-w-0 flex-col gap-[14px]">
+          <PageTitle>Registry</PageTitle>
+          <p className="text-[13.5px] font-light text-ink-mute">
+            <span className="font-mono text-ink">{stats.itemCount}</span> item{stats.itemCount === 1 ? "" : "s"}
+            {" · "}<span className="font-mono text-ink">{formatEuro(stats.monthlyTotalCents)}</span>/mo total
+            {" · "}<span className="font-mono text-ink">{formatEuro(stats.toCancelMonthlyCents)}</span>/mo marked to cancel
+            {/* A pending decision is one of the few things in this app that is
+                literally waiting on Martin, so the count carries the amber. */}
+            {" · "}<span className={stats.pendingDecisions > 0 ? "font-mono text-attn" : "font-mono text-ink"}>
+              {stats.pendingDecisions}
+            </span> decision{stats.pendingDecisions === 1 ? "" : "s"} pending
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-[10px]">
+          <Link href="/registry/new" className={buttonClass("primary")}>+ Add</Link>
+          <Link href="/registry/import" className={buttonClass("ghost")}>Import statement</Link>
+          <Link href="/registry/export" className={buttonClass("ghost")}>Export report</Link>
         </div>
       </div>
-      <p className="text-slate-600">
-        {stats.itemCount} item{stats.itemCount === 1 ? "" : "s"} · {formatEuro(stats.monthlyTotalCents)}/mo total
-        · {formatEuro(stats.toCancelMonthlyCents)}/mo marked to cancel
-        · {stats.pendingDecisions} decision{stats.pendingDecisions === 1 ? "" : "s"} pending
-      </p>
-      <nav className="flex gap-2 border-b pb-2">
-        <Link href="/registry?tab=items" className={tabClass(tab === "items")}>Subscriptions &amp; contracts</Link>
-        <Link href="/registry?tab=debts" className={tabClass(tab === "debts")}>Debts</Link>
-      </nav>
+      <Tabs
+        active={tab}
+        items={[
+          { key: "items", label: "Subscriptions & contracts", href: "/registry?tab=items" },
+          { key: "debts", label: "Debts", href: "/registry?tab=debts" },
+        ]}
+      />
       {tab === "items"
         ? <RegistryItemsList items={items} />
         : <RegistryDebtsList debts={debts} />}

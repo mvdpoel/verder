@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { formatEuro } from "@/components/registry-list";
 import { RetrievedRefs } from "@/components/retrieved-refs";
 import { AlreadyHaveThis } from "@/components/already-have-this";
 import { DocumentPreview } from "@/components/document-preview";
+import { Button, Field, Input, Micro, Notice, Panel, Select, Textarea } from "@/components/ui";
 
 type Proposed = { occurredAt: string; channel: string; direction: "inbound" | "outbound";
   summary: string; details: string; participantNames: string[];
@@ -28,6 +29,80 @@ type Suggestion = { id: string; kind: string; model: string | null; proposed: un
   retrievedRefs: unknown; documentRequest: string | null;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
   document: { sha256: string; mime: string; title: string; sizeBytes: number } | null };
+
+/**
+ * The frame every suggestion sits in.
+ *
+ * A plain `Panel`, never `lit`: this page is a LIST of proposals, and a light
+ * streak on each of them turns the accent into wallpaper. No amber anywhere on
+ * a card either — a suggestion is the machine offering something, not the case
+ * waiting on Martin, and amber has to keep meaning exactly one thing.
+ */
+function Card({ children }: { children: ReactNode }) {
+  return (
+    <li>
+      <Panel>
+        <div className="flex flex-col gap-[18px] p-[26px]">{children}</div>
+      </Panel>
+    </li>
+  );
+}
+
+/**
+ * Cyan is the system's own voice, and every control on this page holds a value
+ * the system PROPOSED rather than one the record already carries. Tinting the
+ * field labels is what keeps an editable suggestion from reading like a fact.
+ */
+function ProposalLabel({ children }: { children: ReactNode }) {
+  return <span className="text-signal">{children}</span>;
+}
+
+/** Where the suggestion came from, and which model wrote it. Provenance, so mono. */
+function Source({ model, children }: { model: string | null; children: ReactNode }) {
+  return (
+    <Micro className="leading-relaxed">
+      {children}
+      {model && <span className="text-ink-faint"> · suggested by {model}</span>}
+    </Micro>
+  );
+}
+
+/** A measured fact the model is showing its work with — never editable. */
+function Measured({ children }: { children: ReactNode }) {
+  return <p className="font-mono text-[11.5px] tracking-[0.1em] text-ink-soft">{children}</p>;
+}
+
+/**
+ * The verdict bar. One affirmative and one dismissal, separated from the form
+ * above by a hairline so the decision never reads as another field.
+ *
+ * The affirmative is `signal`, NOT `primary`. A queue of five proposals renders
+ * five of these, and five gradient buttons each with their own glow is the glow
+ * law broken exactly as it is written: a signal that appears five times on one
+ * screen is decoration. `signal` keeps the cyan — so the affirmative still reads
+ * as the affirmative next to a `ghost` dismissal — and spends no glow at all,
+ * which leaves this page honestly without a primary button. That is the right
+ * answer: nothing here is THE thing to press, because every card is.
+ */
+function Verdict({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap gap-[10px] border-t border-hairline pt-[18px]">{children}</div>
+  );
+}
+
+/** The original mail, closed by default: it is the source, not the proposal. */
+function OriginalEmail({ bodyText }: { bodyText: string }) {
+  return (
+    <details>
+      <summary className="cursor-pointer font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim transition-colors hover:text-signal">
+        Original email
+      </summary>
+      <pre className="mt-[12px] max-h-72 overflow-auto rounded-chip border border-hairline bg-void/60 p-[14px] font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-ink-mute">
+        {bodyText}
+      </pre>
+    </details>
+  );
+}
 
 export function SuggestionCard({ s }: { s: Suggestion }) {
   if (s.kind === "document-meta") return <DocMetaCard s={s} />;
@@ -62,42 +137,47 @@ function TaskCard({ s }: { s: Suggestion }) {
   }
   const busy = approve.isPending || reject.isPending;
   return (
-    <li className="rounded border bg-white p-4 space-y-3">
-      <p className="text-sm text-slate-500">
+    <Card>
+      <Source model={s.model}>
         {s.rawEmail ? `From email · “${s.rawEmail.subject}”` : "Action item found"}
-        {s.model && <span> · suggested by {s.model}</span>}
-      </p>
-      <label className="block text-sm">Task<input className="w-full border rounded p-2"
-        value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-      <label className="block text-sm">Details<textarea className="w-full border rounded p-2" rows={2}
-        value={details} onChange={(e) => setDetails(e.target.value)} /></label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-sm">Due date<input type="date" className="w-full border rounded p-2"
-          value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
-        <label className="block text-sm">Assignee<select className="w-full border rounded p-2"
-          value={assigneePartyId} onChange={(e) => setAssigneePartyId(e.target.value)}>
-          <option value="">— nobody yet —</option>
-          {(parties.data ?? []).map((party) =>
-            <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
+      </Source>
+      <Field label={<ProposalLabel>Task</ProposalLabel>} htmlFor={`${s.id}-task`}>
+        <Input id={`${s.id}-task`} value={title} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
+      <Field label={<ProposalLabel>Details</ProposalLabel>} htmlFor={`${s.id}-details`}>
+        <Textarea id={`${s.id}-details`} rows={2}
+          value={details} onChange={(e) => setDetails(e.target.value)} />
+      </Field>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label={<ProposalLabel>Due date</ProposalLabel>} htmlFor={`${s.id}-due`}>
+          <Input id={`${s.id}-due`} type="date"
+            value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+        </Field>
+        <Field label={<ProposalLabel>Assignee</ProposalLabel>} htmlFor={`${s.id}-assignee`}>
+          <Select id={`${s.id}-assignee`} value={assigneePartyId}
+            onChange={(e) => setAssigneePartyId(e.target.value)}>
+            <option value="">— nobody yet —</option>
+            {(parties.data ?? []).map((party) =>
+              <option key={party.id} value={party.id}>{party.name}</option>)}
+          </Select>
+        </Field>
       </div>
       {s.documentRequest && <AlreadyHaveThis suggestionId={s.id} request={s.documentRequest}
         selected={pickedDocId ? [pickedDocId] : []}
         onToggle={(id) => setPickedDocId((prev) => (prev === id ? null : id))} />}
       <RetrievedRefs refs={s.retrievedRefs} />
-      {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
-        <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
-      <div className="flex gap-2">
-        <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
-          disabled={!title.trim() || busy}
+      {s.rawEmail && <OriginalEmail bodyText={s.rawEmail.bodyText} />}
+      <Verdict>
+        <Button variant="signal" size="sm" disabled={!title.trim() || busy}
           onClick={() => approve.mutate({ id: s.id, task: {
             title: title.trim(), details: details || undefined,
             dueAt: dueAt ? new Date(dueAt) : undefined,
             documentId: pickedDocId ?? undefined,
-            assigneePartyId: assigneePartyId || undefined } })}>Add task</button>
-        <button className="rounded border px-4 py-1 disabled:opacity-50" disabled={busy}
-          onClick={() => reject.mutate({ id: s.id })}>Not a task</button>
-      </div>
-    </li>
+            assigneePartyId: assigneePartyId || undefined } })}>Add task</Button>
+        <Button variant="ghost" size="sm" disabled={busy}
+          onClick={() => reject.mutate({ id: s.id })}>Not a task</Button>
+      </Verdict>
+    </Card>
   );
 }
 
@@ -111,33 +191,35 @@ function EntryCard({ s }: { s: Suggestion }) {
   const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
   if (!p) return null;
   return (
-    <li className="rounded border bg-white p-4 space-y-3">
-      <p className="text-sm text-slate-500">
+    <Card>
+      <Source model={s.model}>
         {s.rawEmail ? `Email from ${s.rawEmail.fromAddr}: “${s.rawEmail.subject}”` : "Detected item"}
-        {s.model && <span> · suggested by {s.model}</span>}
-      </p>
-      <label className="block text-sm">Summary<input className="w-full border rounded p-2"
-        value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
-      <label className="block text-sm">Details<textarea className="w-full border rounded p-2" rows={3}
-        value={details} onChange={(e) => setDetails(e.target.value)} /></label>
+      </Source>
+      <Field label={<ProposalLabel>Summary</ProposalLabel>} htmlFor={`${s.id}-summary`}>
+        <Input id={`${s.id}-summary`} value={summary} onChange={(e) => setSummary(e.target.value)} />
+      </Field>
+      <Field label={<ProposalLabel>Details</ProposalLabel>} htmlFor={`${s.id}-details`}>
+        <Textarea id={`${s.id}-details`} rows={3}
+          value={details} onChange={(e) => setDetails(e.target.value)} />
+      </Field>
       {s.documentRequest && <AlreadyHaveThis suggestionId={s.id} request={s.documentRequest}
         selected={pickedDocIds}
         onToggle={(id) => setPickedDocIds((prev) =>
           prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
       <RetrievedRefs refs={s.retrievedRefs} />
-      {s.rawEmail && <details><summary className="cursor-pointer text-sm">Original email</summary>
-        <pre className="text-xs whitespace-pre-wrap bg-slate-50 p-2 rounded">{s.rawEmail.bodyText}</pre></details>}
-      <div className="flex gap-2">
-        <button className="rounded bg-emerald-700 text-white px-4 py-1"
+      {s.rawEmail && <OriginalEmail bodyText={s.rawEmail.bodyText} />}
+      <Verdict>
+        <Button variant="signal" size="sm"
           onClick={() => approve.mutate({ id: s.id, entry: {
             occurredAt: new Date(p.occurredAt), channel: p.channel as "email", direction: p.direction,
             summary, details: details || undefined, source: "gmail-watch",
             participantPartyIds: [],
             documentIds: [...new Set([...p.attachmentDocumentIds, ...pickedDocIds])],
-            actionItems: p.actionItems } })}>Add to the record</button>
-        <button className="rounded border px-4 py-1" onClick={() => reject.mutate({ id: s.id })}>Not relevant</button>
-      </div>
-    </li>
+            actionItems: p.actionItems } })}>Add to the record</Button>
+        <Button variant="ghost" size="sm"
+          onClick={() => reject.mutate({ id: s.id })}>Not relevant</Button>
+      </Verdict>
+    </Card>
   );
 }
 
@@ -167,28 +249,36 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
   if (!p) return null;
   const amountCents = Math.abs(p.amountCents ?? p.typicalAmountCents ?? 0);
   return (
-    <li className="rounded border bg-white p-4 space-y-3">
-      <p className="text-sm text-slate-500">
+    <Card>
+      <Source model={s.model}>
         Recurring charge found{p.counterpartyName ? ` — ${p.counterpartyName}` : ""}
-        {s.model && <span> · suggested by {s.model}</span>}
-      </p>
-      <p className="text-sm text-slate-700">{chargeEvidence(p)}</p>
+      </Source>
+      <Measured>{chargeEvidence(p)}</Measured>
+      {/*
+        A lookup still running is the system talking about itself, so it is cyan
+        and not amber — nothing here is blocked on Martin, he is only being told
+        he may fill it in ahead of the machine.
+      */}
       {p.resolved === false && (
-        <p className="rounded bg-amber-50 border border-amber-200 text-amber-800 text-sm p-2">
+        <Notice tone="signal">
           Waiting for receipt lookup — you can also fill it in yourself.
-        </p>
+        </Notice>
       )}
-      {p.note && <p className="text-sm text-slate-600">{p.note}</p>}
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-sm">Name<input className="w-full border rounded p-2"
-          value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <label className="block text-sm">Category<select className="w-full border rounded p-2"
-          value={category} onChange={(e) => setCategory(e.target.value as ItemCategory)}>
-          {ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+      {p.note && <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">{p.note}</p>}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label={<ProposalLabel>Name</ProposalLabel>} htmlFor={`${s.id}-name`}>
+          <Input id={`${s.id}-name`} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={<ProposalLabel>Category</ProposalLabel>} htmlFor={`${s.id}-category`}>
+          <Select id={`${s.id}-category`} value={category}
+            onChange={(e) => setCategory(e.target.value as ItemCategory)}>
+            {ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </Select>
+        </Field>
       </div>
       <RetrievedRefs refs={s.retrievedRefs} />
-      <div className="flex gap-2">
-        <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
+      <Verdict>
+        <Button variant="signal" size="sm"
           disabled={!name || approve.isPending || reject.isPending}
           onClick={() => approve.mutate({ id: s.id, item: {
             name, category, amountCents,
@@ -198,13 +288,13 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
               ? p.paymentChannel : "invoice") as "invoice",
             discoveredVia: (["manual", "bank", "paypal", "apple", "email"].includes(p.discoveredVia ?? "")
               ? p.discoveredVia : "bank") as "bank",
-          } })}>Add to registry</button>
-        <button className="rounded border px-4 py-1 disabled:opacity-50"
+          } })}>Add to registry</Button>
+        <Button variant="ghost" size="sm"
           disabled={approve.isPending || reject.isPending}
           onClick={() => reject.mutate({ id: s.id })}>
-          Not a subscription</button>
-      </div>
-    </li>
+          Not a subscription</Button>
+      </Verdict>
+    </Card>
   );
 }
 
@@ -219,30 +309,34 @@ function DebtCard({ s }: { s: Suggestion }) {
   // assert the creditor claims nothing.
   const claimedCents = p.claimedCents == null ? null : Math.abs(p.claimedCents);
   return (
-    <li className="rounded border bg-white p-4 space-y-3">
-      <p className="text-sm text-slate-500">
-        Possible debt found
-        {s.model && <span> · suggested by {s.model}</span>}
-      </p>
-      <p className="text-sm rounded bg-amber-50 border border-amber-200 text-amber-800 p-2">
+    <Card>
+      <Source model={s.model}>Possible debt found</Source>
+      {/*
+        The copy says "no judgement" and the colour has to agree: a debt the
+        model spotted is the system reporting, not a demand on Martin, so this
+        line is cyan. Amber here would turn every creditor notice into an alarm.
+      */}
+      <Notice tone="signal">
         This looks like a debt collector — no judgement, just good to have it on the list.
-      </p>
-      <label className="block text-sm">Creditor<input className="w-full border rounded p-2"
-        value={creditorName} onChange={(e) => setCreditorName(e.target.value)} /></label>
-      <p className="text-sm text-slate-700">Claimed: {formatEuro(claimedCents)}</p>
+      </Notice>
+      <Field label={<ProposalLabel>Creditor</ProposalLabel>} htmlFor={`${s.id}-creditor`}>
+        <Input id={`${s.id}-creditor`} value={creditorName}
+          onChange={(e) => setCreditorName(e.target.value)} />
+      </Field>
+      <Measured>Claimed: {formatEuro(claimedCents)}</Measured>
       <RetrievedRefs refs={s.retrievedRefs} />
-      <div className="flex gap-2">
-        <button className="rounded bg-emerald-700 text-white px-4 py-1 disabled:opacity-50"
+      <Verdict>
+        <Button variant="signal" size="sm"
           disabled={!creditorName || approve.isPending || reject.isPending}
           onClick={() => approve.mutate({ id: s.id, debt: {
             creditorName, claimedCents, references: p.references ?? undefined } })}>
-          Add as debt</button>
-        <button className="rounded border px-4 py-1 disabled:opacity-50"
+          Add as debt</Button>
+        <Button variant="ghost" size="sm"
           disabled={approve.isPending || reject.isPending}
           onClick={() => reject.mutate({ id: s.id })}>
-          Not a debt</button>
-      </div>
-    </li>
+          Not a debt</Button>
+      </Verdict>
+    </Card>
   );
 }
 
@@ -255,26 +349,26 @@ function DocMetaCard({ s }: { s: Suggestion }) {
   const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
   if (!p || !s.document) return null;
   return (
-    <li className="rounded border bg-white p-4 space-y-3">
-      <p className="text-sm text-slate-500">
-        {`Scanned document “${s.document.title}”`}
-        {s.model && <span> · suggested by {s.model}</span>}
-      </p>
+    <Card>
+      <Source model={s.model}>{`Scanned document “${s.document.title}”`}</Source>
       <DocumentPreview
         doc={{ sha256: s.document.sha256, title: s.document.title, mime: s.document.mime,
           sizeBytes: s.document.sizeBytes }}
         height="short" />
-      <label className="block text-sm">Title<input className="w-full border rounded p-2"
-        value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-      <label className="block text-sm">Type<input className="w-full border rounded p-2"
-        value={docType} onChange={(e) => setDocType(e.target.value)} /></label>
+      <Field label={<ProposalLabel>Title</ProposalLabel>} htmlFor={`${s.id}-title`}>
+        <Input id={`${s.id}-title`} value={title} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
+      <Field label={<ProposalLabel>Type</ProposalLabel>} htmlFor={`${s.id}-doctype`}>
+        <Input id={`${s.id}-doctype`} value={docType} onChange={(e) => setDocType(e.target.value)} />
+      </Field>
       <RetrievedRefs refs={s.retrievedRefs} />
-      <div className="flex gap-2">
-        <button className="rounded bg-emerald-700 text-white px-4 py-1"
+      <Verdict>
+        <Button variant="signal" size="sm"
           onClick={() => approve.mutate({ id: s.id, title, docType: docType || undefined })}>
-          Looks right</button>
-        <button className="rounded border px-4 py-1" onClick={() => reject.mutate({ id: s.id })}>Not relevant</button>
-      </div>
-    </li>
+          Looks right</Button>
+        <Button variant="ghost" size="sm"
+          onClick={() => reject.mutate({ id: s.id })}>Not relevant</Button>
+      </Verdict>
+    </Card>
   );
 }

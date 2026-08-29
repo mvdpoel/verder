@@ -42,8 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="relative flex min-h-screen">
         <nav
           aria-label="Hoofdnavigatie"
-          className="flex w-[78px] shrink-0 flex-col items-center gap-1.5 border-r border-edge bg-rail py-[26px]"
-        >
+          className="flex w-[78px] shrink-0 flex-col items-center gap-1.5 border-r border-edge bg-rail py-[26px]">
           <Link href="/dashboard" aria-label="verder" className="mb-[22px] text-signal">
             <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
               <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1" />
@@ -58,8 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               href={href}
               title={label}
               aria-label={label}
-              className="flex h-[44px] w-[46px] items-center justify-center rounded-panel text-ink-dim transition-colors hover:bg-signal/10 hover:text-signal"
-            >
+              className="flex h-[44px] w-[46px] items-center justify-center rounded-panel text-ink-dim transition-colors hover:bg-signal/10 hover:text-signal">
               <NavIcon href={href} />
             </Link>
           ))}

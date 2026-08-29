@@ -3,6 +3,7 @@ import { serverCaller } from "@/lib/trpc-server";
 import { MoneyChart } from "@/components/money-chart";
 import { CADENCE_LABEL, CATEGORY_LABEL, euro } from "@/components/money-format";
 import { incomeLineSummaries } from "@/lib/money-disclosures";
+import { buttonClass, Chip, Empty, Label, Micro, PageTitle, Panel } from "@/components/ui";
 
 /**
  * Geld in en uit. Everything on this page is derived on read from evidence that
@@ -12,6 +13,13 @@ import { incomeLineSummaries } from "@/lib/money-disclosures";
  * The page reports; it never judges. A month that got worse is a fact too, and
  * the "na opzeggen" line is here because something can be done — not because
  * something went wrong.
+ *
+ * NO AMBER ANYWHERE ON THIS PAGE, deliberately. Amber means "waiting on
+ * Martin", and nothing here is: a hatched month is a statement that has not
+ * been imported yet, an incidental credit is a disclosure, and money going out
+ * is simply what happened. The coverage warnings are told apart by PATTERN —
+ * filled, hatched, dashed, or an explicit gap — which is the distinction the
+ * whole page rests on and the one thing colour must not be asked to carry.
  */
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -27,15 +35,23 @@ export default async function MoneyPage({
 
   if (series.length === 0) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Geld in en uit</h1>
-        <p className="text-slate-600">
-          Nog geen afschriften ingelezen — zodra je een bankafschrift importeert
-          bouwt dit overzicht zichzelf op.
-        </p>
-        <Link className="text-blue-600 underline" href="/registry/import">
-          Afschrift importeren
-        </Link>
+      <div className="space-y-6">
+        <PageTitle>
+          Geld in en uit
+        </PageTitle>
+        <Empty
+          title={
+            <span className="block max-w-md text-center">
+              Nog geen afschriften ingelezen — zodra je een bankafschrift importeert
+              bouwt dit overzicht zichzelf op.
+            </span>
+          }
+          action={
+            <Link className={buttonClass("primary")} href="/registry/import">
+              Afschrift importeren
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -69,10 +85,12 @@ export default async function MoneyPage({
     iban ? (accountLabels[iban] ?? iban) : "onbekende rekening";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Geld in en uit</h1>
-        <p className="mt-1 text-slate-600">
+        <PageTitle>
+          Geld in en uit
+        </PageTitle>
+        <p className="mt-3 max-w-3xl text-[13.5px] font-light leading-relaxed text-ink-mute">
           Wat er binnenkomt, wat eruit gaat en wat er overblijft — per maand en per
           rekening, opgebouwd uit de afschriften en de vaste lasten die al in het
           dossier staan.
@@ -82,33 +100,34 @@ export default async function MoneyPage({
       {/* Header: the last month the statements provably cover in full. Not the
           month of the newest transaction — that one is nearly always half
           imported and would report a shortfall that is only missing data. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {series.map((s) => {
           const last = s.lastCompleteMonth
             ? s.months.find((m) => m.month === s.lastCompleteMonth)
             : undefined;
           return (
-            <div key={s.accountIban ?? "unknown"} className="rounded border bg-white p-4">
-              <p className="truncate text-xs font-medium text-slate-500" title={accountName(s.accountIban)}>
-                {accountName(s.accountIban)}
-              </p>
+            <Panel key={s.accountIban ?? "unknown"} className="p-[22px]">
+              <Label className="truncate">{accountName(s.accountIban)}</Label>
               {last ? (
                 <>
-                  <p className="mt-1 text-xs text-slate-500">
-                    laatste volledige maand · {last.month}
-                  </p>
-                  <dl className="mt-2 space-y-1 text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
-                    <div className="flex justify-between">
-                      <dt className="text-slate-600">vast inkomen</dt>
-                      <dd className="font-medium">{euro(last.inCents)}</dd>
+                  <Micro className="mt-[7px]">laatste volledige maand · {last.month}</Micro>
+                  <dl
+                    className="mt-4 space-y-[9px] text-[13px] font-light"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-mute">vast inkomen</dt>
+                      <dd className="font-mono text-ink-soft">{euro(last.inCents)}</dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-slate-600">uitgaven</dt>
-                      <dd className="font-medium">{euro(last.outCents)}</dd>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-mute">uitgaven</dt>
+                      <dd className="font-mono text-ink-soft">{euro(last.outCents)}</dd>
                     </div>
-                    <div className="flex justify-between border-t pt-1">
-                      <dt className="text-slate-600">blijft over</dt>
-                      <dd className="font-semibold">{euro(last.inCents - last.outCents)}</dd>
+                    <div className="flex items-baseline justify-between gap-3 border-t border-hairline pt-[9px]">
+                      <dt className="text-ink-mute">blijft over</dt>
+                      <dd className="font-mono text-[15px] text-ink-bright">
+                        {euro(last.inCents - last.outCents)}
+                      </dd>
                     </div>
                   </dl>
                   {/* The sum above is asymmetric on purpose and must say so
@@ -120,7 +139,7 @@ export default async function MoneyPage({
                       cannot stay is the reader meeting the shortfall two
                       screens before the footnote that explains it. */}
                   {last.incidentalCents > 0 && (
-                    <p className="mt-2 text-xs text-slate-600">
+                    <p className="mt-4 text-[12px] font-light leading-relaxed text-ink-label">
                       Er kwam die maand ook {euro(last.incidentalCents)} incidenteel
                       binnen. Dat telt hier niet mee — in dit bedrag staat alleen
                       terugkerend inkomen. De losse regels staan onderaan, bij “wat
@@ -129,12 +148,12 @@ export default async function MoneyPage({
                   )}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-3 text-[13px] font-light leading-relaxed text-ink-mute">
                   Nog geen maand die volledig door een afschrift gedekt wordt — zodra
                   er één compleet is staat hij hier.
                 </p>
               )}
-            </div>
+            </Panel>
           );
         })}
       </div>
@@ -147,7 +166,7 @@ export default async function MoneyPage({
           handover that never happened); the reader has to be told that, next to
           the cards, or the page has simply moved the mistake to them. */}
       {series.length > 1 && (
-        <p className="text-sm text-slate-600">
+        <p className="max-w-3xl text-[13px] font-light leading-relaxed text-ink-mute">
           Deze rekeningen staan los van elkaar en horen niet bij elkaar opgeteld te
           worden. Leefgeld telt op de leefgeldrekening als inkomen en op de
           beheerrekening als uitgave — hetzelfde geld, van twee kanten gezien. Lees
@@ -168,9 +187,12 @@ export default async function MoneyPage({
           it was rendered nowhere at all. A bar the reader cannot trace back to a
           name is a number he has to take on faith, and this page does not ask
           for faith. */}
-      <section className="rounded border bg-white p-4">
-        <h2 className="font-semibold">Waar het vaste inkomen vandaan komt</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <Panel as="section" className="p-[26px]">
+        {/* Still an <h2>: the section headings on this page read as the
+            system's small caps, but the document outline is what a screen
+            reader navigates by and it stays intact. */}
+        <Label as="h2">Waar het vaste inkomen vandaan komt</Label>
+        <p className="mt-3 max-w-3xl text-[13px] font-light leading-relaxed text-ink-mute">
           Hierop zijn de inkomstenbalken en de prognose gebouwd: bijschrijvingen van
           een tegenpartij die op een vast ritme betaalt. Het bedrag is wat één
           volledige periode oplevert, zodat een deelmaand aan het begin of eind van
@@ -178,36 +200,32 @@ export default async function MoneyPage({
           inkomen onder een nieuwe naam doorloopt — bijvoorbeeld na een
           baanwissel — en dat het als één lijn geteld wordt.
         </p>
-        <div className="mt-3 space-y-3">
+        <div className="mt-5 space-y-5">
           {series.map((s) => {
             const lines = incomeLineSummaries(s.incomeLines);
             return (
               <div key={s.accountIban ?? "unknown"}>
-                <p className="truncate text-xs font-medium text-slate-500" title={accountName(s.accountIban)}>
-                  {accountName(s.accountIban)}
-                </p>
+                <Label className="truncate">{accountName(s.accountIban)}</Label>
                 {lines.length === 0 ? (
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-2 text-[13px] font-light leading-relaxed text-ink-mute">
                     Nog geen terugkerende bijschrijving herkend op deze rekening —
                     zodra er twee betalingen in hetzelfde ritme binnen zijn staat de
                     lijn hier.
                   </p>
                 ) : (
-                  <ul className="mt-1 space-y-1 text-sm">
+                  <ul className="mt-2">
                     {lines.map((l) => (
-                      <li key={l.key} className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-medium text-slate-700">{l.label}</span>
-                        {l.continued && (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
-                            voortgezet
-                          </span>
-                        )}
+                      <li
+                        key={l.key}
+                        className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-hairline py-[11px] last:border-0">
+                        <span className="text-[13.5px] text-ink-soft">{l.label}</span>
+                        {l.continued && <Chip tone="signal">voortgezet</Chip>}
                         <span
-                          className="ml-auto text-slate-600"
+                          className="ml-auto font-mono text-[11px] tracking-[0.1em] text-ink-dim"
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {CADENCE_LABEL[l.cadence] ?? l.cadence}{" "}
-                          <span className="font-medium text-slate-800">
+                          <span className="text-[13px] text-ink-soft">
                             {euro(l.typicalAmountCents)}
                           </span>
                         </span>
@@ -219,64 +237,70 @@ export default async function MoneyPage({
             );
           })}
         </div>
-      </section>
+      </Panel>
 
       {detail && (
-        <section className="rounded border bg-white p-4">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="font-semibold">
+        <Panel as="section" className="p-[26px]">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="font-mono text-[12px] tracking-[0.16em] uppercase text-ink-bright">
               {detail.month} · {accountName(detail.accountIban)}
             </h2>
             <Link
               href={cat ? `/money?cat=${encodeURIComponent(cat)}` : "/money"}
-              className="ml-auto text-sm text-slate-500 hover:underline"
-            >
+              className="ml-auto font-mono text-[10px] tracking-[0.16em] uppercase text-ink-dim transition-colors hover:text-signal">
               sluiten
             </Link>
           </div>
           {detail.categories.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-3 text-[13px] font-light text-ink-mute">
               Geen uitgaven in deze maand op deze rekening.
             </p>
           ) : (
-            <div className="mt-3 space-y-3">
+            <div className="mt-5 space-y-2">
               {detail.categories.map((c) => (
-                <details key={c.category} open={cat === c.category} className="rounded border">
-                  <summary className="flex cursor-pointer justify-between px-3 py-2 text-sm">
-                    <span className="font-medium">
-                      {CATEGORY_LABEL[c.category] ?? c.category}
+                <details
+                  key={c.category}
+                  open={cat === c.category}
+                  className="rounded-panel border border-edge">
+                  <summary className="flex cursor-pointer items-baseline justify-between gap-3 px-[14px] py-[11px] text-[13.5px] font-light text-ink-soft">
+                    <span>{CATEGORY_LABEL[c.category] ?? c.category}</span>
+                    <span
+                      className="font-mono text-[13px] text-ink"
+                      style={{ fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {euro(c.cents)}
                     </span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{euro(c.cents)}</span>
                   </summary>
-                  <ul className="divide-y border-t text-sm">
+                  <ul className="border-t border-hairline">
                     {c.transactions.map((t) => {
                       const doc = statementDocs.get(t.statementSha256);
                       return (
-                        <li key={t.id} className="flex flex-wrap items-baseline gap-2 px-3 py-2">
-                          <span className="w-20 text-xs text-slate-500">
+                        <li
+                          key={t.id}
+                          className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-hairline px-[14px] py-[10px] text-[13px] font-light last:border-0">
+                          <span className="w-20 shrink-0 font-mono text-[10px] tracking-[0.1em] text-ink-dim">
                             {new Date(t.bookedAt).toLocaleDateString("nl-NL")}
                           </span>
-                          <span className="text-slate-700">
+                          <span className="text-ink-soft">
                             {t.itemName ?? t.counterpartyName ?? "onbekende tegenpartij"}
                           </span>
                           {t.itemName && t.counterpartyName && (
-                            <span className="text-xs text-slate-400">{t.counterpartyName}</span>
+                            <span className="text-[12px] text-ink-label">{t.counterpartyName}</span>
                           )}
                           <span
-                            className="ml-auto font-medium"
+                            className="ml-auto font-mono text-ink"
                             style={{ fontVariantNumeric: "tabular-nums" }}
                           >
                             {euro(t.amountCents)}
                           </span>
                           {doc ? (
                             <Link
-                              className="w-full text-xs text-slate-500 hover:underline"
-                              href={`/vault/${doc.id}`}
-                            >
+                              className="w-full font-mono text-[10px] tracking-[0.1em] text-ink-dim transition-colors hover:text-signal"
+                              href={`/vault/${doc.id}`}>
                               → afschrift: {doc.title}
                             </Link>
                           ) : (
-                            <span className="w-full text-xs text-slate-400">
+                            <span className="w-full font-mono text-[10px] tracking-[0.1em] text-ink-faint">
                               afschrift niet in de kluis gevonden
                             </span>
                           )}
@@ -289,20 +313,20 @@ export default async function MoneyPage({
             </div>
           )}
           {detail.parseErrorRows > 0 && (
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-4 text-[12px] font-light text-ink-label">
               {detail.parseErrorRows} regel(s) in deze maand waren onleesbaar en tellen
               nergens in mee.
             </p>
           )}
-        </section>
+        </Panel>
       )}
 
       {/* Disclosures. Everything the bars leave out is on the same screen —
           that is what makes the arithmetic reconcile. Removing this block makes
           the page lie, and the number VerderGroep reads must never be silently
           understated. */}
-      <section className="rounded border bg-white p-4">
-        <h2 className="font-semibold">Wat er niet in de balken zit</h2>
+      <Panel as="section" className="p-[26px]">
+        <Label as="h2">Wat er niet in de balken zit</Label>
         {series.every((s) =>
           s.months.every(
             (m) =>
@@ -312,12 +336,12 @@ export default async function MoneyPage({
               m.coverage === "complete"
           )
         ) ? (
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-3 max-w-3xl text-[13px] font-light leading-relaxed text-ink-mute">
             Niets. Elke maand hierboven is volledig gedekt door een afschrift, en
             elke bijschrijving telt mee als vast inkomen.
           </p>
         ) : (
-          <div className="mt-3 space-y-4">
+          <div className="mt-5 space-y-6">
             {series.map((s) => {
               const notes = s.months.filter(
                 (m) =>
@@ -329,14 +353,14 @@ export default async function MoneyPage({
               if (notes.length === 0) return null;
               return (
                 <div key={s.accountIban ?? "unknown"}>
-                  <p className="truncate text-xs font-medium text-slate-500">
-                    {accountName(s.accountIban)}
-                  </p>
-                  <ul className="mt-1 space-y-1 text-sm text-slate-600">
+                  <Label className="truncate">{accountName(s.accountIban)}</Label>
+                  <ul className="mt-2 space-y-3 text-[13px] font-light text-ink-mute">
                     {notes.map((m) => (
-                      <li key={m.month} className="space-y-1">
-                        <div className="flex flex-wrap gap-x-2">
-                          <span className="font-medium text-slate-700">{m.month}</span>
+                      <li key={m.month} className="space-y-1 border-b border-hairline pb-3 last:border-0">
+                        <div className="flex flex-wrap items-baseline gap-x-3">
+                          <span className="font-mono text-[11px] tracking-[0.12em] text-ink-soft">
+                            {m.month}
+                          </span>
                           {m.coverage === "none" && <span>geen data — geen afschrift voor deze maand</span>}
                           {m.coverage === "partial" && (
                             <span>mogelijk incompleet — het afschrift dekt niet de hele maand</span>
@@ -376,12 +400,12 @@ export default async function MoneyPage({
             })}
           </div>
         )}
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-5 max-w-3xl text-[12px] font-light leading-relaxed text-ink-label">
           Alleen terugkerende bijschrijvingen tellen als vast inkomen. Rekeningen
           worden nooit samengevoegd: geld dat van de ene eigen rekening naar de
           andere gaat is een overboeking, geen inkomen.
         </p>
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -403,14 +427,19 @@ function DisclosedRows({
   }[];
 }) {
   return (
-    <ul className="mt-1 space-y-0.5 border-l pl-3 text-xs text-slate-500">
+    <ul className="mt-2 space-y-[3px] border-l border-hairline pl-[13px] text-[12px] text-ink-dim">
       {rows.map((r) => (
-        <li key={r.id} className="flex flex-wrap items-baseline gap-x-2">
-          <span className="w-20">{new Date(r.bookedAt).toLocaleDateString("nl-NL")}</span>
-          <span className="text-slate-600">
+        <li key={r.id} className="flex flex-wrap items-baseline gap-x-3">
+          <span className="w-20 shrink-0 font-mono text-[10px] tracking-[0.1em]">
+            {new Date(r.bookedAt).toLocaleDateString("nl-NL")}
+          </span>
+          <span className="font-light text-ink-mute">
             {r.counterpartyName ?? "onbekende tegenpartij"}
           </span>
-          <span className="ml-auto" style={{ fontVariantNumeric: "tabular-nums" }}>
+          <span
+            className="ml-auto font-mono text-[11px]"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {euro(r.amountCents)}
           </span>
         </li>

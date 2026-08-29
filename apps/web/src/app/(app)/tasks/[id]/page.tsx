@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { TaskForm } from "@/components/task-form";
 import { TaskStatusForm } from "@/components/task-status-form";
 import { TaskStatusBadge, TaskStatusTimeline } from "@/components/task-list";
 import { taskFormOptions } from "../form-options";
+import { Chip, Empty, PageTitle, Panel, PanelHead, Row, TextLink } from "@/components/ui";
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,46 +22,58 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
     label: "Document", text: linked.document.title, href: `/vault/${linked.document.id}` });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">{task.title}</h1>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-[14px]">
+        <PageTitle>
+          {task.title}
+        </PageTitle>
         <TaskStatusBadge status={task.effectiveStatus} />
-        {task.assigneeName && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-            {task.assigneeName}
-          </span>
-        )}
+        {task.assigneeName && <Chip tone="faint">{task.assigneeName}</Chip>}
       </div>
-      <div className="grid grid-cols-2 gap-8 items-start">
-        <div className="space-y-6">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
           <TaskForm task={{
             id: task.id, title: task.title, details: task.details,
             assigneePartyId: task.assigneePartyId, dueAt: task.dueAt,
             entryId: task.entryId, financialItemId: task.financialItemId,
             debtId: task.debtId, documentId: task.documentId,
           }} options={options} />
-          <section>
-            <h2 className="font-semibold mb-2">Linked evidence</h2>
-            {evidence.length === 0
-              ? <p className="text-sm text-slate-600">Not linked to anything yet — that&apos;s fine.</p>
-              : (
-                <ul className="space-y-1">
-                  {evidence.map((e) => (
-                    <li key={e.href} className="text-sm">
-                      <span className="text-slate-500">{e.label}: </span>
-                      <Link href={e.href} className="underline">{e.text}</Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-          </section>
+          <Panel className="p-[26px]">
+            <div className="flex flex-col gap-[14px]">
+              <PanelHead labelAs="h2" label="Linked evidence" />
+              {evidence.length === 0
+                ? <Empty title={"Not linked to anything yet — that's fine."} />
+                : (
+                  /*
+                    A junction mark, not a done one: each of these is a record
+                    that lives elsewhere and can be walked to from here.
+                  */
+                  <div>
+                    {evidence.map((e) => (
+                      <Row
+                        key={e.href}
+                        state="junction"
+                        kicker={e.label}
+                        title={
+                          <TextLink href={e.href}>
+                            {e.text}
+                          </TextLink>
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+            </div>
+          </Panel>
         </div>
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           <TaskStatusForm taskId={task.id} currentStatus={task.effectiveStatus} />
-          <section>
-            <h2 className="font-semibold mb-2">Status trail — every step on record</h2>
-            <TaskStatusTimeline changes={task.statusTimeline} />
-          </section>
+          <Panel className="p-[26px]">
+            <div className="flex flex-col gap-[14px]">
+              <PanelHead labelAs="h2" label="Status trail — every step on record" />
+              <TaskStatusTimeline changes={task.statusTimeline} />
+            </div>
+          </Panel>
         </div>
       </div>
     </div>
