@@ -212,9 +212,24 @@ DROP TABLE gone_tracks;
 DROP TABLE IF EXISTS milestones;
 ```
 
-- [ ] **Step 2: Drop the table from the schema**
+- [ ] **Step 2: Drop the table from the schema, and register the migration**
 
 In `packages/db/src/schema.ts`, delete the `export const milestones = pgTable("milestones", { … })` declaration (~line 257). **Keep `wsnpStageEnum`** — `stops.stage` still uses it (line 329) and removing an enum a live column depends on means recreating the type for no gain.
+
+**A hand-written `.sql` that drizzle does not know about never runs.** All 26 existing migrations have an entry in `packages/db/drizzle/meta/_journal.json` and a `NNNN_snapshot.json` beside it, the hand-written ones (0008, 0011, 0013, 0016, 0017) included. Register 0026 by letting drizzle do the bookkeeping and then replacing the body:
+
+```bash
+env -u NODE_ENV pnpm --filter @verder/db generate
+```
+
+Drizzle sees the dropped `milestones` table, writes a new `0026_<random-name>.sql`, appends `{"idx": 26, …, "tag": "0026_<random-name>"}` to `meta/_journal.json`, and writes `meta/0026_snapshot.json`. Then:
+
+1. Replace the generated `.sql` file's contents with the migration from Step 1 **in full** — the generated `DROP TABLE "milestones"` is only the last statement of it.
+2. `git mv` the file to `packages/db/drizzle/0026_vertical_case_timeline.sql`.
+3. Edit the new journal entry's `"tag"` to `"0026_vertical_case_timeline"` so it matches the filename.
+4. Leave `meta/0026_snapshot.json` exactly as generated — it is drizzle's picture of the schema, and the schema change is only the dropped table.
+
+Verify: `grep -c 0026_vertical_case_timeline packages/db/drizzle/meta/_journal.json` prints `1`.
 
 - [ ] **Step 3: Apply it to the dev database and read the result**
 
@@ -453,6 +468,7 @@ The DAG machinery goes — `longestPathColumns`, the Kahn ordering, the reachabi
 - Create: `packages/api/src/amsterdam.ts`, `packages/api/src/amsterdam.test.ts`
 - Modify: `packages/api/src/money-series.ts` — import and re-export `monthKey` from the new module
 - Modify: `packages/api/src/track-map.ts` — the rewrite
+- Modify: `packages/api/src/routers/tracks.test.ts:112`, `apps/web/src/app/(app)/dashboard/page.tsx:27` — the two readers of the removed `column` field
 - Test: `packages/api/src/track-map.test.ts` — rewritten
 
 **Interfaces:**
@@ -947,7 +963,28 @@ Implement in this order:
 Run: `env -u NODE_ENV pnpm --filter @verder/api test track-map`
 Expected: PASS, all 27 tests.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 10: Fix the two remaining readers of `column`**
+
+`MapStop.column` is gone, so the branch does not typecheck until these move with it. A type change and its callers belong in one commit.
+
+`apps/web/src/app/(app)/dashboard/page.tsx:27` sorts a spoor's stops to find its furthest one. Row 0 is the top of the page, so ascending row is newest first:
+
+```tsx
+      const own = map.stops.filter((s) => s.trackId === t.id)
+        .sort((a, b) => a.row - b.row);
+      // The newest stop that is not done yet, or the newest stop there is. Row 0
+      // is the top of the page, so ascending row is newest first.
+      return { track: t, stop: own.find((s) => s.state !== "done") ?? own[0] };
+```
+
+`packages/api/src/routers/tracks.test.ts:112` reads `map.stops.find((s) => s.id === id)!.column`. Change `column` to `row` **and invert whatever comparison the assertion makes** — a bigger column meant later, a bigger row means older.
+
+- [ ] **Step 11: Typecheck the whole repo**
+
+Run: `env -u NODE_ENV pnpm -r typecheck`
+Expected: PASS. `grep -rn "\.column\|columnCount\|isStation" apps/web/src packages/api/src` should return nothing but the `isStation` uses in `apps/web/src/lib/track-marks*`, which Task 4 removes.
+
+- [ ] **Step 12: Commit**
 
 ```bash
 git add -A
@@ -1092,28 +1129,16 @@ spoor, and six new hues would leave the palette behind."
 ### Task 5: The three remaining callers
 
 **Files:**
-- Modify: `apps/web/src/app/(app)/dashboard/page.tsx:27`
 - Modify: `apps/web/src/app/(app)/timeline/page.tsx`
 - Modify: `apps/web/src/components/stop-editor.tsx:48`
-- Modify: `packages/api/src/routers/tracks.test.ts:112`
 
 **Interfaces:**
 - Consumes: `CaseMap` from Task 3.
 - Produces: nothing new.
 
-- [ ] **Step 1: Fix the dashboard sort**
+**Already done, do not redo:** the dashboard sort (`dashboard/page.tsx:27`) and the router test (`tracks.test.ts:112`) moved into Task 3, because they are the direct callers of the `column` field it removed and the branch would not typecheck between the two tasks. Leave both alone.
 
-`apps/web/src/app/(app)/dashboard/page.tsx:27` reads `.sort((a, b) => a.column - b.column)`, and `column` is gone. A spoor's furthest stop is now its **topmost** row, so sort ascending by `row` and take the first — the array is already newest-first after the sort:
-
-```tsx
-      const own = map.stops.filter((s) => s.trackId === t.id)
-        .sort((a, b) => a.row - b.row);
-      // The newest stop that is not done yet, or the newest stop there is. Row 0
-      // is the top of the page, so ascending row is newest first.
-      return { track: t, stop: own.find((s) => s.state !== "done") ?? own[0] };
-```
-
-- [ ] **Step 2: Fix the timeline page's detail panel**
+- [ ] **Step 1: Fix the timeline page's detail panel**
 
 In `apps/web/src/app/(app)/timeline/page.tsx`:
 - Lines 111-112 print `verwacht <expectedAt>`. No stop is expected any more; delete that branch and keep only the `happenedAt` one.
@@ -1132,28 +1157,24 @@ In `apps/web/src/app/(app)/timeline/page.tsx`:
         </p>
 ```
 
-- [ ] **Step 3: Drop `verwacht` from the stop editor**
+- [ ] **Step 2: Drop `verwacht` from the stop editor**
 
 `apps/web/src/components/stop-editor.tsx:48` offers `{ value: "expected", label: "verwacht" }`. Remove that option from the array. Leave the `expectedAt` field and the router's `expected` enum member alone — `buildTrackMap` filters the state defensively (Task 3), so this is the second of two lines of defence rather than a load-bearing one.
 
-- [ ] **Step 4: Fix the router test**
-
-`packages/api/src/routers/tracks.test.ts:112` reads `map.stops.find((s) => s.id === id)!.column`. Change `column` to `row` and invert whatever comparison the assertion makes — a bigger column meant later, a bigger row means **older**.
-
-- [ ] **Step 5: Typecheck and run everything**
+- [ ] **Step 3: Typecheck and run everything**
 
 Run: `env -u NODE_ENV pnpm -r typecheck && env -u NODE_ENV pnpm -r test`
 Expected: PASS. `grep -rn "\.column\|columnCount\|isStation" apps/web/src packages/api/src` should return nothing.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add -A
-git commit -m "feat(web): point the map's callers at rows instead of columns
+git commit -m "feat(web): drop the future from the timeline page and the editor
 
-Dashboard sorts newest-first by row; the timeline detail panel drops the
-verwacht branch and the insert-before-the-endpoint helper, which had no
-endpoint left to insert before; the stop editor stops offering verwacht."
+The detail panel loses its verwacht branch and the helper that inserted a
+halte before the expected endpoint, which has no endpoint left to insert
+before; the stop editor stops offering verwacht at all."
 ```
 
 ---
