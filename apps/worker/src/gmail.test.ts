@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
 import { pollGmail, retryAfterFrom, buildQueries, type GmailPort } from "./gmail";
+import { settleDocumentTexts } from "./test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -39,6 +40,13 @@ describe("pollGmail", () => {
     const [raw] = await db.select().from(schema.rawEmails)
       .where(eq(schema.rawEmails.id, enqueued[0]));
     expect(raw.subject).toContain("rental contract");
+    // The CHANNEL LABEL. ingestRawEmail defaults `source` to "gmail" and that
+    // default is the only thing keeping 737 historical rows and every future
+    // Gmail ingest correctly attributed — yet until this line the whole suite
+    // passed with the default flipped to "jmap", because nothing anywhere
+    // selected the column. A mislabelled row is not cosmetic: it would tell the
+    // JMAP cutover that Gmail-era mail had already arrived over JMAP.
+    expect(raw.source).toBe("gmail");
     // Legal-evidence requirement (spec: persist raw message with full headers
     // *before* AI runs): the canonical RFC822 bytes must live in the vault at
     // the content-addressed path of the stored hash, not just as a hash that
@@ -49,6 +57,16 @@ describe("pollGmail", () => {
       .where(eq(schema.documents.sourceRef, raw.gmailMessageId));
     expect(docs).toHaveLength(1);
     expect(docs[0].source).toBe("email-attachment");
+    // Shared-dev-DB hygiene, and it is load-bearing: pendingDocMeta is
+    // ORDER BY created_at ASC LIMIT 50 on a database nothing truncates, so a
+    // fixture attachment with no document_texts row squats at the front of that
+    // page forever. Seven ingesting tests in this file had put 49 checklist.pdf
+    // rows in the backlog and made docmeta-sweep.test.ts fail on a document it
+    // had just created. Settle what this test ingested, and assert it.
+    expect(await settleDocumentTexts(db, raw.gmailMessageId)).toBe(1);
+    const [text] = await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, docs[0].id));
+    expect(text.extractor).toBe("none");
     await pool.end();
   });
 
@@ -72,6 +90,7 @@ describe("pollGmail", () => {
     const [repaired] = await db.select().from(schema.rawEmails)
       .where(eq(schema.rawEmails.id, raw.id));
     expect(repaired.suggestQueuedAt).not.toBeNull();
+    await settleDocumentTexts(db, id);
     await pool.end();
   });
 
@@ -95,6 +114,7 @@ describe("pollGmail", () => {
       .filter((d) => d.includes(id));
     expect(detail.length).toBeGreaterThan(0);
     expect(detail.some((d) => d.includes("image.png") && d.includes("ii_abc"))).toBe(true);
+    await settleDocumentTexts(db, id);
     await pool.end();
   });
 
@@ -123,6 +143,7 @@ describe("pollGmail", () => {
     const errorRuns = runs.filter((r) => r.worker === "gmail" && r.status === "error"
       && JSON.stringify(r.detail).includes(badId));
     expect(errorRuns.length).toBeGreaterThan(0);
+    await settleDocumentTexts(db, goodId);
     await pool.end();
   });
 });
@@ -188,6 +209,7 @@ describe("Gmail rate-limit backoff", () => {
     const result = await pollGmail({ db, gmail: fakeGmail(id), vaultDir,
       enqueueSuggest: async () => {} });
     expect(result.ingested).toBe(1);
+    await settleDocumentTexts(db, id);
     await pool.end();
   });
 
@@ -266,6 +288,7 @@ describe("pollGmail asks Gmail to do the filtering", () => {
       gmail: { listMessageIds: async () => [id], getMessage: async () => msg } });
     expect(res.ingested).toBe(1);
     expect(enqueued).toHaveLength(1);
+    await settleDocumentTexts(db, id);
     await pool.end();
   });
 
@@ -278,6 +301,7 @@ describe("pollGmail asks Gmail to do the filtering", () => {
       gmail: { listMessageIds: async () => [id, id],
                getMessage: async () => { fetches++; return makeMsg(id); } } });
     expect(fetches).toBe(1);
+    await settleDocumentTexts(db, id);
     await pool.end();
   });
 });

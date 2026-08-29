@@ -3,14 +3,17 @@ import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
+import { isRelevantMessage, relevantAddresses } from "./mail/relevance";
+import type { MailMessage, SkippedPart } from "./mail/port";
 
 /** A message part the port refused to promote to a document — see
  *  isInlineBodyImage. Reported so a wrong skip is visible the same day rather
  *  than never: the part is gone from every surface and re-polling will not
- *  fetch it again. */
-export interface SkippedPart {
-  filename: string; mime: string; contentId: string | null;
-}
+ *  fetch it again.
+ *
+ *  ONE definition, two consumers: it lives in ./mail/port and is re-exported
+ *  here so the Gmail and JMAP ports cannot drift apart. */
+export type { SkippedPart };
 
 export interface GmailMessage {
   id: string; threadId: string; from: string; to: string; subject: string;
@@ -34,11 +37,16 @@ export interface GmailPort {
  * emails are financial evidence, not correspondence, so no suggest.entry job
  * is ever owed — stamping the outbox marker at insert time keeps pollGmail's
  * outbox repair from enqueuing one later.
+ *
+ * `msg` is a MailMessage, not a GmailMessage: the transaction is the same
+ * whichever port produced the message, and `source` LABELS the row with the
+ * channel it arrived over. It never rewrites gmail_message_id, which is also
+ * documents.source_ref and what the case map's third level derives from.
  */
 export async function ingestRawEmail(
   deps: { db: Db; vaultDir: string },
-  msg: GmailMessage,
-  opts?: { skipSuggest?: boolean },
+  msg: MailMessage,
+  opts?: { skipSuggest?: boolean; source?: "gmail" | "jmap" },
 ): Promise<string> {
   return deps.db.transaction(async (tx) => {
     const { sha256: rawSha256 } = await storeFile(deps.vaultDir, msg.raw);
@@ -47,6 +55,7 @@ export async function ingestRawEmail(
       fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
       sentAt: msg.sentAt, rawRfc822Sha256: rawSha256,
       bodyText: msg.bodyText,
+      source: opts?.source ?? "gmail",
       ...(opts?.skipSuggest ? { suggestQueuedAt: new Date() } : {}),
     }).returning();
     for (const att of msg.attachments) {
@@ -143,15 +152,6 @@ export function buildQueries(window: string, addrs: string[]): string[] {
   return queries;
 }
 
-/** Everyone worth watching: the configured domains plus every party's address. */
-async function relevantAddresses(db: Db): Promise<string[]> {
-  const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  const partyEmails = (await db.select().from(schema.parties))
-    .map((p) => p.email).filter((e): e is string => !!e);
-  return [...new Set([...senders, ...partyEmails].map((s) => s.toLowerCase()))];
-}
-
 export async function pollGmail(deps: {
   db: Db; gmail: GmailPort; vaultDir: string;
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
@@ -205,10 +205,9 @@ export async function pollGmail(deps: {
         for (const p of msg.skippedParts ?? []) skippedParts.push({ ...p, messageId: id });
         // Belt and braces behind the server-side filter, and it must test the
         // SAME two headers the query does — checking `from` alone would fetch
-        // Martin's own sent mail and then throw it away.
-        const hay = `${msg.from} ${msg.to}`.toLowerCase();
-        const relevant = addrs.some((a) => hay.includes(a));
-        if (!relevant) continue;
+        // Martin's own sent mail and then throw it away. The predicate lives in
+        // ./mail/relevance so pollMail applies this identical policy.
+        if (!isRelevantMessage(addrs, msg)) continue;
         const rawEmailId = await ingestRawEmail(deps, msg);
         await enqueueAndMark(deps, rawEmailId);
         ingested++;
