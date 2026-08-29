@@ -9,12 +9,10 @@ const stop = (over: Partial<Parameters<typeof stopMark>[0]> = {}) => ({
 });
 
 describe("stopMark", () => {
-  it("fills a stop that happened and outlines one that has not", () => {
-    expect(stopMark(stop({ state: "done" })).fill).toBe("solid");
-    expect(stopMark(stop({ state: "open" })).fill).toBe("hollow");
-  });
-
-  it("has no dashed mark left — nothing on the map is expected", () => {
+  it("draws only two marks — filled if it happened, outlined if it is open", () => {
+    // These are ALL the marks the map can reach: migration 0026 removed every
+    // expected stop, so there is no third state left to draw and no dashed mark
+    // on the page.
     expect(stopMark(stop({ state: "done" })).fill).toBe("solid");
     expect(stopMark(stop({ state: "open" })).fill).toBe("hollow");
   });

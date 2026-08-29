@@ -46,14 +46,17 @@ const BAND_H = 30;        // what a band header costs
 const EMPTY_BAND_H = 22;
 const LABEL_GAP = 18;
 const LABEL_W = 380;      // the label column's FLOOR, not its width
+const LABEL_MAX = 900;    // ...and its CEILING, so the date gutter stays reachable
 const LABEL_PAD = 8;
 const SPOOR_DX = 8;       // gap between a title and the spoor name trailing it
 const PAD_TOP = 12;
 const PAD_BOTTOM = 16;
 const R_STOP = 6;
+const BAND_FS = 10;
+const BAND_TRACKING = 0.08;
 
 /**
- * How wide a row's label runs, estimated from its length.
+ * How wide a run of text is, estimated from what is in it.
  *
  * The whole point of this drawing is that a title is never cut, and a root
  * `<svg>` clips whatever runs past its width — so the label column cannot be a
@@ -61,17 +64,40 @@ const R_STOP = 6;
  * on the server, and measuring after mount would move the page under Martin
  * while he reads it.
  *
- * So it is estimated, and the estimate is deliberately GENEROUS: too wide costs
- * whitespace inside a container that already scrolls, too narrow costs the end
- * of a sentence. MEASURED in Chrome at 12px/10px system-ui against all 34 rows
- * of the real case — the widest came out at 0.522 em per character, and 0.565
- * is that with room left for a row in capitals.
+ * So it is estimated, PER CHARACTER AND BY CASE, because one average per string
+ * is not safe here. MEASURED in Chrome at 12px/10px system-ui: across all 34
+ * rows of the real case the widest averaged 0.522 em per character, but those
+ * rows are ordinary Dutch sentences — an uppercase run is around 0.66 em, so a
+ * caps-heavy title of about sixty characters overflows a flat 0.565 estimate by
+ * roughly 68px and is silently cut off, which is the one failure this drawing
+ * exists to remove. Charging capitals at their own rate costs nothing on a
+ * normal row and cannot be defeated by a shouty one.
+ *
+ * Both rates keep headroom over what was measured. Over-estimating buys
+ * whitespace inside a container that already scrolls; under-estimating costs
+ * the end of a sentence.
  */
-const CHAR_EM = 0.565;
-const labelWidth = (title: string, spoor: string | null) =>
-  title.length * 12 * CHAR_EM
-  + (spoor === null ? 0 : SPOOR_DX + spoor.length * 10 * CHAR_EM);
+const CHAR_EM = 0.565;    // measured worst case 0.522
+const CAPS_EM = 0.72;     // measured around 0.66
 
+/** Uppercase in any language, not just A–Z: É and Ë are wide too. */
+const isUpper = (ch: string) => ch !== ch.toLowerCase() && ch === ch.toUpperCase();
+
+function runWidth(text: string, px: number): number {
+  let caps = 0;
+  let total = 0;
+  for (const ch of text) {
+    total++;
+    if (isUpper(ch)) caps++;
+  }
+  return px * (caps * CAPS_EM + (total - caps) * CHAR_EM);
+}
+
+const labelWidth = (title: string, spoor: string | null) =>
+  runWidth(title, 12)
+  + (spoor === null ? 0 : SPOOR_DX + runWidth(spoor, 10));
+
+const CARD = "#ffffff";   // the card this svg sits on — what a plate hides with
 const INK = "#52514e";
 const MUTED = "#898781";
 const RAIL = "#c3c2b7";
@@ -114,11 +140,18 @@ export function TrackMap({
   // The column is as wide as its widest row, never narrower than LABEL_W. A
   // title that ran past the svg's width would be silently cut off, which is
   // exactly the failure the 16-character stubs were.
+  // The column is as wide as its widest row, between a floor and a CEILING. A
+  // title that ran past the svg's width would be silently cut off, which is
+  // exactly the failure the 16-character stubs were — but an unbounded column
+  // is its own failure: past a certain width the card scrolls the date gutter
+  // off the left edge and the reader loses the axis the whole page is built on.
+  // LABEL_MAX fits about 150 characters, so it binds on pathology only.
+  //
   // reduce, not Math.max(...spread): the spread is one argument per stop, and
   // there is no cap on how many stops a case can grow to.
-  const labelW = Math.ceil(map.stops.reduce(
+  const labelW = Math.min(LABEL_MAX, Math.ceil(map.stops.reduce(
     (w, s) => Math.max(w, labelWidth(s.title, spoorOf(s.trackId)) + LABEL_PAD),
-    LABEL_W));
+    LABEL_W)));
   const width = labelX + labelW;
 
   return (
@@ -135,19 +168,11 @@ export function TrackMap({
             month with stops in it, which is what makes a quiet stretch read as
             quiet instead of as missing. */}
         {map.bands.map((band, i) => (
-          <g key={band.key}>
-            <line
-              x1={0} x2={width} y1={bandY[i] - 12} y2={bandY[i] - 12}
-              stroke={MUTED} strokeWidth="0.5" opacity="0.5"
-            />
-            <text
-              x={0} y={bandY[i]} fontSize="10" fill={MUTED} letterSpacing="0.08em"
-            >
-              {(band.empty
-                ? `${band.label} · geen gebeurtenissen`
-                : band.label).toUpperCase()}
-            </text>
-          </g>
+          <line
+            key={band.key}
+            x1={0} x2={width} y1={bandY[i] - 12} y2={bandY[i] - 12}
+            stroke={MUTED} strokeWidth="0.5" opacity="0.5"
+          />
         ))}
 
         {/* One rail per track, running down its own lane between its newest and
@@ -164,24 +189,20 @@ export function TrackMap({
           const terminus = trackTerminus(t);
           return (
             <g key={t.id}>
+              {/* NO NAME IN THE GUTTER, for any track. The hoofdlijn never had
+                  one — its name beside a stop reads as that stop's caption —
+                  and on the vertical map that argument covers the zijsporen
+                  too, because EVERY ROW ALREADY NAMES ITS OWN SPOOR after the
+                  title. A gutter name repeated the same string 14px lower and
+                  to the left, in the only whitespace the 34px cadence has, so
+                  it read as a caption for the row BELOW it. The rail is named
+                  on hover instead: free, and no ink. */}
+              <title>{t.title}</title>
               <line
                 x1={x} x2={x} y1={top} y2={end}
                 stroke={t.lane === 0 ? INK : RAIL}
                 strokeWidth={t.lane === 0 ? 3 : 2}
               />
-              {/* Side tracks get their name under the tail of their rail — the
-                  oldest end, where the spoor began, and the one end that has
-                  nothing below it to be confused with. The MAIN LINE does not:
-                  it is named by the page heading above the map and by the
-                  Sporen list below it, and a name in the gutter would read as a
-                  caption of whichever stop it landed beside. */}
-              {t.parentTrackId !== null && (
-                <text
-                  x={x - 4} y={end + 16} fontSize="10" fill={MUTED}
-                >
-                  {t.title}
-                </text>
-              )}
               {/* The cap sits at the TOP of the rail, the newest end: that is
                   where the spoor stopped. AFGEROND and GEËINDIGD are different
                   facts and the spoor editor makes Martin choose between them,
@@ -289,7 +310,7 @@ export function TrackMap({
                 )}
                 <circle
                   cx={cx} cy={cy} r={R_STOP}
-                  fill={mark.fill === "solid" ? INK : "#ffffff"}
+                  fill={mark.fill === "solid" ? INK : CARD}
                   stroke={INK}
                   strokeWidth="2"
                   strokeDasharray={mark.fill === "dashed" ? "3 2" : undefined}
@@ -309,6 +330,35 @@ export function TrackMap({
                 <title>{label}</title>
               </g>
             </Link>
+          );
+        })}
+
+        {/* The band LABELS are painted last, over the rails.
+            The rails run continuously through the band strip, so a label wide
+            enough to reach lane 0 lands on them: `MEI 2026 · GEEN
+            GEBEURTENISSEN` is about 180px and crossed four of them, and even a
+            full month is borderline — `SEPTEMBER 2026` just touches the spine.
+            The plate is the card's own background, so the label reads without
+            leaving the gutter it belongs in. Its RULE stays underneath
+            everything, where a divider belongs. */}
+        {map.bands.map((band, i) => {
+          const text = (band.empty
+            ? `${band.label} · geen gebeurtenissen`
+            : band.label).toUpperCase();
+          const plate = runWidth(text, BAND_FS) + text.length * BAND_TRACKING * BAND_FS;
+          return (
+            <g key={band.key}>
+              <rect
+                x={-2} y={bandY[i] - 9} width={plate + 8} height={13}
+                fill={CARD}
+              />
+              <text
+                x={0} y={bandY[i]} fontSize={BAND_FS} fill={MUTED}
+                letterSpacing={`${BAND_TRACKING}em`}
+              >
+                {text}
+              </text>
+            </g>
           );
         })}
 
