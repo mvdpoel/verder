@@ -18,7 +18,7 @@
  * readability; each stop prints its own date.
  */
 
-import { monthKey, monthLabel, monthsBetween } from "./amsterdam";
+import { monthIndex, monthKey, monthLabel, monthsBetween } from "./amsterdam";
 
 export interface TrackRow {
   id: string;
@@ -81,13 +81,21 @@ export interface MapBand {
   empty: boolean;
 }
 
+/**
+ * A departure or a return, as two points to draw a curve between.
+ *
+ * `from` is the MOVING line and `to` is the line it meets, which means the two
+ * ends swap roles with the kind: a `branch` runs from the parent to the child,
+ * a `merge` runs from the child back to the parent. Reading `from` as "always
+ * the parent" draws every merge backwards.
+ */
 export interface MapEdge {
   kind: "branch" | "merge";
   trackId: string;
-  /** On the parent line. */
+  /** Where the line leaves: the parent on a branch, the zijspoor on a merge. */
   fromLane: number;
   fromRow: number;
-  /** On the child line. */
+  /** Where it arrives: the zijspoor on a branch, the parent on a merge. */
   toLane: number;
   toRow: number;
   /** The anchor stop, when one is recorded and drawn. */
@@ -97,6 +105,8 @@ export interface MapEdge {
 export interface MapProblem {
   kind:
     | "no-root"
+    | "extra-root"
+    | "date-out-of-range"
     | "backwards-merge"
     | "branch-into-own-subtree"
     | "ancestry-cycle"
@@ -130,6 +140,28 @@ const BAND_LABEL: Record<string, string> = {
 /** Newest first: "nu" at the top, then the months, then everything undatable. */
 function bandLabel(key: string): string {
   return BAND_LABEL[key] ?? monthLabel(key);
+}
+
+/**
+ * How far the month bands reach either side of the middle of the case, in
+ * months. Five years each way: a bewindvoering runs three years and a WSNP
+ * three more, so a real case fits with room to spare, while the mistyped year
+ * that "1926" is falls outside by a century and is reported instead of drawn.
+ * It also bounds what the renderer is ever asked to paint at 121 stripes.
+ */
+const MAX_BAND_REACH = 60;
+
+/**
+ * The instant a Date carries, or null when there is nothing usable there.
+ *
+ * `new Date("onzin")` is a Date whose time is NaN, and handing that to
+ * Intl.format throws RangeError. Nothing in this module may throw, and NaN
+ * would poison every comparison it reached anyway.
+ */
+function instantOf(s: StopRow): number | null {
+  if (s.happenedAt === null) return null;
+  const at = s.happenedAt.getTime();
+  return Number.isNaN(at) ? null : at;
 }
 
 export function buildTrackMap(input: {
@@ -168,7 +200,6 @@ export function buildTrackMap(input: {
     else problems.push({ kind: "ancestry-cycle", trackId: t.id,
       detail: `spoor "${t.title}" hangt niet aan de hoofdlijn` });
   }
-  const drawable = new Set(reachable.map((t) => t.id));
 
   // 1. TRACK ORDER. Depth-first from the root, children by title then id.
   //
@@ -194,6 +225,20 @@ export function buildTrackMap(input: {
   walk(root);
   const trackOrder = new Map(ordered.map((t, i) => [t.id, i]));
 
+  // `tracks_single_root_uq` makes a second hoofdlijn unreachable from the
+  // database, but the header of this module promises that ANY input renders,
+  // and "unreachable from today's schema" is not that promise. A track that
+  // terminates at some OTHER root is not on this map — the map draws one case —
+  // so it is left out, and every one of them is NAMED. Silently dropping a
+  // whole line, stops and all, is the one failure mode a problems panel exists
+  // to prevent.
+  const drawable = new Set(ordered.map((t) => t.id));
+  for (const t of reachable) {
+    if (drawable.has(t.id)) continue;
+    problems.push({ kind: "extra-root", trackId: t.id,
+      detail: `spoor "${t.title}" hangt aan een tweede hoofdlijn — de kaart tekent er één` });
+  }
+
   // 2. STOPS PER TRACK. An orphan is reported BEFORE the expected filter: an
   // expected orphan is still a data error, and dropping it silently would hide
   // one problem behind another.
@@ -210,7 +255,7 @@ export function buildTrackMap(input: {
     // offers the state. This is the second line of defence: the axis is time,
     // and an expected stop has no date to put on it.
     if (s.state === "expected") continue;
-    byTrack.get(s.trackId)!.push(s);
+    byTrack.get(s.trackId)?.push(s);
   }
   for (const list of byTrack.values()) {
     list.sort((a, b) => a.orderIndex - b.orderIndex || a.id.localeCompare(b.id));
@@ -228,29 +273,102 @@ export function buildTrackMap(input: {
   for (const list of byTrack.values()) {
     let lastDated: number | null = null;
     for (const s of list) {
-      const at = s.happenedAt?.getTime() ?? null;
+      const at = instantOf(s);
       if (at !== null && lastDated !== null && at < lastDated) outOfOrder.add(s.id);
       if (at !== null) lastDated = at;
     }
   }
 
-  // 4. EFFECTIVE BAND AND EFFECTIVE TIME per stop.
+  // 4. WHICH DATES THE AXIS CAN HONESTLY CARRY.
+  //
+  // A date is geometry here, so a wrong one is not a wrong label any more — it
+  // is a wrong page. `<input type="date">` on the stop editor has no min and no
+  // max, so 1926 for 2026 is one keystroke away, and it would hand the renderer
+  // 1200 month stripes with 34 stops among them. Past a few centuries the band
+  // list is truncated by monthsBetween's own guard and stops start landing in
+  // bands that do not exist at all.
+  //
+  // So the axis covers a window around the MIDDLE of the case, and a stop
+  // outside it is filed under "zonder datum" and REPORTED — its date is kept
+  // and printed on the stop, it just stops deciding where the stop sits.
+  //
+  // The anchor is the MEDIAN month, never the newest or the oldest: a single
+  // typo would become whichever of those it was nearest and push the whole real
+  // case out of the window instead of itself. With one bad date among many good
+  // ones the median is always a good one. (With exactly two stops one month
+  // apart in centuries there is no majority to appeal to and either answer is a
+  // guess — the problems entry is what makes it visible.)
+  const datedMonths: string[] = [];
+  for (const list of byTrack.values()) {
+    for (const s of list) {
+      const at = instantOf(s);
+      if (at !== null) datedMonths.push(monthKey(s.happenedAt!));
+    }
+  }
+  datedMonths.sort();
+  const anchor = datedMonths.length > 0
+    ? datedMonths[datedMonths.length >> 1] : null;
+  const anchorIndex = anchor === null ? 0 : monthIndex(anchor);
+
+  /** The instant a stop can be placed at, or null when it cannot be placed. */
+  const placeableOf = new Map<string, number | null>();
+  for (const list of byTrack.values()) {
+    for (const s of list) {
+      const at = instantOf(s);
+      if (at === null) {
+        // No date at all is the ordinary case and no problem. A date the
+        // runtime cannot read is unreachable through drizzle, but this module
+        // promises never to throw, so it is caught rather than trusted.
+        if (s.happenedAt !== null) {
+          problems.push({ kind: "date-out-of-range", stopId: s.id,
+            detail: `halte "${s.title}" heeft een onleesbare datum — hij staat onder "zonder datum"` });
+          placeableOf.set(s.id, null);
+        }
+        continue;
+      }
+      const month = monthKey(s.happenedAt!);
+      if (Math.abs(monthIndex(month) - anchorIndex) > MAX_BAND_REACH) {
+        problems.push({ kind: "date-out-of-range", stopId: s.id,
+          detail: `halte "${s.title}" is gedateerd op ${month} en valt buiten de zaak — hij staat onder "zonder datum"` });
+        placeableOf.set(s.id, null);
+        continue;
+      }
+      placeableOf.set(s.id, at);
+    }
+  }
+  /** Had a date, but not one the axis can carry: "zonder datum", never "nu". */
+  const unplaceable = (s: StopRow) =>
+    s.happenedAt !== null && placeableOf.get(s.id) == null;
+
+  // 4b. EFFECTIVE BAND AND EFFECTIVE TIME per stop.
   //
   // A dated stop speaks for itself. An OPEN undated stop is what is running
   // right now, so it goes in "nu", above all history. A DONE undated stop
   // happened, we just do not know when — it borrows its place from the stop
   // before it on its own track (else the one after it), which is the only
   // honest guess there is, and lands in "onbekend" when its whole track is
-  // undated.
+  // undated. It borrows the INSTANT and not just the band, which is what puts
+  // it directly above the stop it borrowed from.
+  //
+  // The borrowing reads `placeableOf`, so a neighbour's unusable date is never
+  // handed on: one typo must not drag a healthy stop off the axis with it.
   const bandOf = new Map<string, string>();
   const timeOf = new Map<string, number | null>();
   for (const list of byTrack.values()) {
-    const times = list.map((s) => s.happenedAt?.getTime() ?? null);
+    const times = list.map((s) => placeableOf.get(s.id) ?? null);
     for (let i = 0; i < list.length; i++) {
       const s = list[i];
       if (times[i] !== null) {
         bandOf.set(s.id, monthKey(s.happenedAt!));
         timeOf.set(s.id, times[i]);
+        continue;
+      }
+      if (unplaceable(s)) {
+        // It has a date; it is just not one the axis can carry. It never
+        // borrows and it is never "nu" — that would file a stop dated 1926
+        // under what is running today.
+        bandOf.set(s.id, ONBEKEND);
+        timeOf.set(s.id, null);
         continue;
       }
       if (s.state === "open") {

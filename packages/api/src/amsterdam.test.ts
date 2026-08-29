@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, monthKey, monthLabel, monthsBetween } from "./amsterdam";
+import { dayKey, monthIndex, monthKey, monthLabel, monthsBetween } from "./amsterdam";
 
 describe("amsterdam calendar", () => {
   it("reads an instant as an Amsterdam calendar day", () => {
@@ -21,5 +21,12 @@ describe("amsterdam calendar", () => {
   it("crosses a year boundary", () => {
     expect(monthsBetween("2025-11", "2026-02"))
       .toEqual(["2026-02", "2026-01", "2025-12", "2025-11"]);
+  });
+
+  it("subtracts two months, across a year boundary and across centuries", () => {
+    expect(monthIndex("2026-08") - monthIndex("2026-04")).toBe(4);
+    expect(monthIndex("2026-02") - monthIndex("2025-11")).toBe(3);
+    // The gap a mistyped year opens, which is what the map has to refuse.
+    expect(monthIndex("2026-05") - monthIndex("1926-05")).toBe(1200);
   });
 });

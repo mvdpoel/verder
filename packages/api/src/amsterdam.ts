@@ -30,6 +30,16 @@ export function monthLabel(month: string): string {
 }
 
 /**
+ * A month key as a single number, so two of them can be subtracted. Months
+ * since year 0 — the origin is arbitrary and never leaves this module; only
+ * differences are meaningful.
+ */
+export function monthIndex(month: string): number {
+  const [y, m] = month.split("-").map(Number);
+  return y * 12 + (m - 1);
+}
+
+/**
  * Every month from `newest` down to `oldest`, inclusive, newest first —
  * INCLUDING the ones with nothing in them. A quiet stretch is a fact about the
  * case and the map has to be able to show it.

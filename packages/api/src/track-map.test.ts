@@ -111,6 +111,16 @@ describe("buildTrackMap bands", () => {
     expect(map.stops.find((s) => s.id === "s2b")!.bandKey).toBe("2026-07");
   });
 
+  // The band alone does not pin it down. It borrows the INSTANT of the stop it
+  // took its band from, so it lands directly above it — later on the track, and
+  // the page runs newest-first.
+  it("puts an undated done stop directly above the stop it borrowed from", () => {
+    const f = caseFixture();
+    f.stops.push(stop({ id: "s2b", trackId: "spine", orderIndex: 250 }));
+    const map = buildTrackMap(f);
+    expect(rowOf(map, "s2b")).toBe(rowOf(map, "s2") - 1);
+  });
+
   it("drops an entirely undated track into a `zonder datum` band at the bottom", () => {
     const f = caseFixture();
     f.tracks.push(track({ id: "leeg", title: "Zonder datum", parentTrackId: "spine" }));
@@ -270,5 +280,69 @@ describe("buildTrackMap problems", () => {
     const map = buildTrackMap({ tracks: [], stops: [] });
     expect(map.problems.map((p) => p.kind)).toEqual(["no-root"]);
     expect(map.bands).toEqual([]);
+  });
+});
+
+/**
+ * "TOTAL: any input renders" is a promise in the header of the module, so it
+ * gets tests that try to break it rather than tests that trust it. Every input
+ * below is refused by the schema today; none of them may throw, and none of
+ * them may go missing without a word in `problems`.
+ */
+describe("buildTrackMap totality", () => {
+  it("draws the first hoofdlijn and reports a second one instead of throwing", () => {
+    const f = caseFixture();
+    f.tracks.push(track({ id: "tweede", title: "Tweede hoofdlijn" }));
+    f.stops.push(stop({ id: "t1", trackId: "tweede", happenedAt: on("2026-08-05") }));
+    const map = buildTrackMap(f);
+    expect(map.problems.map((p) => p.kind)).toContain("extra-root");
+    expect(map.stops.map((s) => s.id)).not.toContain("t1");
+    // Totality: the hoofdlijn the map did pick still drew.
+    expect(rowOf(map, "s4")).toBe(0);
+  });
+
+  it("reports a stopless second hoofdlijn rather than dropping it in silence", () => {
+    const f = caseFixture();
+    f.tracks.push(track({ id: "tweede", title: "Tweede hoofdlijn" }));
+    const map = buildTrackMap(f);
+    expect(map.problems.some((p) => p.kind === "extra-root" && p.trackId === "tweede"))
+      .toBe(true);
+    expect(map.tracks.map((t) => t.id)).not.toContain("tweede");
+  });
+
+  it("refuses a mistyped year rather than drawing twelve hundred bands", () => {
+    const f = caseFixture();
+    // One keystroke away: <input type="date"> takes 1926 as happily as 2026.
+    f.stops.push(stop({ id: "typjaar", trackId: "spine", orderIndex: 500,
+      happenedAt: on("1926-05-01") }));
+    const map = buildTrackMap(f);
+    expect(map.stops.find((s) => s.id === "typjaar")!.bandKey).toBe("onbekend");
+    expect(map.problems.map((p) => p.kind)).toContain("date-out-of-range");
+    expect(map.bands.length).toBeLessThan(12);
+  });
+
+  it("keeps the bands tiling every row when a date is centuries out", () => {
+    const f = caseFixture();
+    f.stops.push(stop({ id: "ver", trackId: "spine", orderIndex: 500,
+      happenedAt: on("2926-05-01") }));
+    const map = buildTrackMap(f);
+    let next = 0;
+    for (const b of map.bands) {
+      expect(b.fromRow).toBe(next);
+      next = b.toRow;
+    }
+    expect(next).toBe(map.rowCount);
+    // And no stop is filed under a band that does not exist.
+    expect(map.stops.every((s) => map.bands.some((b) => b.key === s.bandKey))).toBe(true);
+  });
+
+  it("does not throw on a date it cannot read", () => {
+    const f = caseFixture();
+    f.stops.push(stop({ id: "kapot", trackId: "spine", orderIndex: 500,
+      happenedAt: new Date("onzin") }));
+    const map = buildTrackMap(f);
+    expect(map.stops.find((s) => s.id === "kapot")!.bandKey).toBe("onbekend");
+    expect(map.problems.map((p) => p.kind)).toContain("date-out-of-range");
+    expect(rowOf(map, "s4")).toBe(0);
   });
 });
