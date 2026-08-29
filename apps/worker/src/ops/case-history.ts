@@ -177,167 +177,230 @@ export const STOP_RENAMES = [
  * nothing manages, which is exactly what the test below refuses, so the entry
  * comes out rather than staying as a harmless-looking no-op.
  */
-export const TRACK_RENAMES: readonly { from: string; to: string }[] = [];
+export const TRACK_RENAMES: readonly { from: string; to: string }[] = [
+  // The episode restructure empties both of these: Moratorium and
+  // Schuldhulpverlening Almere were never separate matters, they were two of
+  // the parties working on ONE ontruiming, and their stops move onto that
+  // spoor. Rather than leave two empty rails on the map (and `tracks` has no
+  // DELETE outside a migration), the freed rows are renamed into the two
+  // containers the restructure needs. A track carries no evidence and no
+  // ledger event, so a row is a container and repurposing one is honest —
+  // this is the "rename-and-move, never delete-and-recreate" rule doing
+  // exactly the work it exists for.
+  { from: "Moratorium", to: "Opstartstukken" },
+  { from: "Schuldhulpverlening Almere", to: "Bijzondere bijstand" },
+];
 
 /**
- * The main line carries the bewindvoering story: aanmelding, de gang naar de
- * rechtbank, de beschikking, de opstart.
+ * The main line carries the bewindvoering itself, plus every moment something
+ * new landed.
  *
- * This reverses the earlier bare-trunk correction, and the reason is that the
- * trunk changed meaning. It used to run to `Einde bewindvoering`; migration
- * 0026 deletes that goal because the map shows history only, so the root is no
- * longer a destination — it is the spine of the story so far. A spine with two
- * stops and nine sporen hanging off it is not a story.
+ * A SPOOR IS ONE EPISODE. Something arrives — that is the trigger, and the
+ * trigger belongs on the HOOFDLIJN. Everything done in response hangs off it as
+ * a spoor and stays one spoor until the matter is closed. WHO does the work
+ * never splits it: Verder Bewind handing the ontruiming to Verder
+ * Schuldhulpverlening, a moratorium being prepared, the deurwaarder, Woonhave —
+ * that is one conversation about one thing, stopping the ontruiming, and it is
+ * one spoor.
+ *
+ * That is Martin's own reading of his case and it corrects two mistakes in the
+ * first vertical map: sporen were split by WHO did the work (Ontruiming /
+ * Moratorium / Schuldhulpverlening as three peers, when they are one episode
+ * with three parties in it), and the ANSWERING of a request sat on the trunk
+ * next to the request itself, when the request is the trigger and the answering
+ * is the branch.
+ *
+ * So the trunk is seven stops: `Aanmelding` (he asked), `Beschikking` (the
+ * court said go), the handover, and the four moments something arrived —
+ * Team Opstart's request, the deurwaarder at the door, the bank account taken
+ * over, Regio 3's request.
  */
 export const SPINE_SEED: StopSeed[] = [
   { orderIndex: 100, title: "Aanmelding bij Verder", kind: "mail", state: "done",
     happenedAt: at("2026-04-16"),
     note: "Bevestiging binnen een dag, met de toezegging binnen twee werkdagen " +
-      "te bellen." },
-  { orderIndex: 200, title: "Intakegesprek bewindvoering", kind: "meeting", state: "done",
-    happenedAt: at("2026-04-22"),
-    note: "Stadhuis Almere, Sociaal Domein, 10:00, met Demi Willemse. Eén dag na " +
-      "het eerste telefoongesprek ingepland." },
-  { orderIndex: 300, title: "Ondernemingen uitgeschreven bij de KvK", kind: "document",
-    state: "done", happenedAt: at("2026-04-24"),
-    task: "Ondernemingen uitschrijven bij de KvK",
-    note: "OpsMate, MP Hold BV en CloudSupport BV ontbonden." },
-  { orderIndex: 400, title: "Verzoek onderbewindstelling ingediend", kind: "process",
-    state: "done", happenedAt: at("2026-04-24"), doc: "Plan van aanpak bewind.pdf",
-    task: "Verzoek onderbewindstelling indienen bij de rechtbank",
-    note: "Met plan van aanpak, aanvullend plan van aanpak en toestemmingsverklaring." },
-  { orderIndex: 500, title: "Poststukken ingeleverd", kind: "meeting", state: "done",
-    happenedAt: at("2026-04-29"), task: "Poststukken aanleveren voor het schuldenoverzicht",
-    note: "Alle enveloppen geopend en als doos afgegeven bij de balie Sociaal Domein. " +
-      "Zwaarder werk dan het klinkt." },
-  { orderIndex: 600, title: "Rechtbank vraagt een verklaring", kind: "process", state: "done",
-    happenedAt: at("2026-06-01"),
-    note: "Een uitgebreide verklaring over het ontstaan van de schulden, als aanvulling " +
-      "op het ingediende verzoek." },
-  { orderIndex: 700, title: "Verklaring ontstaan schulden aangeleverd", kind: "mail",
-    state: "done", happenedAt: at("2026-06-09"),
-    task: "Verklaring over het ontstaan van de schulden schrijven",
-    note: "Diezelfde middag door Demi doorgezet naar de rechtbank. Ditzelfde stuk gaat " +
-      "op 04-08 opnieuw mee als 'eigen verhaal' voor het moratorium." },
-  { orderIndex: 800, title: "Beschikking: onder bewind gesteld", kind: "process",
+      "te bellen. Hier begint de aanvraag." },
+  // The "Go!" moment, and the one place on this map where a spoor comes BACK.
+  // The aanvraag was not something that happened alongside the bewindvoering —
+  // it was the prerequisite for it, and a merge is how the map says so.
+  { orderIndex: 200, title: "Beschikking: onder bewind gesteld", kind: "process",
     state: "done", happenedAt: at("2026-07-14"), doc: "Beschikking M.P. van der Poel.pdf",
-    note: "Zaak NLTZ2612548IVB. Dossier bij Verder: 25.04052. Toegewezen." },
-  { orderIndex: 900, title: "Dossier naar Team Opstart", kind: "process", state: "done",
+    note: "Zaak NLTZ2612548IVB. Dossier bij Verder: 25.04052. Toegewezen. Hiermee is " +
+      "de aanvraag afgerond en mag Verder handelen." },
+  { orderIndex: 300, title: "Dossier naar Team Opstart", kind: "process", state: "done",
     happenedAt: at("2026-07-20"),
-    note: "Demi draagt over aan het opstartteam. Hiermee is de aanvraag afgerond " +
-      "en komt de lijn weer samen." },
-  { orderIndex: 1000, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
+    note: "Demi draagt over aan het opstartteam." },
+  { orderIndex: 400, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
     state: "done", happenedAt: at("2026-07-27"),
     note: "Afschriften en inkomensspecificaties van drie maanden, zorgpolis 2026, " +
       "voorschotbeschikking toeslagen, huurverhoging, jaarafrekening water en energie." },
-  { orderIndex: 1100, title: "Heen en weer over de bestandsformaten", kind: "mail",
-    state: "done", happenedAt: at("2026-07-31"),
-    task: "Bankafschriften in een leesbaar formaat aanleveren",
-    note: "Vier pogingen — xlsx, pdf, opnieuw xlsx, en ten slotte het PDF-afschrift " +
-      "dat direct uit ABN AMRO komt. Zes mails over één bestand." },
-  { orderIndex: 1200, title: "Opstart van het dossier afgerond", kind: "document",
-    state: "done", happenedAt: at("2026-07-31"), task: "Opstartstukken aanleveren" },
-  { orderIndex: 1300, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
+  { orderIndex: 500, title: "Deurwaarder zegt de ontruiming aan", kind: "process",
+    state: "done", happenedAt: at("2026-07-29"),
+    note: "Aan de deur, zonder dat er iets van bij Verder bekend was. Eruit per " +
+      "18 augustus. Diezelfde ochtend met de grootste spoed om terugbellen gevraagd." },
+  { orderIndex: 600, title: "Rekening overgenomen zonder aankondiging", kind: "process",
+    state: "done", happenedAt: at("2026-08-05"),
+    note: "Pas geblokkeerd, inloggen onmogelijk, geen geld voor boodschappen. " +
+      "Eén berichtje vooraf had dit voorkomen." },
+  { orderIndex: 700, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
     happenedAt: at("2026-08-12"),
     note: "Acht categorieën, voor de bijzondere bijstand en de individuele " +
       "inkomenstoeslag. Het meeste ligt er al; nieuw zijn de jaaropgaven " +
       "van de afgelopen vijf jaar." },
-  { orderIndex: 1400, title: "Regio 3 vraagt de laatste drie loonstroken",
-    kind: "mail", state: "done", happenedAt: at("2026-08-25"),
-    note: "Van de acht categorieën stond dit nog open." },
-  // `done`, not `open`, and the two seeds have to agree on this: `writeStop`
-  // never touches `state` on an existing stop, so a stop this seed calls `open`
-  // and `ensureCaseMap` calls `done` produces two different maps depending on
-  // which one ran after the last truncation. Production is the authority and
-  // says done, 28-08 — Martin marked it himself. What is still outstanding
-  // hangs on the linked task, which is where "waar wacht het op MIJ" belongs.
-  { orderIndex: 1500, title: "Stukken aanleveren", kind: "document", state: "done",
-    happenedAt: at("2026-08-28"),
-    task: "Stukken aanleveren voor bijzondere bijstand en individuele inkomenstoeslag" },
 ];
 
 export const TRACK_SEED: TrackSeed[] = [
   {
+    // The one spoor that MERGES. Everything else on this map either ends or is
+    // still running; the aanvraag is the only episode that was a prerequisite
+    // for the hoofdlijn rather than something that arose alongside it, and the
+    // beschikking is where it comes back.
+    title: "Aanvraag bewindvoering",
+    status: "done",
+    branchesAt: "Aanmelding bij Verder",
+    mergesAt: "Beschikking: onder bewind gesteld",
+    note: "Op eigen initiatief aangevraagd. Van de aanmelding op 16 april tot de " +
+      "beschikking op 14 juli — drie maanden, waarvan tweeënhalve maand wachten " +
+      "op de rechtbank.",
+    stops: [
+      { orderIndex: 100, title: "Intakegesprek bewindvoering", kind: "meeting", state: "done",
+        happenedAt: at("2026-04-22"),
+        note: "Stadhuis Almere, Sociaal Domein, 10:00, met Demi Willemse. Eén dag na " +
+          "het eerste telefoongesprek ingepland." },
+      { orderIndex: 200, title: "Ondernemingen uitgeschreven bij de KvK", kind: "document",
+        state: "done", happenedAt: at("2026-04-24"),
+        task: "Ondernemingen uitschrijven bij de KvK",
+        note: "OpsMate, MP Hold BV en CloudSupport BV ontbonden." },
+      { orderIndex: 300, title: "Verzoek onderbewindstelling ingediend", kind: "process",
+        state: "done", happenedAt: at("2026-04-24"), doc: "Plan van aanpak bewind.pdf",
+        task: "Verzoek onderbewindstelling indienen bij de rechtbank",
+        note: "Met plan van aanpak, aanvullend plan van aanpak en toestemmingsverklaring." },
+      { orderIndex: 400, title: "Poststukken ingeleverd", kind: "meeting", state: "done",
+        happenedAt: at("2026-04-29"), task: "Poststukken aanleveren voor het schuldenoverzicht",
+        note: "Alle enveloppen geopend en als doos afgegeven bij de balie Sociaal Domein. " +
+          "Zwaarder werk dan het klinkt." },
+      { orderIndex: 500, title: "Rechtbank vraagt een verklaring", kind: "process", state: "done",
+        happenedAt: at("2026-06-01"),
+        note: "Een uitgebreide verklaring over het ontstaan van de schulden, als aanvulling " +
+          "op het ingediende verzoek." },
+      { orderIndex: 600, title: "Verklaring ontstaan schulden aangeleverd", kind: "mail",
+        state: "done", happenedAt: at("2026-06-09"),
+        task: "Verklaring over het ontstaan van de schulden schrijven",
+        note: "Diezelfde middag door Demi doorgezet naar de rechtbank. Ditzelfde stuk gaat " +
+          "op 04-08 opnieuw mee als 'eigen verhaal' voor het moratorium." },
+    ],
+  },
+  {
+    // ONE episode, not three. This spoor used to be split across Ontruiming,
+    // Moratorium and Schuldhulpverlening Almere — by which organisation was
+    // acting, which is not a fact about the case. From the deurwaarder at the
+    // door to the SHV file closing, it is one continuous effort to keep Martin
+    // in his house, and it worked.
     title: "Ontruiming Woonhave",
     status: "ended",
-    note: "De ontruiming die is afgewend. Geëindigd — en dat is een goede afloop, " +
-      "geen mislukking: de dreiging is weg, de achterstand loopt verder op het spoor " +
-      "Schuldregeling.",
+    branchesAt: "Deurwaarder zegt de ontruiming aan",
+    note: "De ontruiming die is afgewend. Van de aanzegging aan de deur tot het " +
+      "gesloten SHV-dossier: melden bij Verder, Verder schakelt de " +
+      "schuldhulpverlening in, een moratorium wordt klaargezet, en het " +
+      "minnelijke akkoord met Woonhave maakt dat overbodig. Geëindigd — en dat " +
+      "is een goede afloop, geen mislukking: de dreiging is weg, de achterstand " +
+      "loopt verder op het spoor Schuldregeling.",
     stops: [
-      { orderIndex: 100, title: "Deurwaarder zegt de ontruiming aan", kind: "process",
-        state: "done", happenedAt: at("2026-07-29"),
-        note: "Aan de deur, zonder dat er iets van bij Verder bekend was. Eruit per " +
-          "18 augustus. Diezelfde ochtend met de grootste spoed om terugbellen gevraagd." },
+      // UNDATED on purpose. Nothing in de vault legt vast wanneer dit telefoontje
+      // was — het staat hier omdat Martin het vertelt, en deze app verzint geen
+      // datum bij een feit. De kaart erft de plek van de eerstvolgende gedateerde
+      // halte, dus hij komt vanzelf onder het verzoek van 30-07 te staan.
+      { orderIndex: 100, title: "Ik meld het bij Verder Bewind", kind: "call", state: "done",
+        note: "Datum niet vastgelegd: het moet tussen de aanzegging (29-07) en het " +
+          "verzoek van Verder aan de deurwaarder (30-07) in hebben gezeten. " +
+          "Opgetekend uit Martins eigen relaas, niet uit een mail." },
       { orderIndex: 200, title: "Verder verzoekt de deurwaarder om opschorting", kind: "mail",
         state: "done", happenedAt: at("2026-07-30"), doc: "Beschikking M.P. van der Poel.pdf",
         task: "Deurwaarder aanschrijven met de beschikking en om opschorting verzoeken",
         note: "Regio 3 aan Hafkamp, met de beschikking erbij. Dit is de brief die de " +
           "zaak keert." },
-      { orderIndex: 300, title: "Minnelijk voorstel via de deurwaarder", kind: "process",
-        state: "done", happenedAt: at("2026-08-04"),
-        task: "Minnelijk voorstel doen aan Woonhave via de deurwaarder" },
-      { orderIndex: 400, title: "Woonhave akkoord — ontruiming geannuleerd", kind: "process",
-        state: "done", happenedAt: at("2026-08-06"),
-        note: "Voorwaarde: de lopende huur wordt betaald. In de mail van André staat " +
-          "19 augustus als ontruimingsdatum, de deurwaarder zei 18 augustus." },
-    ],
-  },
-  {
-    title: "Moratorium",
-    status: "ended",
-    note: "Het tweede spoor dat naast het minnelijke traject werd ingezet. Nooit " +
-      "ingediend — het akkoord van 6 augustus maakte het overbodig.",
-    stops: [
-      { orderIndex: 100, title: "Spoedverzoek: stukken vóór maandag", kind: "mail",
+      { orderIndex: 300, title: "Spoedverzoek: stukken vóór maandag", kind: "mail",
         state: "done", happenedAt: at("2026-07-31"),
         note: "Vijftien documenten, deadline maandag 3 augustus, over een weekend." },
-      { orderIndex: 200, title: "Moratoriumpakket aangeleverd", kind: "document", state: "done",
+      { orderIndex: 400, title: "Moratoriumpakket aangeleverd", kind: "document", state: "done",
         happenedAt: at("2026-08-03"), task: "Stukken voor het moratorium aanleveren",
         note: "Zestien bijlagen in één mail, binnen de deadline. Alleen de loonstrook " +
           "van mei ontbrak." },
-      { orderIndex: 300, title: "Aanvullende stukken aan André", kind: "mail", state: "done",
-        happenedAt: at("2026-08-04"),
-        task: "Kopie ID, huurspecificatie en eigen verhaal aanleveren" },
-      { orderIndex: 400, title: "Niet ingediend — niet meer nodig", kind: "process",
-        state: "done", happenedAt: at("2026-08-06"),
-        task: "Moratoriumverzoek indienen bij de rechtbank",
-        note: "Het minnelijke akkoord bereikte hetzelfde resultaat zonder rechtbank." },
-    ],
-  },
-  {
-    title: "Schuldhulpverlening Almere",
-    status: "ended",
-    note: "Het crisisdossier bij de gemeente. Geopend en binnen twee dagen weer " +
-      "gesloten, met een positieve beëindiging: de crisis waarin zij een rol " +
-      "speelden was voorbij.",
-    stops: [
-      { orderIndex: 100, title: "Toegelaten tot de schuldhulpverlening", kind: "document",
+      { orderIndex: 500, title: "Toegelaten tot de schuldhulpverlening", kind: "document",
         state: "done", happenedAt: at("2026-08-04"),
         doc: "M.P._van der Poel_04-08-2026 10:56:50.pdf",
         task: "Afspraak sociaal domein Stadhuis Almere" },
-      { orderIndex: 200, title: "Dossier gesloten — positief beëindigd", kind: "document",
+      { orderIndex: 600, title: "Aanvullende stukken aan André", kind: "mail", state: "done",
+        happenedAt: at("2026-08-04"),
+        task: "Kopie ID, huurspecificatie en eigen verhaal aanleveren" },
+      { orderIndex: 700, title: "Minnelijk voorstel via de deurwaarder", kind: "process",
+        state: "done", happenedAt: at("2026-08-04"),
+        task: "Minnelijk voorstel doen aan Woonhave via de deurwaarder" },
+      { orderIndex: 800, title: "Woonhave akkoord — ontruiming geannuleerd", kind: "process",
+        state: "done", happenedAt: at("2026-08-06"),
+        note: "Voorwaarde: de lopende huur wordt betaald. In de mail van André staat " +
+          "19 augustus als ontruimingsdatum, de deurwaarder zei 18 augustus." },
+      { orderIndex: 900, title: "Niet ingediend — niet meer nodig", kind: "process",
+        state: "done", happenedAt: at("2026-08-06"),
+        task: "Moratoriumverzoek indienen bij de rechtbank",
+        note: "Het minnelijke akkoord bereikte hetzelfde resultaat zonder rechtbank." },
+      { orderIndex: 1000, title: "Dossier gesloten — positief beëindigd", kind: "document",
         state: "done", happenedAt: at("2026-08-06"),
         doc: "SHV-ALMEREWGSbeschikkingbeëindigingPOSITIEF_M.P._vanderPoel_06-08-202610:38:36.pdf",
-        note: "Bij een nieuwe aanmelding start het dossier opnieuw op. Dat is precies " +
-          "wat er straks moet gebeuren voor de schuldregeling." },
+        note: "De eindhalte: de zaak is goed afgelopen. Bij een nieuwe aanmelding start " +
+          "het dossier opnieuw op — dat is precies wat er straks moet gebeuren voor " +
+          "de schuldregeling." },
+    ],
+  },
+  {
+    title: "Opstartstukken",
+    status: "done",
+    branchesAt: "Team Opstart vraagt de opstartstukken",
+    note: "Het antwoord op de eerste vraag van Team Opstart. Zes mails over één " +
+      "bestand, en daarna was het dossier opgestart.",
+    stops: [
+      { orderIndex: 100, title: "Heen en weer over de bestandsformaten", kind: "mail",
+        state: "done", happenedAt: at("2026-07-31"),
+        task: "Bankafschriften in een leesbaar formaat aanleveren",
+        note: "Vier pogingen — xlsx, pdf, opnieuw xlsx, en ten slotte het PDF-afschrift " +
+          "dat direct uit ABN AMRO komt. Zes mails over één bestand." },
+      { orderIndex: 200, title: "Opstart van het dossier afgerond", kind: "document",
+        state: "done", happenedAt: at("2026-07-31"), task: "Opstartstukken aanleveren" },
+    ],
+  },
+  {
+    title: "Bijzondere bijstand",
+    status: "open",
+    branchesAt: "Stukken opgevraagd door Regio 3",
+    note: "Het antwoord op de tweede stukkenvraag, voor de bijzondere bijstand en " +
+      "de individuele inkomenstoeslag.",
+    stops: [
+      { orderIndex: 100, title: "Regio 3 vraagt de laatste drie loonstroken",
+        kind: "mail", state: "done", happenedAt: at("2026-08-25"),
+        note: "Van de acht categorieën stond dit nog open." },
+      // `done`, not `open`, and the two seeds have to agree on this: `writeStop`
+      // never touches `state` on an existing stop, so a stop this seed calls `open`
+      // and `ensureCaseMap` calls `done` produces two different maps depending on
+      // which one ran after the last truncation. Production is the authority and
+      // says done, 28-08 — Martin marked it himself. What is still outstanding
+      // hangs on the linked task, which is where "waar wacht het op MIJ" belongs.
+      { orderIndex: 200, title: "Stukken aanleveren", kind: "document", state: "done",
+        happenedAt: at("2026-08-28"),
+        task: "Stukken aanleveren voor bijzondere bijstand en individuele inkomenstoeslag" },
     ],
   },
   {
     title: "Bankrekening en leefgeld",
     status: "open",
-    note: "De overname van de ABN-rekening. Het geld loopt weer — de klacht over " +
-      "hoe het ging staat nog open.",
+    branchesAt: "Rekening overgenomen zonder aankondiging",
+    note: "Wat er volgde op de overname van de ABN-rekening. Het geld loopt weer — " +
+      "de klacht over hoe het ging staat nog open bij Verder.",
     stops: [
-      { orderIndex: 100, title: "Rekening overgenomen zonder aankondiging", kind: "process",
-        state: "done", happenedAt: at("2026-08-05"),
-        note: "Pas geblokkeerd, inloggen onmogelijk, geen geld voor boodschappen. " +
-          "Eén berichtje vooraf had dit voorkomen." },
       // `done`, not `open`: indienen IS gebeurd. Het antwoord dat uitblijft
       // hangt aan de gekoppelde taak, die `waiting` staat — en dat is ook waar
       // het hoort, want de headline van de kaart beantwoordt "waar wacht het op
-      // MIJ", en dit wacht op Verder. Een open halte hier zou die kop kapen van
-      // de stukken voor de bijzondere bijstand, die er wél echt op wachten.
-      { orderIndex: 200, title: "Klacht over de bejegening", kind: "mail", state: "done",
+      // MIJ", en dit wacht op Verder.
+      { orderIndex: 100, title: "Klacht over de bejegening", kind: "mail", state: "done",
         happenedAt: at("2026-08-06"),
         task: "Reactie op de klacht over de geblokkeerde rekening",
         note: "Netjes en zakelijk ingediend bij Demi en André. Er kwam een weerwoord " +
@@ -345,15 +408,18 @@ export const TRACK_SEED: TrackSeed[] = [
       // Two facts, two stops, because the mail of 18-08 gives both dates and
       // fusing them lost one. The pas went on the spoedpost that morning; the
       // € 50 only starts once it is activated.
-      { orderIndex: 300, title: "Betaalpas per spoedpost verstuurd", kind: "process",
+      { orderIndex: 200, title: "Betaalpas per spoedpost verstuurd", kind: "process",
         state: "done", happenedAt: at("2026-08-18"),
         note: "Verwachte bezorging binnen twee werkdagen." },
-      { orderIndex: 400, title: "Leefgeld loopt: € 50 per week", kind: "process", state: "done",
+      { orderIndex: 300, title: "Leefgeld loopt: € 50 per week", kind: "process", state: "done",
         happenedAt: at("2026-08-18"), task: "Betaalpas leefgeldrekening activeren",
         note: "Elke maandag, vanaf de activering van de pas. Dertien dagen na de blokkade." },
     ],
   },
   {
+    // No `branchesAt`, and that is deliberate rather than unfinished: nobody
+    // recorded which moment set this in motion. NULL says "no recorded origin",
+    // which is true; the spoor editor takes one the day Martin knows.
     title: "Schuldregeling",
     status: "open",
     note: "Het spoor waar het naartoe moet: eerst het financiële beeld compleet, " +
@@ -366,14 +432,12 @@ export const TRACK_SEED: TrackSeed[] = [
       { orderIndex: 200, title: "Financieel beeld compleet, vaste lasten stabiel",
         kind: "process", state: "open",
         task: "Financieel beeld compleet maken en vaste lasten stabiliseren" },
-      // The four expected stops this spoor used to carry are gone: migration
-      // 0026 deleted every `expected` stop, because the map shows history and
-      // the current situation only. What still has to happen lives on the
-      // tasks they pointed at, which TASK_SEED keeps — a task is a commitment,
-      // a stop was a drawing of a future nobody had lived yet.
     ],
   },
   {
+    // Not an episode: nothing has been done with these yet, so there is no
+    // trigger on the hoofdlijn and no handling to hang off it. Three things
+    // that arrived and are still waiting.
     title: "Schuldeisers buiten het dossier",
     status: "open",
     note: "Drie schuldeisers die je dit voorjaar hebben aangeschreven en die in de " +

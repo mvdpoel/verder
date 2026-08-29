@@ -35,14 +35,19 @@ const ROOT_TITLE = "Bewindvoering";
 const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
 
 /**
- * The spine, as the case actually ran — aanmelding, de gang naar de rechtbank,
- * de beschikking, de opstart.
+ * The spine: the bewindvoering itself, plus every moment something new landed.
  *
- * This REVERSES the bare-trunk rule ("a metro map's trunk shows where the line
- * goes, not every errand run along it"). That rule was right for a horizontal
- * map aimed at `Einde bewindvoering`. Migration 0026 deletes that goal, so the
- * root has nothing left to aim at: it is no longer a destination, it is the
- * spine of the story so far, and it has to carry that story.
+ * Migration 0026 deleted the goal stop, so the root is no longer a destination
+ * — it is the story so far. And a spoor is ONE EPISODE: something arrives (the
+ * trigger, which belongs HERE, on the hoofdlijn) and everything done in
+ * response hangs off it until the matter closes, however many parties are
+ * involved. So these seven are the aanmelding, the beschikking that answered
+ * it, the handover, and the four moments something arrived — Team Opstart's
+ * request, the deurwaarder at the door, the bank account taken over, and Regio
+ * 3's request. The answering of each lives on the spoor that answers it.
+ *
+ * That is Martin's own reading of his case; the long version, with what it
+ * corrects, is on `SPINE_SEED` in apps/worker/src/ops/case-history.ts.
  *
  * DATED, not undated: every stop on the trunk has happened, and `writeStop`
  * never touches `happened_at` on a stop that already exists, so writing it
@@ -66,20 +71,12 @@ const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
  */
 export const SPINE_SEED = [
   { title: "Aanmelding bij Verder", orderIndex: 100, happenedAt: at("2026-04-16") },
-  { title: "Intakegesprek bewindvoering", orderIndex: 200, happenedAt: at("2026-04-22") },
-  { title: "Ondernemingen uitgeschreven bij de KvK", orderIndex: 300, happenedAt: at("2026-04-24") },
-  { title: "Verzoek onderbewindstelling ingediend", orderIndex: 400, happenedAt: at("2026-04-24") },
-  { title: "Poststukken ingeleverd", orderIndex: 500, happenedAt: at("2026-04-29") },
-  { title: "Rechtbank vraagt een verklaring", orderIndex: 600, happenedAt: at("2026-06-01") },
-  { title: "Verklaring ontstaan schulden aangeleverd", orderIndex: 700, happenedAt: at("2026-06-09") },
-  { title: "Beschikking: onder bewind gesteld", orderIndex: 800, happenedAt: at("2026-07-14") },
-  { title: "Dossier naar Team Opstart", orderIndex: 900, happenedAt: at("2026-07-20") },
-  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 1000, happenedAt: at("2026-07-27") },
-  { title: "Heen en weer over de bestandsformaten", orderIndex: 1100, happenedAt: at("2026-07-31") },
-  { title: "Opstart van het dossier afgerond", orderIndex: 1200, happenedAt: at("2026-07-31") },
-  { title: "Stukken opgevraagd door Regio 3", orderIndex: 1300, happenedAt: at("2026-08-12") },
-  { title: "Regio 3 vraagt de laatste drie loonstroken", orderIndex: 1400, happenedAt: at("2026-08-25") },
-  { title: "Stukken aanleveren", orderIndex: 1500, happenedAt: at("2026-08-28") },
+  { title: "Beschikking: onder bewind gesteld", orderIndex: 200, happenedAt: at("2026-07-14") },
+  { title: "Dossier naar Team Opstart", orderIndex: 300, happenedAt: at("2026-07-20") },
+  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 400, happenedAt: at("2026-07-27") },
+  { title: "Deurwaarder zegt de ontruiming aan", orderIndex: 500, happenedAt: at("2026-07-29") },
+  { title: "Rekening overgenomen zonder aankondiging", orderIndex: 600, happenedAt: at("2026-08-05") },
+  { title: "Stukken opgevraagd door Regio 3", orderIndex: 700, happenedAt: at("2026-08-12") },
 ] as const satisfies readonly { title: string; orderIndex: number; happenedAt: Date }[];
 
 export type EnsureCaseMapResult = {

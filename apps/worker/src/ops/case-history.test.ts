@@ -39,13 +39,20 @@ describe("case-history seed", () => {
     const recorded = { branchesAtStopId: "stop-a", mergesAtStopId: "stop-b" };
     expect(trackPointerPatch(recorded, {})).toEqual({});
 
-    // And it holds for the seed as it actually stands: not one entry names a
-    // pointer, so a real run may not touch either column on any existing spoor.
+    // And it holds for the seed as it actually stands, in BOTH directions: a
+    // spoor whose entry names no pointer may not have that column touched on a
+    // real run, and one that does name a pointer must still be able to move it.
+    // The episode restructure gave five spoors a branch point, so a loop that
+    // only checked for `{}` would now be asserting the opposite of the rule.
     for (const t of TRACK_SEED) {
-      expect(trackPointerPatch(recorded, {
+      const patch = trackPointerPatch(recorded, {
         branchesAtStopId: t.branchesAt === undefined ? undefined : "stop-x",
         mergesAtStopId: t.mergesAt === undefined ? undefined : "stop-x",
-      }), `spoor "${t.title}"`).toEqual({});
+      });
+      expect("branchesAtStopId" in patch, `spoor "${t.title}" branch point`)
+        .toBe(t.branchesAt !== undefined);
+      expect("mergesAtStopId" in patch, `spoor "${t.title}" merge point`)
+        .toBe(t.mergesAt !== undefined);
     }
   });
 
@@ -104,9 +111,10 @@ describe("case-history seed", () => {
   });
 
   it("orders stops by order_index in the same direction as their dates", () => {
-    // The layout is a longest-path layering, not a time axis, so a date that
-    // runs backwards against order_index is FLAGGED by the map rather than
-    // reordered. Better to never ship one.
+    // The layout IS a time axis now, and a date that runs backwards against
+    // order_index is FLAGGED by the map rather than reordered — order_index
+    // still decides where an undated stop sits and how two stops on one day
+    // stack. Better to never ship a disagreement.
     for (const track of [{ title: "hoofdlijn", stops: SPINE_SEED }, ...TRACK_SEED]) {
       const dated = track.stops
         .filter((s) => s.happenedAt)
@@ -120,10 +128,16 @@ describe("case-history seed", () => {
     }
   });
 
-  it("gives every done stop a date and no expected stop one", () => {
+  it("gives every done stop a date, or a note saying why it has none", () => {
     for (const s of allStops()) {
-      if (s.state === "done") {
-        expect(s.happenedAt, `done stop "${s.title}" has no date`).toBeDefined();
+      if (s.state === "done" && !s.happenedAt) {
+        // An undated `done` stop is legal in exactly one case: nothing recorded
+        // when it happened and this app does not invent a date. It then owes
+        // the reader that explanation in its note — otherwise an undated stop
+        // is indistinguishable from a forgotten one. The map places it beside
+        // the next dated stop on its own spoor, never in the "zonder datum"
+        // band, so it costs the reader nothing.
+        expect(s.note, `undated done stop "${s.title}" explains nothing`).toBeDefined();
       }
       if (s.state === "expected") {
         expect(s.happenedAt, `expected stop "${s.title}" is dated`).toBeUndefined();
@@ -185,15 +199,38 @@ describe("case-history seed", () => {
     expect(states).not.toContain("expected");
   });
 
-  it("puts the fifteen spine stops in date order", () => {
+  it("puts the seven spine stops in date order", () => {
     // The trunk is no longer a destination, it is the story so far — so every
     // one of its stops has happened, and the order they are numbered in is the
-    // order they happened in.
+    // order they happened in. Seven, not fifteen: the episode restructure moved
+    // the ANSWERING of each request onto the spoor that answers it, and left
+    // only the bewindvoering's own milestones plus the moments something landed.
     const dated = SPINE_SEED.filter((s) => s.happenedAt);
-    expect(dated).toHaveLength(15);
+    expect(dated).toHaveLength(7);
     for (let i = 1; i < dated.length; i++) {
       expect(dated[i].happenedAt!.getTime())
         .toBeGreaterThanOrEqual(dated[i - 1].happenedAt!.getTime());
+    }
+  });
+
+  it("branches every spoor at a trigger that came before the work it started", () => {
+    // THE EPISODE RULE, as an assertion. A spoor is the handling of one thing
+    // that landed: the trigger sits on the hoofdlijn and the response hangs off
+    // it. So a branch point cannot be dated AFTER the first thing that happened
+    // on the spoor it starts — that would be a response filed before its cause.
+    // This is the check that would have caught the old shape, where the
+    // ontruiming's own aanzegging sat inside the spoor instead of on the line.
+    const spine = new Map(SPINE_SEED.map((s) => [s.title, s.happenedAt!.getTime()]));
+    for (const t of TRACK_SEED) {
+      if (!t.branchesAt) continue;
+      const trigger = spine.get(t.branchesAt);
+      expect(trigger, `${t.title} branches at "${t.branchesAt}", which is not on the spine`)
+        .toBeDefined();
+      const firstDated = t.stops.filter((s) => s.happenedAt)
+        .map((s) => s.happenedAt!.getTime()).sort((a, b) => a - b)[0];
+      if (firstDated === undefined) continue;
+      expect(trigger!, `${t.title} starts before the stop it branches at`)
+        .toBeLessThanOrEqual(firstDated);
     }
   });
 
