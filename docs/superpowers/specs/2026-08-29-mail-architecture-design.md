@@ -1,7 +1,7 @@
 # Eigen mail: Stalwart thuis, een voordeur bij TransIP
 
 Date: 2026-08-29
-Status: draft, awaiting Martin's review
+Status: approved, phase 1 planned
 Sub-project 9. The mailbox cleanup (sender triage + bulk delete against Gmail)
 is a SEPARATE sub-project that sequences before phase 3 of this one; it gets its
 own spec.
