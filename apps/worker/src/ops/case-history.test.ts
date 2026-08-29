@@ -119,9 +119,16 @@ describe("case-history seed", () => {
     // stop that already exists — so a stop only one of them names is a stop
     // only one of them creates, and whichever ran last decides what the map
     // looks like. That is exactly how 0026's deletes come undone silently.
-    expect(SPINE_SEED.map((s) => ({ title: s.title, orderIndex: s.orderIndex })))
-      .toEqual(CASE_MAP_SPINE_SEED.map(
-        (s) => ({ title: s.title, orderIndex: s.orderIndex })));
+    // happenedAt is in the comparison too: ensureCaseMap now dates the spine
+    // on insert, and a date only one of the two seeds knows is exactly the
+    // kind of drift this test exists to catch — `writeStop` never backfills
+    // happened_at on a stop that already exists, so whichever seed ran last
+    // would decide the date silently, same as it decides title and order.
+    expect(SPINE_SEED.map((s) => (
+      { title: s.title, orderIndex: s.orderIndex, happenedAt: s.happenedAt?.getTime() }
+    ))).toEqual(CASE_MAP_SPINE_SEED.map((s) => (
+      { title: s.title, orderIndex: s.orderIndex, happenedAt: s.happenedAt?.getTime() }
+    )));
     // ensureCaseMap writes every one of them `done`; this seed must not
     // contradict it, because it is the one that would lose the argument.
     for (const s of SPINE_SEED) expect(s.state, s.title).toBe("done");

@@ -2,14 +2,20 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { createDb, type Db } from "./client";
 import * as schema from "./schema";
 
+/** Amsterdam wall-clock → instant, pinned to noon — the same convention
+ *  `SPINE_SEED` in apps/worker/src/ops/case-history.ts uses, so the two agree
+ *  on the instant and not just the calendar day. */
+const at = (iso: string) => new Date(`${iso}T12:00:00+02:00`);
+
 /**
  * The seed of Martin's case map, as an IDEMPOTENT function.
  *
  * TWO SPELLINGS OF ONE SEED. `drizzle/0023_timeline_tracks.sql`, amended by
  * 0024 and reshaped by `drizzle/0026_vertical_case_timeline.sql`, is the other,
- * and the two must agree on every title and order_index here. The difference in
- * scope is deliberate: the migrations ALSO move and delete the rows the map
- * already had, which is a one-time data migration and must never be repeated.
+ * and the two must agree on every title, order_index and happened_at here.
+ * The difference in scope is deliberate: the migrations ALSO move and delete
+ * the rows the map already had, which is a one-time data migration and must
+ * never be repeated.
  * This function only puts back the SKELETON: the root track and its spine.
  *
  * Why it has to exist at all: `stops.entry_id` and `stops.document_id`
@@ -38,35 +44,43 @@ const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
  * root has nothing left to aim at: it is no longer a destination, it is the
  * spine of the story so far, and it has to carry that story.
  *
- * Undated here on purpose — this function only puts the SKELETON back after a
- * truncation. The dates live in the migration and in case-history's seed, and
- * `case-history` only ever dates a stop whose happened_at is still NULL, so a
- * date typed by hand always wins.
+ * DATED, not undated: every stop on the trunk has happened, and `writeStop`
+ * never touches `happened_at` on a stop that already exists, so writing it
+ * here only ever fills in a gap left by a truncation — it can never overwrite
+ * a date typed by hand. Undated used to be the rule ("this function only puts
+ * the SKELETON back"), but that reasoning stopped applying the moment the spine
+ * stopped being a skeleton and became the story so far (see above): a
+ * truncate-and-reseed with no dates here rendered the whole hoofdlijn under
+ * "Zonder datum" until `case-history` next ran. The dates below are read from
+ * `SPINE_SEED` in apps/worker/src/ops/case-history.ts — never retyped — using
+ * the same noon-Amsterdam convention (`at`, above) so the two agree on the
+ * instant, not just the calendar day.
  *
  * EXPORTED so it can be diffed against `SPINE_SEED` in
  * apps/worker/src/ops/case-history.ts, which is the third spelling of this one
- * seed. The two must name the same stops in the same order: `writeStop` never
- * changes `state` or `title` on a stop that already exists, so a title only one
- * of them knows is a stop only one of them creates, and 0026's deletes come
- * undone the next time the other one runs. case-history.test.ts asserts it.
+ * seed. The two must name the same stops in the same order with the same
+ * dates: `writeStop` never changes `state` or `title` on a stop that already
+ * exists, so a title only one of them knows is a stop only one of them
+ * creates, and 0026's deletes come undone the next time the other one runs.
+ * case-history.test.ts asserts it.
  */
 export const SPINE_SEED = [
-  { title: "Aanmelding bij Verder", orderIndex: 100 },
-  { title: "Intakegesprek bewindvoering", orderIndex: 200 },
-  { title: "Ondernemingen uitgeschreven bij de KvK", orderIndex: 300 },
-  { title: "Verzoek onderbewindstelling ingediend", orderIndex: 400 },
-  { title: "Poststukken ingeleverd", orderIndex: 500 },
-  { title: "Rechtbank vraagt een verklaring", orderIndex: 600 },
-  { title: "Verklaring ontstaan schulden aangeleverd", orderIndex: 700 },
-  { title: "Beschikking: onder bewind gesteld", orderIndex: 800 },
-  { title: "Dossier naar Team Opstart", orderIndex: 900 },
-  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 1000 },
-  { title: "Heen en weer over de bestandsformaten", orderIndex: 1100 },
-  { title: "Opstart van het dossier afgerond", orderIndex: 1200 },
-  { title: "Stukken opgevraagd door Regio 3", orderIndex: 1300 },
-  { title: "Regio 3 vraagt de laatste drie loonstroken", orderIndex: 1400 },
-  { title: "Stukken aanleveren", orderIndex: 1500 },
-] as const satisfies readonly { title: string; orderIndex: number }[];
+  { title: "Aanmelding bij Verder", orderIndex: 100, happenedAt: at("2026-04-16") },
+  { title: "Intakegesprek bewindvoering", orderIndex: 200, happenedAt: at("2026-04-22") },
+  { title: "Ondernemingen uitgeschreven bij de KvK", orderIndex: 300, happenedAt: at("2026-04-24") },
+  { title: "Verzoek onderbewindstelling ingediend", orderIndex: 400, happenedAt: at("2026-04-24") },
+  { title: "Poststukken ingeleverd", orderIndex: 500, happenedAt: at("2026-04-29") },
+  { title: "Rechtbank vraagt een verklaring", orderIndex: 600, happenedAt: at("2026-06-01") },
+  { title: "Verklaring ontstaan schulden aangeleverd", orderIndex: 700, happenedAt: at("2026-06-09") },
+  { title: "Beschikking: onder bewind gesteld", orderIndex: 800, happenedAt: at("2026-07-14") },
+  { title: "Dossier naar Team Opstart", orderIndex: 900, happenedAt: at("2026-07-20") },
+  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 1000, happenedAt: at("2026-07-27") },
+  { title: "Heen en weer over de bestandsformaten", orderIndex: 1100, happenedAt: at("2026-07-31") },
+  { title: "Opstart van het dossier afgerond", orderIndex: 1200, happenedAt: at("2026-07-31") },
+  { title: "Stukken opgevraagd door Regio 3", orderIndex: 1300, happenedAt: at("2026-08-12") },
+  { title: "Regio 3 vraagt de laatste drie loonstroken", orderIndex: 1400, happenedAt: at("2026-08-25") },
+  { title: "Stukken aanleveren", orderIndex: 1500, happenedAt: at("2026-08-28") },
+] as const satisfies readonly { title: string; orderIndex: number; happenedAt: Date }[];
 
 export type EnsureCaseMapResult = {
   rootTrack: boolean;
@@ -100,7 +114,7 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
     if (await stopOnRoot(station.title)) continue;
     await db.insert(schema.stops).values({
       trackId: root.id, orderIndex: station.orderIndex, title: station.title,
-      kind: "process", state: "done",
+      kind: "process", state: "done", happenedAt: station.happenedAt,
     });
     created.spineStops.push(station.title);
   }
