@@ -49,17 +49,34 @@ describe("tracks and stops", () => {
       "bewindvoering"]) {
       expect(spine.map((s) => s.title), title).not.toContain(title);
     }
-    // Seven, and every one of them `done`. Seven because a spoor is one
-    // episode: the trigger belongs here on the hoofdlijn and the ANSWERING of
-    // it belongs on the spoor that answers it. So the line carries the
-    // aanmelding, the beschikking, the handover, and the four moments
-    // something arrived — never the work that followed.
-    expect(spine).toHaveLength(7);
+    // This count is NOT the episode-rule assertion — do not read it as one and
+    // do not delete it as tautological either; it does a narrower, real job.
+    // Its job is ensureCaseMap's FAITHFULNESS: every stop CASE_MAP_SPINE_SEED
+    // names is present on the root, and none of them is present TWICE.
+    // `ensureCaseMap` has actually inserted a duplicate before — a trigger
+    // mid-promotion off its spoor, found by a root-scoped lookup that could
+    // not yet see it there (see the WHY on `stopAnywhere` above) — and a title
+    // check like the ones below would still pass with a stray second copy
+    // sitting next to the first; only a count catches that. The EPISODE rule
+    // — the trunk carries the trigger and never the answering — is what the
+    // explicit title checks below assert, and that is the part that still
+    // carries meaning as the trunk legitimately grows.
+    expect(spine).toHaveLength(CASE_MAP_SPINE_SEED.length);
     expect(spine.find((s) => s.title === "Aanmelding bij Verder")).toBeDefined();
     expect(spine.find((s) => s.title === "Stukken opgevraagd door Regio 3")).toBeDefined();
-    // The answering lives on a spoor, so it may never be seeded onto the trunk.
+    // The answering lives on a spoor, so it may never be seeded onto the
+    // trunk. Ten stops now, not seven — the debt-record slice grew the count
+    // by adding three more moments-something-arrived (the KvK, the Trust and
+    // Law / PLM Investments and the Stam / Het CAK notices). That is the rule
+    // WORKING, not an exception to it: each notice is still a trigger that
+    // belongs on the hoofdlijn, and the handling of each — "verwerkt als
+    // vordering", then "melden bij Verder" — lives on its own spoor, exactly
+    // like every answering before it.
     for (const answered of ["Stukken aanleveren", "Verzoek onderbewindstelling ingediend",
-      "Opstart van het dossier afgerond"]) {
+      "Opstart van het dossier afgerond", "KvK — verwerkt als vordering",
+      "KvK — melden bij Verder", "PLM — verwerkt als vordering",
+      "PLM — melden bij Verder", "CAK — verwerkt als vordering",
+      "CAK — melden bij Verder"]) {
       expect(spine.map((s) => s.title), answered).not.toContain(answered);
     }
     expect(spine.filter((s) => s.state === "expected")).toEqual([]);
