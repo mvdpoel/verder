@@ -29,7 +29,19 @@ describe("search_outbox triggers", () => {
     userId = u.id;
   });
 
+  /** Documents this file created, settled once at the end. */
+  const settleLater: { id: string; sha256: string }[] = [];
+
   afterAll(async () => {
+    // The WORKER connection, because 0016 grants verder_app SELECT only on
+    // document_texts — which is exactly why this suite already holds one.
+    // onConflictDoNothing: a test that stored its own text has already settled.
+    if (settleLater.length > 0) {
+      await workerDb.insert(schema.documentTexts).values(settleLater.map((d) => ({
+        documentId: d.id, sha256: d.sha256, text: "", charCount: 0,
+        extractor: "none" as const, truncated: false,
+      }))).onConflictDoNothing();
+    }
     await pool.end();
     await workerPool.end();
   });
@@ -42,10 +54,27 @@ describe("search_outbox triggers", () => {
         eq(schema.searchOutbox.entityId, entityId)));
 
   const makeDocument = async () => {
+    const shaHex = sha();
     const [doc] = await db.insert(schema.documents).values({
-      sha256: sha(), title: "Brief van de rechtbank", mime: "application/pdf",
+      sha256: shaHex, title: "Brief van de rechtbank", mime: "application/pdf",
       sizeBytes: 1234, source: "upload", receivedAt: new Date("2026-08-01T09:00:00Z"),
     }).returning();
+    // SETTLE THE DOCUMENT. `documents` is append-only evidence and no test gets
+    // a DELETE grant, so a fixture cannot be removed — and a document with no
+    // document_texts row is a permanent entry in pendingDocMeta's
+    // `ORDER BY created_at ASC LIMIT 50` page on a dev database nothing
+    // truncates. Twenty-one "Brief van de rechtbank" rows from this one factory
+    // were squatting at the head of it, crowding a freshly created document off
+    // the page and turning docmeta-sweep.test.ts red for reasons that have
+    // nothing to do with the sweep. Writing the "none" row an unreadable file
+    // would have earned is the append-only way to settle the debt;
+    // apps/worker's settleDocumentTexts carries the full reasoning and cannot
+    // be imported here, because the dependency runs the other way.
+    //
+    // Settled in afterAll rather than here: one test below asserts that the
+    // ARRIVAL of a document's text enqueues a second outbox row, and a text row
+    // written by the factory would already have fired that trigger.
+    settleLater.push({ id: doc.id, sha256: shaHex });
     return doc;
   };
 

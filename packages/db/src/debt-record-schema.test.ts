@@ -84,6 +84,22 @@ describe("debt record", () => {
       mime: "application/pdf", sizeBytes: 1, source: "upload",
       receivedAt: new Date(),
     }).returning();
+    // SETTLE THE DOCUMENT. `documents` is append-only evidence and no test gets
+    // a DELETE grant, so this fixture is permanent — and a document with no
+    // document_texts row is a permanent entry in pendingDocMeta's
+    // `ORDER BY created_at ASC LIMIT 50` page on a dev database nothing
+    // truncates. Seven of these had accumulated at the head of it, crowding
+    // freshly created documents off the page and turning docmeta-sweep.test.ts
+    // red for reasons with nothing to do with the sweep. The "none" row an
+    // unreadable file would have earned is the append-only way to settle it;
+    // apps/worker's settleDocumentTexts carries the reasoning and cannot be
+    // imported here, because the dependency runs the other way. This runs on
+    // the ADMIN connection — 0016 gives verder_app SELECT only on
+    // document_texts, and extraction is the worker's job.
+    await db.insert(schema.documentTexts).values({
+      documentId: doc.id, sha256: `test-${d.id}`, text: "", charCount: 0,
+      extractor: "none", truncated: false,
+    });
     await db.insert(schema.debtDocuments)
       .values({ debtId: d.id, documentId: doc.id });
     const links = await db.select().from(schema.debtDocuments)

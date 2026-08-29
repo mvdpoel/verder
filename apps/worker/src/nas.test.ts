@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import { sha256Hex } from "@verder/core";
 import { scanNasFolder } from "./nas";
+import { settleDocumentTexts } from "./test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -29,6 +30,16 @@ describe("scanNasFolder", () => {
       .where(eq(schema.documents.sha256, sha256Hex(content)));
     expect(doc.source).toBe("nas-scan");
     expect(doc.title).toBe("scan_0001.pdf");
+    // Shared-dev-DB hygiene, the same debt gmail.test.ts and poll.test.ts
+    // settle. The scan's content is stamped per run, so every run of this file
+    // ingested a NEW document and none of them ever got a document_texts row:
+    // thirteen scan_0001.pdf rows were sitting at the head of pendingDocMeta's
+    // `ORDER BY created_at ASC LIMIT 50` page. source_ref is the FILENAME here
+    // (nas.ts:36) and the filename is fixed, so this settles the predecessors
+    // too — hence "at least one" rather than exactly one.
+    expect(await settleDocumentTexts(db, "scan_0001.pdf"))
+      .toBeGreaterThanOrEqual(1);
+    expect(await settleDocumentTexts(db, "scan_0001.pdf")).toBe(0);
     await pool.end();
   });
 });

@@ -79,6 +79,19 @@ describe("knowledge-base index grants", () => {
     const deleted = await worker.delete(schema.documentTexts)
       .where(eq(schema.documentTexts.documentId, doc.id)).returning();
     expect(deleted).toHaveLength(1);
+
+    // SETTLE THE DOCUMENT the delete above just un-settled. `documents` is
+    // append-only evidence and no role here may delete one, so the fixture is
+    // permanent — and a document with no document_texts row is a permanent
+    // entry in pendingDocMeta's `ORDER BY created_at ASC LIMIT 50` page on a
+    // dev database nothing truncates. Seven "Gescande brief" rows had
+    // accumulated at the head of it, crowding freshly created documents off the
+    // page and turning docmeta-sweep.test.ts red for reasons with nothing to do
+    // with the sweep. Restoring the "none" row an unreadable file would have
+    // earned costs this test nothing: the DELETE grant is already proven above.
+    await worker.insert(schema.documentTexts).values({
+      documentId: doc.id, sha256: sha, text: "", extractor: "none", charCount: 0,
+    });
   });
 
   it("lets the app role read the index but never write it", async () => {
