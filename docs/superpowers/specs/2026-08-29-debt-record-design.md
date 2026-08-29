@@ -194,9 +194,10 @@ when that document is in the vault — the same "fill it in on a later run" rule
 `writeStop` already uses for `document_id`, so the backfill is safe to run
 before or after a Gmail backfill.
 
-**Ledger impact: +3 `party.created` events, and nothing else.** This is the one
-place in the slice that moves the chain head, and it moves it correctly —
-a party is evidence. Debts, links and documents-links append nothing.
+Ledger impact: +3 `party.created` events from the existing party-creation path,
+and nothing else — debts and both link tables append nothing. Noted for
+completeness, not as a gate: the chain is not a requirement this project is
+designing around at this stage.
 
 ## 3. The map — three episodes
 
@@ -283,7 +284,21 @@ Same ordering as every migration since 0020, with one difference at the end.
 2. `DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" pnpm --filter @verder/db migrate` from the HOST, before any image is rebuilt.
 3. Rebuild web + worker.
 4. Run `pnpm --filter worker case-history`.
-5. `nightly-verify` must report **126 → 129 events**, +3 `party.created` and nothing else. **The chain head MOVES here, and that is correct** — unlike the vertical-timeline deploy, this slice creates parties, and a party is evidence. A head that did NOT move would mean the three eisers were not recorded.
+5. Check the result on `/registry` and `/timeline`: three debts with their eiser and intermediair, three episodes on the map. `nightly-verify` should stay green (it will read 129 events, +3 from the new parties); it is a health check here, not a gate.
+
+## A note on where this data ends up living
+
+`debt_parties` and `parties.parent_party_id` are the graph-shaped part of this
+case: claimant → intermediary → contact person is a small graph, and so is the
+document trail hanging off it. This slice models it as plain relations in
+Postgres because that is where every other fact in the app lives and because the
+shape is small enough that the join costs nothing.
+
+Nothing here is built to be a graph store, and nothing here forecloses one: the
+edges are explicit rows with a typed role rather than columns on `debts`, so
+moving them into a graph or a vector-adjacent store later is a migration of one
+table, not a change of meaning. Worth knowing while the storage question is
+still open; not worth building for yet.
 
 ## Non-goals
 
