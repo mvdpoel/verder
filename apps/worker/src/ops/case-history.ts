@@ -197,6 +197,11 @@ export const TRACK_RENAMES: readonly { from: string; to: string; status: TrackSt
   // old status is provably meaningless.
   { from: "Moratorium", to: "Opstartstukken", status: "done" },
   { from: "Schuldhulpverlening Almere", to: "Bijzondere bijstand", status: "open" },
+  // Same rule, one episode later: "Schuldeisers buiten het dossier" dissolved
+  // into three per-creditor spoors, each branching off its own notice on the
+  // spine now. The freed row becomes the first of the three rather than a
+  // fourth empty rail.
+  { from: "Schuldeisers buiten het dossier", to: "Vordering KvK", status: "open" },
 ];
 
 /**
@@ -218,8 +223,12 @@ export const TRACK_RENAMES: readonly { from: string; to: string; status: TrackSt
  * next to the request itself, when the request is the trigger and the answering
  * is the branch.
  *
- * So the trunk is seven stops: `Aanmelding` (he asked), `Beschikking` (the
- * court said go), the handover, and the four moments something arrived —
+ * So the trunk is TEN stops: `Aanmelding` (he asked), the three creditor
+ * notices that arrived while the aanvraag was pending (KvK, Trust and Law /
+ * PLM Investments, Stam / Het CAK — each now the trigger of its own spoor,
+ * moved here from the track that used to lump the three together by what
+ * they had in common instead of by what happened), `Beschikking` (the court
+ * said go), the handover, and the four moments something else arrived —
  * Team Opstart's request, the deurwaarder at the door, the bank account taken
  * over, Regio 3's request.
  */
@@ -228,29 +237,48 @@ export const SPINE_SEED: StopSeed[] = [
     happenedAt: at("2026-04-16"),
     note: "Bevestiging binnen een dag, met de toezegging binnen twee werkdagen " +
       "te bellen. Hier begint de aanvraag." },
+  // The three creditor notices, moved here byte-identical (title, kind,
+  // happenedAt, note) from the track that used to be "Schuldeisers buiten het
+  // dossier". Each is a TRIGGER now, not a still-open errand: `state` changes
+  // from "open" to "done" because the notice arriving is a thing that
+  // happened, and the `task` link each used to carry moves to the second stop
+  // of the spoor that now handles it — the outstanding work, not the arrival.
+  { orderIndex: 200, title: "KvK — aanmaning op OpsMate", kind: "mail", state: "done",
+    happenedAt: at("2026-05-26"),
+    note: "Factuur 260194200, KVK 77463102 — op een onderneming die op 22 april " +
+      "al was uitgeschreven." },
+  { orderIndex: 300, title: "Trust and Law — PLM Investments, € 2.623,15", kind: "mail",
+    state: "done", happenedAt: at("2026-06-11"),
+    doc: "Informatieblad vordering (nieuw).pdf",
+    note: "Zes aanmaningen tussen 13 mei en 16 juni. Op 12 juni naar Verder verwezen; " +
+      "sinds de beschikking is er niets meer op gevolgd." },
+  { orderIndex: 400, title: "Stam — Het CAK, € 1.141,61, er ligt een vonnis", kind: "mail",
+    state: "done", happenedAt: at("2026-07-14"),
+    note: "De sommatie spreekt over het voorkomen van verdere uitvoering van de " +
+      "veroordeling. Deze mail is nooit doorgestuurd naar Verder." },
   // The "Go!" moment, and the one place on this map where a spoor comes BACK.
   // The aanvraag was not something that happened alongside the bewindvoering —
   // it was the prerequisite for it, and a merge is how the map says so.
-  { orderIndex: 200, title: "Beschikking: onder bewind gesteld", kind: "process",
+  { orderIndex: 500, title: "Beschikking: onder bewind gesteld", kind: "process",
     state: "done", happenedAt: at("2026-07-14"), doc: "Beschikking M.P. van der Poel.pdf",
     note: "Zaak NLTZ2612548IVB. Dossier bij Verder: 25.04052. Toegewezen. Hiermee is " +
       "de aanvraag afgerond en mag Verder handelen." },
-  { orderIndex: 300, title: "Dossier naar Team Opstart", kind: "process", state: "done",
+  { orderIndex: 600, title: "Dossier naar Team Opstart", kind: "process", state: "done",
     happenedAt: at("2026-07-20"),
     note: "Demi draagt over aan het opstartteam." },
-  { orderIndex: 400, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
+  { orderIndex: 700, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
     state: "done", happenedAt: at("2026-07-27"),
     note: "Afschriften en inkomensspecificaties van drie maanden, zorgpolis 2026, " +
       "voorschotbeschikking toeslagen, huurverhoging, jaarafrekening water en energie." },
-  { orderIndex: 500, title: "Deurwaarder zegt de ontruiming aan", kind: "process",
+  { orderIndex: 800, title: "Deurwaarder zegt de ontruiming aan", kind: "process",
     state: "done", happenedAt: at("2026-07-29"),
     note: "Aan de deur, zonder dat er iets van bij Verder bekend was. Eruit per " +
       "18 augustus. Diezelfde ochtend met de grootste spoed om terugbellen gevraagd." },
-  { orderIndex: 600, title: "Rekening overgenomen zonder aankondiging", kind: "process",
+  { orderIndex: 900, title: "Rekening overgenomen zonder aankondiging", kind: "process",
     state: "done", happenedAt: at("2026-08-05"),
     note: "Pas geblokkeerd, inloggen onmogelijk, geen geld voor boodschappen. " +
       "Eén berichtje vooraf had dit voorkomen." },
-  { orderIndex: 700, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
+  { orderIndex: 1000, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
     happenedAt: at("2026-08-12"),
     note: "Acht categorieën, voor de bijzondere bijstand en de individuele " +
       "inkomenstoeslag. Het meeste ligt er al; nieuw zijn de jaaropgaven " +
@@ -443,30 +471,55 @@ export const TRACK_SEED: TrackSeed[] = [
     ],
   },
   {
-    // Not an episode: nothing has been done with these yet, so there is no
-    // trigger on the hoofdlijn and no handling to hang off it. Three things
-    // that arrived and are still waiting.
-    title: "Schuldeisers buiten het dossier",
+    // One of three episodes that used to be lumped together as "Schuldeisers
+    // buiten het dossier" — a spoor grouped by what the creditors had in
+    // common (unfiled, outside the dossier) rather than by what happened. The
+    // aanmaning itself is now the trigger on the hoofdlijn; this spoor is just
+    // its handling: get it into the debt record, then tell Verder about it.
+    title: "Vordering KvK",
     status: "open",
-    note: "Drie schuldeisers die je dit voorjaar hebben aangeschreven en die in de " +
-      "correspondentie met Verder nergens terugkomen. Bij twee ervan loopt al een " +
-      "executietraject.",
+    branchesAt: "KvK — aanmaning op OpsMate",
+    note: "De aanmaning op een onderneming die al was uitgeschreven bij de KvK. " +
+      "Verwerkt als vordering in het dossier; nog te melden bij de bewindvoerder.",
     stops: [
-      { orderIndex: 100, title: "KvK — aanmaning op OpsMate", kind: "mail", state: "open",
-        happenedAt: at("2026-05-26"), task: "KvK-aanmaning OpsMate melden bij de bewindvoerder",
-        note: "Factuur 260194200, KVK 77463102 — op een onderneming die op 22 april " +
-          "al was uitgeschreven." },
-      { orderIndex: 200, title: "Trust and Law — PLM Investments, € 2.623,15", kind: "mail",
-        state: "open", happenedAt: at("2026-06-11"),
-        doc: "Informatieblad vordering (nieuw).pdf",
-        task: "Vordering Trust and Law / PLM Investments melden bij de bewindvoerder",
-        note: "Zes aanmaningen tussen 13 mei en 16 juni. Op 12 juni naar Verder verwezen; " +
-          "sinds de beschikking is er niets meer op gevolgd." },
-      { orderIndex: 300, title: "Stam — Het CAK, € 1.141,61, er ligt een vonnis", kind: "mail",
-        state: "open", happenedAt: at("2026-07-14"),
-        task: "Vonnis Stam Gerechtsdeurwaarders / Het CAK melden bij de bewindvoerder",
-        note: "De sommatie spreekt over het voorkomen van verdere uitvoering van de " +
-          "veroordeling. Deze mail is nooit doorgestuurd naar Verder." },
+      { orderIndex: 100, title: "KvK — verwerkt als vordering", kind: "process",
+        state: "done", happenedAt: at("2026-08-29"),
+        note: "De aanmaning dateert van 26 mei; dit is de datum waarop de vordering " +
+          "in het dossier is vastgelegd, niet die van de aanmaning zelf." },
+      { orderIndex: 200, title: "KvK — melden bij Verder", kind: "process", state: "open",
+        task: "KvK-aanmaning OpsMate melden bij de bewindvoerder" },
+    ],
+  },
+  {
+    title: "Vordering PLM Investments",
+    status: "open",
+    branchesAt: "Trust and Law — PLM Investments, € 2.623,15",
+    note: "De vordering van Trust and Law namens PLM Investments, sinds de " +
+      "beschikking niet meer opgevolgd. Verwerkt als vordering in het dossier; " +
+      "nog te melden bij de bewindvoerder.",
+    stops: [
+      { orderIndex: 100, title: "PLM — verwerkt als vordering", kind: "process",
+        state: "done", happenedAt: at("2026-08-29"),
+        note: "De laatste aanmaning dateert van 16 juni; dit is de datum waarop de " +
+          "vordering in het dossier is vastgelegd, niet die van de aanmaning zelf." },
+      { orderIndex: 200, title: "PLM — melden bij Verder", kind: "process", state: "open",
+        task: "Vordering Trust and Law / PLM Investments melden bij de bewindvoerder" },
+    ],
+  },
+  {
+    title: "Vonnis Het CAK",
+    status: "open",
+    branchesAt: "Stam — Het CAK, € 1.141,61, er ligt een vonnis",
+    note: "De sommatie van Stam namens Het CAK, met een vonnis erachter, nooit " +
+      "doorgestuurd naar Verder. Verwerkt als vordering in het dossier; nog te " +
+      "melden bij de bewindvoerder.",
+    stops: [
+      { orderIndex: 100, title: "CAK — verwerkt als vordering", kind: "process",
+        state: "done", happenedAt: at("2026-08-29"),
+        note: "De sommatie dateert van 14 juli; dit is de datum waarop de vordering " +
+          "in het dossier is vastgelegd, niet die van de sommatie zelf." },
+      { orderIndex: 200, title: "CAK — melden bij Verder", kind: "process", state: "open",
+        task: "Vonnis Stam Gerechtsdeurwaarders / Het CAK melden bij de bewindvoerder" },
     ],
   },
 ];

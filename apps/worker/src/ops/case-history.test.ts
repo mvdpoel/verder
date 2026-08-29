@@ -152,9 +152,9 @@ describe("case-history seed", () => {
     // else. Every open stop must be work that waits on Martin.
     const waitsOnMartin = new Set([
       "Financieel beeld compleet, vaste lasten stabiel",
-      "KvK — aanmaning op OpsMate",
-      "Trust and Law — PLM Investments, € 2.623,15",
-      "Stam — Het CAK, € 1.141,61, er ligt een vonnis",
+      "KvK — melden bij Verder",
+      "PLM — melden bij Verder",
+      "CAK — melden bij Verder",
     ]);
     const open = allStops().filter((s) => s.state === "open").map((s) => s.title);
     expect(new Set(open)).toEqual(waitsOnMartin);
@@ -199,14 +199,16 @@ describe("case-history seed", () => {
     expect(states).not.toContain("expected");
   });
 
-  it("puts the seven spine stops in date order", () => {
+  it("puts the ten spine stops in date order", () => {
     // The trunk is no longer a destination, it is the story so far — so every
     // one of its stops has happened, and the order they are numbered in is the
-    // order they happened in. Seven, not fifteen: the episode restructure moved
+    // order they happened in. Ten, not fifteen: the episode restructure moved
     // the ANSWERING of each request onto the spoor that answers it, and left
-    // only the bewindvoering's own milestones plus the moments something landed.
+    // only the bewindvoering's own milestones, the moments something landed,
+    // and — as of the debt-record slice — the three creditor notices that
+    // arrived while the aanvraag was pending.
     const dated = SPINE_SEED.filter((s) => s.happenedAt);
-    expect(dated).toHaveLength(7);
+    expect(dated).toHaveLength(10);
     for (let i = 1; i < dated.length; i++) {
       expect(dated[i].happenedAt!.getTime())
         .toBeGreaterThanOrEqual(dated[i - 1].happenedAt!.getTime());
@@ -288,5 +290,38 @@ describe("case-history seed", () => {
     const titles = allStops().map((s) => s.title);
     expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
     expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  it("puts each debt notice on the line and its handling on a spoor", () => {
+    // The episode rule: the notice is the trigger and belongs on the hoofdlijn;
+    // what was done about it hangs off. Three notices, three spoors.
+    const spine = new Set(SPINE_SEED.map((s) => s.title));
+    for (const notice of ["KvK — aanmaning op OpsMate",
+      "Trust and Law — PLM Investments, € 2.623,15",
+      "Stam — Het CAK, € 1.141,61, er ligt een vonnis"]) {
+      expect(spine, notice).toContain(notice);
+    }
+    for (const spoor of ["Vordering KvK", "Vordering PLM Investments",
+      "Vonnis Het CAK"]) {
+      const t = TRACK_SEED.find((x) => x.title === spoor);
+      expect(t, spoor).toBeDefined();
+      expect(t!.stops).toHaveLength(2);
+    }
+    // The spoor that lumped them together is gone.
+    expect(TRACK_SEED.map((t) => t.title))
+      .not.toContain("Schuldeisers buiten het dossier");
+  });
+
+  it("dates the registry entry, not the notice, on a verwerkt-stop", () => {
+    // The notice is older than the record. Back-dating the record to the
+    // notice's day would be the app inventing a fact; leaving it undated would
+    // drop it into the `onbekend` band, away from the episode it belongs to.
+    for (const t of TRACK_SEED.filter((x) => x.title.startsWith("Vordering ")
+      || x.title === "Vonnis Het CAK")) {
+      const verwerkt = t.stops.find((s) => s.title.includes("verwerkt als vordering"));
+      expect(verwerkt, t.title).toBeDefined();
+      expect(verwerkt!.happenedAt?.toISOString().slice(0, 10)).toBe("2026-08-29");
+      expect(verwerkt!.state).toBe("done");
+    }
   });
 });

@@ -41,8 +41,10 @@ const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
  * — it is the story so far. And a spoor is ONE EPISODE: something arrives (the
  * trigger, which belongs HERE, on the hoofdlijn) and everything done in
  * response hangs off it until the matter closes, however many parties are
- * involved. So these seven are the aanmelding, the beschikking that answered
- * it, the handover, and the four moments something arrived — Team Opstart's
+ * involved. So these ten are the aanmelding, the three creditor notices that
+ * arrived while the aanvraag was pending (KvK, Trust and Law / PLM
+ * Investments, Stam / Het CAK), the beschikking that answered the aanvraag,
+ * the handover, and the four moments something else arrived — Team Opstart's
  * request, the deurwaarder at the door, the bank account taken over, and Regio
  * 3's request. The answering of each lives on the spoor that answers it.
  *
@@ -71,12 +73,18 @@ const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
  */
 export const SPINE_SEED = [
   { title: "Aanmelding bij Verder", orderIndex: 100, happenedAt: at("2026-04-16") },
-  { title: "Beschikking: onder bewind gesteld", orderIndex: 200, happenedAt: at("2026-07-14") },
-  { title: "Dossier naar Team Opstart", orderIndex: 300, happenedAt: at("2026-07-20") },
-  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 400, happenedAt: at("2026-07-27") },
-  { title: "Deurwaarder zegt de ontruiming aan", orderIndex: 500, happenedAt: at("2026-07-29") },
-  { title: "Rekening overgenomen zonder aankondiging", orderIndex: 600, happenedAt: at("2026-08-05") },
-  { title: "Stukken opgevraagd door Regio 3", orderIndex: 700, happenedAt: at("2026-08-12") },
+  // The three creditor notices, each now the trigger of its own spoor rather
+  // than a stop on a track that lumped them together. See SPINE_SEED in
+  // apps/worker/src/ops/case-history.ts for the long version.
+  { title: "KvK — aanmaning op OpsMate", orderIndex: 200, happenedAt: at("2026-05-26") },
+  { title: "Trust and Law — PLM Investments, € 2.623,15", orderIndex: 300, happenedAt: at("2026-06-11") },
+  { title: "Stam — Het CAK, € 1.141,61, er ligt een vonnis", orderIndex: 400, happenedAt: at("2026-07-14") },
+  { title: "Beschikking: onder bewind gesteld", orderIndex: 500, happenedAt: at("2026-07-14") },
+  { title: "Dossier naar Team Opstart", orderIndex: 600, happenedAt: at("2026-07-20") },
+  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 700, happenedAt: at("2026-07-27") },
+  { title: "Deurwaarder zegt de ontruiming aan", orderIndex: 800, happenedAt: at("2026-07-29") },
+  { title: "Rekening overgenomen zonder aankondiging", orderIndex: 900, happenedAt: at("2026-08-05") },
+  { title: "Stukken opgevraagd door Regio 3", orderIndex: 1000, happenedAt: at("2026-08-12") },
 ] as const satisfies readonly { title: string; orderIndex: number; happenedAt: Date }[];
 
 export type EnsureCaseMapResult = {
