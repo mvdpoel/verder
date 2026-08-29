@@ -131,7 +131,8 @@ describe("debt record", () => {
     expect(await appDb.select().from(schema.debtParties)
       .where(eq(schema.debtParties.debtId, d.id))).toHaveLength(0);
 
-    await expect(appDb.delete(schema.registryDecisions))
+    await expect(appDb.delete(schema.registryDecisions)
+      .where(eq(schema.registryDecisions.id, crypto.randomUUID())))
       .rejects.toThrow(/permission denied/);
   });
 });

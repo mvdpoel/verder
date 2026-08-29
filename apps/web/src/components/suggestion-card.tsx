@@ -19,7 +19,7 @@ type ProposedRegistryItem = { name?: string; category?: string; amountCents?: nu
   chargeCount?: number; typicalAmountCents?: number; lastAt?: string;
   transactionIds?: string[]; aggregator?: "apple" | "paypal" | null;
   resolved?: boolean; note?: string };
-type ProposedDebt = { creditorName?: string; claimedCents?: number; references?: string | null;
+type ProposedDebt = { creditorName?: string; claimedCents?: number | null; references?: string | null;
   counterpartyName?: string | null; chargeCount?: number; lastAt?: string };
 type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
   assigneeHint?: "martin" | "verdergroep" | "other"; rawEmailId?: string };
@@ -215,7 +215,9 @@ function DebtCard({ s }: { s: Suggestion }) {
   const approve = trpc.suggestions.approveDebt.useMutation({ onSuccess: () => router.refresh() });
   const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
   if (!p) return null;
-  const claimedCents = Math.abs(p.claimedCents ?? 0);
+  // A notice that never states a total is unknown, not zero — `0` would
+  // assert the creditor claims nothing.
+  const claimedCents = p.claimedCents == null ? null : Math.abs(p.claimedCents);
   return (
     <li className="rounded border bg-white p-4 space-y-3">
       <p className="text-sm text-slate-500">

@@ -132,7 +132,13 @@ export async function applyCaseDebts(db: Db): Promise<{
   }
 
   // --- documents, by filename --------------------------------------------------
-  const documents = await db.select().from(schema.documents);
+  // Oldest wins under a duplicate title (the same rule case-history.ts's
+  // documents lookup and this file's own party/debt lookups use): without the
+  // orderBy, two vault rows sharing a title have no stable pick, and a later
+  // run could bind the debt-document link to a different row than an earlier
+  // run did, adding a second link under the (debt_id, document_id) unique key.
+  const documents = await db.select().from(schema.documents)
+    .orderBy(asc(schema.documents.createdAt), asc(schema.documents.id));
   const docIdByTitle = new Map<string, string>();
   for (const d of documents) if (!docIdByTitle.has(d.title)) docIdByTitle.set(d.title, d.id);
 
