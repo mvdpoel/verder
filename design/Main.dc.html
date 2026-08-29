@@ -1,0 +1,530 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@200;300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Saira, "Helvetica Neue", sans-serif; }
+    a { color: #63d3ea; text-decoration: none; }
+    a:hover { color: #a9e9f6; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .glass {
+      background: linear-gradient(168deg, rgba(120,180,230,0.075), rgba(120,180,230,0.018) 62%);
+      border: 1px solid rgba(140,195,240,0.10);
+      border-top-color: rgba(160,215,250,0.24);
+      border-radius: 3px;
+      backdrop-filter: blur(2px);
+    }
+    .lbl {
+      font-size: 9.5px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #6d8298;
+      font-weight: 400;
+    }
+    @keyframes drift {
+      0% { transform: translate3d(0,0,0) scale(1); opacity: 0.55; }
+      50% { transform: translate3d(28px,-18px,0) scale(1.06); opacity: 0.8; }
+      100% { transform: translate3d(0,0,0) scale(1); opacity: 0.55; }
+    }
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes spin-back {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    @keyframes halo {
+      0% { opacity: 0.25; r: 7; }
+      55% { opacity: 0.9; r: 13; }
+      100% { opacity: 0.25; r: 7; }
+    }
+    @keyframes breathe {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+    @keyframes sweepx {
+      0% { transform: translateX(0px); opacity: 0; }
+      6% { opacity: 1; }
+      94% { opacity: 1; }
+      100% { transform: translateX(1020px); opacity: 0; }
+    }
+    @keyframes trace {
+      from { stroke-dashoffset: 1100; }
+      to { stroke-dashoffset: 0; }
+    }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 1590px; overflow: hidden; background: #04070d; color: #dbe6f2;">
+
+  <!-- volumetric field -->
+  <div style="position: absolute; inset: 0; pointer-events: none; background:
+      radial-gradient(760px 520px at 78% 6%, rgba(60,150,190,0.20), transparent 70%),
+      radial-gradient(620px 480px at 12% 62%, rgba(90,80,190,0.13), transparent 72%);
+      animation: drift 26s ease-in-out infinite;"></div>
+  <div style="position: absolute; inset: 0; pointer-events: none; opacity: 0.5; background-image:
+      linear-gradient(rgba(120,190,230,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,190,230,0.045) 1px, transparent 1px);
+      background-size: 120px 120px;
+      mask-image: radial-gradient(900px 700px at 65% 16%, #000 20%, transparent 82%);"></div>
+
+  <!-- left rail -->
+  <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 78px; border-right: 1px solid rgba(140,195,240,0.10); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 0; background: rgba(6,11,20,0.6);">
+    <div style="width: 26px; height: 26px; margin-bottom: 22px;">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <circle cx="13" cy="13" r="11" stroke="#63d3ea" stroke-width="1"></circle>
+        <path d="M13 3.2 L13 22.8" stroke="#63d3ea" stroke-width="1" opacity="0.45"></path>
+        <path d="M5.4 8.4 C 10 13, 16 13, 20.6 8.4" stroke="#63d3ea" stroke-width="1.2"></path>
+      </svg>
+    </div>
+    <div style="position: relative; width: 46px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: linear-gradient(90deg, rgba(99,211,234,0.16), rgba(99,211,234,0.02));">
+      <div style="position: absolute; left: -1px; top: 8px; bottom: 8px; width: 2px; background: #63d3ea; box-shadow: 0 0 12px 2px rgba(99,211,234,0.7);"></div>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#bfeefa" stroke-width="1.3" stroke-linecap="round">
+        <rect x="3" y="3" width="7.5" height="7.5"></rect><rect x="13.5" y="3" width="7.5" height="7.5"></rect>
+        <rect x="3" y="13.5" width="7.5" height="7.5"></rect><rect x="13.5" y="13.5" width="7.5" height="7.5"></rect>
+      </svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 L21 21" stroke-linecap="round"></path></svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><path d="M5 4h11l3.5 3.5V20H5z"></path><path d="M8 10h8M8 14h5"></path></svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><rect x="3.5" y="6" width="17" height="13"></rect><path d="M3.5 10h17M9 6V4.5h6V6"></path></svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-6M22 19H2"></path></svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><path d="M4.5 7h15M4.5 12h15M4.5 17h9"></path></svg>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center; position: relative;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2.6"></circle><circle cx="17" cy="17" r="2.6"></circle><path d="M7 9.6V21M17 14.4V3M7 15h10"></path></svg>
+      <div style="position: absolute; top: 8px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: #e8a557; box-shadow: 0 0 8px 1px rgba(232,165,87,0.8); animation: breathe 3.4s ease-in-out infinite;"></div>
+    </div>
+    <div style="width: 46px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.3" stroke-linecap="round"><path d="M12 3.5 20 7v6.5c0 4-3.4 6.4-8 7.5-4.6-1.1-8-3.5-8-7.5V7z"></path><path d="M9 12l2.2 2.2L15.5 10"></path></svg>
+    </div>
+    <div style="margin-top: auto; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(140,195,240,0.22); display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: 0.06em; color: #93a8bd;">MP</div>
+  </div>
+
+  <!-- top strip -->
+  <div style="position: absolute; left: 78px; right: 0; top: 0; height: 62px; border-bottom: 1px solid rgba(140,195,240,0.09); display: flex; align-items: center; gap: 28px; padding: 0 40px;">
+    <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.44em; color: #cfe4f2;">VERDER</div>
+    <div class="mono" style="font-size: 10.5px; letter-spacing: 0.16em; color: #5f7488;">DOSSIER NLTZ2612548IVB · ONDER BEWIND · VERDERGROEP</div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 18px;">
+      <div class="mono" style="display: flex; align-items: center; gap: 9px; font-size: 10.5px; letter-spacing: 0.14em; color: #63788e; border: 1px solid rgba(140,195,240,0.12); border-radius: 2px; padding: 6px 12px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.6"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 L21 21" stroke-linecap="round"></path></svg>
+        ZOEK IN HET DOSSIER
+        <span style="color: #46586a;">⌘K</span>
+      </div>
+      <div class="mono" style="display: flex; align-items: center; gap: 7px; font-size: 10.5px; letter-spacing: 0.14em; color: #7fd8c0;">
+        <span style="width: 5px; height: 5px; border-radius: 50%; background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.7); animation: breathe 3s ease-in-out infinite;"></span>
+        KETEN INTACT · 129
+      </div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="position: absolute; left: 118px; right: 40px; top: 96px; height: 372px;">
+    <div class="glass" style="position: absolute; inset: 0; overflow: hidden;">
+      <div style="position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(99,211,234,0.75) 22%, rgba(99,211,234,0.15) 60%, transparent);"></div>
+
+      <!-- case metrics: wat er geindexeerd is, en bij wie het werk ligt -->
+      <div style="position: absolute; right: 26px; top: 34px; width: 304px; height: 304px;">
+        <div style="position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(99,211,234,0.13), transparent 62%);"></div>
+        <svg width="304" height="304" viewBox="0 0 304 304" fill="none" style="position: absolute; inset: 0;">
+          <g style="transform-origin: 152px 152px; animation: spin-slow 78s linear infinite;">
+            <circle cx="152" cy="152" r="141" stroke="rgba(99,211,234,0.16)" stroke-width="1" stroke-dasharray="2 9"></circle>
+          </g>
+          <g style="transform-origin: 152px 152px; animation: spin-back 112s linear infinite;">
+            <circle cx="152" cy="152" r="133" stroke="rgba(140,205,235,0.11)" stroke-width="1" stroke-dasharray="40 20"></circle>
+          </g>
+          <g style="transform-origin: 152px 152px; transform: rotate(-90deg);">
+            <circle cx="152" cy="152" r="118" stroke="rgba(99,211,234,0.10)" stroke-width="3"></circle>
+            <circle cx="152" cy="152" r="118" stroke="#63d3ea" stroke-width="3" stroke-linecap="round" stroke-dasharray="741.4" stroke-dashoffset="44.5"></circle>
+            <circle cx="152" cy="152" r="96" stroke="rgba(140,195,240,0.09)" stroke-width="3"></circle>
+            <circle cx="152" cy="152" r="96" stroke="#8fb3cc" stroke-width="3" stroke-linecap="round" stroke-dasharray="603.2" stroke-dashoffset="181"></circle>
+            <circle cx="152" cy="152" r="74" stroke="rgba(140,195,240,0.09)" stroke-width="3"></circle>
+            <circle cx="152" cy="152" r="74" stroke="#e8a557" stroke-width="3" stroke-linecap="round" stroke-dasharray="252 213" stroke-dashoffset="0"></circle>
+            <circle cx="152" cy="152" r="74" stroke="rgba(147,168,189,0.65)" stroke-width="3" stroke-linecap="round" stroke-dasharray="200 265" stroke-dashoffset="-258"></circle>
+          </g>
+          <circle cx="152" cy="152" r="54" fill="rgba(232,165,87,0.05)"></circle>
+        </svg>
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;">
+          <div class="mono" style="font-size: 44px; font-weight: 400; line-height: 1; color: #e8a557; text-shadow: 0 0 26px rgba(232,165,87,0.5);">5</div>
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.24em; color: #e8a557; margin-top: 6px;">VOOR JOU</div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.16em; color: #63788e; margin-top: 5px;">VAN 9 OPEN TAKEN</div>
+        </div>
+      </div>
+
+      <!-- de ringen, uitgeschreven -->
+      <div style="position: absolute; right: 352px; top: 74px; width: 190px; display: flex; flex-direction: column; align-items: flex-end; gap: 17px;">
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+          <div class="lbl">Documenten met tekst</div>
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div class="mono" style="font-size: 16px; color: #dbe6f2;">62 <span style="color: #63788e;">/ 66</span></div>
+            <span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid #63d3ea; box-sizing: border-box;"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+          <div class="lbl">Taken afgerond</div>
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div class="mono" style="font-size: 16px; color: #dbe6f2;">21 <span style="color: #63788e;">/ 30</span></div>
+            <span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid #8fb3cc; box-sizing: border-box;"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+          <div class="lbl" style="color: #e8a557;">Open · bij jou</div>
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div class="mono" style="font-size: 16px; color: #e8a557;">5</div>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #e8a557; box-shadow: 0 0 10px 1px rgba(232,165,87,0.55);"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+          <div class="lbl">Open · bij Verder</div>
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div class="mono" style="font-size: 16px; color: #93a8bd;">4</div>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: rgba(147,168,189,0.65);"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="position: relative; padding: 30px 40px; max-width: 620px; display: flex; flex-direction: column; gap: 0;">
+        <div class="lbl" style="color: #e8a557;">Waar het nu op wacht</div>
+        <div style="font-size: 19px; font-weight: 300; letter-spacing: 0.005em; line-height: 1.3; margin-top: 14px; color: #63d3ea;">Onboarding bij Verder</div>
+        <div style="font-size: 46px; font-weight: 200; letter-spacing: -0.015em; line-height: 1.08; margin-top: 5px; color: #f0f7fc;">Stukken aanleveren</div>
+        <div style="margin-top: 14px; font-size: 14.5px; font-weight: 300; line-height: 1.6; color: #93a8bd; max-width: 470px;">Team Opstart wacht op je laatste loonstroken en de zorgpolis. Vier van de zes bestanden staan al in de kluis.</div>
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+          <div class="mono" style="display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: 0.16em; color: #041016; background: linear-gradient(100deg, #7fdcf0, #63d3ea); padding: 13px 22px; border-radius: 2px; box-shadow: 0 0 26px -4px rgba(99,211,234,0.6);">
+            STUKKEN AANLEVEREN
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#041016" stroke-width="2" stroke-linecap="round"><path d="M5 12h13M12.5 6l6 6-6 6"></path></svg>
+          </div>
+          <div class="mono" style="display: flex; align-items: center; font-size: 11px; letter-spacing: 0.16em; color: #a9c2d6; border: 1px solid rgba(140,195,240,0.20); padding: 13px 22px; border-radius: 2px;">OPEN HET SPOOR</div>
+        </div>
+        <div style="display: flex; gap: 26px; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(140,195,240,0.09);">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div class="lbl">Sinds</div>
+            <div class="mono" style="font-size: 13px; color: #cfe0ee;">28 aug · dag 2</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div class="lbl">Wacht op</div>
+            <div class="mono" style="font-size: 13px; color: #cfe0ee;">jou</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div class="lbl">Bewijs</div>
+            <div class="mono" style="font-size: 13px; color: #cfe0ee;">4 / 6 bestanden</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DE ZAAK — horizontale meting over alle sporen ============ -->
+  <div class="glass" style="position: absolute; left: 118px; right: 40px; top: 496px; height: 304px; overflow: hidden;">
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(99,211,234,0.45) 40%, rgba(99,211,234,0.10) 72%, transparent);"></div>
+    <div style="padding: 22px 26px 20px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <div class="lbl">De zaak · 10 sporen · 41 haltes</div>
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.16em; color: #63d3ea;">DE HELE KAART →</div>
+      </div>
+
+      <svg width="100%" height="200" viewBox="0 0 1230 200" fill="none">
+        <defs>
+          <linearGradient id="sweepgrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#63d3ea" stop-opacity="0"></stop>
+            <stop offset="0.5" stop-color="#63d3ea" stop-opacity="0.32"></stop>
+            <stop offset="1" stop-color="#63d3ea" stop-opacity="0"></stop>
+          </linearGradient>
+        </defs>
+
+        <!-- maandkolommen -->
+        <line x1="414" y1="22" x2="414" y2="184" stroke="rgba(140,195,240,0.08)" stroke-width="1"></line>
+        <line x1="618" y1="22" x2="618" y2="184" stroke="rgba(140,195,240,0.08)" stroke-width="1"></line>
+        <line x1="822" y1="22" x2="822" y2="184" stroke="rgba(140,195,240,0.08)" stroke-width="1"></line>
+        <line x1="1026" y1="22" x2="1026" y2="184" stroke="rgba(140,195,240,0.08)" stroke-width="1"></line>
+        <text x="216" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#4f6478">APR</text>
+        <text x="420" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#4f6478">MEI</text>
+        <text x="624" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#4f6478">JUN</text>
+        <text x="828" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#4f6478">JUL</text>
+        <text x="1032" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#4f6478">AUG</text>
+
+        <!-- scan -->
+        <g style="animation: sweepx 11s linear infinite;">
+          <rect x="210" y="22" width="46" height="162" fill="url(#sweepgrad)"></rect>
+        </g>
+
+        <!-- NU -->
+        <line x1="1213" y1="20" x2="1213" y2="186" stroke="#e8a557" stroke-width="1" opacity="0.45"></line>
+        <text x="1206" y="14" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="2" fill="#e8a557">NU · 28 AUG</text>
+
+        <!-- ── hoofdlijn ── -->
+        <text x="196" y="38" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#dbe6f2">Bewindvoering</text>
+        <path d="M319 34 L1213 34" stroke="rgba(200,222,240,0.42)" stroke-width="1.6"
+              stroke-dasharray="1100" style="animation: trace 2.2s ease-out forwards;"></path>
+        <circle cx="319" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="914" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="960" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="1039" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="1118" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="1164" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="1213" cy="34" r="4.6" fill="#b6cfe4"></circle>
+        <circle cx="914" cy="34" r="8.4" fill="none" stroke="rgba(99,211,234,0.45)" stroke-width="1"></circle>
+        <circle cx="960" cy="34" r="8.4" fill="none" stroke="rgba(99,211,234,0.45)" stroke-width="1"></circle>
+        <circle cx="1118" cy="34" r="8.4" fill="none" stroke="rgba(99,211,234,0.45)" stroke-width="1"></circle>
+        <circle cx="1164" cy="34" r="8.4" fill="none" stroke="rgba(99,211,234,0.45)" stroke-width="1"></circle>
+        <circle cx="1213" cy="34" r="8.4" fill="none" stroke="rgba(232,165,87,0.5)" stroke-width="1"></circle>
+
+        <!-- ── Aanvraag bewindvoering — afgerond, voegt samen op de beschikking ── -->
+        <text x="196" y="64" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#8ea4ba">Aanvraag bewindvoering</text>
+        <path d="M319 34 C 319 50, 322 60, 336 60 L 884 60 C 900 60, 914 52, 914 34"
+              stroke="rgba(99,211,234,0.30)" stroke-width="1.2"></path>
+        <circle cx="360" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="452" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="556" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="668" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="782" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="862" cy="60" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <text x="926" y="64" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="1.6" fill="#4f6478">SAMENGEVOEGD</text>
+
+        <!-- ── Ontruiming Woonhave — geëindigd ── -->
+        <text x="196" y="90" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#8ea4ba">Ontruiming Woonhave</text>
+        <path d="M822 34 C 822 56, 826 86, 840 86 L 1039 86"
+              stroke="rgba(99,211,234,0.30)" stroke-width="1.2"></path>
+        <circle cx="866" cy="86" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="932" cy="86" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="996" cy="86" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <line x1="1039" y1="79" x2="1039" y2="93" stroke="rgba(150,205,232,0.75)" stroke-width="1.4"></line>
+        <text x="1051" y="90" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="1.6" fill="#4f6478">GEËINDIGD</text>
+
+        <!-- ── Onboarding bij Verder — open, wacht op jou ── -->
+        <text x="196" y="116" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#f0f7fc">Onboarding bij Verder</text>
+        <path d="M960 34 C 960 66, 964 112, 978 112 L 1213 112"
+              stroke="rgba(232,165,87,0.42)" stroke-width="1.3"></path>
+        <circle cx="1006" cy="112" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="1082" cy="112" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="1152" cy="112" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="1213" cy="112" r="12" fill="rgba(232,165,87,0.14)"></circle>
+        <circle cx="1213" cy="112" r="5.4" fill="#e8a557"></circle>
+        <circle cx="1213" cy="112" r="9" fill="none" stroke="#e8a557" stroke-width="1" opacity="0.55" style="animation: halo 3.6s ease-in-out infinite;"></circle>
+
+        <!-- ── Bankrekening en leefgeld — open ── -->
+        <text x="196" y="142" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#8ea4ba">Bankrekening en leefgeld</text>
+        <path d="M1118 34 C 1118 92, 1122 138, 1136 138 L 1213 138"
+              stroke="rgba(99,211,234,0.30)" stroke-width="1.2"></path>
+        <circle cx="1160" cy="138" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+        <circle cx="1196" cy="138" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+
+        <!-- ── Schuldregeling — open ── -->
+        <text x="196" y="168" text-anchor="end" font-family="Saira, sans-serif" font-size="13" fill="#8ea4ba">Schuldregeling</text>
+        <path d="M1164 34 C 1164 118, 1168 164, 1182 164 L 1213 164"
+              stroke="rgba(99,211,234,0.30)" stroke-width="1.2"></path>
+        <circle cx="1200" cy="164" r="3.6" fill="#04070d" stroke="rgba(150,205,232,0.75)" stroke-width="1.2"></circle>
+
+        <!-- resterende sporen -->
+        <text x="196" y="192" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="1.6" fill="#4f6478">+ 4 SPOREN</text>
+        <line x1="210" y1="188" x2="1213" y2="188" stroke="rgba(140,195,240,0.07)" stroke-width="1" stroke-dasharray="2 6"></line>
+      </svg>
+
+      <div style="display: flex; align-items: center; gap: 20px; padding-top: 2px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #b6cfe4;"></span>
+          <span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">GEBEURD</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(150,205,232,0.75); box-sizing: border-box;"></span>
+          <span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">HALTE</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #e8a557; box-shadow: 0 0 8px 1px rgba(232,165,87,0.6);"></span>
+          <span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">WACHT OP JOU</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(99,211,234,0.55); box-sizing: border-box;"></span>
+          <span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">KNOOPPUNT</span>
+        </div>
+        <div class="mono" style="margin-left: auto; font-size: 10px; letter-spacing: 0.12em; color: #4f6478;">MAANDEN GELIJK VERDEELD · HALTES BINNEN EEN MAAND NIET OP SCHAAL</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- readouts -->
+  <div style="position: absolute; left: 118px; right: 40px; top: 830px; height: 96px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: rgba(140,195,240,0.09);">
+    <div style="background: #04070d; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="lbl">Te beoordelen</div>
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <div class="mono" style="font-size: 32px; font-weight: 400; color: #63d3ea; text-shadow: 0 0 22px rgba(99,211,234,0.55);">4</div>
+        <div style="font-size: 12px; color: #6d8298;">suggesties</div>
+      </div>
+    </div>
+    <div style="background: #04070d; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="lbl">Kluis</div>
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <div class="mono" style="font-size: 32px; font-weight: 400; color: #dbe6f2;">7</div>
+        <div style="font-size: 12px; color: #6d8298;">te sorteren</div>
+      </div>
+    </div>
+    <div style="background: #04070d; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="lbl">Taken</div>
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <div class="mono" style="font-size: 32px; font-weight: 400; color: #dbe6f2;">9</div>
+        <div style="font-size: 12px; color: #e8a557;">1 te laat</div>
+      </div>
+    </div>
+    <div style="background: #04070d; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="lbl">Registratie</div>
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <div class="mono" style="font-size: 32px; font-weight: 400; color: #dbe6f2;">12</div>
+        <div style="font-size: 12px; color: #6d8298;">€ 1.284 p/m</div>
+      </div>
+    </div>
+    <div style="background: #04070d; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="lbl">Vorderingen</div>
+      <div style="display: flex; align-items: baseline; gap: 9px;">
+        <div class="mono" style="font-size: 32px; font-weight: 400; color: #dbe6f2;">3</div>
+        <div style="font-size: 12px; color: #6d8298;">1 zonder bedrag</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- two columns -->
+  <div style="position: absolute; left: 118px; right: 40px; top: 960px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px;">
+
+    <div class="glass" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <div class="lbl">Wat jij nog moet doen</div>
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.16em; color: #63d3ea;">ALLE TAKEN →</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0;">
+        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(140,195,240,0.07);">
+          <div style="width: 9px; height: 9px; border-radius: 50%; background: #e8a557; box-shadow: 0 0 12px 2px rgba(232,165,87,0.6); flex-shrink: 0;"></div>
+          <div style="flex-grow: 1;">
+            <div style="font-size: 14px; color: #eaf3fa;">Loonstroken juni en juli uploaden</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #63788e; margin-top: 3px;">ONBOARDING BIJ VERDER</div>
+          </div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #e8a557;">TE LAAT · 27 AUG</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(140,195,240,0.07);">
+          <div style="width: 9px; height: 9px; border-radius: 50%; border: 1px solid #63d3ea; flex-shrink: 0;"></div>
+          <div style="flex-grow: 1;">
+            <div style="font-size: 14px; color: #cfe0ee;">Zorgpolis 2026 opvragen bij Zilveren Kruis</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #63788e; margin-top: 3px;">ONBOARDING BIJ VERDER</div>
+          </div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">01 SEP</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(140,195,240,0.07);">
+          <div style="width: 9px; height: 9px; border-radius: 50%; border: 1px solid #63d3ea; flex-shrink: 0;"></div>
+          <div style="flex-grow: 1;">
+            <div style="font-size: 14px; color: #cfe0ee;">Vordering KvK melden bij Verder</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #63788e; margin-top: 3px;">VORDERING KVK</div>
+          </div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">02 SEP</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(140,195,240,0.07);">
+          <div style="width: 9px; height: 9px; border-radius: 50%; background: rgba(140,195,240,0.35); flex-shrink: 0;"></div>
+          <div style="flex-grow: 1;">
+            <div style="font-size: 14px; color: #93a8bd;">Reactie op klacht bejegening</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #63788e; margin-top: 3px;">WACHT OP VERDER</div>
+          </div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">21 AUG</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 0;">
+          <div style="width: 9px; height: 9px; border-radius: 50%; background: rgba(140,195,240,0.35); flex-shrink: 0;"></div>
+          <div style="flex-grow: 1;">
+            <div style="font-size: 14px; color: #93a8bd;">Voorstel schuldregeling</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #63788e; margin-top: 3px;">WACHT OP VERDER</div>
+          </div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">21 AUG</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+      <div class="glass" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <div class="lbl">Geld in en uit</div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">APR — OKT 2026</div>
+        </div>
+        <svg width="100%" height="132" viewBox="0 0 520 132" preserveAspectRatio="none" fill="none">
+          <defs>
+            <linearGradient id="inA" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#63d3ea" stop-opacity="0.55"></stop>
+              <stop offset="1" stop-color="#63d3ea" stop-opacity="0.02"></stop>
+            </linearGradient>
+          </defs>
+          <rect x="370" y="0" width="150" height="132" fill="rgba(140,195,240,0.035)"></rect>
+          <path d="M0 96 L74 62 L148 40 L222 34 L296 30 L370 48 L444 44 L520 42 L520 132 L0 132 Z" fill="url(#inA)"></path>
+          <path d="M0 96 L74 62 L148 40 L222 34 L296 30 L370 48" stroke="#63d3ea" stroke-width="1.4"></path>
+          <path d="M370 48 L444 44 L520 42" stroke="#63d3ea" stroke-width="1.4" stroke-dasharray="3 5"></path>
+          <path d="M0 112 L74 104 L148 100 L222 92 L296 96 L370 88 L444 90 L520 88" stroke="#e8a557" stroke-width="1.2"></path>
+        </svg>
+        <div style="display: flex; gap: 22px;">
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 14px; height: 2px; background: #63d3ea;"></span><span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">IN · € 3.556</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 14px; height: 2px; background: #e8a557;"></span><span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">UIT · € 1.284</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 14px; height: 8px; background: rgba(140,195,240,0.14);"></span><span class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #7f95aa;">PROGNOSE</span></div>
+        </div>
+      </div>
+
+      <div class="glass" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 14px;">
+        <div class="lbl">Systeem</div>
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.6);"></span>
+            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #a9c2d6; flex-grow: 1;">SEARCH.DRAIN</span>
+            <span class="mono" style="font-size: 11px; color: #63788e;">14:31:02</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.6);"></span>
+            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #a9c2d6; flex-grow: 1;">DOCMETA.SWEEP</span>
+            <span class="mono" style="font-size: 11px; color: #63788e;">14:30:00</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #e8a557; box-shadow: 0 0 8px 1px rgba(232,165,87,0.6); animation: breathe 3s ease-in-out infinite;"></span>
+            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #a9c2d6; flex-grow: 1;">MAIL.INGEST</span>
+            <span class="mono" style="font-size: 11px; color: #e8a557;">GEPAUZEERD</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.6);"></span>
+            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #a9c2d6; flex-grow: 1;">NIGHTLY-VERIFY</span>
+            <span class="mono" style="font-size: 11px; color: #63788e;">129 / 66 OK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- recently logged -->
+  <div style="position: absolute; left: 118px; right: 40px; top: 1425px; display: flex; flex-direction: column; gap: 14px;">
+    <div class="lbl">Recent vastgelegd</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: rgba(140,195,240,0.09);">
+      <div style="background: #04070d; padding: 16px 20px; display: flex; flex-direction: column; gap: 7px;">
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">29 AUG · MAIL</div>
+        <div style="font-size: 13.5px; color: #cfe0ee; line-height: 1.45;">Aanmaning Kamer van Koophandel als vordering vastgelegd</div>
+      </div>
+      <div style="background: #04070d; padding: 16px 20px; display: flex; flex-direction: column; gap: 7px;">
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">28 AUG · MAIL</div>
+        <div style="font-size: 13.5px; color: #cfe0ee; line-height: 1.45;">Team Opstart vraagt om loonstroken en polis</div>
+      </div>
+      <div style="background: #04070d; padding: 16px 20px; display: flex; flex-direction: column; gap: 7px;">
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">22 AUG · BESLUIT</div>
+        <div style="font-size: 13.5px; color: #cfe0ee; line-height: 1.45;">Leefgeld vastgesteld op € 65 per week</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":1590}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

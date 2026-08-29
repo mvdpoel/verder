@@ -1,0 +1,101 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Dashboard"
+    },
+    {
+      "id": "page-3",
+      "name": "Ontwerpsysteem"
+    },
+    {
+      "id": "page-2",
+      "name": "Richtingen B en C"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Dashboard — richting A + de strip uit B",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1590
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "B — Brugconsole",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1240
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "title": "C — Sporendrift",
+      "page": "page-2",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1240
+    },
+    {
+      "file": "Tokens.dc.html",
+      "title": "Fundament — kleur, type, vorm, beweging",
+      "page": "page-3",
+      "x": 0,
+      "y": 0,
+      "w": 1240,
+      "h": 1580
+    },
+    {
+      "file": "Componenten.dc.html",
+      "title": "Onderdelen — knoppen, invoer, panelen, dialoog",
+      "page": "page-3",
+      "x": 1400,
+      "y": 0,
+      "w": 1240,
+      "h": 2020
+    }
+  ],
+  "annotations": [
+    {
+      "id": "dir-a",
+      "page": "page-1",
+      "x": 0,
+      "y": -340,
+      "w": 700,
+      "text": "RICHTING A, MET DE MEETSTRIP UIT B\nZelfde taal als A: zwart veld met volumetrisch licht, glazen panelen, cyaan als kleur van het systeem en amber uitsluitend voor wat op jou wacht.\n\nDE KOP noemt eerst het spoor (Onboarding bij Verder) en dan de halte (Stukken aanleveren) — dezelfde naam die het spoor in de strip en in de takenlijst draagt.\n\nHET RONDE OBJECT is geen sfeer meer maar een meting: buitenring documenten met tekst (62/66), middenring taken afgerond (21/30), binnenring de negen open taken gesplitst — amber wat bij jou ligt, grijs wat bij Verder ligt. In het midden staat het enige getal dat er 's ochtends toe doet: 5 voor jou. Rechts ernaast staan de vier ringen uitgeschreven, want een ring zonder cijfer is decoratie.\n\nDE STRIP UIT B zit direct onder de kop, in A getekend: een SVG met rails en haltes, aftakkingen die met een boog uit de hoofdlijn komen en een samenvoeging die er weer in terugbuigt. Ontruiming Woonhave eindigt met een streep — geëindigd is een schone afloop, geen mislukking. NU is een amberlijn rechts, met een trage cyaan scan eroverheen.\n\nDe as is eerlijk: maanden gelijk verdeeld, haltes bínnen een maand niet — dat staat er ook onder. Anders stapelen 22 van de 34 haltes zich in vijf weken op elkaar.\n\nTwee gevolgen, geen extra's: de sporenlijst uit A is weg (die stond nu twee keer op de pagina) en die kolom vertelt in plaats daarvan wat jij nog moet doen. De strip toont zes sporen plus '+ 4 sporen' — het dashboard hoort minder te tonen dan /timeline."
+    },
+    {
+      "id": "dir-b",
+      "page": "page-2",
+      "x": 0,
+      "y": -300,
+      "w": 640,
+      "text": "B — BRUGCONSOLE\nPrecisie-instrument. Vlak zwart, geen bloom, alles op een strak modulair raster met haarlijnen, hoekhaken, tikjes en monospace cijfers. De signatuur is de strip bovenin: alle tien sporen als één horizontale meting, met NU als markering.\n\nWaarom: dit toont het meeste in één blik en blijft rustig bij dichte data. Het is de enige richting waarin je 41 haltes tegelijk kunt overzien.\n\nRuil: het minst 'levend' van de drie — de dynamiek zit in de data, niet in de sfeer. Koeler van toon, wat bij dit onderwerp ook een nadeel kan zijn.\n\nBewaard voor de vergelijking: de strip is overgezet naar het dashboard."
+    },
+    {
+      "id": "dir-c",
+      "page": "page-2",
+      "x": 1560,
+      "y": -300,
+      "w": 640,
+      "text": "C — SPORENDRIFT\nHologram bij daglicht. Parelwit veld met iriserende gloed, zwevende kaarten met dichroïsche randen, diepe inkt en veel lucht. De zaak is één zachte lijn die van links onder naar rechts boven loopt, met NU als warme punt.\n\nWaarom: het futurisme zit in het materiaal (iridescentie, glas, licht) in plaats van in duisternis. Optimistisch en leesbaar in een lichte kamer — bij dit onderwerp een houding, geen decoratie.\n\nRuil: minst 'Star Trek-brug'. Iridescentie kan decoratief worden als het niet streng wordt gehouden, en licht toont minder data per scherm.\n\nBewaard voor de vergelijking, niet gekozen."
+    },
+    {
+      "id": "systeem",
+      "page": "page-3",
+      "x": 0,
+      "y": -300,
+      "w": 700,
+      "text": "HET ONTWERPSYSTEEM\nLinks het fundament: elke kleur, elke tekstmaat, elke radius, elke gloed en elke beweging met zijn tokennaam en exacte waarde. Rechts het vocabulaire: knoppen, invoervelden met hun fout- en focusstaten, panelen, rijen, metingen, markeringen, chips, tabs, tabellen, dialoog, meldingen en de lege staat.\n\nTWEE REGELS DIE ALLES BIJEENHOUDEN. Amber is uitsluitend voor wat op Martin wacht — gebruik het nergens anders, of het houdt op iets te betekenen. En gloed is een signaal, geen versiering: alleen op iets waar je op kunt drukken of wat om aandacht vraagt.\n\nWat hier niet staat bestaat nog niet. Een scherm dat iets nieuws nodig heeft, voegt het hier eerst toe."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-3"
+  }
+}

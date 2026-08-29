@@ -1,1 +1,251 @@
 @import "tailwindcss";
+
+/*
+ * verder — the design system, as tokens.
+ *
+ * Every value here comes one-to-one out of the design canvas (direction A,
+ * "Holodek"). Screens pick from this list and invent nothing: that is the only
+ * thing keeping thirty pages one system rather than thirty tastes.
+ *
+ * TWO RULES HOLD IT TOGETHER, and no screen may break them:
+ *
+ *   1. AMBER (`attn`) is for what is waiting on Martin, and nothing else. Not
+ *      "important", not "error", not a bit of accent. The moment amber turns up
+ *      somewhere else it stops meaning anything, and the one colour that says
+ *      "you have to do something here" has become unreliable.
+ *   2. GLOW is a signal, not decoration — only on something you can press or
+ *      something asking for attention.
+ *
+ * The translucent tokens are written as 8-digit hex (colour + alpha) rather than
+ * rgba(): Tailwind v4 can still do `border-edge/50` via color-mix on those, and
+ * an rgba() token loses that.
+ */
+@theme {
+  /* ── ground ────────────────────────────────────────────────────────────── */
+  --color-void: #04070d;          /* the page itself */
+  --color-rail: #060b1499;        /* the rail, 60% over the field */
+  --color-glass-a: #78b4e613;     /* panel gradient, top (7.5%) */
+  --color-glass-b: #78b4e605;     /* panel gradient, bottom (1.8%) */
+  --color-edge: #8cc3f01a;        /* panel border (10%) */
+  --color-edge-lit: #a0d7fa3d;    /* a panel's top border (24%) */
+  --color-edge-strong: #8cc3f033; /* ghost button, input border (20%) */
+  --color-hairline: #8cc3f012;    /* separator between rows (7%) */
+  --color-hairline-lit: #8cc3f017;/* the grid behind a tile row (9%) */
+  --color-field: #060b1480;       /* input control */
+  --color-scrim: #020408b8;       /* scrim under a dialog */
+
+  /* ── text ──────────────────────────────────────────────────────────────── */
+  --color-ink-bright: #f0f7fc;    /* headings */
+  --color-ink: #dbe6f2;           /* ordinary text */
+  --color-ink-soft: #cfe0ee;      /* rows, second plane */
+  --color-ink-mute: #93a8bd;      /* paragraphs, explanation */
+  --color-ink-label: #6d8298;     /* the small caps labels */
+  --color-ink-dim: #63788e;       /* mono micro, dates */
+  --color-ink-faint: #4f6478;     /* axis names, specifications */
+
+  /* ── signal ────────────────────────────────────────────────────────────── */
+  --color-signal: #63d3ea;        /* the system: links, action, index */
+  --color-signal-lit: #7fdcf0;    /* light end of the button gradient */
+  --color-signal-link: #a9e9f6;   /* hover */
+  --color-attn: #e8a557;          /* WAITING ON YOU — and nothing else */
+  --color-okay: #7fd8c0;          /* system healthy */
+  --color-steel: #b6cfe4;         /* it happened */
+  --color-steel-dim: #8fb3cc;     /* it happened, second plane */
+  --color-on-signal: #041016;     /* text ON a cyan field */
+
+  /* ── type ──────────────────────────────────────────────────────────────── */
+  --font-display: var(--font-saira), "Helvetica Neue", ui-sans-serif, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+
+  /* ── shape ─────────────────────────────────────────────────────────────── */
+  --radius-chip: 2px;             /* button, chip, input */
+  --radius-panel: 3px;            /* panel, card, dialog */
+
+  /* ── glow ──────────────────────────────────────────────────────────────── */
+  --shadow-action: 0 0 26px -4px #63d3ea99;
+  --shadow-attn: 0 0 12px 2px #e8a55799;
+  --shadow-okay: 0 0 8px 1px #7fd8c0b3;
+  --shadow-signal-dot: 0 0 12px 2px #63d3eab3;
+  --shadow-lift: 0 30px 70px -30px #000000e6;
+
+  /* ── motion ────────────────────────────────────────────────────────────── */
+  /* Nothing moves for less than two seconds: this is a dossier, not a game. */
+  --animate-breathe: breathe 3s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 68s linear infinite;
+  --animate-spin-back: spin-back 92s linear infinite;
+  --animate-halo: halo 3.6s ease-in-out infinite;
+  --animate-drift: drift 26s ease-in-out infinite;
+  --animate-sweep: sweep 11s linear infinite;
+  --animate-trace: trace 2.2s ease-out forwards;
+
+  @keyframes breathe {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes spin-back {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+  }
+  @keyframes halo {
+    0% { opacity: 0.25; r: 7; }
+    55% { opacity: 0.9; r: 13; }
+    100% { opacity: 0.25; r: 7; }
+  }
+  @keyframes drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+    50% { transform: translate3d(28px, -18px, 0) scale(1.06); opacity: 0.8; }
+    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  }
+  @keyframes sweep {
+    0% { transform: translateX(0); opacity: 0; }
+    6% { opacity: 1; }
+    94% { opacity: 1; }
+    100% { transform: translateX(var(--sweep-distance, 1020px)); opacity: 0; }
+  }
+  @keyframes trace {
+    from { stroke-dashoffset: var(--trace-length, 1100); }
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+/*
+ * Whoever turned motion off gets no motion. The field, the rings and the scan
+ * are atmosphere; the information is there without them, and that is the point.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased;
+  }
+  /*
+   * Focus is visible and cyan, everywhere. The browser default is a blue ring
+   * that half disappears against this field, and a dossier you cannot drive from
+   * the keyboard is not a dossier.
+   */
+  :focus-visible {
+    outline: 1px solid var(--color-signal);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: #63d3ea40;
+    color: var(--color-ink-bright);
+  }
+  ::placeholder {
+    color: var(--color-ink-dim);
+  }
+}
+
+@layer components {
+  /*
+   * The glass panel. The gradient runs at an angle (168°) so the light seems to
+   * come from the upper left, and the top border is lighter than the rest —
+   * which is what makes it read as a sheet of glass instead of a box.
+   */
+  .panel {
+    background: linear-gradient(168deg, var(--color-glass-a), var(--color-glass-b) 62%);
+    border: 1px solid var(--color-edge);
+    border-top-color: var(--color-edge-lit);
+    border-radius: var(--radius-panel);
+    backdrop-filter: blur(2px);
+    position: relative;
+  }
+  /*
+   * The light streak along the top edge. Only on the panel that leads the page —
+   * on every panel it stops being an accent and becomes a pattern.
+   */
+  .panel-edge::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #63d3eabf 22%, #63d3ea26 60%, transparent);
+    pointer-events: none;
+  }
+
+  /*
+   * The primary button's gradient. A class and not a utility, because the
+   * angled `bg-linear-<angle>` form only exists in later Tailwind versions, and
+   * a button that quietly loses its background does not read as a button.
+   */
+  .grad-action {
+    background-image: linear-gradient(100deg, var(--color-signal-lit), var(--color-signal));
+  }
+
+  /* The small caps label above every block. */
+  .lbl {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-label);
+    font-weight: 400;
+  }
+  /* Mono micro: dates, channels, statuses — everything that has been measured. */
+  .micro {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-dim);
+  }
+
+  /*
+   * The background field: a slowly drifting glow plus a 120px grid that falls
+   * away towards the edges. Pure atmosphere — it sits on a `pointer-events: none`
+   * layer and carries no information.
+   */
+  .field-aura {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(760px 520px at 78% 6%, #3c96be33, transparent 70%),
+      radial-gradient(620px 480px at 12% 62%, #5a50be21, transparent 72%);
+    animation: var(--animate-drift);
+  }
+  .field-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image:
+      linear-gradient(#78bee60b 1px, transparent 1px),
+      linear-gradient(90deg, #78bee60b 1px, transparent 1px);
+    background-size: 120px 120px;
+    mask-image: radial-gradient(900px 700px at 65% 16%, #000 20%, transparent 82%);
+  }
+
+  /*
+   * The two export pages (/verify/export and /registry/export) are paper:
+   * documents Martin hands to Verder. They stay light whatever the rest of the
+   * app looks like — putting a black page with a glow through a printer costs a
+   * cartridge and reads as a gimmick on a legal document.
+   */
+  .print-doc {
+    background: #ffffff;
+    color: #0f172a;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .print-doc a {
+    color: #1d4ed8;
+  }
+}

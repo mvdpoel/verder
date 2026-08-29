@@ -1,0 +1,286 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400;500;600&family=DM+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Sora, "Helvetica Neue", sans-serif; }
+    a { color: #6f63e8; text-decoration: none; }
+    a:hover { color: #4b3fd6; }
+    .mono { font-family: "DM Mono", ui-monospace, monospace; }
+    .lbl {
+      font-family: "DM Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #8a93a6;
+    }
+    .iri {
+      border-radius: 20px;
+      padding: 1px;
+      background: linear-gradient(150deg, rgba(124,108,240,0.55), rgba(78,197,224,0.42) 38%, rgba(111,224,176,0.34) 66%, rgba(255,255,255,0.16));
+      box-shadow: 0 22px 50px -28px rgba(38,48,76,0.42), 0 2px 8px -4px rgba(38,48,76,0.16);
+    }
+    .iri > .in {
+      border-radius: 19px;
+      background: rgba(255,255,255,0.86);
+      backdrop-filter: blur(14px);
+      height: 100%;
+      box-sizing: border-box;
+    }
+    @keyframes bloom {
+      0% { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
+      50% { transform: translate3d(-26px,20px,0) rotate(8deg) scale(1.09); }
+      100% { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
+    }
+    @keyframes bloom2 {
+      0% { transform: translate3d(0,0,0) scale(1); }
+      50% { transform: translate3d(30px,-16px,0) scale(0.94); }
+      100% { transform: translate3d(0,0,0) scale(1); }
+    }
+    @keyframes shimmer {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.5; }
+      60% { transform: scale(2.3); opacity: 0; }
+      100% { transform: scale(2.3); opacity: 0; }
+    }
+    @keyframes draw {
+      from { stroke-dashoffset: 900; }
+      to { stroke-dashoffset: 0; }
+    }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 1240px; overflow: hidden; background: #eef0f6; color: #131a24;">
+
+  <!-- iridescent field -->
+  <div style="position: absolute; width: 900px; height: 760px; left: -180px; top: -240px; border-radius: 50%; filter: blur(90px); opacity: 0.55; background: radial-gradient(circle at 40% 40%, rgba(124,108,240,0.42), transparent 62%); animation: bloom 30s ease-in-out infinite;"></div>
+  <div style="position: absolute; width: 820px; height: 700px; right: -200px; top: -160px; border-radius: 50%; filter: blur(90px); opacity: 0.5; background: radial-gradient(circle at 50% 50%, rgba(78,197,224,0.44), transparent 64%); animation: bloom2 26s ease-in-out infinite;"></div>
+  <div style="position: absolute; width: 760px; height: 620px; left: 34%; bottom: -260px; border-radius: 50%; filter: blur(96px); opacity: 0.42; background: radial-gradient(circle at 50% 50%, rgba(111,224,176,0.40), transparent 64%); animation: bloom 34s ease-in-out infinite;"></div>
+  <div style="position: absolute; inset: 0; opacity: 0.35; background-image: radial-gradient(rgba(60,74,102,0.14) 1px, transparent 1px); background-size: 34px 34px; mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);"></div>
+
+  <!-- floating nav -->
+  <div style="position: absolute; left: 64px; right: 64px; top: 38px; display: flex; align-items: center; gap: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <defs>
+          <linearGradient id="mk" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7c6cf0"></stop>
+            <stop offset="0.55" stop-color="#4ec5e0"></stop>
+            <stop offset="1" stop-color="#6fe0b0"></stop>
+          </linearGradient>
+        </defs>
+        <circle cx="13" cy="13" r="11" stroke="url(#mk)" stroke-width="1.5"></circle>
+        <path d="M5.6 8.8 C 10 13.6, 16 13.6, 20.4 8.8" stroke="url(#mk)" stroke-width="1.7" stroke-linecap="round"></path>
+      </svg>
+      <div style="font-size: 17px; font-weight: 500; letter-spacing: -0.01em; color: #131a24;">verder</div>
+    </div>
+    <div class="iri" style="border-radius: 999px; padding: 1px; margin-left: 16px;">
+      <div class="in" style="border-radius: 999px; display: flex; align-items: center; gap: 4px; padding: 5px 6px;">
+        <div style="font-size: 13px; font-weight: 500; color: #ffffff; background: #131a24; border-radius: 999px; padding: 8px 16px;">Overzicht</div>
+        <div style="font-size: 13px; font-weight: 400; color: #5b667a; padding: 8px 14px;">De zaak</div>
+        <div style="font-size: 13px; font-weight: 400; color: #5b667a; padding: 8px 14px;">Logboek</div>
+        <div style="font-size: 13px; font-weight: 400; color: #5b667a; padding: 8px 14px;">Kluis</div>
+        <div style="font-size: 13px; font-weight: 400; color: #5b667a; padding: 8px 14px;">Geld</div>
+        <div style="display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 400; color: #5b667a; padding: 8px 14px;">
+          Taken
+          <span class="mono" style="font-size: 10px; color: #ffffff; background: #ef7a63; border-radius: 999px; padding: 2px 6px;">1</span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.68); border: 1px solid rgba(60,74,102,0.10); border-radius: 999px; padding: 9px 16px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a93a6" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 L21 21" stroke-linecap="round"></path></svg>
+        <span style="font-size: 13px; color: #8a93a6;">Vraag iets over je dossier</span>
+        <span class="mono" style="font-size: 11px; color: #b3bbc9;">⌘K</span>
+      </div>
+      <div style="width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(140deg, #7c6cf0, #4ec5e0); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 500;">MP</div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="position: absolute; left: 64px; top: 138px; width: 700px;">
+    <div class="lbl" style="color: #ef7a63;">Dit wacht op jou</div>
+    <div style="font-size: 60px; font-weight: 200; letter-spacing: -0.035em; line-height: 1.06; margin-top: 18px; color: #131a24;">Stukken<br>aanleveren</div>
+    <div style="font-size: 17px; font-weight: 300; line-height: 1.62; color: #4d586c; margin-top: 22px; max-width: 520px;">Team Opstart wacht op je laatste twee loonstroken en de zorgpolis. Vier van de zes bestanden staan al klaar in de kluis — je bent er bijna.</div>
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 32px;">
+      <div style="display: flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 500; color: #ffffff; background: linear-gradient(120deg, #131a24, #2a3348); border-radius: 999px; padding: 15px 26px; box-shadow: 0 16px 34px -18px rgba(19,26,36,0.9);">
+        Bestanden aanleveren
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h13M12.5 6l6 6-6 6"></path></svg>
+      </div>
+      <div style="font-size: 14px; font-weight: 400; color: #4d586c; border: 1px solid rgba(60,74,102,0.16); border-radius: 999px; padding: 15px 24px; background: rgba(255,255,255,0.5);">Bekijk het spoor</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 30px;">
+      <div style="display: flex; gap: 5px;">
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: #6fe0b0;"></div>
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: #6fe0b0;"></div>
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: #6fe0b0;"></div>
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: #6fe0b0;"></div>
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: rgba(60,74,102,0.14);"></div>
+        <div style="width: 42px; height: 4px; border-radius: 2px; background: rgba(60,74,102,0.14);"></div>
+      </div>
+      <div class="mono" style="font-size: 11.5px; color: #6b7688;">4 van 6 bestanden · sinds 28 augustus</div>
+    </div>
+  </div>
+
+  <!-- hero object: the case as a soft drifting line -->
+  <div style="position: absolute; right: 40px; top: 122px; width: 620px; height: 460px;">
+    <svg width="620" height="460" viewBox="0 0 620 460" fill="none">
+      <defs>
+        <linearGradient id="spine" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#7c6cf0" stop-opacity="0.15"></stop>
+          <stop offset="0.5" stop-color="#4ec5e0" stop-opacity="0.85"></stop>
+          <stop offset="1" stop-color="#6fe0b0" stop-opacity="0.9"></stop>
+        </linearGradient>
+        <linearGradient id="branch" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#7c6cf0" stop-opacity="0.42"></stop>
+          <stop offset="1" stop-color="#4ec5e0" stop-opacity="0.2"></stop>
+        </linearGradient>
+      </defs>
+      <path d="M28 404 C 150 404, 168 300, 262 288 S 402 262, 452 176 S 528 96, 586 82"
+            stroke="url(#spine)" stroke-width="2.5" stroke-linecap="round"
+            stroke-dasharray="900" style="animation: draw 2.4s ease-out forwards;"></path>
+      <path d="M262 288 C 300 288, 318 344, 372 350 S 440 356, 470 332" stroke="url(#branch)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="4 7"></path>
+      <path d="M452 176 C 476 176, 486 128, 528 124" stroke="url(#branch)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="4 7"></path>
+      <circle cx="28" cy="404" r="5" fill="#ffffff" stroke="#a9b0c4" stroke-width="1.5"></circle>
+      <circle cx="262" cy="288" r="5" fill="#ffffff" stroke="#4ec5e0" stroke-width="1.8"></circle>
+      <circle cx="452" cy="176" r="5" fill="#ffffff" stroke="#4ec5e0" stroke-width="1.8"></circle>
+      <circle cx="470" cy="332" r="4" fill="#ffffff" stroke="#a9b0c4" stroke-width="1.4"></circle>
+      <circle cx="528" cy="124" r="4" fill="#ffffff" stroke="#a9b0c4" stroke-width="1.4"></circle>
+      <circle cx="586" cy="82" r="20" fill="#ef7a63" opacity="0.24" style="transform-origin: 586px 82px; animation: pulse 3s ease-out infinite;"></circle>
+      <circle cx="586" cy="82" r="8" fill="#ef7a63"></circle>
+      <text x="20" y="432" font-family="DM Mono, monospace" font-size="10.5" fill="#8a93a6" letter-spacing="1.4">16 APR</text>
+      <text x="228" y="316" font-family="DM Mono, monospace" font-size="10.5" fill="#8a93a6" letter-spacing="1.4">14 JUL</text>
+      <text x="418" y="204" font-family="DM Mono, monospace" font-size="10.5" fill="#8a93a6" letter-spacing="1.4">14 AUG</text>
+      <text x="512" y="66" font-family="DM Mono, monospace" font-size="10.5" fill="#ef7a63" letter-spacing="1.4">NU · 28 AUG</text>
+      <text x="20" y="392" font-family="Sora, sans-serif" font-size="12.5" fill="#4d586c">Aanmelding</text>
+      <text x="228" y="276" font-family="Sora, sans-serif" font-size="12.5" fill="#4d586c">Beschikking</text>
+      <text x="386" y="164" font-family="Sora, sans-serif" font-size="12.5" fill="#4d586c">Rekening overgenomen</text>
+    </svg>
+  </div>
+
+  <!-- three cards -->
+  <div style="position: absolute; left: 64px; right: 64px; top: 620px; display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 20px;">
+
+    <div class="iri" style="height: 306px;">
+      <div class="in" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <div class="lbl">Waar de zaak staat</div>
+          <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: #6f63e8;">DE HELE KAART</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0;">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid rgba(60,74,102,0.08);">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef7a63; flex-shrink: 0;"></span>
+            <span style="flex-grow: 1; font-size: 14px; font-weight: 400; color: #131a24;">Stukken aanleveren</span>
+            <span style="font-size: 12px; color: #ef7a63;">wacht op jou</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid rgba(60,74,102,0.08);">
+            <span style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #4ec5e0; box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="flex-grow: 1; font-size: 14px; font-weight: 300; color: #3c4658;">Leefgeld ingeregeld</span>
+            <span class="mono" style="font-size: 11px; color: #8a93a6;">14 aug</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid rgba(60,74,102,0.08);">
+            <span style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #4ec5e0; box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="flex-grow: 1; font-size: 14px; font-weight: 300; color: #3c4658;">Wacht op voorstel Verder</span>
+            <span class="mono" style="font-size: 11px; color: #8a93a6;">21 aug</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid rgba(60,74,102,0.08);">
+            <span style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #4ec5e0; box-sizing: border-box; flex-shrink: 0;"></span>
+            <span style="flex-grow: 1; font-size: 14px; font-weight: 300; color: #3c4658;">KvK — melden bij Verder</span>
+            <span class="mono" style="font-size: 11px; color: #8a93a6;">29 aug</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 11px 0;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #6fe0b0; flex-shrink: 0;"></span>
+            <span style="flex-grow: 1; font-size: 14px; font-weight: 300; color: #6b7688;">Ontruiming afgewend</span>
+            <span class="mono" style="font-size: 11px; color: #8a93a6;">02 aug</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="iri" style="height: 306px;">
+      <div class="in" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+        <div class="lbl">Geld in en uit</div>
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <div style="font-size: 40px; font-weight: 200; letter-spacing: -0.03em; color: #131a24;">€ 2.272</div>
+          <div style="font-size: 13px; color: #6b7688;">over in augustus</div>
+        </div>
+        <svg width="100%" height="112" viewBox="0 0 300 112" preserveAspectRatio="none" fill="none">
+          <defs>
+            <linearGradient id="inC" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#4ec5e0" stop-opacity="0.34"></stop>
+              <stop offset="1" stop-color="#4ec5e0" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M0 82 C 40 70, 60 40, 100 34 S 160 22, 200 30 S 260 26, 300 24 L300 112 L0 112 Z" fill="url(#inC)"></path>
+          <path d="M0 82 C 40 70, 60 40, 100 34 S 160 22, 200 30 S 260 26, 300 24" stroke="#4ec5e0" stroke-width="2" stroke-linecap="round"></path>
+          <path d="M0 96 C 40 94, 60 90, 100 88 S 160 84, 200 86 S 260 82, 300 82" stroke="#c8a2f0" stroke-width="1.6" stroke-linecap="round"></path>
+        </svg>
+        <div style="display: flex; gap: 18px;">
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 12px; height: 3px; border-radius: 2px; background: #4ec5e0;"></span><span class="mono" style="font-size: 10.5px; color: #6b7688;">in 3.556</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 12px; height: 3px; border-radius: 2px; background: #c8a2f0;"></span><span class="mono" style="font-size: 10.5px; color: #6b7688;">uit 1.284</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div class="iri" style="height: 143px;">
+        <div class="in" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="lbl">Voor jou klaargezet</div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <div style="font-size: 38px; font-weight: 200; letter-spacing: -0.03em; color: #6f63e8;">4</div>
+            <div style="font-size: 13px; font-weight: 300; color: #4d586c; line-height: 1.45;">suggesties wachten<br>op je oordeel</div>
+          </div>
+        </div>
+      </div>
+      <div class="iri" style="height: 143px;">
+        <div class="in" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="lbl">In de kluis</div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <div style="font-size: 38px; font-weight: 200; letter-spacing: -0.03em; color: #131a24;">7</div>
+            <div style="font-size: 13px; font-weight: 300; color: #4d586c; line-height: 1.45;">nieuwe bestanden<br>nog te sorteren</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- footer strip -->
+  <div style="position: absolute; left: 64px; right: 64px; top: 962px; display: flex; flex-direction: column; gap: 16px;">
+    <div class="lbl">Recent vastgelegd</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(60,74,102,0.12);">
+        <div class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #8a93a6;">29 AUG · MAIL</div>
+        <div style="font-size: 14.5px; font-weight: 300; color: #2a3348; line-height: 1.5;">Aanmaning Kamer van Koophandel vastgelegd als vordering</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(60,74,102,0.12);">
+        <div class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #8a93a6;">28 AUG · MAIL</div>
+        <div style="font-size: 14.5px; font-weight: 300; color: #2a3348; line-height: 1.5;">Team Opstart vraagt om loonstroken en zorgpolis</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(60,74,102,0.12);">
+        <div class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #8a93a6;">22 AUG · BESLUIT</div>
+        <div style="font-size: 14.5px; font-weight: 300; color: #2a3348; line-height: 1.5;">Leefgeld vastgesteld op € 65 per week</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; margin-top: 22px;">
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: #6fe0b0;"></span>
+      <span class="mono" style="font-size: 11px; color: #6b7688;">Alles gecontroleerd — 129 gebeurtenissen, 66 bestanden, keten intact. Mail staat gepauzeerd.</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@200;300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Saira, "Helvetica Neue", sans-serif; }
+    a { color: #63d3ea; text-decoration: none; }
+    a:hover { color: #a9e9f6; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .lbl { font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6d8298; font-weight: 400; }
+    .micro { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.14em; color: #63788e; }
+    .spec { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9px; letter-spacing: 0.1em; color: #46586a; }
+
+    .panel {
+      background: linear-gradient(168deg, rgba(120,180,230,0.075), rgba(120,180,230,0.018) 62%);
+      border: 1px solid rgba(140,195,240,0.10);
+      border-top-color: rgba(160,215,250,0.24);
+      border-radius: 3px;
+      position: relative;
+    }
+    .panel-edge::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(99,211,234,0.6) 26%, rgba(99,211,234,0.12) 64%, transparent);
+    }
+    .sect-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid rgba(140,195,240,0.10); padding-bottom: 10px; margin-bottom: 20px; }
+
+    .btn { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: 0.16em; padding: 13px 22px; border-radius: 2px; display: inline-flex; align-items: center; gap: 10px; }
+    .btn-primary { color: #041016; background: linear-gradient(100deg, #7fdcf0, #63d3ea); box-shadow: 0 0 26px -4px rgba(99,211,234,0.6); }
+    .btn-ghost { color: #a9c2d6; border: 1px solid rgba(140,195,240,0.20); }
+    .btn-quiet { color: #63788e; }
+    .btn-danger { color: #e8a557; border: 1px solid rgba(232,165,87,0.34); }
+    .btn-disabled { color: #46586a; border: 1px solid rgba(140,195,240,0.08); }
+    .btn-sm { font-size: 10px; padding: 9px 14px; }
+
+    .input {
+      width: 100%; box-sizing: border-box; background: rgba(6,11,20,0.5);
+      border: 1px solid rgba(140,195,240,0.14); border-radius: 2px;
+      padding: 11px 13px; color: #dbe6f2; font-family: Saira, sans-serif; font-size: 14px; font-weight: 300;
+    }
+    .input-focus { border-color: #63d3ea; box-shadow: 0 0 0 1px rgba(99,211,234,0.25), 0 0 20px -8px rgba(99,211,234,0.8); }
+    .input-error { border-color: rgba(232,165,87,0.55); }
+    .field { display: flex; flex-direction: column; gap: 7px; }
+    .hint { font-size: 12px; font-weight: 300; color: #6d8298; }
+    .err { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; color: #e8a557; }
+
+    .chip { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9.5px; letter-spacing: 0.14em; padding: 4px 9px; border-radius: 2px; border: 1px solid; }
+    .row { display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(140,195,240,0.07); }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
+    .th { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #4f6478; text-align: left; font-weight: 400; padding: 0 0 10px; border-bottom: 1px solid rgba(140,195,240,0.10); }
+    .td { font-size: 13.5px; color: #cfe0ee; padding: 11px 0; border-bottom: 1px solid rgba(140,195,240,0.07); font-weight: 300; }
+    @keyframes breathe { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1240px; height: 2020px; background: #04070d; color: #dbe6f2; overflow: hidden;">
+  <div style="position: absolute; inset: 0; pointer-events: none; background: radial-gradient(700px 480px at 84% 3%, rgba(60,150,190,0.15), transparent 70%);"></div>
+  <div style="position: absolute; inset: 0; pointer-events: none; opacity: 0.45; background-image: linear-gradient(rgba(120,190,230,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(120,190,230,0.045) 1px, transparent 1px); background-size: 120px 120px; mask-image: radial-gradient(820px 640px at 70% 8%, #000 20%, transparent 82%);"></div>
+
+  <div style="position: relative; padding: 54px 56px; display: flex; flex-direction: column; gap: 44px;">
+
+    <div>
+      <div style="font-size: 15px; letter-spacing: 0.44em; color: #cfe4f2;">VERDER</div>
+      <div style="font-size: 40px; font-weight: 200; letter-spacing: -0.02em; color: #f0f7fc; margin-top: 12px;">Ontwerpsysteem — onderdelen</div>
+      <div style="font-size: 14.5px; font-weight: 300; color: #93a8bd; margin-top: 10px; max-width: 660px; line-height: 1.6;">Het complete vocabulaire. Een scherm bouwt hiermee; wat hier niet staat, bestaat nog niet en wordt hier eerst toegevoegd.</div>
+    </div>
+
+    <!-- KNOPPEN + INVOER -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+      <div>
+        <div class="sect-head"><div class="lbl">06 · Knoppen</div><div style="font-size: 13px; font-weight: 300; color: #6d8298;">Eén hoofdactie per scherm.</div></div>
+        <div style="display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div class="btn btn-primary">STUKKEN AANLEVEREN
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#041016" stroke-width="2" stroke-linecap="round"><path d="M5 12h13M12.5 6l6 6-6 6"></path></svg>
+            </div>
+            <div class="btn btn-ghost">OPEN HET SPOOR</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div class="btn btn-ghost btn-sm">BEWERKEN</div>
+            <div class="btn btn-quiet btn-sm">ANNULEREN</div>
+            <div class="btn btn-danger btn-sm">AFWIJZEN</div>
+            <div class="btn btn-disabled btn-sm">OPSLAAN</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 26px;">
+            <div class="spec">PRIMAIR · VERLOOP + GLOED</div>
+            <div class="spec">GHOST · 1PX RAND</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="mono" style="display: flex; align-items: center; gap: 9px; font-size: 10.5px; letter-spacing: 0.14em; color: #63788e; border: 1px solid rgba(140,195,240,0.12); border-radius: 2px; padding: 6px 12px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="1.6"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 L21 21" stroke-linecap="round"></path></svg>
+              ZOEK IN HET DOSSIER <span style="color: #46586a;">⌘K</span>
+            </div>
+            <div class="spec">ZOEKKNOP IN DE BALK</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sect-head"><div class="lbl">07 · Invoer</div><div style="font-size: 13px; font-weight: 300; color: #6d8298;">Label boven, hulp eronder, fout in amber.</div></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+          <div class="field">
+            <div class="lbl">Titel</div>
+            <div class="input">Beschikking bewindvoering</div>
+          </div>
+          <div class="field">
+            <div class="lbl" style="color: #63d3ea;">Bedrag</div>
+            <div class="input input-focus">€ 1.284,00</div>
+          </div>
+          <div class="field">
+            <div class="lbl">Schuldeiser</div>
+            <div class="input" style="display: flex; align-items: center; justify-content: space-between; color: #93a8bd;">Kamer van Koophandel
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#63788e" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+            <div class="hint">Nieuwe partij? Typ de naam voluit.</div>
+          </div>
+          <div class="field">
+            <div class="lbl">Datum</div>
+            <div class="input input-error mono" style="font-size: 13px;">31-02-2026</div>
+            <div class="err">BESTAAT NIET</div>
+          </div>
+          <div class="field" style="grid-column: span 2;">
+            <div class="lbl">Notitie</div>
+            <div class="input" style="height: 62px; color: #93a8bd; font-size: 13.5px; line-height: 1.55;">Aanmaning noemt een factuurnummer en geen totaalbedrag.</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 22px; grid-column: span 2;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 15px; height: 15px; border-radius: 2px; border: 1px solid #63d3ea; display: flex; align-items: center; justify-content: center; background: rgba(99,211,234,0.14);">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#63d3ea" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"></path></svg>
+              </div>
+              <span style="font-size: 13.5px; font-weight: 300; color: #cfe0ee;">Vertrouw dit apparaat</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 15px; height: 15px; border-radius: 2px; border: 1px solid rgba(140,195,240,0.24);"></div>
+              <span style="font-size: 13.5px; font-weight: 300; color: #93a8bd;">Blijf ingelogd</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEEL + METING -->
+    <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px;">
+      <div>
+        <div class="sect-head"><div class="lbl">08 · Paneel</div><div style="font-size: 13px; font-weight: 300; color: #6d8298;">Glas, 1px rand, lichtere bovenrand. De lichtstreep alleen op het paneel dat leidt.</div></div>
+        <div class="panel panel-edge" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <div class="lbl">Wat jij nog moet doen</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.16em; color: #63d3ea;">ALLE TAKEN →</div>
+          </div>
+          <div>
+            <div class="row">
+              <div class="dot" style="background: #e8a557; box-shadow: 0 0 12px 2px rgba(232,165,87,0.6);"></div>
+              <div style="flex-grow: 1;">
+                <div style="font-size: 14px; color: #eaf3fa;">Loonstroken juni en juli uploaden</div>
+                <div class="micro" style="margin-top: 3px;">ONBOARDING BIJ VERDER</div>
+              </div>
+              <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #e8a557;">TE LAAT · 27 AUG</div>
+            </div>
+            <div class="row">
+              <div class="dot" style="border: 1px solid #63d3ea;"></div>
+              <div style="flex-grow: 1;">
+                <div style="font-size: 14px; color: #cfe0ee;">Zorgpolis 2026 opvragen</div>
+                <div class="micro" style="margin-top: 3px;">ONBOARDING BIJ VERDER</div>
+              </div>
+              <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">01 SEP</div>
+            </div>
+            <div class="row" style="border-bottom: 0;">
+              <div class="dot" style="background: rgba(140,195,240,0.35);"></div>
+              <div style="flex-grow: 1;">
+                <div style="font-size: 14px; color: #93a8bd;">Voorstel schuldregeling</div>
+                <div class="micro" style="margin-top: 3px;">WACHT OP VERDER</div>
+              </div>
+              <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63788e;">21 AUG</div>
+            </div>
+          </div>
+        </div>
+        <div class="spec" style="margin-top: 12px;">RIJ · STIP 9PX · TITEL 14 · ONDERTITEL MICRO · META RECHTS</div>
+      </div>
+
+      <div>
+        <div class="sect-head"><div class="lbl">09 · Meting</div><div style="font-size: 13px; font-weight: 300; color: #6d8298;">Getallen zijn mono. Nooit een ring zonder cijfer.</div></div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: rgba(140,195,240,0.09); margin-bottom: 20px;">
+          <div style="background: #04070d; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="lbl">Te beoordelen</div>
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <div class="mono" style="font-size: 32px; color: #63d3ea; text-shadow: 0 0 22px rgba(99,211,234,0.55);">4</div>
+              <div style="font-size: 12px; color: #6d8298;">suggesties</div>
+            </div>
+          </div>
+          <div style="background: #04070d; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="lbl">Kluis</div>
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <div class="mono" style="font-size: 32px; color: #dbe6f2;">7</div>
+              <div style="font-size: 12px; color: #6d8298;">te sorteren</div>
+            </div>
+          </div>
+          <div style="background: #04070d; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="lbl">Taken</div>
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <div class="mono" style="font-size: 32px; color: #dbe6f2;">9</div>
+              <div style="font-size: 12px; color: #e8a557;">1 te laat</div>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 26px;">
+          <svg width="96" height="96" viewBox="0 0 96 96" fill="none">
+            <g style="transform-origin: 48px 48px; transform: rotate(-90deg);">
+              <circle cx="48" cy="48" r="40" stroke="rgba(99,211,234,0.10)" stroke-width="3"></circle>
+              <circle cx="48" cy="48" r="40" stroke="#63d3ea" stroke-width="3" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="15"></circle>
+              <circle cx="48" cy="48" r="29" stroke="rgba(140,195,240,0.09)" stroke-width="3"></circle>
+              <circle cx="48" cy="48" r="29" stroke="#e8a557" stroke-width="3" stroke-linecap="round" stroke-dasharray="182.2" stroke-dashoffset="81"></circle>
+            </g>
+          </svg>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid #63d3ea; box-sizing: border-box;"></span>
+              <div class="mono" style="font-size: 15px; color: #dbe6f2;">62 <span style="color: #63788e;">/ 66</span></div>
+              <div class="lbl">documenten met tekst</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 10px; height: 10px; border-radius: 50%; background: #e8a557;"></span>
+              <div class="mono" style="font-size: 15px; color: #e8a557;">5</div>
+              <div class="lbl" style="color: #e8a557;">open · bij jou</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding-top: 4px;">
+              <div style="width: 120px; height: 3px; background: rgba(140,195,240,0.13);"><div style="width: 62%; height: 3px; background: #63d3ea;"></div></div>
+              <div class="spec">VOORTGANGSBALK 3PX</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MARKERINGEN, CHIPS, TABS -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px;">
+      <div>
+        <div class="sect-head"><div class="lbl">10 · Markeringen</div></div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="background: #b6cfe4;"></span><span style="font-size: 13.5px; font-weight: 300;">gebeurd</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="border: 1px solid #63d3ea;"></span><span style="font-size: 13.5px; font-weight: 300;">halte, open</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="background: #e8a557; box-shadow: 0 0 12px 2px rgba(232,165,87,0.6);"></span><span style="font-size: 13.5px; font-weight: 300;">wacht op jou</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="border: 1px solid rgba(99,211,234,0.55);"></span><span style="font-size: 13.5px; font-weight: 300;">knooppunt</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="width: 1.5px; height: 12px; background: rgba(150,205,232,0.75);"></span><span style="font-size: 13.5px; font-weight: 300; margin-left: 6px;">geëindigd — schone afloop</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.7); animation: breathe 3s ease-in-out infinite;"></span><span style="font-size: 13.5px; font-weight: 300;">systeem in orde</span></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span class="dot" style="background: rgba(140,195,240,0.35);"></span><span style="font-size: 13.5px; font-weight: 300;">wacht op iemand anders</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sect-head"><div class="lbl">11 · Chips</div></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 22px;">
+          <span class="chip" style="color: #e8a557; border-color: rgba(232,165,87,0.4);">TE LAAT</span>
+          <span class="chip" style="color: #63d3ea; border-color: rgba(99,211,234,0.34);">OPEN</span>
+          <span class="chip" style="color: #7fd8c0; border-color: rgba(127,216,192,0.34);">AFGEROND</span>
+          <span class="chip" style="color: #93a8bd; border-color: rgba(140,195,240,0.2);">WACHT</span>
+          <span class="chip" style="color: #63788e; border-color: rgba(140,195,240,0.14);">WEGGEGOOID</span>
+          <span class="chip" style="color: #041016; border-color: transparent; background: #63d3ea;">NIEUW</span>
+        </div>
+        <div class="sect-head" style="margin-top: 0;"><div class="lbl">12 · Tabs</div></div>
+        <div style="display: flex; gap: 4px; border-bottom: 1px solid rgba(140,195,240,0.10); padding-bottom: 0;">
+          <div class="mono" style="font-size: 10.5px; letter-spacing: 0.16em; color: #f0f7fc; padding: 9px 14px; border-bottom: 1px solid #63d3ea; margin-bottom: -1px;">OPEN</div>
+          <div class="mono" style="font-size: 10.5px; letter-spacing: 0.16em; color: #63788e; padding: 9px 14px;">WACHT OP ANDEREN</div>
+          <div class="mono" style="font-size: 10.5px; letter-spacing: 0.16em; color: #63788e; padding: 9px 14px;">AFGEROND</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sect-head"><div class="lbl">13 · Tabel</div></div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr><th class="th">Schuldeiser</th><th class="th">Rol</th><th class="th" style="text-align: right;">Gevorderd</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="td">Kamer van Koophandel</td><td class="td"><span class="micro">EISER</span></td><td class="td mono" style="text-align: right; font-size: 12.5px; color: #63788e;">onbekend</td></tr>
+            <tr><td class="td">PLM Investments</td><td class="td"><span class="micro">EISER</span></td><td class="td mono" style="text-align: right; font-size: 12.5px;">€ 2.418,00</td></tr>
+            <tr><td class="td">Trust and Law</td><td class="td"><span class="micro">INCASSO</span></td><td class="td mono" style="text-align: right; font-size: 12.5px; color: #63788e;">—</td></tr>
+          </tbody>
+        </table>
+        <div class="spec" style="margin-top: 12px;">BEDRAGEN RECHTS · ONBEKEND IS ONBEKEND, NOOIT € 0</div>
+      </div>
+    </div>
+
+    <!-- DIALOOG, MELDING, LEEG -->
+    <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px;">
+      <div>
+        <div class="sect-head"><div class="lbl">14 · Dialoog</div><div style="font-size: 13px; font-weight: 300; color: #6d8298;">Sluier verduistert, paneel zweeft erboven.</div></div>
+        <div style="position: relative; height: 268px; border-radius: 3px; overflow: hidden; border: 1px solid rgba(140,195,240,0.07);">
+          <div style="position: absolute; inset: 0; background: #04070d; opacity: 0.55;"></div>
+          <div style="position: absolute; inset: 0; background-image: linear-gradient(rgba(120,190,230,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(120,190,230,0.05) 1px, transparent 1px); background-size: 60px 60px; opacity: 0.5;"></div>
+          <div style="position: absolute; inset: 0; background: rgba(2,4,8,0.72); backdrop-filter: blur(3px);"></div>
+          <div class="panel panel-edge" style="position: absolute; left: 46px; right: 46px; top: 26px; padding: 24px 26px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 30px 70px -30px rgba(0,0,0,0.9);">
+            <div class="lbl" style="color: #e8a557;">Document weggooien</div>
+            <div style="font-size: 20px; font-weight: 300; color: #f0f7fc;">image.png uit het dossier halen?</div>
+            <div style="font-size: 13.5px; font-weight: 300; color: #93a8bd; line-height: 1.6;">De bytes blijven bewaard en het besluit komt in het logboek. Je kunt dit terugdraaien.</div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px;">
+              <div class="btn btn-quiet btn-sm">ANNULEREN</div>
+              <div class="btn btn-danger btn-sm">WEGGOOIEN</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sect-head"><div class="lbl">15 · Melding en lege staat</div></div>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div class="panel" style="padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
+            <span class="dot" style="background: #7fd8c0; box-shadow: 0 0 8px 1px rgba(127,216,192,0.7);"></span>
+            <div style="flex-grow: 1; font-size: 13.5px; font-weight: 300; color: #cfe0ee;">Beschikking vastgelegd in het logboek.</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #63d3ea;">BEKIJK</div>
+          </div>
+          <div class="panel" style="padding: 14px 18px; display: flex; align-items: center; gap: 14px; border-color: rgba(232,165,87,0.28);">
+            <span class="dot" style="background: #e8a557; box-shadow: 0 0 12px 2px rgba(232,165,87,0.6);"></span>
+            <div style="flex-grow: 1; font-size: 13.5px; font-weight: 300; color: #cfe0ee;">Mail staat gepauzeerd — er komt niets binnen.</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #e8a557;">HERSTEL</div>
+          </div>
+          <div style="border: 1px dashed rgba(140,195,240,0.16); border-radius: 3px; padding: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(99,211,234,0.45)" stroke-width="1" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.2v.1"></path></svg>
+            <div style="font-size: 15px; font-weight: 300; color: #cfe0ee;">Nog niets te beoordelen</div>
+            <div style="font-size: 13px; font-weight: 300; color: #6d8298; text-align: center; max-width: 300px; line-height: 1.55;">Zodra er post binnenkomt zet ik hier voorstellen klaar. Je hoeft niets te doen.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1240,"height":2020}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -31,8 +31,16 @@ export function CommandPalette() {
       }
       if (e.key === "Escape") setOpen(false);
     };
+    // The search button in the top bar fires this event. The shortcut stays the
+    // way in and the button is its visible side, so the palette never has to
+    // hand state out to the shell around it.
+    const onSummon = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("verder:palette", onSummon);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("verder:palette", onSummon);
+    };
   }, []);
 
   // 150 ms debounce: one request per pause in typing, not one per keystroke.

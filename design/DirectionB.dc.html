@@ -1,0 +1,398 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500&family=Barlow:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Barlow, "Helvetica Neue", sans-serif; }
+    a { color: #9fe3ef; text-decoration: none; }
+    a:hover { color: #d3f4fa; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .cond { font-family: "Barlow Condensed", "Helvetica Neue", sans-serif; }
+    .cap {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 9px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: #5c6b73;
+    }
+    .panel {
+      border: 1px solid rgba(159,227,239,0.13);
+      background: rgba(159,227,239,0.014);
+      position: relative;
+    }
+    .panel::before, .panel::after {
+      content: "";
+      position: absolute;
+      width: 7px;
+      height: 7px;
+      border: 1px solid rgba(159,227,239,0.5);
+    }
+    .panel::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+    .panel::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+    @keyframes scan {
+      0% { left: 0%; opacity: 0; }
+      8% { opacity: 1; }
+      92% { opacity: 1; }
+      100% { left: 100%; opacity: 0; }
+    }
+    @keyframes tick {
+      0% { opacity: 1; }
+      49% { opacity: 1; }
+      50% { opacity: 0.15; }
+      100% { opacity: 0.15; }
+    }
+    @keyframes rise {
+      from { transform: scaleY(0.2); }
+      to { transform: scaleY(1); }
+    }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 1240px; overflow: hidden; background: #060809; color: #c9d4d9;">
+
+  <!-- command bar -->
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 46px; border-bottom: 1px solid rgba(159,227,239,0.13); display: flex; align-items: center; gap: 0; padding: 0 22px;">
+    <div class="cond" style="font-size: 17px; letter-spacing: 0.4em; font-weight: 400; color: #e2edf1;">VERDER</div>
+    <div style="width: 1px; height: 22px; background: rgba(159,227,239,0.13); margin: 0 22px;"></div>
+    <div class="mono" style="font-size: 10px; letter-spacing: 0.15em; color: #5c6b73;">NLTZ2612548IVB</div>
+    <div style="width: 1px; height: 22px; background: rgba(159,227,239,0.13); margin: 0 22px;"></div>
+    <div class="mono" style="font-size: 10px; letter-spacing: 0.15em; color: #5c6b73;">BEWINDVOERING · VERDERGROEP · DAG 127</div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 0;">
+      <div class="mono" style="font-size: 10px; letter-spacing: 0.15em; color: #5c6b73; padding: 0 18px; border-left: 1px solid rgba(159,227,239,0.13);">⌘K ZOEKEN</div>
+      <div class="mono" style="font-size: 10px; letter-spacing: 0.15em; color: #86d9a8; padding: 0 18px; border-left: 1px solid rgba(159,227,239,0.13);">KETEN 129 · OK</div>
+      <div class="mono" style="font-size: 10px; letter-spacing: 0.15em; color: #c9d4d9; padding-left: 18px; border-left: 1px solid rgba(159,227,239,0.13);">M. VAN DER POEL</div>
+    </div>
+  </div>
+
+  <!-- nav -->
+  <div style="position: absolute; left: 0; top: 46px; bottom: 0; width: 176px; border-right: 1px solid rgba(159,227,239,0.13); padding: 20px 0; display: flex; flex-direction: column; gap: 0;">
+    <div class="cap" style="padding: 0 22px 12px;">Dossier</div>
+    <div class="cond" style="position: relative; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #060809; background: #9fe3ef; padding: 8px 22px;">Overzicht</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">De zaak</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">Logboek</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">Kluis</div>
+    <div class="cap" style="padding: 22px 22px 12px;">Geld</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">Registratie</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">In en uit</div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">Vorderingen</div>
+    <div class="cap" style="padding: 22px 22px 12px;">Werk</div>
+    <div class="cond" style="display: flex; align-items: center; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">
+      Taken
+      <span class="mono" style="margin-left: auto; font-size: 10px; letter-spacing: 0; color: #f08a3c;">1</span>
+    </div>
+    <div class="cond" style="display: flex; align-items: center; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">
+      Beoordelen
+      <span class="mono" style="margin-left: auto; font-size: 10px; letter-spacing: 0; color: #9fe3ef;">4</span>
+    </div>
+    <div class="cond" style="font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9ba3; padding: 8px 22px;">Controle</div>
+    <div style="margin-top: auto; padding: 0 22px;">
+      <div class="cap" style="margin-bottom: 8px;">Opslag</div>
+      <div style="height: 3px; background: rgba(159,227,239,0.13);">
+        <div style="width: 34%; height: 3px; background: #9fe3ef;"></div>
+      </div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #5c6b73; margin-top: 7px;">66 BESTANDEN · 1,4 GB</div>
+    </div>
+  </div>
+
+  <!-- ruler -->
+  <div style="position: absolute; left: 176px; right: 0; top: 46px; height: 14px; border-bottom: 1px solid rgba(159,227,239,0.08); display: flex; align-items: flex-end;">
+    <div style="display: flex; width: 100%; height: 6px;">
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.18);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.18);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.18);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+      <div style="flex-grow: 1; border-left: 1px solid rgba(159,227,239,0.08);"></div>
+    </div>
+  </div>
+
+  <!-- headline row -->
+  <div style="position: absolute; left: 200px; right: 24px; top: 84px; display: flex; align-items: flex-end; gap: 26px;">
+    <div style="flex-grow: 1;">
+      <div class="cap" style="color: #f08a3c;">Actie vereist — wacht op jou</div>
+      <div class="cond" style="font-size: 44px; font-weight: 300; letter-spacing: 0.01em; line-height: 1.05; margin-top: 8px; color: #eef5f7;">STUKKEN AANLEVEREN</div>
+      <div style="font-size: 14px; font-weight: 300; color: #8d9ba3; margin-top: 8px; max-width: 620px; line-height: 1.55;">Team Opstart wacht op de laatste twee loonstroken en de zorgpolis. Vier van de zes bestanden staan al in de kluis.</div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <div class="mono" style="font-size: 10.5px; letter-spacing: 0.18em; color: #060809; background: #f08a3c; padding: 12px 20px;">AANLEVEREN</div>
+      <div class="mono" style="font-size: 10.5px; letter-spacing: 0.18em; color: #9fe3ef; border: 1px solid rgba(159,227,239,0.3); padding: 12px 20px;">SPOOR</div>
+    </div>
+  </div>
+
+  <!-- gantt strip -->
+  <div class="panel" style="position: absolute; left: 200px; right: 24px; top: 224px; height: 240px; overflow: hidden;">
+    <div style="position: absolute; top: 0; bottom: 0; width: 1px; background: linear-gradient(180deg, transparent, rgba(159,227,239,0.5), transparent); animation: scan 9s linear infinite;"></div>
+    <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 14px 18px 10px;">
+      <div class="cap">De zaak · 10 sporen · 41 haltes</div>
+      <div class="mono" style="font-size: 9px; letter-spacing: 0.2em; color: #5c6b73;">APR 26 ————— NU</div>
+    </div>
+    <div style="padding: 0 18px 16px; display: flex; flex-direction: column; gap: 0;">
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #c9d4d9;">Bewindvoering</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 0; right: 0; top: 12px; height: 2px; background: rgba(201,212,217,0.55);"></div>
+          <div style="position: absolute; left: 2%; top: 9px; width: 8px; height: 8px; background: #c9d4d9;"></div>
+          <div style="position: absolute; left: 44%; top: 9px; width: 8px; height: 8px; background: #c9d4d9;"></div>
+          <div style="position: absolute; left: 61%; top: 9px; width: 8px; height: 8px; background: #c9d4d9;"></div>
+          <div style="position: absolute; left: 78%; top: 9px; width: 8px; height: 8px; background: #c9d4d9;"></div>
+          <div style="position: absolute; left: 93%; top: 9px; width: 8px; height: 8px; background: #c9d4d9;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #77858c;">Aanvraag bewindvoering</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 2%; width: 42%; top: 12px; height: 1px; background: rgba(159,227,239,0.4);"></div>
+          <div style="position: absolute; left: 8%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 22%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 33%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div class="mono" style="position: absolute; left: 46%; top: 6px; font-size: 9px; letter-spacing: 0.14em; color: #5c6b73;">SAMENGEVOEGD</div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #eef5f7;">Opstartstukken</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 61%; right: 6%; top: 12px; height: 1px; background: rgba(240,138,60,0.5);"></div>
+          <div style="position: absolute; left: 66%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 80%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 93%; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #f08a3c;"></div>
+          <div style="position: absolute; left: 93%; top: 4px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(240,138,60,0.45); margin-left: -4px; margin-top: 0;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #77858c;">Ontruiming Woonhave</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 48%; width: 26%; top: 12px; height: 1px; background: rgba(159,227,239,0.4);"></div>
+          <div style="position: absolute; left: 50%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 62%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 73%; top: 9px; width: 1px; height: 9px; background: rgba(159,227,239,0.7);"></div>
+          <div class="mono" style="position: absolute; left: 76%; top: 6px; font-size: 9px; letter-spacing: 0.14em; color: #5c6b73;">GEËINDIGD</div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #77858c;">Bankrekening en leefgeld</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 70%; right: 6%; top: 12px; height: 1px; background: rgba(159,227,239,0.4);"></div>
+          <div style="position: absolute; left: 72%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+          <div style="position: absolute; left: 84%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #77858c;">Schuldregeling</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 76%; right: 0%; top: 12px; height: 1px; background: rgba(159,227,239,0.4);"></div>
+          <div style="position: absolute; left: 78%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; height: 26px;">
+        <div class="cond" style="width: 210px; flex-shrink: 0; font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase; color: #77858c;">Vordering KvK</div>
+        <div style="flex-grow: 1; position: relative; height: 26px;">
+          <div style="position: absolute; left: 90%; right: 2%; top: 12px; height: 1px; background: rgba(159,227,239,0.4);"></div>
+          <div style="position: absolute; left: 92%; top: 10px; width: 6px; height: 6px; border: 1px solid rgba(159,227,239,0.7); border-radius: 50%; background: #060809;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- readout row -->
+  <div style="position: absolute; left: 200px; right: 24px; top: 488px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+    <div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+      <div class="cap">Beoordelen</div>
+      <div class="mono" style="font-size: 30px; font-weight: 400; color: #9fe3ef;">04</div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73;">SUGGESTIES OPEN</div>
+    </div>
+    <div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+      <div class="cap">Kluis</div>
+      <div class="mono" style="font-size: 30px; font-weight: 400; color: #c9d4d9;">07</div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73;">TE SORTEREN</div>
+    </div>
+    <div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+      <div class="cap">Taken</div>
+      <div class="mono" style="font-size: 30px; font-weight: 400; color: #c9d4d9;">09</div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #f08a3c;">1 TE LAAT · 4 WACHTEND</div>
+    </div>
+    <div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+      <div class="cap">Vast per maand</div>
+      <div class="mono" style="font-size: 30px; font-weight: 400; color: #c9d4d9;">1.284</div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73;">EURO · 12 POSTEN</div>
+    </div>
+    <div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+      <div class="cap">Vorderingen</div>
+      <div class="mono" style="font-size: 30px; font-weight: 400; color: #c9d4d9;">03</div>
+      <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73;">1 ZONDER BEDRAG</div>
+    </div>
+  </div>
+
+  <!-- lower grid -->
+  <div style="position: absolute; left: 200px; right: 24px; top: 612px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+
+    <div class="panel" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <div class="cap">Open taken</div>
+        <div class="mono" style="font-size: 9px; letter-spacing: 0.16em; color: #9fe3ef;">ALLES →</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #f08a3c; width: 62px; flex-shrink: 0;">TE LAAT</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #dde6ea;">Loonstroken juni en juli uploaden</div>
+          <div class="mono" style="font-size: 9.5px; color: #5c6b73;">27-08</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73; width: 62px; flex-shrink: 0;">OPEN</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Zorgpolis 2026 opvragen bij Zilveren Kruis</div>
+          <div class="mono" style="font-size: 9.5px; color: #5c6b73;">01-09</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #5c6b73; width: 62px; flex-shrink: 0;">OPEN</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Vordering KvK melden bij Verder</div>
+          <div class="mono" style="font-size: 9.5px; color: #5c6b73;">02-09</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #7fb6c4; width: 62px; flex-shrink: 0;">WACHT</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #8d9ba3;">Reactie op klacht bejegening — Verder</div>
+          <div class="mono" style="font-size: 9.5px; color: #5c6b73;">21-08</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0;">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #7fb6c4; width: 62px; flex-shrink: 0;">WACHT</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #8d9ba3;">Voorstel schuldregeling — Verder</div>
+          <div class="mono" style="font-size: 9.5px; color: #5c6b73;">21-08</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <div class="cap">Geld in en uit · euro per maand</div>
+        <div class="mono" style="font-size: 9px; letter-spacing: 0.16em; color: #5c6b73;">BEHEERREKENING</div>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 10px; height: 132px; padding-top: 6px;">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 42px; background: #9fe3ef; transform-origin: bottom; animation: rise 900ms ease-out;"></div>
+            <div style="width: 13px; height: 30px; background: rgba(240,138,60,0.75); transform-origin: bottom; animation: rise 900ms ease-out;"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">APR</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 76px; background: #9fe3ef;"></div>
+            <div style="width: 13px; height: 34px; background: rgba(240,138,60,0.75);"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">MEI</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 62px; background: #9fe3ef;"></div>
+            <div style="width: 13px; height: 40px; background: rgba(240,138,60,0.75);"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">JUN</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 96px; background: #9fe3ef;"></div>
+            <div style="width: 13px; height: 38px; background: rgba(240,138,60,0.75);"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">JUL</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 92px; background: #9fe3ef;"></div>
+            <div style="width: 13px; height: 36px; background: rgba(240,138,60,0.75);"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">AUG</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 92px; border: 1px dashed rgba(159,227,239,0.5); box-sizing: border-box;"></div>
+            <div style="width: 13px; height: 36px; border: 1px dashed rgba(240,138,60,0.45); box-sizing: border-box;"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">SEP</div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: flex-end; gap: 3px; height: 106px;">
+            <div style="width: 13px; height: 92px; border: 1px dashed rgba(159,227,239,0.5); box-sizing: border-box;"></div>
+            <div style="width: 13px; height: 36px; border: 1px dashed rgba(240,138,60,0.45); box-sizing: border-box;"></div>
+          </div>
+          <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5c6b73;">OKT</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 18px; padding-top: 2px;">
+        <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: #9fe3ef;"></span><span class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #77858c;">IN 3.556</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: rgba(240,138,60,0.75);"></span><span class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #77858c;">UIT 1.284</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; border: 1px dashed rgba(159,227,239,0.5); box-sizing: border-box;"></span><span class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #77858c;">PROGNOSE</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 200px; right: 24px; top: 872px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px;">
+    <div class="panel" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div class="cap">Recent vastgelegd</div>
+      <div style="display: flex; flex-direction: column; gap: 0;">
+        <div style="display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #5c6b73; width: 74px; flex-shrink: 0; padding-top: 2px;">29-08 MAIL</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Aanmaning Kamer van Koophandel vastgelegd als vordering</div>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #5c6b73; width: 74px; flex-shrink: 0; padding-top: 2px;">28-08 MAIL</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Team Opstart vraagt om loonstroken en zorgpolis</div>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(159,227,239,0.08);">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #5c6b73; width: 74px; flex-shrink: 0; padding-top: 2px;">22-08 BESL</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Leefgeld vastgesteld op € 65 per week</div>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 9px 0;">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.1em; color: #5c6b73; width: 74px; flex-shrink: 0; padding-top: 2px;">14-08 BANK</div>
+          <div style="flex-grow: 1; font-size: 13.5px; color: #c9d4d9;">Beheerrekening overgenomen door VerderGroep</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div class="cap">Systeem</div>
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="width: 7px; height: 7px; background: #86d9a8;"></span>
+          <span class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #a9b7bd; flex-grow: 1;">SEARCH.DRAIN</span>
+          <span class="mono" style="font-size: 10.5px; color: #5c6b73;">14:31:02</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="width: 7px; height: 7px; background: #86d9a8;"></span>
+          <span class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #a9b7bd; flex-grow: 1;">DOCMETA.SWEEP</span>
+          <span class="mono" style="font-size: 10.5px; color: #5c6b73;">14:30:00</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="width: 7px; height: 7px; background: #f08a3c; animation: tick 2.2s steps(1) infinite;"></span>
+          <span class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #a9b7bd; flex-grow: 1;">MAIL.INGEST</span>
+          <span class="mono" style="font-size: 10.5px; color: #f08a3c;">GEPAUZEERD</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="width: 7px; height: 7px; background: #86d9a8;"></span>
+          <span class="mono" style="font-size: 10.5px; letter-spacing: 0.1em; color: #a9b7bd; flex-grow: 1;">NIGHTLY-VERIFY</span>
+          <span class="mono" style="font-size: 10.5px; color: #5c6b73;">129 / 66 OK</span>
+        </div>
+      </div>
+      <div style="border-top: 1px solid rgba(159,227,239,0.08); padding-top: 12px; display: flex; align-items: baseline; gap: 10px;">
+        <div class="mono" style="font-size: 9px; letter-spacing: 0.2em; color: #5c6b73;">KETENKOP</div>
+        <div class="mono" style="font-size: 11px; color: #86d9a8;">862c05f1…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>
