@@ -35,6 +35,7 @@ import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { setTaskStatus } from "@verder/api/src/task-decide";
 import { recordRun } from "../heartbeat";
 import { applyCaseDebts } from "./case-debts";
+import { documentIdsByTitle } from "./seed-documents";
 
 // --- the source material ------------------------------------------------------
 
@@ -753,12 +754,11 @@ export async function applyCaseHistory(
 
   // --- documents, by filename ------------------------------------------------
   // Title is the filename the mail carried, and ingestion copies it verbatim.
-  // Oldest wins, so a file mailed twice resolves to the first copy filed —
-  // the same rule the rest of this app resolves duplicates with.
-  const documents = await db.select().from(schema.documents)
-    .orderBy(asc(schema.documents.createdAt), asc(schema.documents.id));
-  const docIdByTitle = new Map<string, string>();
-  for (const d of documents) if (!docIdByTitle.has(d.title)) docIdByTitle.set(d.title, d.id);
+  // Oldest wins, so a file mailed twice resolves to the first copy filed — the
+  // same rule the rest of this app resolves duplicates with — and a discarded
+  // document is not a candidate at all. Shared with case-debts.ts so the two
+  // seeds can never disagree about which document a title resolves to.
+  const docIdByTitle = await documentIdsByTitle(db);
   const wantedDocs = new Set<string>();
   for (const s of SPINE_SEED) if (s.doc) wantedDocs.add(s.doc);
   for (const t of TRACK_SEED) for (const s of t.stops) if (s.doc) wantedDocs.add(s.doc);

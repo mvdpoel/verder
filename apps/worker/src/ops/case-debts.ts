@@ -16,6 +16,7 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
+import { documentIdsByTitle } from "./seed-documents";
 
 export interface DebtSeed {
   creditorName: string; // what the notice literally said
@@ -132,15 +133,10 @@ export async function applyCaseDebts(db: Db): Promise<{
   }
 
   // --- documents, by filename --------------------------------------------------
-  // Oldest wins under a duplicate title (the same rule case-history.ts's
-  // documents lookup and this file's own party/debt lookups use): without the
-  // orderBy, two vault rows sharing a title have no stable pick, and a later
-  // run could bind the debt-document link to a different row than an earlier
-  // run did, adding a second link under the (debt_id, document_id) unique key.
-  const documents = await db.select().from(schema.documents)
-    .orderBy(asc(schema.documents.createdAt), asc(schema.documents.id));
-  const docIdByTitle = new Map<string, string>();
-  for (const d of documents) if (!docIdByTitle.has(d.title)) docIdByTitle.set(d.title, d.id);
+  // Shared with case-history.ts so the two seeds can never disagree about which
+  // document a title resolves to. It skips discarded documents and lets the
+  // oldest surviving copy win; the reasoning for both is on the helper.
+  const docIdByTitle = await documentIdsByTitle(db);
 
   // --- debts, never updating amounts on an existing row -----------------------
   for (const seed of DEBT_SEED) {
