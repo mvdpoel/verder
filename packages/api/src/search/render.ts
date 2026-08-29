@@ -163,7 +163,7 @@ export function renderFinancialItem(item: {
 }
 
 export function renderDebt(debt: {
-  creditorName: string; claimedCents: number; principalCents: number | null;
+  creditorName: string; claimedCents: number | null; principalCents: number | null;
   references_: string | null; origin: string | null; originStory: string | null; createdAt: Date;
 }, ctx: { status: string; creditorPartyName: string | null }): Rendered {
   return {
@@ -172,7 +172,7 @@ export function renderDebt(debt: {
       field("Schuldeiser", debt.creditorName),
       field("Schuldeiser (partij)", ctx.creditorPartyName),
       field("Status", nlLabel(ctx.status)),
-      field("Gevorderd bedrag", euro(debt.claimedCents)),
+      field("Gevorderd bedrag", debt.claimedCents === null ? null : euro(debt.claimedCents)),
       field("Hoofdsom", debt.principalCents === null ? null : euro(debt.principalCents)),
       field("Kenmerk", debt.references_),
       field("Herkomst", debt.origin),

@@ -14,13 +14,14 @@ export const partiesRouter = router({
     email: z.string().email().optional(),
     phone: z.string().optional(),
     notes: z.string().optional(),
+    parentPartyId: z.string().uuid().nullish(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       const [p] = await tx.insert(schema.parties).values(input).returning();
       await appendLedgerEvent(tx, {
         eventType: "party.created", entityType: "party", entityId: p.id,
         payload: { id: p.id, kind: p.kind, name: p.name, organization: p.organization,
-          email: p.email, phone: p.phone, notes: p.notes },
+          email: p.email, phone: p.phone, notes: p.notes, parentPartyId: p.parentPartyId },
       });
       return p;
     })),

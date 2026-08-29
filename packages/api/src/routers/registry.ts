@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { decide, effectiveStatus } from "../registry-decide";
@@ -33,7 +33,7 @@ export const debtFields = z.object({
   creditorPartyId: z.string().uuid().nullish(),
   creditorName: z.string().min(1),
   principalCents: z.number().int().nullish(),
-  claimedCents: z.number().int(),
+  claimedCents: z.number().int().nullish(),
   references: z.string().nullish(),
   origin: z.string().nullish(),
   originStory: z.string().nullish(),
@@ -259,14 +259,84 @@ const debtsRouter = router({
         ? await ctx.db.select().from(schema.documents)
             .where(inArray(schema.documents.id, extraDocIds))
         : [];
+
+      const parties = await ctx.db.select({
+        partyId: schema.parties.id, name: schema.parties.name,
+        organization: schema.parties.organization,
+        role: schema.debtParties.role, note: schema.debtParties.note,
+      }).from(schema.debtParties)
+        .innerJoin(schema.parties, eq(schema.parties.id, schema.debtParties.partyId))
+        .where(eq(schema.debtParties.debtId, debt.id))
+        .orderBy(asc(schema.debtParties.role), asc(schema.parties.name));
+
+      const ownDocs = await ctx.db.select({ doc: schema.documents })
+        .from(schema.debtDocuments)
+        .innerJoin(schema.documents, eq(schema.documents.id, schema.debtDocuments.documentId))
+        .where(eq(schema.debtDocuments.debtId, debt.id))
+        .then((rows) => rows.map((r) => r.doc));
+
       return {
         ...debt,
         effectiveStatus: decisions[0]?.status ?? "identified",
         decisions,
         relatedEntries,
         documents: [...decisionDocs, ...entryDocs],
+        parties,
+        debtDocuments: ownDocs.map((d) => ({ id: d.id, title: d.title, mime: d.mime })),
       };
     }),
+
+  linkParty: protectedProcedure.input(z.object({
+    debtId: z.string().uuid(), partyId: z.string().uuid(),
+    role: z.enum(["eiser", "incasso", "deurwaarder", "gemachtigde"]),
+    note: z.string().nullish(),
+  })).mutation(async ({ ctx, input }) => {
+    // onConflictDoNothing: linking twice is a no-op, not an error. The user
+    // clicked a button; a unique-violation stack trace is not an answer.
+    await ctx.db.insert(schema.debtParties).values({
+      debtId: input.debtId, partyId: input.partyId,
+      role: input.role, note: input.note ?? null,
+    }).onConflictDoNothing();
+  }),
+
+  unlinkParty: protectedProcedure.input(z.object({
+    debtId: z.string().uuid(), partyId: z.string().uuid(),
+    role: z.enum(["eiser", "incasso", "deurwaarder", "gemachtigde"]),
+  })).mutation(async ({ ctx, input }) => {
+    await ctx.db.delete(schema.debtParties).where(and(
+      eq(schema.debtParties.debtId, input.debtId),
+      eq(schema.debtParties.partyId, input.partyId),
+      eq(schema.debtParties.role, input.role)));
+  }),
+
+  linkDocument: protectedProcedure.input(z.object({
+    debtId: z.string().uuid(), documentId: z.string().uuid(),
+  })).mutation(async ({ ctx, input }) => {
+    await ctx.db.insert(schema.debtDocuments)
+      .values(input).onConflictDoNothing();
+  }),
+
+  unlinkDocument: protectedProcedure.input(z.object({
+    debtId: z.string().uuid(), documentId: z.string().uuid(),
+  })).mutation(async ({ ctx, input }) => {
+    await ctx.db.delete(schema.debtDocuments).where(and(
+      eq(schema.debtDocuments.debtId, input.debtId),
+      eq(schema.debtDocuments.documentId, input.documentId)));
+  }),
+
+  // Reversible on purpose: marking a debt reported by mistake must not be a
+  // one-way door, and `reported` is a fact about the world rather than a
+  // ledgered decision.
+  setReported: protectedProcedure.input(z.object({
+    debtId: z.string().uuid(),
+    reportedAt: z.coerce.date().nullable(),
+    entryId: z.string().uuid().nullish(),
+  })).mutation(async ({ ctx, input }) => {
+    await ctx.db.update(schema.debts).set({
+      reportedToVerderAt: input.reportedAt,
+      reportedViaEntryId: input.reportedAt === null ? null : (input.entryId ?? null),
+    }).where(eq(schema.debts.id, input.debtId));
+  }),
 });
 
 const transactionsRouter = router({

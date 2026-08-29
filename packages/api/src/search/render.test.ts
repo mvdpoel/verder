@@ -137,6 +137,15 @@ describe("renderers", () => {
     expect(r.status).toBe("disputed");
   });
 
+  it("renders a debt whose notice stated no total, omitting the amount line", () => {
+    const r = renderDebt({ creditorName: "Kamer van Koophandel", claimedCents: null,
+      principalCents: null, references_: null, origin: null, originStory: null,
+      createdAt: new Date("2026-07-01T00:00:00Z") },
+      { status: "identified", creditorPartyName: null });
+    expect(r.body).not.toContain("Gevorderd bedrag");
+    expect(r.body).not.toContain("Hoofdsom");
+  });
+
   it("renders a task, dated by its deadline", () => {
     const r = renderTask({ title: "Kopie paspoort opsturen", details: "Naar VerderGroep mailen.",
       dueAt: new Date("2026-09-01T00:00:00Z"), createdAt: new Date("2026-08-19T00:00:00Z") },

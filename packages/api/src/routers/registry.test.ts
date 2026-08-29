@@ -356,4 +356,74 @@ describe("registry router", () => {
     await expect(anon.registry.items.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(anon.registry.stats()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
+
+  describe("debt parties and documents", () => {
+    it("returns the creditor and the intermediary with their roles", async () => {
+      const c = caller();
+      const debt = await c.registry.debts.create({
+        creditorName: "PLM Investments II B.V.", claimedCents: 262315,
+      });
+      const eiser = await c.parties.create({
+        kind: "organization", name: "PLM Investments II B.V.",
+      });
+      const incasso = await c.parties.create({
+        kind: "organization", name: "Trust and Law Incassoservices",
+      });
+      await c.registry.debts.linkParty({
+        debtId: debt.id, partyId: eiser.id, role: "eiser",
+      });
+      await c.registry.debts.linkParty({
+        debtId: debt.id, partyId: incasso.id, role: "incasso",
+        note: "Kenmerk 26TNL-001031",
+      });
+
+      const got = await c.registry.debts.get({ id: debt.id });
+      expect(got.parties.map((p) => [p.role, p.name])).toEqual(
+        expect.arrayContaining([
+          ["eiser", "PLM Investments II B.V."],
+          ["incasso", "Trust and Law Incassoservices"],
+        ]));
+    });
+
+    it("unlinks a party that was linked to the wrong debt", async () => {
+      const c = caller();
+      const debt = await c.registry.debts.create({
+        creditorName: "Verkeerd", claimedCents: 100,
+      });
+      const p = await c.parties.create({ kind: "organization", name: "Fout" });
+      await c.registry.debts.linkParty({
+        debtId: debt.id, partyId: p.id, role: "incasso",
+      });
+      await c.registry.debts.unlinkParty({
+        debtId: debt.id, partyId: p.id, role: "incasso",
+      });
+      expect((await c.registry.debts.get({ id: debt.id })).parties).toEqual([]);
+    });
+
+    it("accepts a debt whose notice stated no total", async () => {
+      const c = caller();
+      const debt = await c.registry.debts.create({
+        creditorName: "Kamer van Koophandel", claimedCents: null,
+      });
+      expect((await c.registry.debts.get({ id: debt.id })).claimedCents).toBeNull();
+    });
+
+    it("records that Verder was told, and lets it be taken back", async () => {
+      const c = caller();
+      const debt = await c.registry.debts.create({
+        creditorName: "Het CAK", claimedCents: 114161,
+      });
+      expect((await c.registry.debts.get({ id: debt.id })).reportedToVerderAt)
+        .toBeNull();
+      await c.registry.debts.setReported({
+        debtId: debt.id, reportedAt: new Date("2026-09-01T10:00:00Z"),
+      });
+      expect((await c.registry.debts.get({ id: debt.id })).reportedToVerderAt)
+        .not.toBeNull();
+      // Reversible: marking it by mistake must not be permanent.
+      await c.registry.debts.setReported({ debtId: debt.id, reportedAt: null });
+      expect((await c.registry.debts.get({ id: debt.id })).reportedToVerderAt)
+        .toBeNull();
+    });
+  });
 });
