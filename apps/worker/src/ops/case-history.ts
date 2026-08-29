@@ -34,6 +34,7 @@ import { createDb, ensureCaseMap, schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { setTaskStatus } from "@verder/api/src/task-decide";
 import { recordRun } from "../heartbeat";
+import { applyCaseDebts } from "./case-debts";
 
 // --- the source material ------------------------------------------------------
 
@@ -661,6 +662,10 @@ export interface CaseHistoryResult {
   rewired: string[];
   /** Stops still on the main line that the seed does not account for. */
   strandedOnSpine: string[];
+  /** The three creditors from case-debts.ts. Not evidence; see that file. */
+  debts: string[];
+  debtParties: string[];
+  debtDocLinks: string[];
 }
 
 export async function applyCaseHistory(
@@ -670,6 +675,7 @@ export async function applyCaseHistory(
     parties: [], spineStops: [], tracks: [], stops: [],
     tasks: [], statuses: [], docLinksFilled: [], missingDocs: [],
     renamed: [], moved: [], rewired: [], strandedOnSpine: [],
+    debts: [], debtParties: [], debtDocLinks: [],
   };
 
   // --- parties ---------------------------------------------------------------
@@ -900,6 +906,13 @@ export async function applyCaseHistory(
     .where(eq(schema.stops.trackId, root.id)))
     .map((s) => s.title).filter((t) => !SPINE_ANCHORS.includes(t));
   out.strandedOnSpine = strays;
+
+  // --- the three creditors nobody has told Verder about ----------------------
+  const debtResult = await applyCaseDebts(db);
+  out.parties.push(...debtResult.parties);
+  out.debts = debtResult.debts;
+  out.debtParties = debtResult.debtParties;
+  out.debtDocLinks = debtResult.debtDocLinks;
 
   return out;
 }
