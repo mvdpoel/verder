@@ -42,8 +42,15 @@ const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
  * truncation. The dates live in the migration and in case-history's seed, and
  * `case-history` only ever dates a stop whose happened_at is still NULL, so a
  * date typed by hand always wins.
+ *
+ * EXPORTED so it can be diffed against `SPINE_SEED` in
+ * apps/worker/src/ops/case-history.ts, which is the third spelling of this one
+ * seed. The two must name the same stops in the same order: `writeStop` never
+ * changes `state` or `title` on a stop that already exists, so a title only one
+ * of them knows is a stop only one of them creates, and 0026's deletes come
+ * undone the next time the other one runs. case-history.test.ts asserts it.
  */
-const SPINE_SEED = [
+export const SPINE_SEED = [
   { title: "Aanmelding bij Verder", orderIndex: 100 },
   { title: "Intakegesprek bewindvoering", orderIndex: 200 },
   { title: "Ondernemingen uitgeschreven bij de KvK", orderIndex: 300 },

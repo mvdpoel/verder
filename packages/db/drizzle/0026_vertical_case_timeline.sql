@@ -18,6 +18,17 @@
 ALTER TABLE tracks DROP CONSTRAINT IF EXISTS track_branch_root_ck;
 --> statement-breakpoint
 
+--    0023's check was a BIconditional, so dropping it gave up a second rule
+--    that was never in question: that the ROOT track may not name a branch
+--    point. It has no parent to leave, so a stop id there means nothing, and
+--    `buildTrackMap` would be reading a pointer that cannot be drawn. This is
+--    the surviving half — a child may now leave its origin unrecorded, but the
+--    main line may never claim one. Raw SQL, exactly as 0023 wrote the check it
+--    replaces, so drizzle's snapshot is unaffected.
+ALTER TABLE tracks ADD CONSTRAINT track_root_no_branch_ck
+  CHECK (parent_track_id IS NOT NULL OR branches_at_stop_id IS NULL);
+--> statement-breakpoint
+
 -- 1. Pointers first: these are FKs into `stops`, and the deletes below fail
 --    while any of them still points at a row that is about to go.
 UPDATE tracks SET branches_at_stop_id = NULL, merges_at_stop_id = NULL

@@ -1,3 +1,4 @@
 export * as schema from "./schema";
 export { createDb, type Db } from "./client";
-export { ensureCaseMap, type EnsureCaseMapResult } from "./seed-case-map";
+export { ensureCaseMap, SPINE_SEED as CASE_MAP_SPINE_SEED,
+  type EnsureCaseMapResult } from "./seed-case-map";

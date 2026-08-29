@@ -87,6 +87,21 @@ describe("tracks and stops", () => {
     expect(after[0].n).toBe(before[0].n);
   });
 
+  it("refuses a branch point on the root, which has no parent to leave", async () => {
+    // The surviving half of 0023's biconditional `track_branch_root_ck`. 0026
+    // dropped that check so a spoor may leave its origin unrecorded — but the
+    // main line has nothing to branch FROM, so a stop id here means nothing and
+    // buildTrackMap would be reading a pointer it can never draw.
+    const r = await root();
+    const [anchor] = await db.select().from(schema.stops)
+      .where(and(eq(schema.stops.trackId, r.id),
+        eq(schema.stops.title, "Aanmelding bij Verder")));
+    await expect(
+      db.update(schema.tracks).set({ branchesAtStopId: anchor.id })
+        .where(eq(schema.tracks.id, r.id)),
+    ).rejects.toThrow(/track_root_no_branch_ck/);
+  });
+
   it("no longer enqueues the models the map replaced", async () => {
     // 0017 put search outbox triggers on milestones and timeline_events. Those
     // entity types left SEARCH_ENTITY_TYPES with this sub-project, and

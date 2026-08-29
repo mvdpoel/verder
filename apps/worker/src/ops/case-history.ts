@@ -197,7 +197,13 @@ export const SPINE_SEED: StopSeed[] = [
   { orderIndex: 1400, title: "Regio 3 vraagt de laatste drie loonstroken",
     kind: "mail", state: "done", happenedAt: at("2026-08-25"),
     note: "Van de acht categorieën stond dit nog open." },
-  { orderIndex: 1500, title: "Stukken aanleveren", kind: "document", state: "open",
+  // `done`, not `open`, and the two seeds have to agree on this: `writeStop`
+  // never touches `state` on an existing stop, so a stop this seed calls `open`
+  // and `ensureCaseMap` calls `done` produces two different maps depending on
+  // which one ran after the last truncation. Production is the authority and
+  // says done, 28-08 — Martin marked it himself. What is still outstanding
+  // hangs on the linked task, which is where "waar wacht het op MIJ" belongs.
+  { orderIndex: 1500, title: "Stukken aanleveren", kind: "document", state: "done",
     happenedAt: at("2026-08-28"),
     task: "Stukken aanleveren voor bijzondere bijstand en individuele inkomenstoeslag" },
 ];

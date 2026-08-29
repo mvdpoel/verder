@@ -3,6 +3,7 @@
 // otherwise surface as a thrown script halfway through a production run — or,
 // worse, as a map that renders but points the wrong way.
 import { describe, expect, it } from "vitest";
+import { CASE_MAP_SPINE_SEED } from "@verder/db";
 import {
   PARTY_SEED, SPINE_SEED, STOP_RENAMES, TASK_SEED, TRACK_RENAMES, TRACK_SEED,
 } from "./case-history";
@@ -94,7 +95,6 @@ describe("case-history seed", () => {
     // actually went wrong: an open stop on a track whose work waits on someone
     // else. Every open stop must be work that waits on Martin.
     const waitsOnMartin = new Set([
-      "Stukken aanleveren",
       "Financieel beeld compleet, vaste lasten stabiel",
       "KvK — aanmaning op OpsMate",
       "Trust and Law — PLM Investments, € 2.623,15",
@@ -110,6 +110,21 @@ describe("case-history seed", () => {
       expect(t.statusNote, `task "${t.title}" has a status but no note`).toBeTruthy();
       expect(["in-progress", "waiting", "done", "dropped"]).toContain(t.status);
     }
+  });
+
+  it("agrees with ensureCaseMap's spine, stop for stop and in order", () => {
+    // THREE SPELLINGS OF ONE SPINE: migration 0026, ensureCaseMap, and this
+    // seed. The migration is one-shot and already measured; these two both run
+    // again and again, and `writeStop` changes neither `title` nor `state` on a
+    // stop that already exists — so a stop only one of them names is a stop
+    // only one of them creates, and whichever ran last decides what the map
+    // looks like. That is exactly how 0026's deletes come undone silently.
+    expect(SPINE_SEED.map((s) => ({ title: s.title, orderIndex: s.orderIndex })))
+      .toEqual(CASE_MAP_SPINE_SEED.map(
+        (s) => ({ title: s.title, orderIndex: s.orderIndex })));
+    // ensureCaseMap writes every one of them `done`; this seed must not
+    // contradict it, because it is the one that would lose the argument.
+    for (const s of SPINE_SEED) expect(s.state, s.title).toBe("done");
   });
 
   it("seeds no expected stop — the map shows history only", () => {
