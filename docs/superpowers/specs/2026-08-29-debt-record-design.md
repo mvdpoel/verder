@@ -266,8 +266,12 @@ case. Selection lives in the URL like `?stop=`, so a view stays linkable.
   `bedrag onbekend`), the status, and a marker for not-yet-reported.
 - The party editor gains `parent_party_id`, offering organisations only.
 
-Copy is Dutch and reports rather than judges: an unreported debt is
-`nog niet gemeld`, never a warning.
+Copy MATCHES THE FILE IT IS IN. The registry pages are written in English
+("Claimed", "started as", "From your logbook — contact with this creditor"); the
+timeline and the map are Dutch. Do not impose one on the other — a page that
+switches language mid-screen reads worse than either choice. Either way it
+reports rather than judges: an unreported debt is "not reported to Verder yet",
+never a warning.
 
 ## 5. Testing
 
