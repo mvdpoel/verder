@@ -6,9 +6,12 @@ import { AddTrackForm, TrackEditor } from "@/components/track-editor";
 import { AddStopForm, StopEditor } from "@/components/stop-editor";
 
 /**
- * De zaak als metrokaart. The main line runs to Einde bewindvoering; a side
- * track branches off when something arrives, runs its stops, and either merges
- * back (it was a prerequisite) or ends.
+ * De zaak als verticale metrokaart: het nieuwste bovenaan, per maand omlaag.
+ *
+ * The main line is how the bewindvoering itself ran — from the aanmelding at
+ * Verder to where it stands now. It has no goal stop: the map shows history
+ * and the current situation only. A side track branches off when something
+ * arrives, runs its stops, and either merges back (it was a prerequisite) or ends.
  *
  * Everything here is derived on read from tracks + stops and the evidence they
  * point at. Nothing on this page writes evidence or appends a ledger event: a

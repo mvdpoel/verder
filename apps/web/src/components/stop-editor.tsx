@@ -7,10 +7,14 @@ import { type LinkOption, linkId, linkOptionList } from "@/lib/stop-links";
 /**
  * Create and edit a halte.
  *
- * A stop may exist before anything in the ledger corresponds to it — that is
- * the point of `verwacht`. What it must never do is copy a fact: the title and
- * the note are Martin's words, and everything else is read live from whatever
- * the stop links to.
+ * A stop may exist before anything in the ledger corresponds to it — a halte
+ * that is `loopt nog` is exactly that. What it must never do is copy a fact:
+ * the title and the note are Martin's words, and everything else is read live
+ * from whatever the stop links to.
+ *
+ * The editor offers two states and one date. `verwacht` and `verwacht op` are
+ * gone with migration 0026: the page's axis is time, and a stop the future has
+ * not reached has no date to put on it.
  *
  * The three link pickers are the third level of the map — the mail, the task
  * and the files hanging off a halte. They store an ID and nothing else: no
@@ -20,7 +24,7 @@ import { type LinkOption, linkId, linkOptionList } from "@/lib/stop-links";
 
 type StopData = {
   id: string; title: string; kind: string; state: string;
-  happenedAt: Date | string | null; expectedAt: Date | string | null;
+  happenedAt: Date | string | null;
   note: string | null;
   entryId: string | null; taskId: string | null; documentId: string | null;
 };
@@ -57,18 +61,13 @@ const toDateInput = (d: Date | string | null): string =>
   d ? new Date(d).toISOString().slice(0, 10) : "";
 const fromDateInput = (v: string): Date | null => (v ? new Date(v) : null);
 
-export function AddStopForm({
-  trackId, orderIndex,
-}: {
-  trackId: string;
-  /**
-   * Where on the line the new halte lands. Left out, the router appends at
-   * max+1 — which on the hoofdlijn means AFTER the *Einde bewindvoering*
-   * anchor the migration parked at 1000000, so the page passes a position
-   * whenever it is inserting before that goal.
-   */
-  orderIndex?: number | null;
-}) {
+/**
+ * A new halte always lands at the END of its spoor: the router appends at
+ * max+1. There is no `orderIndex` prop any more — the hoofdlijn lost the
+ * *Einde bewindvoering* anchor that used to sit at 1000000 and forced callers
+ * to insert before it, and the vertical map orders by DATE, not by position.
+ */
+export function AddStopForm({ trackId }: { trackId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -105,7 +104,6 @@ export function AddStopForm({
         onClick={() => create.mutate({
           trackId, title: title.trim(),
           state: state as "done" | "open" | "expected",
-          orderIndex,
         })}
       >
         Toevoegen
@@ -128,7 +126,6 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
   const [form, setForm] = useState({
     title: stop.title, kind: stop.kind, state: stop.state,
     happenedAt: toDateInput(stop.happenedAt),
-    expectedAt: toDateInput(stop.expectedAt),
     note: stop.note ?? "",
     entryId: stop.entryId ?? "",
     taskId: stop.taskId ?? "",
@@ -183,12 +180,6 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
           <input type="date" className="ml-1 rounded border px-2 py-1 text-sm"
             value={form.happenedAt}
             onChange={(e) => setForm({ ...form, happenedAt: e.target.value })} />
-        </label>
-        <label className="text-xs text-slate-600">
-          verwacht op
-          <input type="date" className="ml-1 rounded border px-2 py-1 text-sm"
-            value={form.expectedAt}
-            onChange={(e) => setForm({ ...form, expectedAt: e.target.value })} />
         </label>
       </div>
       <textarea
@@ -280,7 +271,11 @@ export function StopEditor({ stop, links }: { stop: StopData; links?: StopLinks 
             kind: form.kind as "process" | "mail" | "call" | "meeting" | "document" | "other",
             state: form.state as "done" | "open" | "expected",
             happenedAt: fromDateInput(form.happenedAt),
-            expectedAt: fromDateInput(form.expectedAt),
+            // `expectedAt` is deliberately NOT sent. The column and the router
+            // field still exist, and an undefined field is left untouched by
+            // the update — so an old expected date is preserved in the row and
+            // simply never shown, rather than being quietly erased by an editor
+            // that no longer asks about it.
             note: form.note.trim() || null,
             // Empty string is "geen": explicit null, so a link can be REMOVED.
             // `undefined` would leave the old one in place forever.

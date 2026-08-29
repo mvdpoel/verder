@@ -137,9 +137,6 @@ export function TrackMap({
     return t && t.parentTrackId !== null ? t.title : null;
   };
 
-  // The column is as wide as its widest row, never narrower than LABEL_W. A
-  // title that ran past the svg's width would be silently cut off, which is
-  // exactly the failure the 16-character stubs were.
   // The column is as wide as its widest row, between a floor and a CEILING. A
   // title that ran past the svg's width would be silently cut off, which is
   // exactly the failure the 16-character stubs were — but an unbounded column

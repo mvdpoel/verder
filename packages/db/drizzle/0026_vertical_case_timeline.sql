@@ -25,12 +25,22 @@ ALTER TABLE tracks DROP CONSTRAINT IF EXISTS track_branch_root_ck;
 --    the surviving half — a child may now leave its origin unrecorded, but the
 --    main line may never claim one. Raw SQL, exactly as 0023 wrote the check it
 --    replaces, so drizzle's snapshot is unaffected.
+ALTER TABLE tracks DROP CONSTRAINT IF EXISTS track_root_no_branch_ck;
+--> statement-breakpoint
 ALTER TABLE tracks ADD CONSTRAINT track_root_no_branch_ck
   CHECK (parent_track_id IS NOT NULL OR branches_at_stop_id IS NULL);
 --> statement-breakpoint
 
 -- 1. Pointers first: these are FKs into `stops`, and the deletes below fail
 --    while any of them still points at a row that is about to go.
+--
+--    This nulls `merges_at_stop_id` for EVERY child track, which is broader
+--    than the spec's "where it pointed at a deleted stop". It is deliberate and
+--    it is not a bug: every merge in the real data DID point at a stop this
+--    migration deletes, so the two spellings do exactly the same thing here.
+--    Narrowing already-written SQL for a distinction with no effect is the
+--    riskier move — a WHERE clause that has to be right about which stops the
+--    DO block below will delete is one more thing that can be wrong.
 UPDATE tracks SET branches_at_stop_id = NULL, merges_at_stop_id = NULL
  WHERE parent_track_id IS NOT NULL;
 --> statement-breakpoint

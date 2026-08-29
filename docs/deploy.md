@@ -360,10 +360,9 @@ chain must still verify.
 After deploying the case map (sub-project 6), the migration does more than add
 tables — it also drops the two retired search triggers and deletes the chunks
 and outbox rows for the entity kinds the map replaced. Order matters more here
-than usual, because the blast radius is not only `/timeline`: the dashboard
-calls `milestones.timeline()` (which now selects from `tracks`) and every
-logbook entry page calls `tracks.map()`, so an image deployed ahead of the
-migration takes down the landing page too.
+than usual, because the blast radius is not only `/timeline`: the dashboard and
+every logbook entry page call `tracks.map()` themselves, so an image deployed
+ahead of the migration takes down the landing page too.
 
 ```bash
 # 1. migration FIRST, from the homelab HOST
@@ -393,6 +392,45 @@ If a dev database ever loses its map (the test suite truncates evidence tables
 and the cascade reaches `stops`), restore it with
 `pnpm --filter @verder/db seed-map` — idempotent, and safe to run against a
 database that already has one.
+
+### Migration 0026 — the vertical case map
+
+0026 turns the map vertical (newest at the top, one band per month) and makes it
+history-only. It is the ONE migration in this project that DELETES rows from
+`stops` and `tracks`: the *Einde bewindvoering* goal, the duplicated anchors and
+every `expected` stop go, the Aanvraag and Opstart stops move onto the spine,
+and every child track's `branches_at_stop_id` / `merges_at_stop_id` is nulled
+(branch geometry is date-driven from here on; the pointer is semantic only and
+the spoor editor is where Martin records one when he knows it). It runs as the
+`verder` admin role — the app and worker grants are untouched and still carry no
+DELETE.
+
+Same ordering trap as 0020–0023, and the same reason: `/timeline`, the dashboard
+and every logbook entry page read `tracks.map()`, and the new web image reads
+columns and rows the old schema does not have.
+
+```bash
+# 1. migration FIRST, from the homelab HOST
+ssh homelab 'cd ~/apps/verder && pnpm --filter @verder/db migrate'
+# 2. then rsync the tree (with the full --exclude list) and rebuild web + worker
+# 3. verify — 0026 appends NO ledger events, so the event count and the chain
+#    HEAD must both be unchanged. A moved head means something wrote evidence.
+ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
+```
+
+After it lands, check:
+
+- `/timeline` draws the spine top-to-bottom with a month band per month, and no
+  spoor is left dangling — the map derives a departure from a spoor's own oldest
+  halte, so a NULL pointer is normal and not a problem to fix.
+- The dashboard's **Waar de zaak staat** block shows the running haltes plus the
+  newest three dated ones, and one line per open spoor under them.
+- `/verify` is green and the chain head is the one recorded before the deploy.
+
+`pnpm --filter worker case-history` remains safe to re-run afterwards: it no
+longer touches a branch or merge point that no seed entry names, so a pointer
+recorded by hand in the spoor editor survives every run.
 
 It is scoped to the population it was measured against: `created_at` before
 2026-08-21, and only documents still sitting in the inbox. `image.png` is also
