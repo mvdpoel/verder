@@ -135,7 +135,22 @@ export const rawEmails = pgTable("raw_emails", {
   // has been enqueued. NULL means the ingest committed but the enqueue is still
   // owed — the gmail poller retries it on the next cycle.
   suggestQueuedAt: timestamp("suggest_queued_at", { withTimezone: true }),
-});
+  // Which port ingested this message. Defaulted to 'gmail' so every historical
+  // row is labelled without its gmail_message_id being touched — that id is
+  // also documents.source_ref and the case map's third level derives from it.
+  source: text("source").notNull().default("gmail"),
+}, (t) => [
+  check("raw_emails_source_check", sql`${t.source} IN ('gmail', 'jmap')`),
+  // The JMAP poller dedups on message CONTENT before ingesting, one lookup by
+  // this hash per downloaded message. Unindexed that is a sequential scan per
+  // message over a table that is growing by one row per message — O(N^2) on
+  // exactly the run this dedup exists for, the first sync after the 11.49 GB
+  // Takeout import. NOT unique: the same bytes legitimately arrive twice (one
+  // mail delivered to two addresses, a Takeout copy of something Gmail already
+  // ingested) and the poller's answer is to skip the second, not to have
+  // Postgres abort the sync.
+  index("raw_emails_sha256_idx").on(t.rawRfc822Sha256),
+]);
 
 export const suggestions = pgTable("suggestions", {
   id: uuid("id").primaryKey().defaultRandom(),

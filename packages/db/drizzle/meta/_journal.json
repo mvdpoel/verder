@@ -197,6 +197,20 @@
       "when": 1788001814246,
       "tag": "0027_debt_record",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788032237903,
+      "tag": "0028_raw_emails_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788036996064,
+      "tag": "0029_raw_emails_sha256_idx",
+      "breakpoints": true
     }
   ]
 }

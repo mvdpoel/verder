@@ -1,0 +1,25 @@
+-- The JMAP poller dedups on message CONTENT before it ingests: one
+-- `select id from raw_emails where raw_rfc822_sha256 = $1` per downloaded
+-- message. Unindexed that is a sequential scan per message over a table
+-- growing by one row per message — O(N^2) on precisely the run this dedup
+-- exists for, the first sync after the 11.49 GB Takeout import, and on the one
+-- job that is already downloading every blob. Measured before this index:
+-- `Seq Scan on raw_emails ... Rows Removed by Filter: 1334`.
+--
+-- NOT unique. Identical bytes legitimately arrive twice (the same mail
+-- delivered to two addresses; a Takeout copy of a message Gmail already
+-- ingested) and the poller's answer to that is to skip the second, not to have
+-- Postgres reject the INSERT and abort the sync.
+--
+-- WHY THIS IS 0029 AND NOT AN EDIT TO 0028. 0028 is already applied to the dev
+-- database and recorded in drizzle/meta/_journal.json. The migrator skips a
+-- migration purely on `journal.when <= max(created_at)` in
+-- drizzle.__drizzle_migrations — the stored hash is written but never compared
+-- — so amending 0028 in place would silently NOT re-run in dev: the index
+-- would have to be created there by hand, dev would then disagree with the
+-- tooling's own model of what has been applied, and the recorded hash would be
+-- stale forever. A new migration is the only spelling under which the same
+-- command produces the same result in dev and in production. Production, which
+-- has seen neither file, runs 0028 then 0029 and ends with the column, the
+-- check constraint and this index, each exactly once.
+CREATE INDEX "raw_emails_sha256_idx" ON "raw_emails" USING btree ("raw_rfc822_sha256");
