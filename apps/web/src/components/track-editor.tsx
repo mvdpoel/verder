@@ -98,6 +98,7 @@ export function TrackEditor({ track, stops }: { track: TrackData; stops: StopOpt
   const [form, setForm] = useState({
     title: track.title,
     status: track.status,
+    branchesAtStopId: track.branchesAtStopId ?? "",
     mergesAtStopId: track.mergesAtStopId ?? "",
     note: track.note ?? "",
   });
@@ -112,9 +113,11 @@ export function TrackEditor({ track, stops }: { track: TrackData; stops: StopOpt
       </button>
     );
   }
-  // Only stops on the PARENT track can be a merge point: a spoor rejoins the
-  // line it left, never a third one.
-  const mergeOptions = stops.filter((s) => s.trackId === track.parentTrackId);
+  // Only stops on the PARENT track can be a branch or a merge point: a spoor
+  // leaves the line it belongs to and rejoins that same line, never a third
+  // one. The router refuses anything else with a sentence in Dutch — this list
+  // is what keeps him from ever reading it.
+  const pointOptions = stops.filter((s) => s.trackId === track.parentTrackId);
   return (
     <div className="mt-2 w-full space-y-2 rounded border p-3">
       <input
@@ -132,18 +135,39 @@ export function TrackEditor({ track, stops }: { track: TrackData; stops: StopOpt
           {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </label>
+      {/* The two ends of a zijspoor, side by side. The branch point exists
+          because migration 0026 nulled every one of them: the map draws a
+          spoor's departure from its own oldest halte, so the pointer is
+          semantic only — "dit spoor komt uit DIE gebeurtenis voort". NULL is
+          the honest default and stays reachable, because for most sporen
+          nobody ever wrote the origin down and the app may not invent one.
+          Neither control is shown for the hoofdlijn: it leaves nothing and
+          comes back on nothing, and the router refuses both. */}
       {track.parentTrackId && (
-        <label className="block text-xs text-slate-600">
-          Komt terug op de hoofdlijn bij
-          <select
-            className="mt-1 w-full rounded border px-2 py-1 text-sm"
-            value={form.mergesAtStopId}
-            onChange={(e) => setForm({ ...form, mergesAtStopId: e.target.value })}
-          >
-            <option value="">— komt niet terug, dit spoor eindigt —</option>
-            {mergeOptions.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-          </select>
-        </label>
+        <>
+          <label className="block text-xs text-slate-600">
+            Vertrekt bij welke halte?
+            <select
+              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              value={form.branchesAtStopId}
+              onChange={(e) => setForm({ ...form, branchesAtStopId: e.target.value })}
+            >
+              <option value="">— niet vastgelegd —</option>
+              {pointOptions.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs text-slate-600">
+            Komt terug op de hoofdlijn bij
+            <select
+              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              value={form.mergesAtStopId}
+              onChange={(e) => setForm({ ...form, mergesAtStopId: e.target.value })}
+            >
+              <option value="">— komt niet terug, dit spoor eindigt —</option>
+              {pointOptions.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </label>
+        </>
       )}
       <textarea
         className="w-full rounded border px-2 py-1 text-sm"
@@ -158,6 +182,11 @@ export function TrackEditor({ track, stops }: { track: TrackData; stops: StopOpt
             id: track.id,
             title: form.title.trim(),
             status: form.status as "open" | "done" | "ended",
+            // Empty string is "niet vastgelegd": an explicit null, so a branch
+            // point can be REMOVED again. `undefined` would leave the old one
+            // in place forever — the same rule the stop editor's link pickers
+            // follow.
+            branchesAtStopId: form.branchesAtStopId || null,
             mergesAtStopId: form.mergesAtStopId || null,
             note: form.note.trim() || null,
           })}

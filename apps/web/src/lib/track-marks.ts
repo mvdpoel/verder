@@ -88,17 +88,83 @@ export const TRACK_STATUS_LABEL: Record<string, string> = {
  * verwacht made the screen-reader label of the current stop contradict the card
  * printed right next to it.
  *
- * The date is added when there is one, because it is a label on the stop. It is
- * never what decides the wording.
+ * The date is `happenedAt` and ONLY `happenedAt` — the one date the vertical
+ * map files a row by. It used to fall back to `expectedAt`, and that made the
+ * label disagree with the axis: a `done` stop carrying only an expected date
+ * announced itself as "gebeurd · 12-09-2026" on a row `buildTrackMap` had
+ * filed under "Zonder datum", because an expected date is not evidence that
+ * anything happened. The column still exists; nothing reads it here.
  */
 export function stopWhenLabel(stop: {
   state: string;
   happenedAt: Date | string | null;
-  expectedAt?: Date | string | null;
 }): string {
   const label = STOP_STATE_LABEL[stop.state] ?? stop.state;
-  const when = stop.happenedAt ?? stop.expectedAt ?? null;
-  return when ? `${label} · ${new Date(when).toLocaleDateString("nl-NL")}` : label;
+  return stop.happenedAt
+    ? `${label} · ${new Date(stop.happenedAt).toLocaleDateString("nl-NL")}`
+    : label;
+}
+
+/**
+ * The top of the timeline, for the dashboard's case block.
+ *
+ * The `nu` band's rows first — what is running right now, which is not history
+ * and may not read as if it were — and then the newest few dated rows. It is
+ * deliberately SHORTER than /timeline: no map, no evidence, no problems, no
+ * undated tail. The dashboard says where the case stands and points at the page
+ * that shows how it got there.
+ *
+ * "onbekend" rows are left out on purpose. A stop lands there when its date is
+ * one the axis cannot carry (a mistyped year), so printing it would put a wrong
+ * date on the landing page — and a stop with no date at all has nothing to show
+ * in a list whose whole shape is date · wat · spoor.
+ *
+ * Rows come in the map's own order, which is already newest-first: `row` 0 is
+ * the top of the page. Nothing is re-sorted here, so the dashboard can never
+ * disagree with the map about what is newest.
+ */
+export interface CaseTopRow {
+  id: string;
+  title: string;
+  /** The zijspoor it sits on, or "hoofdlijn". */
+  spoor: string;
+  /** "loopt nu" for a running row, otherwise the date in nl-NL. */
+  when: string;
+  /** A `nu` row: it is happening, not something that happened. */
+  running: boolean;
+}
+
+/** The band key `buildTrackMap` files a running, undated stop under. */
+const NU_BAND = "nu";
+
+export function caseTopRows(input: {
+  stops: {
+    id: string; trackId: string; title: string; row: number;
+    bandKey: string; happenedAt: Date | string | null;
+  }[];
+  tracks: { id: string; title: string; parentTrackId: string | null }[];
+  /** How many dated rows to show under the running ones. Three or four. */
+  datedLimit?: number;
+}): CaseTopRow[] {
+  const spoorOf = new Map(input.tracks.map((t) =>
+    [t.id, t.parentTrackId === null ? "hoofdlijn" : t.title]));
+  const byRow = [...input.stops].sort((a, b) => a.row - b.row);
+  const running = byRow.filter((s) => s.bandKey === NU_BAND).map((s) => ({
+    id: s.id, title: s.title, spoor: spoorOf.get(s.trackId) ?? "hoofdlijn",
+    when: "loopt nu", running: true,
+  }));
+  // A date it has AND a band that can carry it. Both, because the two can
+  // disagree: a stop dated 1926 keeps its happenedAt and still lands in
+  // "onbekend".
+  const dated = byRow
+    .filter((s) => s.happenedAt !== null && s.bandKey !== NU_BAND
+      && /^\d{4}-\d{2}$/.test(s.bandKey))
+    .slice(0, input.datedLimit ?? 3)
+    .map((s) => ({
+      id: s.id, title: s.title, spoor: spoorOf.get(s.trackId) ?? "hoofdlijn",
+      when: new Date(s.happenedAt!).toLocaleDateString("nl-NL"), running: false,
+    }));
+  return [...running, ...dated];
 }
 
 /**

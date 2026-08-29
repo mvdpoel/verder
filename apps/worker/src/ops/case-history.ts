@@ -63,11 +63,59 @@ export interface TrackSeed {
   title: string;
   status: TrackStatus;
   note: string;
-  /** Title of the root stop this track branches at, when one is recorded. */
-  branchesAt?: string;
-  /** Title of the root stop this track merges back into, if it merges at all. */
-  mergesAt?: string;
+  /**
+   * Title of the root stop this track branches at.
+   *
+   * THREE-VALUED, and the difference is load-bearing. ABSENT means the seed has
+   * no opinion: whatever is in the row stays, including an origin Martin
+   * recorded by hand in the spoor editor. `null` means the seed asserts there
+   * is none and rewires the column to NULL. A title means that stop.
+   *
+   * It used to be two-valued, and absent meant NULL — so a run of this script
+   * silently reverted the merge point he had just recorded and reported it in
+   * `rewired`. Structure is the seed's; an origin he typed is content.
+   */
+  branchesAt?: string | null;
+  /** Title of the root stop this track merges back into. Three-valued, as above. */
+  mergesAt?: string | null;
   stops: StopSeed[];
+}
+
+/** The two spoor pointers, as the seed may or may not have an opinion about them. */
+export interface TrackPointers {
+  branchesAtStopId: string | null;
+  mergesAtStopId: string | null;
+}
+
+/**
+ * What to rewire on a spoor that already exists — THE one-way door in this
+ * script, kept shut.
+ *
+ * STRUCTURE is the seed's to own; CONTENT is Martin's, and a branch or merge
+ * point he set by hand in the spoor editor is content: nobody else knows that
+ * Schuldregeling rejoins the line at the beschikking. So an ABSENT field is
+ * "no opinion" and produces no key at all; an explicit value — a stop id, or
+ * `null` for "this spoor has no recorded origin" — rewires when it differs.
+ *
+ * The two are distinguishable because nothing between the seed and here
+ * collapses `undefined` into `null`. That collapse is the regression: with it,
+ * every run of `pnpm --filter worker case-history` erased a pointer he had just
+ * recorded and reported the erasure as `rewired`.
+ */
+export function trackPointerPatch(
+  existing: TrackPointers,
+  wanted: { branchesAtStopId?: string | null; mergesAtStopId?: string | null },
+): Partial<TrackPointers> {
+  const patch: Partial<TrackPointers> = {};
+  if (wanted.branchesAtStopId !== undefined
+    && wanted.branchesAtStopId !== existing.branchesAtStopId) {
+    patch.branchesAtStopId = wanted.branchesAtStopId;
+  }
+  if (wanted.mergesAtStopId !== undefined
+    && wanted.mergesAtStopId !== existing.mergesAtStopId) {
+    patch.mergesAtStopId = wanted.mergesAtStopId;
+  }
+  return patch;
 }
 
 /**
@@ -726,30 +774,45 @@ export async function applyCaseHistory(
     // A spoor with no recorded origin is the normal case now: the map draws its
     // branch from the spine at its own oldest stop, so the pointer is semantic
     // only and NULL honestly means "nobody wrote down what this came out of".
-    const branch = seed.branchesAt ? await stopOn(root.id, seed.branchesAt) : undefined;
-    if (seed.branchesAt && !branch) throw new Error(
-      `track "${seed.title}" branches at "${seed.branchesAt}", which is not on the root`);
-    const merge = seed.mergesAt ? await stopOn(root.id, seed.mergesAt) : undefined;
-    if (seed.mergesAt && !merge) throw new Error(
-      `track "${seed.title}" merges at "${seed.mergesAt}", which is not on the root`);
+    //
+    // `wantedPointer` keeps the three values apart all the way to the UPDATE:
+    // undefined stays undefined (no opinion), null stays null (the seed says
+    // there is none). Never `?? null` here — that is exactly the collapse that
+    // turned "don't touch" into "erase".
+    const wantedPointer = async (
+      title: string | null | undefined, what: "branches" | "merges",
+    ): Promise<string | null | undefined> => {
+      if (title === undefined) return undefined;
+      if (title === null) return null;
+      const stop = await stopOn(root.id, title);
+      if (!stop) throw new Error(
+        `track "${seed.title}" ${what} at "${title}", which is not on the root`);
+      return stop.id;
+    };
+    const branchId = await wantedPointer(seed.branchesAt, "branches");
+    const mergeId = await wantedPointer(seed.mergesAt, "merges");
 
     let [track] = await db.select().from(schema.tracks)
       .where(and(eq(schema.tracks.title, seed.title),
         eq(schema.tracks.parentTrackId, root.id)))
       .orderBy(asc(schema.tracks.createdAt), asc(schema.tracks.id)).limit(1);
     if (!track) {
+      // A brand new row has nothing to preserve, so "no opinion" and "none"
+      // land on the same value here — and only here.
       [track] = await db.insert(schema.tracks).values({
         title: seed.title, status: seed.status, parentTrackId: root.id,
-        branchesAtStopId: branch?.id ?? null, mergesAtStopId: merge?.id ?? null,
+        branchesAtStopId: branchId ?? null, mergesAtStopId: mergeId ?? null,
         note: seed.note,
       }).returning();
       out.tracks.push(seed.title);
-    } else if (track.branchesAtStopId !== (branch?.id ?? null)
-      || track.mergesAtStopId !== (merge?.id ?? null)) {
-      await db.update(schema.tracks)
-        .set({ branchesAtStopId: branch?.id ?? null, mergesAtStopId: merge?.id ?? null })
-        .where(eq(schema.tracks.id, track.id));
-      out.rewired.push(seed.title);
+    } else {
+      const patch = trackPointerPatch(track, {
+        branchesAtStopId: branchId, mergesAtStopId: mergeId,
+      });
+      if (Object.keys(patch).length > 0) {
+        await db.update(schema.tracks).set(patch).where(eq(schema.tracks.id, track.id));
+        out.rewired.push(seed.title);
+      }
     }
     trackByTitle.set(seed.title, track);
   }

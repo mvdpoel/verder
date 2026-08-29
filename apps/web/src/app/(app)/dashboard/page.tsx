@@ -3,7 +3,7 @@ import { serverCaller } from "@/lib/trpc-server";
 import { EnablePush } from "@/components/enable-push";
 import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
-import { noOpenTracksLine } from "@/lib/track-marks";
+import { caseTopRows, noOpenTracksLine } from "@/lib/track-marks";
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
@@ -27,15 +27,20 @@ export default async function DashboardPage() {
       // is the top of the page, so ascending row is newest first.
       return { track: t, stop: own.find((s) => s.state !== "done") ?? own[0] };
     });
+  // The top of the timeline: what is running now, then the newest few dated
+  // haltes. Same `tracks.map()` call as the list below it — the dashboard makes
+  // one query for this whole block, never two.
+  const topRows = caseTopRows({ stops: map.stops, tracks: map.tracks, datedLimit: 3 });
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Hi Martin 👋 — here's where things stand</h1>
         <EnablePush />
       </div>
-      {/* Where the case stands, in one line per open spoor. The dashboard shows
-          LESS than /timeline on purpose: no map, no evidence, no problems — it
-          points at the page that has them. */}
+      {/* Where the case stands: the top of the timeline, then one line per open
+          spoor. The dashboard shows LESS than /timeline on purpose: no map, no
+          evidence, no problems, and only the newest handful of rows — it points
+          at the page that has them. */}
       <section>
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="font-semibold">Waar de zaak staat</h2>
@@ -43,6 +48,27 @@ export default async function DashboardPage() {
             de hele kaart →
           </Link>
         </div>
+        {topRows.length > 0 && (
+          <ul className="mb-3 space-y-1 rounded border bg-white p-3 text-sm">
+            {topRows.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-baseline gap-x-2">
+                {/* The date column, fixed width so the rows line up and the
+                    page reads as a timeline and not as a paragraph. A running
+                    halte says "loopt nu" here instead of a date: it has none,
+                    and printing one would be the dashboard inventing it. */}
+                <span
+                  className={`w-24 shrink-0 text-xs ${
+                    r.running ? "font-medium text-green-700" : "text-slate-500"
+                  }`}
+                >
+                  {r.when}
+                </span>
+                <span className={r.running ? "font-medium" : undefined}>{r.title}</span>
+                <span className="text-slate-500">· {r.spoor}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {openTracks.length === 0 ? (
           // Names the outcomes that actually happened. "alles is afgerond"
           // asserted afgerond over a spoor whose status is `ended` — a

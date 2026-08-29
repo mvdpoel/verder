@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { CASE_MAP_SPINE_SEED } from "@verder/db";
 import {
   PARTY_SEED, SPINE_SEED, STOP_RENAMES, TASK_SEED, TRACK_RENAMES, TRACK_SEED,
+  trackPointerPatch,
 } from "./case-history";
 
 // Migration 0026 emptied the root of everything the seed does not name: Start,
@@ -27,6 +28,47 @@ describe("case-history seed", () => {
         expect(root, `${t.title} merges at "${t.mergesAt}"`).toContain(t.mergesAt);
       }
     }
+  });
+
+  it("leaves a hand-set branch or merge point alone", () => {
+    // THE REGRESSION THIS GUARDS. Martin opens the spoor editor and records
+    // that Schuldregeling rejoins the hoofdlijn at the beschikking. No
+    // TRACK_SEED entry names a merge point, so a seed that read "absent means
+    // NULL" would erase what he just typed on the very next run — and report
+    // the erasure in `rewired` as if it were a repair.
+    const recorded = { branchesAtStopId: "stop-a", mergesAtStopId: "stop-b" };
+    expect(trackPointerPatch(recorded, {})).toEqual({});
+
+    // And it holds for the seed as it actually stands: not one entry names a
+    // pointer, so a real run may not touch either column on any existing spoor.
+    for (const t of TRACK_SEED) {
+      expect(trackPointerPatch(recorded, {
+        branchesAtStopId: t.branchesAt === undefined ? undefined : "stop-x",
+        mergesAtStopId: t.mergesAt === undefined ? undefined : "stop-x",
+      }), `spoor "${t.title}"`).toEqual({});
+    }
+  });
+
+  it("still rewires a pointer the seed does name, null included", () => {
+    // "Absent" and "explicitly none" have to stay distinguishable, or the fix
+    // for the one-way door just installs a different one: a seed that DOES have
+    // an opinion must still be able to move a pointer, and to clear it.
+    const recorded = { branchesAtStopId: "stop-a", mergesAtStopId: "stop-b" };
+    expect(trackPointerPatch(recorded, { mergesAtStopId: "stop-c" }))
+      .toEqual({ mergesAtStopId: "stop-c" });
+    expect(trackPointerPatch(recorded, { branchesAtStopId: null }))
+      .toEqual({ branchesAtStopId: null });
+    expect(trackPointerPatch(recorded, {
+      branchesAtStopId: null, mergesAtStopId: null,
+    })).toEqual({ branchesAtStopId: null, mergesAtStopId: null });
+
+    // A value equal to what is already there is not a rewire: `rewired` in the
+    // run's report must name the spoor that actually moved and no other.
+    expect(trackPointerPatch(recorded, { branchesAtStopId: "stop-a" })).toEqual({});
+    // And clearing a column that is already NULL is not one either.
+    expect(trackPointerPatch(
+      { branchesAtStopId: null, mergesAtStopId: null }, { mergesAtStopId: null },
+    )).toEqual({});
   });
 
   it("points every stop's task at a task the seed defines", () => {
