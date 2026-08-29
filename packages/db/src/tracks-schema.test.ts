@@ -3,8 +3,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { createDb, ensureCaseMap, schema, type Db } from "./index";
 
 // ADMIN role: this suite is about the CONSTRAINTS and TRIGGERS the map depends
-// on (one root, no floating branch, no poisoned index queue), not about grants
-// — the grant shape is the same one milestones and timeline_events carry.
+// on (one root, no poisoned index queue) and about what the seed puts back
+// after a truncation — not about grants, whose shape is unchanged.
 const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
 // APP role: the rename below is what the web app actually does, and that role
 // has NO INSERT grant on search_outbox — only the SECURITY DEFINER function
@@ -35,26 +35,25 @@ describe("tracks and stops", () => {
     return r;
   };
 
-  it("seeds exactly one root track, with its two anchors", async () => {
+  it("seeds exactly one root track, named for the period and not for a goal", async () => {
     const roots = await db.select().from(schema.tracks)
       .where(isNull(schema.tracks.parentTrackId));
     expect(roots).toHaveLength(1);
-    expect(roots[0].title).toBe("Einde bewindvoering");
+    // Migration 0026 deleted `Einde bewindvoering` — the map shows history, so
+    // the root is no longer a destination and its old name described nothing.
+    expect(roots[0].title).toBe("Bewindvoering");
 
-    const anchors = await db.select().from(schema.stops)
+    const spine = await db.select().from(schema.stops)
       .where(eq(schema.stops.trackId, roots[0].id));
-    const start = anchors.find((s) => s.title === "Start");
-    expect(start).toBeDefined();
-    // DONE — the case is under way — but with NO date. A seeded now() would
-    // render "Start · <the day of the migration>" as a fact about when Martin's
-    // case began, which nobody measured, and it would also put the start AFTER
-    // every copied key event and so flag all of them as out of order.
-    expect(start?.state).toBe("done");
-    expect(start?.happenedAt).toBeNull();
-
-    const goal = anchors.find((s) => s.title === "Einde bewindvoering");
-    expect(goal?.state).toBe("expected"); // it has not happened; do not imply it has
-    expect(goal?.happenedAt).toBeNull();
+    for (const title of ["Start", "Einde bewindvoering", "Aanvraag bewindvoering",
+      "bewindvoering"]) {
+      expect(spine.map((s) => s.title), title).not.toContain(title);
+    }
+    // The seed's own fifteen, and every one of them `done`: all fifteen have
+    // happened, and nothing this function writes is ever `expected` again.
+    expect(spine.find((s) => s.title === "Aanmelding bij Verder")).toBeDefined();
+    expect(spine.find((s) => s.title === "Stukken aanleveren")).toBeDefined();
+    expect(spine.filter((s) => s.state === "expected")).toEqual([]);
   });
 
   it("refuses a second root track", async () => {
@@ -63,50 +62,27 @@ describe("tracks and stops", () => {
     ).rejects.toThrow(/tracks_single_root_uq/);
   });
 
-  it("refuses a child track with no branch point", async () => {
+  it("allows a child track with no branch point", async () => {
+    // 0023 forced one with `track_branch_root_ck`; 0026 dropped that check.
+    // Branch geometry is date-driven now, so the pointer is semantic only and
+    // NULL is the honest value for a spoor whose origin nobody recorded.
     const r = await root();
-    await expect(
-      db.insert(schema.tracks).values({ title: "zwevend spoor", parentTrackId: r.id })
-    ).rejects.toThrow(/track_branch_root_ck/);
-  });
-
-  it("seeds the WSNP track with all six stages, merging back", async () => {
-    const [wsnp] = await db.select().from(schema.tracks)
-      .where(eq(schema.tracks.title, "WSNP"));
-    expect(wsnp.mergesAtStopId).not.toBeNull(); // WSNP is a prerequisite, so it rejoins
-
-    const stops = await db.select().from(schema.stops)
-      .where(eq(schema.stops.trackId, wsnp.id));
-    const stages = stops.map((s) => s.stage).filter(Boolean) as string[];
-    expect([...new Set(stages)].sort()).toEqual([
-      "accepted", "application", "clean-slate", "onboarding", "settlement", "wsnp-start",
-    ]);
-
-    // The synthetic filler adds a stop only for a stage that has NO stop at all,
-    // and puts it on the round slot (pos * 100); a stop copied from a real
-    // milestone sits at pos * 100 + n with n >= 1. So there is at most one
-    // synthetic stop per stage, and that is the whole invariant.
-    //
-    // What CANNOT be asserted here: that a synthetic stop stands alone in its
-    // stage. This dev database is shared and the api suites keep adding staged
-    // stops to this very track (milestones.test.ts parks one on `clean-slate`
-    // by design, because the app role has no DELETE on stops). A stage holding
-    // a synthetic plus a foreign fixture is a healthy database, not a broken
-    // seed, and asserting otherwise makes this test fail on run order.
-    for (const stage of new Set(stages)) {
-      const group = stops.filter((s) => s.stage === stage);
-      const synthetic = group.filter((s) => s.orderIndex % 100 === 0);
-      expect(synthetic.length).toBeLessThanOrEqual(1);
+    const [side] = await db.insert(schema.tracks)
+      .values({ title: `zwevend spoor ${Date.now()}`, parentTrackId: r.id }).returning();
+    try {
+      expect(side.branchesAtStopId).toBeNull();
+    } finally {
+      await db.delete(schema.searchOutbox)
+        .where(eq(schema.searchOutbox.entityId, side.id));
+      await db.delete(schema.tracks).where(eq(schema.tracks.id, side.id));
     }
   });
 
   it("ensureCaseMap creates nothing on a database that already has the map", async () => {
     const before = await db.select({ n: sql<number>`count(*)::int` }).from(schema.stops);
+    await ensureCaseMap(db);
     const created = await ensureCaseMap(db);
-    expect(created).toEqual({
-      rootTrack: false, startStop: false, goalStop: false,
-      wsnpTrack: false, spineStops: [], stageStops: [],
-    });
+    expect(created).toEqual({ rootTrack: false, spineStops: [] });
     const after = await db.select({ n: sql<number>`count(*)::int` }).from(schema.stops);
     expect(after[0].n).toBe(before[0].n);
   });
@@ -116,9 +92,9 @@ describe("tracks and stops", () => {
     // entity types left SEARCH_ENTITY_TYPES with this sub-project, and
     // loadAndRender THROWS on an unknown type — so every row those triggers
     // write is a job search.drain retries forever, failing every 60 s. 0023
-    // drops the triggers and deletes what they already queued and indexed.
-    await db.insert(schema.milestones)
-      .values({ stage: "application", title: `trigger probe ${Date.now()}` });
+    // drops the triggers and deletes what they already queued and indexed;
+    // 0026 dropped the milestones table itself, so only the retired
+    // timeline_events kind can still be probed here.
     await db.insert(schema.timelineEvents)
       .values({ title: `trigger probe ${Date.now()}`, happenedAt: new Date() });
 
@@ -136,7 +112,8 @@ describe("tracks and stops", () => {
     // old name forever.
     const r = await root();
     const [anchor] = await db.select().from(schema.stops)
-      .where(and(eq(schema.stops.trackId, r.id), eq(schema.stops.title, "Start")));
+      .where(and(eq(schema.stops.trackId, r.id),
+        eq(schema.stops.title, "Aanmelding bij Verder")));
     const [side] = await db.insert(schema.tracks).values({
       title: `rename probe ${Date.now()}`, parentTrackId: r.id,
       branchesAtStopId: anchor.id,
@@ -175,34 +152,28 @@ describe("tracks and stops", () => {
     }
   });
 
-  it("runs the main line Start -> aanvraag -> bewindvoering -> ... -> Einde", async () => {
-    // The spine is what the page is FOR: the road to the end of the
-    // bewindvoering, with the two facts that shape it on the way. Asserted as
-    // relative order, never as absolute order_index values, because migration
-    // 0024 renumbers whatever 0023 had already copied in between the anchors.
-    const [root] = await db.select().from(schema.tracks)
+  it("runs the main line from the aanmelding to the stukken, in date order", async () => {
+    // The spine is what the page is FOR: how the bewindvoering itself has run,
+    // oldest first. Asserted as relative order, never as absolute order_index
+    // values, so a later insert between two stations does not fail this.
+    const [r] = await db.select().from(schema.tracks)
       .where(isNull(schema.tracks.parentTrackId));
     const line = (await db.select().from(schema.stops)
-      .where(eq(schema.stops.trackId, root.id)))
+      .where(eq(schema.stops.trackId, r.id)))
       .sort((a, b) => a.orderIndex - b.orderIndex);
     const at = (title: string) => line.findIndex((s) => s.title === title);
 
-    expect(at("Start")).toBe(0);
-    expect(at("Aanvraag bewindvoering")).toBeGreaterThan(at("Start"));
-    expect(at("bewindvoering")).toBeGreaterThan(at("Aanvraag bewindvoering"));
-    // The goal is the far right of the line, always — nothing is ever added
-    // after it, which is what the 1000000 slot is for.
-    expect(at("Einde bewindvoering")).toBe(line.length - 1);
+    expect(at("Aanmelding bij Verder")).toBe(0);
+    expect(at("Beschikking: onder bewind gesteld"))
+      .toBeGreaterThan(at("Verzoek onderbewindstelling ingediend"));
+    expect(at("Dossier naar Team Opstart"))
+      .toBeGreaterThan(at("Beschikking: onder bewind gesteld"));
+    // The newest thing waiting on Martin is the far end of the line — and the
+    // map begins at the aanmelding, so nothing sits before it any more.
+    expect(at("Stukken aanleveren")).toBe(line.length - 1);
 
-    const station = (title: string) => line.find((s) => s.title === title)!;
-    // Undated on purpose: nobody recorded when either happened, and this app
-    // does not invent a date for Martin's own case.
-    expect(station("Aanvraag bewindvoering").happenedAt).toBeNull();
-    expect(station("Aanvraag bewindvoering").state).toBe("done");
-    // "loopt nog" — the period he is in, not a thing that finished.
-    expect(station("bewindvoering").state).toBe("open");
-    expect(station("bewindvoering").happenedAt).toBeNull();
-    expect(station("Einde bewindvoering").state).toBe("expected");
+    // Nothing on this line is a claim about the future: 0026 deleted every
+    // expected stop, and the seed writes `done` only.
+    expect(line.filter((s) => s.state === "expected")).toEqual([]);
   });
-
 });

@@ -60,10 +60,10 @@ describe("search_outbox triggers", () => {
 
   // `tracks` and `stops` are covered in tracks-schema.test.ts instead — they are
   // the only indexed tables that cannot be reached without the seeded map, and
-  // that suite already owns the seed. `milestones` and `timeline_events` are
-  // NOT covered anywhere any more: sub-project 6 retired both entity kinds and
-  // migration 0023 drops their triggers, so a row here would be a job
-  // search.drain can never complete.
+  // that suite already owns the seed. `timeline_events` is NOT covered anywhere
+  // any more: sub-project 6 retired the kind and migration 0023 drops its
+  // trigger, so a row here would be a job search.drain can never complete.
+  // (`milestones` carried the same trap; migration 0026 dropped the table.)
   it("enqueues exactly one row per insert on each indexed entity table", async () => {
     const [party] = await db.insert(schema.parties)
       .values({ kind: "organization", name: `VerderGroep ${crypto.randomUUID()}` }).returning();
@@ -101,10 +101,6 @@ describe("search_outbox triggers", () => {
     // A retired kind must NOT enqueue: 0023 dropped both triggers, because
     // loadAndRender throws on a type that left SEARCH_ENTITY_TYPES and the
     // drain would retry that row every 60 s forever.
-    const [milestone] = await db.insert(schema.milestones)
-      .values({ stage: "onboarding", title: "Onboarding gestart (outbox test)" }).returning();
-    expect(await outboxFor("milestone", milestone.id)).toHaveLength(0);
-
     const [event] = await db.insert(schema.timelineEvents).values({
       title: "Verzoek verstuurd naar de rechtbank",
       happenedAt: new Date("2026-08-01T12:00:00Z"), kind: "process",

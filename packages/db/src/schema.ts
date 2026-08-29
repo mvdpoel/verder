@@ -223,11 +223,14 @@ export const registryDecisions = pgTable("registry_decisions", {
   check("registry_decision_target_ck", sql`num_nonnulls(${t.financialItemId}, ${t.debtId}) = 1`),
 ]);
 
-// --- tasks + milestones (sub-project 3) ---
-// tasks and milestones are editable fact tables (UPDATE allowed, DELETE never).
+// --- tasks (sub-project 3) ---
+// tasks is an editable fact table (UPDATE allowed, DELETE never).
 // task_status_changes is an EVIDENCE table: insert-only, ledger-backed
 // (eventType "task.status", entityType "task_status_change").
 
+// Still live: `stops.stage` uses it. The `milestones` table it was written for
+// is dropped by migration 0026, but dropping an enum a live column depends on
+// means recreating the type for no gain.
 export const wsnpStageEnum = pgEnum("wsnp_stage", ["application", "accepted", "onboarding", "wsnp-start", "settlement", "clean-slate"]);
 
 export const tasks = pgTable("tasks", {
@@ -254,23 +257,11 @@ export const taskStatusChanges = pgTable("task_status_changes", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const milestones = pgTable("milestones", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  stage: wsnpStageEnum("stage").notNull(),
-  title: text("title").notNull(),
-  happenedAt: timestamp("happened_at", { withTimezone: true }),
-  expectedAt: timestamp("expected_at", { withTimezone: true }),
-  done: boolean("done").notNull().default(false),
-  note: text("note"),
-  entryId: uuid("entry_id").references(() => logEntries.id),
-  documentId: uuid("document_id").references(() => documents.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
 // Curated key events: Martin's hand-picked story of the process (intake,
 // request sent to court, a call, a letter that arrived). Editable display aid
-// like milestones — NOT ledgered; linked logbook entries and documents remain
-// the evidence.
+// — NOT ledgered; linked logbook entries and documents remain the evidence.
+// Retired by tracks + stops (sub-project 6); the table is still here because it
+// holds rows and dropping it is a separate decision from dropping milestones.
 export const timelineEventKindEnum = pgEnum("timeline_event_kind", ["process", "mail", "call", "meeting", "document", "other"]);
 
 export const timelineEvents = pgTable("timeline_events", {
@@ -281,7 +272,6 @@ export const timelineEvents = pgTable("timeline_events", {
   note: text("note"),
   entryId: uuid("entry_id").references(() => logEntries.id),
   documentId: uuid("document_id").references(() => documents.id),
-  milestoneId: uuid("milestone_id").references(() => milestones.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -292,8 +282,8 @@ export const timelineEvents = pgTable("timeline_events", {
 // Einde bewindvoering) or it ends.
 //
 // Both tables are editable display aids, deliberately NOT ledgered — exactly
-// what timeline_events and milestones already were. A stop asserts nothing; it
-// points at the evidence, which stays in log_entries, documents and tasks.
+// what timeline_events and the milestones table already were. A stop asserts
+// nothing; it points at the evidence: log_entries, documents and tasks.
 
 export const trackStatusEnum = pgEnum("track_status", ["open", "done", "ended"]);
 export const stopStateEnum = pgEnum("stop_state", ["done", "open", "expected"]);
@@ -305,7 +295,10 @@ export const tracks = pgTable("tracks", {
   // NULL = the main line. A unique index on a constant expression, filtered to
   // these rows, allows exactly one of them to exist.
   parentTrackId: uuid("parent_track_id"),
-  // Where it leaves the parent; NULL iff parentTrackId is NULL (check constraint).
+  // Where it leaves the parent. NULL is normal: migration 0026 dropped the
+  // `track_branch_root_ck` check that forced a child track to name one, because
+  // branch geometry is date-driven now and the pointer is semantic only — NULL
+  // honestly means "nobody wrote down what this spoor came out of".
   branchesAtStopId: uuid("branches_at_stop_id"),
   // The stop on the parent it feeds into; NULL = it just ends, which is a real
   // outcome and not an unfinished one.

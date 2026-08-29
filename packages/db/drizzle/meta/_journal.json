@@ -183,6 +183,13 @@
       "when": 1787944656083,
       "tag": "0025_passkey",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787985593402,
+      "tag": "0026_vertical_case_timeline",
+      "breakpoints": true
     }
   ]
 }

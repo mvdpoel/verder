@@ -4,17 +4,12 @@
 // worse, as a map that renders but points the wrong way.
 import { describe, expect, it } from "vitest";
 import {
-  PARTY_SEED, SPINE_DATES, SPINE_SEED, STOP_RENAMES, TASK_SEED, TRACK_RENAMES,
-  TRACK_SEED,
+  PARTY_SEED, SPINE_SEED, STOP_RENAMES, TASK_SEED, TRACK_RENAMES, TRACK_SEED,
 } from "./case-history";
 
-/** The stops the root track already has from migrations 0023/0024. */
-const EXISTING_ROOT_STOPS = [
-  "Start", "Aanvraag bewindvoering", "bewindvoering", "Einde bewindvoering",
-];
-
-const rootStopTitles = () =>
-  new Set([...EXISTING_ROOT_STOPS, ...SPINE_SEED.map((s) => s.title)]);
+// Migration 0026 emptied the root of everything the seed does not name: Start,
+// the two duplicated anchors and the goal are gone, and the spine IS SPINE_SEED.
+const rootStopTitles = () => new Set(SPINE_SEED.map((s) => s.title));
 
 const allStops = () => [...SPINE_SEED, ...TRACK_SEED.flatMap((t) => t.stops)];
 
@@ -22,7 +17,11 @@ describe("case-history seed", () => {
   it("branches and merges every track at a stop that is actually on the root", () => {
     const root = rootStopTitles();
     for (const t of TRACK_SEED) {
-      expect(root, `${t.title} branches at "${t.branchesAt}"`).toContain(t.branchesAt);
+      // Both pointers are optional now, and every spoor in this seed leaves them
+      // unset — a NULL origin is the honest value for one nobody recorded.
+      if (t.branchesAt) {
+        expect(root, `${t.title} branches at "${t.branchesAt}"`).toContain(t.branchesAt);
+      }
       if (t.mergesAt) {
         expect(root, `${t.title} merges at "${t.mergesAt}"`).toContain(t.mergesAt);
       }
@@ -59,10 +58,6 @@ describe("case-history seed", () => {
     for (const t of TRACK_SEED) {
       expect(dupes(t.stops.map((s) => s.title)), t.title).toEqual([]);
     }
-    // A side-track stop that shares a title with a root stop is not a conflict
-    // (the guard is per track), but a stop that collides with one of 0023/0024's
-    // anchors on the ROOT would be adopted instead of created.
-    for (const s of SPINE_SEED) expect(EXISTING_ROOT_STOPS).not.toContain(s.title);
   });
 
   it("orders stops by order_index in the same direction as their dates", () => {
@@ -117,17 +112,25 @@ describe("case-history seed", () => {
     }
   });
 
-  it("dates only the two anchors 0024 deliberately left undated", () => {
-    expect(SPINE_DATES.map((s) => s.title))
-      .toEqual(["Aanvraag bewindvoering", "bewindvoering"]);
-    for (const s of SPINE_DATES) expect(EXISTING_ROOT_STOPS).toContain(s.title);
+  it("seeds no expected stop — the map shows history only", () => {
+    // Migration 0026 deleted every expected stop there was. A seed that writes
+    // one back would resurrect exactly what the migration removed, on the next
+    // run of this script, silently.
+    const states = [...SPINE_SEED.map((s) => s.state),
+      ...TRACK_SEED.flatMap((t) => t.stops.map((s) => s.state))];
+    expect(states).not.toContain("expected");
   });
 
-  it("keeps the main line bare — four anchors, no stations of its own", () => {
-    // Martin's correction after seeing the first render: the trunk shows where
-    // the line goes, not every errand run along it. Everything else is work,
-    // and work lives on a spoor.
-    expect(SPINE_SEED).toEqual([]);
+  it("puts the fifteen spine stops in date order", () => {
+    // The trunk is no longer a destination, it is the story so far — so every
+    // one of its stops has happened, and the order they are numbered in is the
+    // order they happened in.
+    const dated = SPINE_SEED.filter((s) => s.happenedAt);
+    expect(dated).toHaveLength(15);
+    for (let i = 1; i < dated.length; i++) {
+      expect(dated[i].happenedAt!.getTime())
+        .toBeGreaterThanOrEqual(dated[i - 1].happenedAt!.getTime());
+    }
   });
 
   it("renames onto a title the seed actually uses, and away from one it does not", () => {
@@ -152,8 +155,10 @@ describe("case-history seed", () => {
     // side track still branching there would throw mid-run in production.
     const onSideTracks = new Set(TRACK_SEED.flatMap((t) => t.stops.map((s) => s.title)));
     for (const t of TRACK_SEED) {
-      expect(onSideTracks, `${t.title} branches at "${t.branchesAt}"`)
-        .not.toContain(t.branchesAt);
+      if (t.branchesAt) {
+        expect(onSideTracks, `${t.title} branches at "${t.branchesAt}"`)
+          .not.toContain(t.branchesAt);
+      }
       if (t.mergesAt) {
         expect(onSideTracks, `${t.title} merges at "${t.mergesAt}"`)
           .not.toContain(t.mergesAt);
@@ -167,6 +172,6 @@ describe("case-history seed", () => {
     // and forth on every run.
     const titles = allStops().map((s) => s.title);
     expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
-    for (const t of titles) expect(EXISTING_ROOT_STOPS).not.toContain(t);
+    expect(new Set(titles).size).toBe(titles.length);
   });
 });

@@ -63,8 +63,8 @@ export interface TrackSeed {
   title: string;
   status: TrackStatus;
   note: string;
-  /** Title of the root stop this track branches at. */
-  branchesAt: string;
+  /** Title of the root stop this track branches at, when one is recorded. */
+  branchesAt?: string;
   /** Title of the root stop this track merges back into, if it merges at all. */
   mergesAt?: string;
   stops: StopSeed[];
@@ -100,23 +100,6 @@ export const PARTY_SEED = [
 }[];
 
 /**
- * Two stops that migration 0024 left undated on purpose, which the mailbox has
- * since dated. 0024's rule was never "these are undated forever" — it was that
- * this app does not invent a date nobody recorded. These two are now recorded:
- * Demi's mail of 24-04 says the papers HAVE gone to the court, and the
- * beschikking itself carries 14-07. So they get dates, and a note saying which
- * mail proves it, rather than a date that appears from nowhere.
- */
-export const SPINE_DATES = [
-  { title: "Aanvraag bewindvoering", happenedAt: at("2026-04-24"),
-    note: "Datum waarop Demi Willemse bevestigde dat de stukken naar de rechtbank " +
-      "waren gegaan. De indiening zelf kan een dag eerder zijn geweest — dit is " +
-      "de vroegste datum die uit de mail blijkt." },
-  { title: "bewindvoering", happenedAt: at("2026-07-14"),
-    note: "Vanaf de beschikking. Blijft `open`: dit is de periode waar je nu in zit." },
-] as const;
-
-/**
  * Stops the map already carries under a title that is no longer the right one.
  * Applied FIRST, so every guard below (all of which key on the title) sees the
  * new name and adopts the existing row instead of inserting a second copy.
@@ -136,116 +119,93 @@ export const STOP_RENAMES = [
   { from: "Betaalpas en leefgeld geregeld", to: "Betaalpas per spoedpost verstuurd" },
 ] as const;
 
-/** Tracks under a title that is no longer right, renamed before anything else. */
-export const TRACK_RENAMES = [
-  // Absorbed the opstart stops: it is one continuous thread with Verder about
-  // documents — Team Opstart's first request, the format back-and-forth, and
-  // then Regio 3 asking for the bijstand stukken. Same conversation, one spoor.
-  { from: "Bijzondere bijstand en inkomenstoeslag", to: "Opstart en stukken" },
-] as const;
+/**
+ * Tracks under a title that is no longer right, renamed before anything else.
+ *
+ * EMPTY, and the mechanism stays. It carried one entry —
+ * "Bijzondere bijstand en inkomenstoeslag" → "Opstart en stukken" — and the
+ * target of that rename is a track migration 0026 deleted: its stops are on the
+ * spine now. A rename onto a title no seed claims strands the row under a name
+ * nothing manages, which is exactly what the test below refuses, so the entry
+ * comes out rather than staying as a harmless-looking no-op.
+ */
+export const TRACK_RENAMES: readonly { from: string; to: string }[] = [];
 
 /**
- * The main line carries FOUR stops and nothing else: Start, the application,
- * the period he is in, and the goal. Everything that happened is work, and
- * work belongs on a spoor that branches and either merges back or ends.
+ * The main line carries the bewindvoering story: aanmelding, de gang naar de
+ * rechtbank, de beschikking, de opstart.
  *
- * This is a change from the first run, which hung ten stations off the main
- * line. Martin's correction, and he is right: a metro map's trunk shows where
- * the line goes, not every errand run along it. `Aanvraag bewindvoering` and
- * `bewindvoering` are already there from migration 0024, so the spine needs no
- * new stops at all — it needs the ones it has to give theirs back.
+ * This reverses the earlier bare-trunk correction, and the reason is that the
+ * trunk changed meaning. It used to run to `Einde bewindvoering`; migration
+ * 0026 deletes that goal because the map shows history only, so the root is no
+ * longer a destination — it is the spine of the story so far. A spine with two
+ * stops and nine sporen hanging off it is not a story.
  */
-export const SPINE_SEED: StopSeed[] = [];
+export const SPINE_SEED: StopSeed[] = [
+  { orderIndex: 100, title: "Aanmelding bij Verder", kind: "mail", state: "done",
+    happenedAt: at("2026-04-16"),
+    note: "Bevestiging binnen een dag, met de toezegging binnen twee werkdagen " +
+      "te bellen." },
+  { orderIndex: 200, title: "Intakegesprek bewindvoering", kind: "meeting", state: "done",
+    happenedAt: at("2026-04-22"),
+    note: "Stadhuis Almere, Sociaal Domein, 10:00, met Demi Willemse. Eén dag na " +
+      "het eerste telefoongesprek ingepland." },
+  { orderIndex: 300, title: "Ondernemingen uitgeschreven bij de KvK", kind: "document",
+    state: "done", happenedAt: at("2026-04-24"),
+    task: "Ondernemingen uitschrijven bij de KvK",
+    note: "OpsMate, MP Hold BV en CloudSupport BV ontbonden." },
+  { orderIndex: 400, title: "Verzoek onderbewindstelling ingediend", kind: "process",
+    state: "done", happenedAt: at("2026-04-24"), doc: "Plan van aanpak bewind.pdf",
+    task: "Verzoek onderbewindstelling indienen bij de rechtbank",
+    note: "Met plan van aanpak, aanvullend plan van aanpak en toestemmingsverklaring." },
+  { orderIndex: 500, title: "Poststukken ingeleverd", kind: "meeting", state: "done",
+    happenedAt: at("2026-04-29"), task: "Poststukken aanleveren voor het schuldenoverzicht",
+    note: "Alle enveloppen geopend en als doos afgegeven bij de balie Sociaal Domein. " +
+      "Zwaarder werk dan het klinkt." },
+  { orderIndex: 600, title: "Rechtbank vraagt een verklaring", kind: "process", state: "done",
+    happenedAt: at("2026-06-01"),
+    note: "Een uitgebreide verklaring over het ontstaan van de schulden, als aanvulling " +
+      "op het ingediende verzoek." },
+  { orderIndex: 700, title: "Verklaring ontstaan schulden aangeleverd", kind: "mail",
+    state: "done", happenedAt: at("2026-06-09"),
+    task: "Verklaring over het ontstaan van de schulden schrijven",
+    note: "Diezelfde middag door Demi doorgezet naar de rechtbank. Ditzelfde stuk gaat " +
+      "op 04-08 opnieuw mee als 'eigen verhaal' voor het moratorium." },
+  { orderIndex: 800, title: "Beschikking: onder bewind gesteld", kind: "process",
+    state: "done", happenedAt: at("2026-07-14"), doc: "Beschikking M.P. van der Poel.pdf",
+    note: "Zaak NLTZ2612548IVB. Dossier bij Verder: 25.04052. Toegewezen." },
+  { orderIndex: 900, title: "Dossier naar Team Opstart", kind: "process", state: "done",
+    happenedAt: at("2026-07-20"),
+    note: "Demi draagt over aan het opstartteam. Hiermee is de aanvraag afgerond " +
+      "en komt de lijn weer samen." },
+  { orderIndex: 1000, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
+    state: "done", happenedAt: at("2026-07-27"),
+    note: "Afschriften en inkomensspecificaties van drie maanden, zorgpolis 2026, " +
+      "voorschotbeschikking toeslagen, huurverhoging, jaarafrekening water en energie." },
+  { orderIndex: 1100, title: "Heen en weer over de bestandsformaten", kind: "mail",
+    state: "done", happenedAt: at("2026-07-31"),
+    task: "Bankafschriften in een leesbaar formaat aanleveren",
+    note: "Vier pogingen — xlsx, pdf, opnieuw xlsx, en ten slotte het PDF-afschrift " +
+      "dat direct uit ABN AMRO komt. Zes mails over één bestand." },
+  { orderIndex: 1200, title: "Opstart van het dossier afgerond", kind: "document",
+    state: "done", happenedAt: at("2026-07-31"), task: "Opstartstukken aanleveren" },
+  { orderIndex: 1300, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
+    happenedAt: at("2026-08-12"),
+    note: "Acht categorieën, voor de bijzondere bijstand en de individuele " +
+      "inkomenstoeslag. Het meeste ligt er al; nieuw zijn de jaaropgaven " +
+      "van de afgelopen vijf jaar." },
+  { orderIndex: 1400, title: "Regio 3 vraagt de laatste drie loonstroken",
+    kind: "mail", state: "done", happenedAt: at("2026-08-25"),
+    note: "Van de acht categorieën stond dit nog open." },
+  { orderIndex: 1500, title: "Stukken aanleveren", kind: "document", state: "open",
+    happenedAt: at("2026-08-28"),
+    task: "Stukken aanleveren voor bijzondere bijstand en individuele inkomenstoeslag" },
+];
 
 export const TRACK_SEED: TrackSeed[] = [
   {
-    // Martin started this himself, and it ran end to end without ever touching
-    // the main line: aanmelding, intake, stukken, naar de rechtbank, wachten,
-    // beschikking, overdracht. `done`, not `ended` — it reached what it set out
-    // to reach, and merges back into the line it was a prerequisite for.
-    title: "Aanvraag bewindvoering",
-    status: "done",
-    branchesAt: "Aanvraag bewindvoering",
-    mergesAt: "bewindvoering",
-    note: "Op eigen initiatief aangevraagd. Van de aanmelding op 16 april tot de " +
-      "beschikking op 14 juli — drie maanden, waarvan tweeënhalve maand wachten " +
-      "op de rechtbank.",
-    stops: [
-      { orderIndex: 100, title: "Aanmelding bij Verder", kind: "mail", state: "done",
-        happenedAt: at("2026-04-16"),
-        note: "Bevestiging binnen een dag, met de toezegging binnen twee werkdagen " +
-          "te bellen." },
-      { orderIndex: 200, title: "Intakegesprek bewindvoering", kind: "meeting", state: "done",
-        happenedAt: at("2026-04-22"),
-        note: "Stadhuis Almere, Sociaal Domein, 10:00, met Demi Willemse. Eén dag na " +
-          "het eerste telefoongesprek ingepland." },
-      { orderIndex: 300, title: "Ondernemingen uitgeschreven bij de KvK", kind: "document",
-        state: "done", happenedAt: at("2026-04-24"),
-        task: "Ondernemingen uitschrijven bij de KvK",
-        note: "OpsMate, MP Hold BV en CloudSupport BV ontbonden." },
-      { orderIndex: 400, title: "Verzoek onderbewindstelling ingediend", kind: "process",
-        state: "done", happenedAt: at("2026-04-24"), doc: "Plan van aanpak bewind.pdf",
-        task: "Verzoek onderbewindstelling indienen bij de rechtbank",
-        note: "Met plan van aanpak, aanvullend plan van aanpak en toestemmingsverklaring." },
-      { orderIndex: 500, title: "Poststukken ingeleverd", kind: "meeting", state: "done",
-        happenedAt: at("2026-04-29"), task: "Poststukken aanleveren voor het schuldenoverzicht",
-        note: "Alle enveloppen geopend en als doos afgegeven bij de balie Sociaal Domein. " +
-          "Zwaarder werk dan het klinkt." },
-      { orderIndex: 600, title: "Rechtbank vraagt een verklaring", kind: "process", state: "done",
-        happenedAt: at("2026-06-01"),
-        note: "Een uitgebreide verklaring over het ontstaan van de schulden, als aanvulling " +
-          "op het ingediende verzoek." },
-      { orderIndex: 700, title: "Verklaring ontstaan schulden aangeleverd", kind: "mail",
-        state: "done", happenedAt: at("2026-06-09"),
-        task: "Verklaring over het ontstaan van de schulden schrijven",
-        note: "Diezelfde middag door Demi doorgezet naar de rechtbank. Ditzelfde stuk gaat " +
-          "op 04-08 opnieuw mee als 'eigen verhaal' voor het moratorium." },
-      { orderIndex: 800, title: "Beschikking: onder bewind gesteld", kind: "process",
-        state: "done", happenedAt: at("2026-07-14"), doc: "Beschikking M.P. van der Poel.pdf",
-        note: "Zaak NLTZ2612548IVB. Dossier bij Verder: 25.04052. Toegewezen." },
-      { orderIndex: 900, title: "Dossier naar Team Opstart", kind: "process", state: "done",
-        happenedAt: at("2026-07-20"),
-        note: "Demi draagt over aan het opstartteam. Hiermee is de aanvraag afgerond " +
-          "en komt de lijn weer samen." },
-    ],
-  },
-  {
-    // The other side of the same coin: Verder asking Martin for documents,
-    // continuously, from the opstart through to the bijstand. One thread, and
-    // the only spoor whose open end is genuinely waiting on him.
-    title: "Opstart en stukken",
-    status: "open",
-    branchesAt: "bewindvoering",
-    note: "Alles wat Verder aan stukken heeft gevraagd sinds het dossier bij hen " +
-      "ligt. Begonnen door Team Opstart, nu bij Regio 3. Hier wacht het op jou.",
-    stops: [
-      { orderIndex: 100, title: "Team Opstart vraagt de opstartstukken", kind: "mail",
-        state: "done", happenedAt: at("2026-07-27"),
-        note: "Afschriften en inkomensspecificaties van drie maanden, zorgpolis 2026, " +
-          "voorschotbeschikking toeslagen, huurverhoging, jaarafrekening water en energie." },
-      { orderIndex: 200, title: "Heen en weer over de bestandsformaten", kind: "mail",
-        state: "done", happenedAt: at("2026-07-31"),
-        task: "Bankafschriften in een leesbaar formaat aanleveren",
-        note: "Vier pogingen — xlsx, pdf, opnieuw xlsx, en ten slotte het PDF-afschrift " +
-          "dat direct uit ABN AMRO komt. Zes mails over één bestand." },
-      { orderIndex: 300, title: "Opstart van het dossier afgerond", kind: "document",
-        state: "done", happenedAt: at("2026-07-31"), task: "Opstartstukken aanleveren" },
-      { orderIndex: 400, title: "Stukken opgevraagd door Regio 3", kind: "mail", state: "done",
-        happenedAt: at("2026-08-12"),
-        note: "Acht categorieën, voor de bijzondere bijstand en de individuele " +
-          "inkomenstoeslag. Het meeste ligt er al; nieuw zijn de jaaropgaven " +
-          "van de afgelopen vijf jaar." },
-      { orderIndex: 500, title: "Stukken aanleveren", kind: "document", state: "open",
-        task: "Stukken aanleveren voor bijzondere bijstand en individuele inkomenstoeslag" },
-      { orderIndex: 600, title: "Aanvragen ingediend bij de gemeente", kind: "process",
-        state: "expected",
-        task: "Aanvraag bijzondere bijstand kosten bewindvoering indienen" },
-    ],
-  },
-  {
     title: "Ontruiming Woonhave",
     status: "ended",
-    branchesAt: "bewindvoering",
     note: "De ontruiming die is afgewend. Geëindigd — en dat is een goede afloop, " +
       "geen mislukking: de dreiging is weg, de achterstand loopt verder op het spoor " +
       "Schuldregeling.",
@@ -271,7 +231,6 @@ export const TRACK_SEED: TrackSeed[] = [
   {
     title: "Moratorium",
     status: "ended",
-    branchesAt: "bewindvoering",
     note: "Het tweede spoor dat naast het minnelijke traject werd ingezet. Nooit " +
       "ingediend — het akkoord van 6 augustus maakte het overbodig.",
     stops: [
@@ -294,7 +253,6 @@ export const TRACK_SEED: TrackSeed[] = [
   {
     title: "Schuldhulpverlening Almere",
     status: "ended",
-    branchesAt: "bewindvoering",
     note: "Het crisisdossier bij de gemeente. Geopend en binnen twee dagen weer " +
       "gesloten, met een positieve beëindiging: de crisis waarin zij een rol " +
       "speelden was voorbij.",
@@ -313,7 +271,6 @@ export const TRACK_SEED: TrackSeed[] = [
   {
     title: "Bankrekening en leefgeld",
     status: "open",
-    branchesAt: "bewindvoering",
     note: "De overname van de ABN-rekening. Het geld loopt weer — de klacht over " +
       "hoe het ging staat nog open.",
     stops: [
@@ -345,8 +302,6 @@ export const TRACK_SEED: TrackSeed[] = [
   {
     title: "Schuldregeling",
     status: "open",
-    branchesAt: "bewindvoering",
-    mergesAt: "Einde bewindvoering",
     note: "Het spoor waar het naartoe moet: eerst het financiële beeld compleet, " +
       "dan een minnelijke regeling met alle schuldeisers. Lukt dat niet, dan pas WSNP.",
     stops: [
@@ -357,22 +312,16 @@ export const TRACK_SEED: TrackSeed[] = [
       { orderIndex: 200, title: "Financieel beeld compleet, vaste lasten stabiel",
         kind: "process", state: "open",
         task: "Financieel beeld compleet maken en vaste lasten stabiliseren" },
-      { orderIndex: 300, title: "Betalingsregeling huurachterstand", kind: "process",
-        state: "expected", task: "Betalingsregeling huurachterstand uitwerken met Hafkamp" },
-      { orderIndex: 400, title: "Schuldeisers aangeschreven met de beschikking",
-        kind: "process", state: "expected",
-        task: "Alle schuldeisers aanschrijven met de beschikking" },
-      { orderIndex: 500, title: "Nieuwe aanmelding schuldhulpverlening", kind: "process",
-        state: "expected",
-        task: "Nieuwe aanmelding schuldhulpverlening zodra er een regeling kan starten" },
-      { orderIndex: 600, title: "Minnelijke schuldregeling voorgesteld", kind: "process",
-        state: "expected" },
+      // The four expected stops this spoor used to carry are gone: migration
+      // 0026 deleted every `expected` stop, because the map shows history and
+      // the current situation only. What still has to happen lives on the
+      // tasks they pointed at, which TASK_SEED keeps — a task is a commitment,
+      // a stop was a drawing of a future nobody had lived yet.
     ],
   },
   {
     title: "Schuldeisers buiten het dossier",
     status: "open",
-    branchesAt: "Aanvraag bewindvoering",
     note: "Drie schuldeisers die je dit voorjaar hebben aangeschreven en die in de " +
       "correspondentie met Verder nergens terugkomen. Bij twee ervan loopt al een " +
       "executietraject.",
@@ -570,7 +519,6 @@ export const TASK_SEED: TaskSeed[] = [
 
 export interface CaseHistoryResult {
   parties: string[];
-  spineDated: string[];
   spineStops: string[];
   tracks: string[];
   stops: string[];
@@ -594,7 +542,7 @@ export async function applyCaseHistory(
   db: Db, userId: string
 ): Promise<CaseHistoryResult> {
   const out: CaseHistoryResult = {
-    parties: [], spineDated: [], spineStops: [], tracks: [], stops: [],
+    parties: [], spineStops: [], tracks: [], stops: [],
     tasks: [], statuses: [], docLinksFilled: [], missingDocs: [],
     renamed: [], moved: [], rewired: [], strandedOnSpine: [],
   };
@@ -755,17 +703,6 @@ export async function applyCaseHistory(
     return row;
   };
 
-  // Date the two anchors 0024 left undated, now that the mail proves them.
-  // Only when they are still null: a hand-typed date on the map wins.
-  for (const s of SPINE_DATES) {
-    const existing = await stopOn(root.id, s.title);
-    if (!existing || existing.happenedAt) continue;
-    await db.update(schema.stops)
-      .set({ happenedAt: s.happenedAt, note: existing.note ?? s.note })
-      .where(eq(schema.stops.id, existing.id));
-    out.spineDated.push(s.title);
-  }
-
   for (const seed of SPINE_SEED) {
     const before = out.stops.length;
     await writeStop(root.id, seed);
@@ -780,8 +717,11 @@ export async function applyCaseHistory(
   // track and no longer a legal branch point for a child of the root.
   const trackByTitle = new Map<string, typeof schema.tracks.$inferSelect>();
   for (const seed of TRACK_SEED) {
-    const branch = await stopOn(root.id, seed.branchesAt);
-    if (!branch) throw new Error(
+    // A spoor with no recorded origin is the normal case now: the map draws its
+    // branch from the spine at its own oldest stop, so the pointer is semantic
+    // only and NULL honestly means "nobody wrote down what this came out of".
+    const branch = seed.branchesAt ? await stopOn(root.id, seed.branchesAt) : undefined;
+    if (seed.branchesAt && !branch) throw new Error(
       `track "${seed.title}" branches at "${seed.branchesAt}", which is not on the root`);
     const merge = seed.mergesAt ? await stopOn(root.id, seed.mergesAt) : undefined;
     if (seed.mergesAt && !merge) throw new Error(
@@ -794,14 +734,14 @@ export async function applyCaseHistory(
     if (!track) {
       [track] = await db.insert(schema.tracks).values({
         title: seed.title, status: seed.status, parentTrackId: root.id,
-        branchesAtStopId: branch.id, mergesAtStopId: merge?.id ?? null,
+        branchesAtStopId: branch?.id ?? null, mergesAtStopId: merge?.id ?? null,
         note: seed.note,
       }).returning();
       out.tracks.push(seed.title);
-    } else if (track.branchesAtStopId !== branch.id
+    } else if (track.branchesAtStopId !== (branch?.id ?? null)
       || track.mergesAtStopId !== (merge?.id ?? null)) {
       await db.update(schema.tracks)
-        .set({ branchesAtStopId: branch.id, mergesAtStopId: merge?.id ?? null })
+        .set({ branchesAtStopId: branch?.id ?? null, mergesAtStopId: merge?.id ?? null })
         .where(eq(schema.tracks.id, track.id));
       out.rewired.push(seed.title);
     }
@@ -812,12 +752,10 @@ export async function applyCaseHistory(
     for (const stop of seed.stops) await writeStop(track.id, stop);
   }
 
-  // Nothing may be left stranded on the main line. The spine is the four stops
-  // the migrations put there and nothing else, so any other stop still sitting
-  // on the root is one this seed forgot to re-home — and it would render as a
-  // station on a trunk that is supposed to be bare.
-  const SPINE_ANCHORS = ["Start", "Aanvraag bewindvoering", "bewindvoering",
-    "Einde bewindvoering", ...SPINE_SEED.map((s) => s.title)];
+  // Nothing may be left stranded on the main line. The spine is exactly what
+  // SPINE_SEED names, so any other stop still sitting on the root is one this
+  // seed forgot to re-home.
+  const SPINE_ANCHORS = SPINE_SEED.map((s) => s.title);
   const strays = (await db.select({ title: schema.stops.title }).from(schema.stops)
     .where(eq(schema.stops.trackId, root.id)))
     .map((s) => s.title).filter((t) => !SPINE_ANCHORS.includes(t));

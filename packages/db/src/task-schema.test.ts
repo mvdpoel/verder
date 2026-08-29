@@ -26,7 +26,7 @@ describe("task schema", () => {
     await pool.end();
   });
 
-  it("inserts a task, a status change and a milestone", async () => {
+  it("inserts a task and a status change", async () => {
     const [task] = await db.insert(schema.tasks).values({
       title: "Kopie paspoort opsturen",
       details: "Gevraagd door VerderGroep per mail.",
@@ -46,14 +46,6 @@ describe("task schema", () => {
     }).returning();
     expect(change.id).toBeTruthy();
     expect(change.overrideReason).toBeNull();
-
-    const [milestone] = await db.insert(schema.milestones).values({
-      stage: "application",
-      title: "Aanvraag ingediend",
-      happenedAt: new Date("2026-08-01T00:00:00Z"),
-    }).returning();
-    expect(milestone.id).toBeTruthy();
-    expect(milestone.done).toBe(false); // default
   });
 
   it("task_status_changes is insert-only for the app role (UPDATE denied)", async () => {
@@ -82,17 +74,6 @@ describe("task schema", () => {
     // but nothing is ever deleted
     await expect(
       db.delete(schema.tasks).where(eq(schema.tasks.id, task.id)),
-    ).rejects.toThrow(/permission denied/);
-
-    const [milestone] = await db.insert(schema.milestones).values({
-      stage: "onboarding", title: "Intake gesprek",
-    }).returning();
-    const [msFixed] = await db.update(schema.milestones)
-      .set({ done: true, happenedAt: new Date("2026-08-10T00:00:00Z") })
-      .where(eq(schema.milestones.id, milestone.id)).returning();
-    expect(msFixed.done).toBe(true);
-    await expect(
-      db.delete(schema.milestones).where(eq(schema.milestones.id, milestone.id)),
     ).rejects.toThrow(/permission denied/);
   });
 

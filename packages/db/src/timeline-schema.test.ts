@@ -29,11 +29,10 @@ describe("timeline_events schema", () => {
     expect(event.note).toBeNull();
     expect(event.entryId).toBeNull();
     expect(event.documentId).toBeNull();
-    expect(event.milestoneId).toBeNull();
     expect(event.createdAt).toBeInstanceOf(Date);
   });
 
-  it("defaults kind to 'other' and links to a logbook entry and milestone", async () => {
+  it("defaults kind to 'other' and links to a logbook entry", async () => {
     const [user] = await db.insert(schema.users)
       .values({ email: `tl${Date.now()}@test.local`, name: "Martin" }).returning();
     const [entry] = await db.insert(schema.logEntries).values({
@@ -44,18 +43,13 @@ describe("timeline_events schema", () => {
       summary: "Gebeld met VerderGroep over de inventarisatie",
       createdBy: user.id,
     }).returning();
-    const [milestone] = await db.insert(schema.milestones)
-      .values({ stage: "onboarding", title: "Onboarding gestart (timeline test)" }).returning();
-
     const [event] = await db.insert(schema.timelineEvents).values({
       title: "Gebeld met VerderGroep",
       happenedAt: new Date("2026-07-02T10:00:00Z"),
       entryId: entry.id,
-      milestoneId: milestone.id,
     }).returning();
     expect(event.kind).toBe("other"); // default
     expect(event.entryId).toBe(entry.id);
-    expect(event.milestoneId).toBe(milestone.id);
   });
 
   it("allows UPDATE but never DELETE (app role)", async () => {

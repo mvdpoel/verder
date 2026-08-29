@@ -5,13 +5,12 @@ import * as schema from "./schema";
 /**
  * The seed of Martin's case map, as an IDEMPOTENT function.
  *
- * TWO SPELLINGS OF ONE SEED. `drizzle/0023_timeline_tracks.sql` is the other,
- * and the two must agree on every title, order_index and state here. The
- * difference in scope is deliberate: the migration ALSO copies the existing
- * `timeline_events` and `milestones` rows onto the map, which is a one-time
- * data migration and must never be repeated — running it twice would duplicate
- * every key event. This function only puts back the SKELETON: the root track,
- * its two anchors, the WSNP track, and one stop per WSNP stage that has none.
+ * TWO SPELLINGS OF ONE SEED. `drizzle/0023_timeline_tracks.sql`, amended by
+ * 0024 and reshaped by `drizzle/0026_vertical_case_timeline.sql`, is the other,
+ * and the two must agree on every title and order_index here. The difference in
+ * scope is deliberate: the migrations ALSO move and delete the rows the map
+ * already had, which is a one-time data migration and must never be repeated.
+ * This function only puts back the SKELETON: the root track and its spine.
  *
  * Why it has to exist at all: `stops.entry_id` and `stops.document_id`
  * reference `log_entries` and `documents`, so the
@@ -26,69 +25,50 @@ import * as schema from "./schema";
  */
 
 /** The root track: the main line, and the only track with no parent. */
-const ROOT_TITLE = "Einde bewindvoering";
-const ROOT_NOTE =
-  "De hoofdlijn. Alles hier is een stap richting het einde van de bewindvoering.";
-/** The two anchors on the root. The goal anchor shares the root's title. */
-const START_TITLE = "Start";
-const GOAL_TITLE = ROOT_TITLE;
-/** Room for every stop between the anchors, so nothing ever needs a renumber. */
-const GOAL_ORDER = 1_000_000;
+const ROOT_TITLE = "Bewindvoering";
+const ROOT_NOTE = "De hoofdlijn: hoe de bewindvoering zelf is gelopen.";
 
 /**
- * The main line's own stations, between the two anchors (migration 0024).
+ * The spine, as the case actually ran — aanmelding, de gang naar de rechtbank,
+ * de beschikking, de opstart.
  *
- * The road to Einde bewindvoering needs the two facts that shape the case: that
- * Martin APPLIED for bewindvoering, and that he is IN it. Undated on purpose —
- * nobody recorded when either happened, and the map lays out structurally, so
- * an undated station costs nothing and an invented date would be a claim.
+ * This REVERSES the bare-trunk rule ("a metro map's trunk shows where the line
+ * goes, not every errand run along it"). That rule was right for a horizontal
+ * map aimed at `Einde bewindvoering`. Migration 0026 deletes that goal, so the
+ * root has nothing left to aim at: it is no longer a destination, it is the
+ * spine of the story so far, and it has to carry that story.
  *
- * "bewindvoering" is `open`, not `done`: it is the period he is in rather than
- * a thing that finished. It therefore holds "waar het nu op wacht" until a side
- * track carries an open stop further right, which is exactly the handover
- * intended — the headline follows the furthest-right open stop.
+ * Undated here on purpose — this function only puts the SKELETON back after a
+ * truncation. The dates live in the migration and in case-history's seed, and
+ * `case-history` only ever dates a stop whose happened_at is still NULL, so a
+ * date typed by hand always wins.
  */
 const SPINE_SEED = [
-  { title: "Aanvraag bewindvoering", orderIndex: 100, state: "done" },
-  { title: "bewindvoering", orderIndex: 200, state: "open" },
-] as const satisfies readonly { title: string; orderIndex: number;
-  state: (typeof schema.stopStateEnum.enumValues)[number] }[];
-
-const WSNP_TITLE = "WSNP";
-const WSNP_NOTE = "De zes fases van de wettelijke schuldsanering.";
-
-/**
- * The six stages in enum order, with the title each synthetic stop carries.
- * order_index is `position * 100` — the ROUND slot. The migration gives a stop
- * copied from a real milestone `position * 100 + n` with n >= 1, so a round
- * order_index is what marks a stop as the synthetic filler for its stage.
- */
-const WSNP_STAGE_SEED = [
-  { stage: "application", title: "Aanvraag" },
-  { stage: "accepted", title: "Toegelaten" },
-  { stage: "onboarding", title: "Intake" },
-  { stage: "wsnp-start", title: "Start WSNP" },
-  { stage: "settlement", title: "Regeling" },
-  { stage: "clean-slate", title: "Schone lei" },
-] as const satisfies readonly { stage: (typeof schema.wsnpStageEnum.enumValues)[number];
-  title: string }[];
+  { title: "Aanmelding bij Verder", orderIndex: 100 },
+  { title: "Intakegesprek bewindvoering", orderIndex: 200 },
+  { title: "Ondernemingen uitgeschreven bij de KvK", orderIndex: 300 },
+  { title: "Verzoek onderbewindstelling ingediend", orderIndex: 400 },
+  { title: "Poststukken ingeleverd", orderIndex: 500 },
+  { title: "Rechtbank vraagt een verklaring", orderIndex: 600 },
+  { title: "Verklaring ontstaan schulden aangeleverd", orderIndex: 700 },
+  { title: "Beschikking: onder bewind gesteld", orderIndex: 800 },
+  { title: "Dossier naar Team Opstart", orderIndex: 900 },
+  { title: "Team Opstart vraagt de opstartstukken", orderIndex: 1000 },
+  { title: "Heen en weer over de bestandsformaten", orderIndex: 1100 },
+  { title: "Opstart van het dossier afgerond", orderIndex: 1200 },
+  { title: "Stukken opgevraagd door Regio 3", orderIndex: 1300 },
+  { title: "Regio 3 vraagt de laatste drie loonstroken", orderIndex: 1400 },
+  { title: "Stukken aanleveren", orderIndex: 1500 },
+] as const satisfies readonly { title: string; orderIndex: number }[];
 
 export type EnsureCaseMapResult = {
   rootTrack: boolean;
-  startStop: boolean;
-  goalStop: boolean;
-  wsnpTrack: boolean;
   /** The main-line stations that were missing and got put back. */
   spineStops: string[];
-  /** The stages that had no stop at all and got their synthetic one back. */
-  stageStops: string[];
 };
 
 export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
-  const created: EnsureCaseMapResult = {
-    rootTrack: false, startStop: false, goalStop: false,
-    wsnpTrack: false, spineStops: [], stageStops: [],
-  };
+  const created: EnsureCaseMapResult = { rootTrack: false, spineStops: [] };
 
   // The root is the track with no parent, and a unique index allows exactly
   // one — so "find by parent IS NULL" is the same question as "is there a map".
@@ -107,67 +87,15 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
     return s;
   };
 
-  // DONE, and deliberately WITHOUT a date. A now() here would render as
-  // "Start · <today>", a claim about when Martin's case began that nobody
-  // measured — the one kind of assertion this app refuses to make.
-  let start = await stopOnRoot(START_TITLE);
-  if (!start) {
-    [start] = await db.insert(schema.stops).values({
-      trackId: root.id, orderIndex: 0, title: START_TITLE,
-      kind: "process", state: "done",
-    }).returning();
-    created.startStop = true;
-  }
-
-  // The goal has not happened yet, and the map says so rather than implying it.
-  let goal = await stopOnRoot(GOAL_TITLE);
-  if (!goal) {
-    [goal] = await db.insert(schema.stops).values({
-      trackId: root.id, orderIndex: GOAL_ORDER, title: GOAL_TITLE,
-      kind: "process", state: "expected",
-    }).returning();
-    created.goalStop = true;
-  }
-
   // The main line's own stations. Guarded on title, like everything else here,
   // so a database that already has them is left alone.
   for (const station of SPINE_SEED) {
     if (await stopOnRoot(station.title)) continue;
     await db.insert(schema.stops).values({
       trackId: root.id, orderIndex: station.orderIndex, title: station.title,
-      kind: "process", state: station.state,
+      kind: "process", state: "done",
     });
     created.spineStops.push(station.title);
-  }
-
-  // WSNP is a procedure INSIDE the goal of ending bewindvoering, not the same
-  // road: its own track, branching at the start anchor and merging back at the
-  // goal. Oldest wins, the same rule the milestones router resolves it with.
-  let [wsnp] = await db.select().from(schema.tracks)
-    .where(and(eq(schema.tracks.title, WSNP_TITLE),
-      eq(schema.tracks.parentTrackId, root.id)))
-    .orderBy(asc(schema.tracks.createdAt), asc(schema.tracks.id)).limit(1);
-  if (!wsnp) {
-    [wsnp] = await db.insert(schema.tracks).values({
-      title: WSNP_TITLE, status: "open", parentTrackId: root.id,
-      branchesAtStopId: start.id, mergesAtStopId: goal.id, note: WSNP_NOTE,
-    }).returning();
-    created.wsnpTrack = true;
-  }
-
-  // One synthetic stop per stage that has NO stop at all — never per stage that
-  // has no SYNTHETIC stop. A stage Martin has already written down is complete,
-  // and adding a filler beside it would duplicate a station on the strip. Same
-  // rule as the migration's FOREACH loop.
-  const wsnpStops = await db.select().from(schema.stops)
-    .where(eq(schema.stops.trackId, wsnp.id));
-  for (const [i, { stage, title }] of WSNP_STAGE_SEED.entries()) {
-    if (wsnpStops.some((s) => s.stage === stage)) continue;
-    await db.insert(schema.stops).values({
-      trackId: wsnp.id, orderIndex: (i + 1) * 100, title,
-      kind: "process", state: "expected", stage,
-    });
-    created.stageStops.push(stage);
   }
 
   return created;
