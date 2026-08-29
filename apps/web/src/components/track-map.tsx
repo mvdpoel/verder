@@ -8,34 +8,78 @@ import {
 } from "@/lib/track-marks";
 
 /**
- * The case as a metro map. Inline SVG, no chart library — the web app has no
- * runtime dependency beyond Next and React and `money-chart.tsx` already holds
- * that line.
+ * The case as a vertical metro map, newest at the top. Inline SVG, no chart
+ * library — the web app has no runtime dependency beyond Next and React and
+ * `money-chart.tsx` already holds that line.
  *
  * This file DRAWS; it does not decide. Which stop gets which mark is
- * `@/lib/track-marks`, and where every stop sits is `buildTrackMap` in the api
- * package — both unit-tested without React.
+ * `@/lib/track-marks`, and which row, lane and band every stop sits in is
+ * `buildTrackMap` in the api package — both unit-tested without React.
  *
- * Position is a layering, never a time axis: an expected stop has no date, and
- * a time axis would mean inventing one. Dates are labels here, not geometry.
+ * WHY VERTICAL. The horizontal drawing put every stop in its own column, so a
+ * title had to fit under a dot and was cut to sixteen characters; at 34 stops
+ * it was twelve columns of stubs. Down the page a row is as wide as the screen,
+ * so there is one label column at a fixed x and the full title fits in it. The
+ * page scrolls down anyway, which is the direction a browser is good at.
+ *
+ * POSITION IS TIME here — rows descend into the past and the month bands are
+ * the scale. That reverses the rule this drawing was built on ("a layering,
+ * never a time axis"), which existed because an expected stop had no date to
+ * place. Migration 0026 removed every expected stop, so the axis is honest.
+ * Within a band the stops are evenly spaced and NOT to scale: each one prints
+ * its own date, and the legend says so.
+ *
+ * MONOCHROME on purpose. A stop's lane and the muted track name after its title
+ * already say which spoor it belongs to; six new hues would only leave the
+ * palette behind. Green is spent on one thing — what is waiting on Martin.
  */
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type MapPayload = RouterOutputs["tracks"]["map"]["map"];
 
 // Pixels, not facts.
-const COL_W = 116;
-const LANE_H = 64;
-const PAD_X = 150;   // room for the track title at the left of its lane
-const PAD_Y = 40;
-const R_STOP = 7;
-const R_STATION = 11;
+const DATE_W = 64;        // right-aligned date gutter
+const LANE_X0 = 84;       // x of lane 0, the spine
+const LANE_W = 20;
+const ROW_H = 34;
+const BAND_H = 30;        // what a band header costs
+const EMPTY_BAND_H = 22;
+const LABEL_GAP = 18;
+const LABEL_W = 380;      // the label column's FLOOR, not its width
+const LABEL_PAD = 8;
+const SPOOR_DX = 8;       // gap between a title and the spoor name trailing it
+const PAD_TOP = 12;
+const PAD_BOTTOM = 16;
+const R_STOP = 6;
+
+/**
+ * How wide a row's label runs, estimated from its length.
+ *
+ * The whole point of this drawing is that a title is never cut, and a root
+ * `<svg>` clips whatever runs past its width — so the label column cannot be a
+ * fixed 380 and hope. It cannot be measured either: there is no layout engine
+ * on the server, and measuring after mount would move the page under Martin
+ * while he reads it.
+ *
+ * So it is estimated, and the estimate is deliberately GENEROUS: too wide costs
+ * whitespace inside a container that already scrolls, too narrow costs the end
+ * of a sentence. MEASURED in Chrome at 12px/10px system-ui against all 34 rows
+ * of the real case — the widest came out at 0.522 em per character, and 0.565
+ * is that with room left for a row in capitals.
+ */
+const CHAR_EM = 0.565;
+const labelWidth = (title: string, spoor: string | null) =>
+  title.length * 12 * CHAR_EM
+  + (spoor === null ? 0 : SPOOR_DX + spoor.length * 10 * CHAR_EM);
 
 const INK = "#52514e";
 const MUTED = "#898781";
 const RAIL = "#c3c2b7";
 const CURRENT = "#0ca30c";
 const FLAG = "#e34948";
+
+const dateLabel = (at: Date | string) =>
+  new Date(at).toLocaleDateString("nl-NL");
 
 export function TrackMap({
   map, selected,
@@ -45,12 +89,37 @@ export function TrackMap({
 }) {
   if (map.stops.length === 0 && map.tracks.length === 0) return null;
 
-  const x = (column: number) => PAD_X + column * COL_W;
-  const y = (lane: number) => PAD_Y + lane * LANE_H;
-  const width = PAD_X + Math.max(1, map.columnCount) * COL_W;
-  const height = PAD_Y + Math.max(1, map.laneCount) * LANE_H + 30;
+  // Rows are slots; bands are headers between them. One pass turns both into y.
+  const rowY = new Array<number>(map.rowCount);
+  const bandY: number[] = [];
+  let cursor = PAD_TOP;
+  for (const band of map.bands) {
+    bandY.push(cursor + 12);
+    cursor += band.empty ? EMPTY_BAND_H : BAND_H;
+    for (let r = band.fromRow; r < band.toRow; r++) {
+      rowY[r] = cursor + ROW_H / 2;
+      cursor += ROW_H;
+    }
+  }
+  const height = cursor + PAD_BOTTOM;
+  const laneX = (lane: number) => LANE_X0 + lane * LANE_W;
+  const labelX = laneX(map.laneCount) + LABEL_GAP;
 
-  const byId = new Map(map.stops.map((s) => [s.id, s]));
+  const trackById = new Map(map.tracks.map((t) => [t.id, t]));
+  const spoorOf = (trackId: string) => {
+    const t = trackById.get(trackId);
+    return t && t.parentTrackId !== null ? t.title : null;
+  };
+
+  // The column is as wide as its widest row, never narrower than LABEL_W. A
+  // title that ran past the svg's width would be silently cut off, which is
+  // exactly the failure the 16-character stubs were.
+  // reduce, not Math.max(...spread): the spread is one argument per stop, and
+  // there is no cap on how many stops a case can grow to.
+  const labelW = Math.ceil(map.stops.reduce(
+    (w, s) => Math.max(w, labelWidth(s.title, spoorOf(s.trackId)) + LABEL_PAD),
+    LABEL_W));
+  const width = labelX + labelW;
 
   return (
     <div className="overflow-x-auto rounded border bg-white p-4">
@@ -59,56 +128,79 @@ export function TrackMap({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="De zaak als metrokaart: de hoofdlijn naar het einde van de bewindvoering, met zijsporen"
+        aria-label="De zaak van boven naar beneden: de nieuwste halte bovenaan, per maand, met de hoofdlijn links en de zijsporen ernaast"
       >
-        {/* One rail per track, with its name at the left of its own lane. */}
+        {/* A month in which nothing happened is a fact about the case, so its
+            band is drawn and named rather than closed up. It is shorter than a
+            month with stops in it, which is what makes a quiet stretch read as
+            quiet instead of as missing. */}
+        {map.bands.map((band, i) => (
+          <g key={band.key}>
+            <line
+              x1={0} x2={width} y1={bandY[i] - 12} y2={bandY[i] - 12}
+              stroke={MUTED} strokeWidth="0.5" opacity="0.5"
+            />
+            <text
+              x={0} y={bandY[i]} fontSize="10" fill={MUTED} letterSpacing="0.08em"
+            >
+              {(band.empty
+                ? `${band.label} · geen gebeurtenissen`
+                : band.label).toUpperCase()}
+            </text>
+          </g>
+        ))}
+
+        {/* One rail per track, running down its own lane between its newest and
+            its oldest stop. The hoofdlijn is lane 0 and drawn heavier. */}
         {map.tracks.map((t) => {
-          const from = x(t.firstColumn);
-          const to = x(t.lastColumn);
-          const lane = y(t.lane);
+          const top = rowY[t.firstRow];
+          const bottom = rowY[t.lastRow];
+          // A track with no stops has no rows to hang a rail on. buildTrackMap
+          // still gives it a lane, and the Sporen list on /timeline still names
+          // it — there is simply nothing here to draw.
+          if (top === undefined || bottom === undefined) return null;
+          const x = laneX(t.lane);
+          const end = Math.max(bottom, top + 8);
           const terminus = trackTerminus(t);
-          const end = Math.max(to, from + 8);
           return (
             <g key={t.id}>
               <line
-                x1={from} x2={end} y1={lane} y2={lane}
+                x1={x} x2={x} y1={top} y2={end}
                 stroke={t.lane === 0 ? INK : RAIL}
                 strokeWidth={t.lane === 0 ? 3 : 2}
               />
-              {/* Side tracks get their name in the gutter. The MAIN LINE does
-                  not: its rail starts at column 0, so its name would land
-                  immediately left of the Start node and read as that stop's
-                  label — "Einde bewindvoering · Start" as one phrase, which is
-                  the opposite of what the map means. The main line is already
-                  named by the heading above it, by its own goal stop at the far
-                  right, and by the Sporen list on /timeline. */}
+              {/* Side tracks get their name under the tail of their rail — the
+                  oldest end, where the spoor began, and the one end that has
+                  nothing below it to be confused with. The MAIN LINE does not:
+                  it is named by the page heading above the map and by the
+                  Sporen list below it, and a name in the gutter would read as a
+                  caption of whichever stop it landed beside. */}
               {t.parentTrackId !== null && (
                 <text
-                  x={PAD_X - 12} y={lane + 4} textAnchor="end"
-                  fontSize="11" fill={MUTED}
+                  x={x - 4} y={end + 16} fontSize="10" fill={MUTED}
                 >
                   {t.title}
                 </text>
               )}
-              {/* A spoor that finished is a CLEAN outcome — handled and closed —
-                  so it gets a cap, not a frayed end. AFGEROND and GEËINDIGD are
-                  different facts and the editor makes Martin choose between
-                  them, so they get different caps: afgerond is a solid double
-                  bar in the ink of the line, geëindigd a single muted bar. The
-                  <title> names it, and the Sporen list on /timeline spells it
-                  out in words for anyone not using a mouse. */}
+              {/* The cap sits at the TOP of the rail, the newest end: that is
+                  where the spoor stopped. AFGEROND and GEËINDIGD are different
+                  facts and the spoor editor makes Martin choose between them,
+                  so they get different caps: afgerond a solid double bar in the
+                  ink of the line, geëindigd a single muted bar. The <title>
+                  names it, and the Sporen list spells it out in words for
+                  anyone not using a mouse. */}
               {terminus === "done" && (
                 <g>
-                  <line x1={end + 5} x2={end + 5} y1={lane - 8} y2={lane + 8}
+                  <line x1={x - 8} x2={x + 8} y1={top - 11} y2={top - 11}
                     stroke={INK} strokeWidth="2" />
-                  <line x1={end + 10} x2={end + 10} y1={lane - 8} y2={lane + 8}
+                  <line x1={x - 8} x2={x + 8} y1={top - 16} y2={top - 16}
                     stroke={INK} strokeWidth="2" />
                   <title>{`${t.title} — ${TRACK_STATUS_LABEL.done}`}</title>
                 </g>
               )}
               {terminus === "ended" && (
                 <g>
-                  <line x1={end + 6} x2={end + 6} y1={lane - 7} y2={lane + 7}
+                  <line x1={x - 7} x2={x + 7} y1={top - 12} y2={top - 12}
                     stroke={MUTED} strokeWidth="2" />
                   <title>{`${t.title} — ${TRACK_STATUS_LABEL.ended}`}</title>
                 </g>
@@ -117,84 +209,124 @@ export function TrackMap({
           );
         })}
 
-        {/* Branches and merges: a curve between two lanes. */}
-        {map.edges.filter((e) => e.kind !== "track").map((e) => {
-          const from = byId.get(e.fromStopId);
-          const to = byId.get(e.toStopId);
-          if (!from || !to) return null;
-          const x1 = x(from.column); const y1 = y(from.lane);
-          const x2 = x(to.column); const y2 = y(to.lane);
-          const mid = (x1 + x2) / 2;
+        {/* Branches and merges: a curve between two lanes at two rows.
+            `from` is the MOVING line and `to` is the one it meets, so the ends
+            swap roles with the kind — a branch runs parent → zijspoor, a merge
+            runs zijspoor → parent. buildTrackMap already resolved both into
+            lane/row pairs, so there is nothing to look up here. */}
+        {map.edges.map((e) => {
+          const y1 = rowY[e.fromRow];
+          const y2 = rowY[e.toRow];
+          if (y1 === undefined || y2 === undefined) return null;
+          const x1 = laneX(e.fromLane);
+          const x2 = laneX(e.toLane);
+          const mid = (y1 + y2) / 2;
           return (
             <path
-              key={`${e.kind}-${e.fromStopId}-${e.toStopId}`}
-              d={`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
+              key={`${e.kind}-${e.trackId}`}
+              d={`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`}
               fill="none" stroke={RAIL} strokeWidth="2"
             />
           );
         })}
 
         {map.stops.map((s) => {
+          const cy = rowY[s.row];
+          if (cy === undefined) return null;
           const mark = stopMark(s);
-          const cx = x(s.column);
-          const cy = y(s.lane);
-          const r = mark.size === "station" ? R_STATION : R_STOP;
+          const cx = laneX(s.lane);
           const isCurrent = s.id === map.currentStopId;
           const isSelected = s.id === selected;
+          const spoor = spoorOf(s.trackId);
           // From the STATE, never from whether there is a date: an open stop
           // with no date is "loopt nog". Reading it out as "verwacht" made the
           // screen-reader label of the current stop contradict the card that
           // sits right next to it.
           const when = stopWhenLabel(s);
+          // Everything the row shows, in one string. It is the tooltip and it
+          // is the link's name, so what the eye gets and what a screen reader
+          // gets cannot drift apart — including the red "!", which is a
+          // painted glyph and would otherwise be announced to nobody.
+          const label = [s.title, spoor, when].filter(Boolean).join(" — ")
+            + (mark.flagged ? " — let op: deze datum ligt vóór de vorige halte" : "");
           return (
             // The <title> is the mouse tooltip; the label on the link is what a
             // screen reader gets, because everything inside a role="img" is
             // presentational and a focusable link in there would otherwise be
             // announced with no name at all.
-            <Link key={s.id} href={stopHref(s.id, selected)} aria-label={`${s.title} — ${when}`}>
+            <Link key={s.id} href={stopHref(s.id, selected)} aria-label={label}>
               <g>
                 {isSelected && (
-                  <circle cx={cx} cy={cy} r={r + 7} fill="#0b0b0b" opacity="0.06" />
+                  <rect
+                    x={0} y={cy - ROW_H / 2} width={width} height={ROW_H}
+                    fill="#0b0b0b" opacity="0.06"
+                  />
                 )}
-                {/* What is waiting on Martin right now, marked so he does not
-                    have to hunt for it. */}
+                {/* What is waiting on Martin right now, marked on the edge of
+                    the page so he does not have to hunt for it. */}
                 {isCurrent && (
-                  <circle cx={cx} cy={cy} r={r + 4} fill="none"
-                    stroke={CURRENT} strokeWidth="2" />
+                  <rect
+                    x={0} y={cy - ROW_H / 2} width={3} height={ROW_H}
+                    fill={CURRENT}
+                  />
+                )}
+                {s.happenedAt && (
+                  <text
+                    x={DATE_W - 8} y={cy + 3} textAnchor="end" fontSize="10"
+                    fill={mark.flagged ? FLAG : MUTED}
+                  >
+                    {dateLabel(s.happenedAt)}
+                  </text>
+                )}
+                {/* Its date contradicts the stop before it. Shown, never
+                    corrected — the panel under the map explains it. */}
+                {mark.flagged && (
+                  <text x={DATE_W - 4} y={cy + 3} fontSize="10" fill={FLAG}>!</text>
                 )}
                 {mark.ring && (
-                  <circle cx={cx} cy={cy} r={r + 2} fill="none"
+                  <circle cx={cx} cy={cy} r={R_STOP + 3} fill="none"
                     stroke={MUTED} strokeWidth="1" />
                 )}
                 <circle
-                  cx={cx} cy={cy} r={r}
+                  cx={cx} cy={cy} r={R_STOP}
                   fill={mark.fill === "solid" ? INK : "#ffffff"}
                   stroke={INK}
                   strokeWidth="2"
                   strokeDasharray={mark.fill === "dashed" ? "3 2" : undefined}
                 />
-                {mark.flagged && (
-                  <text x={cx + r + 3} y={cy - r} fontSize="12" fill={FLAG}>!</text>
-                )}
+                {/* One label column at a fixed x, and the WHOLE title in it.
+                    The spoor's name trails it in the muted 10px, which is what
+                    lets the lanes stay narrow enough to fit on a phone. */}
                 <text
-                  x={cx} y={cy + r + 14} textAnchor="middle" fontSize="10"
-                  fill={isSelected ? "#0b0b0b" : MUTED}
+                  x={labelX} y={cy + 4} fontSize="12"
+                  fill={isSelected ? "#0b0b0b" : "#1f1e1c"}
                 >
-                  {s.title.length > 16 ? `${s.title.slice(0, 15)}…` : s.title}
+                  {s.title}
+                  {spoor && (
+                    <tspan dx={SPOOR_DX} fontSize="10" fill={MUTED}>{spoor}</tspan>
+                  )}
                 </text>
-                <title>{`${s.title} — ${when}`}</title>
+                <title>{label}</title>
               </g>
             </Link>
           );
         })}
+
+        {/* Tracks but no stops: a real state — a spoor opens the moment
+            something arrives, before anyone has written down what happened. */}
+        {map.rowCount === 0 && (
+          <text x={0} y={PAD_TOP + 12} fontSize="12" fill={MUTED}>
+            Nog geen haltes op de kaart.
+          </text>
+        )}
       </svg>
 
       <p className="mt-3 text-xs text-slate-500">
-        Gevuld = gebeurd · open = loopt nog · gestippeld = verwacht · omcirkeld =
+        Nieuwste bovenaan. Gevuld = gebeurd · open = loopt nog · omcirkeld =
         vertrek- of aankomstpunt van een zijspoor ·{" "}
-        <span style={{ color: CURRENT }}>groene ring</span> = waar het nu op wacht ·
+        <span style={{ color: CURRENT }}>groene rand</span> = waar het nu op wacht ·
         dubbele streep = spoor afgerond · enkele streep = spoor geëindigd.
-        De kaart staat niet op schaal: een verwachte halte heeft nog geen datum.
+        Binnen een maand staan de haltes op volgorde, niet op schaal.
       </p>
     </div>
   );

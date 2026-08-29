@@ -4,7 +4,7 @@ import {
 } from "@/lib/track-marks";
 
 const stop = (over: Partial<Parameters<typeof stopMark>[0]> = {}) => ({
-  state: "done" as const, isStation: false, isJunction: false,
+  state: "done" as const, isJunction: false,
   datesOutOfOrder: false, ...over,
 });
 
@@ -12,19 +12,20 @@ describe("stopMark", () => {
   it("fills a stop that happened and outlines one that has not", () => {
     expect(stopMark(stop({ state: "done" })).fill).toBe("solid");
     expect(stopMark(stop({ state: "open" })).fill).toBe("hollow");
+  });
+
+  it("has no dashed mark left — nothing on the map is expected", () => {
+    expect(stopMark(stop({ state: "done" })).fill).toBe("solid");
+    expect(stopMark(stop({ state: "open" })).fill).toBe("hollow");
+  });
+
+  it("still draws something for a state it can no longer be given", () => {
+    // Migration 0026 removed every expected stop and buildTrackMap filters the
+    // state out a second time, so this arm is unreachable by design. stopMark
+    // stays TOTAL over the state anyway: a row that somehow reaches it must
+    // draw as something, and dashed is the one thing it may not draw as a fact.
     expect(stopMark(stop({ state: "expected" })).fill).toBe("dashed");
-  });
-
-  it("never renders an expected stop as if it had happened", () => {
-    // The whole reason the map is laid out structurally is that an expected
-    // stop has no date. It must not look like a fact.
-    const mark = stopMark(stop({ state: "expected" }));
-    expect(mark.fill).not.toBe("solid");
-  });
-
-  it("draws a staged stop large and a plain one small", () => {
-    expect(stopMark(stop({ isStation: true })).size).toBe("station");
-    expect(stopMark(stop({ isStation: false })).size).toBe("stop");
+    expect(stopMark(stop({ state: "expected" })).fill).not.toBe("solid");
   });
 
   it("rings a junction, so a branch point is visible without following the line", () => {
@@ -84,8 +85,6 @@ describe("stopWhenLabel", () => {
       .toBe("loopt nog");
     expect(stopWhenLabel({ state: "done", happenedAt: null, expectedAt: null }))
       .toBe("gebeurd");
-    expect(stopWhenLabel({ state: "expected", happenedAt: null, expectedAt: null }))
-      .toBe("verwacht");
   });
 
   it("adds the date when there is one, without changing the wording", () => {
@@ -93,8 +92,6 @@ describe("stopWhenLabel", () => {
     const stamp = d.toLocaleDateString("nl-NL");
     expect(stopWhenLabel({ state: "open", happenedAt: d })).toBe(`loopt nog · ${stamp}`);
     expect(stopWhenLabel({ state: "done", happenedAt: d })).toBe(`gebeurd · ${stamp}`);
-    expect(stopWhenLabel({ state: "expected", happenedAt: null, expectedAt: d }))
-      .toBe(`verwacht · ${stamp}`);
   });
 
   it("never announces an open or done stop as verwacht", () => {

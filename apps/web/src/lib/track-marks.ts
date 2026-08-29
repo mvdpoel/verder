@@ -9,17 +9,26 @@
  * The input shapes are declared here and matched structurally against
  * `MapStop` / `MapTrack`, so this module imports nothing from `@verder/api`.
  *
- * The four stop marks are visually distinct on purpose:
+ * The three stop marks are visually distinct on purpose:
  *   solid   → it happened
  *   hollow  → it is open, and it is what is waiting on someone
- *   dashed  → it is expected: on the map before it is a fact, and it must
- *             never look like one
  *   ringed  → a junction: another track leaves from or lands on this stop
+ *
+ * There used to be a fourth, `dashed`, for a stop that was expected. Migration
+ * 0026 removed every expected stop, the editor no longer offers the state, and
+ * `buildTrackMap` filters it out a second time — the page's axis is time, and
+ * an expected stop has no date to put on it. The arm is kept because `stopMark`
+ * is TOTAL over the state: a row that somehow reaches it must still draw as
+ * something, and the one thing it may not draw as is a fact. It is unreachable
+ * by design, not by accident.
+ *
+ * There is no `size` either. It carried the old map's "station" — a stop the
+ * horizontal drawing gave a bigger dot — and the vertical page has one dot
+ * size, because a row is already a row.
  */
 
 export interface StopMark {
   fill: "solid" | "hollow" | "dashed";
-  size: "station" | "stop";
   ring: boolean;
   /** Its date contradicts the stop before it — shown, never corrected. */
   flagged: boolean;
@@ -27,13 +36,11 @@ export interface StopMark {
 
 export function stopMark(stop: {
   state: "done" | "open" | "expected";
-  isStation: boolean;
   isJunction: boolean;
   datesOutOfOrder: boolean;
 }): StopMark {
   return {
     fill: stop.state === "done" ? "solid" : stop.state === "open" ? "hollow" : "dashed",
-    size: stop.isStation ? "station" : "stop",
     ring: stop.isJunction,
     flagged: stop.datesOutOfOrder,
   };
