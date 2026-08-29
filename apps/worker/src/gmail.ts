@@ -101,12 +101,62 @@ async function rateLimitedUntil(db: Db): Promise<Date | null> {
   return !Number.isNaN(when.getTime()) && when > new Date() ? when : null;
 }
 
+/**
+ * Gmail `q` strings that ask the SERVER to do the filtering.
+ *
+ * WHY THIS EXISTS. pollGmail used to list `newer_than:7d` — every message in the
+ * mailbox — fetch each one in full, and only then ask whether the sender
+ * mattered. On a mailbox with thousands of commercial mails that is hundreds of
+ * `messages.get` calls per tick at 20 quota units each, against a budget of
+ * 6.000 per minute, every three minutes, for a hit rate near zero. Measured
+ * 2026-08-29: 378 rate-limited skips in 24 hours and an ~18-minute lockout loop
+ * the poller could not escape. Filtering server-side costs 5 units per page.
+ *
+ * BOTH DIRECTIONS, always. `to:` is what finds the mail Martin SENT to a party;
+ * scoping on `from:` alone is why none of his outbound post — the whole
+ * moratorium package, paspoort, loonstroken — was ever ingested.
+ *
+ * A leading "@" is stripped for the query (`from:(verdergroep.nl)` matches any
+ * address at the domain) while the raw form is kept for the in-process check.
+ */
+const QUERY_MAX = 1500;
+
+export function buildQueries(window: string, addrs: string[]): string[] {
+  // THE TRAP: no addresses must mean NO query. Returning the bare window would
+  // match the entire mailbox, which is precisely the burn being removed.
+  if (addrs.length === 0) return [];
+  const render = (chunk: string[]) => {
+    const list = chunk.map((a) => a.replace(/^@/, "")).join(" OR ");
+    return `${window} AND (from:(${list}) OR to:(${list}))`;
+  };
+  const queries: string[] = [];
+  let chunk: string[] = [];
+  for (const a of addrs) {
+    if (chunk.length && render([...chunk, a]).length > QUERY_MAX) {
+      queries.push(render(chunk));
+      chunk = [a];
+    } else {
+      chunk.push(a);
+    }
+  }
+  if (chunk.length) queries.push(render(chunk));
+  return queries;
+}
+
+/** Everyone worth watching: the configured domains plus every party's address. */
+async function relevantAddresses(db: Db): Promise<string[]> {
+  const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const partyEmails = (await db.select().from(schema.parties))
+    .map((p) => p.email).filter((e): e is string => !!e);
+  return [...new Set([...senders, ...partyEmails].map((s) => s.toLowerCase()))];
+}
+
 export async function pollGmail(deps: {
   db: Db; gmail: GmailPort; vaultDir: string;
   enqueueSuggest: (rawEmailId: string) => Promise<void>;
-  query?: string;
+  window?: string;
 }): Promise<{ ingested: number }> {
-  const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
   let ingested = 0;
   const failures: { id: string; message: string }[] = [];
   // Parts the port refused to promote. `scanned` counts messages, not parts, so
@@ -125,9 +175,18 @@ export async function pollGmail(deps: {
   }
 
   try {
-    const partyEmails = (await deps.db.select().from(schema.parties))
-      .map((p) => p.email).filter((e): e is string => !!e);
-    const ids = await deps.gmail.listMessageIds(deps.query ?? "newer_than:7d");
+    const addrs = await relevantAddresses(deps.db);
+    const queries = buildQueries(deps.window ?? "newer_than:7d", addrs);
+    // Chunks overlap in nothing but their results: the same thread can surface
+    // in two queries, and a second getMessage would cost 20 units for bytes
+    // already in hand.
+    const seenIds = new Set<string>();
+    const ids: string[] = [];
+    for (const q of queries) {
+      for (const id of await deps.gmail.listMessageIds(q)) {
+        if (!seenIds.has(id)) { seenIds.add(id); ids.push(id); }
+      }
+    }
     for (const id of ids) {
       // One bad message must not block the rest of the mailbox: isolate each
       // message so a persistent failure only surfaces in worker_runs while
@@ -144,8 +203,11 @@ export async function pollGmail(deps: {
         }
         const msg = await deps.gmail.getMessage(id);
         for (const p of msg.skippedParts ?? []) skippedParts.push({ ...p, messageId: id });
-        const relevant = [...senders, ...partyEmails]
-          .some((s) => msg.from.toLowerCase().includes(s.toLowerCase()));
+        // Belt and braces behind the server-side filter, and it must test the
+        // SAME two headers the query does — checking `from` alone would fetch
+        // Martin's own sent mail and then throw it away.
+        const hay = `${msg.from} ${msg.to}`.toLowerCase();
+        const relevant = addrs.some((a) => hay.includes(a));
         if (!relevant) continue;
         const rawEmailId = await ingestRawEmail(deps, msg);
         await enqueueAndMark(deps, rawEmailId);

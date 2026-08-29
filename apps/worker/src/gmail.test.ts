@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
-import { pollGmail, retryAfterFrom, type GmailPort } from "./gmail";
+import { pollGmail, retryAfterFrom, buildQueries, type GmailPort } from "./gmail";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -203,6 +203,81 @@ describe("Gmail rate-limit backoff", () => {
     await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
     await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
     expect(listCalls).toBe(2);                 // tried again, as it should
+    await pool.end();
+  });
+});
+
+describe("buildQueries", () => {
+  it("searches BOTH directions, so mail Martin sent TO a party is found too", () => {
+    const [q] = buildQueries("newer_than:7d", ["case@verdergroep.nl"]);
+    expect(q).toContain("newer_than:7d");
+    expect(q).toContain("from:(case@verdergroep.nl)");
+    expect(q).toContain("to:(case@verdergroep.nl)");
+  });
+
+  // A Gmail `q` is finite and the creditor list only grows. Chunking keeps the
+  // filter server-side; the alternative is silently falling back to fetching
+  // everything, which is the bug this whole change exists to remove.
+  it("chunks a long address list, covering every address exactly once", () => {
+    const addrs = Array.from({ length: 40 }, (_, i) => `creditor${i}@example.com`);
+    const queries = buildQueries("newer_than:7d", addrs);
+    expect(queries.length).toBeGreaterThan(1);
+    for (const a of addrs) {
+      expect(queries.filter((q) => q.includes(a))).toHaveLength(1);
+    }
+    for (const q of queries) expect(q.length).toBeLessThan(1800);
+  });
+
+  // THE TRAP: an empty list must yield NO query. Returning the bare window
+  // would match the entire mailbox — exactly the burn being fixed.
+  it("returns nothing to poll when there is nobody to watch", () => {
+    expect(buildQueries("newer_than:7d", [])).toEqual([]);
+  });
+});
+
+describe("pollGmail asks Gmail to do the filtering", () => {
+  it("sends a sender-scoped query instead of the bare time window", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const seen: string[] = [];
+    await pollGmail({ db, vaultDir, enqueueSuggest: async () => {},
+      gmail: { listMessageIds: async (q) => { seen.push(q); return []; },
+               getMessage: async () => { throw new Error("must not fetch"); } } });
+    expect(seen.length).toBeGreaterThan(0);
+    for (const q of seen) {
+      expect(q).toContain("newer_than:7d");
+      expect(q).toContain("from:(");
+      expect(q).toContain("to:(");
+    }
+    await pool.end();
+  });
+
+  it("ingests mail Martin SENT to a party, not only mail received from one", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const email = `creditor-${Date.now()}@stam-incasso.nl`;
+    await db.insert(schema.parties).values({ kind: "organization", name: "Stam", email });
+    const id = `m-sent-${Date.now()}`;
+    const msg = { ...makeMsg(id), from: "martin@vanderpoel.pro", to: email,
+      subject: "Bijgaand de gevraagde stukken" };
+    const enqueued: string[] = [];
+    const res = await pollGmail({ db, vaultDir,
+      enqueueSuggest: async (x) => { enqueued.push(x); },
+      gmail: { listMessageIds: async () => [id], getMessage: async () => msg } });
+    expect(res.ingested).toBe(1);
+    expect(enqueued).toHaveLength(1);
+    await pool.end();
+  });
+
+  it("fetches a message once even when several chunked queries return it", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const id = `m-dupe-${Date.now()}`;
+    let fetches = 0;
+    await pollGmail({ db, vaultDir, enqueueSuggest: async () => {},
+      gmail: { listMessageIds: async () => [id, id],
+               getMessage: async () => { fetches++; return makeMsg(id); } } });
+    expect(fetches).toBe(1);
     await pool.end();
   });
 });
