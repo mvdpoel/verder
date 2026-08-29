@@ -72,7 +72,11 @@ Measured this session, not assumed. Everything else in this spec is a proposal.
   | `/mnt/nas-download` | NAS, NFS | 7.3 TB | 2.9 TB | backups |
 
   ~690 GB of free LOCAL NVMe. Mailbox capacity is not a constraint here.
-- **Martin's Gmail size: ~30 GB, his estimate, not measured.** See Open questions.
+- **Martin's Gmail size: 11.49 GB, MEASURED 2026-08-29** at
+  `drive.google.com/settings/storage`, not the ~30 GB estimate this spec was
+  written against. Total account storage is 16.28 GB: Gmail 11.49, Drive 3.91,
+  Photos 0.90. The estimate was 2.6x high, which matters only for the backup
+  fan-out — see Open questions 1.
 
 ## 1. Topology
 
@@ -308,22 +312,35 @@ arrives at a domain with no SPF, no DKIM and no DMARC.
 
 ## Open questions
 
-1. **How large is the Gmail mailbox?** Martin's estimate is ~30 GB; still not
-   measured, because the Gmail API exposes no aggregate byte count and the
-   worker's token is `gmail.readonly`, so no Drive API. The figure lives at
-   `one.google.com/storage`. **It no longer decides anything structural** —
-   `/mnt/data` has 342 GB free and swallows the estimate ten times over. What it
-   still sizes is the BACKUP fan-out: a 30 GB store means a ~30 GB weekly Maildir
-   export encrypted to Dropbox and TransIP Stack every generation, which is the
-   strongest argument for running the mailbox cleanup BEFORE the import rather
-   than before phase 3. Note also that "mailboxes" may span `dytechsolutions.nl`,
-   which is out of scope, so the in-scope figure may be well under 30 GB.
+1. **How large is the Gmail mailbox? ANSWERED 2026-08-29: 11.49 GB.** Read from
+   `drive.google.com/settings/storage` (the Gmail API exposes no aggregate byte
+   count and the worker's token is `gmail.readonly`, so this could never come
+   from the app). Martin's ~30 GB estimate was 2.6x high. It decides nothing
+   structural — `/mnt/data` has 342 GB free — but it sizes the BACKUP fan-out,
+   and an ~11 GB weekly Maildir export encrypted to Dropbox and TransIP Stack is
+   a materially smaller commitment than the 30 GB this spec budgeted for. It also
+   weakens, without removing, the argument for running the mailbox cleanup BEFORE
+   the import rather than before phase 3. The in-scope figure excludes
+   `dytechsolutions.nl`, which is a separate account and out of scope.
+
 2. **Does TransIP allow inbound port 25 on the k8s LoadBalancer?** Their
    published block is explicitly about OUTGOING mail ports. Unverified, and
    phase 2 gate.
 3. **What is `smtp._domainkey`?** A live DKIM record for an unidentified sender.
-4. **Is `vanderpoel.pro` a paid Workspace seat?** Decides whether phase 4 saves
-   ~€83/year or nothing.
+4. **Is `vanderpoel.pro` a paid Workspace seat? ANSWERED 2026-08-29: yes.**
+   Google Takeout shows the banner *"Your data for some services is unavailable
+   for export because your Workspace admin has disabled them"*, which only a
+   Workspace-governed account renders. Mail is NOT among the blocked products, so
+   Takeout remains the export route. Phase 4's decommission is therefore a real
+   saving rather than nothing.
+
+5. **What is the Gmail label `Forward to pullit@yukiworks.nl`?** Seen in
+   Takeout's per-label list on 2026-08-29. A label of that name is what Gmail
+   creates for a filter that forwards, so mail from this mailbox appears to be
+   going to a third party. It is not phase 1's problem — phase 1 reads, it does
+   not deliver — but phase 3 swaps the MX out from under whatever rule that is,
+   and a forward that silently stops is the kind of thing discovered late. Identify
+   it before phase 3, alongside `smtp._domainkey` in question 3.
 
 ## Risks, honestly
 
