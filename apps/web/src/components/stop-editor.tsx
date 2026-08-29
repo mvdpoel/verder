@@ -45,7 +45,6 @@ const nlDate = (d: Date | string | null | undefined) =>
 const STATES = [
   { value: "done", label: "gebeurd" },
   { value: "open", label: "loopt nog" },
-  { value: "expected", label: "verwacht" },
 ];
 
 const KINDS = [

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
-import { TrackMap, type MapPayload } from "@/components/track-map";
+import { TrackMap } from "@/components/track-map";
 import { STOP_STATE_LABEL, TRACK_STATUS_LABEL, stopHref } from "@/lib/track-marks";
 import { AddTrackForm, TrackEditor } from "@/components/track-editor";
 import { AddStopForm, StopEditor } from "@/components/stop-editor";
@@ -18,29 +18,6 @@ import { AddStopForm, StopEditor } from "@/components/stop-editor";
  * is the question this page is opened to answer; the map is the context for the
  * answer, not the answer itself.
  */
-
-type MapStop = MapPayload["stops"][number];
-
-/**
- * Where a new halte lands on a spoor.
- *
- * The router appends at max+1 when it is given nothing, and on the hoofdlijn
- * that means AFTER *Einde bewindvoering*, which migration 0023 parked at
- * order_index 1000000. So when a spoor ends on something still verwacht — the
- * endpoint everything else happens before — the new halte goes in front of it.
- * The seed leaves wide gaps (0, 1..n, 1000000) precisely so this needs no
- * renumbering of anything already there.
- */
-function insertPosition(own: MapStop[]): number | undefined {
-  const last = own.at(-1);
-  // No haltes yet, or this spoor ends on something that already happened:
-  // appending is exactly right, so let the router do it.
-  if (!last || last.state !== "expected") return undefined;
-  const floor = own.at(-2)?.orderIndex ?? -1;
-  // No room left between the two? Share the endpoint's slot: the map breaks
-  // that tie on date, and a dated halte sorts ahead of an undated endpoint.
-  return floor + 1 < last.orderIndex ? floor + 1 : last.orderIndex;
-}
 
 export default async function TimelinePage({
   searchParams,
@@ -62,9 +39,12 @@ export default async function TimelinePage({
       <div>
         <h1 className="text-2xl font-bold">De zaak</h1>
         <p className="mt-1 text-slate-600">
-          De hoofdlijn loopt naar het einde van de bewindvoering. Een zijspoor
-          begint zodra er iets binnenkomt — een mail, een telefoontje, een brief —
-          en komt daarna terug op de hoofdlijn of eindigt op zichzelf.
+          Het nieuwste staat bovenaan. De hoofdlijn is hoe de bewindvoering zelf
+          is gelopen — van de aanmelding bij Verder tot waar het nu staat. Een
+          zijspoor begint zodra er iets binnenkomt — een mail, een telefoontje,
+          een brief — en komt daarna terug op de hoofdlijn of eindigt op zichzelf.
+          Wat nog moet gebeuren staat er niet op: deze kaart laat zien wat er is
+          gebeurd.
         </p>
       </div>
 
@@ -108,9 +88,7 @@ export default async function TimelinePage({
               {shownTrack?.title} · {STOP_STATE_LABEL[shown.state] ?? shown.state}
               {shown.happenedAt
                 ? ` · ${new Date(shown.happenedAt).toLocaleDateString("nl-NL")}`
-                : shown.expectedAt
-                  ? ` · verwacht ${new Date(shown.expectedAt).toLocaleDateString("nl-NL")}`
-                  : ""}
+                : ""}
             </span>
             {selected && (
               <Link href="/timeline" className="ml-auto text-sm text-slate-500 hover:underline">
@@ -215,10 +193,7 @@ export default async function TimelinePage({
                 {TRACK_STATUS_LABEL[t.status] ?? t.status}
               </span>
               <span className="ml-auto flex flex-wrap gap-2">
-                <AddStopForm
-                  trackId={t.id}
-                  orderIndex={insertPosition(map.stops.filter((s) => s.trackId === t.id))}
-                />
+                <AddStopForm trackId={t.id} />
                 <TrackEditor track={t} stops={map.stops} />
               </span>
             </li>
