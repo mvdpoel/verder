@@ -425,5 +425,30 @@ describe("registry router", () => {
       expect((await c.registry.debts.get({ id: debt.id })).reportedToVerderAt)
         .toBeNull();
     });
+
+    it("records the entry it was reported via, and clears it too on undo", async () => {
+      const c = caller();
+      const debt = await c.registry.debts.create({
+        creditorName: "Het CAK", claimedCents: 114161,
+      });
+      const entry = await c.entries.create({
+        occurredAt: new Date("2026-09-01T10:00:00Z"), channel: "email",
+        direction: "outbound", summary: "Schuld aan CAK gemeld bij VerderGroep.",
+        participantPartyIds: [], actionItems: [], documentIds: [],
+      });
+      await c.registry.debts.setReported({
+        debtId: debt.id, reportedAt: new Date("2026-09-01T10:00:00Z"),
+        entryId: entry.id,
+      });
+      const reported = await c.registry.debts.get({ id: debt.id });
+      expect(reported.reportedToVerderAt).not.toBeNull();
+      expect(reported.reportedViaEntryId).toBe(entry.id);
+      // Reversible: BOTH halves clear together, or a cleared timestamp would
+      // leave a dangling reference to the entry that "told" Verder.
+      await c.registry.debts.setReported({ debtId: debt.id, reportedAt: null });
+      const cleared = await c.registry.debts.get({ id: debt.id });
+      expect(cleared.reportedToVerderAt).toBeNull();
+      expect(cleared.reportedViaEntryId).toBeNull();
+    });
   });
 });
