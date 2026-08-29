@@ -14,16 +14,18 @@ export default async function DashboardPage() {
   const recent = await caller.entries.list({ limit: 5 });
   const staleMs = 15 * 60 * 1000;
   const { map } = await caller.tracks.map();
-  // One line per open spoor: its furthest stop that is not done yet, or its
-  // last stop if everything on it is done. `.at(-1)` rather than an index,
-  // because a spoor with no haltes yet is a real state and the type should say
-  // so instead of promising a stop that isn't there.
+  // One line per open spoor: its newest stop that is not done yet, or its
+  // newest stop if everything on it is done. `own[0]` can be undefined, because
+  // a spoor with no haltes yet is a real state and the type should say so
+  // instead of promising a stop that isn't there.
   const openTracks = map.tracks
     .filter((t) => t.status === "open" && t.parentTrackId !== null)
     .map((t) => {
       const own = map.stops.filter((s) => s.trackId === t.id)
-        .sort((a, b) => a.column - b.column);
-      return { track: t, stop: own.find((s) => s.state !== "done") ?? own.at(-1) };
+        .sort((a, b) => a.row - b.row);
+      // The newest stop that is not done yet, or the newest stop there is. Row 0
+      // is the top of the page, so ascending row is newest first.
+      return { track: t, stop: own.find((s) => s.state !== "done") ?? own[0] };
     });
   return (
     <div className="space-y-8">

@@ -7,6 +7,12 @@
  * reported as positive magnitudes on both sides of the chart.
  */
 
+// Amsterdam calendar arithmetic lives in its own pure module now, shared with
+// track-map.ts. Re-exported under the names it has always had here, so nothing
+// that imports dayKey/monthKey from money-series changes.
+import { dayKey, monthKey } from "./amsterdam";
+export { dayKey, monthKey };
+
 import { detectRecurring, type RecurringCandidate } from "@verder/parsers";
 
 export interface MoneyTx {
@@ -46,20 +52,6 @@ export interface MonthSeries {
 
 /** Debits with no registry item behind them pool here. */
 export const UNCATEGORIZED = "overig";
-
-const DAY_FMT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit",
-});
-
-/** "2026-07-31" in Amsterdam time. en-CA is ISO order, so string compare is chronological. */
-export function dayKey(d: Date): string {
-  return DAY_FMT.format(d);
-}
-
-/** "2026-07" in Amsterdam time — a 23:30 UTC booking on 31 July is August here. */
-export function monthKey(d: Date): string {
-  return dayKey(d).slice(0, 7);
-}
 
 /**
  * The Amsterdam calendar day after this one. The key is already Amsterdam-local,

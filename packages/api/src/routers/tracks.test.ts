@@ -109,8 +109,12 @@ describe("tracks router", () => {
     expect(onTrack.slice(-2).map((s) => s.id)).toEqual([first.id, second.id]);
 
     const { map, evidence } = await caller().tracks.map();
-    const cols = (id: string) => map.stops.find((s) => s.id === id)!.column;
-    expect(cols(second.id)).toBeGreaterThan(cols(first.id));
+    // Row 0 is the top of the page and the map runs newest-first, so the stop
+    // appended last sits ABOVE the one before it — a SMALLER row, not a bigger
+    // column. `second` is open and undated, so it lands in the "nu" band; the
+    // dated `first` sits below it in August.
+    const rows = (id: string) => map.stops.find((s) => s.id === id)!.row;
+    expect(rows(second.id)).toBeLessThan(rows(first.id));
     // Every stop on the map has an evidence entry, even an empty one.
     expect(evidence[second.id]).toBeDefined();
     expect(evidence[second.id].documents).toEqual([]);
