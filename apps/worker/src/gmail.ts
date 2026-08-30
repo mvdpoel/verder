@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
@@ -99,11 +99,18 @@ export async function ingestRawEmail(
       source: opts?.source ?? "gmail",
       ...(opts?.skipSuggest ? { suggestQueuedAt: new Date() } : {}),
     }).returning();
+    // One lookup per MESSAGE, not per attachment: every attachment on this
+    // message shares one sender. Case-insensitive on both sides, exactly as
+    // migration 0032's backfill compares them — raw_emails.from_addr holds a
+    // bare address, and the two comparisons must agree or ingest and backfill
+    // disagree about the same mail.
+    const [sender] = await tx.select().from(schema.parties)
+      .where(sql`lower(${schema.parties.email}) = lower(${msg.from})`).limit(1);
     for (const att of msg.attachments) {
       const { sha256 } = await storeFile(deps.vaultDir, att.data);
       await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
         mime: att.mime, title: att.filename, source: "email-attachment",
-        sourceRef: msg.id, receivedAt: msg.sentAt });
+        sourceRef: msg.id, receivedAt: msg.sentAt, partyId: sender?.id });
     }
     return row.id;
   });

@@ -41,13 +41,29 @@ export async function taskStatusPayloadHash(db: Db, changeId: string): Promise<s
 /**
  * The canonical payload a document.updated event carries, rebuilt from a live
  * document_status_changes row. Must stay byte-identical to what
- * `documents.update`, `suggestions.approveDocumentMeta` and the
- * discard-signature-images backfill append — all three write this exact shape.
+ * `suggestions.approveDocumentMeta` and the discard-signature-images backfill
+ * append — neither writes a `partyId` key, and every row from before Task 3
+ * (the sender) never had one either.
  */
 export function documentStatusChangePayload(c: {
   documentId: string; status: string; title: string | null; docType: string | null;
 }) {
   return { id: c.documentId, status: c.status, title: c.title, docType: c.docType };
+}
+
+/**
+ * The WIDER shape `documents.update` writes since Task 3 (the sender): the
+ * same payload plus `partyId`, always present (null when no sender was set).
+ * A `document_status_changes` row cannot say which shape wrote it, so
+ * `resolveDocumentUpdatedHashes` tries both candidates per row rather than
+ * picking one — this one matches a Task-3-era `documents.update` call, the
+ * narrower one above matches everything else.
+ */
+export function documentStatusChangePayloadWithParty(c: {
+  documentId: string; status: string; title: string | null; docType: string | null;
+  partyId: string | null;
+}) {
+  return { ...documentStatusChangePayload(c), partyId: c.partyId };
 }
 
 /**
@@ -67,28 +83,39 @@ export function documentStatusChangePayload(c: {
  * one surviving row vouch for both — so a tampered duplicate would hide behind
  * its twin. Events are walked in seq order, oldest first, which is the order
  * the rows were written in.
+ *
+ * Each row yields TWO candidate hashes (with and without `partyId` — see
+ * `documentStatusChangePayloadWithParty`), because a row alone cannot say
+ * which era of `documents.update` (or which other writer) produced it. A
+ * match on either candidate consumes BOTH, so the row still vouches for
+ * exactly one event.
  */
 export async function resolveDocumentUpdatedHashes(
   db: Db,
   rows: { seq: number; eventType: string; entityId: string; payloadHash: string }[],
 ): Promise<Map<number, string>> {
   const resolved = new Map<number, string>();
-  const unconsumed = new Map<string, string[]>(); // documentId -> row hashes not yet claimed
+  // documentId -> per-row [narrow, wide] hash pairs not yet claimed
+  const unconsumed = new Map<string, [string, string][]>();
   for (const e of rows) {
     if (e.eventType !== "document.updated") continue;
-    let hashes = unconsumed.get(e.entityId);
-    if (!hashes) {
+    let candidates = unconsumed.get(e.entityId);
+    if (!candidates) {
       const changes = await db.select().from(schema.documentStatusChanges)
         .where(eq(schema.documentStatusChanges.documentId, e.entityId))
         .orderBy(asc(schema.documentStatusChanges.createdAt));
-      hashes = changes.map((c) => sha256Hex(canonicalJson(documentStatusChangePayload(c))));
-      unconsumed.set(e.entityId, hashes);
+      candidates = changes.map((c) => [
+        sha256Hex(canonicalJson(documentStatusChangePayload(c))),
+        sha256Hex(canonicalJson(documentStatusChangePayloadWithParty(c))),
+      ]);
+      unconsumed.set(e.entityId, candidates);
     }
-    const i = hashes.indexOf(e.payloadHash);
+    const i = candidates.findIndex(([narrow, wide]) =>
+      narrow === e.payloadHash || wide === e.payloadHash);
     // No live row hashes to this event's payload: the status change was edited
     // or removed after the fact. Leave it unresolved so the dispatch flags it.
     if (i === -1) continue;
-    hashes.splice(i, 1);
+    candidates.splice(i, 1);
     resolved.set(e.seq, e.payloadHash);
   }
   return resolved;

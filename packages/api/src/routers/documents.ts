@@ -12,7 +12,7 @@ import { readFilePath, relPathFor } from "../storage";
 export async function ingestDocument(tx: Db, input: {
   sha256: string; sizeBytes: number; mime: string; title: string;
   source: "upload" | "nas-scan" | "email-attachment"; sourceRef?: string;
-  receivedAt: Date; docType?: string;
+  receivedAt: Date; docType?: string; partyId?: string;
 }) {
   const [existing] = await tx.select().from(schema.documents)
     .where(eq(schema.documents.sha256, input.sha256));
@@ -23,7 +23,7 @@ export async function ingestDocument(tx: Db, input: {
     payload: { id: doc.id, sha256: doc.sha256, title: doc.title,
       docType: doc.docType ?? null, mime: doc.mime, sizeBytes: doc.sizeBytes,
       source: doc.source, sourceRef: doc.sourceRef ?? null,
-      receivedAt: input.receivedAt.toISOString() },
+      receivedAt: input.receivedAt.toISOString(), partyId: doc.partyId ?? null },
   });
   return doc;
 }
@@ -45,6 +45,9 @@ export async function effectiveDocument(db: Db, id: string) {
     effectiveStatus: latest?.status ?? doc.status,
     effectiveTitle: latest?.title ?? doc.title,
     effectiveDocType: latest?.docType ?? doc.docType,
+    // ?? and not ||: a change row that says nothing about the sender leaves
+    // the ingest-time value standing. See the "cannot clear" test.
+    effectivePartyId: latest?.partyId ?? doc.partyId ?? null,
     previousStatus: changes[1]?.status ?? doc.status };
 }
 
@@ -57,7 +60,7 @@ export const documentsRouter = router({
     mime: z.string(), title: z.string().min(1),
     source: z.enum(["upload", "nas-scan", "email-attachment"]),
     sourceRef: z.string().optional(), receivedAt: z.coerce.date(),
-    docType: z.string().optional(),
+    docType: z.string().optional(), partyId: z.string().uuid().optional(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction((tx) => ingestDocument(tx, input))),
 
@@ -177,6 +180,7 @@ export const documentsRouter = router({
   update: protectedProcedure.input(z.object({
     id: z.string().uuid(), status: z.enum(["inbox", "filed", "discarded"]),
     title: z.string().optional(), docType: z.string().optional(),
+    partyId: z.string().uuid().optional(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       // A transition that would change nothing observable appends nothing.
@@ -197,15 +201,17 @@ export const documentsRouter = router({
         const current = await effectiveDocument(tx, input.id);
         if (current.effectiveStatus === input.status
           && current.effectiveTitle === (input.title ?? doc.title)
-          && current.effectiveDocType === (input.docType ?? doc.docType)) return current;
+          && current.effectiveDocType === (input.docType ?? doc.docType)
+          && current.effectivePartyId === (input.partyId ?? current.effectivePartyId)) return current;
       }
       await tx.insert(schema.documentStatusChanges).values({
         documentId: input.id, status: input.status,
-        title: input.title, docType: input.docType });
+        title: input.title, docType: input.docType, partyId: input.partyId });
       await appendLedgerEvent(tx, {
         eventType: "document.updated", entityType: "document", entityId: input.id,
         payload: { id: input.id, status: input.status,
-          title: input.title ?? null, docType: input.docType ?? null } });
+          title: input.title ?? null, docType: input.docType ?? null,
+          partyId: input.partyId ?? null } });
       return effectiveDocument(tx, input.id);
     })),
 

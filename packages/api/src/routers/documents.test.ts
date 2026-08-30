@@ -346,4 +346,49 @@ describe("documents router", () => {
     expect(afterDiscard.discarded).toBe(before.discarded + 1);
   });
 
+  it("resolves the sender from the latest change row, falling back to ingest", async () => {
+    const c = caller();
+    const [party] = await db.insert(schema.parties).values({
+      kind: "organization", name: `Woonhave Testfixture ${crypto.randomUUID()}`,
+    }).returning();
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "application/pdf", title: "Aanzegging", source: "upload",
+      receivedAt: new Date() });
+    expect((await c.documents.get({ id: doc.id })).effectivePartyId).toBeNull();
+
+    await c.documents.update({ id: doc.id, status: "filed", partyId: party.id });
+    expect((await c.documents.get({ id: doc.id })).effectivePartyId).toBe(party.id);
+  });
+
+  // The property is inherited from title and docType and is deliberate, not a
+  // bug: the fallback is ??, so a change row with a null party reads as "no
+  // opinion" and the ingest-time value returns. Clearing needs a sentinel and
+  // is out of scope — this test is here so that stays a decision.
+  it("cannot clear a sender by writing null", async () => {
+    const c = caller();
+    const [party] = await db.insert(schema.parties).values({
+      kind: "organization", name: `Verder Testfixture ${crypto.randomUUID()}`,
+    }).returning();
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "application/pdf", title: "Brief", source: "upload",
+      receivedAt: new Date(), partyId: party.id });
+    await c.documents.update({ id: doc.id, status: "filed", title: "Brief v2" });
+    expect((await c.documents.get({ id: doc.id })).effectivePartyId).toBe(party.id);
+  });
+
+  it("appends no extra ledger event for a no-op sender write", async () => {
+    const c = caller();
+    const [party] = await db.insert(schema.parties).values({
+      kind: "organization", name: `KvK Testfixture ${crypto.randomUUID()}`,
+    }).returning();
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "application/pdf", title: "Aanmaning", source: "upload",
+      receivedAt: new Date() });
+    await c.documents.update({ id: doc.id, status: "filed", partyId: party.id });
+    const before = (await allEvents()).length;
+    await c.documents.update({ id: doc.id, status: "filed", partyId: party.id });
+    expect((await allEvents()).length).toBe(before);
+    expect(await verifyLedger()).toMatchObject({ ok: true });
+  });
+
 });
