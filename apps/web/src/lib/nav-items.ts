@@ -8,17 +8,23 @@
 export type NavItem = { label: string; href: string };
 
 /**
- * IN DUTCH, all eleven. The rail was seven English labels next to four Dutch
- * ones — "Vault, Registry, Verify" beside "Geld, De zaak, Instellingen" — which
- * is the app asking its reader to hold two vocabularies for one dossier. These
- * are the `title` and `aria-label` on an icon that has no visible word beside
- * it, so they are also the ONLY name most of these destinations ever get.
+ * IN DUTCH, all eleven but one. The rail was seven English labels next to
+ * four Dutch ones — "Vault, Registry, Verify" beside "Geld, De zaak,
+ * Instellingen" — which is the app asking its reader to hold two
+ * vocabularies for one dossier. These are the `title` and `aria-label` on an
+ * icon that has no visible word beside it, so they are also the ONLY name
+ * most of these destinations ever get.
+ *
+ * "Files" is the one deliberate exception: the page it names spells out its
+ * own title as "Files" (see `(app)/files/page.tsx`), and a rail that called
+ * the destination something else than the page it points to would be its own
+ * small lie.
  */
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Zoeken", href: "/search" },
   { label: "Logboek", href: "/logbook" },
-  { label: "Kluis", href: "/vault" },
+  { label: "Files", href: "/files" },
   // "Register" and not "Registratie": this is the ledger of contracts and
   // debts, not the act of registering something.
   { label: "Register", href: "/registry" },

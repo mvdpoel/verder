@@ -32,7 +32,7 @@ export const NAV_ICON: Record<string, ReactNode> = {
       <path d="M8 10h8M8 14h5" />
     </>
   ),
-  "/vault": (
+  "/files": (
     <>
       <rect x="3.5" y="6" width="17" height="13" />
       <path d="M3.5 10h17M9 6V4.5h6V6" />
