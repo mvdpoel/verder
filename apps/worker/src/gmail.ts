@@ -60,6 +60,17 @@ export function asMailMessage(msg: GmailMessage): MailMessage {
  * so a message this dossier considers relevant and a message whose sender
  * this resolves can never disagree about what the address IS.
  *
+ * `.at(-1)`, NOT the first match. A display name comes BEFORE the addr-spec in
+ * RFC 5322 (`Demi Willemse <demi@verdergroep.nl>`), and a display name is
+ * whatever the sender wrote — including something that is itself address-
+ * shaped: `"demi@verdergroep.nl" <attacker@evil.tld>` parses to
+ * `["demi@verdergroep.nl", "attacker@evil.tld"]`, and taking the FIRST one
+ * would attribute the document to Demi's party while the actual mailbox is
+ * the attacker's. `documents` has no UPDATE, so a wrong attribution here is
+ * permanent. The real addr-spec — the thing inside `<...>` when the header
+ * has one, or the bare address when it does not — is always the LAST address
+ * the regex finds, because nothing legitimate follows it in either form.
+ *
  * Folded with `asciiLower`, on BOTH sides, in JS — never SQL `lower()`, which
  * is Unicode-aware: U+212A KELVIN SIGN folds to ASCII "k" under `lower()`,
  * which would let a sender-chosen header fold into an address the dossier
@@ -75,7 +86,7 @@ export function asMailMessage(msg: GmailMessage): MailMessage {
  * not an arbitrary one.
  */
 async function resolveSenderPartyId(tx: Db, fromHeader: string): Promise<string | undefined> {
-  const fromAddr = addressesInHeader(fromHeader)[0];
+  const fromAddr = addressesInHeader(fromHeader).at(-1);
   if (!fromAddr) return undefined;
   const parties = await tx.select({ id: schema.parties.id, email: schema.parties.email })
     .from(schema.parties)

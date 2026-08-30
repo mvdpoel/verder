@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
-import { pollGmail, retryAfterFrom, buildQueries, type GmailPort } from "./gmail";
+import { pollGmail, retryAfterFrom, buildQueries, ingestRawEmail, type GmailPort } from "./gmail";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -225,6 +225,105 @@ describe("Gmail rate-limit backoff", () => {
     await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
     await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
     expect(listCalls).toBe(2);                 // tried again, as it should
+    await pool.end();
+  });
+});
+
+describe("ingestRawEmail resolves the sender", () => {
+  // One MailMessage per test, with a configurable `from` header and exactly
+  // one attachment, so each test can inspect the resulting document's
+  // partyId directly — the same shape a Gmail-port message reduces to via
+  // asMailMessage, but built by hand so the raw header text is explicit.
+  function mkMsg(id: string, from: string) {
+    return {
+      id, threadId: `t-${id}`, from, to: "martin@vanderpoel.pro",
+      subject: "test", sentAt: new Date(), bodyText: "",
+      raw: Buffer.from(`raw-${id}`), messageId: null as string | null,
+      attachments: [{ filename: "bijlage.pdf", mime: "application/pdf",
+        data: Buffer.from(`pdf-${id}`) }],
+    };
+  }
+  const partyIdOf = async (db: ReturnType<typeof createDb>["db"], msgId: string) => {
+    const [doc] = await db.select().from(schema.documents)
+      .where(eq(schema.documents.sourceRef, msgId));
+    return doc.partyId;
+  };
+
+  it("resolves a bare address to the matching party", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const email = `demi-${Date.now()}@verdergroep.nl`;
+    const [party] = await db.insert(schema.parties)
+      .values({ kind: "person", name: "Demi Willemse", email }).returning();
+    const id = `m-bare-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id, email));
+    expect(await partyIdOf(db, id)).toBe(party.id);
+    await pool.end();
+  });
+
+  it("resolves a Display Name <addr> header on the addr-spec, not the display name", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const email = `demi-${Date.now()}@verdergroep.nl`;
+    const [party] = await db.insert(schema.parties)
+      .values({ kind: "person", name: "Demi Willemse", email }).returning();
+    const id = `m-display-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id, `Demi Willemse <${email}>`));
+    expect(await partyIdOf(db, id)).toBe(party.id);
+    await pool.end();
+  });
+
+  // The regression this round fixed: a display name that is ITSELF
+  // address-shaped must never win over the real addr-spec in `<...>` — taking
+  // the FIRST address in the header attributed a hostile message to whichever
+  // party's address the sender chose to quote in the display name.
+  it("resolves the addr-spec even when the display name is itself an address, and never the quoted one", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const watchedEmail = `spoofed-${Date.now()}@watched.nl`;
+    const attackerEmail = `attacker-${Date.now()}@evil.tld`;
+    const [watched] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Watched Party", email: watchedEmail }).returning();
+    const [attacker] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Attacker Party", email: attackerEmail }).returning();
+    const id = `m-spoof-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir },
+      mkMsg(id, `"${watchedEmail}" <${attackerEmail}>`));
+    const resolved = await partyIdOf(db, id);
+    expect(resolved).not.toBe(watched.id);
+    expect(resolved).toBe(attacker.id);
+    await pool.end();
+  });
+
+  it("resolves no sender when the From header is empty or unparseable", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const id = `m-empty-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id, ""));
+    expect(await partyIdOf(db, id)).toBeNull();
+    const id2 = `m-junk-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id2, "not an address"));
+    expect(await partyIdOf(db, id2)).toBeNull();
+    await pool.end();
+  });
+
+  // relevance.ts's own finding, replayed here: U+212A KELVIN SIGN lower-cases
+  // to ASCII "k" under `String.toLowerCase()`, so a message header spelling an
+  // address with it must never match a party whose email is plain ASCII.
+  it("does not Unicode-fold a KELVIN SIGN to match an ASCII address", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const asciiEmail = `incasso-${Date.now()}@kvk.nl`;
+    await db.insert(schema.parties)
+      .values({ kind: "organization", name: "KvK", email: asciiEmail }).returning();
+    // Same local part and domain SHAPE, but the leading "k" of "kvk" is
+    // replaced with U+212A KELVIN SIGN, not ASCII "k" — the exact
+    // substitution relevance.ts documents (`incasso@Kvk.nl` folds to
+    // `incasso@kvk.nl` under `toLowerCase()`, never under `asciiLower`).
+    const kelvinEmail = asciiEmail.replace("@k", "@K");
+    const id = `m-kelvin-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id, kelvinEmail));
+    expect(await partyIdOf(db, id)).toBeNull();
     await pool.end();
   });
 });

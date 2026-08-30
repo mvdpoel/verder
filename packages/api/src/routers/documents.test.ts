@@ -326,6 +326,14 @@ describe("documents router", () => {
         SET party_id = ${attacker.id} WHERE id = ${narrowChangeId}`);
       expect(await makeLedgerRecompute(db, vaultDir, await narrowCtx())(narrowEv))
         .not.toBe(narrowEv.payloadHash);
+      // Restore, like every other tamper in this test: the dev DB is shared
+      // and never truncated, so a row left mismatched here would be a
+      // permanent, unexplained payload_hash_mismatch for anything that later
+      // runs a whole-chain recompute over this document.
+      await admin3.db.execute(sql`UPDATE document_status_changes
+        SET party_id = NULL WHERE id = ${narrowChangeId}`);
+      expect(await makeLedgerRecompute(db, vaultDir, await narrowCtx())(narrowEv))
+        .toBe(narrowEv.payloadHash);
     } finally {
       await admin3.pool.end();
     }
