@@ -40,10 +40,18 @@ export async function taskStatusPayloadHash(db: Db, changeId: string): Promise<s
 
 /**
  * The canonical payload a document.updated event carries, rebuilt from a live
- * document_status_changes row. Must stay byte-identical to what
- * `suggestions.approveDocumentMeta` and the discard-signature-images backfill
- * append — neither writes a `partyId` key, and every row from before Task 3
- * (the sender) never had one either.
+ * document_status_changes row.
+ *
+ * This is a COMPATIBILITY LANE, not the current shape: every writer
+ * (`documents.update`, `suggestions.approveDocumentMeta`, the
+ * discard-signature-images backfill) has carried `partyId` since Task 3 (the
+ * sender) — see `documentStatusChangePayloadWithParty` below, which is what
+ * all of them actually write now. This narrower shape exists only because a
+ * row written before the column existed has a payload hash baked in that
+ * never had a `partyId` key, and that hash can never be recomputed to match
+ * anything else. `resolveDocumentUpdatedHashes` only ever tries this shape
+ * for a row whose live `party_id` is NULL — see the guard there for why that
+ * is safe.
  */
 export function documentStatusChangePayload(c: {
   documentId: string; status: string; title: string | null; docType: string | null;
@@ -52,12 +60,11 @@ export function documentStatusChangePayload(c: {
 }
 
 /**
- * The WIDER shape `documents.update` writes since Task 3 (the sender): the
- * same payload plus `partyId`, always present (null when no sender was set).
- * A `document_status_changes` row cannot say which shape wrote it, so
- * `resolveDocumentUpdatedHashes` tries both candidates per row rather than
- * picking one — this one matches a Task-3-era `documents.update` call, the
- * narrower one above matches everything else.
+ * The shape every writer of a document.updated event has used since Task 3
+ * (the sender): the same payload plus `partyId`, always present as a key
+ * (null when no sender applies). This is the ONLY shape any writer produces
+ * going forward — see `documentStatusChangePayload` above for the narrower,
+ * pre-Task-3 shape `resolveDocumentUpdatedHashes` still has to recognise.
  */
 export function documentStatusChangePayloadWithParty(c: {
   documentId: string; status: string; title: string | null; docType: string | null;
@@ -84,10 +91,27 @@ export function documentStatusChangePayloadWithParty(c: {
  * its twin. Events are walked in seq order, oldest first, which is the order
  * the rows were written in.
  *
- * Each row yields TWO candidate hashes (with and without `partyId` — see
- * `documentStatusChangePayloadWithParty`), because a row alone cannot say
- * which era of `documents.update` (or which other writer) produced it. A
- * match on either candidate consumes BOTH, so the row still vouches for
+ * Each row yields up to TWO candidate hashes: the wide shape always, and the
+ * narrow (pre-`partyId`) shape ONLY WHEN the row's live `party_id IS NULL`.
+ * That guard is what closes the hole a naive "try both, always" version would
+ * leave open: `documentStatusChangePayload` never reads `partyId` at all, so
+ * without the guard an admin UPDATE that set `party_id` on an untouched row
+ * would leave the narrow candidate's hash completely unchanged — matching the
+ * row's original (narrow-era) stored hash regardless of what was just written
+ * into its sender column, and reporting the tamper as ok. Every row written
+ * before the `party_id` column existed has `party_id = NULL` and always will
+ * (nothing backfills document_status_changes.party_id), so `party_id IS NULL`
+ * is an exact, self-maintaining test for "this row may still be narrow-era" —
+ * and the moment an attacker (or anyone) writes a non-null `party_id` onto
+ * such a row, the guard drops the narrow candidate and only the wide one
+ * remains, which that row's original narrow-shape hash cannot match.
+ *
+ * A genuinely wide-era row with no resolved sender also has `party_id IS
+ * NULL`, so both candidates are computed for it too — harmless, because its
+ * stored hash was written by a wide-shape writer and only the wide candidate
+ * can ever match it; the narrow candidate is simply never claimed.
+ *
+ * A match on either candidate consumes BOTH, so the row still vouches for
  * exactly one event.
  */
 export async function resolveDocumentUpdatedHashes(
@@ -95,8 +119,10 @@ export async function resolveDocumentUpdatedHashes(
   rows: { seq: number; eventType: string; entityId: string; payloadHash: string }[],
 ): Promise<Map<number, string>> {
   const resolved = new Map<number, string>();
-  // documentId -> per-row [narrow, wide] hash pairs not yet claimed
-  const unconsumed = new Map<string, [string, string][]>();
+  // documentId -> per-row [narrow, wide] hash pairs not yet claimed.
+  // narrow is null when the row's live party_id is non-null — see the
+  // function docblock for why that must exclude it from matching.
+  const unconsumed = new Map<string, [string | null, string][]>();
   for (const e of rows) {
     if (e.eventType !== "document.updated") continue;
     let candidates = unconsumed.get(e.entityId);
@@ -105,13 +131,13 @@ export async function resolveDocumentUpdatedHashes(
         .where(eq(schema.documentStatusChanges.documentId, e.entityId))
         .orderBy(asc(schema.documentStatusChanges.createdAt));
       candidates = changes.map((c) => [
-        sha256Hex(canonicalJson(documentStatusChangePayload(c))),
+        c.partyId === null ? sha256Hex(canonicalJson(documentStatusChangePayload(c))) : null,
         sha256Hex(canonicalJson(documentStatusChangePayloadWithParty(c))),
       ]);
       unconsumed.set(e.entityId, candidates);
     }
     const i = candidates.findIndex(([narrow, wide]) =>
-      narrow === e.payloadHash || wide === e.payloadHash);
+      (narrow !== null && narrow === e.payloadHash) || wide === e.payloadHash);
     // No live row hashes to this event's payload: the status change was edited
     // or removed after the fact. Leave it unresolved so the dispatch flags it.
     if (i === -1) continue;

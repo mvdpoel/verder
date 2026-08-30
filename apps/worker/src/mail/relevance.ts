@@ -36,7 +36,7 @@ import { schema, type Db } from "@verder/db";
  * legitimately name is ASCII (see the two patterns below), so folding anything
  * else is guessing, and this module's whole job is to refuse to guess.
  */
-const asciiLower = (s: string): string => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+export const asciiLower = (s: string): string => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
 
 /** A domain entry: `@verdergroep.nl`, matching anybody at that exact domain. */
 const DOMAIN_RE = /^@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
@@ -45,6 +45,20 @@ const ADDRESS_RE = /^[a-z0-9!#$%&'*+/=?^_`{|}~.-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/
 /** Addresses as they appear inside a header: `Demi <demi@verdergroep.nl>`,
  *  `a@b.nl, c@d.nl`, or bare. Deliberately the same shape as ADDRESS_RE. */
 const IN_HEADER_RE = /[a-z0-9!#$%&'*+/=?^_`{|}~.-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/g;
+
+/**
+ * Every address a raw header names, ASCII-folded — never `toLowerCase`, see
+ * `asciiLower` above. `From: Demi Willemse <demi@verdergroep.nl>` yields one
+ * address; a `to` header can yield several. Shared by `isRelevantMessage`
+ * below and by the sender-resolution lookup in `ingestRawEmail` (Task 3),
+ * which is exactly the ONE-DEFINITION discipline this module already applies
+ * to `MailMessage`/`SkippedPart`: a second, ad hoc regex over `msg.from` would
+ * parse a Gmail header (which carries a display name) differently from how
+ * this module already does, and silently match nothing.
+ */
+export function addressesInHeader(header: string): string[] {
+  return [...(asciiLower(header).match(IN_HEADER_RE) ?? [])];
+}
 
 /**
  * WHO WROTE THE ENTRY — and therefore how far to trust it (FINDING 7).
@@ -257,10 +271,7 @@ export async function relevantAddresses(db: Db): Promise<string[]> {
 export function isRelevantMessage(
   addrs: string[], msg: { from: string; to: string },
 ): boolean {
-  const inMsg = new Set([
-    ...(asciiLower(msg.from).match(IN_HEADER_RE) ?? []),
-    ...(asciiLower(msg.to).match(IN_HEADER_RE) ?? []),
-  ]);
+  const inMsg = new Set([...addressesInHeader(msg.from), ...addressesInHeader(msg.to)]);
   if (inMsg.size === 0) return false;
   for (const raw of addrs) {
     const a = asciiLower(raw.trim());

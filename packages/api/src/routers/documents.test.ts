@@ -8,7 +8,8 @@ import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { storeFile } from "../storage";
-import { makeLedgerRecompute, resolveDocumentUpdatedHashes } from "../verification";
+import { appendLedgerEvent } from "../ledger";
+import { documentStatusChangePayload, makeLedgerRecompute, resolveDocumentUpdatedHashes } from "../verification";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 // The admin role is the only one that CAN update an evidence table — the app
@@ -260,6 +261,74 @@ describe("documents router", () => {
     // never silently passed through.
     const ghost: ChainEvent = { ...event, seq: -1 };
     expect(await makeLedgerRecompute(db, vaultDir, await ctx())(ghost)).not.toBe(ev.payloadHash);
+
+    // CRITICAL 1 (Task 3 review): party_id must be covered by the recompute on
+    // BOTH shapes it can appear in, or an admin UPDATE that touches only
+    // party_id passes /verify silently — exactly the attack this dispatch
+    // exists to catch for status, title and docType.
+    const [attacker] = await db.insert(schema.parties).values({
+      kind: "organization", name: `Attacker Testfixture ${crypto.randomUUID()}`,
+    }).returning();
+
+    // Case 1 — a WIDE-era row: `change` above was written by documents.update
+    // (post Task 3), so its payload already carries a `partyId` key (null,
+    // since no sender was set). Tampering party_id onto it must break the
+    // match.
+    const admin2 = createDb(ADMIN_URL);
+    try {
+      await admin2.db.execute(sql`UPDATE document_status_changes
+        SET party_id = ${attacker.id} WHERE id = ${change.id}`);
+      expect(await makeLedgerRecompute(db, vaultDir, await ctx())(event)).not.toBe(ev.payloadHash);
+      await admin2.db.execute(sql`UPDATE document_status_changes
+        SET party_id = NULL WHERE id = ${change.id}`);
+      expect(await makeLedgerRecompute(db, vaultDir, await ctx())(event)).toBe(ev.payloadHash);
+    } finally {
+      await admin2.pool.end();
+    }
+
+    // Case 2 — a NARROW-era row: no writer produces this shape any more
+    // (every one of them now carries the effective party forward), so it is
+    // fabricated here exactly as history left it — a document_status_changes
+    // row with no party_id, and a document.updated event whose payload never
+    // had a partyId key at all — through the real appendLedgerEvent, so the
+    // chain itself stays valid. `documentStatusChangePayload` is the same
+    // narrow builder `resolveDocumentUpdatedHashes` still recognises, and the
+    // same one tracks.test.ts already uses to fabricate a pre-Task-3 row.
+    const narrowDoc = await seedDocument({ title: "Oud.pdf", mime: "application/pdf" });
+    const narrowChangeId = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(schema.documentStatusChanges)
+        .values({ documentId: narrowDoc.id, status: "filed", title: "Oud.pdf" }).returning();
+      await appendLedgerEvent(tx, {
+        eventType: "document.updated", entityType: "document", entityId: narrowDoc.id,
+        payload: documentStatusChangePayload(row),
+      });
+      return row.id;
+    });
+    const allRows = await allEvents();
+    const narrowEv = allRows.find((e) =>
+      e.eventType === "document.updated" && e.entityId === narrowDoc.id)!;
+    const narrowCtx = async () => ({ linkedLater: new Map<string, Set<string>>(),
+      resolvedLinkHash: new Map<number, string>(),
+      resolvedStatusHash: await resolveDocumentUpdatedHashes(db, allRows) });
+
+    // Green: the narrow shape still matches a genuinely narrow-era row.
+    expect(await makeLedgerRecompute(db, vaultDir, await narrowCtx())(narrowEv))
+      .toBe(narrowEv.payloadHash);
+
+    // Tampered: before the fix, documentStatusChangePayload never read
+    // party_id at all, so this UPDATE left the narrow candidate's hash
+    // unchanged and the tamper passed as ok. After the fix, a non-null
+    // party_id excludes the narrow candidate, and the row's original
+    // (narrow-shape) hash cannot match the wide one either.
+    const admin3 = createDb(ADMIN_URL);
+    try {
+      await admin3.db.execute(sql`UPDATE document_status_changes
+        SET party_id = ${attacker.id} WHERE id = ${narrowChangeId}`);
+      expect(await makeLedgerRecompute(db, vaultDir, await narrowCtx())(narrowEv))
+        .not.toBe(narrowEv.payloadHash);
+    } finally {
+      await admin3.pool.end();
+    }
   });
 
   it("omits discarded documents from the vault list by default", async () => {

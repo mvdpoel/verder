@@ -114,11 +114,18 @@ export const suggestionsRouter = router({
       const [s] = await tx.select().from(schema.suggestions)
         .where(eq(schema.suggestions.id, input.id));
       if (!s?.documentId) throw new Error("Suggestion has no document");
+      // Carry the effective sender forward (Task 3 fix): this row only ever
+      // corrects title/docType, and effectiveDocument reads partyId from the
+      // LATEST change row same as title/docType — writing this row without it
+      // would silently revert a sender Martin (or ingest) had already set.
+      const current = await effectiveDocument(tx, s.documentId);
       await tx.insert(schema.documentStatusChanges).values({
-        documentId: s.documentId, status: "filed", title: input.title, docType: input.docType });
+        documentId: s.documentId, status: "filed", title: input.title,
+        docType: input.docType, partyId: current.effectivePartyId });
       await appendLedgerEvent(tx, {
         eventType: "document.updated", entityType: "document", entityId: s.documentId,
-        payload: { id: s.documentId, status: "filed", title: input.title, docType: input.docType ?? null } });
+        payload: { id: s.documentId, status: "filed", title: input.title,
+          docType: input.docType ?? null, partyId: current.effectivePartyId } });
       await tx.update(schema.suggestions).set({
         status: "approved", finalPayload: { title: input.title, docType: input.docType ?? null },
         verdictAt: new Date(),

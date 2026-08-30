@@ -1,9 +1,9 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
-import { isRelevantMessage, relevantAddresses } from "./mail/relevance";
+import { addressesInHeader, asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";
 import type { MailMessage, SkippedPart } from "./mail/port";
 
@@ -46,6 +46,41 @@ export interface GmailPort {
  */
 export function asMailMessage(msg: GmailMessage): MailMessage {
   return { ...msg, messageId: extractMessageId(msg.raw) };
+}
+
+/**
+ * The sender of a message, resolved to a party — or undefined, the honest
+ * outcome when no party matches (an upload and a scan legitimately have no
+ * sender either, which is why `ingestDocument`'s `partyId` stays optional).
+ *
+ * `fromHeader` is PARSED, not compared as a whole string: under Gmail it is a
+ * raw header (`Demi Willemse <demi@verdergroep.nl>`), and comparing that
+ * against `parties.email` (a bare address) would never match real mail.
+ * `addressesInHeader` is the same extraction `isRelevantMessage` already uses,
+ * so a message this dossier considers relevant and a message whose sender
+ * this resolves can never disagree about what the address IS.
+ *
+ * Folded with `asciiLower`, on BOTH sides, in JS — never SQL `lower()`, which
+ * is Unicode-aware: U+212A KELVIN SIGN folds to ASCII "k" under `lower()`,
+ * which would let a sender-chosen header fold into an address the dossier
+ * watches (`mail/relevance.ts`'s own finding, word for word). An address that
+ * fails to parse (an empty or malformed From) resolves no sender, rather than
+ * matching every party whose email is also empty — `parties.email` is free
+ * text, nullable and not unique, and a blank row has already reached
+ * production once (relevance.ts, finding F).
+ *
+ * `ORDER BY created_at, id` is a deterministic tiebreak for the case two
+ * parties share an email — there is no ranking rule for that, so "oldest
+ * wins" is at least the same choice `case-history`'s document lookup makes,
+ * not an arbitrary one.
+ */
+async function resolveSenderPartyId(tx: Db, fromHeader: string): Promise<string | undefined> {
+  const fromAddr = addressesInHeader(fromHeader)[0];
+  if (!fromAddr) return undefined;
+  const parties = await tx.select({ id: schema.parties.id, email: schema.parties.email })
+    .from(schema.parties)
+    .orderBy(asc(schema.parties.createdAt), asc(schema.parties.id));
+  return parties.find((p) => p.email && asciiLower(p.email) === fromAddr)?.id;
 }
 
 /**
@@ -100,17 +135,14 @@ export async function ingestRawEmail(
       ...(opts?.skipSuggest ? { suggestQueuedAt: new Date() } : {}),
     }).returning();
     // One lookup per MESSAGE, not per attachment: every attachment on this
-    // message shares one sender. Case-insensitive on both sides, exactly as
-    // migration 0032's backfill compares them — raw_emails.from_addr holds a
-    // bare address, and the two comparisons must agree or ingest and backfill
-    // disagree about the same mail.
-    const [sender] = await tx.select().from(schema.parties)
-      .where(sql`lower(${schema.parties.email}) = lower(${msg.from})`).limit(1);
+    // message shares one sender. See resolveSenderPartyId for why this is not
+    // a plain string/SQL-lower() comparison against msg.from.
+    const senderPartyId = await resolveSenderPartyId(tx, msg.from);
     for (const att of msg.attachments) {
       const { sha256 } = await storeFile(deps.vaultDir, att.data);
       await ingestDocument(tx, { sha256, sizeBytes: att.data.length,
         mime: att.mime, title: att.filename, source: "email-attachment",
-        sourceRef: msg.id, receivedAt: msg.sentAt, partyId: sender?.id });
+        sourceRef: msg.id, receivedAt: msg.sentAt, partyId: senderPartyId });
     }
     return row.id;
   });

@@ -102,16 +102,19 @@ export async function discardSignatureImages(
       // what it did from the log alone.
       log(`discard-signature-images: discarding ${row.id} — ${fresh.effectiveTitle}`
         + ` (${row.sizeBytes} bytes, ${row.mime}, ${row.source})`);
-      // Carry the effective title/docType forward. effectiveDocument reads them
-      // from the LATEST status change only, so writing this row without them
-      // would silently revert a correction made when the document was filed.
+      // Carry the effective title/docType/sender forward. effectiveDocument
+      // reads all three from the LATEST status change only, so writing this
+      // row without them would silently revert a correction made when the
+      // document was filed (Task 3 added partyId to that list).
       await tx.insert(schema.documentStatusChanges).values({
         documentId: row.id, status: "discarded",
-        title: fresh.effectiveTitle, docType: fresh.effectiveDocType ?? undefined });
+        title: fresh.effectiveTitle, docType: fresh.effectiveDocType ?? undefined,
+        partyId: fresh.effectivePartyId ?? undefined });
       await appendLedgerEvent(tx, {
         eventType: "document.updated", entityType: "document", entityId: row.id,
         payload: { id: row.id, status: "discarded",
-          title: fresh.effectiveTitle ?? null, docType: fresh.effectiveDocType ?? null } });
+          title: fresh.effectiveTitle ?? null, docType: fresh.effectiveDocType ?? null,
+          partyId: fresh.effectivePartyId ?? null } });
       return true;
     });
     if (wrote) discarded++; else skipped++;
