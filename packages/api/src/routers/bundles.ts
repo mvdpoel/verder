@@ -6,6 +6,7 @@ import { protectedProcedure, router } from "../trpc";
 import { bundleRuleSchema, parseBundleRule, type BundleRule } from "../bundle-rule";
 import { effectiveDocStatusSql, effectivePartyIdSql, notDiscardedSql } from "../effective-status";
 import { docTypeKeySql } from "./documents";
+import { docTypeKey } from "../doc-type";
 
 /**
  * A bundle is NOT evidence. Nothing in this file appends a ledger event, and
@@ -22,18 +23,6 @@ import { docTypeKeySql } from "./documents";
  */
 const receivedAtAmsterdamSql = sql`(documents.received_at AT TIME ZONE 'Europe/Amsterdam')`;
 
-/**
- * The same fold docTypeKeySql applies to the document side (lower + btrim +
- * collapse inner whitespace runs), applied here to the rule's literal input
- * so the two sides compare like for like. Without this a rule typed with
- * different casing or double spacing than the document would silently match
- * nothing — or worse, match a different set than the tree's soort branch
- * counts for the same key.
- */
-function foldDocTypeKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 function ruleWhere(rule: BundleRule): SQL {
   const parts: (SQL | undefined)[] = [
     // A rule excludes discarded documents UNLESS it asks for them by name.
@@ -41,9 +30,11 @@ function ruleWhere(rule: BundleRule): SQL {
     // a rule bundle.
     rule.status ? sql`${effectiveDocStatusSql} = ${rule.status}` : notDiscardedSql,
     // The SAME key the tree groups its soort branch on and browse's soort
-    // branch filters on — never a lookalike restated by hand, or a rule's
-    // count would disagree with the branch it was built from.
-    rule.docType ? sql`${docTypeKeySql} = ${foldDocTypeKey(rule.docType)}` : undefined,
+    // branch filters on (docTypeKeySql), compared against the rule's literal
+    // folded through docTypeKey — Task 4's fold, not a third hand-rolled copy
+    // of it — so both sides collapse whitespace/case identically. A rule's
+    // count must never disagree with the branch it was built from.
+    rule.docType ? sql`${docTypeKeySql} = ${docTypeKey(rule.docType)}` : undefined,
     rule.partyId ? sql`${effectivePartyIdSql} = ${rule.partyId}` : undefined,
     rule.source ? sql`documents.source = ${rule.source}` : undefined,
     rule.from ? sql`${receivedAtAmsterdamSql} >= ${rule.from}` : undefined,

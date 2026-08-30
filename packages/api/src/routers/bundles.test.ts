@@ -3,6 +3,7 @@ import { asc, sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
+import { docTypeKey } from "../doc-type";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 
@@ -97,24 +98,69 @@ describe("bundles router", () => {
     expect(after.length).toBe(before.length);
   });
 
-  // Ruling 21: a rule must select exactly what the tree's branch selects. If a
-  // rule's soort folds differently from the tree's soort branch, a bundle's
-  // count disagrees with the branch it was built from, on the same screen.
-  it("a soort rule matches exactly what the tree's soort branch matches", async () => {
-    // Deliberately messy casing and doubled inner whitespace, so this only
-    // passes if the rule is folded through the SAME key the tree groups on
-    // (docTypeKeySql) rather than a lookalike lower/trim.
-    const rawDocType = `Regel  Soort ${mark}`;
-    const foldedKey = rawDocType.trim().toLowerCase().replace(/\s+/g, " ");
-    const a = await add(rawDocType);
-    const b = await add(rawDocType);
-    const b2 = await caller().bundles.create({
-      name: `Gefold ${mark}`, kind: "rule", rule: { docType: rawDocType } });
-    const got = await caller().bundles.get({ id: b2.id });
+  // Ruling 21, part 1: a soort rule must fold whitespace/case exactly like
+  // docTypeKeySql, the same key the tree's soort branch groups on and
+  // browse's soort branch filters on. Three documents that differ ONLY in
+  // inner whitespace/case, and a rule spelled a third way again, so this can
+  // only pass if all three collapse to one key through the shared fold —
+  // under the raw lower/trim comparison Ruling 21 rejected, this matches
+  // NEITHER document (verified: see the fix report).
+  it("a soort rule folds whitespace and case exactly like the tree's soort branch", async () => {
+    const a = await add(`Regel  Soort ${mark}`); // doubled inner space, mixed case
+    const b = await add(`regel soort ${mark}`); // single space, lowercase
+    const ruleDocType = ` REGEL   SOORT ${mark} `; // leading/trailing + tripled inner space
+    const bundle = await caller().bundles.create({
+      name: `Gefold ${mark}`, kind: "rule", rule: { docType: ruleDocType } });
+    const got = await caller().bundles.get({ id: bundle.id });
     const branch = await caller().documents.browse({
-      branch: { kind: "soort", key: foldedKey } });
-    expect(new Set(got.documentIds)).toEqual(new Set(branch.rows.map((r) => r.id)));
+      branch: { kind: "soort", key: docTypeKey(ruleDocType) } });
     expect(new Set(got.documentIds)).toEqual(new Set([a.id, b.id]));
+    expect(new Set(got.documentIds)).toEqual(new Set(branch.rows.map((r) => r.id)));
+  });
+
+  // Ruling 21, part 2: a soort rule must read the EFFECTIVE doc_type
+  // (corrections travel through document_status_changes and the raw column
+  // never changes — the append-only law). A rule naming the corrected soort
+  // must find the document; a rule still naming the original soort must not.
+  // Under a raw-column comparison this is exactly backwards: it would find
+  // the document by its stale name and miss it by its current one (verified:
+  // see the fix report).
+  it("a soort rule reads the corrected doc_type, not the original one", async () => {
+    const original = `origineel ${mark}`;
+    const corrected = `gecorrigeerd ${mark}`;
+    const doc = await add(original);
+    await caller().documents.update({ id: doc.id, status: "inbox", docType: corrected });
+
+    const findsCorrected = await caller().bundles.create({
+      name: `Naar het echte soort ${mark}`, kind: "rule", rule: { docType: corrected } });
+    expect((await caller().bundles.get({ id: findsCorrected.id })).documentIds)
+      .toEqual([doc.id]);
+
+    const findsOriginal = await caller().bundles.create({
+      name: `Naar het oude soort ${mark}`, kind: "rule", rule: { docType: original } });
+    expect((await caller().bundles.get({ id: findsOriginal.id })).documentIds).toEqual([]);
+  });
+
+  // Ruling 21, part 3: a party rule must read the EFFECTIVE sender the same
+  // way — a sender set only by correction, never at ingest, so the raw
+  // documents.party_id stays NULL forever and only effectivePartyIdSql sees
+  // it. Under a raw-column comparison `NULL = partyId` is NULL, which a WHERE
+  // clause treats as false, so this document would never be found by any
+  // party rule (verified: see the fix report).
+  it("a party rule reads the sender set by a correction, never the raw column", async () => {
+    const partyName = `Kennisbank Testfixture ${crypto.randomUUID()}`;
+    const [party] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: partyName }).returning();
+    const doc = await add(`afzender ${mark}`);
+    await caller().documents.update({ id: doc.id, status: "inbox", partyId: party.id });
+
+    const before = await caller().documents.get({ id: doc.id });
+    expect(before.partyId).toBeNull(); // the raw column: never written after ingest
+    expect(before.effectivePartyId).toBe(party.id); // what the correction actually set
+
+    const bundle = await caller().bundles.create({
+      name: `Van deze partij ${mark}`, kind: "rule", rule: { partyId: party.id } });
+    expect((await caller().bundles.get({ id: bundle.id })).documentIds).toEqual([doc.id]);
   });
 
   // documents.browse({ branch: { kind: "bundel", id } }) has no test anywhere
