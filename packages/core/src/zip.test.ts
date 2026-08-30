@@ -52,6 +52,43 @@ describe("buildZip", () => {
       ({ name: `f${i}.txt`, bytes: bytes("x"), at: AT }));
     expect(() => buildZip(many)).toThrow(/bestanden|entries/i);
   });
+
+  it("keeps every entry's offset correct across a multi-entry archive, including an empty one and a non-ASCII name", () => {
+    const nonAscii = "Bèschikking — kwijtschelding.pdf";
+    const zip = buildZip([
+      { name: "eerste.txt", bytes: bytes("een"), at: AT },
+      { name: "tweede.pdf", bytes: bytes("%PDF-1.4 fake"), at: AT },
+      { name: nonAscii, bytes: bytes("niet-ascii"), at: AT },
+      { name: "leeg.txt", bytes: new Uint8Array(), at: AT },
+    ]);
+    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const path = join(dir, "t.zip");
+    writeFileSync(path, zip);
+    expect(() => execFileSync("unzip", ["-t", path])).not.toThrow();
+    expect(execFileSync("unzip", ["-p", path, "eerste.txt"]).toString()).toBe("een");
+    expect(execFileSync("unzip", ["-p", path, "tweede.pdf"]).toString()).toBe("%PDF-1.4 fake");
+    // The third and fourth entries are asserted explicitly: an offset bug in the
+    // central directory typically leaves entry 0 correct and corrupts everything
+    // after it, so a test that only checks the first entry cannot catch it.
+    // The non-ASCII entry is matched with a glob rather than the literal name.
+    // Measured: the bytes this writer stores are correct — Python's zipfile
+    // (a strict central-directory reader) decodes the name back exactly —
+    // but Apple's unzip 6.00 cannot match a UTF-8-flagged non-ASCII name by
+    // an exact literal argument on this machine; that is a read-side tool
+    // quirk, not a writer defect. The glob still resolves through the same
+    // central-directory lookup, so it still exercises this entry's offset.
+    expect(execFileSync("unzip", ["-p", path, "B*kwijtschelding.pdf"]).toString()).toBe("niet-ascii");
+    expect(execFileSync("unzip", ["-p", path, "leeg.txt"]).toString()).toBe("");
+  });
+
+  it("builds and reads back a single-entry archive", () => {
+    const zip = buildZip([{ name: "enkel.txt", bytes: bytes("solo"), at: AT }]);
+    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const path = join(dir, "t.zip");
+    writeFileSync(path, zip);
+    expect(() => execFileSync("unzip", ["-t", path])).not.toThrow();
+    expect(execFileSync("unzip", ["-p", path, "enkel.txt"]).toString()).toBe("solo");
+  });
 });
 
 describe("zipEntryName", () => {
@@ -80,5 +117,12 @@ describe("zipEntryName", () => {
 
   it("falls back to .bin for a mime it does not know", () => {
     expect(zipEntryName("Iets", "application/x-weird", new Set())).toBe("Iets.bin");
+  });
+
+  it("deduplicates case-insensitively, since a filesystem often is", () => {
+    const taken = new Set<string>();
+    expect(zipEntryName("Report", "application/pdf", taken)).toBe("Report.pdf");
+    expect(zipEntryName("REPORT", "application/pdf", taken)).toBe("REPORT (2).pdf");
+    expect(zipEntryName("report", "application/pdf", taken)).toBe("report (3).pdf");
   });
 });
