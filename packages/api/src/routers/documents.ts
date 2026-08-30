@@ -7,6 +7,7 @@ import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { effectiveDocStatusSql, notDiscardedSql } from "../effective-status";
+import { docTypeLabel } from "../doc-type";
 import { readFilePath, relPathFor } from "../storage";
 
 export async function ingestDocument(tx: Db, input: {
@@ -110,6 +111,79 @@ export const documentsRouter = router({
       .groupBy(status);
     const by = (s: string) => rows.find((r) => r.status === s)?.n ?? 0;
     return { inbox: by("inbox"), filed: by("filed"), discarded: by("discarded") };
+  }),
+
+  /**
+   * The left pane, as counts.
+   *
+   * Every number comes from a grouped query against the database and never from
+   * measuring the page that was just rendered — the rule `counts` established
+   * when "Postvak — 100 te sorteren" was what a vault of 100 and a vault of
+   * 1000 both said.
+   *
+   * Discarded documents are excluded from every branch except `status`, which
+   * is the branch that exists to find them again.
+   */
+  tree: protectedProcedure.query(async ({ ctx }) => {
+    const live = notDiscardedSql;
+    // Folds inner whitespace runs too, matching docTypeKey exactly: without
+    // regexp_replace, "bank  afschrift" (double space) and "bank afschrift"
+    // would land in two SQL branches while docTypeKey treats them as one key.
+    const docTypeKeySql = sql<string>`regexp_replace(
+      lower(btrim(coalesce(documents.doc_type,''))), '\\s+', ' ', 'g')`;
+    // Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
+    // bucket files 31 August 23:00Z under August while every date the app
+    // prints says 1 September.
+    const month = sql<string>`to_char(
+      (documents.received_at AT TIME ZONE 'Europe/Amsterdam'), 'YYYY-MM')`;
+
+    const [soortRows, vanWieRows, periodeRows, bronRows, statusRows] = await Promise.all([
+      ctx.db.select({
+        // The raw spellings come back as an array so docTypeLabel can pick the
+        // one most rows use; grouping on the key alone would lose them.
+        key: docTypeKeySql,
+        spellings: sql<string[]>`array_agg(distinct btrim(coalesce(documents.doc_type,'')))`,
+        n: sql<number>`count(*)::int`,
+      }).from(schema.documents).where(live)
+        .groupBy(docTypeKeySql),
+
+      ctx.db.select({
+        partyId: sql<string | null>`documents.party_id`,
+        name: sql<string | null>`(SELECT p.name FROM parties p WHERE p.id = documents.party_id)`,
+        n: sql<number>`count(*)::int`,
+      }).from(schema.documents).where(live)
+        .groupBy(sql`documents.party_id`),
+
+      ctx.db.select({ month, n: sql<number>`count(*)::int` })
+        .from(schema.documents).where(live).groupBy(month).orderBy(sql`1 desc`),
+
+      ctx.db.select({ source: schema.documents.source, n: sql<number>`count(*)::int` })
+        .from(schema.documents).where(live).groupBy(schema.documents.source),
+
+      ctx.db.select({ status: effectiveDocStatusSql, n: sql<number>`count(*)::int` })
+        .from(schema.documents).groupBy(effectiveDocStatusSql),
+    ]);
+
+    const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli",
+      "augustus", "september", "oktober", "november", "december"];
+
+    return {
+      soort: soortRows
+        .map((r) => ({ key: r.key, label: docTypeLabel(r.spellings ?? []), n: r.n }))
+        // Biggest first, but "Zonder soort" (the empty key) always last: it is
+        // a to-do list, not a category, and it is often the largest branch.
+        .sort((a, b) => (a.key === "" ? 1 : b.key === "" ? -1 : b.n - a.n)),
+      vanWie: vanWieRows
+        .map((r) => ({ partyId: r.partyId, name: r.name ?? "Onbekend", n: r.n }))
+        .sort((a, b) => (a.partyId === null ? 1 : b.partyId === null ? -1 : b.n - a.n)),
+      periode: periodeRows.map((r) => ({
+        month: r.month,
+        label: `${MONTHS[Number(r.month.slice(5, 7)) - 1]} ${r.month.slice(2, 4)}`,
+        n: r.n,
+      })),
+      bron: bronRows,
+      status: statusRows,
+    };
   }),
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))
