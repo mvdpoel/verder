@@ -647,6 +647,59 @@ and a mail server is not where to start blurring them. A passage in the previous
 draft of this section was headed "one measured trap" and had in fact only been
 read. So:
 
+**THE SETUP WIZARD, MEASURED END TO END 2026-08-30.** It was run twice; the
+first run had to be thrown away. Everything here is observed, not read:
+
+1. **"Automatically Obtain TLS Certificate" on step 1 must be OFF, and it is ON
+   by default.** Leaving it on creates an ACME provider that immediately orders
+   a Let's Encrypt certificate for FIVE hostnames it derives from the domain —
+   `autoconfig`, `autodiscover`, `mail`, `mta-sts`, `ua-auto-config` — over
+   `tls-alpn-01`, which requires Let's Encrypt to reach port 443 on a public IP.
+   Behind a tunnel none of that resolves and none of it is reachable, so every
+   order fails with `Cannot negotiate ALPN protocol "acme-tls/1"` and it retries
+   about every 35 seconds: 6 orders in twelve minutes before it was stopped.
+   Let's Encrypt allows 5 failed validations per hostname per hour, so this
+   burns the budget phase 3 will actually need.
+2. **THE ACME PROVIDER CANNOT BE DELETED THROUGH THE WEBUI, so the only cure is
+   not to create it.** Both routes were tried on v0.16.19: the edit form's red
+   Delete with its "cannot be undone" confirm, and the list's Actions → Delete
+   with its "Confirm Action" dialog. Both return to a list that still shows the
+   provider after a hard reload, and NOTHING is written to the server log —
+   no error, no rejection, while the same session authenticates fine and the
+   identical bulk control deletes listeners without trouble. Recovering from a
+   provider you did not want means wiping the store and re-running the wizard,
+   which is only cheap before the archive import.
+3. **The wizard enables SEVEN listeners no matter what you choose** — it never
+   asks. `smtp:25`, `submissions:465`, `imaps:993`, `pop3s:995`, `sieve:4190`,
+   `https:443` and `http:8080`. Phase 1 wants only the last. Delete the other
+   six (Network → Listeners, select, Actions → Delete) and restart; verified
+   afterwards from `/proc/net/tcp` inside the container, not from the UI.
+   Only 8080 is published to the host, so the others were never externally
+   reachable — but an SMTP listener that exists without being meant to is
+   exactly what makes phase 2's "is inbound 25 reachable?" test lie.
+4. **Finishing setup invalidates your session, and the failure looks like a
+   broken htaccess.** You authenticate against the ephemeral BOOTSTRAP store;
+   setup replaces it with the real one; your token then decodes against nothing
+   and the server logs `Failed to decode token` while the browser falls back to
+   a Basic-auth prompt. It is not a bad password. Clear `localStorage` and
+   `sessionStorage` for the origin and sign in again. This happens on every
+   run — it is inherent to the bootstrap handover, not a fault.
+5. **`sudo rm -rf <dir>/*` SILENTLY DOES NOTHING on `etc/`.** That directory is
+   mode 0750 owned by uid 2000, so the `*` glob is expanded by the unprivileged
+   shell BEFORE sudo runs, matches nothing, and rm removes nothing while exiting
+   0. Measured: `data/` and `blobs/` (0755) were wiped and `etc/config.json`
+   survived, leaving a stale config over an empty database. Use
+   `sudo sh -c 'rm -rf …'` so the glob expands as root, and verify with
+   `sudo find <dir> -mindepth 1 | wc -l` rather than trusting the exit code.
+6. **Log Destination offers `Console`, and its defaults are the right ones** —
+   ANSI colours off, multiline off, where the `Log file` default has ANSI on.
+   Choose Console: `/var/log/stalwart/` is not a bind mount, so file logs live
+   in the container's writable layer and vanish on the next image bump.
+7. **Min blob size renders with a locale comma (`16,44`)** and a typed value can
+   land off by one — `16` was entered and `blobSize: 15360` was stored. It is
+   inert when Attachment & File Storage is left on "Use data store", because the
+   threshold then chooses between two names for the same RocksDB.
+
 **MEASURED ON THE HOMELAB, first start 2026-08-30 08:34 CEST.** Until this
 deploy nothing in this section had ever met a running Stalwart. These four have:
 
