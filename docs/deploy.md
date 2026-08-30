@@ -288,6 +288,9 @@ rsync -avn --delete --info=del \
   --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' \
   --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod' \
   --exclude 'secrets' --exclude 'vault-files' \
+  --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' \
+  --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' \
+  --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' \
   ./ homelab:~/apps/verder/
 
 # Then the real run: same flags, drop the -n.
@@ -295,6 +298,9 @@ rsync -av --delete \
   --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' \
   --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod' \
   --exclude 'secrets' --exclude 'vault-files' \
+  --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' \
+  --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' \
+  --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' \
   ./ homelab:~/apps/verder/
 ```
 
@@ -314,6 +320,39 @@ production one. `nightly.log` is written into `~/apps/verder/` itself and exists
 on the homelab only, so `--delete` without it erases the whole history of
 nightly backup and verify runs — on 2026-08-22 the dry run printed exactly one
 line, `deleting nightly.log`, which is the only warning there is.
+
+**The last eight excludes were added 2026-08-30, and the list was UNSAFE without
+them.** It only ever looked safe because every deploy so far ran from Martin's
+working tree, where those gitignored files happen to exist locally — so
+`--delete` found a matching copy on both sides and printed nothing. Sync from
+any tree that does not have them (a fresh clone, a `git worktree`, CI, a second
+machine) and the dry run asks to delete, measured — 44 `deleting` lines from a
+clean worktree of HEAD, of which these four matter:
+
+```
+deleting apps/worker/nld.traineddata     11 MB of Tesseract data; ocr-image
+deleting apps/worker/eng.traineddata     and ocr-pdf stop working
+deleting .env                            VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+deleting apps/web/.env.local             DATABASE_URL, AUTH_SECRET, APP_URL,
+                                         VAULT_DIR, VAPID keys
+```
+
+None of those three files is in git anywhere, so the deletion is unrecoverable —
+and losing the VAPID keys takes out web-push, which is the alerting path
+precisely BECAUSE it does not depend on mail.
+
+**Prefer deploying from a clean worktree of HEAD**, not from the working tree:
+
+```bash
+git worktree add --detach /tmp/deploy-tree HEAD    # then rsync from there
+```
+
+It ships exactly what is committed, which is the only way to be sure a second
+session's uncommitted work is not riding along — on 2026-08-30 a parallel
+session was mid-edit in `apps/web/` during this deploy, and a working-tree rsync
+would have built its half-finished design system into the production web image.
+That habit is only safe with the excludes above, which is why they are not
+optional.
 
 Afterwards, confirm the secrets survived:
 
@@ -608,7 +647,34 @@ and a mail server is not where to start blurring them. A passage in the previous
 draft of this section was headed "one measured trap" and had in fact only been
 read. So:
 
-**MEASURED (by this session, locally):**
+**MEASURED ON THE HOMELAB, first start 2026-08-30 08:34 CEST.** Until this
+deploy nothing in this section had ever met a running Stalwart. These four have:
+
+- **The container reports healthy in bootstrap mode.** `docker compose ps` shows
+  `stalwart  Up (healthy)` within 12 s of a cold start, and on the host
+  `/healthz/live` → 200, `/admin` → 302, `/.well-known/jmap` → 307. §8.8 listed
+  "up and healthy" as an *assumption* because the server behaves differently in
+  recovery mode; it holds.
+- **`create_host_path: false` is honoured by the homelab's Compose 2.40.3**, not
+  merely by Docker Desktop's v5.0.0 where it was first tested. Differential test
+  on the homelab: the guarded service refused with `invalid mount config for
+  type "bind": bind source path does not exist` and created nothing, while an
+  unguarded service on an identical missing path started and silently created
+  the directory. Note that `docker compose config` on 2.40.3 renders the mount
+  as a bare `bind: {}` and does NOT echo the key back — the guard is there, the
+  render just does not show it, so do not read its absence as missing.
+- **Bootstrap mode prints a one-time admin password to the container log** and
+  writes NOTHING to `/etc/stalwart` until the wizard finishes — that directory
+  was still empty after a successful start. Recover the password with
+  `docker compose … logs stalwart`; it survives until the container is recreated.
+- **The nested blob mount leaves a root-owned stub.** `STALWART_BLOB_DIR` targets
+  `/var/lib/stalwart/blobs`, which is *inside* `STALWART_DATA_DIR`'s target, so
+  Docker creates the mountpoint inside the outer bind and it lands `root:root`
+  (`/mnt/data/verder/stalwart/data/blobs`). It is inert — real writes go to the
+  outer `blobs` bind, which is `2000:2000` — but if the wizard's Storage screen
+  is ever pointed at a Filesystem blob store, check ownership first.
+
+**MEASURED (locally, before the deploy):**
 
 - `docker compose -f docker-compose.prod.yml --env-file <file> config` renders
   the whole file with **all four `STALWART_*` variables absent**: the three
