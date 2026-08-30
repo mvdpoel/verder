@@ -17,6 +17,7 @@
 - Evidence tables are append-only (enforced by Postgres grants); every evidence mutation appends a `ledger_events` row in the same transaction. Never weaken this.
 - AI output is suggestion-only; nothing enters the ledger without Martin's approval. Model suggestion + verdict + edit diff are always recorded (golden rule: self-improvement).
 - Tone: supportive/encouraging toward Martin; short, professional, official register for anyone else.
+- Language: **talk to Martin in English** — chat, commit messages, specs, plans, code comments. The APP is Dutch and stays Dutch (every label, every notice, every export a human reads); that is a product decision about its readers, not about how we work together. Only two things in the UI are English, both deliberate: the rail label and page title `Files`.
 
 ## Key docs
 - Vision/braindump: `docs/braindump.md`
