@@ -4,6 +4,7 @@ import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
 import { isRelevantMessage, relevantAddresses } from "./mail/relevance";
+import { extractMessageId } from "./mail/message-id";
 import type { MailMessage, SkippedPart } from "./mail/port";
 
 /** A message part the port refused to promote to a document — see
@@ -24,6 +25,27 @@ export interface GmailMessage {
 export interface GmailPort {
   listMessageIds(query: string): Promise<string[]>;
   getMessage(id: string): Promise<GmailMessage>;
+}
+
+/**
+ * A GmailMessage as the MailMessage the ingest takes.
+ *
+ * The two shapes now differ in exactly one field, and it is the one that spans
+ * the two ingest namespaces: the RFC 5322 Message-ID. The JMAP port asks the
+ * server for it as a header PROPERTY, which costs no blob and is what lets
+ * pollMail skip a message the dossier already holds before downloading it. The
+ * Gmail API offers no such form, so this path reads it out of the RFC822
+ * original — which it is holding anyway, since ingestRawEmail is about to write
+ * those very bytes to the vault. Still one source per port, never two per
+ * message: nothing here re-derives what a port already reported.
+ *
+ * Filled at the ingest boundary rather than by widening GmailMessage, because
+ * that would make the field required of every Gmail-era fixture and of
+ * gmail-auth's part walker — real work spent on a path that is unscheduled and
+ * being replaced by JMAP.
+ */
+export function asMailMessage(msg: GmailMessage): MailMessage {
+  return { ...msg, messageId: extractMessageId(msg.raw) };
 }
 
 /**
@@ -55,6 +77,25 @@ export async function ingestRawEmail(
       fromAddr: msg.from, toAddr: msg.to, subject: msg.subject,
       sentAt: msg.sentAt, rawRfc822Sha256: rawSha256,
       bodyText: msg.bodyText,
+      // THE IDENTITY THAT SPANS THE TWO INGEST NAMESPACES, written at the one
+      // moment it is free to write. A row ingested without it is a row the next
+      // re-import cannot recognise — neither its gmail_message_id (a Stalwart
+      // Email id is a different namespace) nor its content hash (Takeout's mbox
+      // bytes are not the bytes Gmail's API returned) matches — so it is a
+      // permanent duplicate in an append-only table plus one redundant LLM job,
+      // and the only repair afterwards is a hand-run backfill.
+      //
+      // THE FALLBACK IS NOT BELT-AND-BRACES. The JMAP port asks the server for
+      // the header as a PROPERTY, which is what lets pollMail skip a known
+      // message before downloading it, but a MailMessage may still arrive with
+      // none: an mbox-imported message whose header property the store did not
+      // index, or any future port that fills the field lazily. The raw bytes
+      // are the backstop and they are already in hand here — storeFile has just
+      // hashed and written this very buffer — so reading the header out of them
+      // costs one pass over a few kilobytes and no I/O at all. `??` and not
+      // `||`: null is "the port did not say", and there is no other falsy value
+      // extractMessageId can produce that would mean anything else.
+      messageId: msg.messageId ?? extractMessageId(msg.raw),
       source: opts?.source ?? "gmail",
       ...(opts?.skipSuggest ? { suggestQueuedAt: new Date() } : {}),
     }).returning();
@@ -208,7 +249,7 @@ export async function pollGmail(deps: {
         // Martin's own sent mail and then throw it away. The predicate lives in
         // ./mail/relevance so pollMail applies this identical policy.
         if (!isRelevantMessage(addrs, msg)) continue;
-        const rawEmailId = await ingestRawEmail(deps, msg);
+        const rawEmailId = await ingestRawEmail(deps, asMailMessage(msg));
         await enqueueAndMark(deps, rawEmailId);
         ingested++;
       } catch (err) {

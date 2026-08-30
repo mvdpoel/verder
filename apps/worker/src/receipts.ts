@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
-import { ingestRawEmail, type GmailPort } from "./gmail";
+import { asMailMessage, ingestRawEmail, type GmailPort } from "./gmail";
 import { recordRun } from "./heartbeat";
 import { buildReceiptPrompt, RECEIPT_PROMPT_VERSION } from "./prompts";
 import type { LlmPort } from "./ollama";
@@ -88,7 +88,8 @@ export async function resolveAggregator(
             .where(eq(schema.rawEmails.gmailMessageId, id));
           const rawEmailId = seen
             ? seen.id
-            : await ingestRawEmail(deps, await deps.gmail.getMessage(id), { skipSuggest: true });
+            : await ingestRawEmail(deps, asMailMessage(await deps.gmail.getMessage(id)),
+              { skipSuggest: true });
           if (!receiptRawEmailIds.includes(rawEmailId)) receiptRawEmailIds.push(rawEmailId);
         } catch (err) {
           failures.push({ id, message: String(err) });

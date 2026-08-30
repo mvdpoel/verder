@@ -32,6 +32,10 @@ function msg(id: string, over: Partial<MailMessage> = {}): MailMessage {
   return { id, threadId: "t1", from: "case@verdergroep.nl", to: "martin@vanderpoel.pro",
     subject: "Stukken aanleveren", sentAt: new Date(), bodyText: "Beste Martin",
     raw: Buffer.from(`raw-${id}`),
+    // Per-fixture, exactly like the raw bytes: the Message-ID is an identity,
+    // so two fixture messages sharing one would be two mails claiming to be the
+    // same mail — the very thing the dedup reads it for.
+    messageId: `${id}@fixture.invalid`,
     // Per-message bytes, exactly as gmail.test.ts's fixture does it. Sharing
     // one buffer across every fixture message made ingestDocument dedup them on
     // sha256, so the second message's "attachment" was really the first
@@ -54,7 +58,7 @@ function portOf(msgs: MailMessage[], cursor = "s2") {
   const port: MailPort = {
     changedSince: async () => ({ ids: msgs.map((m) => m.id), cursor }),
     headers: async (ids) => msgs.filter((m) => ids.includes(m.id))
-      .map((m) => ({ id: m.id, from: m.from, to: m.to })),
+      .map((m) => ({ id: m.id, from: m.from, to: m.to, messageId: m.messageId })),
     getMessage: async (id) => {
       gets.push(id);
       const m = msgs.find((x) => x.id === id);
@@ -267,6 +271,11 @@ describe("pollMail", () => {
       id: historicId, threadId: "t-hist", from: "case@verdergroep.nl",
       to: "martin@vanderpoel.pro", subject: "Beschikking", sentAt: new Date(),
       bodyText: "", raw: bytes, attachments: [],
+      // DELIBERATELY not the Message-ID the JMAP fixture below carries. What is
+      // under test here is the sha256 path, and two fixtures sharing an
+      // identity would let a dedup on that identity keep this test green while
+      // the hash path had stopped working.
+      messageId: `${historicId}@fixture.invalid`,
     }, { skipSuggest: true });
     const [historic] = await db.select().from(schema.rawEmails)
       .where(eq(schema.rawEmails.gmailMessageId, historicId));
@@ -301,6 +310,201 @@ describe("pollMail", () => {
     // A held cursor is the tell that the message failed rather than deduped: a
     // recognised duplicate is finished business and the delta may move past it.
     expect(run.detail?.cursorHeld).toBeUndefined();
+    await pool.end();
+  });
+
+  // THE KEY THE OTHER TWO CANNOT REACH. A Stalwart Email id is a different
+  // namespace from a Gmail message id, so the id lookup misses every email the
+  // dossier already holds — and Takeout's mbox bytes are not the bytes Gmail's
+  // API returned for the same message, so the sha256 key misses them too.
+  // Measured on the archive: 130 relevant messages matching 0 of 107 existing
+  // rows, i.e. ~114 permanent duplicate rows in an append-only table and ~114
+  // redundant LLM jobs on a VRAM-starved GPU. The RFC 5322 Message-ID is
+  // assigned by the ORIGINATING server and survives both export formats, which
+  // is what makes it the identity that spans them.
+  //
+  // IT MUST FIRE BEFORE getMessage, and that is half the point: recognising the
+  // duplicate only after its blobs have crossed the wire drags the whole
+  // Gmail-era overlap through an 11.49 GB archive to throw it away again.
+  it("skips a message the dossier holds under another id and other bytes", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = vault();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const historicId = `m-gmail-mid-${stamp}`;
+    const jmapId = `j-mid-${stamp}`;
+    // Normalised, i.e. exactly what normaliseMessageId hands back: the ingest
+    // stores what the skip decision is made on, so a fixture wearing angle
+    // brackets would be testing a value nothing ever compares.
+    const shared = `case.${stamp}@verdergroep.nl`;
+    // Ingested through the REAL path, exactly as the 107 Gmail-era rows were —
+    // hand-writing the row would assert that ingestRawEmail records the
+    // Message-ID by construction rather than by observation, and it recording
+    // nothing is precisely the failure that leaves this dedup blind.
+    await ingestRawEmail({ db, vaultDir }, {
+      id: historicId, threadId: "t-hist", from: "case@verdergroep.nl",
+      to: "martin@vanderpoel.pro", subject: "Beschikking", sentAt: new Date(),
+      bodyText: "", raw: Buffer.from(`gmail-bytes-${stamp}`), attachments: [],
+      messageId: shared,
+    }, { skipSuggest: true });
+    const [historic] = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.gmailMessageId, historicId));
+    expect(historic.messageId).toBe(shared);
+
+    const enqueued: string[] = [];
+    const worker = uniqueWorker("mid-dedup");
+    // DIFFERENT BYTES ON PURPOSE. If the fixture reused the historic raw the
+    // content hash would skip this message and the test would stay green with
+    // the Message-ID path deleted — which is the whole case that actually
+    // happens here, an mbox export of a message the API had already handed over.
+    const { port, gets } = portOf([msg(jmapId, {
+      raw: Buffer.from(`takeout-bytes-${stamp}`), attachments: [], messageId: shared })]);
+    const r = await pollMail({ db, mail: port, vaultDir, worker,
+      enqueueSuggest: async (x) => { enqueued.push(x); } });
+    expect(r.ingested).toBe(0);
+    // NOT EVEN DOWNLOADED — the assertion the ingest count cannot make.
+    expect(gets).toEqual([]);
+
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("ok");
+    expect(run.detail?.knownByMessageId).toBe(1);
+    // Counted apart from the content-hash key, because the two answer different
+    // questions and one number for both would hide either going blind.
+    expect(run.detail?.duplicates).toBe(0);
+    expect(run.detail?.failures).toEqual([]);
+    // A held cursor is the tell that the message FAILED rather than deduped.
+    expect(run.detail?.cursorHeld).toBeUndefined();
+
+    // THE LAW, the same one the content-hash branch obeys: the existing row's
+    // gmail_message_id is NEVER rewritten. It is also documents.source_ref, and
+    // the case map's third level — the mail and its files hanging off a stop —
+    // is derived from the equality of the two, so "correcting" it to the JMAP
+    // id would silently unlink every attachment of that mail.
+    const [after] = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.id, historic.id));
+    expect(after.gmailMessageId).toBe(historicId);
+    expect(after.source).toBe("gmail");
+    expect(enqueued).not.toContain(historic.id);
+    await pool.end();
+  });
+
+
+  // THE SAME KEY, TURNED ON THE RUN ITSELF, and the case the batched lookup
+  // above cannot see. `heldMessageIds` is a SNAPSHOT taken once before the
+  // loop: it answers "what did raw_emails hold when this poll started", and a
+  // second candidate carrying a Message-ID the FIRST candidate has just
+  // ingested is not in it. The content hash behind it queries the database live
+  // per message and so catches a same-bytes repeat inside one run — which makes
+  // an un-updated snapshot strictly WEAKER than the key it fronts, rather than
+  // a cheaper version of it.
+  //
+  // THE MAILBOX ACTUALLY LOOKS LIKE THIS. One mail delivered to two addresses
+  // arrives as two Stalwart Emails with one Message-ID and different bytes
+  // (different Received headers) — the exact reason schema.ts leaves the sha
+  // index non-unique and the reason `findDuplicates` in backfill-message-ids
+  // exists to report pairs. Without the mutation both are ingested: two
+  // permanent rows in a table with no DELETE grant, two suggest.entry jobs on a
+  // VRAM-starved GPU, and BOTH counters reporting 0, so there is no trace of it
+  // anywhere.
+  it("skips a second candidate carrying a Message-ID this same poll just ingested", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = vault();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const firstId = `j-run-a-${stamp}`;
+    const secondId = `j-run-b-${stamp}`;
+    // Normalised, as normaliseMessageId hands it back — the value the skip is
+    // decided on, so a fixture in angle brackets would test nothing.
+    const shared = `two.addresses.${stamp}@verdergroep.nl`;
+
+    const worker = uniqueWorker("mid-in-run");
+    // DIFFERENT BYTES ON PURPOSE, and this is the whole test: one mail
+    // delivered twice differs in its Received headers, so the content hash
+    // cannot see the pair and only the Message-ID can.
+    const { port, gets } = portOf([
+      msg(firstId, { raw: Buffer.from(`delivered-to-one-${stamp}`), attachments: [],
+        messageId: shared }),
+      msg(secondId, { raw: Buffer.from(`delivered-to-two-${stamp}`), attachments: [],
+        messageId: shared }),
+    ]);
+    const enqueued: string[] = [];
+    const r = await pollMail({ db, mail: port, vaultDir, worker,
+      enqueueSuggest: async (x) => { enqueued.push(x); } });
+
+    expect(r.ingested).toBe(1);
+    // NOT EVEN DOWNLOADED — the assertion the ingest count cannot make, and the
+    // one that fails against a snapshot that is never updated.
+    expect(gets).toEqual([firstId]);
+    // One row, not two, and it is the first candidate's: the second is skipped,
+    // never merged into the first, exactly as the two dedup keys behind it
+    // skip rather than rewrite.
+    const rows = await db.select().from(schema.rawEmails)
+      .where(eq(schema.rawEmails.messageId, shared));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].gmailMessageId).toBe(firstId);
+    expect(enqueued).toHaveLength(1);
+
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("ok");
+    // COUNTED APART FROM knownByMessageId, the same way the preview keeps
+    // attachmentsRepeatedInRun apart from attachmentsAlreadyInVault. That
+    // figure is the measured Gmail-era overlap with the DOSSIER (130 relevant
+    // against 0 of 107 rows); a within-run repeat is a fact about the MAILBOX
+    // and folding it in would inflate the one number this slice was measured
+    // against with something that is not overlap at all.
+    expect(run.detail?.messagesRepeatedInRun).toBe(1);
+    expect(run.detail?.knownByMessageId).toBe(0);
+    expect(run.detail?.duplicates).toBe(0);
+    expect(run.detail?.failures).toEqual([]);
+    // A recognised duplicate is finished business: the delta may move past it.
+    expect(run.detail?.cursorHeld).toBeUndefined();
+    await pool.end();
+  });
+
+  // A message carrying no Message-ID at all is unusual and perfectly legal, and
+  // it must fall through to the content hash rather than be skipped — otherwise
+  // the new key trades one blind spot for a worse one, silently dropping mail
+  // the dossier does not hold.
+  //
+  // THE TRAP IT GUARDS. A lookup built as a Set of the values found in
+  // raw_emails answers `has(null)` with true the moment ANY existing row has no
+  // Message-ID recorded — which is every row until the backfill has run — so a
+  // null candidate would be "recognised" by an unknown and never ingested. SQL
+  // gets this right on its own (`NULL = NULL` is unknown); the Set does not, so
+  // the existing row here also carries none.
+  it("ingests a candidate with no Message-ID instead of matching it on nothing", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = vault();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const otherId = `m-nomid-${stamp}`;
+    const newId = `j-nomid-${stamp}`;
+    await ingestRawEmail({ db, vaultDir }, {
+      id: otherId, threadId: "t-nomid", from: "case@verdergroep.nl",
+      to: "martin@vanderpoel.pro", subject: "Zonder Message-ID", sentAt: new Date(),
+      bodyText: "", raw: Buffer.from(`no-mid-existing-${stamp}`), attachments: [],
+      messageId: null,
+    }, { skipSuggest: true });
+
+    const worker = uniqueWorker("mid-null");
+    const { port, gets } = portOf([msg(newId, {
+      raw: Buffer.from(`no-mid-new-${stamp}`), attachments: [], messageId: null })]);
+    const r = await pollMail({ db, mail: port, vaultDir, worker,
+      enqueueSuggest: async () => {} });
+    expect(r.ingested).toBe(1);
+    // It reached the content-hash path, which is the only place a message with
+    // no Message-ID can be judged at all.
+    expect(gets).toEqual([newId]);
+    const run = await lastRun(db, worker);
+    expect(run.detail?.knownByMessageId).toBe(0);
+    // THE TELL THAT THE KEY IS ALIVE AT ALL. jmap-port.ts asks for
+    // `header:Message-ID:asText` and reads it back by exact string key, and
+    // every test in this repo uses a fake that echoes that key verbatim —
+    // docs/deploy.md says in terms that none of it has been measured against a
+    // running Stalwart. A server that omits the property, or answers under
+    // different casing, returns null for EVERY message and the whole dedup
+    // becomes a silent no-op reporting `knownByMessageId: 0` — indistinguishable
+    // from a genuinely disjoint mailbox. This counter is what separates them: on
+    // ordinary mail "130 of 130 carry no Message-ID" is visibly impossible,
+    // whereas a zero overlap is not.
+    expect(run.detail?.noMessageId).toBe(1);
     await pool.end();
   });
 
@@ -370,7 +574,8 @@ describe("pollMail", () => {
     const junk = `j-junk-${stamp}`;
     const p: MailPort = {
       changedSince: async () => ({ ids: [junk, `j-gone-${stamp}`], cursor: "s2" }),
-      headers: async () => [{ id: junk, from: `deals@shop-${stamp}.example`, to: "" }],
+      headers: async () => [{ id: junk, from: `deals@shop-${stamp}.example`, to: "",
+        messageId: `${junk}@shop.example` }],
       getMessage: async (id) => msg(id),
     };
     await pollMail({ db, mail: p, vaultDir: vault(), worker, enqueueSuggest: async () => {} });
@@ -732,7 +937,8 @@ describe("pollMail", () => {
     const id = `j-trunc-ok-${Date.now()}`;
     const p: MailPort = {
       changedSince: async () => ({ ids: [id], cursor: "s-after", hasMore: true }),
-      headers: async () => [{ id, from: "case@verdergroep.nl", to: "martin@vanderpoel.pro" }],
+      headers: async () => [{ id, from: "case@verdergroep.nl", to: "martin@vanderpoel.pro",
+        messageId: `${id}@verdergroep.nl` }],
       getMessage: async (x) => msg(x),
     };
     const r = await pollMail({ db, mail: p, vaultDir: vault(), worker,

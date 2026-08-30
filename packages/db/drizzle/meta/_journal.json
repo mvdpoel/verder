@@ -211,6 +211,20 @@
       "when": 1788036996064,
       "tag": "0029_raw_emails_sha256_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788095154813,
+      "tag": "0030_raw_emails_message_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788095911778,
+      "tag": "0031_raw_emails_message_id_grant",
+      "breakpoints": true
     }
   ]
 }

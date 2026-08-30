@@ -139,6 +139,17 @@ export const rawEmails = pgTable("raw_emails", {
   // row is labelled without its gmail_message_id being touched — that id is
   // also documents.source_ref and the case map's third level derives from it.
   source: text("source").notNull().default("gmail"),
+  // The RFC 5322 Message-ID, as the originating server wrote it. This is the
+  // only identity that spans the two ingest namespaces: a Stalwart Email id is
+  // not a Gmail message id, and Takeout's mbox bytes are not the bytes Gmail's
+  // API returned for the same message, so neither gmail_message_id nor
+  // raw_rfc822_sha256 recognises a mail the dossier already holds — measured at
+  // 130 relevant messages matching 0 of 107 existing rows.
+  // NULLABLE, and it has to be: every row predating this column has none until
+  // the backfill runs, and a message carrying no Message-ID header at all is
+  // unusual but legal. NOT NULL would make the column say something false in
+  // both cases; NULL says "unknown", which is the truth.
+  messageId: text("message_id"),
 }, (t) => [
   check("raw_emails_source_check", sql`${t.source} IN ('gmail', 'jmap')`),
   // The JMAP poller dedups on message CONTENT before ingesting, one lookup by
@@ -150,6 +161,14 @@ export const rawEmails = pgTable("raw_emails", {
   // ingested) and the poller's answer is to skip the second, not to have
   // Postgres abort the sync.
   index("raw_emails_sha256_idx").on(t.rawRfc822Sha256),
+  // One lookup by Message-ID per candidate message, on the same sync and for
+  // the same reason as the hash index above — and NOT unique for a stronger
+  // reason than that one. The poller's policy for a duplicate is to skip it; a
+  // unique constraint makes Postgres abort the INSERT instead, would fail the
+  // backfill outright the moment two existing rows turn out to share an id, and
+  // would promote a malformed sender reusing a Message-ID from a skipped
+  // message into an error that stops ingestion.
+  index("raw_emails_message_id_idx").on(t.messageId),
 ]);
 
 export const suggestions = pgTable("suggestions", {

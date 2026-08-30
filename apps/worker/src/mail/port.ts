@@ -6,6 +6,22 @@ export interface MailMessage {
   sentAt: Date; bodyText: string; raw: Buffer;
   attachments: { filename: string; mime: string; data: Buffer }[];
   skippedParts?: SkippedPart[];
+  /**
+   * The RFC 5322 Message-ID, normalised, or null when the message carries none.
+   *
+   * The SAME value `headers()` returned for this id, carried through so the
+   * ingest stores what the skip decision was made on. A port that read it once
+   * cheaply and then again out of the raw bytes has two sources for one
+   * identity, and they disagree exactly where it matters — a header the store
+   * rewrote, a Takeout export that refolded the line — leaving a row deduped
+   * against a value nothing will ever compute again.
+   *
+   * Required, not optional, and nullable rather than absent: null is "this
+   * message has no Message-ID", which is unusual but ingestable, while a
+   * missing field is a port that forgot. Only the first is a fact about the
+   * mail.
+   */
+  messageId: string | null;
 }
 
 export interface MailChanges {
@@ -32,8 +48,26 @@ export interface MailChanges {
  * `from` address, every `to` joined): the relevance filter must test the same
  * strings the ingest will store, or a message is judged on an address its
  * raw_emails row does not record.
+ *
+ * `messageId` is the same rule applied to identity, and it is here rather than
+ * on MailMessage alone because it is what lets a KNOWN message be skipped
+ * BEFORE its blob is fetched. Neither the store's own id nor the raw sha256
+ * recognises a mail the dossier already holds across two ingest paths — a
+ * Stalwart Email id is a different namespace from a Gmail message id, and
+ * Takeout's mbox bytes are not the bytes Gmail's API returned for the same
+ * message (measured on the archive at 130 relevant messages matching 0 of 107
+ * existing rows). The RFC 5322 Message-ID is assigned by the ORIGINATING server
+ * and survives both formats, so it is the identity that spans them; it must be
+ * normalised the SAME way on both sides of the comparison, or the dedup misses
+ * on a pair of angle brackets and writes the duplicate anyway.
+ *
+ * Null means the message carries no Message-ID at all. That is unusual and
+ * still ingestable — it simply cannot be deduped by one — so no port may throw
+ * over it.
  */
-export interface MailHeaders { id: string; from: string; to: string }
+export interface MailHeaders {
+  id: string; from: string; to: string; messageId: string | null;
+}
 
 /**
  * Discovery is CURSOR-based, not query-based.

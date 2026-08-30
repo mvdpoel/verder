@@ -593,6 +593,41 @@ describe("JmapPort.getMessage", () => {
     expect(m.bodyText).toBe("Beste Martin");
   });
 
+  /**
+   * ONE SOURCE FOR ONE IDENTITY.
+   *
+   * The Message-ID is the only thing that recognises a mail already ingested
+   * through the Gmail API (different id namespace, different raw bytes, so
+   * neither the store id nor the sha256 matches), and `headers()` reads it as a
+   * property so pollMail can skip such a message before any blob is fetched.
+   * getMessage asks for the SAME property rather than parsing `raw` — whose
+   * bytes are in hand by then, which is exactly the temptation — because two
+   * parsers for one identity disagree precisely where it costs: the row is then
+   * stored under a value the skip will never compute again.
+   */
+  it("carries the Message-ID from the same header property, normalised", async () => {
+    const call = fakeCall([[{ list: [message({
+      "header:Message-ID:asText": "<CAF+9@mail.gmail.com>" })] }]]);
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
+      download: vi.fn(async () => Buffer.from("x")) as never });
+    const m = await p.getMessage("e1");
+
+    expect(m.messageId).toBe("CAF+9@mail.gmail.com");
+    const props = (sent(call)[3][0][1] as { properties: string[] }).properties;
+    expect(props).toContain("header:Message-ID:asText");
+  });
+
+  // A message with no Message-ID is unusual and still ingestable — it simply
+  // cannot be deduped by one. Refusing it would fail the poll over a header the
+  // sender omitted; "" would be worse, because it compares EQUAL to the next
+  // message that also has none.
+  it("reads a message with no Message-ID as null", async () => {
+    const call = fakeCall([[{ list: [message({})] }]]);
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
+      download: vi.fn(async () => Buffer.from("x")) as never });
+    expect((await p.getMessage("e1")).messageId).toBeNull();
+  });
+
   // receivedAt is when the STORE took delivery — for the Vandelay import that is
   // the import date. sent_at flows into documents.received_at, which is EVIDENCE
   // and append-only, so a wrong date is not correctable later.

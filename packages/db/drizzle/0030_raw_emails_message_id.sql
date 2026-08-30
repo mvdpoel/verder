@@ -1,0 +1,46 @@
+-- The identity that spans the two ingest namespaces. Stalwart holds 146,270
+-- messages imported from a Google Takeout mbox; the dossier already holds 107
+-- emails ingested earlier through the Gmail API. A preview of the first JMAP
+-- sync found 130 relevant messages and matched ZERO of them to an existing row,
+-- missing on both identities we had: a Stalwart Email id lives in a different
+-- namespace from a Gmail message id, so `gmail_message_id` never matches, and
+-- Takeout's mbox bytes are not byte-identical to what Gmail's API returned for
+-- the same message, so 0029's `raw_rfc822_sha256` never matches either.
+-- Committing that sync as it stood would have written ~114 permanent duplicate
+-- rows into an append-only table and fired ~114 redundant LLM jobs. The RFC 5322
+-- Message-ID is assigned by the ORIGINATING server and survives both export
+-- formats intact, which is what makes it the correct identity here.
+--
+-- NULLABLE, and it has to be. Every row already in the table has no Message-ID
+-- recorded until the backfill runs, and a message carrying no Message-ID header
+-- at all is unusual but perfectly legal. NOT NULL would force the column to say
+-- something false in both cases; NULL says "unknown", which is the truth, and a
+-- dedup that reads NULL as "no match" is exactly right about such a row.
+ALTER TABLE "raw_emails" ADD COLUMN "message_id" text;--> statement-breakpoint
+-- Indexed for the same reason as 0029's hash index: the dedup does one
+-- `select id from raw_emails where message_id = $1` per candidate message, and
+-- unindexed that is a sequential scan per message over a table growing by one
+-- row per message — O(N^2) on the one run this dedup exists for, the first sync
+-- after the 11.49 GB Takeout import.
+--
+-- NOT unique, and here that matters more than it did for the hash. The poller's
+-- policy for a duplicate is to SKIP it; a unique constraint replaces that skip
+-- with Postgres ABORTING the insert, which is not the same decision written a
+-- different way — it stops the sync. It would also fail the backfill outright
+-- the moment two rows already in the table turn out to share a Message-ID, with
+-- no recourse but to delete from an append-only table. And a malformed sender
+-- that reuses a Message-ID across genuinely different messages is a thing that
+-- happens; under a unique index that sender's second mail becomes an
+-- ingest-stopping error instead of one skipped message.
+--
+-- WHY THIS IS 0030 AND NOT AN EDIT TO 0028 OR 0029, for the third time and for
+-- the reason 0029 spells out at length: both are already applied to the dev
+-- database and recorded in drizzle/meta/_journal.json, and the migrator skips a
+-- migration purely on `journal.when <= max(created_at)` in
+-- drizzle.__drizzle_migrations — the stored hash is written but never compared.
+-- Amending either in place would silently NOT re-run in dev, so the column
+-- would have to be added there by hand, and the recorded hash would be stale
+-- forever. Production, which has seen none of the three, runs 0028, 0029 and
+-- 0030 in order and ends with the source column, both indexes and this column,
+-- each exactly once.
+CREATE INDEX "raw_emails_message_id_idx" ON "raw_emails" USING btree ("message_id");

@@ -20,26 +20,69 @@ const port = (call: unknown, download: unknown = vi.fn(), limits?: { pageSize: n
  * import is years of commercial mail pulled through the wire in full.
  */
 describe("JmapPort.headers", () => {
-  it("asks for from and to ONLY, in one Email/get for many ids", async () => {
+  it("asks for from, to and the Message-ID ONLY, in one Email/get for many ids", async () => {
     const call = fakeCall([[{ list: [
-      { id: "e1", from: [{ email: "case@verdergroep.nl" }], to: [{ email: "m@x.nl" }] },
-      { id: "e2", from: [{ email: "deals@shop.example" }], to: [{ email: "p@shop.example" }] },
+      { id: "e1", from: [{ email: "case@verdergroep.nl" }], to: [{ email: "m@x.nl" }],
+        "header:Message-ID:asText": "<a1@verdergroep.nl>" },
+      { id: "e2", from: [{ email: "deals@shop.example" }], to: [{ email: "p@shop.example" }],
+        "header:Message-ID:asText": "<a2@shop.example>" },
     ] }]]);
     const r = await port(call).headers(["e1", "e2"]);
 
     expect(r).toEqual([
-      { id: "e1", from: "case@verdergroep.nl", to: "m@x.nl" },
-      { id: "e2", from: "deals@shop.example", to: "p@shop.example" },
+      { id: "e1", from: "case@verdergroep.nl", to: "m@x.nl",
+        messageId: "a1@verdergroep.nl" },
+      { id: "e2", from: "deals@shop.example", to: "p@shop.example",
+        messageId: "a2@shop.example" },
     ]);
     expect(call).toHaveBeenCalledTimes(1);
     const calls = call.mock.calls[0][3] as unknown[][];
     expect(calls).toHaveLength(1);
     expect(calls[0][0]).toBe("Email/get");
     const args = calls[0][1] as Record<string, unknown>;
-    expect(args.properties).toEqual(["id", "from", "to"]);
+    expect(args.properties).toEqual(["id", "from", "to", "header:Message-ID:asText"]);
     // No blobId, no attachments, no bodyValues: asking for them is asking the
     // server to build exactly what this call exists to avoid.
     expect(args.fetchTextBodyValues).toBeUndefined();
+  });
+
+  /**
+   * THE WHOLE POINT OF ASKING FOR IT *HERE*.
+   *
+   * A Stalwart Email id and a Gmail message id are different namespaces, and
+   * Takeout's mbox bytes are not the bytes Gmail's API returned for the same
+   * message, so neither the id nor the sha256 recognises a mail the dossier
+   * already holds — measured on the archive at 130 relevant messages matching 0
+   * of 107 existing rows. The Message-ID does, and it is a HEADER PROPERTY:
+   * RFC 8621 §4.1.1's `header:{name}:{form}` costs no blob, so pollMail can
+   * skip a known message before `getMessage` pulls the RFC822 original and
+   * every attachment. Reading it out of the raw bytes instead would mean
+   * downloading exactly what the skip exists to avoid, 146 270 times.
+   */
+  it("returns the Message-ID normalised, without the delimiting brackets", async () => {
+    const call = fakeCall([[{ list: [
+      { id: "e1", from: [], to: [], "header:Message-ID:asText": "  <CAF+9@mail.gmail.com>  " },
+    ] }]]);
+    expect(await port(call).headers(["e1"])).toEqual([
+      { id: "e1", from: "", to: "", messageId: "CAF+9@mail.gmail.com" },
+    ]);
+  });
+
+  // RFC 8621 answers an absent header with null, and a message without a
+  // Message-ID is unusual but perfectly ingestable — it simply cannot be
+  // deduped by one. Throwing here would fail the whole poll over a header the
+  // sender omitted; the honest answer is "unknown", which is null.
+  it("reads a message with no Message-ID as null rather than throwing", async () => {
+    const call = fakeCall([[{ list: [
+      { id: "e1", from: [], to: [], "header:Message-ID:asText": null },
+      { id: "e2", from: [], to: [] },
+      // `<>` is a value that arrived and carries no id. It must not become "",
+      // which would compare EQUAL to the next message that also has none — a
+      // dedup key matching unrelated mail, which drops a real document.
+      { id: "e3", from: [], to: [], "header:Message-ID:asText": "<>" },
+    ] }]]);
+    expect((await port(call).headers(["e1", "e2", "e3"])).map((h) => h.messageId))
+      .toEqual([null, null, null]);
   });
 
   it("downloads nothing", async () => {
@@ -91,7 +134,8 @@ describe("JmapPort.headers", () => {
   // address its raw_emails row does not record.
   it("reads a missing header as empty rather than throwing", async () => {
     const call = fakeCall([[{ list: [{ id: "e1", from: null, to: null }] }]]);
-    expect(await port(call).headers(["e1"])).toEqual([{ id: "e1", from: "", to: "" }]);
+    expect(await port(call).headers(["e1"]))
+      .toEqual([{ id: "e1", from: "", to: "", messageId: null }]);
   });
 
   // A message destroyed between Email/changes and this call simply is not in

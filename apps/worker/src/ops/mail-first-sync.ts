@@ -38,11 +38,11 @@
 // commit ingests everything and HOLDS the cursor, the second finds every
 // message already known by id, fails nothing, and writes the cursor the
 // scheduled poll then continues from. The script says so in its own output.
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { createDb, schema, type Db } from "@verder/db";
 import { openMailPort } from "../mail/from-env";
-import { MAIL_WORKER, pollMail } from "../mail/poll";
+import { MAIL_WORKER, messageIdsAlreadyHeld, pollMail } from "../mail/poll";
 import { isRelevantMessage, relevanceFilter, type RejectedAddress } from "../mail/relevance";
 import { MailFirstSyncOverflowError, type MailPort } from "../mail/port";
 
@@ -80,11 +80,32 @@ export interface PreviewWalk {
   relevant: number;
   /** Relevant ids already in `raw_emails.gmail_message_id`. */
   knownById: number;
+  /** Of the rest, the ones whose RFC 5322 Message-ID is already in
+   *  `raw_emails.message_id` — the dossier holds them under a different id and
+   *  different bytes. */
+  knownByMessageId: number;
+  /** Of the rest, the ones whose Message-ID an EARLIER candidate of this same
+   *  walk already accounted for — one mail delivered to two addresses, which is
+   *  two Stalwart ids, one Message-ID and different bytes. The message-level
+   *  twin of `attachmentsRepeatedInRun`, and kept apart from
+   *  `knownByMessageId` for the same reason: that figure is overlap with the
+   *  DOSSIER, this one is a fact about the MAILBOX. */
+  messagesRepeatedInRun: number;
   /** Of the rest, the ones whose bytes are already in
    *  `raw_emails.raw_rfc822_sha256`. */
   knownByContent: number;
   /** Candidates whose blobs could not be read at all. */
   unreadable: number;
+  /** Relevant candidates whose Message-ID header came back NULL — counted over
+   *  the whole candidate set, not just the fresh ones, because the question it
+   *  answers is about the SERVER and not about the dossier. See the field of
+   *  the same name on FirstSyncPreview for what it is for. */
+  noMessageId: number;
+  /** Rows in `raw_emails`, and rows of those with no Message-ID recorded. A
+   *  fact about the TABLE rather than about the walk, carried here so the
+   *  report and the arithmetic have one source — see FirstSyncPreview. */
+  rawEmailRows: number;
+  rowsWithoutMessageId: number;
   /** The sha256 of every attachment of every genuinely-new message, AFTER the
    *  port's inline-image rule — one entry per message, including the empty
    *  ones, and in the order the ingest would write them.
@@ -107,12 +128,61 @@ export interface FirstSyncPreview {
   irrelevant: number;
   relevant: number;
   knownById: number;
-  /** The Gmail-era overlap. A Stalwart Email id is a different namespace from a
-   *  Gmail message id, so every message already ingested comes back under a
-   *  fresh id and can only be recognised by its bytes — which makes this the
-   *  number that says whether the content dedup is working at all. */
+  /** THE GMAIL-ERA OVERLAP, and on this mailbox the only key that finds it. A
+   *  Stalwart Email id is a different namespace from a Gmail message id, so
+   *  every message already ingested comes back under a fresh id; Takeout's mbox
+   *  bytes are not the bytes Gmail's API returned for it either, so its content
+   *  hash is fresh too. Measured before this key existed: 130 relevant messages
+   *  matching 0 of 107 existing rows. A preview reporting those as new asks for
+   *  authorisation to duplicate the whole existing dossier. */
+  knownByMessageId: number;
+  /** THE SAME KEY TURNED ON THE RUN ITSELF. `messageIdsAlreadyHeld` is a
+   *  snapshot taken once before the walk, so it cannot see a Message-ID an
+   *  earlier candidate of this very run already accounted for — and that is the
+   *  shape of one mail delivered to two addresses: two Stalwart Emails, one
+   *  Message-ID, different bytes (different Received headers), which is exactly
+   *  why schema.ts leaves the sha index non-unique and why `findDuplicates`
+   *  exists to report such pairs. Kept apart from `knownByMessageId` on the
+   *  same law `attachmentsRepeatedInRun` follows one level down. */
+  messagesRepeatedInRun: number;
+  /** The messages recognised by their bytes alone — a Message-ID neither side
+   *  recorded, or an identical export. Kept SEPARATE from the figure above
+   *  because the two keys answer different questions, and one number for both
+   *  would hide either of them going blind. */
   knownByContent: number;
   unreadable: number;
+  /**
+   * Relevant candidates whose Message-ID header came back NULL.
+   *
+   * THE TELL THAT THE KEY IS ALIVE AT ALL. jmap-port.ts asks for
+   * `header:Message-ID:asText` and reads it back by EXACT string key; every test
+   * in this repo drives a fake that echoes that key verbatim, and docs/deploy.md
+   * states in terms that none of this has been measured against a running
+   * Stalwart. A server that omits the property, or answers under different
+   * casing, hands back null for EVERY message and the entire dedup becomes a
+   * silent no-op — producing `NEW 130` again, byte for byte the report measured
+   * before the key existed. A zero overlap looks ordinary; "130 of 130 relevant
+   * messages carry no Message-ID" is impossible on its face.
+   */
+  noMessageId: number;
+  /**
+   * Rows in `raw_emails`, and how many of them still have `message_id` NULL.
+   *
+   * BLOCKER B, AND THE ONLY TELL A SKIPPED BACKFILL LEAVES. This whole slice is
+   * inert until `backfill-message-ids` has run: every existing row's message_id
+   * is NULL, the batched lookup returns an empty set, and the preview prints
+   * `already held … 0` and `NEW 130` — which is not "you forgot a step", it
+   * reads as "the overlap is genuinely zero", and --commit against it writes
+   * ~114 permanent rows into a table with no DELETE grant. A nonzero NULL count
+   * beside a nonzero total is the only thing that distinguishes the two, so it
+   * is measured here and printed prominently rather than inferred.
+   *
+   * A row may legitimately stay NULL forever — its vault file missing, or a
+   * message that genuinely carries no Message-ID header — which is why this is
+   * a disclosure and not a refusal. See the note in `printPreview`.
+   */
+  rawEmailRows: number;
+  rowsWithoutMessageId: number;
   fresh: number;
   /** Attachments carried by the fresh messages, counted as they occur. NOT the
    *  number of ledger events: the three fields below partition exactly this
@@ -171,10 +241,28 @@ export function summarisePreview(walk: PreviewWalk): FirstSyncPreview {
     throw new Error(`preview walk is inconsistent: irrelevant would be ${irrelevant} `
       + "— more messages were judged relevant than had headers to judge");
   }
-  const fresh = walk.relevant - walk.knownById - walk.knownByContent - walk.unreadable;
+  // Every candidate the walk did NOT read for attachments is subtracted here,
+  // `messagesRepeatedInRun` included: it is a skip like the other three, and
+  // leaving it out would make `fresh` disagree with the attachment list below —
+  // caught by the guard after it, but as a confusing inconsistency error rather
+  // than as the count it actually is.
+  const fresh = walk.relevant - walk.knownById - walk.knownByMessageId
+    - walk.messagesRepeatedInRun - walk.knownByContent - walk.unreadable;
   if (fresh < 0) {
     throw new Error(`preview walk is inconsistent: fresh would be ${fresh} `
       + "— more messages were accounted for than were found relevant");
+  }
+  // The two tells get the same treatment as every other derived figure: a walk
+  // that cannot have happened is refused rather than summarised, because both
+  // of these numbers exist SOLELY so an operator can decide whether to trust
+  // the ones beside them. A tell that is itself wrong is worse than none.
+  if (walk.noMessageId > walk.relevant) {
+    throw new Error(`preview walk is inconsistent: noMessageId is ${walk.noMessageId} `
+      + `of ${walk.relevant} relevant message(s)`);
+  }
+  if (walk.rowsWithoutMessageId > walk.rawEmailRows) {
+    throw new Error("preview walk is inconsistent: rowsWithoutMessageId is "
+      + `${walk.rowsWithoutMessageId} of ${walk.rawEmailRows} raw_emails row(s)`);
   }
   if (walk.attachmentShas.length !== fresh) {
     throw new Error(`preview walk is inconsistent: ${walk.attachmentShas.length} `
@@ -200,8 +288,12 @@ export function summarisePreview(walk: PreviewWalk): FirstSyncPreview {
 
   return {
     scanned: walk.scanned, vanished, irrelevant, relevant: walk.relevant,
-    knownById: walk.knownById, knownByContent: walk.knownByContent,
-    unreadable: walk.unreadable, fresh,
+    knownById: walk.knownById, knownByMessageId: walk.knownByMessageId,
+    messagesRepeatedInRun: walk.messagesRepeatedInRun,
+    knownByContent: walk.knownByContent,
+    unreadable: walk.unreadable, noMessageId: walk.noMessageId,
+    rawEmailRows: walk.rawEmailRows,
+    rowsWithoutMessageId: walk.rowsWithoutMessageId, fresh,
     attachments, attachmentsAlreadyInVault, attachmentsRepeatedInRun,
     predictedLedgerEvents:
       attachments - attachmentsAlreadyInVault - attachmentsRepeatedInRun,
@@ -332,26 +424,55 @@ export async function previewFirstSync(deps: {
   // message must not have its attachments pulled through the wire before being
   // discarded, which over an 11.49 GB archive is the whole cost of the run.
   const heads = await deps.mail.headers(changed.ids);
-  const wanted = heads.filter((h) => isRelevantMessage(addrs, h)).map((h) => h.id);
+  const wanted = heads.filter((h) => isRelevantMessage(addrs, h));
+
+  // One batched query for the whole candidate set, read through pollMail's own
+  // helper rather than re-spelled here: the null rule inside it is what decides
+  // ingest-or-skip, and a second copy of it is how the preview would come to
+  // describe an ingest the commit does not perform.
+  const heldMessageIds = await messageIdsAlreadyHeld(deps.db, wanted);
+  // Mirrors pollMail exactly: the set is KEPT UP TO DATE by the walk rather
+  // than left as the snapshot it starts as. A preview that reported a different
+  // number from what the commit does is worse than no preview, and this is the
+  // one place the two could silently diverge — the ingest side has to add,
+  // because the content hash behind it queries the database live and would
+  // otherwise be the stronger key. `ingestedInRun` exists only to attribute the
+  // skip to the right counter; the skip itself reads `heldMessageIds` alone, so
+  // there is one branch and no way for two memories to disagree.
+  const ingestedInRun = new Set<string>();
 
   let knownById = 0;
+  let knownByMessageId = 0;
+  let messagesRepeatedInRun = 0;
   let knownByContent = 0;
   const attachmentShas: string[][] = [];
   const sample: FreshMessageRow[] = [];
   const failures: { id: string; message: string }[] = [];
 
-  for (const id of wanted) {
+  for (const h of wanted) {
+    const id = h.id;
     try {
       const [seen] = await deps.db.select({ id: schema.rawEmails.id })
         .from(schema.rawEmails).where(eq(schema.rawEmails.gmailMessageId, id));
       if (seen) { knownById++; continue; }
 
+      // The key that spans the two ingest namespaces, applied — as the commit
+      // applies it — BEFORE the blobs are fetched. On this mailbox it is the
+      // only one of the three that recognises the existing dossier at all: 130
+      // relevant messages matched 0 of 107 rows by id and by bytes. A null
+      // Message-ID falls through to the content check below, never skips: the
+      // message is unusual, not known.
+      if (h.messageId !== null && heldMessageIds.has(h.messageId)) {
+        if (ingestedInRun.has(h.messageId)) messagesRepeatedInRun++;
+        else knownByMessageId++;
+        continue;
+      }
+
       const msg = await deps.mail.getMessage(id);
-      // The second idempotence key, and the one that matters here: the ~50
-      // emails already ingested from Gmail come back over JMAP under fresh
-      // Stalwart ids, miss the lookup above, and would each earn a second
-      // raw_emails row. Reported separately from knownById precisely so the
-      // rate of that is known rather than assumed.
+      // The last idempotence key, for a message carrying no Message-ID at all —
+      // there is nothing to compare, so the bytes are all that is left.
+      // Reported separately from the two above precisely so the rate of each is
+      // known rather than assumed.
       const sha = sha256Hex(msg.raw);
       const [sameBytes] = await deps.db.select({ id: schema.rawEmails.id })
         .from(schema.rawEmails).where(eq(schema.rawEmails.rawRfc822Sha256, sha));
@@ -364,6 +485,12 @@ export async function previewFirstSync(deps: {
       // hash function anywhere in this chain would silently predict events for
       // documents the vault holds.
       attachmentShas.push(msg.attachments.map((a) => sha256Hex(a.data)));
+      // The commit's add, mirrored — see pollMail for why it lands at the
+      // moment the row would be written and not after the enqueue.
+      if (h.messageId !== null) {
+        heldMessageIds.add(h.messageId);
+        ingestedInRun.add(h.messageId);
+      }
       if (sample.length < sampleRows) {
         sample.push({ id, sentAt: msg.sentAt, from: msg.from, subject: msg.subject,
           attachments: msg.attachments.length });
@@ -380,11 +507,54 @@ export async function previewFirstSync(deps: {
   return {
     counts: summarisePreview({
       scanned, headersReturned: heads.length, relevant: wanted.length,
-      knownById, knownByContent, unreadable: failures.length, attachmentShas,
+      knownById, knownByMessageId, messagesRepeatedInRun, knownByContent,
+      unreadable: failures.length,
+      noMessageId: wanted.filter((h) => h.messageId === null).length,
+      ...await messageIdCoverage(deps.db),
+      attachmentShas,
       vaultShas: await shasAlreadyInVault(deps.db, attachmentShas.flat()),
     }),
     addrs, rejected, sample, failures,
   };
+}
+
+/**
+ * How much of `raw_emails` the Message-ID backfill has actually reached.
+ *
+ * ONE QUERY, TWO NUMBERS, and it is the only evidence there is that
+ * `backfill-message-ids` was ever run. Without it a skipped backfill and a
+ * genuinely disjoint mailbox produce IDENTICAL reports — `already held … 0`,
+ * `NEW 130` — and the second is a perfectly ordinary outcome while the first is
+ * ~114 permanent rows in a table with no DELETE grant.
+ *
+ * WHOLE-TABLE AND NOT SCOPED to the candidates, deliberately. The question is
+ * not "did these messages match" — that is `knownByMessageId`, and it reads 0
+ * in both cases — but "is the key the dedup compares against populated at all",
+ * which is a property of the dossier and not of this walk.
+ *
+ * A count and not an existence check, because the two ends behave differently:
+ * 107 of 107 NULL is a backfill that never ran, while 3 of 107 is the normal
+ * residue the backfill itself documents — a vault file lost to a bad restore, a
+ * message that genuinely carries no Message-ID header. Only the number
+ * distinguishes them, so a boolean here would refuse a healthy run forever.
+ *
+ * EXPORTED only so there is a test on it. It is two lines of SQL, and it is
+ * also the only thing standing between an operator and a --commit whose every
+ * count is wrong in the dangerous direction — the pure `summarisePreview` tests
+ * can prove the report CARRIES the numbers and can prove nothing about where
+ * they come from. `count(*) FILTER (WHERE …)` is exactly the sort of expression
+ * that runs, returns a plausible figure, and counts the wrong thing.
+ */
+export async function messageIdCoverage(
+  db: Db,
+): Promise<{ rawEmailRows: number; rowsWithoutMessageId: number }> {
+  const [row] = await db.select({
+    rawEmailRows: sql<number>`count(*)::int`,
+    rowsWithoutMessageId:
+      sql<number>`(count(*) FILTER (WHERE ${schema.rawEmails.messageId} IS NULL))::int`,
+  }).from(schema.rawEmails);
+  return { rawEmailRows: row?.rawEmailRows ?? 0,
+    rowsWithoutMessageId: row?.rowsWithoutMessageId ?? 0 };
 }
 
 /**
@@ -427,6 +597,37 @@ function printPreview(report: FirstSyncPreviewReport): void {
   const row = (label: string, n: number, note = "") =>
     console.log(`  ${label.padEnd(29)}${String(n).padStart(7)}${note ? `   ${note}` : ""}`);
 
+  // FIRST, ABOVE EVERYTHING, because it is the one condition under which every
+  // number below it is wrong in the dangerous direction. The Message-ID key is
+  // inert until `backfill-message-ids` has filled the column: the lookup comes
+  // back empty, `already held … 0` and `NEW 130` print exactly as they printed
+  // before the key existed, and that reads as "the overlap is genuinely zero"
+  // rather than as "you skipped a step". A number that names its own cure is
+  // the shape every refusal in this codebase uses, so it names the command.
+  //
+  // IT DISCLOSES RATHER THAN REFUSES, and the choice is deliberate. A refusal
+  // here would be theatre: this function runs only in preview mode, which writes
+  // nothing — `--commit` never reaches it — so the only thing it could withhold
+  // is the figure the operator needs in order to decide. Worse, the condition
+  // can never clear on its own: a row whose vault file is missing, or a message
+  // that genuinely carries no Message-ID header, stays NULL forever by the
+  // backfill's own design, so a refusal would need an override flag, and every
+  // override flag on this script is one more way to authorise an irreversible
+  // append by accident — against parseFirstSyncArgs's central law. So the
+  // number is printed loudly, twice, and the authorising figure below says out
+  // loud that it is unreliable while this stands.
+  if (c.rowsWithoutMessageId > 0 && c.rawEmailRows > 0) {
+    console.log("\n*** THE MESSAGE-ID BACKFILL HAS NOT FINISHED ***");
+    console.log(`  ${c.rowsWithoutMessageId} of ${c.rawEmailRows} raw_emails row(s) have no`);
+    console.log("  Message-ID recorded, so the dedup CANNOT RECOGNISE THEM and every");
+    console.log("  count below reports them as new mail. Run:");
+    console.log("      pnpm --filter worker backfill-message-ids");
+    console.log("  and preview again. A handful of rows may legitimately stay NULL —");
+    console.log("  a missing vault file, a message carrying no Message-ID header — but");
+    console.log(`  ${c.rowsWithoutMessageId} of ${c.rawEmailRows} is what a backfill that never `
+      + "ran looks like.");
+  }
+
   console.log("\nrelevance filter");
   if (report.addrs.length === 0) {
     // An empty list matches NOTHING, deliberately — isRelevantMessage's own
@@ -447,9 +648,32 @@ function printPreview(report: FirstSyncPreviewReport): void {
   row("irrelevant", c.irrelevant);
   row("relevant", c.relevant);
   row("already ingested by id", c.knownById);
-  row("already ingested by content", c.knownByContent, "(the Gmail-era overlap)");
+  // In the order the poll applies the three keys, so the table reads as the
+  // sieve it is. This line is where the Gmail-era overlap actually lands: the
+  // dossier holds these messages, under a different id and different bytes, and
+  // nothing but the Message-ID can see it.
+  row("already held, other id/bytes", c.knownByMessageId, "(the Gmail-era overlap)");
+  // The message-level twin of "repeated within this run" under the attachment
+  // table below, and printed for the same reason: without it the sieve does not
+  // add up, and the reader is entitled to assume something was dropped.
+  row("repeated within this run", c.messagesRepeatedInRun, "(same Message-ID twice)");
+  row("already ingested by content", c.knownByContent, "(byte-identical)");
   if (c.unreadable > 0) row("unreadable", c.unreadable);
   row("NEW", c.fresh);
+
+  // NOT a sub-total of the sieve — a candidate with no Message-ID is judged by
+  // its bytes and lands wherever that puts it — so it prints below the total,
+  // where it cannot be mistaken for one of the rows that add up. It is here at
+  // all because "the header came back empty for every message" and "there is no
+  // overlap" produce the same report otherwise, and only the first is a bug.
+  row("carrying no Message-ID", c.noMessageId, "(of the relevant ones)");
+  if (c.noMessageId === c.relevant && c.relevant > 0) {
+    console.log("  ^ EVERY relevant message came back without a Message-ID. On a mailbox");
+    console.log("    of ordinary mail that is not possible: the far likelier cause is that");
+    console.log("    the server does not answer `header:Message-ID:asText` under that exact");
+    console.log("    key, in which case the whole Message-ID dedup is a silent no-op and");
+    console.log("    the NEW figure above is the pre-dedup one. Do not --commit on it.");
+  }
 
   if (report.sample.length > 0) {
     console.log(`\nthe new messages (${report.sample.length} of ${c.fresh})`);
@@ -479,12 +703,20 @@ function printPreview(report: FirstSyncPreviewReport): void {
   console.log("  NOT already hold, on tables with no DELETE grant. ingestDocument");
   console.log("  returns the existing row on a sha256 match and appends nothing, so");
   console.log(`  the other ${c.attachments - c.predictedLedgerEvents} attachment(s) above cost zero events.`);
+  if (c.rowsWithoutMessageId > 0 && c.rawEmailRows > 0) {
+    // Repeated AT the figure, not only at the top. The operator authorises on
+    // this line, and a warning fifty lines above it has already scrolled away.
+    console.log(`  IT IS NOT TRUSTWORTHY: ${c.rowsWithoutMessageId} of ${c.rawEmailRows} `
+      + "existing row(s) have no Message-ID");
+    console.log("  recorded, so messages the dossier already holds are counted as new.");
+    console.log("  Run `pnpm --filter worker backfill-message-ids` and preview again.");
+  }
   if (c.unreadable > 0) {
     // The only thing that keeps the figure from being exact, and it is stated
     // where the figure is, not in a footnote further down.
     console.log(`  IT IS A LOWER BOUND: ${c.unreadable} message(s) could not be read, and`);
     console.log("  their attachments are not in this figure.");
-  } else {
+  } else if (c.rowsWithoutMessageId === 0) {
     console.log(`  The ledger chain head will move by exactly ${c.predictedLedgerEvents} event(s).`);
   }
   console.log("\nNOTHING WAS WRITTEN: no cursor, no worker_runs row, no ingest.");

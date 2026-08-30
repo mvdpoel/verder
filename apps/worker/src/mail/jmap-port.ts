@@ -1,4 +1,5 @@
 import { isJmapMethodError, type JmapCredential, type JmapSession } from "./jmap-client";
+import { normaliseMessageId } from "./message-id";
 import {
   MailCursorRejectedError, MailFirstSyncOverflowError,
   type MailChanges, type MailHeaders, type MailMessage, type MailPort, type SkippedPart,
@@ -236,13 +237,58 @@ interface Deps {
   onDateFallback?: (note: MailDateFallback) => void;
 }
 
+/**
+ * RFC 8621 §4.1.1's `header:{name}:{form}` — the Message-ID AS A PROPERTY, and
+ * that is the entire reason this slice exists.
+ *
+ * The dossier already holds 107 mails ingested through the Gmail API, and the
+ * imported archive holds 146 270 more. Neither the store's Email id (a
+ * different namespace from a Gmail message id) nor the raw sha256 (Takeout's
+ * mbox bytes are not the bytes Gmail's API returned for the same message)
+ * recognises the overlap: measured at 130 relevant messages matching 0 of 107
+ * existing rows, i.e. ~114 permanent rows in an append-only table and ~114
+ * redundant LLM jobs. The RFC 5322 Message-ID is assigned by the originating
+ * server and survives both formats, so it is the identity that spans them.
+ *
+ * ASKING FOR IT AS A HEADER PROPERTY COSTS NO BLOB. `headers()` is called on
+ * EVERY id the enumeration returns — all 146 270 on a first sync — and its
+ * whole contract is that it downloads nothing; the server answers a header form
+ * out of the parsed message it already has. The alternative, reading the id
+ * from the raw bytes in `getMessage`, can only run AFTER the RFC822 original
+ * and every attachment have been pulled through the wire, which is precisely
+ * what knowing the id early lets pollMail skip. `:asText` rather than `:asRaw`
+ * because the server unfolds and decodes it, so the value arrives on one line;
+ * normaliseMessageId still collapses any fold artefact, since a store that
+ * ignores the form is not a reason to write a broken dedup key.
+ */
+const MESSAGE_ID_PROP = "header:Message-ID:asText";
+
 // `sentAt` is the Date header the sender wrote; `receivedAt` is when THIS store
 // took delivery. They differ by seconds for live mail and by years for anything
 // Vandelay injects from the Takeout mbox, and the value flows through
 // raw_emails.sent_at into documents.received_at, which is evidence and
 // append-only. Ask for both, prefer the header.
 const PROPS = ["id", "threadId", "blobId", "subject", "sentAt", "receivedAt", "from", "to",
-  "textBody", "bodyValues", "attachments"];
+  "textBody", "bodyValues", "attachments",
+  // The same property headers() asks for, so the ingest stores the value the
+  // skip decision was made on. Re-parsing `raw` here would be a SECOND source
+  // for one identity, and two sources disagree exactly where it hurts: a
+  // message deduped on one spelling and stored under another is a row nothing
+  // will ever match again.
+  MESSAGE_ID_PROP];
+
+/**
+ * The Message-ID off a JMAP row, normalised, or null.
+ *
+ * A server answers an absent header with null, and one that omits the key
+ * entirely is answering the same thing badly — both are "no Message-ID", which
+ * is unusual but perfectly ingestable. Throwing here would fail an entire poll
+ * over a header the SENDER left out.
+ */
+function messageIdOf(row: Record<string, unknown>): string | null {
+  const v = row[MESSAGE_ID_PROP];
+  return typeof v === "string" ? normaliseMessageId(v) : null;
+}
 
 /** RFC 8620 §5.5. `limit` is present ONLY when the server clamped the one we
  *  asked for, and `position` is where the page it answered actually starts —
@@ -251,9 +297,14 @@ interface QueryResponse { ids?: string[]; total?: number; limit?: number; positi
 /** `state` is likewise typed optional against a server that omits what RFC 8620
  *  §5.1 requires — the first sync's whole cursor is this one field. */
 interface GetIdsResponse { state?: string; list?: { id: string }[] }
-/** One row of a properties-limited `Email/get` — see MailPort.headers. */
+/** One row of a properties-limited `Email/get` — see MailPort.headers. The
+ *  Message-ID arrives keyed by the property name VERBATIM (RFC 8621 §4.1.1), so
+ *  it is an index signature rather than a field: `header:Message-ID:asText` is
+ *  not an identifier, and a server that omits the key for a message without one
+ *  is as legal as a server that sends null. */
 interface HeaderRow {
   id: string; from: { email: string }[] | null; to: { email: string }[] | null;
+  [header: string]: unknown;
 }
 
 /** `newState` is typed OPTIONAL although RFC 8620 §5.2 requires it: the point
@@ -482,12 +533,16 @@ export function makeJmapPort(d: Deps): MailPort {
             accountId: d.session.accountId, ids: ids.slice(i, i + srv.getIds),
             // NOT `blobId`, `attachments` or `bodyValues`: asking for them is
             // asking the server to assemble exactly what this call exists to
-            // avoid fetching.
-            properties: ["id", "from", "to"],
+            // avoid fetching. A header FORM is not in that class — the server
+            // reads it off the message it has already parsed and downloads
+            // nothing — which is what lets pollMail recognise a message the
+            // dossier already holds before spending a single blob on it.
+            properties: ["id", "from", "to", MESSAGE_ID_PROP],
           }, "h0"]]);
         for (const e of r.list ?? []) {
           out.push({ id: e.id, from: e.from?.[0]?.email ?? "",
-            to: (e.to ?? []).map((x) => x.email).join(", ") });
+            to: (e.to ?? []).map((x) => x.email).join(", "),
+            messageId: messageIdOf(e) });
         }
       }
       return out;
@@ -510,6 +565,9 @@ export function makeJmapPort(d: Deps): MailPort {
         textBody: { partId: string }[] | null;
         bodyValues: Record<string, { value: string }> | null;
         attachments: JmapAttachment[] | null;
+        // Keyed verbatim by the requested property name, exactly as in
+        // HeaderRow — see messageIdOf.
+        [header: string]: unknown;
       };
       if (!e) throw new Error(`JMAP Email/get returned nothing for ${id}`);
 
@@ -563,6 +621,13 @@ export function makeJmapPort(d: Deps): MailPort {
         from: e.from?.[0]?.email ?? "",
         to: (e.to ?? []).map((x) => x.email).join(", "),
         subject: e.subject ?? "(no subject)",
+        // Read from the property `headers()` already asked for, never re-parsed
+        // out of `raw`: one source for one identity. The bytes are right there
+        // by now, which is exactly the temptation — and a second parser is what
+        // makes the value the row is STORED under differ from the value the
+        // skip was DECIDED on, at which point the dedup has quietly stopped
+        // working and nothing says so.
+        messageId: messageIdOf(e),
         // The Date header, falling back to delivery time only when the message
         // carries none the port can use. An import that stamps receivedAt with
         // the import date would otherwise date every historical mail to the day

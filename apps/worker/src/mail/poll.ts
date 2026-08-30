@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { ingestRawEmail } from "../gmail";
@@ -8,7 +8,7 @@ import {
 } from "./relevance";
 import {
   MailCursorRejectedError, MailDeltaTooLargeError, MailFirstSyncRefusedError,
-  type MailChanges, type MailPort, type SkippedPart,
+  type MailChanges, type MailHeaders, type MailPort, type SkippedPart,
 } from "./port";
 
 /**
@@ -37,6 +37,24 @@ export const MAIL_WORKER = "mail";
  * hand-run script rather than a bigger number here.
  */
 export const MAIL_MAX_DELTA = 500;
+
+/**
+ * Message-IDs per `raw_emails.message_id` lookup.
+ *
+ * The lookup is ONE batched query for the whole candidate set and not one per
+ * message, which is the lesson 0029 records about the content hash: a query per
+ * downloaded message over a table growing by one row per message is O(N^2) on
+ * precisely the run this dedup exists for, the first sync after the 11.49 GB
+ * Takeout import. Batching it makes the whole poll one round trip instead of
+ * one per candidate, and the ceiling is not a delta of 500 — mail-first-sync
+ * passes Infinity and hands this 146 270 ids.
+ *
+ * Chunked for the reason VAULT_LOOKUP_CHUNK is: every id is a bound parameter
+ * and Postgres refuses a statement with more than 65 535 of them, so the one
+ * run this is built for is exactly the one that would die on a driver error.
+ * The extra round trips are against a database on the same box and cannot fail.
+ */
+export const MESSAGE_ID_LOOKUP_CHUNK = 500;
 
 /** Rows the outbox repair may retry in ONE poll. It is an ENQUEUE bound, not a
  *  drain bound — the same lesson DOCMETA_SWEEP_BATCH records — and the repair
@@ -181,6 +199,30 @@ interface Deps {
 export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
   let ingested = 0;
   let duplicates = 0;
+  // Counted apart from `duplicates` on purpose: the two keys answer different
+  // questions and the rate of each is the only evidence that it still works.
+  // One number for both would let the Message-ID lookup go blind — the case
+  // that actually happens on this mailbox — behind a content-hash figure that
+  // reads as healthy.
+  let knownByMessageId = 0;
+  // Counted apart from knownByMessageId, which is the measured overlap with the
+  // DOSSIER (130 relevant messages against 0 of 107 existing rows). A repeat
+  // inside one run is a fact about the MAILBOX — one mail delivered to two
+  // addresses — and folding it into that figure would inflate the one number
+  // this slice was measured against with something that is not overlap at all.
+  // It is the message-level twin of the preview's attachmentsRepeatedInRun.
+  let messagesRepeatedInRun = 0;
+  // MISSING TELL C. jmap-port.ts asks for `header:Message-ID:asText` and reads
+  // it back by EXACT string key, and docs/deploy.md says in terms that none of
+  // this has been measured against a running Stalwart — every test drives a
+  // fake that echoes the key verbatim. A server that omits the property, or
+  // answers under different casing, returns null for EVERY candidate and the
+  // whole Message-ID dedup becomes a silent no-op that reports
+  // `knownByMessageId: 0` — indistinguishable from a genuinely disjoint
+  // mailbox, which is exactly the report measured before this key existed. This
+  // counter separates the two: on ordinary mail "130 of 130 relevant messages
+  // carry no Message-ID" is impossible on its face, and a zero overlap is not.
+  let noMessageId = 0;
   let irrelevant = 0;
   let vanished = 0;
   let resynced = false;
@@ -325,17 +367,29 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
     const { addrs, rejected } = await relevanceFilter(deps.db);
     rejectedAddresses = rejected;
     const heads = await deps.mail.headers(changed.ids);
-    const wanted: string[] = [];
-    for (const h of heads) {
-      if (isRelevantMessage(addrs, h)) wanted.push(h.id);
-    }
+    const wanted = heads.filter((h) => isRelevantMessage(addrs, h));
     irrelevant = heads.length - wanted.length;
     // An id the store no longer holds is NOT an irrelevant message, and one
     // number for both would hide a store dropping mail behind a figure that
     // reads as ordinary housekeeping.
     vanished = scanned - heads.length;
 
-    for (const id of wanted) {
+    // THE THIRD IDEMPOTENCE KEY, and the only one that recognises this mailbox.
+    // Asked for the WHOLE candidate set in one batched query, ahead of the loop
+    // — see MESSAGE_ID_LOOKUP_CHUNK for why a lookup per message is the shape
+    // 0029 already had to fix once. It is then KEPT UP TO DATE by the loop
+    // rather than left as a snapshot: see the note at the add itself for why a
+    // snapshot is weaker than the live content-hash query it fronts.
+    const heldMessageIds = await messageIdsAlreadyHeld(deps.db, wanted);
+    noMessageId = wanted.filter((h) => h.messageId === null).length;
+    // What THIS run has put in raw_emails, tracked only to attribute the skip
+    // to the right counter below. The skip itself reads `heldMessageIds` alone,
+    // so there is exactly one branch that can decide ingest-or-skip and no way
+    // for the two memories to disagree about a message.
+    const ingestedInRun = new Set<string>();
+
+    for (const h of wanted) {
+      const id = h.id;
       // One bad message must not block the rest of the mailbox: isolate each
       // message so a persistent failure only surfaces in worker_runs while
       // every other message still ingests.
@@ -348,6 +402,40 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
         // (the id was in `created`, the cursor moved past it, and
         // Email/changes never returns it again). repairSuggestOutbox drives it.
         if (seen) continue;
+
+        // THE KEY THAT SPANS THE TWO INGEST NAMESPACES, applied BEFORE a single
+        // blob crosses the wire. A Stalwart Email id is not a Gmail message id
+        // (so the lookup above misses every mail the dossier already holds) and
+        // Takeout's mbox bytes are not the bytes Gmail's API returned for the
+        // same message (so the content hash below misses them too): measured at
+        // 130 relevant messages matching 0 of 107 existing rows, i.e. ~114
+        // permanent rows in an append-only table and ~114 redundant LLM jobs.
+        // The RFC 5322 Message-ID is assigned by the ORIGINATING server and
+        // survives both export formats, which is what makes it the identity
+        // that spans them.
+        //
+        // THE DIVISION OF LABOUR WITH THE CONTENT HASH, which stays exactly as
+        // it was and must: this key catches the SAME message re-exported in a
+        // different format — the case that actually happens here — and the hash
+        // catches a message that carries no Message-ID at all, where there is
+        // nothing to compare. Removing either trades one blind spot for another.
+        //
+        // A NULL messageId FALLS THROUGH, never skips. It means "this message
+        // has no Message-ID", which is unusual and perfectly ingestable; the
+        // content hash is what judges it. Skipping on an unknown would silently
+        // drop mail the dossier does not hold, which is the one failure
+        // direction that cannot be repaired — no DELETE grant, no second copy.
+        //
+        // AND THE SAME LAW AS THE HASH BRANCH: on a match you SKIP. The
+        // existing row's gmail_message_id is never rewritten, because it is
+        // also documents.source_ref and the case map's third level derives from
+        // it — "correcting" it to the JMAP id would silently unlink every
+        // attachment of that mail.
+        if (h.messageId !== null && heldMessageIds.has(h.messageId)) {
+          if (ingestedInRun.has(h.messageId)) messagesRepeatedInRun++;
+          else knownByMessageId++;
+          continue;
+        }
 
         const msg = await deps.mail.getMessage(id);
 
@@ -374,6 +462,50 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
 
         for (const p of msg.skippedParts ?? []) skippedParts.push({ ...p, messageId: id });
         const rawEmailId = await ingestRawEmail(deps, msg, { source: "jmap" });
+
+        // BLOCKER A: THE SET IS MUTATED, and the reason is that a snapshot which
+        // is never updated is not a cheaper version of the live query — it is a
+        // different and weaker guarantee. MESSAGE_ID_LOOKUP_CHUNK argues for one
+        // batched query plus an in-memory set precisely to avoid the O(N^2)
+        // per-message lookup 0029 had to fix once already, and that argument is
+        // about ROUND TRIPS, not about answering a stale question. Built once
+        // and left alone, the set answers "what did raw_emails hold when this
+        // poll started", while the content hash sitting right behind it queries
+        // the database LIVE per message and therefore does catch a same-bytes
+        // repeat inside one run: the new key would be strictly weaker than the
+        // one it fronts.
+        //
+        // AND THE GAP IS THE CASE THIS MAILBOX ACTUALLY HAS. One mail delivered
+        // to two addresses arrives as two Stalwart Emails carrying one
+        // Message-ID and DIFFERENT bytes (different Received headers) — the very
+        // reason schema.ts leaves the sha index non-unique and the reason
+        // findDuplicates in backfill-message-ids exists to report such pairs.
+        // Neither is in the pre-built set, neither matches the other's sha, so
+        // both would be ingested: two permanent rows in a table with no DELETE
+        // grant, two suggest.entry jobs on a VRAM-starved GPU, and BOTH counters
+        // reporting 0, i.e. no trace of it anywhere.
+        //
+        // IT SITS BEFORE enqueueAndMark, not after, and that ordering is
+        // load-bearing rather than tidy. The row is committed the moment
+        // ingestRawEmail returns, and mail-first-sync's --commit run passes
+        // throwingEnqueueSuggest, which throws for EVERY message by design — so
+        // an add placed after the enqueue would never execute on the one run
+        // this dedup was built for, and the whole first sync would duplicate
+        // every twice-delivered mail in the archive.
+        //
+        // `h.messageId` and not `msg.messageId`: the set is the lookup's key
+        // space, seeded from a query on raw_emails.message_id and probed with
+        // the header value, so anything else put into it is a value the probe
+        // can never match. MailMessage.messageId is required by the port
+        // contract to be the SAME value headers() returned, so there is nothing
+        // to choose between them here — and a port that broke that contract
+        // would store one value and probe another on the next run too, which is
+        // a port bug this set must not paper over.
+        if (h.messageId !== null) {
+          heldMessageIds.add(h.messageId);
+          ingestedInRun.add(h.messageId);
+        }
+
         await enqueueAndMark(deps, rawEmailId);
         ingested++;
       } catch (err) {
@@ -416,7 +548,8 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
   const keep = held ? (resynced ? null : cursor) : changed.cursor;
   const status = failures.length || repaired.failures.length ? "error" : "ok";
   await writeCursor(deps.db, worker, keep, {
-    ingested, scanned, irrelevant, vanished, duplicates,
+    ingested, scanned, irrelevant, vanished, knownByMessageId,
+    messagesRepeatedInRun, noMessageId, duplicates,
     repaired: repaired.enqueued, failures, skippedParts,
     ...(repaired.failures.length ? { repairFailures: repaired.failures } : {}),
     ...(repaired.deferred ? { repairDeferred: repaired.deferred } : {}),
@@ -426,6 +559,60 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
     ...(changed.hasMore ? { hasMore: true } : {}),
   }, status);
   return { ingested };
+}
+
+/**
+ * Which of these candidates' Message-IDs `raw_emails` already holds.
+ *
+ * ONE BATCHED QUERY FOR THE WHOLE CANDIDATE SET, chunked — the alternative is a
+ * lookup per message, which is the exact shape 0029 had to add an index for on
+ * the content hash: a sequential-scan-per-message over a table growing by one
+ * row per message is O(N^2) on the one run the dedup exists for. There is an
+ * index now (`raw_emails_message_id_idx`), and it does not make N round trips
+ * on a first sync any less wasteful.
+ *
+ * NULL CANDIDATES ARE DROPPED BEFORE THE QUERY, and this is the whole
+ * correctness argument of the helper rather than a tidy-up. A message with no
+ * Message-ID must fall through to the content check, and a Set built from what
+ * comes back would answer `has(null)` with true the moment ANY row has none
+ * recorded — which is every row until the backfill has run. SQL would have got
+ * this right on its own (`NULL = NULL` is unknown), so the Set is where the trap
+ * lives; filtering on the way in is what keeps the two agreeing.
+ *
+ * Returns the ids FOUND rather than a per-candidate answer, because the caller
+ * asks one question per message and a Set answers it in constant time without
+ * the order of the query results mattering.
+ *
+ * THE CALLER OWNS THE SET AND ADDS TO IT as it ingests, which is why this hands
+ * back a fresh mutable Set rather than a frozen or shared one. What it returns
+ * is the state of `raw_emails` at ONE instant, and the poll walks candidates
+ * afterwards: without the caller's adds the key would answer a question that
+ * stopped being true at the first ingest, and would miss the pair this mailbox
+ * genuinely has (one mail delivered to two addresses — one Message-ID, two
+ * Stalwart ids, different bytes). Batching the query is about round trips; it
+ * was never an argument for answering a stale question.
+ *
+ * EXPORTED for ops/mail-first-sync.ts, which otherwise re-walks this poll's
+ * steps by hand — deliberately, so no dry-run branch sits on the production
+ * ingest path. That hand-copy is safe for a `select ... where gmail_message_id
+ * = $1`; it is not safe for a null-handling rule, which is precisely the sort of
+ * duplication that made `documentIdsByTitle`'s two copies disagree. The preview
+ * exists to describe the commit, so both read the key through one function.
+ */
+export async function messageIdsAlreadyHeld(
+  db: Db, candidates: MailHeaders[],
+): Promise<Set<string>> {
+  const distinct = [...new Set(
+    candidates.map((c) => c.messageId).filter((m): m is string => m !== null))];
+  const found = new Set<string>();
+  for (let i = 0; i < distinct.length; i += MESSAGE_ID_LOOKUP_CHUNK) {
+    const rows = await db.select({ messageId: schema.rawEmails.messageId })
+      .from(schema.rawEmails)
+      .where(inArray(schema.rawEmails.messageId,
+        distinct.slice(i, i + MESSAGE_ID_LOOKUP_CHUNK)));
+    for (const r of rows) if (r.messageId !== null) found.add(r.messageId);
+  }
+  return found;
 }
 
 /**

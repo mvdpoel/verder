@@ -1,0 +1,39 @@
+-- The one grant migration 0030 needs and does not carry.
+--
+-- 0030 added `raw_emails.message_id`; the backfill that fills it for the rows
+-- the dossier already holds (apps/worker/src/ops/backfill-message-ids.ts) runs
+-- as verder_worker, and that role's UPDATE on this table is COLUMN-SCOPED.
+-- 0005 granted exactly `UPDATE ("suggest_queued_at")` and nothing else —
+-- "raw_emails stays append-only for the worker except for this bookkeeping
+-- column" — so a new column is NOT writable by inheriting anything. Measured
+-- before this file was written: `has_column_privilege('verder_worker',
+-- 'raw_emails','message_id','UPDATE')` was false, and the backfill died on
+-- `permission denied for table raw_emails` at its first fillable row.
+--
+-- COLUMN-SCOPED AGAIN, for the reason 0005 was. The lazy fix is
+-- `GRANT UPDATE ON raw_emails TO verder_worker`, and it would hand the worker
+-- the power to rewrite `gmail_message_id` — which is also `documents.source_ref`
+-- and what the case map's third level derives from, so a "correction" there
+-- silently unlinks every attachment of that mail — along with from_addr,
+-- subject and sent_at, the header facts the archived RFC822 original is
+-- evidence FOR. Naming the column keeps the append-only law exactly as strong
+-- as it was.
+--
+-- message_id is safe to make writable at all because it is DERIVED and not
+-- evidence: it is a header copied out of an original the vault keeps forever,
+-- so it can be recomputed by running the backfill again. Nothing about writing
+-- it appends a ledger event.
+--
+-- verder_app is deliberately absent. The web app has never written raw_emails
+-- and this column changes nothing about that.
+--
+-- WHY THIS IS 0031 AND NOT AN EDIT TO 0030, for the same reason 0029 and 0030
+-- each spell out at length: 0030 is already applied to the dev database and
+-- recorded in drizzle/meta/_journal.json, and the migrator skips a migration
+-- purely on `journal.when <= max(created_at)` in drizzle.__drizzle_migrations —
+-- the stored hash is written but never compared. Amending 0030 in place would
+-- silently NOT re-run in dev, so the grant would have to be applied there by
+-- hand and the recorded hash would be stale forever. Production, which has seen
+-- neither, runs 0030 and 0031 in order and ends with the column and its grant,
+-- each exactly once.
+GRANT UPDATE ("message_id") ON "raw_emails" TO verder_worker;
