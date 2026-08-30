@@ -60,111 +60,97 @@ export function asMailMessage(msg: GmailMessage): MailMessage {
 const SENDER_ADDRESS_RE = /^[a-z0-9!#$%&'*+/=?^_`{|}~.-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
 
 /**
- * Strips RFC 5322 comments — parenthesised runs, which may nest — from a
- * header. Returns `ok: false` on anything that does not balance (a stray
- * `)`, or a `(` never closed): a malformed header is refused rather than
- * guessed at, consistent with `senderAddress`'s whole bias.
+ * The ONE address a `From` header names — or `null`.
  *
- * Does NOT track quoted strings: a display name containing a literal,
- * unescaped `(` would have it treated as a comment opener too. That is safe
- * here — the only thing this function's output feeds is address extraction,
- * and stripping a few extra characters out of a display name can only ever
- * remove a candidate address, never manufacture one that was not already
- * address-shaped in the source text.
- */
-function stripComments(header: string): { text: string; ok: boolean } {
-  let depth = 0;
-  let out = "";
-  for (const ch of header) {
-    if (ch === "(") { depth++; continue; }
-    if (ch === ")") {
-      if (depth === 0) return { text: "", ok: false }; // stray close, no opener
-      depth--;
-      continue;
-    }
-    if (depth === 0) out += ch;
-  }
-  return { text: out, ok: depth === 0 };
-}
-
-/**
- * The ONE address a `From` header names, resolved by PARSING it rather than
- * by picking an element out of a flat scan.
+ * WHAT IT ACCEPTS, and nothing else:
+ *   - `[display-name] <addr-spec>` — exactly ONE top-level `<...>` pair with
+ *     nothing but whitespace after the `>`; the address is that pair's
+ *     content. A `<`, `>`, `,` or `:` inside a QUOTED display name is part of
+ *     the name and not punctuation, so `"Doe, John" <j@d.nl>` and
+ *     `"<demi@verdergroep.nl>" <a@evil.tld>` both resolve to the real mailbox.
+ *   - a bare `addr-spec` — no angle brackets at all, and the whole trimmed
+ *     header is an address.
+ * In both cases the candidate must satisfy `SENDER_ADDRESS_RE` in its
+ * ENTIRETY. Nothing is ever extracted from inside a longer string.
  *
- * This replaces two earlier, both wrong, attempts. `addressesInHeader(...)[0]`
- * (round 1) took the FIRST address-shaped substring, which is the display
- * name whenever it is itself address-shaped:
- * `"demi@verdergroep.nl" <attacker@evil.tld>` attributed the message to
- * Demi's party while the real mailbox was the attacker's.
- * `addressesInHeader(...).at(-1)` (round 2) took the LAST one instead, which
- * fixed that example but not the general case: a parenthesised COMMENT is
- * legal RFC 5322 and may follow the addr-spec —
- * `"Demi Willemse" <attacker@evil.tld> (demi@verdergroep.nl)` — and `.at(-1)`
- * picked the comment's address instead. Neither a first-element nor a
- * last-element pick over `addressesInHeader`'s flat output can be correct,
- * because that function (deliberately, for its own callers) has no notion of
- * angle brackets, quotes or comments at all.
+ * EVERYTHING ELSE IS REFUSED, in particular:
+ *   - any `(` or `)` ANYWHERE, quoted or not. RFC 5322 comments nest AND take
+ *     `quoted-pair` escapes, and three review rounds showed that a stripper
+ *     for them is a decoy generator, not a defence: `<a@evil.tld> ( \) <d@watched.nl> \( )`
+ *     is a fully VALID header whose comment a hand-written stripper
+ *     mis-terminates, leaking the watched address to the top level. Comments
+ *     in a real-world `From` are vanishingly rare; a parser bug here is
+ *     permanent evidence. So there is no comment support at all.
+ *   - more than one top-level `<` (`<a@evil.tld> <d@watched.nl>`, `<<d@watched.nl>>`),
+ *     a `>` with no `<`, a second `>`, or an unterminated `<` or `"`. One
+ *     mailbox or nothing — never a positional pick among several.
+ *   - a top-level `,`, `:` or `;` — a mailbox list, or the group syntax
+ *     (`undisclosed-recipients:;`, `Groep: <d@watched.nl>;`). All three are
+ *     `specials` that an unquoted display-name phrase may not contain, so
+ *     refusing them costs no correctly formed sender.
  *
- * The actual RFC 5322 rule for a single mailbox: strip comments first — they
- * carry no addressing information and may appear almost anywhere. What is
- * left is either `[display-name] <addr-spec>` — the address is the content
- * of the (last, if the header is somehow still ambiguous after that) `<...>`
- * pair — or a bare `addr-spec` with no angle brackets at all.
+ * WHY REFUSING IS THE CHEAP FAILURE — the reason for every rule above. This
+ * header is text the SENDER writes, and a message reaches ingest when ANY
+ * address in it matches a watched party, so a header carrying a decoy address
+ * is reachable end to end. A resolved sender is written into an append-only
+ * `documents` row and into a `document.ingested` ledger payload, and neither
+ * has an UPDATE grant: a wrong attribution can NEVER be corrected. A refusal
+ * costs an "Onbekend" a human fixes in the UI in seconds. When in doubt,
+ * resolve nothing.
  *
- * BIASED HARD TOWARD `null`. A wrong sender is written into an append-only
- * `documents` row and a `document.ingested` ledger payload that can never be
- * corrected — `documents` has no UPDATE grant — while a `null` sender renders
- * as "Onbekend" and is simply a fact nobody supplied. So this function
- * returns `null` rather than guess whenever: comments do not balance; a
- * top-level comma outside any quoted string or `<...>` pair signals more
- * than one mailbox; there are no angle brackets and the remaining text is
- * not, in its entirety, one address; or the content of the (last) `<...>`
- * pair is not, in its entirety, one address.
- *
- * Quoted strings ARE tracked here (unlike `stripComments`, which does not
- * need to): a comma or `<` inside a quoted display name — `"Doe, John" <j@d.nl>`,
- * `"<not an address>" <j@d.nl>` — must not be mistaken for the mailbox
- * separator or the real angle-bracket pair.
+ * NO SUBSTRING INVARIANT IS CLAIMED, because the earlier one was false: this
+ * docblock used to say comment-stripping "can only ever remove a candidate
+ * address, never manufacture one", and `att(x)acker@evil.tld` stripped to
+ * `attacker@evil.tld` — an address appearing nowhere in the input. The rule
+ * now is checkable instead: what is returned is one contiguous slice of the
+ * header (or the whole header), ASCII-folded and matched WHOLE against one
+ * regex.
  */
 export function senderAddress(header: string): string | null {
-  const { text, ok } = stripComments(header);
-  if (!ok) return null;
+  // Parentheses anywhere at all. This IS the deletion of stripComments, not a
+  // fast path around it — see the docblock.
+  if (header.includes("(") || header.includes(")")) return null;
 
   let inQuotes = false;
-  let angleDepth = 0;
-  let angleStart = -1;
-  let lastAngleContent: string | null = null;
-  let sawTopLevelComma = false;
+  let open = -1; // index of the one top-level "<"
+  let close = -1; // index of the one top-level ">"
 
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
+  for (let i = 0; i < header.length; i++) {
+    const ch = header[i];
     if (inQuotes) {
-      // RFC 5322 quoted-pair: a backslash escapes the next character, which
-      // therefore cannot end the quoted string (or be mistaken for anything
-      // else) even if it is itself a `"`.
-      if (ch === "\\" && i + 1 < text.length) { i++; continue; }
+      // RFC 5322 quoted-pair: a backslash escapes the next character, so it
+      // cannot end the quoted string even when that next character is a `"`.
+      if (ch === "\\") { i++; continue; }
       if (ch === '"') inQuotes = false;
       continue;
     }
     if (ch === '"') { inQuotes = true; continue; }
     if (ch === "<") {
-      if (angleDepth === 0) angleStart = i + 1;
-      angleDepth++;
+      if (open !== -1) return null; // a second mailbox, or a nested "<"
+      open = i;
       continue;
     }
     if (ch === ">") {
-      if (angleDepth === 0) return null; // stray close, malformed
-      angleDepth--;
-      if (angleDepth === 0) lastAngleContent = text.slice(angleStart, i);
+      if (open === -1 || close !== -1) return null; // stray, or a second ">"
+      close = i;
       continue;
     }
-    if (angleDepth > 0) continue; // inside a mailbox's angle brackets: ignore
-    if (ch === ",") sawTopLevelComma = true;
+    // A mailbox list, or a group. Either way the header names something other
+    // than exactly one mailbox.
+    if (ch === "," || ch === ":" || ch === ";") return null;
   }
-  if (inQuotes || angleDepth !== 0) return null; // unterminated quote or `<`
-  if (sawTopLevelComma) return null; // more than one mailbox — ambiguous
+  if (inQuotes) return null; // unterminated quoted string
+  if (open !== -1 && close === -1) return null; // unterminated "<"
 
-  const candidate = (lastAngleContent ?? text).trim();
+  let candidate: string;
+  if (open === -1) {
+    candidate = header.trim();
+  } else {
+    // `angle-addr` allows only CFWS after the ">", and comments are already
+    // refused above — so anything but whitespace here is unaccounted-for text.
+    if (header.slice(close + 1).trim() !== "") return null;
+    candidate = header.slice(open + 1, close).trim();
+  }
   if (!candidate) return null;
   const folded = asciiLower(candidate);
   return SENDER_ADDRESS_RE.test(folded) ? folded : null;
