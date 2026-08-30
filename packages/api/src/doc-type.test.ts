@@ -24,4 +24,11 @@ describe("docTypeLabel", () => {
   it("breaks a tie alphabetically", () => {
     expect(docTypeLabel(["Beschikking", "beschikking"])).toBe("Beschikking");
   });
+
+  // The tie-break must be alphabetical for genuinely different spellings, not
+  // merely deterministic — reversing the comparator to make the case test pass
+  // silently made this one resolve "Zienswijze".
+  it("breaks a tie between different spellings alphabetically", () => {
+    expect(docTypeLabel(["Aanmaning", "Zienswijze"])).toBe("Aanmaning");
+  });
 });
