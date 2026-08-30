@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
@@ -7,6 +7,7 @@ import {
   Micro, Panel, Select, Table, TableWrap, Td, Th, buttonClass,
 } from "@/components/ui";
 import { buildFilesHref, type ParsedFiles, type Sort } from "@/lib/files-url";
+import { nextSelection } from "@/lib/files-selection";
 
 type Row = {
   id: string; title: string; docType: string | null; partyName: string | null;
@@ -61,18 +62,26 @@ export function FilesTable({ rows, total, parsed, bundles }: {
 }) {
   // Selection is client state on purpose: a sixty-item selection in a query
   // string is a URL nobody can share anyway. `last` carries the anchor for a
-  // shift-click range.
+  // shift-click range. The reducer itself lives in files-selection.ts, pure
+  // and unit-tested, so this component only has to wire the DOM event to it.
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [last, setLast] = useState<number | null>(null);
+  const ids = rows.map((r) => r.id);
 
   const toggle = (i: number, shift: boolean) => {
-    const next = new Set(sel);
-    const span = shift && last !== null
-      ? rows.slice(Math.min(last, i), Math.max(last, i) + 1) : [rows[i]];
-    const turningOn = !sel.has(rows[i].id);
-    for (const r of span) turningOn ? next.add(r.id) : next.delete(r.id);
-    setSel(next);
+    setSel((prev) => nextSelection(prev, ids, i, last, shift));
     setLast(i);
+  };
+
+  // `shiftKey` is an undocumented detail of the underlying event, not a
+  // guaranteed property of every ChangeEvent — a mouse click carries it
+  // because React's checkbox onChange rides the native click, but keyboard
+  // activation (Tab + Space) and assistive tech have no such property.
+  // Reading it unconditionally would be a blind cast; its absence must
+  // degrade to a single-row toggle, never to a guessed range.
+  const shiftHeld = (e: ChangeEvent<HTMLInputElement>): boolean => {
+    const ne = e.nativeEvent;
+    return "shiftKey" in ne && Boolean((ne as MouseEvent).shiftKey);
   };
 
   return (
@@ -100,7 +109,7 @@ export function FilesTable({ rows, total, parsed, bundles }: {
                 <Td>
                   <input type="checkbox" checked={sel.has(r.id)}
                     aria-label={`Selecteer ${r.title}`}
-                    onChange={(e) => toggle(i, (e.nativeEvent as MouseEvent).shiftKey)} />
+                    onChange={(e) => toggle(i, shiftHeld(e))} />
                 </Td>
                 <Td>
                   <Link href={buildFilesHref(parsed, { sel: r.id })}

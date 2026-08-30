@@ -73,7 +73,7 @@ export async function FilesPreview({ doc }: { doc: DocRow | null }) {
             Openen
           </Link>
           <a href={`/api/files/${doc.sha256}`} className={buttonClass("ghost", "sm")}>
-            Download
+            Downloaden
           </a>
         </div>
       </Panel>
