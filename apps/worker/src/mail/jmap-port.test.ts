@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { JmapMethodError } from "./jmap-client";
+import { JmapMethodError, basic } from "./jmap-client";
 import {
   DEFAULT_LIMITS, MailMessageUndatableError, isInlineBodyImage, makeJmapPort,
   type MailDateFallback,
@@ -19,7 +19,7 @@ function withCaps(core: Record<string, number>): typeof S {
 type CallArgs = [unknown, unknown, string[], unknown[][]];
 function fakeCall(responses: (unknown[] | ((calls: unknown[][]) => unknown[]))[]) {
   let n = 0;
-  return vi.fn(async (_s: unknown, _t: unknown, _using: string[], calls: unknown[][]) => {
+  return vi.fn(async (_s: unknown, _auth: unknown, _using: string[], calls: unknown[][]) => {
     const r = responses[Math.min(n, responses.length - 1)];
     n++;
     return typeof r === "function" ? r(calls) : r;
@@ -29,7 +29,7 @@ function sent(call: ReturnType<typeof fakeCall>, i = 0): CallArgs {
   return call.mock.calls[i] as unknown as CallArgs;
 }
 const port = (call: unknown) =>
-  makeJmapPort({ session: S, token: "t", call: call as never, download: vi.fn() as never });
+  makeJmapPort({ session: S, auth: "t", call: call as never, download: vi.fn() as never });
 
 describe("isInlineBodyImage", () => {
   // Same rule as the Gmail port: image/* AND inline AND a cid. macOS Mail marks
@@ -46,6 +46,56 @@ describe("isInlineBodyImage", () => {
   });
   it("keeps anything with missing metadata rather than guessing it away", () => {
     expect(isInlineBodyImage({ name: "x", type: null, disposition: null, cid: null, blobId: "b" })).toBe(false);
+  });
+});
+
+/**
+ * The port carries a CREDENTIAL, not a token string.
+ *
+ * Stalwart is authenticated with HTTP Basic and an app password, so the thing
+ * every call and every download has to carry is what `basic()` builds — a
+ * `{authorization}` object. While Deps typed the field `string`, threading one
+ * through cost an `as never` at the construction site, and a cast is exactly
+ * what must not stand between a wrong credential and the compiler: the ingest
+ * path has no other check, and a mistyped credential surfaces as a 401 that
+ * reads like a wrong password.
+ *
+ * Asserted on IDENTITY (`toBe`), not on shape. The Authorization header value
+ * is built in exactly one place — `authHeader` in jmap-client — and a port that
+ * re-encoded or rebuilt anything of its own would be the second, which is how
+ * the two spellings come to disagree.
+ */
+describe("JmapPort — credentials", () => {
+  it("threads a Basic credential object through to every call", async () => {
+    const auth = basic("martin@example.nl", "app-password");
+    const call = fakeCall([[{ ids: [], total: 0 }, { state: "s1", list: [] }]]);
+    const p = makeJmapPort({
+      session: S, auth, call: call as never, download: vi.fn() as never,
+    });
+    await p.changedSince(null);
+
+    expect(sent(call)[1]).toBe(auth);
+  });
+
+  // The RFC822 original and each attachment are separate downloads, and the
+  // credential travels with all of them: a port that authenticated its API
+  // calls but not its blob fetches fails only where the bytes are.
+  it("threads it through to every download too", async () => {
+    const auth = basic("martin@example.nl", "app-password");
+    const call = fakeCall([[{ list: [{
+      id: "e1", threadId: "t1", blobId: "raw-blob", subject: "Stukken",
+      receivedAt: "2026-08-24T10:00:00Z", from: [], to: [],
+      bodyValues: {}, textBody: [],
+      attachments: [{ name: "checklist.pdf", type: "application/pdf",
+        disposition: "attachment", cid: null, blobId: "b1" }],
+    }] }]]);
+    const download = vi.fn(async (..._args: unknown[]) => Buffer.from("x"));
+    const p = makeJmapPort({
+      session: S, auth, call: call as never, download: download as never,
+    });
+    await p.getMessage("e1");
+
+    expect(download.mock.calls.map((c) => c[1])).toEqual([auth, auth]);
   });
 });
 
@@ -94,7 +144,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: page2 }, { state: "s9", list: page2.map((id) => ({ id })) }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 2 },
     });
     const r = await p.changedSince(null);
@@ -113,7 +163,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
   it("refuses to return a cursor when the enumeration hits its page bound", async () => {
     const call = fakeCall([[{ ids: ["a", "b"] }, { state: "s1", list: [{ id: "a" }, { id: "b" }] }]]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 2, firstSyncPages: 2 },
     });
     await expect(p.changedSince(null)).rejects.toBeInstanceOf(MailFirstSyncOverflowError);
@@ -144,7 +194,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: ["b1"], limit: 2, position: 2 }, { state: "s9", list: [{ id: "b1" }] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 500, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -164,7 +214,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
   it("trips the overflow guard on a CLAMPED page that is still full", async () => {
     const call = fakeCall([[{ ids: ["a", "b"], limit: 2 }, { state: "s1", list: [{ id: "a" }, { id: "b" }] }]]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 500, firstSyncPages: 2 },
     });
     await expect(p.changedSince(null)).rejects.toBeInstanceOf(MailFirstSyncOverflowError);
@@ -181,7 +231,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: ["a2"], limit: 4, position: 1 }, { state: "s9", list: [{ id: "a2" }] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 4, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -214,7 +264,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: [] }, { state: "s9", list: [] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 500, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -238,7 +288,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: [] }, { state: "s9", list: [] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 500, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -254,7 +304,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
   it("buys no confirming page when the server stated a total", async () => {
     const call = fakeCall([[{ ids: ["a1"], total: 1 }, { state: "s1", list: [{ id: "a1" }] }]]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 500, firstSyncPages: 5 },
     });
     expect((await p.changedSince(null)).ids).toEqual(["a1"]);
@@ -269,7 +319,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: ["b1"] }, { state: "s9", list: [{ id: "b1" }] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 2, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -304,7 +354,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: ["b1"] }, { state: "s9", list: [{ id: "b1" }] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 2, firstSyncPages: 5 },
     });
     await expect(p.changedSince(null)).rejects.toThrow(/usable state/);
@@ -319,7 +369,7 @@ describe("JmapPort.changedSince — first sync (no cursor)", () => {
       [{ ids: [], limit: 4, position: 1 }, { state: "s9", list: [] }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { pageSize: 4, firstSyncPages: 5 },
     });
     const r = await p.changedSince(null);
@@ -339,7 +389,7 @@ describe("JmapPort — the session's advertised core limits", () => {
   it("bounds the first-sync page by maxObjectsInGet", async () => {
     const call = fakeCall([[{ ids: ["a"], limit: 2 }, { state: "s1", list: [{ id: "a" }] }]]);
     const p = makeJmapPort({
-      session: withCaps({ maxObjectsInGet: 2 }), token: "t",
+      session: withCaps({ maxObjectsInGet: 2 }), auth: "t",
       call: call as never, download: vi.fn() as never, limits: { pageSize: 500 },
     });
     await p.changedSince(null);
@@ -358,7 +408,7 @@ describe("JmapPort — the session's advertised core limits", () => {
   it("does not spend maxObjectsInGet on Email/changes", async () => {
     const call = fakeCall([[{ newState: "s2", created: [], updated: [], destroyed: [] }]]);
     const p = makeJmapPort({
-      session: withCaps({ maxObjectsInGet: 2 }), token: "t",
+      session: withCaps({ maxObjectsInGet: 2 }), auth: "t",
       call: call as never, download: vi.fn() as never, limits: { pageSize: 7 },
     });
     await p.changedSince("s1");
@@ -372,7 +422,7 @@ describe("JmapPort — the session's advertised core limits", () => {
   it("refuses a first sync a session of maxCallsInRequest 1 cannot carry", async () => {
     const call = fakeCall([[]]);
     const p = makeJmapPort({
-      session: withCaps({ maxCallsInRequest: 1 }), token: "t",
+      session: withCaps({ maxCallsInRequest: 1 }), auth: "t",
       call: call as never, download: vi.fn() as never,
     });
     await expect(p.changedSince(null)).rejects.toThrow(/maxCallsInRequest/);
@@ -418,7 +468,7 @@ describe("JmapPort.changedSince — with a cursor", () => {
       [{ newState: "s4", created: ["e3"], updated: [], destroyed: [], hasMoreChanges: true }],
     ]);
     const p = makeJmapPort({
-      session: S, token: "t", call: call as never, download: vi.fn() as never,
+      session: S, auth: "t", call: call as never, download: vi.fn() as never,
       limits: { changesPages: 2 },
     });
     const r = await p.changedSince("s1");
@@ -510,7 +560,7 @@ describe("JmapPort capabilities", () => {
     const call = fakeCall([[{ list: [{
       id: "e1", threadId: "t1", blobId: "b", subject: "s", receivedAt: "2026-08-24T10:00:00Z",
       from: [], to: [], bodyValues: {}, textBody: [], attachments: [] }] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
     await p.getMessage("e1");
     expect(sent(call)[2]).toEqual(CAPS);
   });
@@ -533,7 +583,7 @@ describe("JmapPort.getMessage", () => {
       { name: "logo.png", type: "image/png", disposition: "inline", cid: "c@d", blobId: "b2" },
     ] })] }]]);
     const download = vi.fn(async (_s, _t, blobId) => Buffer.from(`bytes-${blobId}`));
-    const p = makeJmapPort({ session: S, token: "t", call: call as never, download: download as never });
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never, download: download as never });
     const m = await p.getMessage("e1");
 
     expect(m.from).toBe("case@verdergroep.nl");
@@ -548,7 +598,7 @@ describe("JmapPort.getMessage", () => {
   // and append-only, so a wrong date is not correctable later.
   it("dates a message by its Date header, not by when the store received it", async () => {
     const call = fakeCall([[{ list: [message({ sentAt: "2026-04-24T08:30:00Z" })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
     const m = await p.getMessage("e1");
 
     expect(m.sentAt.toISOString()).toBe("2026-04-24T08:30:00.000Z");
@@ -558,7 +608,7 @@ describe("JmapPort.getMessage", () => {
 
   it("falls back to receivedAt when the message carries no Date header", async () => {
     const call = fakeCall([[{ list: [message({ sentAt: null })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never, download: vi.fn(async () => Buffer.from("x")) as never });
     const m = await p.getMessage("e1");
     expect(m.sentAt.toISOString()).toBe("2026-08-24T10:00:00.000Z");
   });
@@ -577,7 +627,7 @@ describe("JmapPort.getMessage", () => {
   it("reports a message dated by delivery time rather than by its own header", async () => {
     const n = notes();
     const call = fakeCall([[{ list: [message({ sentAt: null })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never, onDateFallback: n.onDateFallback });
     await p.getMessage("e1");
 
@@ -589,7 +639,7 @@ describe("JmapPort.getMessage", () => {
   it("reports nothing when the Date header was usable", async () => {
     const n = notes();
     const call = fakeCall([[{ list: [message({ sentAt: "2026-04-24T08:30:00Z" })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never, onDateFallback: n.onDateFallback });
     await p.getMessage("e1");
     expect(n.seen).toEqual([]);
@@ -606,7 +656,7 @@ describe("JmapPort.getMessage", () => {
   it("treats an unparseable Date header as a missing one rather than stalling", async () => {
     const n = notes();
     const call = fakeCall([[{ list: [message({ sentAt: "Tue, 32 Foo 2024 99:99:99" })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never, onDateFallback: n.onDateFallback });
     const m = await p.getMessage("e1");
 
@@ -623,7 +673,7 @@ describe("JmapPort.getMessage", () => {
   // Date that dies three layers down inside a Drizzle mapper.
   it("refuses a message with no usable date at all, naming it", async () => {
     const call = fakeCall([[{ list: [message({ sentAt: null, receivedAt: "not-a-date" })] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never });
     const err = await p.getMessage("e1").catch((e: unknown) => e);
 
@@ -637,14 +687,14 @@ describe("JmapPort.getMessage", () => {
   // a bare TypeError instead of the diagnostic that names the id.
   it("names the id when the response carries no list at all", async () => {
     const call = fakeCall([[{}]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never });
     await expect(p.getMessage("e1")).rejects.toThrow(/e1/);
   });
 
   it("names the id when the message is simply not in the list", async () => {
     const call = fakeCall([[{ list: [] }]]);
-    const p = makeJmapPort({ session: S, token: "t", call: call as never,
+    const p = makeJmapPort({ session: S, auth: "t", call: call as never,
       download: vi.fn(async () => Buffer.from("x")) as never });
     await expect(p.getMessage("e1")).rejects.toThrow(/e1/);
   });

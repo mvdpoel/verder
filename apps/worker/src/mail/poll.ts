@@ -7,10 +7,36 @@ import {
   isRelevantMessage, relevanceFilter, type RejectedAddress,
 } from "./relevance";
 import {
-  MailCursorRejectedError, type MailChanges, type MailPort, type SkippedPart,
+  MailCursorRejectedError, MailDeltaTooLargeError, MailFirstSyncRefusedError,
+  type MailChanges, type MailPort, type SkippedPart,
 } from "./port";
 
-const WORKER = "mail";
+/**
+ * The worker_runs name the mail cursor lives under.
+ *
+ * EXPORTED, and that is the whole point: index.ts used to spell this string by
+ * hand next to a `const WORKER = "mail"` nobody could see from there. Rename one
+ * side and the failure is silent and total — the runs land under one name,
+ * readCursor asks the other, gets null, and (with allowFirstSync false) every
+ * tick from then on refuses a first sync that will never resolve itself. It is
+ * also the string docs/deploy.md and the dashboard health tile look for.
+ */
+export const MAIL_WORKER = "mail";
+
+/**
+ * Ids one delta may carry before this caller refuses to ingest it.
+ *
+ * WHERE THE NUMBER COMES FROM, and it is a tripwire rather than a throughput
+ * knob. An ordinary delta on this mailbox is single digits — a minute of mail,
+ * and usually nothing at all — while the port's own ceiling is changesPages x
+ * maxChanges = 20 x 500 = 10 000 ids in ONE poll. 500 sits far above every
+ * normal day and far below anything that could only be a bulk import, so it can
+ * fire on the event it names and on nothing else. It is not a rate: see
+ * MailDeltaTooLargeError for why draining a bulk import slowly is the same
+ * irreversible append with a longer tail, and why the cure is the previewed
+ * hand-run script rather than a bigger number here.
+ */
+export const MAIL_MAX_DELTA = 500;
 
 /** Rows the outbox repair may retry in ONE poll. It is an ENQUEUE bound, not a
  *  drain bound — the same lesson DOCMETA_SWEEP_BATCH records — and the repair
@@ -100,6 +126,43 @@ interface Deps {
    *  the batch is smaller than the number of rows owed, and seeding fifty
    *  emails into a shared append-only table to prove it would be worse. */
   repairBatch?: number;
+  /**
+   * Ids this caller may accept in ONE delta before refusing to ingest it.
+   *
+   * Defaults to MAIL_MAX_DELTA, which is the whole of the protection on the
+   * DELTA door — allowFirstSync watches the two first-sync doors and cannot see
+   * this one, because a bulk import after the first sync arrives as an entirely
+   * ordinary delta with a valid cursor. ops/mail-first-sync.ts passes Infinity:
+   * the hand-run, previewed path is exactly the context in which a huge batch IS
+   * authorised, and it is the only caller that has shown a human the ledger
+   * events it implies first.
+   *
+   * A test passes a small value, for the same reason repairBatch exists —
+   * seeding ten thousand fixtures into a shared append-only table to cross the
+   * real ceiling would be worse than parameterising it.
+   */
+  maxDelta?: number;
+  /**
+   * Whether this caller may enumerate the WHOLE mailbox.
+   *
+   * Defaults to TRUE so that ops/mail-first-sync.ts — the hand-run, previewed,
+   * explicitly authorised path — and every existing test keep working unchanged.
+   * The SCHEDULED poll passes false, and that flag is what stands between a cron
+   * tick and an irreversible walk of the archive THROUGH THE FIRST-SYNC DOORS —
+   * a null cursor and a cursor the server rejected. It is not the only guard on
+   * the ingest path and must not be read as one: a bulk import arriving AFTER a
+   * healthy first sync is an ordinary delta this flag never sees, and `maxDelta`
+   * above is what refuses that. See MailFirstSyncRefusedError for why the
+   * previous guard (the port's DEFAULT_LIMITS overflowing at 50 000 against a
+   * store holding 146 270) was true by coincidence of mailbox size rather than
+   * by policy.
+   *
+   * Deliberately opt-OUT rather than opt-in: a new caller that forgets the flag
+   * gets the behaviour that is merely expensive, not the one that silently
+   * refuses to ingest. The one caller that must not have it is a single line in
+   * index.ts, right next to the schedule that makes it dangerous.
+   */
+  allowFirstSync?: boolean;
 }
 
 /**
@@ -127,7 +190,7 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
   // will not fetch it again.
   const skippedParts: (SkippedPart & { messageId: string })[] = [];
 
-  const worker = deps.worker ?? WORKER;
+  const worker = deps.worker ?? MAIL_WORKER;
   const cursor = await readCursor(deps.db, worker);
   let changed: MailChanges;
   let scanned = 0;
@@ -152,6 +215,22 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
     // by the same reporting.
     repaired = await repairSuggestOutbox(deps);
 
+    // THE FIRST OF THE THREE DOORS INTO A BULK INGEST, and the one an
+    // unattended caller must be refused at. `changedSince(null)` is not "the
+    // same question with a missing argument" (see MailPort): it enumerates
+    // EVERYTHING, and everything relevant it finds is ingested irreversibly.
+    //
+    // The refusal sits AFTER repairSuggestOutbox on purpose. The repair needs
+    // the database and pg-boss and nothing else, so an email already in
+    // raw_emails must still reach the review queue in a minute of a refused
+    // poll — the same reason the repair sits ahead of discovery at all. And the
+    // throw is left to the catch below rather than recording its own row: that
+    // handler already writes the error run carrying no cursor (there is none)
+    // plus what the repair managed, which is exactly the row this needs.
+    if (deps.allowFirstSync === false && cursor === null) {
+      throw new MailFirstSyncRefusedError("no-cursor");
+    }
+
     // FINDING 18: a cursor the SERVER rejected and a socket failure are
     // different conditions with opposite cures, and the port makes them
     // distinguishable so this layer can own the policy. Rejected → drop the
@@ -162,10 +241,67 @@ export async function pollMail(deps: Deps): Promise<{ ingested: number }> {
       changed = await deps.mail.changedSince(cursor);
     } catch (err) {
       if (!(err instanceof MailCursorRejectedError)) throw err;
+      // The second door, and the comment above finding 18 already said the
+      // recovery policy belongs to THIS layer. Here it is, made explicit for
+      // the caller that cannot be trusted with it: a resync is the right cure
+      // for a rejected cursor when a human runs it and has read the preview,
+      // and the identical hours-long irreversible ingest when a cron does.
+      //
+      // The rejected cursor is NOT dropped on the way out — the catch below
+      // writes back `cursor` because `resynced` stayed false — and that is
+      // wanted. It is the state the server named as unresolvable, so every
+      // following tick fails the same loud way with the same detail, once a
+      // minute, until someone runs the script. Writing null instead would turn
+      // the next tick's refusal into the "no-cursor" one and throw away the
+      // only record of what the server actually refused.
+      if (deps.allowFirstSync === false) {
+        throw new MailFirstSyncRefusedError("cursor-rejected", { cause: err });
+      }
       resynced = true;
       changed = await deps.mail.changedSince(null);
     }
     scanned = changed.ids.length;
+
+    // THE THIRD DOOR, and the only one of the three that is not about a first
+    // sync at all. The two above are shut by allowFirstSync and neither of them
+    // is what a bulk import looks like: the first sync writes cursor C, and a
+    // re-import, a restored subset, a second Vandelay pass or phase 2 starting
+    // to deliver real mail all arrive as messages `created` after C — a
+    // perfectly legitimate delta, valid cursor, no cannotCalculateChanges. The
+    // port drains up to 10 000 of them in one poll and this loop would ingest
+    // every relevant one, unattended, once a minute, appending a
+    // `document.ingested` ledger event per attachment on tables with no DELETE
+    // grant. `hasMore` in the run detail below reports that AFTER the fact, and
+    // visibility after an irreversible append is not authorisation.
+    //
+    // IT THROWS HERE, before the relevance filter and before any getMessage, so
+    // not one blob is pulled through the wire for a delta this poll has decided
+    // it may not have. And it throws into the outer catch on purpose: that
+    // handler writes the error row with `resynced ? null : cursor`, i.e. it
+    // HOLDS the cursor. The same delta is re-listed next tick, nothing is lost,
+    // and the poll goes red once a minute naming the previewed script until a
+    // human acts — which is the recoverable failure, where an advanced cursor
+    // would silently strand every message in the batch it skipped.
+    //
+    // `hasMore` IS PART OF THE DECISION, and leaving it out was the hole this
+    // guard was written to close, wearing the guard as a hat. `scanned` is what
+    // ONE poll happened to drain, not what is waiting: RFC 8620 §5.2 lets the
+    // server return fewer ids per Email/changes page than asked for and set
+    // hasMoreChanges, so a store handing back 200 a page with thousands queued
+    // trips no ceiling and drains unattended at a bounded rate — precisely the
+    // slow irreversible bulk append MailDeltaTooLargeError exists to refuse,
+    // arriving under the tripwire instead of over it. With changesPages ×
+    // maxChanges = 10 000 requested, `hasMore` cannot mean an ordinary day; it
+    // means a bulk event, and a bulk event is a human's decision.
+    //
+    // Both halves are gated on a FINITE ceiling so the hand-run path is
+    // untouched: mail-first-sync passes Infinity precisely because draining a
+    // large batch is its job, and refusing it on hasMore would break the one
+    // caller that has read the preview.
+    const maxDelta = deps.maxDelta ?? MAIL_MAX_DELTA;
+    if (Number.isFinite(maxDelta) && (scanned > maxDelta || changed.hasMore === true)) {
+      throw new MailDeltaTooLargeError(scanned, maxDelta, changed.hasMore === true);
+    }
 
     // FINDING 13, THE BLOCKER. Email/changes hands over every id in the
     // mailbox, and after the Takeout import that is years of commercial mail.

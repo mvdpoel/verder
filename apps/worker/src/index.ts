@@ -6,6 +6,10 @@ import { readFilePath } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
 import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
+import { readCursor, writeCursor } from "./mail/cursor";
+import { openMailPort } from "./mail/from-env";
+import { MAIL_WORKER, pollMail } from "./mail/poll";
+import { makeSingleFlight } from "./mail/single-flight";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
@@ -49,6 +53,147 @@ await boss.work("gmail.poll", async () => {
   const gmail = await realGmailPort();
   await pollGmail({ db, gmail, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
     enqueueSuggest: async (rawEmailId) => { await boss.send("suggest.entry", { rawEmailId }); } });
+});
+
+// The JMAP poll that replaces the one above. Every minute, where Gmail's `*/3`
+// was already too fast for it: `Email/changes` answers "what changed since this
+// state" and returns a DELTA, so a tick over a quiet mailbox costs one request
+// that names nothing, where Gmail's window re-listed and re-fetched the same
+// mail forever. Stalwart is Martin's own server on the same host — no third
+// party, no per-account quota, no rate limit that a tick can re-arm for another
+// fifteen minutes — so the cost of polling more often is a loopback round trip,
+// and the benefit is that a beschikking is in the dossier a minute after it
+// lands rather than three.
+//
+// THE HONEST LIMIT while phase 1 stands: no new mail reaches Stalwart yet — the
+// MX still points at Gmail and gmail.poll is unscheduled — so these ticks find
+// an empty delta and what they actually do is run repairSuggestOutbox, which
+// keeps the review queue fed for emails that committed while pg-boss was
+// unreachable. That is worth a minute's cron on its own, and the schedule is
+// written now precisely so phase 2 (the MX cutover) is a DNS change and not a
+// worker change: the day mail starts arriving, this is already polling for it.
+const mailPoll = makeSingleFlight();
+await boss.createQueue("mail.poll");
+await boss.schedule("mail.poll", "* * * * *");
+await boss.work("mail.poll", async () => {
+  // One poll at a time. A poll can outlast its minute — a slow Stalwart, a
+  // large delta, a request held open until its timeout — and two polls that
+  // start on the SAME cursor both ask what changed since it and both write a
+  // state back, so one of them either loses its delta or ingests it twice. A
+  // skipped tick costs one minute; an overlapped one corrupts the cursor — and
+  // a lost delta is mail that silently never reaches the dossier, because
+  // Email/changes hands an id over ONCE and will not offer it again.
+  await mailPoll.run(async () => {
+    // The port is built PER TICK, not once at startup. openMailPort fetches a
+    // JMAP session with the app password on every call, so a rotated credential
+    // or a restarted Stalwart heals on the next tick instead of needing a
+    // worker restart to notice — and a session cached at startup would be a
+    // 401 an hour after a rotation with no obvious cause. The cost is one extra
+    // HTTP round trip a minute to a server on the same host, which is nothing.
+    //
+    // AND THE PRICE OF BUILDING IT HERE is that this one call sits inside the
+    // single flight but outside every piece of recording pollMail does. A
+    // MailEnvError from a missing or mistyped JMAP_* variable, a Stalwart that
+    // refuses the session fetch, a 401 after an app-password rotation — each
+    // throws straight out of the job handler and writes NO "mail" row at all,
+    // while dashboard.ts selects DISTINCT ON (worker) and keeps rendering the
+    // last `ok` forever with ingestion dead. poll.ts states the invariant in its
+    // own comments — every failure path writes a worker_runs row, because
+    // worker_runs is the only place mail failure is visible — and this is the
+    // single call site that could break it. It is not hypothetical:
+    // JMAP_APP_PASSWORD is not in .env.prod yet, so the first tick after deploy
+    // takes exactly this path.
+    //
+    // THE READ-THEN-WRITE HERE IS NOT MADE SAFE BY THE SINGLE FLIGHT, which is
+    // what this comment used to claim. makeSingleFlight is a PER-PROCESS latch
+    // and says so in its own docstring, and ops/mail-first-sync.ts is documented
+    // to run as a SECOND process against the same database (`docker compose
+    // exec worker pnpm --filter worker mail-first-sync`). The latch does not
+    // span them, so "no other poll can be committing a row between the read and
+    // the write" was simply false.
+    //
+    // What IS true, stated without overclaiming in the other direction: the only
+    // other writer of `mail` rows is that hand-run script, so the whole of the
+    // rule is that the two must not run at the same time — and the reason is
+    // sharper than a cursor lost between this read and this write. A SCHEDULED
+    // REFUSAL ROW CARRIES NO CURSOR AT ALL: pollMail's outer catch writes back
+    // the cursor it read, and on the no-cursor refusal that is null. So a tick
+    // that started before the script finished, refused, and commits its row
+    // just after the script writes the cursor it spent an hour earning leaves
+    // readCursor answering null again — and the next tick refuses a first sync
+    // it is never allowed to perform, permanently, with the ingest it just paid
+    // for invisible.
+    //
+    // Hence the runbook ordering, which is where this is actually enforced: the
+    // first sync runs BEFORE the schedule is live — a one-shot `docker compose
+    // run --rm` against the newly built image, before `up -d worker` — so there
+    // is no scheduled tick to race. docs/deploy.md §8.11 carries that ordering.
+    //
+    // Only openMailPort is wrapped — pollMail records its own error row and
+    // re-throws, and a second catch around it would write a duplicate run for
+    // one failure.
+    let mail;
+    try {
+      mail = await openMailPort(process.env);
+    } catch (err) {
+      await writeCursor(db, MAIL_WORKER, await readCursor(db, MAIL_WORKER),
+        { message: String(err) }, "error");
+      throw err;
+    }
+    // THE GUARD AGAINST AN UNATTENDED FULL SYNC IS THIS FLAG — the FIRST-SYNC
+    // one, and only that one; the delta door below is a different mechanism and
+    // this flag never sees it. It used to be arithmetic. The argument written
+    // here before was that the port's
+    // DEFAULT_LIMITS cap a first sync at 100 × 500 = 50 000 while Stalwart holds
+    // 146 270, so a resync would overflow and fail loudly and cheaply. True
+    // today, and true only BY COINCIDENCE OF MAILBOX SIZE — nothing asserts it.
+    // Point this poll at a store under 50 000 (a partial Vandelay import, a
+    // restored subset, a rebuilt mailbox) and the first cron tick after
+    // `up -d worker` completes a full first sync unattended, appending one
+    // `document.ingested` ledger event per attachment of every relevant message
+    // on tables with no DELETE grant, straight past the preview-and-authorise
+    // ceremony ops/mail-first-sync.ts exists to impose.
+    //
+    // allowFirstSync: false says the policy instead of deriving it: this caller
+    // polls deltas and nothing else, at any mailbox size. The limits are KEPT as
+    // a second backstop, but they are no longer what is doing the protecting.
+    //
+    // AND A DELTA IS NOT AUTOMATICALLY SMALL, which the flag alone cannot say.
+    // Once the first sync has written a cursor, anything imported into Stalwart
+    // afterwards — a re-import, a restored subset, a second Vandelay pass,
+    // phase 2 starting to deliver real mail — comes back as an ordinary delta
+    // with a valid cursor, and the port hands over up to 10 000 ids in one poll.
+    // That is closed by MAIL_MAX_DELTA inside pollMail (a tripwire, not a rate:
+    // see MailDeltaTooLargeError), and this caller takes its default. Both
+    // refusals HOLD the cursor and both name the same recovery in the run row:
+    // `pnpm --filter worker mail-first-sync`, which raises the limits
+    // deliberately and behind a preview, because ingestion is irreversible.
+    return pollMail({ db, mail, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+      allowFirstSync: false,
+      enqueueSuggest: async (rawEmailId) => { await boss.send("suggest.entry", { rawEmailId }); } });
+  });
+  // NOTHING IS WRITTEN ON A SKIP, deliberately, and both reasons matter.
+  //
+  // The first is a race. The mail cursor lives in the LATEST worker_runs row for
+  // "mail", so any row written here has to carry it forward — and reading it to
+  // carry it forward is a read-then-write against a poll that is running RIGHT
+  // NOW on another tick: it can commit its own row between the read and the
+  // write, leaving the skip row newest with the OLDER cursor. The severe case is
+  // the resync — the in-flight poll replaced a REJECTED cursor with a fresh one,
+  // the skip re-installs the rejected one, and every following tick dies on it.
+  // Any correct version of "carry the cursor forward" from here would have to be
+  // atomic with its read; the cheapest correct version is to write nothing, and
+  // let the in-flight poll's own row — which it always writes, and later — be
+  // the newest.
+  //
+  // The second is that a green skip row is actively MISLEADING. A poll hung on a
+  // JMAP request with no timeout would emit a healthy-looking `ok` row every
+  // minute for as long as it hangs, which is the most convincing possible
+  // picture of a mail path that is working. Writing nothing makes the newest
+  // "mail" run go STALE instead, and staleness is the honest signal for "a poll
+  // is stuck" — it is what an operator should be looking at. docs/deploy.md
+  // documents exactly that: if the newest `mail` run is more than a few minutes
+  // old, a poll is hung and the single flight is skipping ticks.
 });
 
 const llm = realLlmPort();

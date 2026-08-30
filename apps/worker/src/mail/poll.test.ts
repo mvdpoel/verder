@@ -6,9 +6,12 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { createDb, schema } from "@verder/db";
 import { ingestRawEmail } from "../gmail";
-import { makeRepairBackoff, pollMail } from "./poll";
+import { MAIL_MAX_DELTA, MAIL_WORKER, makeRepairBackoff, pollMail } from "./poll";
 import { readCursor, writeCursor } from "./cursor";
-import { MailCursorRejectedError, type MailMessage, type MailPort } from "./port";
+import {
+  MailCursorRejectedError, MailDeltaTooLargeError, MailFirstSyncRefusedError,
+  type MailMessage, type MailPort,
+} from "./port";
 import { settleDocumentTexts } from "../test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -565,6 +568,248 @@ describe("pollMail", () => {
       else process.env.MAIL_OWN_ADDRESSES = beforeOwn;
       await pool.end();
     }
+  });
+
+  // THE UNATTENDED CALLER MAY NOT START A FIRST SYNC, and until now nothing
+  // said so. The scheduled poll was protected only by DEFAULT_LIMITS — 100
+  // pages x 500 = 50 000 against a store holding 146 270 — so the protection
+  // was an ARITHMETIC ACCIDENT of how much mail happens to be in Stalwart
+  // today. Point the same poll at a store under 50 000 (a partial Vandelay
+  // import, a restored subset, a rebuilt mailbox) and the first cron tick after
+  // `up -d worker` walks the entire archive unattended, appending one
+  // `document.ingested` LEDGER EVENT per attachment on tables with no DELETE
+  // grant — bypassing the preview-and-authorise ceremony ops/mail-first-sync.ts
+  // exists to impose. The flag is the policy said out loud, and it holds
+  // whatever size the mailbox is.
+  it("refuses a first sync outright when the caller may not enumerate the mailbox", async () => {
+    const { db, pool } = createDb(URL);
+    const worker = uniqueWorker("no-first-sync");
+    const asked: (string | null)[] = [];
+    const p: MailPort = {
+      changedSince: async (c) => { asked.push(c); return { ids: [], cursor: "s-fresh" }; },
+      headers: async () => [],
+      getMessage: async (id) => msg(id),
+    };
+    await expect(pollMail({ db, mail: p, vaultDir: vault(), worker, allowFirstSync: false,
+      enqueueSuggest: async () => {} })).rejects.toThrow(MailFirstSyncRefusedError);
+    // The enumeration is never even ASKED FOR. Asserting on the ingest count
+    // would pass against a poll that walked the whole mailbox and found nothing
+    // relevant, which is the expensive half of what is being refused.
+    expect(asked).toEqual([]);
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("error");
+    // The recovery is named in the row, because worker_runs is the only place
+    // mail failure is visible and "refused" without a cure is just a wedge.
+    expect(String(run.detail?.message)).toContain("mail-first-sync");
+    // No cursor invented on the way out: there was none to carry.
+    expect(await readCursor(db, worker)).toBeNull();
+    await pool.end();
+  });
+
+  // The same policy on the other door into a full enumeration. FINDING 18's
+  // resync is the RIGHT recovery for a rejected cursor — for a human running
+  // mail-first-sync. For the cron it is the identical irreversible walk with
+  // nobody watching, so the refusal replaces it and the run goes red every
+  // minute until someone runs the script by hand.
+  it("refuses to resync a rejected cursor when the caller may not enumerate", async () => {
+    const { db, pool } = createDb(URL);
+    const worker = uniqueWorker("no-resync");
+    await writeCursor(db, worker, "dead-state", { seeded: true });
+    const asked: (string | null)[] = [];
+    const p: MailPort = {
+      changedSince: async (c) => {
+        asked.push(c);
+        if (c !== null) throw new MailCursorRejectedError(c);
+        return { ids: [], cursor: "s-fresh" };
+      },
+      headers: async () => [],
+      getMessage: async (id) => msg(id),
+    };
+    await expect(pollMail({ db, mail: p, vaultDir: vault(), worker, allowFirstSync: false,
+      enqueueSuggest: async () => {} })).rejects.toThrow(MailFirstSyncRefusedError);
+    expect(asked).toEqual(["dead-state"]);          // never a changedSince(null)
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("error");
+    // The dead cursor is KEPT rather than dropped. It is the state the server
+    // named as unresolvable, and holding it means every following tick fails
+    // the same loud way; dropping it would leave readCursor answering null,
+    // which is a first sync refused for a DIFFERENT reason and loses the one
+    // piece of evidence about what the server actually refused.
+    expect(await readCursor(db, worker)).toBe("dead-state");
+    await pool.end();
+  });
+
+  // THE DELTA DOOR, and the one allowFirstSync does not watch. The first-sync
+  // flag closes two doors — a null cursor and a cursor the server rejected —
+  // and a bulk import into Stalwart is neither of them. The first sync writes
+  // cursor C; a re-import, a restored subset, a second Vandelay pass, or phase
+  // 2 starting to deliver real mail all arrive as messages CREATED after C,
+  // which is a perfectly legitimate delta: nothing for the first-sync guard to
+  // catch. jmap-port then drains up to changesPages x maxChanges = 20 x 500 =
+  // 10 000 ids in ONE poll and hands every one of them to the ingest loop, once
+  // a minute, unattended, appending a `document.ingested` LEDGER EVENT per
+  // attachment of everything the relevance filter wants — on tables with no
+  // DELETE grant. That is precisely the harm MailFirstSyncRefusedError exists
+  // to prevent, arriving through the door nobody closed. `hasMore` in the run
+  // detail makes it visible AFTER the fact, and visibility after an
+  // irreversible append is not authorisation.
+  it("refuses a delta above the ceiling before downloading anything", async () => {
+    const { db, pool } = createDb(URL);
+    const worker = uniqueWorker("big-delta");
+    await writeCursor(db, worker, "s-before", { seeded: true });
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const ids = [`j-big-a-${stamp}`, `j-big-b-${stamp}`, `j-big-c-${stamp}`];
+    const asked: string[][] = [];
+    const gets: string[] = [];
+    const p: MailPort = {
+      changedSince: async () => ({ ids, cursor: "s-after" }),
+      headers: async (x) => { asked.push(x); return []; },
+      getMessage: async (id) => { gets.push(id); return msg(id); },
+    };
+    await expect(pollMail({ db, mail: p, vaultDir: vault(), worker, maxDelta: 2,
+      enqueueSuggest: async () => {} })).rejects.toThrow(MailDeltaTooLargeError);
+    // NOTHING CROSSED THE WIRE. The refusal sits ahead of the relevance filter,
+    // so not even the batched headers are asked for — asserting on the ingest
+    // count alone would pass against a poll that downloaded all 10 000 blobs
+    // and happened to find nothing relevant.
+    expect(asked).toEqual([]);
+    expect(gets).toEqual([]);
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("error");
+    // The recovery is named in the row, for the same reason the first-sync
+    // refusal names it: worker_runs is the only place mail failure is visible,
+    // and a red row that names no cure is a wedge rather than a signal.
+    expect(String(run.detail?.message)).toContain("mail-first-sync");
+    // THE CURSOR IS HELD, and that is the whole recovery. Nothing is lost: the
+    // same delta is re-listed next tick, the poll goes red once a minute
+    // naming the previewed script, and a human decides. A cursor advanced past
+    // a delta this poll refused to look at would strand every message in it.
+    expect(await readCursor(db, worker)).toBe("s-before");
+    await pool.end();
+  });
+
+  // THE HOLE THE COUNT ALONE LEAVES. `scanned` is what one poll drained, not
+  // what is waiting: RFC 8620 §5.2 lets a server return small Email/changes
+  // pages and set hasMoreChanges, so a bulk import can walk in UNDER the
+  // tripwire, a bounded batch a minute — which is the slow irreversible bulk
+  // append the ceiling exists to refuse, arriving beneath it instead of over
+  // it. A delta of one with more queued behind it must refuse just as firmly
+  // as a delta of ten thousand.
+  it("refuses a truncated delta even when the count is under the ceiling", async () => {
+    const { db, pool } = createDb(URL);
+    const worker = uniqueWorker("truncated-delta");
+    await writeCursor(db, worker, "s-before", { seeded: true });
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const asked: string[][] = [];
+    const gets: string[] = [];
+    const p: MailPort = {
+      // ONE id — far under the ceiling of 500 — but the server says it has
+      // more. Without the hasMore half of the guard this poll ingests happily.
+      changedSince: async () => ({ ids: [`j-trunc-${stamp}`], cursor: "s-after", hasMore: true }),
+      headers: async (x) => { asked.push(x); return []; },
+      getMessage: async (id) => { gets.push(id); return msg(id); },
+    };
+    await expect(pollMail({ db, mail: p, vaultDir: vault(), worker,
+      enqueueSuggest: async () => {} })).rejects.toThrow(MailDeltaTooLargeError);
+    expect(asked).toEqual([]);
+    expect(gets).toEqual([]);
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("error");
+    // The message must say WHICH trigger fired: "a delta of 1" alone reads as
+    // absurd next to a ceiling of 500, and an operator would raise the knob.
+    expect(String(run.detail?.message)).toContain("MORE queued");
+    expect(await readCursor(db, worker)).toBe("s-before");
+    await pool.end();
+  });
+
+  // The hand-run path must still drain a truncated delta: draining a large
+  // batch is exactly its job, and refusing it on hasMore would break the one
+  // caller that has already read the preview.
+  it("lets the hand-run ops path through a truncated delta", async () => {
+    const { db, pool } = createDb(URL);
+    const worker = uniqueWorker("trunc-infinite");
+    await writeCursor(db, worker, "s-before", { seeded: true });
+    const id = `j-trunc-ok-${Date.now()}`;
+    const p: MailPort = {
+      changedSince: async () => ({ ids: [id], cursor: "s-after", hasMore: true }),
+      headers: async () => [{ id, from: "case@verdergroep.nl", to: "martin@vanderpoel.pro" }],
+      getMessage: async (x) => msg(x),
+    };
+    const r = await pollMail({ db, mail: p, vaultDir: vault(), worker,
+      maxDelta: Infinity, enqueueSuggest: async () => {} });
+    expect(r.ingested).toBe(1);
+    await pool.end();
+  });
+
+  // The off-by-one, which is not a nicety here: a `>=` would refuse a delta of
+  // exactly the ceiling on every tick forever, and the recovery for a refusal
+  // is a hand-run script — so getting this edge wrong stops ingestion until
+  // someone reads the code.
+  it("polls a delta of exactly the ceiling normally", async () => {
+    const { db, pool } = createDb(URL);
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const wanted = `j-edge-${stamp}`;
+    const junk = `j-edge-junk-${stamp}`;
+    const worker = uniqueWorker("edge-delta");
+    const { port, gets } = portOf([
+      msg(wanted),
+      msg(junk, { from: `deals@shop-${stamp}.example`, to: `promo@shop-${stamp}.example` }),
+    ]);
+    const r = await pollMail({ db, mail: port, vaultDir: vault(), worker, maxDelta: 2,
+      enqueueSuggest: async () => {} });
+    expect(r.ingested).toBe(1);
+    expect(gets).toEqual([wanted]);
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("ok");
+    expect(run.detail?.scanned).toBe(2);
+    // The cursor MOVES, which is the difference between a poll that ran and a
+    // poll that refused: a held cursor is what a refusal looks like.
+    expect(await readCursor(db, worker)).toBe("s2");
+    await settleDocumentTexts(db, wanted);
+    await pool.end();
+  });
+
+  // THE OPS PATH IS UNAFFECTED, and it has to be: ops/mail-first-sync.ts is the
+  // hand-run, previewed command whose entire purpose is to ingest a batch far
+  // past this ceiling, after a human has read how many ledger events it implies.
+  // It passes Infinity, and a tripwire that also fired there would make the only
+  // authorised way of doing a bulk ingest impossible.
+  it("lets the hand-run ops path through a delta far past the ceiling", async () => {
+    const { db, pool } = createDb(URL);
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const worker = uniqueWorker("ops-delta");
+    // Irrelevant on purpose: this test is about the gate, and ingesting five
+    // hundred fixtures to prove a comparison would leave that much residue in
+    // an append-only table on the shared dev database.
+    const flood = Array.from({ length: MAIL_MAX_DELTA + 1 }, (_, i) =>
+      msg(`j-ops-${stamp}-${i}`,
+        { from: `deals@shop-${stamp}.example`, to: `promo@shop-${stamp}.example` }));
+    const { port, gets } = portOf(flood);
+    const r = await pollMail({ db, mail: port, vaultDir: vault(), worker,
+      maxDelta: Infinity, enqueueSuggest: async () => {} });
+    expect(r.ingested).toBe(0);
+    expect(gets).toEqual([]);
+    const run = await lastRun(db, worker);
+    expect(run.status).toBe("ok");
+    expect(run.detail?.scanned).toBe(MAIL_MAX_DELTA + 1);
+    expect(await readCursor(db, worker)).toBe("s2");
+    await pool.end();
+  });
+});
+
+/**
+ * The name the cursor lives under, pinned.
+ *
+ * It was a non-exported `const WORKER = "mail"` here while index.ts spelled the
+ * same string by hand, and the two drifting apart is silent and total: rows land
+ * under one name, readCursor reads the other and answers null, and the refusal
+ * above then fires on every tick forever. One exported constant is the fix; this
+ * test is what makes changing its VALUE a deliberate act, since the string is
+ * also what docs/deploy.md and the dashboard's health tile look for.
+ */
+describe("MAIL_WORKER", () => {
+  it("is the worker_runs name the cursor is stored under", () => {
+    expect(MAIL_WORKER).toBe("mail");
   });
 });
 

@@ -1,4 +1,4 @@
-import { isJmapMethodError, type JmapSession } from "./jmap-client";
+import { isJmapMethodError, type JmapCredential, type JmapSession } from "./jmap-client";
 import {
   MailCursorRejectedError, MailFirstSyncOverflowError,
   type MailChanges, type MailHeaders, type MailMessage, type MailPort, type SkippedPart,
@@ -196,9 +196,21 @@ export function isInlineBodyImage(a: JmapAttachment): boolean {
 
 interface Deps {
   session: JmapSession;
-  token: string;
-  call: <T>(s: JmapSession, token: string, using: string[], calls: unknown[][]) => Promise<T[]>;
-  download: (s: JmapSession, token: string, blobId: string, name: string, type: string) => Promise<Buffer>;
+  /**
+   * Whatever jmap-client's credential factories produce, NOT a token string.
+   *
+   * This field was `string`, which is a bearer token and only a bearer token —
+   * so `makeJmapPort({ auth: basic(user, appPassword), … })` did not typecheck
+   * and the only way to wire the deployment's actual credential was a cast at
+   * the construction site. That is the one place a cast must not sit: the port
+   * never inspects the credential, it only forwards it, so a wrong one is
+   * caught by nothing here and surfaces much later as a 401 that reads like a
+   * wrong password. `JmapCredential` still admits the plain string, so bearer
+   * callers are unchanged.
+   */
+  auth: JmapCredential;
+  call: <T>(s: JmapSession, auth: JmapCredential, using: string[], calls: unknown[][]) => Promise<T[]>;
+  download: (s: JmapSession, auth: JmapCredential, blobId: string, name: string, type: string) => Promise<Buffer>;
   limits?: Partial<JmapPortLimits>;
   /**
    * Called once per message that had to be dated by DELIVERY TIME.
@@ -306,7 +318,7 @@ async function firstSync(d: Deps, lim: JmapPortLimits, srv: ServerLimits): Promi
   let askedSizeSeen = false;
 
   for (let page = 0; page < lim.firstSyncPages; page++) {
-    const res = await d.call<unknown>(d.session, d.token, USING, [
+    const res = await d.call<unknown>(d.session, d.auth, USING, [
       ["Email/query", {
         accountId: d.session.accountId,
         sort: [{ property: "receivedAt", isAscending: true }],
@@ -410,7 +422,7 @@ async function delta(
   for (let page = 0; page < lim.changesPages; page++) {
     let r: ChangesResponse;
     try {
-      [r] = await d.call<ChangesResponse>(d.session, d.token, USING, [["Email/changes", {
+      [r] = await d.call<ChangesResponse>(d.session, d.auth, USING, [["Email/changes", {
         accountId: d.session.accountId, sinceState: state, maxChanges: srv.maxChanges,
       }, "c0"]]);
     } catch (err) {
@@ -465,7 +477,7 @@ export function makeJmapPort(d: Deps): MailPort {
         // Chunked at the SMALLER of our page size and the session's advertised
         // maxObjectsInGet: RFC 8620 §5.1 has the server refuse an over-long
         // `ids` with requestTooLarge, and one refusal fails the whole poll.
-        const [r] = await d.call<{ list?: HeaderRow[] }>(d.session, d.token, USING,
+        const [r] = await d.call<{ list?: HeaderRow[] }>(d.session, d.auth, USING,
           [["Email/get", {
             accountId: d.session.accountId, ids: ids.slice(i, i + srv.getIds),
             // NOT `blobId`, `attachments` or `bodyValues`: asking for them is
@@ -483,7 +495,7 @@ export function makeJmapPort(d: Deps): MailPort {
 
     async getMessage(id): Promise<MailMessage> {
       const [r] = await d.call<{ list?: Record<string, never>[] }>(
-        d.session, d.token, USING, [["Email/get", {
+        d.session, d.auth, USING, [["Email/get", {
           accountId: d.session.accountId, ids: [id], properties: PROPS,
           fetchTextBodyValues: true,
         }, "c0"]]);
@@ -531,13 +543,13 @@ export function makeJmapPort(d: Deps): MailPort {
           skippedParts.push({ filename: name, mime, contentId: a.cid });
         } else {
           attachments.push({ filename: name, mime,
-            data: await d.download(d.session, d.token, a.blobId, name, mime) });
+            data: await d.download(d.session, d.auth, a.blobId, name, mime) });
         }
       }
 
       // The Email's own blobId IS the RFC822 original — one download, and the
       // same canonical bytes the vault has always stored.
-      const raw = await d.download(d.session, d.token, e.blobId, "raw.eml", "message/rfc822");
+      const raw = await d.download(d.session, d.auth, e.blobId, "raw.eml", "message/rfc822");
 
       // Reported only once the message is fully assembled: a getMessage that
       // died on a download is retried by the next poll, and counting it here

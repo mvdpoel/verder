@@ -5,11 +5,11 @@ const S = { apiUrl: "https://x/api", downloadUrl: "d", accountId: "a" };
 
 function fakeCall(responses: unknown[][]) {
   let n = 0;
-  return vi.fn(async (_s: unknown, _t: unknown, _using: string[], _calls: unknown[][]) =>
+  return vi.fn(async (_s: unknown, _auth: unknown, _using: string[], _calls: unknown[][]) =>
     responses[Math.min(n++, responses.length - 1)]);
 }
 const port = (call: unknown, download: unknown = vi.fn(), limits?: { pageSize: number }) =>
-  makeJmapPort({ session: S, token: "t", call: call as never, download: download as never,
+  makeJmapPort({ session: S, auth: "t", call: call as never, download: download as never,
     limits });
 
 /**
@@ -70,7 +70,7 @@ describe("JmapPort.headers", () => {
     const call = fakeCall([[{ list: [] }]]);
     const p = makeJmapPort({
       session: { ...S, capabilities: { "urn:ietf:params:jmap:core": { maxObjectsInGet: 2 } } } as never,
-      token: "t", call: call as never, download: vi.fn() as never, limits: { pageSize: 500 },
+      auth: "t", call: call as never, download: vi.fn() as never, limits: { pageSize: 500 },
     });
     await p.headers(["a", "b", "c"]);
 

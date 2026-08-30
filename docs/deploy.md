@@ -1217,43 +1217,53 @@ is up (`crates/http/src/request.rs:526-535`):
 ssh homelab 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/healthz/live'
 ```
 
-### 8.8 **Phase 1 ends here, and mail does NOT start flowing**
+### 8.8 What §8.6 leaves you with, and what actually starts ingestion
 
-Read this before setting an evening aside for it. **Setting `JMAP_USER` /
-`JMAP_APP_PASSWORD` and restarting the worker starts nothing.**
+**SUPERSEDED 2026-08-30 by task 8.** This section used to say that phase 1 ends
+with the mailbox empty and `pollMail` with no call site, and that setting
+`JMAP_USER` / `JMAP_APP_PASSWORD` and restarting the worker starts nothing. Both
+halves have since stopped being true and the section is kept, corrected, rather
+than deleted: someone who read the old wording is the person most likely to be
+surprised by a worker that now ingests.
 
-Phase 1 ends with **Stalwart running and its mailbox EMPTY**:
+What is true now:
 
-- The JMAP client, port and poll logic exist under `apps/worker/src/mail/`, with
-  tests. `pollMail` has **no call site**: `apps/worker/src/index.ts` is
-  unmodified — it imports `pollGmail` and nothing from `./mail` — no queue is
-  registered for it, no cron schedules it. Measured: `grep -rn
-  'JMAP_BASE_URL|makeJmapPort|openSession|pollMail'` over `apps/` and
-  `packages/`, excluding `apps/worker/src/mail/`, returns exactly one line, and
-  it is a comment in `gmail.ts`.
-- **The archive import is Task 7** of `docs/superpowers/plans/2026-08-29-mail-phase-1-jmap.md`
-  — the 11.49 GB Google Takeout `.mbox` into Stalwart. Until it runs, the
-  mailbox holds zero messages.
-- **The worker wiring is Task 8**, a separate session: registering the queue,
-  scheduling it, and deciding what a `mail` row in `worker_runs` looks like.
+- **The mailbox is not empty.** Task 7 ran on 2026-08-30: 146,270 messages,
+  counted server-side with `Email/query` `calculateTotal` and not from the
+  importer's exit code (§8.0). 3,348 of them are Sent Items — the outbound half
+  the dossier has never had.
+- **`pollMail` has a call site.** `apps/worker/src/index.ts` registers the
+  `mail.poll` queue, schedules it `* * * * *`, and runs it behind a per-process
+  single-flight latch. So the three JMAP variables are now load-bearing: with
+  them set the worker polls, and **without them it writes a red `mail` row every
+  minute** rather than nothing at all. That red row is the wiring working — see
+  §8.11 — but it will look like a new failure to anyone who does not expect it.
+- **Starting the worker still does not ingest the archive.** The scheduled poll
+  runs with `allowFirstSync: false` and may only ever ask for deltas. With no
+  cursor it refuses, loudly, once a minute. The archive is ingested by the
+  hand-run, previewed `mail-first-sync`, and §8.11 carries the order in which
+  the two must happen — the first sync BEFORE `up -d worker`, which is not
+  interchangeable.
+- **Mail delivery is still untouched.** No MX record, no DNS. New mail continues
+  to arrive at Gmail and does not reach Stalwart at all; `gmail.poll` remains
+  unscheduled. Phase 1 restores ingestion of what the dossier already has, not
+  of what arrives tomorrow. Bridging that gap is a phase 2 decision, and the
+  plan says so in as many words.
 
-So after §8.7 the honest expectation is:
+So after §8.7, before the first sync, the honest expectation is:
 
-- `docker compose ps` shows `stalwart` **up**. Whether it also reports
-  `healthy` at that moment is **unverified** and should not be planned on. The
-  image's healthcheck is `STALWART_HEALTHCHECK_URL` → `/healthz/live`
-  (`Dockerfile:42-44`), read from source; nobody has watched that endpoint while
-  the server is still in bootstrap mode on an ephemeral store, and the source
-  shows the server behaves differently before the wizard has run. Expect
-  `healthy`; treat `starting` or `unhealthy` as a thing to check (§8.9 item 9),
-  not as a reason to tear the store down.
-- `/.well-known/jmap` answers with a session object.
-- `worker_runs` has **no `mail` rows at all**, and will not get any. That is
-  correct, not a fault. An empty `worker_runs` after §8.6 is what success looks
-  like at the end of phase 1.
-- Nothing new appears in the vault, on `/queue`, or in `documents`.
-
-Do not go looking for an ingestion failure that has not been built yet.
+- `docker compose ps` shows `stalwart` **up (healthy)** — measured on the first
+  cold start, 12 s (§8.0), where this section previously called it unverified.
+- `/.well-known/jmap` answers with a session object, and its `apiUrl` reads
+  `http://stalwart:8080/jmap/`. Any `https://` there means
+  `STALWART_PUBLIC_URL` did not take (§8.2) and the worker will fail on its
+  first method call while its session fetch looks perfect.
+- `worker_runs` has `mail` rows once the new worker is up, and before the first
+  sync they are RED, saying a first sync was refused. That is correct, not a
+  fault.
+- Nothing new appears in the vault, on `/queue`, or in `documents` until
+  `mail-first-sync --commit` runs and you have read the ledger-event count it
+  prints first.
 
 ### 8.9 Confirm on the first start — the read-vs-measured list
 
@@ -1335,6 +1345,74 @@ the export. A future backup step must cover `etc/` as well as the store:
 Nor does the cron know the mail service exists: it never runs `up`, only `exec`
 against `postgres` and `worker`, so a stopped or broken `stalwart` can never turn
 a nightly run red. That cuts both ways.
+
+### 8.11 Reading mail health: the newest `mail` run, and its AGE
+
+`worker_runs` is the only place mail failure is visible, and for the JMAP poll
+there are two things to read, not one.
+
+**The status** of the newest `mail` row is the ordinary signal — the dashboard's
+health tile selects `DISTINCT ON (worker) worker, status`, so an `error` there is
+a failed poll and the `detail` says which kind. One detail is worth knowing in
+advance: a row saying **a first sync was refused** is the scheduled poll doing
+its job. It runs with `allowFirstSync: false` and may only ever ask for deltas,
+because a first sync over the imported archive is irreversible (one
+`document.ingested` ledger event per attachment, on tables with no DELETE grant)
+and hours long. It refuses in two cases — no cursor at all, or a cursor Stalwart
+has rejected — and it will go red once a minute until a human acts. The recovery
+is the hand-run, previewed `pnpm --filter worker mail-first-sync`, never a
+restart.
+
+A **second** refusal reads differently and has the same cure: `a delta of N
+message(s) exceeds the 500 this caller may accept in one poll`. The first-sync
+flag cannot see that case — once a cursor exists, anything bulk-imported into
+Stalwart afterwards comes back as an ordinary delta with a valid cursor, and the
+port will hand over up to 10 000 ids in a single poll. `MAIL_MAX_DELTA` refuses
+it instead of draining it, because draining is the same irreversible ingest with
+a longer tail. **The cursor is HELD on both refusals**: nothing is lost, nothing
+is ingested, and the same delta is offered again next tick.
+
+**Run the first sync BEFORE the schedule is live.** The order matters and it is
+not interchangeable:
+
+```bash
+# with the NEW image built and the worker NOT yet up
+docker compose --env-file .env.prod -f docker-compose.prod.yml \
+  run --rm -T worker pnpm --filter worker mail-first-sync            # preview
+docker compose --env-file .env.prod -f docker-compose.prod.yml \
+  run --rm -T worker pnpm --filter worker mail-first-sync -- --commit
+# twice — see the note on throwingEnqueueSuggest — then:
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d worker
+```
+
+The script and the scheduled poll are two processes writing the same `mail`
+rows, and `makeSingleFlight` is per-process, so it does not hold across them.
+The failure that ordering avoids is specific: **a scheduled refusal row carries
+no cursor** (the no-cursor refusal writes back the null it read), so a tick that
+refuses and commits just *after* the script writes the cursor it spent an hour
+earning leaves `readCursor` answering null again — and every following tick then
+refuses a first sync it is never allowed to perform, with the ingest already
+paid for and invisible. Starting the worker only once the cursor exists removes
+the race rather than managing it.
+
+**The AGE** of that row is the second signal, and nothing else reports it. The
+poll is single-flight: while one poll is still running, every following tick is
+skipped and **writes nothing at all** — deliberately, because a row written on
+the skip path would either race the running poll for the cursor or, worse, paint
+a hung poll green once a minute for as long as it hangs. So:
+
+> If the newest `mail` run is more than a few minutes old, a poll is hung and
+> the single flight is skipping ticks.
+
+That staleness is the intended tell. The poll is scheduled `* * * * *`, so on a
+healthy worker the newest `mail` row is under a minute old whether or not any
+mail arrived.
+
+```sql
+select worker, status, ran_at, now() - ran_at as age, detail
+  from worker_runs where worker = 'mail'
+  order by ran_at desc limit 5;
+```
 
 
 ## Restore procedure

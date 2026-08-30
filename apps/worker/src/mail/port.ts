@@ -87,6 +87,100 @@ export class MailCursorRejectedError extends Error {
 }
 
 /**
+ * A caller that is not permitted to enumerate the whole mailbox was asked to.
+ *
+ * Raised by pollMail for `allowFirstSync: false` — the scheduled cron — on both
+ * doors into a full walk: no cursor at all, and a cursor the server rejected.
+ *
+ * WHY REFUSING IS THE CORRECT ANSWER, and not merely the cautious one. A first
+ * sync over the imported archive is IRREVERSIBLE: every relevant message writes
+ * a raw_emails row, vault bytes and one `document.ingested` LEDGER EVENT per
+ * attachment, on tables with no DELETE grant. It is also hours long on a shared
+ * box, and it is the one operation in this system whose blast radius has to be
+ * READ BEFORE it is authorised, which is exactly what ops/mail-first-sync.ts's
+ * preview exists to make possible. A cron tick is never the right context for
+ * a decision of that shape: nobody is watching it, it cannot be previewed, and
+ * "it happened to be too big to finish" was the only thing stopping it before.
+ *
+ * The alternative — letting the poll resync and relying on the port's
+ * DEFAULT_LIMITS to overflow first — is a guard made of arithmetic about how
+ * much mail is in the store today (100 pages x 500 = 50 000 against 146 270).
+ * Restore a subset, rebuild the mailbox, or import half the archive and the
+ * same code quietly does the whole ingest instead of refusing it.
+ */
+export class MailFirstSyncRefusedError extends Error {
+  constructor(readonly reason: "no-cursor" | "cursor-rejected", options?: { cause?: unknown }) {
+    // The message carries the CURE, because worker_runs is the only place mail
+    // failure is visible (docs/deploy.md) and this error is designed to repeat
+    // every minute until a human acts: a red row that names no recovery is a
+    // wedge, not a signal.
+    super(`a first sync over the whole mailbox was refused (${reason}): this caller may only `
+      + `poll deltas. Ingestion is irreversible, so a full sync is a hand-run, previewed `
+      + `operation — run \`pnpm --filter worker mail-first-sync\` to authorise it.`, options);
+    this.name = "MailFirstSyncRefusedError";
+  }
+}
+
+/**
+ * An ordinary delta came back far too large to be one minute of mail.
+ *
+ * THE DOOR MailFirstSyncRefusedError DOES NOT COVER. That guard closes the two
+ * ways into a FIRST sync — no cursor, and a cursor the server rejected — and a
+ * bulk import into the store is neither. The first sync writes cursor C, and
+ * anything imported afterwards (a re-import, a restored subset, a second
+ * Vandelay pass, phase 2 starting to deliver real mail) is `created` after C:
+ * a perfectly legitimate delta, with a valid cursor and no
+ * `cannotCalculateChanges` anywhere. The port will happily drain
+ * changesPages x maxChanges = 20 x 500 = 10 000 ids in one poll, and every one
+ * of them goes to the ingest loop of a cron that runs every minute.
+ *
+ * WHY REFUSING BEATS DRAINING AT A BOUNDED RATE, which is the obvious
+ * alternative and the wrong one. A rate limit — take 200 a tick and let the
+ * cursor crawl — still ingests every message, unattended, just more slowly: it
+ * converts an irreversible bulk append into a slower irreversible bulk append,
+ * and it does so while looking healthy, because each individual tick is small.
+ * Refusing HOLDS the cursor instead. Nothing is lost (the same delta is
+ * re-listed next tick), nothing is written (`documents` and `ledger_events`
+ * have no DELETE grant, so anything appended here is permanent), and the poll
+ * goes red once a minute naming the recovery until a human decides — which is
+ * the whole point, because the decision "yes, ingest these ten thousand" is one
+ * that has to be READ BEFORE it is authorised, and ops/mail-first-sync.ts's
+ * preview is where it is read.
+ *
+ * A TRIPWIRE, NOT A THROUGHPUT KNOB. Raising the ceiling to make a red poll go
+ * green is the one response that is always wrong: it authorises the ingest
+ * without previewing it, from the side of the system that cannot preview.
+ */
+export class MailDeltaTooLargeError extends Error {
+  /**
+   * `truncated` is `changed.hasMore` — the server had more to give than this
+   * poll drained. It is a SEPARATE trigger from the count, because the count
+   * alone can be under the ceiling while the backlog is enormous: a server
+   * returning small pages sets hasMoreChanges instead of a big `ids`, and the
+   * bulk import then walks in under the tripwire one bounded batch at a time.
+   * Reported so the run row says WHICH of the two fired, since the operator's
+   * question ("is this a big minute or a bulk import?") is answered by that
+   * and not by the number.
+   */
+  constructor(
+    readonly delta: number, readonly ceiling: number, readonly truncated = false,
+  ) {
+    // Same shape as the first-sync refusal's message and for the same reason:
+    // worker_runs is the only place mail failure is visible (docs/deploy.md),
+    // this error repeats every minute by design, and a red row that names no
+    // cure is a wedge rather than a signal.
+    super(`a delta of ${delta} message(s)`
+      + (truncated ? ` — and the server had MORE queued behind it —` : "")
+      + ` exceeds the ${ceiling} this caller may accept in `
+      + `one poll: that is a bulk import, not a minute of mail. Ingestion is irreversible, so `
+      + `it is a hand-run, previewed operation — run \`pnpm --filter worker mail-first-sync\` `
+      + `to read what it would append and authorise it. The cursor is HELD meanwhile: nothing `
+      + `is lost and nothing is ingested.`);
+    this.name = "MailDeltaTooLargeError";
+  }
+}
+
+/**
  * A first sync found more messages than it is willing to enumerate in one pass.
  *
  * This THROWS where an over-long `Email/changes` merely sets `hasMore`, and the
