@@ -647,6 +647,57 @@ and a mail server is not where to start blurring them. A passage in the previous
 draft of this section was headed "one measured trap" and had in fact only been
 read. So:
 
+**THE ARCHIVE IMPORT, MEASURED 2026-08-30.** Google Takeout → Vandelay →
+Stalwart, 146,270 messages. Two things dominate and neither is in any guide:
+
+1. **Stalwart rate-limits its own migration, twice, and the defaults make it
+   impossible.** Vandelay is a well-behaved client: it honours the 429s and
+   sleeps, so nothing fails — it just never finishes. Both limits must be raised
+   BEFORE starting, and both are per-account, not per-connection:
+
+   | Limit | Where | Default | For a migration | Cost if left |
+   | --- | --- | --- | --- | --- |
+   | `maxUploadCount` | Network → Services → JMAP | 1000 files | 10,000,000 | ~95 h |
+   | `uploadQuota` | Network → Services → JMAP | 50,000,000 B | 107,374,182,400 | ~150 h |
+   | Authenticated rate limit | Network → Services → HTTP → **Security** | 1000/min | 1,000,000/min | ~5 h |
+   | `maxConcurrentRequests` / `maxConcurrentUploads` | JMAP | 4 / 4 | 64 / 64 | throughput |
+
+   The blob quota and the request rate limit live on DIFFERENT pages, and the
+   first only reveals the second: clearing the upload quota simply exposes the
+   HTTP limit underneath. Measured after raising all four: **zero 429s**, 146,270
+   messages in 18 minutes, ~8,000 messages/minute.
+
+   Leave `uploadTtl` alone. Its own help text says a LONGER duration keeps
+   uploads alive until referenced, so with the quota raised there is nothing to
+   gain and shortening it is the risky direction.
+
+   THESE ARE LEFT WIDE DELIBERATELY, not overlooked. One human, loopback-bound,
+   no SMTP listener. The practical exposure is that an authenticated client could
+   park 100 GB in temp upload storage on `/mnt/data`; the ANONYMOUS rate limit
+   (100/min) is untouched and is the one that guards an unauthenticated endpoint.
+
+2. **`vandelay import takeout --dry-run` reports FILE counts, not message
+   counts.** The count comes from the real import, which writes only to a local
+   SQLite archive and never contacts the mail server — so it is safe to run for
+   the number alone.
+
+Measured end state, and the acceptance test that matters is the THIRD line, not
+the second — "exited 0" is not evidence that anything arrived:
+
+```
+archive (vandelay inspect)   146,270 emails · 20 mailboxes
+export summary               created=143,547  skipped=2,723  failed=0
+Email/query calculateTotal   146,270          <- the actual server-side count
+```
+
+The 2,723 skips are duplicates from two earlier throttled attempts, correctly
+recognised; the export is idempotent and safe to re-run. Store on disk is 7.3 GB
+for 11.5 GB of blobs — RocksDB lz4, which is the payoff for leaving Attachment &
+File Storage on "Use data store" at the wizard's Storage screen.
+
+Ledger unchanged throughout: 129 events, head `e30067a9…`. Importing 146,270
+messages into Stalwart appends nothing to verder's chain, which is the point.
+
 **THE SETUP WIZARD, MEASURED END TO END 2026-08-30.** It was run twice; the
 first run had to be thrown away. Everything here is observed, not read:
 
