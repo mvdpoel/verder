@@ -86,6 +86,11 @@ export const documents = pgTable("documents", {
   status: docStatusEnum("status").notNull().default("inbox"),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // The sender, resolved at INGEST and never updated: verder_app and
+  // verder_worker hold SELECT, INSERT on this table and no UPDATE, which is
+  // the append-only law. A correction rides document_status_changes.party_id
+  // and is resolved by effectiveDocument, exactly as title and docType are.
+  partyId: uuid("party_id").references(() => parties.id),
 });
 
 export const documentStatusChanges = pgTable("document_status_changes", {
@@ -95,6 +100,7 @@ export const documentStatusChanges = pgTable("document_status_changes", {
   title: text("title"),
   docType: text("doc_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  partyId: uuid("party_id").references(() => parties.id),
 });
 
 export const entryDocuments = pgTable("entry_documents", {
@@ -568,3 +574,29 @@ export const passkey = pgTable("passkey", {
   index("passkey_user_id_idx").on(t.userId),
   index("passkey_credential_id_idx").on(t.credentialID),
 ]);
+
+// --- files: bundles (sub-project 10) ---
+// NOT evidence. Creating, renaming or deleting a bundle appends NO ledger
+// event, the same law tracks/stops and debts follow: a bundle is a VIEW onto
+// evidence, never a claim about the case. That is precisely why DELETE can be
+// granted here while it stays revoked on every evidence table.
+export const bundles = pgTable("bundles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  note: text("note"),
+  // 'manual' — members are rows in bundle_documents.
+  // 'rule'   — members are computed from `rule` at read time.
+  kind: text("kind").notNull(),
+  rule: jsonb("rule"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("bundles_kind_ck", sql`${t.kind} IN ('manual','rule')`),
+  check("bundles_rule_ck", sql`(${t.kind} = 'rule') = (${t.rule} IS NOT NULL)`),
+]);
+
+export const bundleDocuments = pgTable("bundle_documents", {
+  bundleId: uuid("bundle_id").notNull().references(() => bundles.id),
+  documentId: uuid("document_id").notNull().references(() => documents.id),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [unique("bundle_document_uq").on(t.bundleId, t.documentId)]);

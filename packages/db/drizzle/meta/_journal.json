@@ -225,6 +225,13 @@
       "when": 1788095911778,
       "tag": "0031_raw_emails_message_id_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788102406028,
+      "tag": "0032_files_bundles",
+      "breakpoints": true
     }
   ]
 }
