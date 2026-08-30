@@ -6,3 +6,5 @@ export { SEARCH_ENTITY_TYPES, SEARCH_STATUSES, type SearchEntityType, type Searc
 export { CHUNK_SIZE, CHUNK_OVERLAP, chunkBody } from "./search/chunk";
 export { sourceHash } from "./search/source-hash";
 export { RRF_K, rrfFuse, type RankedId, type FusedId } from "./search/fuse";
+export { buildZip, crc32, extensionForMime, zipEntryName,
+  ZIP_MAX_ENTRIES, ZIP_MAX_TOTAL_BYTES, type ZipEntry } from "./zip";
