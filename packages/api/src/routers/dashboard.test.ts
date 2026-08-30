@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { desc, eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
@@ -75,6 +76,30 @@ describe("dashboard router", () => {
     const after = await c.dashboard.stats();
     expect(after.pendingSuggestions).toBe(before.pendingSuggestions - 1);
     expect((await c.suggestions.list({ status: "pending" })).length).toBe(queueBefore - 1);
+  });
+
+  it("leaves incident markers out of the watcher list", async () => {
+    // THE BUG THIS PINS. `search-rerank` is written only by search/retrieve.ts,
+    // only with status "error", when a deep search's rerank times out — no code
+    // path anywhere writes it "ok", and nothing in apps/web requests
+    // mode:"deep". The dashboard reads this list as "things that should be
+    // running" (down = stale || status !== "ok", 15-minute staleness), so one
+    // Ollama timeout on 2026-08-23 turned the tile red permanently: clearing it
+    // needed a success row nothing writes, from a mode nothing requests.
+    //
+    // The row must still be RECORDED — the history is the point — so this
+    // asserts both halves: written to worker_runs, absent from the tile.
+    const c = caller();
+    await db.insert(schema.workerRuns).values({
+      worker: "search-rerank", status: "error",
+      detail: { promptVersion: "rerank-v1", message: "TimeoutError" },
+    });
+    const stats = await c.dashboard.stats();
+    expect(stats.lastWorkerRuns.find((w) => w.worker === "search-rerank")).toBeUndefined();
+    const [kept] = await db.select().from(schema.workerRuns)
+      .where(eq(schema.workerRuns.worker, "search-rerank"))
+      .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+    expect(kept?.status).toBe("error");
   });
 
   it("reports the latest run per worker", async () => {
