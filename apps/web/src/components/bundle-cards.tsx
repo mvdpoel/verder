@@ -5,20 +5,27 @@ import { BundleCardActions, BundleForm } from "@/components/bundle-form";
 
 type Caller = Awaited<ReturnType<typeof serverCaller>>;
 export type BundleRow = Awaited<ReturnType<Caller["bundles"]["list"]>>[number];
+type DocTree = Awaited<ReturnType<Caller["documents"]["tree"]>>;
+type PartyRow = Awaited<ReturnType<Caller["parties"]["list"]>>[number];
 
 /**
  * The `bundels` view: one card per bundle, plus the one card in the grid
  * that is an action rather than a thing — "Nieuwe bundel", which opens
  * `BundleForm`. Rename and delete live on each existing card via
  * `BundleCardActions`.
+ *
+ * `tree` and `parties` are PROPS, not fetched here, on purpose: `page.tsx`
+ * already reads both inside its own `Promise.all` (the tree for `FilesTree`,
+ * and now for this view's rule form too). A `caller.documents.tree()` call
+ * inside this component would run the same five-query aggregate a second
+ * time, strictly AFTER the page's parallel block has already resolved — the
+ * exact serial-tail mistake that block's own comment says it exists to avoid.
  */
-export async function BundleCards({ bundles }: { bundles: BundleRow[] }) {
-  // The rule form needs the full party list (van wie) and the soort branch
-  // (soort) regardless of what the bundles ALREADY reference — unlike
-  // `describeRule`, which only needs the parties an existing rule names. Both
-  // are fetched unconditionally now that the form is always on this view.
-  const caller = await serverCaller();
-  const [parties, tree] = await Promise.all([caller.parties.list(), caller.documents.tree()]);
+export function BundleCards({ bundles, tree, parties }: {
+  bundles: BundleRow[];
+  tree: DocTree;
+  parties: PartyRow[];
+}) {
   const partyNames = Object.fromEntries(parties.map((p) => [p.id, p.name]));
   // "Zonder soort" (the empty key) is a to-do list, not a condition anyone
   // would build a rule on — bundleRuleSchema's docType requires a non-empty

@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import {
-  Button, Dialog, Field, FormError, Input, Micro, Select, Textarea,
+  Button, Dialog, Field, FormError, Input, Micro, Notice, Select, Textarea,
 } from "@/components/ui";
 
 /**
@@ -40,9 +40,12 @@ const EMPTY_RULE = { docType: "", partyId: "", source: "" as SourceValue, status
  * source, status, from, to — nothing invented, nothing left out. An empty
  * rule means "every document in the vault" and the schema refuses it, so
  * `ruleEmpty` disables the submit button before that round trip rather than
- * after it; the message sits right under the fields it is about; never amber
- * — it is guidance, not the field-level "you got this wrong" `Field` reserves
- * amber for.
+ * after it. The message is `Notice tone="signal"`, not `FormError`: nothing
+ * has failed yet — an incomplete form is the single most common state a form
+ * is ever in, and if that turns amber, amber stops meaning "this waits on
+ * you" and starts meaning "look here". `FormError` stays for what it is
+ * everywhere else in this codebase: a mutation that was actually attempted
+ * and actually failed (`create.error`, `rename.error`, `remove.error`).
  *
  * `trigger` lets the same component be the dashed grid card OR a plain
  * button for the empty state, which already draws its own dashed box —
@@ -182,9 +185,9 @@ export function BundleForm({
                 </Field>
               </div>
               {ruleEmpty && (
-                <FormError>
+                <Notice tone="signal">
                   Kies minstens één voorwaarde — anders geldt de regel voor alles in de kluis
-                </FormError>
+                </Notice>
               )}
             </div>
           )}
@@ -231,6 +234,14 @@ export function BundleCardActions({ bundle }: {
     setRenaming(true);
   }
 
+  // Mirrors `openRename`: without this, a failed delete followed by
+  // "annuleren" and a second "verwijderen" click shows last attempt's error
+  // before this one has done anything.
+  function openDeleteConfirm() {
+    remove.reset();
+    setConfirmingDelete(true);
+  }
+
   if (confirmingDelete) {
     return (
       <div className="flex flex-col items-end gap-2">
@@ -253,7 +264,7 @@ export function BundleCardActions({ bundle }: {
     <>
       <div className="flex shrink-0 gap-2">
         <Button variant="quiet" size="sm" onClick={openRename}>hernoemen</Button>
-        <Button variant="quiet" size="sm" onClick={() => setConfirmingDelete(true)}>verwijderen</Button>
+        <Button variant="quiet" size="sm" onClick={openDeleteConfirm}>verwijderen</Button>
       </div>
 
       <Dialog

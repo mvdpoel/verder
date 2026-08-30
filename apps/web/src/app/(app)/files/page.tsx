@@ -19,11 +19,15 @@ export default async function FilesPage({ searchParams }: {
 }) {
   const parsed = parseFilesParams(await searchParams);
   const caller = await serverCaller();
-  // Four independent reads, in parallel. Sequentially this is four round trips
+  // Five independent reads, in parallel. Sequentially this is five round trips
   // before the page draws anything — the mistake the vault page fixed once.
-  const [tree, bundles, browse, selected] = await Promise.all([
+  // `parties` is fetched here rather than inside `BundleCards` for the same
+  // reason: a component that awaits its own data below this block turns one
+  // parallel read into a serial tail after it, on every render of this page.
+  const [tree, bundles, parties, browse, selected] = await Promise.all([
     caller.documents.tree(),
     caller.bundles.list(),
+    caller.parties.list(),
     // `bundels` is a VIEW, not a filter — it lists bundles themselves, so
     // there is nothing for `browse` to narrow and no reason to call it.
     parsed.branch.kind === "bundels"
@@ -41,7 +45,7 @@ export default async function FilesPage({ searchParams }: {
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)_260px]">
         <FilesTree tree={tree} bundles={bundles} parsed={parsed} />
         {parsed.branch.kind === "bundels"
-          ? <BundleCards bundles={bundles} />
+          ? <BundleCards bundles={bundles} tree={tree} parties={parties} />
           : <FilesTable rows={browse.rows} total={browse.total} parsed={parsed}
               bundles={bundles.filter((b) => b.kind === "manual")
                 .map((b) => ({ id: b.id, name: b.name }))} />}
