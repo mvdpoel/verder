@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../trpc";
+import { effectiveDocStatusSql } from "../effective-status";
 
 /**
  * `worker_runs` names that are INCIDENT MARKERS, not watchers — excluded from
@@ -58,9 +59,8 @@ export const dashboardRouter = router({
           (SELECT d.status FROM documents d WHERE d.id = s.document_id))
           IS DISTINCT FROM 'discarded')`)).rows as [{ pending: number }];
     const [{ inbox }] = (await ctx.db.execute(sql`
-      SELECT count(*)::int AS inbox FROM documents d
-      WHERE COALESCE((SELECT c.status FROM document_status_changes c
-        WHERE c.document_id = d.id ORDER BY c.created_at DESC LIMIT 1), d.status) = 'inbox'`)).rows as [{ inbox: number }];
+      SELECT count(*)::int AS inbox FROM documents
+      WHERE ${effectiveDocStatusSql} = 'inbox'`)).rows as [{ inbox: number }];
     const [{ open }] = (await ctx.db.execute(sql`
       SELECT count(*)::int AS open FROM action_items a
       WHERE COALESCE((SELECT c.status FROM action_item_status_changes c

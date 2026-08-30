@@ -1,5 +1,6 @@
-import { asc, sql } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { notDiscardedSql } from "@verder/api/src/effective-status";
 
 /**
  * The vault's documents keyed by the filename they arrived under, for the
@@ -46,13 +47,10 @@ import { schema, type Db } from "@verder/db";
  * under the name the seed knows it by.
  */
 export async function documentIdsByTitle(db: Db): Promise<Map<string, string>> {
-  const effectiveStatus = sql`COALESCE((SELECT c.status FROM document_status_changes c
-    WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1),
-    documents.status)::text`;
   const rows = await db
     .select({ id: schema.documents.id, title: schema.documents.title })
     .from(schema.documents)
-    .where(sql`${effectiveStatus} IS DISTINCT FROM 'discarded'`)
+    .where(notDiscardedSql)
     .orderBy(asc(schema.documents.createdAt), asc(schema.documents.id));
   const byTitle = new Map<string, string>();
   for (const d of rows) if (!byTitle.has(d.title)) byTitle.set(d.title, d.id);

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { notDiscardedSql } from "@verder/api/src/effective-status";
 
 /**
  * Documents whose text has never been extracted.
@@ -27,16 +28,12 @@ import { schema, type Db } from "@verder/db";
  */
 export async function pendingDocMeta(db: Db, limit: number): Promise<string[]> {
   const rows = (await db.execute(sql`
-    SELECT d.id
-    FROM ${schema.documents} d
-    LEFT JOIN ${schema.documentTexts} t ON t.document_id = d.id
-    LEFT JOIN LATERAL (
-      SELECT status FROM ${schema.documentStatusChanges}
-      WHERE document_id = d.id ORDER BY created_at DESC LIMIT 1
-    ) c ON true
+    SELECT documents.id
+    FROM ${schema.documents}
+    LEFT JOIN ${schema.documentTexts} t ON t.document_id = documents.id
     WHERE t.document_id IS NULL
-      AND COALESCE(c.status::text, d.status::text) IS DISTINCT FROM 'discarded'
-    ORDER BY d.created_at ASC
+      AND ${notDiscardedSql}
+    ORDER BY documents.created_at ASC
     LIMIT ${limit}
   `)).rows as { id: string }[];
   return rows.map((r) => r.id);

@@ -6,6 +6,7 @@ import { schema, type Db } from "@verder/db";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
+import { effectiveDocStatusSql, notDiscardedSql } from "../effective-status";
 import { readFilePath, relPathFor } from "../storage";
 
 export async function ingestDocument(tx: Db, input: {
@@ -76,13 +77,10 @@ export const documentsRouter = router({
     // a discard is appended to document_status_changes and never written back,
     // so documents.status keeps reading "inbox" forever. Cast to text so the
     // comparison does not depend on the enum's own operator set.
-    const effectiveStatus = sql`COALESCE((SELECT c.status FROM document_status_changes c
-      WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1),
-      documents.status)::text`;
     const where = input.status
-      ? sql`${effectiveStatus} = ${input.status}`
+      ? sql`${effectiveDocStatusSql} = ${input.status}`
       // IS DISTINCT FROM, not <>, for the same reason it is used in search.
-      : input.includeDiscarded ? undefined : sql`${effectiveStatus} IS DISTINCT FROM 'discarded'`;
+      : input.includeDiscarded ? undefined : notDiscardedSql;
     const rows = await ctx.db.select().from(schema.documents).where(where)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
     return Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
@@ -102,9 +100,7 @@ export const documentsRouter = router({
     // to document_status_changes and never written back, so documents.status
     // keeps reading "inbox" forever and counting the raw column would put every
     // discarded file back in the inbox tally.
-    const status = sql<string>`COALESCE((SELECT c.status FROM document_status_changes c
-      WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1),
-      documents.status)::text`;
+    const status = effectiveDocStatusSql;
     const rows = await ctx.db
       .select({ status, n: sql<number>`count(*)::int` })
       .from(schema.documents)

@@ -16,6 +16,7 @@
 
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { notDiscardedSql } from "./effective-status";
 
 export interface EvidenceInput {
   id: string;
@@ -134,8 +135,7 @@ export async function resolveStopEvidence(
         // IS DISTINCT FROM, not <>: the subquery is NULL for a document nobody
         // ever touched, and NULL <> 'discarded' is NULL — which would drop
         // every document Martin has not filed or discarded.
-        sql`COALESCE(${latestDocumentChange("status")}, documents.status)
-          IS DISTINCT FROM 'discarded'`))
+        notDiscardedSql))
     : [];
 
   // The e-mail: an attachment carries its Gmail message id in source_ref, which
