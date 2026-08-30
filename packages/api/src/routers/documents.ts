@@ -6,7 +6,9 @@ import { schema, type Db } from "@verder/db";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
-import { effectiveDocStatusSql, notDiscardedSql } from "../effective-status";
+import {
+  effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql, notDiscardedSql,
+} from "../effective-status";
 import { docTypeLabel } from "../doc-type";
 import { readFilePath, relPathFor } from "../storage";
 
@@ -129,8 +131,16 @@ export const documentsRouter = router({
     // Folds inner whitespace runs too, matching docTypeKey exactly: without
     // regexp_replace, "bank  afschrift" (double space) and "bank afschrift"
     // would land in two SQL branches while docTypeKey treats them as one key.
+    //
+    // Groups on effectiveDocTypeSql, not the raw column: documents.update
+    // APPENDS a docType correction to document_status_changes and never
+    // writes it back — documents.doc_type would read the pre-correction
+    // value forever, the same trap effectiveDocStatusSql exists for — so
+    // grouping on the raw column would disagree with the document itself,
+    // and with the next task's row query, which resolves through the same
+    // change rows.
     const docTypeKeySql = sql<string>`regexp_replace(
-      lower(btrim(coalesce(documents.doc_type,''))), '\\s+', ' ', 'g')`;
+      lower(btrim(coalesce(${effectiveDocTypeSql},''))), '\\s+', ' ', 'g')`;
     // Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
     // bucket files 31 August 23:00Z under August while every date the app
     // prints says 1 September.
@@ -139,23 +149,41 @@ export const documentsRouter = router({
 
     const [soortRows, vanWieRows, periodeRows, bronRows, statusRows] = await Promise.all([
       ctx.db.select({
-        // The raw spellings come back as an array so docTypeLabel can pick the
-        // one most rows use; grouping on the key alone would lose them.
+        // The raw spellings come back as an array, one entry PER ROW — no
+        // DISTINCT — so docTypeLabel can count occurrences and pick the
+        // spelling most rows actually use. De-duplicating here would make
+        // every spelling appear exactly once, turning the majority vote into
+        // an alphabetical tie-break regardless of how skewed the real data is.
         key: docTypeKeySql,
-        spellings: sql<string[]>`array_agg(distinct btrim(coalesce(documents.doc_type,'')))`,
+        spellings: sql<string[]>`array_agg(btrim(coalesce(${effectiveDocTypeSql},'')))`,
         n: sql<number>`count(*)::int`,
       }).from(schema.documents).where(live)
         .groupBy(docTypeKeySql),
 
+      // A LEFT JOIN, not a correlated name subquery: nesting
+      // effectivePartyIdSql a second time inside a `(SELECT p.name FROM
+      // parties p WHERE p.id = (...))` subquery pushes its inner
+      // documents.id reference one query level deeper than the GROUP BY
+      // expression it would otherwise match, and Postgres refuses it —
+      // "subquery uses ungrouped column documents.id from outer query"
+      // (measured). Joining on parties.id and grouping by it too lets
+      // Postgres select parties.name ungrouped via its functional-dependency
+      // rule for a joined table's primary key.
       ctx.db.select({
-        partyId: sql<string | null>`documents.party_id`,
-        name: sql<string | null>`(SELECT p.name FROM parties p WHERE p.id = documents.party_id)`,
+        // Same reasoning as docTypeKeySql: a sender correction lives in
+        // document_status_changes and is never written back to
+        // documents.party_id.
+        partyId: effectivePartyIdSql,
+        name: schema.parties.name,
         n: sql<number>`count(*)::int`,
-      }).from(schema.documents).where(live)
-        .groupBy(sql`documents.party_id`),
+      }).from(schema.documents)
+        .leftJoin(schema.parties, eq(effectivePartyIdSql, schema.parties.id))
+        .where(live)
+        .groupBy(effectivePartyIdSql, schema.parties.id),
 
       ctx.db.select({ month, n: sql<number>`count(*)::int` })
-        .from(schema.documents).where(live).groupBy(month).orderBy(sql`1 desc`),
+        .from(schema.documents).where(live).groupBy(month)
+        .orderBy(sql`${month} desc`),
 
       ctx.db.select({ source: schema.documents.source, n: sql<number>`count(*)::int` })
         .from(schema.documents).where(live).groupBy(schema.documents.source),
