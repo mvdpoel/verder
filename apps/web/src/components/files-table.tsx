@@ -114,6 +114,12 @@ export function FilesTable({ rows, total, parsed, bundles }: {
                 <Td>
                   <Link href={buildFilesHref(parsed, { sel: r.id })}
                     className="transition-colors hover:text-signal">{r.title}</Link>
+                  {/* A manual bundle shows what it CONTAINS, a discarded
+                      member included — the count, this table and the zip are
+                      one set. Marked, never silent, so the inclusion is
+                      visible. NOT amber: amber means "waits on you", and a
+                      document Martin threw away waits on nobody. */}
+                  {r.status === "discarded" && <Micro>weggelegd</Micro>}
                 </Td>
                 <Td className="text-ink-mute">{r.docType ?? "—"}</Td>
                 <Td className="text-ink-mute">{r.partyName ?? "—"}</Td>

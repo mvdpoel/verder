@@ -166,13 +166,51 @@ describe("bundles router", () => {
   // documents.browse({ branch: { kind: "bundel", id } }) has no test anywhere
   // else — Task 6's tree never emits a bundel branch, and this is the first
   // task with real bundles.
-  it("browse's bundel branch returns a manual bundle's members, minus a discarded one", async () => {
+  //
+  // A MANUAL bundle shows what it CONTAINS, discarded members included. This
+  // used to assert the opposite, and the opposite is what made the card say 3,
+  // the table show 2 and the download hold 3 — three answers to one question,
+  // on one screen. The spec settles it in §6.2 for the zip ("the selection was
+  // deliberate, and a silent inclusion is the lie, not the inclusion") and the
+  // same reasoning governs the count and the table; FilesTable marks the row
+  // "weggelegd" so the inclusion is visible rather than silent.
+  it("browse's bundel branch returns a manual bundle's members, discarded included", async () => {
     const kept = await add(`bundelbrowse ${mark}`);
     const removed = await add(`bundelbrowse ${mark}`);
     await caller().documents.update({ id: removed.id, status: "discarded" });
     const b = await caller().bundles.create({ name: `Doorblader ${mark}`, kind: "manual" });
     await caller().bundles.addDocuments({ id: b.id, documentIds: [kept.id, removed.id] });
     const res = await caller().documents.browse({ branch: { kind: "bundel", id: b.id } });
-    expect(res.rows.map((r) => r.id)).toEqual([kept.id]);
+    expect(res.rows.map((r) => r.id).sort()).toEqual([kept.id, removed.id].sort());
+    expect(res.rows.find((r) => r.id === removed.id)?.status).toBe("discarded");
+    // The three answers agree: card count, table total, zip manifest.
+    expect(res.total).toBe(2);
+    expect((await caller().bundles.get({ id: b.id })).documentIds).toHaveLength(2);
+  });
+
+  // The defect this catches: browse's bundel branch used to filter
+  // bundle_documents, where a RULE bundle deliberately holds nothing at all.
+  // The tree rendered "<naam> · 2" from bundles.list().count, the table
+  // rendered "Niets in deze tak", and the card's Download .zip handed over 2
+  // files. Three answers, one bundle.
+  it("browse's bundel branch computes a rule bundle's members", async () => {
+    const key = `regelbrowse ${mark}`;
+    const one = await add(key);
+    const two = await add(key);
+    const b = await caller().bundles.create({
+      name: `Regelblader ${mark}`, kind: "rule", rule: { docType: key } });
+    const res = await caller().documents.browse({ branch: { kind: "bundel", id: b.id } });
+    expect(res.rows.map((r) => r.id).sort()).toEqual([one.id, two.id].sort());
+    expect(res.total).toBe(2);
+  });
+
+  // A bundle deleted in another tab leaves a ?tak=bundel:<id> URL behind. An
+  // empty middle pane is the honest answer; a NOT_FOUND would 404 the page.
+  it("browse's bundel branch is empty, not an error, for a bundle that is gone", async () => {
+    const b = await caller().bundles.create({ name: `Weg ${mark}`, kind: "manual" });
+    await caller().bundles.remove({ id: b.id });
+    const res = await caller().documents.browse({ branch: { kind: "bundel", id: b.id } });
+    expect(res.rows).toEqual([]);
+    expect(res.total).toBe(0);
   });
 });

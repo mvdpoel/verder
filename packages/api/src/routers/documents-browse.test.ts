@@ -81,7 +81,7 @@ describe("documents.browse", () => {
   // present for the walk to exercise, even on a freshly reset database.
   it("agrees with tree on every branch's true total", async () => {
     // soort (named) + soort (empty key) + known party + unknown party.
-    await add(`${mark} agree-1`, { docType: `agree ${mark}`, partyId });
+    const firstAgree = await add(`${mark} agree-1`, { docType: `agree ${mark}`, partyId });
     await add(`${mark} agree-2`, { docType: undefined });
     // A distinct bron so the "bron" walk includes more than "upload".
     await add(`${mark} agree-3`, { source: "nas-scan", docType: `agree-bron ${mark}` });
@@ -91,6 +91,18 @@ describe("documents.browse", () => {
     // A discarded document, so the "status" walk includes "discarded".
     const gone = await add(`${mark} agree-5`, { docType: `agree-gone ${mark}` });
     await caller().documents.update({ id: gone.id, status: "discarded" });
+
+    // A MANUAL and a RULE bundle, because the tree pane renders both as a
+    // `bundel` branch carrying bundles.list().count and the two resolve
+    // membership in completely different places — a rule bundle holds zero
+    // rows in bundle_documents by design. The manual one deliberately holds a
+    // discarded member: the count, the table and the zip are one set.
+    const manual = await caller().bundles.create({
+      name: `Loonstroken ${mark}`, kind: "manual" });
+    await caller().bundles.addDocuments({
+      id: manual.id, documentIds: [firstAgree.id, gone.id] });
+    await caller().bundles.create({
+      name: `Alles van agree ${mark}`, kind: "rule", rule: { docType: `agree ${mark}` } });
 
     const tree = await caller().documents.tree();
 
@@ -117,6 +129,17 @@ describe("documents.browse", () => {
       const status = st.status as "inbox" | "filed" | "discarded";
       const res = await caller().documents.browse({ branch: { kind: "status", status } });
       expect(res.total).toBe(st.n);
+    }
+    // The bundles are the branch the tree cannot emit: FilesTree renders every
+    // row of bundles.list() as a `bundel` branch carrying that row's count, so
+    // the same agreement has to hold there. It did not — browse filtered
+    // bundle_documents, which a rule bundle leaves empty on purpose, so a rule
+    // bundle read "Loonstroken · 12" in the tree and "Niets in deze tak" in
+    // the table while its card downloaded 12 files.
+    for (const bundle of await caller().bundles.list()) {
+      const res = await caller().documents.browse({
+        branch: { kind: "bundel", id: bundle.id }, limit: 200 });
+      expect(res.total).toBe(bundle.count);
     }
   });
 });

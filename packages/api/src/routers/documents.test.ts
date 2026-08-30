@@ -453,6 +453,63 @@ describe("documents router", () => {
     expect((await c.documents.get({ id: doc.id })).effectivePartyId).toBe(party.id);
   });
 
+  // THE SEAM: effectiveDocument (JS) and effectiveTitleSql/effectiveDocTypeSql
+  // (SQL) are two spellings of one idea, and they used to disagree the moment
+  // a change row was SILENT about a field an earlier row had filled — which
+  // the UI produces in one action, because clearing the Soort box or picking
+  // "Onbekend" sends undefined and that column lands NULL. FilesTable renders
+  // the SQL answer and FilesPreview the JS one, in the same request, side by
+  // side: the table said "Loonstrook / nieuw" and the preview beside it said
+  // "scan_… / oud" about the same document.
+  it("resolves title and soort from the newest change row that NAMES them", async () => {
+    const c = caller();
+    const mark = crypto.randomUUID().slice(0, 8);
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "application/pdf", title: `scan_${mark}`, source: "upload",
+      receivedAt: new Date(), docType: `oud ${mark}` });
+    await c.documents.update({ id: doc.id, status: "filed",
+      title: `Loonstrook ${mark}`, docType: `nieuw ${mark}` });
+    // Silent about title and soort — exactly what the meta form sends when the
+    // Soort box is cleared, and what suggestions.approveDocumentMeta sends
+    // with no docType.
+    await c.documents.update({ id: doc.id, status: "inbox" });
+
+    const js = await c.documents.get({ id: doc.id });
+    expect(js.effectiveTitle).toBe(`Loonstrook ${mark}`);
+    expect(js.effectiveDocType).toBe(`nieuw ${mark}`);
+
+    // The SQL answer, on the same document, in the same state.
+    const sqlSide = await c.documents.browse({
+      branch: { kind: "soort", key: `nieuw ${mark}` } });
+    expect(sqlSide.rows.map((r) => r.id)).toEqual([doc.id]);
+    expect(sqlSide.rows[0].title).toBe(js.effectiveTitle);
+    expect(sqlSide.rows[0].docType).toBe(js.effectiveDocType);
+  });
+
+  // The no-op law under the resolution above: an ABSENT field is a row that
+  // says nothing, so it changes nothing and cannot make a repeat click a new
+  // decision. Comparing an absent title against the INGEST title (as the guard
+  // did) broke this for every renamed document — discarding one twice appended
+  // two discards, and the record would then claim Martin made two.
+  it("discarding a RENAMED document twice is still one decision", async () => {
+    const c = caller();
+    const mark = crypto.randomUUID().slice(0, 8);
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "image/png", title: `scan_${mark}`, source: "upload", receivedAt: new Date() });
+    await c.documents.update({ id: doc.id, status: "filed", title: `Huurcontract ${mark}` });
+    await c.documents.update({ id: doc.id, status: "discarded" });
+    const events = (await allEvents()).length;
+
+    await c.documents.update({ id: doc.id, status: "discarded" });
+
+    expect((await allEvents()).length).toBe(events);
+    const changes = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id));
+    expect(changes).toHaveLength(2);
+    expect((await c.documents.get({ id: doc.id })).effectiveTitle)
+      .toBe(`Huurcontract ${mark}`);
+  });
+
   it("appends no extra ledger event for a no-op sender write", async () => {
     const c = caller();
     const [party] = await db.insert(schema.parties).values({

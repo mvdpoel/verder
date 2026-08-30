@@ -62,3 +62,32 @@ export const effectiveTitleSql: SQL<string> = sql`COALESCE((
   SELECT c.title FROM document_status_changes c
   WHERE c.document_id = documents.id AND c.title IS NOT NULL
   ORDER BY c.created_at DESC LIMIT 1), documents.title)`;
+
+/**
+ * THE TWO BRANCH KEYS BELOW live here, one import level under both routers,
+ * rather than in routers/documents.ts where they were written: bundles.ts
+ * needs docTypeKeySql for a rule, and documents.ts needs bundles.ts to resolve
+ * a bundel branch. Keeping them up there made that pair a cycle.
+ */
+
+/**
+ * The folded soort key `tree` groups on and `browse`'s `soort` branch filters
+ * on — the SAME constant, not two hand-typed copies. Folds inner whitespace
+ * runs too: without regexp_replace, "bank  afschrift" (double space) and
+ * "bank afschrift" would land in two different SQL branches while this key
+ * treats them as one.
+ *
+ * `'\\s+'`, not `'\s+'`: inside a JS template literal `'\s+'` silently drops
+ * the backslash and Postgres then matches a literal "s" — measured.
+ */
+export const docTypeKeySql = sql<string>`regexp_replace(
+  lower(btrim(coalesce(${effectiveDocTypeSql},''))), '\\s+', ' ', 'g')`;
+
+/**
+ * The month key `tree` groups on and `browse`'s `periode` branch filters on —
+ * Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
+ * bucket files 31 August 23:00Z under August while every date the app prints
+ * says 1 September.
+ */
+export const receivedMonthSql = sql<string>`to_char(
+  (documents.received_at AT TIME ZONE 'Europe/Amsterdam'), 'YYYY-MM')`;

@@ -4,8 +4,9 @@ import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { bundleRuleSchema, parseBundleRule, type BundleRule } from "../bundle-rule";
-import { effectiveDocStatusSql, effectivePartyIdSql, notDiscardedSql } from "../effective-status";
-import { docTypeKeySql } from "./documents";
+import {
+  docTypeKeySql, effectiveDocStatusSql, effectivePartyIdSql, notDiscardedSql,
+} from "../effective-status";
 import { docTypeKey } from "../doc-type";
 
 /**
@@ -44,9 +45,57 @@ function ruleWhere(rule: BundleRule): SQL {
 }
 
 /**
- * Which documents a bundle holds — the one place that knows the difference
- * between the two kinds. The zip route calls this, so a rule bundle's download
- * is always current and a manual bundle's download is always what was curated.
+ * A MANUAL bundle's membership: exactly the rows someone put in it.
+ *
+ * NO notDiscardedSql. A manual bundle shows what it CONTAINS — the spec's
+ * §6.2 reasoning for the zip ("the selection was deliberate, and a silent
+ * inclusion is the lie, not the inclusion") is the same reasoning for the
+ * count and for the table. Excluding a discarded member here and nowhere else
+ * is what made the card say 3, the table show 2 and the download hold 3. The
+ * table marks such a row "weggelegd" rather than hiding it.
+ *
+ * A RULE bundle is the other way round: ruleWhere excludes discarded
+ * documents unless the rule names status: 'discarded'. That is deliberate and
+ * tested and does not change — a rule is a standing question about the vault,
+ * not a hand-picked list.
+ */
+const manualMembershipSql = (bundleId: string): SQL =>
+  sql`documents.id IN (SELECT bd.document_id FROM bundle_documents bd
+    WHERE bd.bundle_id = ${bundleId})`;
+
+/**
+ * Which documents a bundle holds, as a WHERE clause on `documents` — what
+ * documents.browse's `bundel` branch filters on, so the middle pane, the count
+ * on the card and the zip are one set.
+ *
+ * Reading bundle_documents directly (as browse did) is right for a manual
+ * bundle and wrong for a rule bundle, which deliberately holds ZERO rows
+ * there: the tree said "Loonstroken · 12", the table said "Niets in deze tak",
+ * and the card still downloaded 12 files.
+ *
+ * Forgiving where resolveBundleDocumentIds is strict: a bundle deleted in
+ * another tab leaves a ?tak=bundel:<id> URL behind, and an empty middle pane
+ * is the honest answer to that — not a 404 over the whole page.
+ */
+export async function bundleWhere(db: Db, bundleId: string): Promise<SQL> {
+  const [b] = await db.select().from(schema.bundles).where(eq(schema.bundles.id, bundleId));
+  if (!b) return sql`false`;
+  if (b.kind === "manual") return manualMembershipSql(bundleId);
+  const parsed = parseBundleRule(b.rule);
+  // An unreadable rule matches nothing — the same answer
+  // resolveBundleDocumentIds gives it, and the bundle card says why.
+  return parsed.ok ? ruleWhere(parsed.rule) : sql`false`;
+}
+
+/**
+ * Which documents a bundle holds, as ids in the order they should be handed
+ * over — the one place that knows the difference between the two kinds. The
+ * zip route calls this, so a rule bundle's download is always current and a
+ * manual bundle's download is always what was curated.
+ *
+ * Membership is bundleWhere's; only the ORDER differs, which is why the manual
+ * half reads bundle_documents rather than the predicate — a curated bundle
+ * downloads in the order it was curated.
  */
 export async function resolveBundleDocumentIds(db: Db, bundleId: string): Promise<string[]> {
   const [b] = await db.select().from(schema.bundles).where(eq(schema.bundles.id, bundleId));

@@ -7,9 +7,10 @@ import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import {
-  effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql, effectiveTitleSql,
-  notDiscardedSql,
+  docTypeKeySql, effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql,
+  effectiveTitleSql, notDiscardedSql, receivedMonthSql,
 } from "../effective-status";
+import { bundleWhere } from "./bundles";
 import { docTypeLabel } from "../doc-type";
 import { readFilePath, relPathFor } from "../storage";
 
@@ -38,47 +39,50 @@ export async function effectiveDocument(db: Db, id: string) {
   // a 404 page (`orNotFound`), and every other router already speaks it.
   // A bare Error is indistinguishable from a crash and renders as one.
   if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
-  // Two rows, not one: the second is what the latest change replaced, which is
-  // what "Undo discard" has to restore. Undoing always to "inbox" would
-  // silently unfile a filed document discarded by mistake.
+  // EVERY change row, newest first — not just the newest two. The second row
+  // is still what "Undo discard" has to restore (undoing always to "inbox"
+  // would silently unfile a filed document discarded by mistake), but title,
+  // soort and sender each need the newest row that HAS AN OPINION about them,
+  // which can sit arbitrarily far back. A document accumulates one row per
+  // correction Martin makes, so this is a handful of rows, not a table scan.
   const changes = await db.select().from(schema.documentStatusChanges)
     .where(eq(schema.documentStatusChanges.documentId, id))
-    .orderBy(desc(schema.documentStatusChanges.createdAt)).limit(2);
+    .orderBy(desc(schema.documentStatusChanges.createdAt));
   const latest = changes[0];
+  /**
+   * THE SAME RESOLUTION effectiveTitleSql / effectiveDocTypeSql /
+   * effectivePartyIdSql do in SQL: the newest change row that NAMES the field,
+   * never simply the newest row.
+   *
+   * Reading `latest?.field ?? doc.field` disagreed with the SQL the moment a
+   * later row was silent about a field an earlier row had filled — which the
+   * UI produces in one action, because clearing the Soort box sends
+   * `undefined` and that column lands NULL. FilesTable renders the SQL answer
+   * and FilesPreview the JS one, side by side in the same request, so the two
+   * spellings must not drift.
+   */
+  const newest = <T>(pick: (c: typeof changes[number]) => T | null | undefined): T | null => {
+    for (const c of changes) {
+      const v = pick(c);
+      if (v !== null && v !== undefined) return v;
+    }
+    return null;
+  };
   return { ...doc,
+    // Status is the exception: document_status_changes.status is NOT NULL, so
+    // every row has an opinion and the newest row simply wins.
     effectiveStatus: latest?.status ?? doc.status,
-    effectiveTitle: latest?.title ?? doc.title,
-    effectiveDocType: latest?.docType ?? doc.docType,
-    // ?? and not ||: a change row that says nothing about the sender leaves
-    // the ingest-time value standing. See the "cannot clear" test.
-    effectivePartyId: latest?.partyId ?? doc.partyId ?? null,
+    effectiveTitle: newest((c) => c.title) ?? doc.title,
+    effectiveDocType: newest((c) => c.docType) ?? doc.docType,
+    // Which is why a sender can be overwritten but never cleared: a change row
+    // with a null party reads as "no opinion", not as "cleared". Documented,
+    // tested, and deliberate — see the "cannot clear a sender" test.
+    effectivePartyId: newest((c) => c.partyId) ?? doc.partyId ?? null,
     previousStatus: changes[1]?.status ?? doc.status };
 }
 
 /** Enough to see what a statement is; far short of hanging the tab on a big one. */
 export const SHEET_PREVIEW_MAX_ROWS = 200;
-
-/**
- * The folded soort key `tree` groups on and `browse`'s `soort` branch filters
- * on — the SAME constant, not two hand-typed copies. Folds inner whitespace
- * runs too: without regexp_replace, "bank  afschrift" (double space) and
- * "bank afschrift" would land in two different SQL branches while this key
- * treats them as one.
- *
- * `'\\s+'`, not `'\s+'`: inside a JS template literal `'\s+'` silently drops
- * the backslash and Postgres then matches a literal "s" — measured.
- */
-export const docTypeKeySql = sql<string>`regexp_replace(
-  lower(btrim(coalesce(${effectiveDocTypeSql},''))), '\\s+', ' ', 'g')`;
-
-/**
- * The month key `tree` groups on and `browse`'s `periode` branch filters on —
- * Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
- * bucket files 31 August 23:00Z under August while every date the app prints
- * says 1 September.
- */
-export const receivedMonthSql = sql<string>`to_char(
-  (documents.received_at AT TIME ZONE 'Europe/Amsterdam'), 'YYYY-MM')`;
 
 /**
  * The middle pane's branch selector. Exported for the web layer to import.
@@ -259,19 +263,23 @@ export const documentsRouter = router({
     limit: z.number().int().min(1).max(200).default(100),
   })).query(async ({ ctx, input }) => {
     const b = input.branch;
-    // Every branch but `status` hides discarded documents. `status` is the
-    // one that exists to find them again, so it filters on the effective
-    // status instead of excluding by it.
+    // Every branch but `status` and `bundel` hides discarded documents.
+    // `status` is the one that exists to find them again, so it filters on the
+    // effective status instead of excluding by it — and a `bundel` lets its
+    // own membership decide, see bundleWhere.
     const where =
-      b.kind === "status" ? sql`${effectiveDocStatusSql} = ${b.status}`
+      // A bundle resolves its own membership, because the two kinds do not
+      // resolve alike: a rule bundle holds no rows in bundle_documents at all,
+      // so the IN-subquery this used to spell by hand showed an empty table
+      // under a tree count of 12 and a card that downloaded 12 files.
+      b.kind === "bundel" ? await bundleWhere(ctx.db, b.id)
+      : b.kind === "status" ? sql`${effectiveDocStatusSql} = ${b.status}`
       : b.kind === "soort" ? sql`${notDiscardedSql} AND ${docTypeKeySql} = ${b.key}`
       : b.kind === "party" ? (b.id === null
           ? sql`${notDiscardedSql} AND ${effectivePartyIdSql} IS NULL`
           : sql`${notDiscardedSql} AND ${effectivePartyIdSql} = ${b.id}`)
       : b.kind === "periode" ? sql`${notDiscardedSql} AND ${receivedMonthSql} = ${b.month}`
       : b.kind === "bron" ? sql`${notDiscardedSql} AND documents.source = ${b.source}`
-      : b.kind === "bundel" ? sql`${notDiscardedSql} AND documents.id IN (
-          SELECT bd.document_id FROM bundle_documents bd WHERE bd.bundle_id = ${b.id})`
       : notDiscardedSql; // "alles"
 
     // Sort by the sender's NAME, resolved through the same effective party id
@@ -401,10 +409,23 @@ export const documentsRouter = router({
         .where(eq(schema.documents.id, input.id));
       if (doc) {
         const current = await effectiveDocument(tx, input.id);
+        // An ABSENT field is not a field set back to its ingest value: it is a
+        // row that says nothing, and effectiveDocument resolves such a row by
+        // keeping whatever the newest row WITH an opinion said. So an absent
+        // field changes nothing by definition, and only a field that is both
+        // present and different makes this a real edit.
+        //
+        // Comparing an absent title against `doc.title` (as this did) broke
+        // the no-op law for a RENAMED document: discarding "Huurcontract
+        // 2026" a second time compared its effective title against the
+        // ingest-time "scan_002", found them different, and appended a second
+        // discard the record would then claim Martin made.
+        const same = <T>(given: T | undefined, effective: T) =>
+          given === undefined || given === effective;
         if (current.effectiveStatus === input.status
-          && current.effectiveTitle === (input.title ?? doc.title)
-          && current.effectiveDocType === (input.docType ?? doc.docType)
-          && current.effectivePartyId === (input.partyId ?? current.effectivePartyId)) return current;
+          && same(input.title, current.effectiveTitle)
+          && same(input.docType, current.effectiveDocType)
+          && same(input.partyId, current.effectivePartyId)) return current;
       }
       await tx.insert(schema.documentStatusChanges).values({
         documentId: input.id, status: input.status,

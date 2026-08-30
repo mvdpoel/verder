@@ -5,8 +5,9 @@ import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { buildTrackMap, filterDebtEpisodes, type StopRow, type TrackRow } from "../track-map";
 import {
-  effectiveTaskStatuses, latestDocumentChange, resolveStopEvidence, type StopEvidence,
+  effectiveTaskStatuses, resolveStopEvidence, type StopEvidence,
 } from "../track-evidence";
+import { effectiveTitleSql, notDiscardedSql } from "../effective-status";
 
 /**
  * The case as a metro map. This router owns two editable display aids and
@@ -179,8 +180,11 @@ export const tracksRouter = router({
     const needle = input.search?.trim();
     const like = needle ? `%${escapeLike(needle)}%` : null;
     // The live title, so a document renamed after filing is findable — and
-    // offered — under the name it now has.
-    const liveTitle = sql<string>`COALESCE(${latestDocumentChange("title")}, documents.title)`;
+    // offered — under the name it now has. effectiveTitleSql, the shared
+    // expression, and not a COALESCE spelled out here: it reads the newest
+    // change row that NAMES a title, so a rename followed by a change that is
+    // silent about the title still offers the new name.
+    const liveTitle = effectiveTitleSql;
 
     const [entries, tasks, documents] = await Promise.all([
       ctx.db.select({
@@ -198,8 +202,7 @@ export const tracksRouter = router({
         id: schema.documents.id, title: liveTitle,
         receivedAt: schema.documents.receivedAt,
       }).from(schema.documents).where(and(
-        sql`COALESCE(${latestDocumentChange("status")}, documents.status)
-          IS DISTINCT FROM 'discarded'`,
+        notDiscardedSql,
         like ? sql`${liveTitle} ILIKE ${like}` : undefined,
       )).orderBy(desc(schema.documents.receivedAt)).limit(input.limit),
     ]);

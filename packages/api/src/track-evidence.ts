@@ -14,9 +14,9 @@
  * discarded or was never there.
  */
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
-import { notDiscardedSql } from "./effective-status";
+import { effectiveTitleSql, notDiscardedSql } from "./effective-status";
 
 export interface EvidenceInput {
   id: string;
@@ -40,18 +40,6 @@ const EMPTY: StopEvidence = { entry: null, task: null, documents: [], email: nul
 
 const idsOf = <T>(rows: T[], pick: (r: T) => string | null) =>
   [...new Set(rows.map(pick).filter((v): v is string => v !== null))];
-
-/**
- * A document's status and title are APPENDED to document_status_changes and
- * never written back to the documents row, so a raw read calls a discarded
- * signature image "inbox" forever. effectiveDocument resolves that per id —
- * which here would be one extra query per document, the N+1 this module exists
- * to avoid — so the same resolution runs in SQL, exactly as documents.list
- * does it: latest change row wins, falling back to the document's own column.
- */
-export const latestDocumentChange = (column: "status" | "title") =>
-  sql`(SELECT c.${sql.raw(column)} FROM document_status_changes c
-    WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1)`;
 
 /**
  * effectiveTaskStatus for many tasks in ONE query.
@@ -127,7 +115,13 @@ export async function resolveStopEvidence(
   const documents = allDocIds.length
     ? await db.select({
         id: schema.documents.id,
-        title: sql<string>`COALESCE(${latestDocumentChange("title")}, documents.title)`,
+        // effectiveTitleSql, not a fourth hand-written COALESCE: a document's
+        // status and title are APPENDED to document_status_changes and never
+        // written back, and the shared expression is the only one that reads
+        // the newest row that NAMES the title rather than simply the newest
+        // row. Resolving it per id with effectiveDocument would be the N+1
+        // this module exists to avoid, so it runs in SQL.
+        title: effectiveTitleSql,
         mime: schema.documents.mime, source: schema.documents.source,
         sourceRef: schema.documents.sourceRef,
       }).from(schema.documents).where(and(
