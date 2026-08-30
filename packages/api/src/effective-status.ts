@@ -50,3 +50,15 @@ export const effectivePartyIdSql: SQL<string | null> = sql`COALESCE((
   SELECT c.party_id FROM document_status_changes c
   WHERE c.document_id = documents.id AND c.party_id IS NOT NULL
   ORDER BY c.created_at DESC LIMIT 1), documents.party_id)`;
+
+/**
+ * A document's title as it actually stands. Same COALESCE-of-newest-opinion
+ * shape as effectiveDocTypeSql and effectivePartyIdSql — unlike status, a
+ * change row can say nothing about the title (it may only correct status or
+ * docType), and that silence must not be read as clearing it. documents.title
+ * is NOT NULL, so the fallback always resolves to a string.
+ */
+export const effectiveTitleSql: SQL<string> = sql`COALESCE((
+  SELECT c.title FROM document_status_changes c
+  WHERE c.document_id = documents.id AND c.title IS NOT NULL
+  ORDER BY c.created_at DESC LIMIT 1), documents.title)`;

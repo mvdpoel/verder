@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import {
-  effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql, notDiscardedSql,
+  effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql, effectiveTitleSql,
+  notDiscardedSql,
 } from "../effective-status";
 import { docTypeLabel } from "../doc-type";
 import { readFilePath, relPathFor } from "../storage";
@@ -56,6 +57,45 @@ export async function effectiveDocument(db: Db, id: string) {
 
 /** Enough to see what a statement is; far short of hanging the tab on a big one. */
 export const SHEET_PREVIEW_MAX_ROWS = 200;
+
+/**
+ * The folded soort key `tree` groups on and `browse`'s `soort` branch filters
+ * on — the SAME constant, not two hand-typed copies. Folds inner whitespace
+ * runs too: without regexp_replace, "bank  afschrift" (double space) and
+ * "bank afschrift" would land in two different SQL branches while this key
+ * treats them as one.
+ *
+ * `'\\s+'`, not `'\s+'`: inside a JS template literal `'\s+'` silently drops
+ * the backslash and Postgres then matches a literal "s" — measured.
+ */
+export const docTypeKeySql = sql<string>`regexp_replace(
+  lower(btrim(coalesce(${effectiveDocTypeSql},''))), '\\s+', ' ', 'g')`;
+
+/**
+ * The month key `tree` groups on and `browse`'s `periode` branch filters on —
+ * Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
+ * bucket files 31 August 23:00Z under August while every date the app prints
+ * says 1 September.
+ */
+export const receivedMonthSql = sql<string>`to_char(
+  (documents.received_at AT TIME ZONE 'Europe/Amsterdam'), 'YYYY-MM')`;
+
+/**
+ * The middle pane's branch selector. Exported for the web layer to import.
+ *
+ * The URL layer additionally has a `bundels` (plural) kind that lists bundles
+ * themselves rather than filtering documents into one — a VIEW, not a
+ * filter — and it deliberately does not appear here.
+ */
+export const branchSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("alles") }),
+  z.object({ kind: z.literal("bundel"), id: z.string().uuid() }),
+  z.object({ kind: z.literal("soort"), key: z.string() }),
+  z.object({ kind: z.literal("party"), id: z.string().uuid().nullable() }),
+  z.object({ kind: z.literal("periode"), month: z.string().regex(/^\d{4}-\d{2}$/) }),
+  z.object({ kind: z.literal("bron"), source: z.enum(["upload", "nas-scan", "email-attachment"]) }),
+  z.object({ kind: z.literal("status"), status: z.enum(["inbox", "filed", "discarded"]) }),
+]);
 
 export const documentsRouter = router({
   registerUpload: protectedProcedure.input(z.object({
@@ -128,24 +168,11 @@ export const documentsRouter = router({
    */
   tree: protectedProcedure.query(async ({ ctx }) => {
     const live = notDiscardedSql;
-    // Folds inner whitespace runs too, matching docTypeKey exactly: without
-    // regexp_replace, "bank  afschrift" (double space) and "bank afschrift"
-    // would land in two SQL branches while docTypeKey treats them as one key.
-    //
-    // Groups on effectiveDocTypeSql, not the raw column: documents.update
-    // APPENDS a docType correction to document_status_changes and never
-    // writes it back — documents.doc_type would read the pre-correction
-    // value forever, the same trap effectiveDocStatusSql exists for — so
-    // grouping on the raw column would disagree with the document itself,
-    // and with the next task's row query, which resolves through the same
-    // change rows.
-    const docTypeKeySql = sql<string>`regexp_replace(
-      lower(btrim(coalesce(${effectiveDocTypeSql},''))), '\\s+', ' ', 'g')`;
-    // Amsterdam, not UTC: month membership is an Amsterdam question, and a UTC
-    // bucket files 31 August 23:00Z under August while every date the app
-    // prints says 1 September.
-    const month = sql<string>`to_char(
-      (documents.received_at AT TIME ZONE 'Europe/Amsterdam'), 'YYYY-MM')`;
+    // docTypeKeySql and receivedMonthSql are the module-level constants
+    // `browse`'s soort/periode branches filter on too — see their doc
+    // comments for why grouping on the raw columns would disagree with the
+    // effective document, and with browse's row query.
+    const month = receivedMonthSql;
 
     const [soortRows, vanWieRows, periodeRows, bronRows, statusRows] = await Promise.all([
       ctx.db.select({
@@ -212,6 +239,79 @@ export const documentsRouter = router({
       bron: bronRows,
       status: statusRows,
     };
+  }),
+
+  /**
+   * The middle pane: the rows for whichever branch is selected, sorted,
+   * capped, with a true total.
+   *
+   * THE INVARIANT: every branch filter below reuses the EXACT expression
+   * `tree` grouped on (docTypeKeySql, effectivePartyIdSql, receivedMonthSql,
+   * effectiveDocStatusSql) — never a lookalike restated by hand. A filter
+   * that drifts from its grouping by so much as a fold would show a
+   * different set than the count `tree` promised, on the same screen, which
+   * is the one thing this page may not do.
+   */
+  browse: protectedProcedure.input(z.object({
+    branch: branchSchema.default({ kind: "alles" }),
+    sort: z.enum(["naam", "soort", "van", "datum", "grootte"]).default("datum"),
+    dir: z.enum(["asc", "desc"]).default("desc"),
+    limit: z.number().int().min(1).max(200).default(100),
+  })).query(async ({ ctx, input }) => {
+    const b = input.branch;
+    // Every branch but `status` hides discarded documents. `status` is the
+    // one that exists to find them again, so it filters on the effective
+    // status instead of excluding by it.
+    const where =
+      b.kind === "status" ? sql`${effectiveDocStatusSql} = ${b.status}`
+      : b.kind === "soort" ? sql`${notDiscardedSql} AND ${docTypeKeySql} = ${b.key}`
+      : b.kind === "party" ? (b.id === null
+          ? sql`${notDiscardedSql} AND ${effectivePartyIdSql} IS NULL`
+          : sql`${notDiscardedSql} AND ${effectivePartyIdSql} = ${b.id}`)
+      : b.kind === "periode" ? sql`${notDiscardedSql} AND ${receivedMonthSql} = ${b.month}`
+      : b.kind === "bron" ? sql`${notDiscardedSql} AND documents.source = ${b.source}`
+      : b.kind === "bundel" ? sql`${notDiscardedSql} AND documents.id IN (
+          SELECT bd.document_id FROM bundle_documents bd WHERE bd.bundle_id = ${b.id})`
+      : notDiscardedSql; // "alles"
+
+    // Sort by the sender's NAME, resolved through the same effective party id
+    // the row and the `party` branch use — sorting on the raw column would
+    // order a corrected sender by where they used to be filed.
+    const partyNameSql = sql<string | null>`(SELECT p.name FROM parties p
+      WHERE p.id = ${effectivePartyIdSql})`;
+    const orderExpr =
+      input.sort === "naam" ? effectiveTitleSql
+      : input.sort === "soort" ? docTypeKeySql
+      : input.sort === "van" ? partyNameSql
+      : input.sort === "grootte" ? schema.documents.sizeBytes
+      : schema.documents.receivedAt; // "datum"
+
+    const [rows, [count]] = await Promise.all([
+      ctx.db.select({
+        id: schema.documents.id,
+        // Resolved through the newest change row that HAS an opinion — what
+        // effectiveDocument does per document, done in SQL here because doing
+        // it per row would be a round trip per document.
+        title: effectiveTitleSql,
+        docType: effectiveDocTypeSql,
+        partyId: effectivePartyIdSql,
+        partyName: partyNameSql,
+        receivedAt: schema.documents.receivedAt,
+        sizeBytes: schema.documents.sizeBytes,
+        mime: schema.documents.mime,
+        sha256: schema.documents.sha256,
+        source: schema.documents.source,
+        status: effectiveDocStatusSql,
+      }).from(schema.documents).where(where)
+        .orderBy(input.dir === "asc" ? asc(orderExpr) : desc(orderExpr))
+        .limit(input.limit),
+      // The TRUE total, counted in the database. Measuring `rows.length`
+      // would make a capped page indistinguishable from a complete one —
+      // the one thing this page may never do.
+      ctx.db.select({ n: sql<number>`count(*)::int` })
+        .from(schema.documents).where(where),
+    ]);
+    return { rows, total: count.n };
   }),
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))
