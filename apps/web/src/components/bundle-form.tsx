@@ -200,11 +200,12 @@ export function BundleForm({
  * Rename and delete on an existing card.
  *
  * Delete is two-step and lives on the card itself rather than in a second
- * Dialog: the confirmation is not amber (Ruling 1 — a mis-click is not
- * "waiting on Martin" the way the map's amber marks are) and `signal` is the
- * system's own colour for "this is the one" on a list where every card
- * carries the same decision, per `button.tsx`'s own doc comment on that
- * variant.
+ * Dialog. The confirm button is `danger`, not `signal`: Ruling 1 governs
+ * FILLED amber and the map's own marker, and it is not the whole story —
+ * `button.tsx`'s own doc comment carries the system's considered exception,
+ * a BORDERED amber for "something you only want to do on purpose", which is
+ * exactly what throwing away a curated bundle is. `signal` reads as "this is
+ * the one to press", the wrong voice for a destructive confirm.
  */
 export function BundleCardActions({ bundle }: {
   bundle: { id: string; name: string; note: string | null };
@@ -238,7 +239,7 @@ export function BundleCardActions({ bundle }: {
           <Button variant="quiet" size="sm" onClick={() => setConfirmingDelete(false)}>
             annuleren
           </Button>
-          <Button variant="signal" size="sm" disabled={remove.isPending}
+          <Button variant="danger" size="sm" disabled={remove.isPending}
             onClick={() => remove.mutate({ id: bundle.id })}>
             ja, verwijderen
           </Button>
