@@ -29,7 +29,10 @@ export async function ingestDocument(tx: Db, input: {
 
 export async function effectiveDocument(db: Db, id: string) {
   const [doc] = await db.select().from(schema.documents).where(eq(schema.documents.id, id));
-  if (!doc) throw new Error("Document not found");
+  // NOT_FOUND rather than a bare Error: the web app turns this one code into
+  // a 404 page (`orNotFound`), and every other router already speaks it.
+  // A bare Error is indistinguishable from a crash and renders as one.
+  if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
   // Two rows, not one: the second is what the latest change replaced, which is
   // what "Undo discard" has to restore. Undoing always to "inbox" would
   // silently unfile a filed document discarded by mistake.
@@ -83,6 +86,31 @@ export const documentsRouter = router({
     const rows = await ctx.db.select().from(schema.documents).where(where)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
     return Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
+  }),
+
+  /**
+   * How many documents there are per effective status — ALL of them, not a page.
+   *
+   * `list` is capped (the pickers ask for a page and must not be handed the
+   * whole vault), so counting its rows under-reports the moment the vault
+   * outgrows the cap: the vault page's own heading read "37 to sort" whether
+   * there were 37 or 370. A count is one grouped query and cannot drift from
+   * the list, because both resolve status the same way.
+   */
+  counts: protectedProcedure.query(async ({ ctx }) => {
+    // The SAME effective-status expression `list` uses: a discard is appended
+    // to document_status_changes and never written back, so documents.status
+    // keeps reading "inbox" forever and counting the raw column would put every
+    // discarded file back in the inbox tally.
+    const status = sql<string>`COALESCE((SELECT c.status FROM document_status_changes c
+      WHERE c.document_id = documents.id ORDER BY c.created_at DESC LIMIT 1),
+      documents.status)::text`;
+    const rows = await ctx.db
+      .select({ status, n: sql<number>`count(*)::int` })
+      .from(schema.documents)
+      .groupBy(status);
+    const by = (s: string) => rows.find((r) => r.status === s)?.n ?? 0;
+    return { inbox: by("inbox"), filed: by("filed"), discarded: by("discarded") };
   }),
 
   get: protectedProcedure.input(z.object({ id: z.string().uuid() }))

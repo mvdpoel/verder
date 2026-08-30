@@ -4,12 +4,10 @@
 // .tsx file — `vitest.config.ts` now sets `jsx: "automatic"`, which takes that
 // trap out for the whole app.
 import React from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CommandPalette } from "@/components/command-palette";
-import { NavIcon } from "@/components/nav-icons";
+import { NavRail } from "@/components/nav-rail";
 import { PaletteTrigger } from "@/components/palette-trigger";
-import { NAV_ITEMS } from "@/lib/nav-items";
 import { getSessionUserId } from "@/lib/trpc-server";
 
 /**
@@ -18,8 +16,10 @@ import { getSessionUserId } from "@/lib/trpc-server";
  * THE RAIL IS ICONS WITHOUT LABELS, and that choice has a price: eleven
  * destinations with no word beside them has to be learnt. What makes the price
  * bearable is that there are eleven of them and not fifty, that every icon
- * carries its name as `title` and `aria-label`, and that ⌘K cuts straight
- * through — the rail is the map, the palette is the motorway.
+ * carries its name as `title` and `aria-label`, that the rail marks WHICH of
+ * the eleven you are on (`NavRail`, without which it is not a map at all), and
+ * that ⌘K cuts straight through — the rail is the map, the palette is the
+ * motorway.
  *
  * THE FIELD (`field-aura` and `field-grid`) is pure atmosphere. It sits on a
  * layer with no pointer events and carries no fact at all; whoever turned motion
@@ -40,28 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="field-grid" />
 
       <div className="relative flex min-h-screen">
-        <nav
-          aria-label="Hoofdnavigatie"
-          className="flex w-[78px] shrink-0 flex-col items-center gap-1.5 border-r border-edge bg-rail py-[26px]">
-          <Link href="/dashboard" aria-label="verder" className="mb-[22px] text-signal">
-            <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-              <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1" />
-              <path d="M13 3.2 L13 22.8" stroke="currentColor" strokeWidth="1" opacity="0.45" />
-              <path d="M5.4 8.4 C 10 13, 16 13, 20.6 8.4" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-          </Link>
-
-          {NAV_ITEMS.map(({ label, href }) => (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              aria-label={label}
-              className="flex h-[44px] w-[46px] items-center justify-center rounded-panel text-ink-dim transition-colors hover:bg-signal/10 hover:text-signal">
-              <NavIcon href={href} />
-            </Link>
-          ))}
-        </nav>
+        <NavRail />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-[62px] shrink-0 items-center gap-7 border-b border-hairline-lit px-10">

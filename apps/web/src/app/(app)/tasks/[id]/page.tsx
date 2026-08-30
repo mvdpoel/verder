@@ -1,4 +1,5 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { orNotFound } from "@/lib/not-found";
 import { TaskForm } from "@/components/task-form";
 import { TaskStatusForm } from "@/components/task-status-form";
 import { TaskStatusBadge, TaskStatusTimeline } from "@/components/task-list";
@@ -8,16 +9,18 @@ import { Chip, Empty, PageTitle, Panel, PanelHead, Row, TextLink } from "@/compo
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
-  const task = await caller.tasks.get({ id });
-  const options = await taskFormOptions();
+  const [task, options] = await Promise.all([
+    orNotFound(caller.tasks.get({ id })),
+    taskFormOptions(),
+  ]);
   const { linked } = task;
   const evidence: { label: string; text: string; href: string }[] = [];
   if (linked.entry) evidence.push({
-    label: "Logbook entry", text: linked.entry.summary, href: `/logbook/${linked.entry.id}` });
+    label: "Logboekregel", text: linked.entry.summary, href: `/logbook/${linked.entry.id}` });
   if (linked.financialItem) evidence.push({
-    label: "Registry item", text: linked.financialItem.name, href: `/registry/${linked.financialItem.id}` });
+    label: "Post in het register", text: linked.financialItem.name, href: `/registry/${linked.financialItem.id}` });
   if (linked.debt) evidence.push({
-    label: "Debt", text: linked.debt.creditorName, href: `/registry/debts/${linked.debt.id}` });
+    label: "Vordering", text: linked.debt.creditorName, href: `/registry/debts/${linked.debt.id}` });
   if (linked.document) evidence.push({
     label: "Document", text: linked.document.title, href: `/vault/${linked.document.id}` });
 
@@ -40,9 +43,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           }} options={options} />
           <Panel className="p-[26px]">
             <div className="flex flex-col gap-[14px]">
-              <PanelHead labelAs="h2" label="Linked evidence" />
+              <PanelHead labelAs="h2" label="Gekoppeld bewijs" />
               {evidence.length === 0
-                ? <Empty title={"Not linked to anything yet — that's fine."} />
+                ? <Empty title="Nog nergens aan gekoppeld — dat mag." />
                 : (
                   /*
                     A junction mark, not a done one: each of these is a record
@@ -70,7 +73,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           <TaskStatusForm taskId={task.id} currentStatus={task.effectiveStatus} />
           <Panel className="p-[26px]">
             <div className="flex flex-col gap-[14px]">
-              <PanelHead labelAs="h2" label="Status trail — every step on record" />
+              <PanelHead labelAs="h2" label="Statusspoor — elke stap blijft staan" />
               <TaskStatusTimeline changes={task.statusTimeline} />
             </div>
           </Panel>

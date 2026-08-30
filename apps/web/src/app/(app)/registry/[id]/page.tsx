@@ -1,7 +1,10 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { orNotFound } from "@/lib/not-found";
 import { DecisionForm } from "@/components/decision-form";
 import { ItemFactsForm } from "@/components/item-facts-form";
-import { DecisionTimeline, StatusBadge, formatEuro } from "@/components/registry-list";
+import {
+  BILLING_CYCLE_SHORT, DECISION_PICKER_LIMIT, DecisionTimeline, StatusBadge, formatEuro,
+} from "@/components/registry-list";
 import {
   Chip,
   Dot,
@@ -36,8 +39,10 @@ function TaskStatusBadge({ status }: { status: string }) {
 export default async function RegistryItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
-  const item = await caller.registry.items.get({ id });
-  const vaultDocs = await caller.documents.list({ limit: 100 });
+  const [item, vaultDocs] = await Promise.all([
+    orNotFound(caller.registry.items.get({ id })),
+    caller.documents.list({ limit: DECISION_PICKER_LIMIT }),
+  ]);
   const docTitles = new Map(item.documents.map((d) => [d.id, d.title]));
   const blocker = item.decisions[0]?.blockerNote;
   const blockingTasks = item.blockingTasks;
@@ -50,7 +55,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
           <StatusBadge status={item.effectiveStatus} kind="item" />
         </div>
         <Micro>
-          {item.category} · {formatEuro(item.amountCents)}/{item.billingCycle} · {formatEuro(item.monthlyCents)}/mo · via {item.discoveredVia}
+          {item.category} · {formatEuro(item.amountCents)}/{BILLING_CYCLE_SHORT[item.billingCycle] ?? item.billingCycle} · {formatEuro(item.monthlyCents)}/mnd · gevonden via {item.discoveredVia}
         </Micro>
       </div>
       {blockingTasks.length > 0 && (
@@ -60,8 +65,8 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
             <Dot state="you" className="mt-[6px]" />
             <p className="text-[13.5px] font-light leading-relaxed text-ink-soft">
               {blocker
-                ? <>Keep in mind: {blocker}</>
-                : <>A few tasks are still in the way before this one can move — one step at a time:</>}
+                ? <>Denk hieraan: {blocker}</>
+                : <>Er staan nog een paar taken in de weg voordat dit verder kan — stap voor stap:</>}
             </p>
           </div>
           <ul className="flex flex-col gap-[9px] pl-[23px]">
@@ -75,7 +80,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
                 </TextLink>
                 {t.dueAt && (
                   <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim">
-                    due {new Date(t.dueAt).toLocaleDateString("nl-NL")}
+                    vóór {new Date(t.dueAt).toLocaleDateString("nl-NL")}
                   </span>
                 )}
               </li>
@@ -87,13 +92,13 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
           a blockerNote that never had a task is still just a note to keep. */}
       {blockingTasks.length === 0 && item.clearedTaskCount > 0 && (
         <Notice tone="ok">
-          Blocker cleared — ready to decide?{" "}
-          <a href="#decide" className="text-signal transition-colors hover:text-signal-link">Record the next step below.</a>{" "}
-          {blocker && <span className="text-ink-mute">(The note was: {blocker})</span>}
+          Blokkade weg — klaar om te besluiten?{" "}
+          <a href="#decide" className="text-signal transition-colors hover:text-signal-link">Leg de volgende stap hieronder vast.</a>{" "}
+          {blocker && <span className="text-ink-mute">(De notitie was: {blocker})</span>}
         </Notice>
       )}
       {blockingTasks.length === 0 && item.clearedTaskCount === 0 && blocker && (
-        <Notice tone="attn">Keep in mind: {blocker}</Notice>
+        <Notice tone="attn">Denk hieraan: {blocker}</Notice>
       )}
       <div className="grid items-start gap-7 xl:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-6">
@@ -106,16 +111,16 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
             cancellationDetails: item.cancellationDetails, accountNumber: item.accountNumber,
           }} />
           <Panel as="section" className="flex min-w-0 flex-col gap-[14px] p-[26px]">
-            <Label as="h2">Evidence — charges from your statements</Label>
+            <Label as="h2">Bewijs — afschrijvingen van je afschriften</Label>
             {item.transactions.length === 0
-              ? <p className="text-[13px] font-light text-ink-label">No linked transactions yet.</p>
+              ? <p className="text-[13px] font-light text-ink-label">Nog geen gekoppelde transacties.</p>
               : (
                 <TableWrap>
                   <Table className="min-w-[420px]">
                     <thead><tr>
-                      <Th>Date</Th>
-                      <Th className="text-right">Amount</Th>
-                      <Th>Counterparty</Th>
+                      <Th>Datum</Th>
+                      <Th className="text-right">Bedrag</Th>
+                      <Th>Tegenpartij</Th>
                     </tr></thead>
                     <tbody>
                       {item.transactions.map((t) => (
@@ -135,9 +140,9 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
               )}
           </Panel>
           <Panel as="section" className="flex flex-col gap-[14px] p-[26px]">
-            <Label as="h2">Linked documents</Label>
+            <Label as="h2">Gekoppelde documenten</Label>
             {item.documents.length === 0
-              ? <p className="text-[13px] font-light text-ink-label">No documents linked yet.</p>
+              ? <p className="text-[13px] font-light text-ink-label">Nog geen documenten gekoppeld.</p>
               : (
                 <ul>
                   {item.documents.map((d) => (
@@ -158,7 +163,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
             currentStatus={item.effectiveStatus}
             documents={vaultDocs.map((d) => ({ id: d.id, title: d.effectiveTitle }))} />
           <Panel as="section" className="flex flex-col gap-[14px] p-[26px]">
-            <Label as="h2">Decision trail — every step on record</Label>
+            <Label as="h2">Besluitspoor — elke stap blijft staan</Label>
             <DecisionTimeline decisions={item.decisions} kind="item" docTitles={docTitles} />
           </Panel>
         </div>

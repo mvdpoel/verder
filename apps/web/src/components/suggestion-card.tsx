@@ -62,7 +62,7 @@ function Source({ model, children }: { model: string | null; children: ReactNode
   return (
     <Micro className="leading-relaxed">
       {children}
-      {model && <span className="text-ink-faint"> · suggested by {model}</span>}
+      {model && <span className="text-ink-faint"> · voorgesteld door {model}</span>}
     </Micro>
   );
 }
@@ -95,7 +95,7 @@ function OriginalEmail({ bodyText }: { bodyText: string }) {
   return (
     <details>
       <summary className="cursor-pointer font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim transition-colors hover:text-signal">
-        Original email
+        Oorspronkelijke e-mail
       </summary>
       <pre className="mt-[12px] max-h-72 overflow-auto rounded-chip border border-hairline bg-void/60 p-[14px] font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-ink-mute">
         {bodyText}
@@ -139,24 +139,24 @@ function TaskCard({ s }: { s: Suggestion }) {
   return (
     <Card>
       <Source model={s.model}>
-        {s.rawEmail ? `From email · “${s.rawEmail.subject}”` : "Action item found"}
+        {s.rawEmail ? `Uit e-mail · “${s.rawEmail.subject}”` : "Actiepunt gevonden"}
       </Source>
-      <Field label={<ProposalLabel>Task</ProposalLabel>} htmlFor={`${s.id}-task`}>
+      <Field label={<ProposalLabel>Taak</ProposalLabel>} htmlFor={`${s.id}-task`}>
         <Input id={`${s.id}-task`} value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
-      <Field label={<ProposalLabel>Details</ProposalLabel>} htmlFor={`${s.id}-details`}>
+      <Field label={<ProposalLabel>Toelichting</ProposalLabel>} htmlFor={`${s.id}-details`}>
         <Textarea id={`${s.id}-details`} rows={2}
           value={details} onChange={(e) => setDetails(e.target.value)} />
       </Field>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label={<ProposalLabel>Due date</ProposalLabel>} htmlFor={`${s.id}-due`}>
+        <Field label={<ProposalLabel>Uiterlijk op</ProposalLabel>} htmlFor={`${s.id}-due`}>
           <Input id={`${s.id}-due`} type="date"
             value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
         </Field>
-        <Field label={<ProposalLabel>Assignee</ProposalLabel>} htmlFor={`${s.id}-assignee`}>
+        <Field label={<ProposalLabel>Wie doet het</ProposalLabel>} htmlFor={`${s.id}-assignee`}>
           <Select id={`${s.id}-assignee`} value={assigneePartyId}
             onChange={(e) => setAssigneePartyId(e.target.value)}>
-            <option value="">— nobody yet —</option>
+            <option value="">— nog niemand —</option>
             {(parties.data ?? []).map((party) =>
               <option key={party.id} value={party.id}>{party.name}</option>)}
           </Select>
@@ -173,9 +173,9 @@ function TaskCard({ s }: { s: Suggestion }) {
             title: title.trim(), details: details || undefined,
             dueAt: dueAt ? new Date(dueAt) : undefined,
             documentId: pickedDocId ?? undefined,
-            assigneePartyId: assigneePartyId || undefined } })}>Add task</Button>
+            assigneePartyId: assigneePartyId || undefined } })}>Taak toevoegen</Button>
         <Button variant="ghost" size="sm" disabled={busy}
-          onClick={() => reject.mutate({ id: s.id })}>Not a task</Button>
+          onClick={() => reject.mutate({ id: s.id })}>Geen taak</Button>
       </Verdict>
     </Card>
   );
@@ -193,12 +193,12 @@ function EntryCard({ s }: { s: Suggestion }) {
   return (
     <Card>
       <Source model={s.model}>
-        {s.rawEmail ? `Email from ${s.rawEmail.fromAddr}: “${s.rawEmail.subject}”` : "Detected item"}
+        {s.rawEmail ? `E-mail van ${s.rawEmail.fromAddr}: “${s.rawEmail.subject}”` : "Gevonden item"}
       </Source>
-      <Field label={<ProposalLabel>Summary</ProposalLabel>} htmlFor={`${s.id}-summary`}>
+      <Field label={<ProposalLabel>Samenvatting</ProposalLabel>} htmlFor={`${s.id}-summary`}>
         <Input id={`${s.id}-summary`} value={summary} onChange={(e) => setSummary(e.target.value)} />
       </Field>
-      <Field label={<ProposalLabel>Details</ProposalLabel>} htmlFor={`${s.id}-details`}>
+      <Field label={<ProposalLabel>Toelichting</ProposalLabel>} htmlFor={`${s.id}-details`}>
         <Textarea id={`${s.id}-details`} rows={3}
           value={details} onChange={(e) => setDetails(e.target.value)} />
       </Field>
@@ -215,9 +215,9 @@ function EntryCard({ s }: { s: Suggestion }) {
             summary, details: details || undefined, source: "gmail-watch",
             participantPartyIds: [],
             documentIds: [...new Set([...p.attachmentDocumentIds, ...pickedDocIds])],
-            actionItems: p.actionItems } })}>Add to the record</Button>
+            actionItems: p.actionItems } })}>Vastleggen in het dossier</Button>
         <Button variant="ghost" size="sm"
-          onClick={() => reject.mutate({ id: s.id })}>Not relevant</Button>
+          onClick={() => reject.mutate({ id: s.id })}>Niet relevant</Button>
       </Verdict>
     </Card>
   );
@@ -225,17 +225,19 @@ function EntryCard({ s }: { s: Suggestion }) {
 
 const ITEM_CATEGORIES = ["energy", "insurance", "telecom", "streaming", "software", "housing", "other"] as const;
 type ItemCategory = (typeof ITEM_CATEGORIES)[number];
-const CYCLE_SHORT: Record<string, string> = { monthly: "mo", quarterly: "qtr", yearly: "yr", irregular: "…" };
+const CYCLE_SHORT: Record<string, string> = { monthly: "mnd", quarterly: "kwartaal", yearly: "jaar", irregular: "…" };
 
 function chargeEvidence(p: { chargeCount?: number; transactionIds?: string[];
   typicalAmountCents?: number; amountCents?: number; billingCycle?: string; lastAt?: string }) {
   const count = p.chargeCount ?? p.transactionIds?.length ?? 0;
   const cents = Math.abs(p.amountCents ?? p.typicalAmountCents ?? 0);
-  const cycle = CYCLE_SHORT[p.billingCycle ?? ""] ?? "mo";
+  const cycle = CYCLE_SHORT[p.billingCycle ?? ""] ?? "mnd";
+  // nl-NL, like every other date in the app. This was the one en-US call left:
+  // it printed "Aug 22" in a Dutch sentence about a Dutch bank charge.
   const last = p.lastAt
-    ? new Date(p.lastAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date(p.lastAt).toLocaleDateString("nl-NL", { month: "short", day: "numeric" })
     : null;
-  return `${count} charge${count === 1 ? "" : "s"} · ${formatEuro(cents)}/${cycle}${last ? ` · last ${last}` : ""}`;
+  return `${count} ${count === 1 ? "afschrijving" : "afschrijvingen"} · ${formatEuro(cents)}/${cycle}${last ? ` · laatst ${last}` : ""}`;
 }
 
 function RegistryItemCard({ s }: { s: Suggestion }) {
@@ -251,7 +253,7 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
   return (
     <Card>
       <Source model={s.model}>
-        Recurring charge found{p.counterpartyName ? ` — ${p.counterpartyName}` : ""}
+        Terugkerende afschrijving gevonden{p.counterpartyName ? ` — ${p.counterpartyName}` : ""}
       </Source>
       <Measured>{chargeEvidence(p)}</Measured>
       {/*
@@ -261,15 +263,15 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
       */}
       {p.resolved === false && (
         <Notice tone="signal">
-          Waiting for receipt lookup — you can also fill it in yourself.
+          Wacht op het opzoeken van de bon — je mag het ook zelf invullen.
         </Notice>
       )}
       {p.note && <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">{p.note}</p>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label={<ProposalLabel>Name</ProposalLabel>} htmlFor={`${s.id}-name`}>
+        <Field label={<ProposalLabel>Naam</ProposalLabel>} htmlFor={`${s.id}-name`}>
           <Input id={`${s.id}-name`} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label={<ProposalLabel>Category</ProposalLabel>} htmlFor={`${s.id}-category`}>
+        <Field label={<ProposalLabel>Categorie</ProposalLabel>} htmlFor={`${s.id}-category`}>
           <Select id={`${s.id}-category`} value={category}
             onChange={(e) => setCategory(e.target.value as ItemCategory)}>
             {ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
@@ -288,11 +290,11 @@ function RegistryItemCard({ s }: { s: Suggestion }) {
               ? p.paymentChannel : "invoice") as "invoice",
             discoveredVia: (["manual", "bank", "paypal", "apple", "email"].includes(p.discoveredVia ?? "")
               ? p.discoveredVia : "bank") as "bank",
-          } })}>Add to registry</Button>
+          } })}>Aan het register toevoegen</Button>
         <Button variant="ghost" size="sm"
           disabled={approve.isPending || reject.isPending}
           onClick={() => reject.mutate({ id: s.id })}>
-          Not a subscription</Button>
+          Geen abonnement</Button>
       </Verdict>
     </Card>
   );
@@ -310,31 +312,31 @@ function DebtCard({ s }: { s: Suggestion }) {
   const claimedCents = p.claimedCents == null ? null : Math.abs(p.claimedCents);
   return (
     <Card>
-      <Source model={s.model}>Possible debt found</Source>
+      <Source model={s.model}>Mogelijke vordering gevonden</Source>
       {/*
         The copy says "no judgement" and the colour has to agree: a debt the
         model spotted is the system reporting, not a demand on Martin, so this
         line is cyan. Amber here would turn every creditor notice into an alarm.
       */}
       <Notice tone="signal">
-        This looks like a debt collector — no judgement, just good to have it on the list.
+        Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben.
       </Notice>
-      <Field label={<ProposalLabel>Creditor</ProposalLabel>} htmlFor={`${s.id}-creditor`}>
+      <Field label={<ProposalLabel>Schuldeiser</ProposalLabel>} htmlFor={`${s.id}-creditor`}>
         <Input id={`${s.id}-creditor`} value={creditorName}
           onChange={(e) => setCreditorName(e.target.value)} />
       </Field>
-      <Measured>Claimed: {formatEuro(claimedCents)}</Measured>
+      <Measured>Gevorderd: {formatEuro(claimedCents)}</Measured>
       <RetrievedRefs refs={s.retrievedRefs} />
       <Verdict>
         <Button variant="signal" size="sm"
           disabled={!creditorName || approve.isPending || reject.isPending}
           onClick={() => approve.mutate({ id: s.id, debt: {
             creditorName, claimedCents, references: p.references ?? undefined } })}>
-          Add as debt</Button>
+          Als vordering vastleggen</Button>
         <Button variant="ghost" size="sm"
           disabled={approve.isPending || reject.isPending}
           onClick={() => reject.mutate({ id: s.id })}>
-          Not a debt</Button>
+          Geen vordering</Button>
       </Verdict>
     </Card>
   );
@@ -350,24 +352,24 @@ function DocMetaCard({ s }: { s: Suggestion }) {
   if (!p || !s.document) return null;
   return (
     <Card>
-      <Source model={s.model}>{`Scanned document “${s.document.title}”`}</Source>
+      <Source model={s.model}>{`Gescand document “${s.document.title}”`}</Source>
       <DocumentPreview
         doc={{ sha256: s.document.sha256, title: s.document.title, mime: s.document.mime,
           sizeBytes: s.document.sizeBytes }}
         height="short" />
-      <Field label={<ProposalLabel>Title</ProposalLabel>} htmlFor={`${s.id}-title`}>
+      <Field label={<ProposalLabel>Titel</ProposalLabel>} htmlFor={`${s.id}-title`}>
         <Input id={`${s.id}-title`} value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
-      <Field label={<ProposalLabel>Type</ProposalLabel>} htmlFor={`${s.id}-doctype`}>
+      <Field label={<ProposalLabel>Soort</ProposalLabel>} htmlFor={`${s.id}-doctype`}>
         <Input id={`${s.id}-doctype`} value={docType} onChange={(e) => setDocType(e.target.value)} />
       </Field>
       <RetrievedRefs refs={s.retrievedRefs} />
       <Verdict>
         <Button variant="signal" size="sm"
           onClick={() => approve.mutate({ id: s.id, title, docType: docType || undefined })}>
-          Looks right</Button>
+          Klopt zo</Button>
         <Button variant="ghost" size="sm"
-          onClick={() => reject.mutate({ id: s.id })}>Not relevant</Button>
+          onClick={() => reject.mutate({ id: s.id })}>Niet relevant</Button>
       </Verdict>
     </Card>
   );

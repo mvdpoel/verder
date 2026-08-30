@@ -13,21 +13,25 @@ import { Empty, PageTitle } from "@/components/ui";
  */
 export default async function QueuePage() {
   const caller = await serverCaller();
-  const pending = await caller.suggestions.list({ status: "pending" });
-  const manual = await caller.suggestions.list({ status: "needs-manual" });
+  const [pending, manual] = await Promise.all([
+    caller.suggestions.list({ status: "pending" }),
+    caller.suggestions.list({ status: "needs-manual" }),
+  ]);
   const all = [...pending, ...manual];
   return (
     <div className="flex max-w-2xl flex-col gap-7">
-      <PageTitle>Review queue</PageTitle>
+      <PageTitle>Te beoordelen</PageTitle>
       {all.length ? (
         <>
           <p className="text-sm font-light leading-relaxed text-ink-mute">
-            {`${all.length} suggestion${all.length > 1 ? "s" : ""} waiting — you decide what becomes part of the record.`}
+            {all.length === 1
+              ? "1 voorstel wacht op je — jij bepaalt wat er in het dossier komt."
+              : `${all.length} voorstellen wachten op je — jij bepaalt wat er in het dossier komt.`}
           </p>
           <ul className="flex flex-col gap-4">{all.map((s) => <SuggestionCard key={s.id} s={s} />)}</ul>
         </>
       ) : (
-        <Empty title="Queue is empty. Everything's handled — take a breather. ☕" />
+        <Empty title="Niets te beoordelen. Alles is afgehandeld — even ademhalen. ☕" />
       )}
     </div>
   );

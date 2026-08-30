@@ -16,20 +16,24 @@ export default async function SearchPage({ searchParams }: {
 }) {
   const parsed = parseSearchParams(await searchParams);
   const caller = await serverCaller();
-  const parties = await caller.parties.list();
-  // The router requires q of at least one character, so an empty box asks nothing.
-  const result = parsed.q ? await caller.search.query(toQueryInput(parsed)) : null;
+  // The router requires q of at least one character, so an empty box asks
+  // nothing — and the party list for the filters does not depend on the query,
+  // so the two go out together.
+  const [parties, result] = await Promise.all([
+    caller.parties.list(),
+    parsed.q ? caller.search.query(toQueryInput(parsed)) : null,
+  ]);
   const notice = result ? semanticNotice(result) : null;
 
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-[10px]">
         <PageTitle>
-          Search
+          Zoeken
         </PageTitle>
         <p className="max-w-2xl text-[14.5px] font-light leading-relaxed text-ink-mute">
-          Everything in the dossier — documents, logbook, e-mail, registry, tasks
-          — in one place. Every result says why it matched.
+          Alles in het dossier — documenten, logboek, e-mail, register, taken —
+          op één plek. Bij elk resultaat staat waaróm het gevonden is.
         </p>
       </div>
 
@@ -50,20 +54,20 @@ export default async function SearchPage({ searchParams }: {
             {result.nextCursor && (
               <Link className={buttonClass("ghost", "sm")}
                 href={buildSearchHref(parsed, { cursor: result.nextCursor })}>
-                More results →
+                Meer resultaten →
               </Link>
             )}
             {parsed.cursor && (
               <TextLink
                 className="font-mono text-[10px] tracking-[0.14em] uppercase"
                 href={buildSearchHref(parsed, { cursor: null })}>
-                back to the first page
+                terug naar de eerste pagina
               </TextLink>
             )}
           </div>
         </>
       ) : (
-        <Empty title="Type something above — or press ⌘K anywhere in the app." />
+        <Empty title="Typ hierboven iets — of druk ⌘K, waar je ook bent in de app." />
       )}
     </div>
   );

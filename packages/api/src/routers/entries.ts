@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
@@ -132,7 +133,7 @@ export const entriesRouter = router({
     .query(async ({ ctx, input }) => {
       const [entry] = await ctx.db.select().from(schema.logEntries)
         .where(eq(schema.logEntries.id, input.id));
-      if (!entry) throw new Error("Entry not found");
+      if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
       const participants = await ctx.db.select().from(schema.entryParticipants)
         .where(eq(schema.entryParticipants.entryId, entry.id));
       const docs = await ctx.db.select().from(schema.entryDocuments)

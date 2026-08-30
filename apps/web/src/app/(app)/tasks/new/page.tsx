@@ -6,7 +6,7 @@ export default async function NewTaskPage() {
   const options = await taskFormOptions();
   return (
     <div className="flex max-w-xl flex-col gap-6">
-      <PageTitle>Add a task</PageTitle>
+      <PageTitle>Nieuwe taak</PageTitle>
       <TaskForm options={options} />
     </div>
   );

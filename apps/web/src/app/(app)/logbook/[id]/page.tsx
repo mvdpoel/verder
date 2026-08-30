@@ -11,17 +11,24 @@ import {
   TextLink,
 } from "@/components/ui";
 import { serverCaller } from "@/lib/trpc-server";
+import { CHANNEL_LABEL, CLARITY_LABEL, DIRECTION_LABEL, ENTRY_SOURCE_LABEL } from "@/lib/entry-labels";
+import { orNotFound } from "@/lib/not-found";
 
 export default async function EntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
-  const e = await caller.entries.get({ id });
-  const parties = await caller.parties.list();
+  // Three independent reads, so three at once. `tracks.map()` is the expensive
+  // one — the whole map with its evidence batched — and it was the third wait
+  // in a row on a page that shows one entry.
+  const [e, parties, { map }] = await Promise.all([
+    orNotFound(caller.entries.get({ id })),
+    caller.parties.list(),
+    caller.tracks.map(),
+  ]);
   // Is this entry already a halte on the map? A halte belongs to a spoor, and
   // choosing the spoor is a decision this page cannot make for Martin — so it
   // reports the link and sends him to the map to make one, instead of the old
   // one-click "add to timeline" that a flat list could get away with.
-  const { map } = await caller.tracks.map();
   const onMap = map.stops.find((s) => s.entryId === id) ?? null;
   const onMapTrack = onMap ? map.tracks.find((t) => t.id === onMap.trackId) : null;
   const nameOf = (pid: string) => parties.find((p) => p.id === pid)?.name ?? pid;
@@ -35,11 +42,11 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
          * to do something", and there is nothing to do.
          */
         <Notice tone="signal">
-          This entry was corrected — see{" "}
+          Deze regel is gecorrigeerd — bekijk{" "}
           <TextLink href={`/logbook/${e.supersededBy}`}>
-            the correction
+            de correctie
           </TextLink>
-          . Both stay on record; that&apos;s what makes your log credible.
+          . Allebei blijven ze staan; juist dáárom is je logboek geloofwaardig.
         </Notice>
       )}
 
@@ -49,28 +56,28 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
             {e.summary}
           </PageTitle>
           <div className="flex flex-wrap items-center gap-[7px]">
-            <Chip tone="mute">{e.channel}</Chip>
-            <Chip tone="faint">{e.direction}</Chip>
+            <Chip tone="mute">{CHANNEL_LABEL[e.channel] ?? e.channel}</Chip>
+            <Chip tone="faint">{DIRECTION_LABEL[e.direction] ?? e.direction}</Chip>
           </div>
         </div>
 
         {/* Everything measured about the entry is mono; the prose below is not. */}
         <div className="grid gap-5 border-t border-hairline pt-[18px] sm:grid-cols-3">
           <div className="flex flex-col gap-[5px]">
-            <Label>happened</Label>
+            <Label>gebeurd op</Label>
             <div className="font-mono text-[12.5px] text-ink-soft">
               {new Date(e.occurredAt).toLocaleString("nl-NL")}
             </div>
           </div>
           <div className="flex flex-col gap-[5px]">
-            <Label>logged</Label>
+            <Label>vastgelegd op</Label>
             <div className="font-mono text-[12.5px] text-ink-soft">
               {new Date(e.recordedAt).toLocaleString("nl-NL")}
             </div>
           </div>
           <div className="flex flex-col gap-[5px]">
-            <Label>source</Label>
-            <div className="font-mono text-[12.5px] text-ink-soft">{e.source}</div>
+            <Label>bron</Label>
+            <div className="font-mono text-[12.5px] text-ink-soft">{ENTRY_SOURCE_LABEL[e.source] ?? e.source}</div>
           </div>
         </div>
 
@@ -84,7 +91,7 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
       <div className="grid gap-5 md:grid-cols-2">
         <Panel className="flex flex-col gap-[14px] p-[26px]">
           {/* Still an h2: the small caps are the style, not a demotion. */}
-          <Label as="h2">Who was involved</Label>
+          <Label as="h2">Wie erbij waren</Label>
           {e.participants.length === 0 ? (
             <Micro>—</Micro>
           ) : (
@@ -99,7 +106,7 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
         </Panel>
 
         <Panel className="flex flex-col gap-2 p-[26px]">
-          <Label as="h2">Agreed actions</Label>
+          <Label as="h2">Afgesproken acties</Label>
           {e.actionItems.length === 0 ? (
             <Micro>—</Micro>
           ) : (
@@ -108,7 +115,7 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
                 <Row
                   key={a.id}
                   title={a.description}
-                  kicker={`(${a.clarity}${a.dueAt ? `, due ${new Date(a.dueAt).toLocaleDateString("nl-NL")}` : ""})`}
+                  kicker={`(${CLARITY_LABEL[a.clarity] ?? a.clarity}${a.dueAt ? `, vóór ${new Date(a.dueAt).toLocaleDateString("nl-NL")}` : ""})`}
                 />
               ))}
             </div>
@@ -119,7 +126,7 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
       <Panel className="flex flex-col items-start gap-4 p-[26px]">
         {onMap ? (
           <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
-            ✓ On the map as a halte —{" "}
+            ✓ Staat als halte op de kaart —{" "}
             <TextLink
               href={`/timeline?stop=${encodeURIComponent(onMap.id)}`}>
               {onMap.title}
@@ -128,16 +135,17 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
           </p>
         ) : (
           <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
-            Not on the map yet. A halte belongs to a spoor, so you add it there —{" "}
+            Staat nog niet op de kaart. Een halte hoort bij een spoor, dus die
+            voeg je daar toe —{" "}
             <TextLink href="/timeline">
               De zaak
             </TextLink>
-            . This entry stays the evidence either way.
+            . Deze regel blijft hoe dan ook het bewijs.
           </p>
         )}
         {!e.supersededBy && (
           <Link href={`/logbook/new?correct=${e.id}`} className={buttonClass("ghost", "sm")}>
-            Correct this entry
+            Deze regel corrigeren
           </Link>
         )}
       </Panel>

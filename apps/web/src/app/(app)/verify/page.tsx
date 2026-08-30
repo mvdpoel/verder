@@ -8,7 +8,7 @@ export default async function VerifyPage() {
   const health = await caller.search.health();
   return (
     <div className="flex flex-col gap-8">
-      <PageTitle>Verify & export</PageTitle>
+      <PageTitle>Controle & export</PageTitle>
       {/*
         Two columns, and the wider one on the left is the evidence: the chain
         check and the report drawn from it. The search index sits BESIDE it

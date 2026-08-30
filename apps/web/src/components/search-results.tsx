@@ -20,9 +20,9 @@ export type SearchHitRow = {
 export function SearchResults({ hits }: { hits: SearchHitRow[] }) {
   if (hits.length === 0) {
     return (
-      <Empty title="Nothing found — try fewer words or widen the filters.">
-        An empty result isn&apos;t a mistake; it may simply not be in the
-        dossier yet.
+      <Empty title="Niets gevonden — probeer minder woorden of zet de filters wijder.">
+        Een leeg resultaat is geen fout; het kan simpelweg nog niet in het
+        dossier staan.
       </Empty>
     );
   }

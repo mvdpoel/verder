@@ -1,15 +1,20 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { orNotFound } from "@/lib/not-found";
 import { DecisionForm } from "@/components/decision-form";
 import { DebtFactsForm } from "@/components/item-facts-form";
 import { DebtPartiesForm } from "@/components/debt-parties-form";
-import { DecisionTimeline, StatusBadge, formatEuro } from "@/components/registry-list";
+import {
+  DECISION_PICKER_LIMIT, DecisionTimeline, StatusBadge, formatEuro,
+} from "@/components/registry-list";
 import { Label, Notice, PageTitle, Panel, TextLink } from "@/components/ui";
 
 export default async function RegistryDebtPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
-  const debt = await caller.registry.debts.get({ id });
-  const vaultDocs = await caller.documents.list({ limit: 100 });
+  const [debt, vaultDocs] = await Promise.all([
+    orNotFound(caller.registry.debts.get({ id })),
+    caller.documents.list({ limit: DECISION_PICKER_LIMIT }),
+  ]);
   const docTitles = new Map(debt.documents.map((d) => [d.id, d.title]));
   const blocker = debt.decisions[0]?.blockerNote;
   // Both sides of the subtraction have to be known amounts — the KvK debt
@@ -28,16 +33,16 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
         {/* formatEuro(null) reads "amount unknown", never € 0,00: a notice that
             states no total is not a claim for nothing. */}
         <p className="text-[13.5px] font-light text-ink-mute">
-          Claimed <span className="font-mono text-ink">{formatEuro(debt.claimedCents)}</span>
+          Gevorderd <span className="font-mono text-ink">{formatEuro(debt.claimedCents)}</span>
           {debt.principalCents !== null && (
-            <> · started as <span className="font-mono text-ink-soft">{formatEuro(debt.principalCents)}</span>
-              {feesCents !== null && feesCents > 0 && <> (<span className="font-mono text-ink-soft">{formatEuro(feesCents)}</span> in fees and interest on top)</>}
+            <> · begonnen als <span className="font-mono text-ink-soft">{formatEuro(debt.principalCents)}</span>
+              {feesCents !== null && feesCents > 0 && <> (<span className="font-mono text-ink-soft">{formatEuro(feesCents)}</span> aan kosten en rente erbovenop)</>}
             </>
           )}
-          {debt.references_ && <> · ref <span className="font-mono text-ink-soft">{debt.references_}</span></>}
+          {debt.references_ && <> · kenmerk <span className="font-mono text-ink-soft">{debt.references_}</span></>}
         </p>
       </div>
-      {blocker && <Notice tone="attn">Keep in mind: {blocker}</Notice>}
+      {blocker && <Notice tone="attn">Denk hieraan: {blocker}</Notice>}
       <div className="grid items-start gap-7 xl:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-6">
           <DebtFactsForm debt={{
@@ -46,11 +51,11 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
             references_: debt.references_, origin: debt.origin, originStory: debt.originStory,
           }} />
           <Panel as="section" className="flex flex-col gap-[14px] p-[26px]">
-            <Label as="h2">From your logbook — contact with this creditor</Label>
+            <Label as="h2">Uit je logboek — contact met deze schuldeiser</Label>
             {debt.relatedEntries.length === 0
               ? (
                 <p className="text-[13px] font-light leading-relaxed text-ink-label">
-                  No logbook entries with this creditor yet. When letters or calls happen, log them — they show up here by themselves.
+                  Nog geen logboekregels met deze schuldeiser. Leg brieven en telefoontjes vast — ze verschijnen hier vanzelf.
                 </p>
               )
               : (
@@ -71,9 +76,9 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
               )}
           </Panel>
           <Panel as="section" className="flex flex-col gap-[14px] p-[26px]">
-            <Label as="h2">Documents via decisions &amp; the logbook</Label>
+            <Label as="h2">Documenten via besluiten &amp; het logboek</Label>
             {debt.documents.length === 0
-              ? <p className="text-[13px] font-light text-ink-label">No documents linked yet.</p>
+              ? <p className="text-[13px] font-light text-ink-label">Nog geen documenten gekoppeld.</p>
               : (
                 <ul>
                   {debt.documents.map((d) => (
@@ -101,7 +106,7 @@ export default async function RegistryDebtPage({ params }: { params: Promise<{ i
             currentStatus={debt.effectiveStatus}
             documents={vaultDocs.map((d) => ({ id: d.id, title: d.effectiveTitle }))} />
           <Panel as="section" className="flex flex-col gap-[14px] p-[26px]">
-            <Label as="h2">Settlement trail — every step on record</Label>
+            <Label as="h2">Afwikkelingsspoor — elke stap blijft staan</Label>
             <DecisionTimeline decisions={debt.decisions} kind="debt" docTitles={docTitles} />
           </Panel>
         </div>

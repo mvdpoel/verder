@@ -84,6 +84,6 @@ describe("semanticNotice", () => {
 
   it("is explicit when the semantic half could not run", () => {
     expect(semanticNotice({ semanticAvailable: false }))
-      .toContain("Semantic search is unavailable");
+      .toContain("Zoeken op betekenis kan nu even niet");
   });
 });

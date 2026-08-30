@@ -45,7 +45,7 @@ export function UploadDrop() {
         "text-[13.5px] font-light",
         busy ? "animate-breathe text-signal" : over ? "text-ink-bright" : "text-ink-mute",
       )}>
-        {busy ? "Storing safely…" : "Drop files here or click to add them to your vault"}
+        {busy ? "Veilig aan het opbergen…" : "Sleep bestanden hierheen, of klik om ze aan je kluis toe te voegen"}
       </span>
       {/* `sr-only` and not `hidden`: a display:none input cannot be reached by
           tab, which took the whole upload away from the keyboard. */}

@@ -18,8 +18,8 @@ export type DocStatus = "inbox" | "filed" | "discarded";
 export function discardAction(
   status: DocStatus, previousStatus: DocStatus,
 ): { label: string; next: DocStatus } {
-  if (status !== "discarded") return { label: "Discard", next: "discarded" };
+  if (status !== "discarded") return { label: "Wegleggen", next: "discarded" };
   // Undoing into another discard would leave a button that changes nothing.
-  return { label: "Undo discard",
+  return { label: "Terugzetten",
     next: previousStatus === "discarded" ? "inbox" : previousStatus };
 }

@@ -32,7 +32,7 @@ function formatBytes(bytes: number): string {
 function DownloadLink({ doc }: { doc: PreviewDoc }) {
   return (
     <a href={`/api/files/${doc.sha256}`} download={doc.title} className={buttonClass("ghost", "sm")}>
-      Download
+      Downloaden
     </a>
   );
 }
@@ -42,9 +42,9 @@ function FileCard({ doc, reason }: { doc: PreviewDoc; reason?: string }) {
     <div className={`${PAGE} flex flex-col items-start gap-[10px] p-[18px]`}>
       <p className="break-all text-[13.5px] font-light text-ink-soft">{doc.title}</p>
       <p className="micro">
-        {doc.mime || "unknown type"}
+        {doc.mime || "onbekend bestandstype"}
         {doc.sizeBytes !== undefined && ` · ${formatBytes(doc.sizeBytes)}`}
-        {` · ${reason ?? "no preview available"}`}
+        {` · ${reason ?? "geen voorbeeld beschikbaar"}`}
       </p>
       <DownloadLink doc={doc} />
     </div>
@@ -55,7 +55,7 @@ function SheetTable({ doc, height, fallback }: {
   doc: PreviewDoc; height: keyof typeof FRAME; fallback?: ReactNode;
 }) {
   const q = trpc.documents.sheetPreview.useQuery({ sha256: doc.sha256 });
-  if (q.isPending) return <p className="micro">Reading spreadsheet…</p>;
+  if (q.isPending) return <p className="micro">Bezig het werkblad te lezen…</p>;
   if (q.error) {
     // When we only GUESSED this was a spreadsheet (the stored mime said
     // nothing), a refusal is the answer to the guess, not an error to report.
@@ -64,7 +64,7 @@ function SheetTable({ doc, height, fallback }: {
       // Not amber: nothing here waits on Martin. The file is intact and the
       // download beside the message is the whole way out.
       <div className={`${PAGE} flex flex-col items-start gap-[10px] p-[18px]`}>
-        <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">This spreadsheet could not be read: {q.error.message}</p>
+        <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">Dit werkblad kon niet gelezen worden: {q.error.message}</p>
         <DownloadLink doc={doc} />
       </div>
     );

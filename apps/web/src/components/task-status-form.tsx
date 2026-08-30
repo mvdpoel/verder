@@ -2,6 +2,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
+import { TASK_STATUS_LABEL } from "@/components/task-list";
 import { TASK_STATUS_ORDER } from "./task-list";
 import {
   Button,
@@ -62,21 +63,23 @@ export function TaskStatusForm({ taskId, currentStatus }: {
      */
     <Panel lit className="p-[26px]">
       <div className="flex flex-col gap-[18px]">
-        <PanelHead labelAs="h2" label="Move it along" />
+        <PanelHead labelAs="h2" label="Zet het in beweging" />
         <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
-          Currently <span className="font-mono text-ink-soft">{currentStatus}</span>.
+          Nu: <span className="font-mono text-ink-soft">{TASK_STATUS_LABEL[currentStatus] ?? currentStatus}</span>.
           {closed
-            ? " This one is settled — reopening takes an override, and that's okay too."
-            : " A status is a step, not a verdict — pick the next one."}
+            ? " Deze is afgerond — heropenen kan, maar dat is een stap buiten de route, en dat mag ook."
+            : " Een status is een stap, geen oordeel — kies de volgende."}
         </p>
-        <Field label="Next status" htmlFor={`${uid}-status`}>
+        <Field label="Volgende status" htmlFor={`${uid}-status`}>
           <Select id={`${uid}-status`} value={status}
             disabled={validNext.isLoading}
             onChange={(e) => setStatus(e.target.value)}>
-            <option value="">— pick a status —</option>
+            <option value="">— kies een status —</option>
             {options.map((s) => (
               <option key={s} value={s}>
-                {valid.includes(s) ? s : `${s} (off the usual path)`}
+                {valid.includes(s)
+                  ? (TASK_STATUS_LABEL[s] ?? s)
+                  : `${TASK_STATUS_LABEL[s] ?? s} (buiten de gebruikelijke route)`}
               </option>
             ))}
           </Select>
@@ -90,19 +93,21 @@ export function TaskStatusForm({ taskId, currentStatus }: {
            */
           <div className="flex flex-col gap-[14px] rounded-panel border border-attn/30 p-[18px]">
             <p className="text-[13.5px] font-light leading-relaxed text-ink-soft">
-              &quot;{currentStatus}&quot; → &quot;{status}&quot; skips the usual steps.
-              That&apos;s allowed — just write down why, so the record stays honest.
+              &quot;{TASK_STATUS_LABEL[currentStatus] ?? currentStatus}&quot; →{" "}
+              &quot;{TASK_STATUS_LABEL[status] ?? status}&quot; slaat de gebruikelijke
+              stappen over. Dat mag — schrijf alleen even op waarom, dan blijft het
+              dossier kloppen.
             </p>
-            <Field label="Why this jump is right" htmlFor={`${uid}-override`}>
+            <Field label="Waarom deze stap klopt" htmlFor={`${uid}-override`}>
               <Input id={`${uid}-override`} value={overrideReason}
-                placeholder="e.g. turned out this was already done last week"
+                placeholder="bijv. bleek vorige week al gedaan te zijn"
                 onChange={(e) => setOverrideReason(e.target.value)} />
             </Field>
           </div>
         )}
-        <Field label="Note (optional — future-you will thank you)" htmlFor={`${uid}-note`}>
+        <Field label="Notitie (optioneel — je bent er later blij mee)" htmlFor={`${uid}-note`}>
           <Textarea id={`${uid}-note`} rows={2} value={note}
-            placeholder="e.g. Sent the documents, waiting for confirmation."
+            placeholder="bijv. Stukken opgestuurd, wacht op bevestiging."
             onChange={(e) => setNote(e.target.value)} />
         </Field>
         {setTaskStatus.error && (
@@ -112,7 +117,7 @@ export function TaskStatusForm({ taskId, currentStatus }: {
         )}
         <div>
           <Button variant="primary" disabled={!ready || setTaskStatus.isPending} onClick={submit}>
-            Record status change
+            Statuswijziging vastleggen
           </Button>
         </div>
       </div>

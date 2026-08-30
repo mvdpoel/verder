@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { euro } from "@/components/money-format";
 import {
   Chip,
   Empty,
@@ -106,30 +107,109 @@ const DEBT_STATUS_DOT: Record<string, DotState> = {
 };
 
 const ITEM_GROUP_LABEL: Record<string, string> = {
-  identified: "Identified — waiting for a first decision",
-  mandatory: "Mandatory — these have to stay",
-  allowed: "Allowed — approved to keep",
-  requested: "Requested — waiting for a verdict",
-  "to-cancel": "To cancel — on the way out",
-  canceled: "Canceled — done and dusted",
+  identified: "Geïnventariseerd — wacht op een eerste besluit",
+  mandatory: "Noodzakelijk — deze moeten blijven",
+  allowed: "Toegestaan — goedgekeurd om te houden",
+  requested: "Aangevraagd — wacht op antwoord",
+  "to-cancel": "Op te zeggen — op weg naar buiten",
+  canceled: "Beëindigd — afgerond",
+};
+
+/**
+ * The status as ONE word, for the chips.
+ *
+ * The chips used to print the database identifier itself — "to-cancel",
+ * "in-settlement" — on pages that are otherwise in Dutch. Exported because
+ * `/registry/export` needs the same vocabulary: the printable report kept its
+ * own copy of this map, and two copies of a status vocabulary is how the screen
+ * and the document handed to Verder come to call one thing by two names.
+ *
+ * Case does not matter for the chips (they are uppercased in CSS); it does in
+ * the export's table, so these are written capitalised.
+ */
+export const ITEM_STATUS_LABEL: Record<string, string> = {
+  identified: "Geïnventariseerd",
+  mandatory: "Noodzakelijk",
+  allowed: "Toegestaan",
+  requested: "Aangevraagd",
+  "to-cancel": "Op te zeggen",
+  canceled: "Beëindigd",
+};
+
+export const DEBT_STATUS_LABEL: Record<string, string> = {
+  identified: "Geïnventariseerd",
+  acknowledged: "Erkend",
+  disputed: "Betwist",
+  "in-settlement": "In afwikkeling",
+  settled: "Afgewikkeld",
+};
+
+/**
+ * The newest documents offered in the decision form's "onderliggend document"
+ * picker.
+ *
+ * 200 is the router's own ceiling for `documents.list`. A <select> cannot
+ * silently omit an option without lying about what can be linked, so when the
+ * list comes back FULL the form says so out loud and points at the other route
+ * — linking from the document's own page in the vault — instead of pretending
+ * the vault holds exactly this many files.
+ *
+ * IT LIVES HERE AND NOT IN `decision-form.tsx`, WHICH IS WHERE IT IS USED.
+ * That file is `"use client"`, and a value exported from a client module
+ * reaches a server component as a CLIENT REFERENCE rather than as the value —
+ * so `documents.list({ limit: DECISION_PICKER_LIMIT })` on the two registry
+ * pages handed zod a function and every detail page answered 500. It type-checks
+ * and it builds; only running the route finds it. `search-kinds.ts` and
+ * `money-format.ts` carry the same warning at the top for the same reason.
+ */
+export const DECISION_PICKER_LIMIT = 200;
+
+/** How often a post is charged, short enough to sit in a one-line summary. */
+export const BILLING_CYCLE_SHORT: Record<string, string> = {
+  monthly: "mnd", quarterly: "kwartaal", yearly: "jaar", irregular: "onregelmatig",
+};
+
+/** The same fact written out, for a dropdown and for the printable report. */
+export const BILLING_CYCLE_LABEL: Record<string, string> = {
+  monthly: "per maand", quarterly: "per kwartaal",
+  yearly: "per jaar", irregular: "onregelmatig",
+};
+
+/**
+ * How a post is paid. The database values are English identifiers and the two
+ * registry forms offered them raw — "direct-debit" in a Dutch dropdown.
+ */
+export const PAYMENT_CHANNEL_LABEL: Record<string, string> = {
+  "direct-debit": "automatische incasso",
+  paypal: "PayPal",
+  apple: "Apple",
+  invoice: "op factuur",
 };
 
 /**
  * €-format integer cents without float arithmetic. `null` means the notice
  * never stated an amount (the KvK aanmaning is the real example) — rendering
- * that as €0,00 would put a number in front of Martin that no creditor ever
+ * that as € 0,00 would put a number in front of Martin that no creditor ever
  * claimed, so it renders as text instead.
+ *
+ * THE NUMBER ITSELF IS `euro()` FROM money-format.ts, and that is the point of
+ * this function now. There were two euro formatters in this app with different
+ * output: /money wrote "€ 2.623,15" and the registry — including the signed
+ * export handed to VerderGroep — wrote "€2623.15", an English decimal point
+ * with no thousands grouping, in a Dutch financial document. Two spellings of
+ * money in one dossier is how the two come to disagree about a figure; this one
+ * survives as the NULL-aware wrapper, which is the only thing it does that
+ * `euro` does not.
  */
 export function formatEuro(cents: number | null): string {
-  if (cents === null) return "amount unknown";
-  const sign = cents < 0 ? "-" : "";
-  const abs = Math.abs(cents);
-  return `${sign}€${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+  if (cents === null) return "bedrag onbekend";
+  return euro(cents);
 }
 
 export function StatusBadge({ status, kind }: { status: string; kind: "item" | "debt" }) {
   const tone = (kind === "item" ? ITEM_STATUS_TONE : DEBT_STATUS_TONE)[status] ?? "faint";
-  return <Chip tone={tone} className={STATUS_EXTRA[status]}>{status}</Chip>;
+  const label = (kind === "item" ? ITEM_STATUS_LABEL : DEBT_STATUS_LABEL)[status] ?? status;
+  return <Chip tone={tone} className={STATUS_EXTRA[status]}>{label}</Chip>;
 }
 
 function SourceBadge({ source }: { source: string }) {
@@ -155,7 +235,7 @@ export function DecisionTimeline({ decisions, kind, docTitles }: {
   if (decisions.length === 0) {
     // Written as a JS string, not JSX text, so the straight quotes survive
     // exactly as they were — a tested copy line is not the place for entities.
-    return <Empty title={'No decisions yet — that\'s fine, it starts as "identified". The first call is yours to make below.'} />;
+    return <Empty title={'Nog geen besluiten — dat hoort zo, alles begint als "geïnventariseerd". De eerste keuze is aan jou, hieronder.'} />;
   }
   return (
     <ol>
@@ -179,12 +259,12 @@ export function DecisionTimeline({ decisions, kind, docTitles }: {
               which is the one thing amber is for. */}
           {d.blockerNote && (
             <p className="mt-[7px] font-mono text-[10px] tracking-[0.12em] text-attn">
-              Blocker: {d.blockerNote}
+              Blokkade: {d.blockerNote}
             </p>
           )}
           {d.overrideReason && (
             <p className="mt-[7px] font-mono text-[10px] tracking-[0.12em] text-ink-dim">
-              Off the usual path — {d.overrideReason}
+              Buiten de gebruikelijke route — {d.overrideReason}
             </p>
           )}
         </li>
@@ -193,7 +273,7 @@ export function DecisionTimeline({ decisions, kind, docTitles }: {
   );
 }
 
-const EMPTY_STATE = "Nothing here yet — import a bank statement and let's find out together what's out there.";
+const EMPTY_STATE = "Nog niets hier — lees een bankafschrift in, dan zoeken we samen uit wat er speelt.";
 
 export function RegistryItemsList({ items }: { items: RegistryItemRow[] }) {
   if (items.length === 0) return <Empty title={EMPTY_STATE} />;
@@ -214,7 +294,7 @@ export function RegistryItemsList({ items }: { items: RegistryItemRow[] }) {
                   {ITEM_GROUP_LABEL[status] ?? status}
                 </Label>
                 <div className="shrink-0 font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim">
-                  {formatEuro(rollupCents)}/mo
+                  {formatEuro(rollupCents)}/mnd
                 </div>
               </div>
               <div>
@@ -233,7 +313,7 @@ export function RegistryItemsList({ items }: { items: RegistryItemRow[] }) {
                         <SourceBadge source={item.discoveredVia} />
                       </span>
                     }
-                    meta={`${item.category} · ${formatEuro(item.amountCents)}/${item.billingCycle} · ${formatEuro(item.monthlyCents)}/mo`}
+                    meta={`${item.category} · ${formatEuro(item.amountCents)}/${BILLING_CYCLE_SHORT[item.billingCycle] ?? item.billingCycle} · ${formatEuro(item.monthlyCents)}/mnd`}
                   />
                 ))}
               </div>
@@ -279,10 +359,10 @@ export function RegistryDebtsList({ debts }: { debts: RegistryDebtRow[] }) {
                 <>
                   {eiserNames.length > 0 && <>eiser: {eiserNames.join(", ")}</>}
                   {intermediaries.length > 0 && <>{eiserNames.length > 0 && " · "}{intermediaries.join(" · ")}</>}
-                  {!debt.reportedToVerderAt && <>{(eiserNames.length > 0 || intermediaries.length > 0) && " · "}not reported to Verder yet</>}
+                  {!debt.reportedToVerderAt && <>{(eiserNames.length > 0 || intermediaries.length > 0) && " · "}nog niet gemeld bij Verder</>}
                 </>
               ) : undefined}
-              meta={debt.claimedCents === null ? "amount unknown" : `claimed ${formatEuro(debt.claimedCents)}`}
+              meta={debt.claimedCents === null ? "bedrag onbekend" : `gevorderd ${formatEuro(debt.claimedCents)}`}
             />
           );
         })}

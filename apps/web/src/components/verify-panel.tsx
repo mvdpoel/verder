@@ -20,13 +20,13 @@ export function VerifyPanel() {
       */}
       <Panel lit>
         <div className="flex flex-col gap-4 p-[26px]">
-          <Label as="h2">Integrity check</Label>
+          <Label as="h2">Integriteitscontrole</Label>
           <p className="max-w-prose text-[13.5px] font-light leading-relaxed text-ink-mute">
-            Recomputes every hash in the chain and re-reads every stored file.
+            Herberekent elke hash in de keten en leest elk opgeslagen bestand opnieuw.
           </p>
           <div>
             <Button variant="primary" disabled={run.isPending} onClick={() => run.mutate()}>
-              {run.isPending ? "Checking…" : "Run verification"}
+              {run.isPending ? "Bezig met controleren…" : "Controle uitvoeren"}
             </Button>
           </div>
           {/*
@@ -41,17 +41,17 @@ export function VerifyPanel() {
             ? (
               <Callout tone="ok" className="flex-col gap-[9px]">
                 <p className="text-[13.5px] font-light leading-relaxed text-okay">
-                  ✔ All good. <span className="font-mono">{run.data.count}</span> events verified, <span className="font-mono">{run.data.checkedFiles}</span> files re-hashed.
+                  ✔ Alles klopt. <span className="font-mono">{run.data.count}</span> gebeurtenissen gecontroleerd, <span className="font-mono">{run.data.checkedFiles}</span> bestanden opnieuw gehasht.
                 </p>
                 <p className="break-all font-mono text-[11px] leading-relaxed tracking-[0.04em] text-ink-dim">
-                  Chain head: <span className="text-okay">{run.data.headHash}</span>
+                  Kop van de keten: <span className="text-okay">{run.data.headHash}</span>
                 </p>
               </Callout>
             )
             : (
               <Callout tone="attn">
                 <p className="text-[13.5px] font-light leading-relaxed text-attn">
-                  ✘ Chain broken at event <span className="font-mono">{run.data.brokenAtSeq}</span> (<span className="font-mono">{run.data.reason}</span>). Don't panic — nothing is lost; investigate before writing anything new.
+                  ✘ De keten is gebroken bij gebeurtenis <span className="font-mono">{run.data.brokenAtSeq}</span> (<span className="font-mono">{run.data.reason}</span>). Geen paniek — er is niets kwijt; zoek dit uit vóór je iets nieuws vastlegt.
                 </p>
               </Callout>
             ))}
@@ -60,12 +60,12 @@ export function VerifyPanel() {
 
       <Panel>
         <div className="flex flex-col gap-4 p-[26px]">
-          <Label as="h2">Export a report</Label>
+          <Label as="h2">Overzicht exporteren</Label>
           <div className="grid max-w-sm grid-cols-2 gap-4">
-            <Field label="From" htmlFor={fromId}>
+            <Field label="Van" htmlFor={fromId}>
               <Input id={fromId} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </Field>
-            <Field label="To" htmlFor={toId}>
+            <Field label="Tot en met" htmlFor={toId}>
               <Input id={toId} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </Field>
           </div>
@@ -82,7 +82,7 @@ export function VerifyPanel() {
               href={`/verify/export?from=${from}&to=${to}`}
               target="_blank"
               rel="noreferrer"
-            >Open report (print → PDF)</a>
+            >Overzicht openen (printen → pdf)</a>
           </div>
         </div>
       </Panel>

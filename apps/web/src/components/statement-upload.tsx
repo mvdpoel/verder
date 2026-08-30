@@ -28,9 +28,9 @@ export function StatementUpload() {
         const body = await res.json();
         next.push(res.ok
           ? { filename: file.name, summary: body as IngestSummary }
-          : { filename: file.name, error: (body as { error?: string }).error ?? "upload failed" });
+          : { filename: file.name, error: (body as { error?: string }).error ?? "uploaden mislukt" });
       } catch {
-        next.push({ filename: file.name, error: "upload failed — please try again" });
+        next.push({ filename: file.name, error: "uploaden mislukt — probeer het nog een keer" });
       }
     }
     setResults((prev) => [...next, ...prev]);
@@ -50,8 +50,8 @@ export function StatementUpload() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}>
         {busy
-          ? <span className="micro animate-breathe">Reading your statement…</span>
-          : "Drop a bank or PayPal statement here (ABN CAMT.053, ABN TSV, ABN Excel, PayPal CSV) or click to choose"}
+          ? <span className="micro animate-breathe">Je afschrift wordt gelezen…</span>
+          : "Sleep hier een bank- of PayPal-afschrift heen (ABN CAMT.053, ABN TSV, ABN Excel, PayPal CSV), of klik om te kiezen"}
         <input type="file" multiple className="sr-only" onChange={(e) => void upload(e.target.files)} />
       </label>
       {results.length > 0 && (
@@ -62,14 +62,14 @@ export function StatementUpload() {
               {r.summary ? (
                 <>
                   <span className="text-ink-mute">
-                    {" — "}{r.summary.inserted} transaction{r.summary.inserted === 1 ? "" : "s"} imported
-                    {r.summary.skipped > 0 && `, ${r.summary.skipped} already known`}
-                    {r.summary.errors > 0 && `, ${r.summary.errors} row${r.summary.errors === 1 ? "" : "s"} we couldn't read (kept safely, nothing lost)`}
+                    {" — "}{r.summary.inserted} {r.summary.inserted === 1 ? "transactie" : "transacties"} ingelezen
+                    {r.summary.skipped > 0 && `, ${r.summary.skipped} al bekend`}
+                    {r.summary.errors > 0 && `, ${r.summary.errors} ${r.summary.errors === 1 ? "regel" : "regels"} konden we niet lezen (veilig bewaard, niets kwijt)`}
                     {" · "}{r.summary.source}
                   </span>
                   <span className="mt-2 block leading-relaxed text-ink-mute">
-                    Recurring charges show up in the{" "}
-                    <TextLink href="/queue">review queue</TextLink> within a couple of minutes.
+                    Terugkerende afschrijvingen verschijnen binnen een paar minuten{" "}
+                    <TextLink href="/queue">bij de voorstellen</TextLink>.
                   </span>
                 </>
               ) : (

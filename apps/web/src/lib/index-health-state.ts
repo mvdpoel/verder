@@ -14,29 +14,29 @@ export function indexHealthState(
   h: IndexHealth, now: number,
 ): { tone: IndexHealthTone; message: string } {
   if (!h.degraded) {
-    return { tone: "ok", message: "Everything written is searchable." };
+    return { tone: "ok", message: "Alles wat is vastgelegd, is doorzoekbaar." };
   }
   if (h.lastDrainAt === null) {
     return {
       tone: "bad",
-      message: "The indexer has never reported. Nothing new is becoming searchable yet — start the worker and it will catch up.",
+      message: "De indexer heeft zich nog nooit gemeld. Nieuwe dingen worden nog niet doorzoekbaar — start de worker, dan haalt hij het in.",
     };
   }
   if (now - Date.parse(h.lastDrainAt) > DRAIN_STALE_MS) {
     return {
       tone: "bad",
-      message: `The indexer hasn't run since ${new Date(h.lastDrainAt).toLocaleString("nl-NL")} — anything written after that isn't searchable yet. Nothing is lost; it catches up as soon as the worker is back.`,
+      message: `De indexer draait niet meer sinds ${new Date(h.lastDrainAt).toLocaleString("nl-NL")} — wat daarna is vastgelegd, is nog niet doorzoekbaar. Er is niets kwijt; hij haalt het in zodra de worker weer draait.`,
     };
   }
   if (h.embedFailures > 0) {
-    const noun = h.embedFailures === 1 ? "chunk" : "chunks";
+    const noun = h.embedFailures === 1 ? "stuk" : "stukken";
     return {
       tone: "warn",
-      message: `${h.embedFailures} ${noun} could not be embedded — keyword search is complete, semantic search is thin. The next index run retries them.`,
+      message: `${h.embedFailures} ${noun} konden niet worden ge-embed — zoeken op woord is compleet, zoeken op betekenis is mager. De volgende indexronde probeert het opnieuw.`,
     };
   }
   return {
     tone: "warn",
-    message: `${h.outboxDepth} records are waiting to be indexed — the queue is catching up.`,
+    message: `${h.outboxDepth} records wachten om geïndexeerd te worden — de wachtrij loopt bij.`,
   };
 }

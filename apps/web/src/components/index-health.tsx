@@ -31,11 +31,11 @@ export function IndexHealthCard({ health, now }: { health: IndexHealth; now: num
   return (
     <Panel>
       <div className="flex flex-col gap-4 p-[26px]">
-        <Label as="h2">Search index</Label>
+        <Label as="h2">Zoekindex</Label>
         <p className="max-w-prose text-[13.5px] font-light leading-relaxed text-ink-mute">
-          The index is derived, never evidence: it can be rebuilt from the record at any
-          time (<code className="rounded-chip bg-field px-[5px] py-[2px] font-mono text-[12px] text-ink-soft">pnpm --filter worker reindex</code>). A broken index can only fail
-          to find something — it can never change what happened.
+          De index is afgeleid en nooit bewijs: hij kan op elk moment opnieuw uit het
+          dossier worden opgebouwd (<code className="rounded-chip bg-field px-[5px] py-[2px] font-mono text-[12px] text-ink-soft">pnpm --filter worker reindex</code>). Een kapotte
+          index kan hooguit iets niet vínden — hij kan nooit veranderen wat er gebeurd is.
         </p>
         <Callout tone={TONE_CALLOUT[state.tone]} dot>
           <p className={cx("text-[13.5px] font-light leading-relaxed", TONE_TEXT[state.tone])}>{state.message}</p>
@@ -48,20 +48,20 @@ export function IndexHealthCard({ health, now }: { health: IndexHealth; now: num
         */}
         <ul className="flex flex-col">
           <li className="border-b border-hairline py-[9px] text-[13px] font-light text-ink-mute last:border-0">
-            <span className="font-mono text-[12.5px] text-ink">{health.chunks}</span> chunks indexed
+            <span className="font-mono text-[12.5px] text-ink">{health.chunks}</span> stukken geïndexeerd
           </li>
           <li className="border-b border-hairline py-[9px] text-[13px] font-light text-ink-mute last:border-0">
-            <span className="font-mono text-[12.5px] text-ink">{health.embedFailures}</span> chunks waiting on a retry after a failed embedding
+            <span className="font-mono text-[12.5px] text-ink">{health.embedFailures}</span> stukken wachten op een nieuwe poging na een mislukte embedding
           </li>
           <li className="border-b border-hairline py-[9px] text-[13px] font-light text-ink-mute last:border-0">
-            <span className="font-mono text-[12.5px] text-ink">{health.outboxDepth}</span> records waiting in the queue
+            <span className="font-mono text-[12.5px] text-ink">{health.outboxDepth}</span> records wachten in de wachtrij
           </li>
           <li className="border-b border-hairline py-[9px] text-[13px] font-light text-ink-mute last:border-0">
-            Last index run:{" "}
+            Laatste indexronde:{" "}
             <span className="font-mono text-[12.5px] text-ink">
               {health.lastDrainAt
                 ? new Date(health.lastDrainAt).toLocaleString("nl-NL")
-                : "never"}
+                : "nooit"}
             </span>
           </li>
         </ul>

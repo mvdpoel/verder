@@ -116,7 +116,7 @@ export function CommandPalette() {
             <path d="M16.5 16.5 L21 21" />
           </svg>
           <input ref={inputRef} value={q}
-            placeholder="Search everything — ⇧Enter for all results"
+            placeholder="Zoek in alles — ⇧Enter voor alle resultaten"
             className="w-full bg-transparent py-[15px] font-display text-[15px] font-light text-ink outline-none placeholder:text-ink-dim"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -136,14 +136,14 @@ export function CommandPalette() {
           {!searching && (
             // An untyped palette is not an empty result: it is the shelf of what
             // moved last, and it says so before the first group.
-            <Micro className="px-[10px] pb-[8px]">Recently updated</Micro>
+            <Micro className="px-[10px] pb-[8px]">Laatst gewijzigd</Micro>
           )}
           {groups.length === 0 && (
             results.isFetching || recent.isFetching ? (
-              <Micro className="px-[10px] py-[16px]">Searching…</Micro>
+              <Micro className="px-[10px] py-[16px]">Bezig met zoeken…</Micro>
             ) : (
               <div className="px-[6px] py-[8px]">
-                <Empty title="Nothing found — try fewer words." />
+                <Empty title="Niets gevonden — probeer minder woorden." />
               </div>
             )
           )}
@@ -175,11 +175,11 @@ export function CommandPalette() {
         </div>
         <div className="flex items-center justify-between gap-4 border-t border-hairline px-[18px] py-[12px]">
           <span className="font-mono text-[10px] tracking-[0.12em] text-ink-dim">
-            ↑↓ to move · Enter to open · ⇧Enter for all · Esc to close
+            ↑↓ bewegen · Enter openen · ⇧Enter alles · Esc sluiten
           </span>
           <button
             className="shrink-0 font-mono text-[10px] tracking-[0.16em] uppercase text-signal transition-colors hover:text-signal-link"
-            onClick={seeAll}>see all results →</button>
+            onClick={seeAll}>alle resultaten →</button>
         </div>
       </Panel>
     </div>

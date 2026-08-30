@@ -26,6 +26,6 @@ export function EnablePush() {
         userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key.data!) });
       const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
       subscribe.mutate(json);
-    }}>🔔 Notify me when something needs review</Button>
+    }}>🔔 Waarschuw me als er iets te beoordelen is</Button>
   );
 }

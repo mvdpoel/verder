@@ -118,9 +118,9 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
   return (
     <>
       <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
-        <Label as="h2">Parties</Label>
+        <Label as="h2">Partijen</Label>
         {parties.length === 0
-          ? <p className="text-[13px] font-light text-ink-label">No parties linked yet.</p>
+          ? <p className="text-[13px] font-light text-ink-label">Nog geen partijen gekoppeld.</p>
           : (
             <ul>
               {parties.map((p) => (
@@ -134,7 +134,7 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
                     {p.note && <span className="text-ink-mute"> — {p.note}</span>}
                   </span>
                   <RemoveButton
-                    label={`Remove ${p.name} as ${p.role}`}
+                    label={`${p.name} als ${p.role} verwijderen`}
                     disabled={unlinkParty.isPending}
                     onClick={() => unlinkParty.mutate({ debtId, partyId: p.partyId, role: p.role })}
                   />
@@ -143,34 +143,34 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
             </ul>
           )}
         <div className="flex flex-wrap items-end gap-[14px]">
-          <Field label="Party" htmlFor="parties-party" className="min-w-[180px] grow">
+          <Field label="Partij" htmlFor="parties-party" className="min-w-[180px] grow">
             <Select id="parties-party" value={newPartyId}
               onChange={(e) => setNewPartyId(e.target.value)}>
-              <option value="">Choose…</option>
+              <option value="">Kies…</option>
               {allParties.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Field>
-          <Field label="Role" htmlFor="parties-role" className="min-w-[130px]">
+          <Field label="Rol" htmlFor="parties-role" className="min-w-[130px]">
             <Select id="parties-role" value={newRole}
               onChange={(e) => setNewRole(e.target.value as DebtPartyRole)}>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
           </Field>
-          <Field label="Note" htmlFor="parties-note" className="min-w-[160px] grow">
-            <Input id="parties-note" placeholder="optional"
+          <Field label="Notitie" htmlFor="parties-note" className="min-w-[160px] grow">
+            <Input id="parties-note" placeholder="optioneel"
               value={newNote} onChange={(e) => setNewNote(e.target.value)} />
           </Field>
           <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={!newPartyId || linkParty.isPending} onClick={addParty}>
-            Add
+            Toevoegen
           </Button>
         </div>
       </Panel>
 
       <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
-        <Label as="h2">Paperwork</Label>
+        <Label as="h2">Papieren</Label>
         {debtDocuments.length === 0
-          ? <p className="text-[13px] font-light text-ink-label">No documents filed against this debt yet.</p>
+          ? <p className="text-[13px] font-light text-ink-label">Nog geen documenten aan deze vordering gekoppeld.</p>
           : (
             <ul>
               {debtDocuments.map((d) => (
@@ -181,7 +181,7 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
                     {d.title}
                   </TextLink>
                   <RemoveButton
-                    label={`Unlink ${d.title}`}
+                    label={`${d.title} ontkoppelen`}
                     disabled={unlinkDocument.isPending}
                     onClick={() => unlinkDocument.mutate({ debtId, documentId: d.id })}
                   />
@@ -193,13 +193,13 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
           <Field label="Document" htmlFor="parties-document" className="min-w-[200px] grow">
             <Select id="parties-document" value={newDocId}
               onChange={(e) => setNewDocId(e.target.value)}>
-              <option value="">Choose…</option>
+              <option value="">Kies…</option>
               {availableDocuments.map((d) => <option key={d.id} value={d.id}>{d.effectiveTitle}</option>)}
             </Select>
           </Field>
           <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={!newDocId || linkDocument.isPending} onClick={addDocument}>
-            Link
+            Koppelen
           </Button>
         </div>
       </Panel>
@@ -211,18 +211,18 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
         {reportedToVerderAt
           ? (
             <Micro>
-              Reported to Verder on {new Date(reportedToVerderAt).toLocaleDateString("nl-NL")}
+              Gemeld bij Verder op {new Date(reportedToVerderAt).toLocaleDateString("nl-NL")}
               {reportedViaEntryId && (
-                <> · <TextLink href={`/logbook/${reportedViaEntryId}`}>see the entry</TextLink></>
+                <> · <TextLink href={`/logbook/${reportedViaEntryId}`}>bekijk de regel</TextLink></>
               )}
             </Micro>
           )
-          : <Micro>Not reported to Verder yet.</Micro>}
+          : <Micro>Nog niet gemeld bij Verder.</Micro>}
         <div className="flex flex-wrap items-end gap-[14px]">
-          <Field label="Via entry (optional)" htmlFor="parties-entry" className="min-w-[240px] grow">
+          <Field label="Via logboekregel (optioneel)" htmlFor="parties-entry" className="min-w-[240px] grow">
             <Select id="parties-entry" value={reportEntryId}
               onChange={(e) => setReportEntryId(e.target.value)}>
-              <option value="">No specific entry</option>
+              <option value="">Geen specifieke regel</option>
               {entries.data?.map((e) => (
                 <option key={e.id} value={e.id}>
                   {new Date(e.occurredAt).toLocaleDateString("nl-NL")} — {e.summary}
@@ -232,12 +232,12 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
           </Field>
           <Button variant="ghost" size="sm" className="mb-[1px]"
             disabled={setReported.isPending} onClick={markReported}>
-            {reportedToVerderAt ? "Update reported date" : "Mark reported today"}
+            {reportedToVerderAt ? "Datum bijwerken" : "Vandaag gemeld"}
           </Button>
           {reportedToVerderAt && (
             <Button variant="quiet" size="sm" className="mb-[1px]"
               disabled={setReported.isPending} onClick={clearReported}>
-              Clear
+              Wissen
             </Button>
           )}
         </div>

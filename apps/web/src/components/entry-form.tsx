@@ -13,6 +13,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { trpc } from "@/lib/trpc-client";
+import { CHANNEL_LABEL, CLARITY_LABEL, DIRECTION_LABEL } from "@/lib/entry-labels";
 
 const CHANNELS = ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"] as const;
 
@@ -58,7 +59,7 @@ export function EntryForm({ correctId }: { correctId?: string }) {
     <div className="flex max-w-3xl flex-col gap-5">
       <div className="flex flex-col gap-[10px]">
         <PageTitle className="leading-none">
-          {correctId ? "Correct an entry" : "Log a contact moment"}
+          {correctId ? "Een regel corrigeren" : "Contactmoment vastleggen"}
         </PageTitle>
         {/*
           A correction never overwrites the original, and saying so is not a
@@ -68,35 +69,37 @@ export function EntryForm({ correctId }: { correctId?: string }) {
         */}
         {correctId && (
           <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
-            The original stays on record; this saves a linked correction.
+            Het origineel blijft staan; dit slaat een gekoppelde correctie op.
           </p>
         )}
       </div>
 
       <Panel lit className="flex flex-col gap-5 p-[26px]">
         <div className="grid gap-5 sm:grid-cols-3">
-          <Field label="When" htmlFor={`${uid}-when`}>
+          <Field label="Wanneer" htmlFor={`${uid}-when`}>
             <Input id={`${uid}-when`} type="datetime-local" value={form.occurredAt}
               onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} />
           </Field>
-          <Field label="Channel" htmlFor={`${uid}-channel`}>
+          <Field label="Kanaal" htmlFor={`${uid}-channel`}>
             <Select id={`${uid}-channel`} value={form.channel}
               onChange={(e) => setForm({ ...form, channel: e.target.value as typeof form.channel })}>
-              {CHANNELS.map((c) => <option key={c}>{c}</option>)}
+              {CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c] ?? c}</option>)}
             </Select>
           </Field>
-          <Field label="Direction" htmlFor={`${uid}-direction`}>
+          <Field label="Richting" htmlFor={`${uid}-direction`}>
             <Select id={`${uid}-direction`} value={form.direction}
               onChange={(e) => setForm({ ...form, direction: e.target.value as typeof form.direction })}>
-              <option>inbound</option><option>outbound</option><option>internal</option>
+              {(["inbound", "outbound", "internal"] as const).map((d) => (
+                <option key={d} value={d}>{DIRECTION_LABEL[d]}</option>
+              ))}
             </Select>
           </Field>
         </div>
-        <Field label="What happened (short)" htmlFor={`${uid}-summary`}>
+        <Field label="Wat is er gebeurd (kort)" htmlFor={`${uid}-summary`}>
           <Input id={`${uid}-summary`} value={form.summary}
             onChange={(e) => setForm({ ...form, summary: e.target.value })} />
         </Field>
-        <Field label="Details" htmlFor={`${uid}-details`}>
+        <Field label="Toelichting" htmlFor={`${uid}-details`}>
           <Textarea id={`${uid}-details`} rows={5} value={form.details}
             onChange={(e) => setForm({ ...form, details: e.target.value })} />
         </Field>
@@ -104,7 +107,7 @@ export function EntryForm({ correctId }: { correctId?: string }) {
 
       <Panel className="p-[26px]">
         <fieldset>
-          <Label as="legend">Who was involved</Label>
+          <Label as="legend">Wie erbij waren</Label>
           <div className="mt-4 grid gap-x-6 gap-y-[11px] sm:grid-cols-2 lg:grid-cols-3">
             {parties.data?.map((p) => (
               <Checkbox key={p.id} label={p.name}
@@ -119,7 +122,7 @@ export function EntryForm({ correctId }: { correctId?: string }) {
               {/* The placeholder is the only name this control has ever had, so
                   it is also its accessible name — a filled-in field with no
                   label is unreadable months later. */}
-              <Input placeholder="Add a person or organization" aria-label="Add a person or organization"
+              <Input placeholder="Persoon of organisatie toevoegen" aria-label="Persoon of organisatie toevoegen"
                 value={newParty} onChange={(e) => setNewParty(e.target.value)} />
             </div>
             {/* A contact person is a person whose parent is the organization. This
@@ -129,8 +132,8 @@ export function EntryForm({ correctId }: { correctId?: string }) {
             <div className="sm:w-[230px] sm:shrink-0">
               <Select value={newPartyParentId}
                 onChange={(e) => setNewPartyParentId(e.target.value)}
-                aria-label="Parent organisation">
-                <option value="">No parent organisation</option>
+                aria-label="Onderdeel van organisatie">
+                <option value="">Geen bovenliggende organisatie</option>
                 {organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </Select>
             </div>
@@ -138,31 +141,33 @@ export function EntryForm({ correctId }: { correctId?: string }) {
               onClick={() => { if (newParty) {
                 createParty.mutate({ kind: "person", name: newParty, parentPartyId: newPartyParentId || null });
                 setNewParty(""); setNewPartyParentId("");
-              } }}>Add</Button>
+              } }}>Toevoegen</Button>
           </div>
         </fieldset>
       </Panel>
 
       <Panel className="p-[26px]">
         <fieldset>
-          <Label as="legend">Agreed actions</Label>
+          <Label as="legend">Afgesproken acties</Label>
           {form.actionItems.map((a, i) => (
             <div key={i} className="mt-4 flex flex-col gap-[10px] sm:flex-row sm:items-center">
               <div className="sm:grow">
-                <Input aria-label="Agreed action" value={a.description}
+                <Input aria-label="Afgesproken actie" value={a.description}
                   onChange={(e) => setForm({ ...form, actionItems: form.actionItems.map((x, j) => j === i ? { ...x, description: e.target.value } : x) })} />
               </div>
               <div className="sm:w-[230px] sm:shrink-0">
-                <Select aria-label="Clarity" value={a.clarity}
+                <Select aria-label="Duidelijkheid" value={a.clarity}
                   onChange={(e) => setForm({ ...form, actionItems: form.actionItems.map((x, j) => j === i ? { ...x, clarity: e.target.value as typeof a.clarity } : x) })}>
-                  <option>clear</option><option>ambiguous</option><option>already-provided</option>
+                  {(["clear", "ambiguous", "already-provided"] as const).map((c) => (
+                    <option key={c} value={c}>{CLARITY_LABEL[c]}</option>
+                  ))}
                 </Select>
               </div>
             </div>
           ))}
           <div className="mt-4">
             <Button variant="ghost" size="sm"
-              onClick={() => setForm({ ...form, actionItems: [...form.actionItems, { description: "", clarity: "clear" }] })}>+ action</Button>
+              onClick={() => setForm({ ...form, actionItems: [...form.actionItems, { description: "", clarity: "clear" }] })}>+ actie</Button>
           </div>
         </fieldset>
       </Panel>
@@ -171,7 +176,7 @@ export function EntryForm({ correctId }: { correctId?: string }) {
       <div>
         <Button variant="primary"
           disabled={!form.summary || create.isPending || correct.isPending} onClick={submit}>
-          {correctId ? "Save correction" : "Save to the record"}
+          {correctId ? "Correctie opslaan" : "Vastleggen in het dossier"}
         </Button>
       </div>
     </div>

@@ -47,5 +47,5 @@ export function rowCountLabel(shown: number, truncated: boolean): string | null 
   if (!truncated) return null;
   // Deliberately not "of N". The reader stops at the cap, so nothing has
   // counted the rest — and counting would mean parsing the whole workbook.
-  return `Showing the first ${shown} rows`;
+  return `De eerste ${shown} regels`;
 }

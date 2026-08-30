@@ -3,9 +3,9 @@ import { Chip, TextLink } from "@/components/ui";
 // Entity type → the screen that shows that record. Types with no detail screen
 // (raw emails, parties) render as plain text rather than a dead link.
 export const ENTITY_LABEL: Record<string, string> = {
-  document: "Document", entry: "Logbook entry", email: "Email",
-  financial_item: "Subscription", debt: "Debt", task: "Task",
-  timeline_event: "Key event", party: "Party",
+  document: "Document", entry: "Logboekregel", email: "E-mail",
+  financial_item: "Post", debt: "Vordering", task: "Taak",
+  timeline_event: "Gebeurtenis", party: "Partij",
 };
 
 export function hrefForEntity(entityType: string, entityId: string): string | null {
@@ -43,7 +43,7 @@ export function RetrievedRefs({ refs }: { refs: unknown }) {
   return (
     <details>
       <summary className="cursor-pointer font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim transition-colors hover:text-signal">
-        The model saw these ({refs.length})
+        Dit lag voor het model ({refs.length})
       </summary>
       <ul className="mt-[12px] flex flex-col gap-[11px]">
         {refs.map((r) => {

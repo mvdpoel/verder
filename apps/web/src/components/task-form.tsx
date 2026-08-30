@@ -104,43 +104,43 @@ export function TaskForm({ task, options }: { task?: TaskFacts; options: TaskFor
      */
     <Panel lit={!task} className="p-[26px]">
       <div className="flex flex-col gap-[18px]">
-        <PanelHead labelAs="h2" label={task ? "The facts" : "New task"} />
+        <PanelHead labelAs="h2" label={task ? "De gegevens" : "Nieuwe taak"} />
         {!task && (
           <p className="text-[13.5px] font-light leading-relaxed text-ink-mute">
-            One clear next step — writing it down is half the work.
+            Eén duidelijke volgende stap — opschrijven is het halve werk.
           </p>
         )}
-        <Field label="Title" htmlFor={`${uid}-title`}>
+        <Field label="Titel" htmlFor={`${uid}-title`}>
           <Input id={`${uid}-title`}
-            placeholder="e.g. Send copy of passport to VerderGroep"
+            placeholder="bijv. Kopie paspoort naar VerderGroep sturen"
             value={form.title} onChange={(e) => set({ title: e.target.value })} />
         </Field>
-        <Field label="Details (optional)" htmlFor={`${uid}-details`}>
+        <Field label="Toelichting (optioneel)" htmlFor={`${uid}-details`}>
           <Textarea id={`${uid}-details`} rows={3}
-            placeholder="anything future-you needs to actually do this"
+            placeholder="alles wat je later nodig hebt om dit echt te doen"
             value={form.details} onChange={(e) => set({ details: e.target.value })} />
         </Field>
         <div className="grid gap-[18px] sm:grid-cols-2">
-          <Field label="Due date (optional)" htmlFor={`${uid}-due`}>
+          <Field label="Uiterlijk op (optioneel)" htmlFor={`${uid}-due`}>
             <Input id={`${uid}-due`} type="date"
               value={form.dueAt} onChange={(e) => set({ dueAt: e.target.value })} />
           </Field>
-          <Field label="Who's on it" htmlFor={`${uid}-assignee`}>
+          <Field label="Wie doet het" htmlFor={`${uid}-assignee`}>
             <Select id={`${uid}-assignee`} value={form.assigneePartyId}
               onChange={(e) => set({ assigneePartyId: e.target.value })}>
-              <option value="">— unassigned —</option>
+              <option value="">— nog niemand —</option>
               {options.parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Field>
         </div>
         <div className="grid gap-[18px] sm:grid-cols-2">
-          {linkSelect("Logbook entry (optional)", form.entryId, "entryId",
+          {linkSelect("Logboekregel (optioneel)", form.entryId, "entryId",
             options.entries.map((e) => ({ id: e.id, text: e.label })))}
-          {linkSelect("Registry item (optional)", form.financialItemId, "financialItemId",
+          {linkSelect("Post in het register (optioneel)", form.financialItemId, "financialItemId",
             options.items.map((i) => ({ id: i.id, text: i.name })))}
-          {linkSelect("Debt (optional)", form.debtId, "debtId",
+          {linkSelect("Vordering (optioneel)", form.debtId, "debtId",
             options.debts.map((d) => ({ id: d.id, text: d.creditorName })))}
-          {linkSelect("Document (optional)", form.documentId, "documentId",
+          {linkSelect("Document (optioneel)", form.documentId, "documentId",
             options.documents.map((d) => ({ id: d.id, text: d.title })))}
         </div>
         {/* A form that will not submit is waiting on Martin — the one thing amber says. */}
@@ -152,7 +152,7 @@ export function TaskForm({ task, options }: { task?: TaskFacts; options: TaskFor
         <div>
           <Button variant={task ? "ghost" : "primary"}
             disabled={!form.title.trim() || pending} onClick={submit}>
-            {task ? "Save facts" : "Add task"}
+            {task ? "Gegevens opslaan" : "Taak toevoegen"}
           </Button>
         </div>
       </div>

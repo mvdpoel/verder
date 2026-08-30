@@ -34,7 +34,7 @@ describe("rowCountLabel", () => {
     // Not "of N": the reader stops at the cap, so nobody has counted the rest.
     // Printing a total would mean parsing the whole workbook — the work the
     // cap exists to refuse.
-    expect(rowCountLabel(200, true)).toBe("Showing the first 200 rows");
+    expect(rowCountLabel(200, true)).toBe("De eerste 200 regels");
   });
 });
 

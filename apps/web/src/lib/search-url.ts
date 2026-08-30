@@ -96,5 +96,8 @@ export function toQueryInput(p: ParsedSearch): {
  */
 export function semanticNotice(result: { semanticAvailable: boolean }): string | null {
   if (result.semanticAvailable) return null;
-  return "Semantic search is unavailable right now — the meaning-based half of the index could not be reached. The keyword results below are complete and nothing is lost; try the same search again once the model host is back.";
+  return "Zoeken op betekenis kan nu even niet — die helft van de index is "
+    + "niet bereikbaar. De resultaten op woord hieronder zijn compleet en er is "
+    + "niets kwijt; probeer dezelfde zoekopdracht opnieuw zodra het model weer "
+    + "draait.";
 }

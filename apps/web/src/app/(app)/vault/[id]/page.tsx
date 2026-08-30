@@ -1,4 +1,5 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { orNotFound } from "@/lib/not-found";
 import { DocumentMetaForm } from "@/components/document-meta-form";
 import { DocumentPreview } from "@/components/document-preview";
 import { PageTitle, Panel } from "@/components/ui";
@@ -6,8 +7,13 @@ import { PageTitle, Panel } from "@/components/ui";
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caller = await serverCaller();
-  const d = await caller.documents.get({ id });
-  const entries = await caller.entries.list({ limit: 100 });
+  // In parallel: the entry list feeds the "hoort bij" picker and does not
+  // depend on the document. Sequentially these were two round trips deep, and
+  // with no loading state that is two waits on a blank screen.
+  const [d, entries] = await Promise.all([
+    orNotFound(caller.documents.get({ id })),
+    caller.entries.list({ limit: 100 }),
+  ]);
   return (
     <div className="flex flex-col gap-7">
       {/*

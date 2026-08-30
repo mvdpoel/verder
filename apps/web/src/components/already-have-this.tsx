@@ -31,22 +31,22 @@ export function AlreadyHaveThis({ suggestionId, request, selected, onToggle }: {
   // not amber: the card can still be approved and linked later.
   if (q.isError) return (
     <Notice tone="signal">
-      Could not check the vault right now — you can still approve and link later.
+      De kluis is nu even niet te doorzoeken — je kunt dit gewoon goedkeuren en later koppelen.
     </Notice>
   );
   if (!q.data) return (
     <p className="font-mono text-[10px] tracking-[0.14em] text-ink-dim">
-      Checking the vault for “{request}”…
+      Bezig de kluis te doorzoeken op “{request}”…
     </p>
   );
   if (q.data.documents.length === 0) return (
     <p className="text-[13px] font-light text-ink-label">
-      Nothing in the vault looks like “{request}” yet.
+      Nog niets in de kluis dat op “{request}” lijkt.
     </p>
   );
   return (
     <div className="flex flex-col gap-[13px] rounded-panel border border-edge bg-void/60 p-[18px]">
-      <Label className="text-signal">You may already have this 📎</Label>
+      <Label className="text-signal">Misschien heb je dit al 📎</Label>
       <ul className="flex flex-col gap-[11px]">
         {q.data.documents.map((d) => (
           <li key={d.documentId}>
@@ -73,7 +73,7 @@ export function AlreadyHaveThis({ suggestionId, request, selected, onToggle }: {
         ))}
       </ul>
       <p className="text-xs font-light text-ink-label">
-        Ticked documents are linked to the record when you approve this card.
+        Aangevinkte documenten worden aan het dossier gekoppeld zodra je dit voorstel goedkeurt.
       </p>
     </div>
   );

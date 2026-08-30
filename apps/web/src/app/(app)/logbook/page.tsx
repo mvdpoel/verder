@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { buttonClass, Empty, PageTitle, Panel, Row } from "@/components/ui";
 import { serverCaller } from "@/lib/trpc-server";
+import { CHANNEL_LABEL, DIRECTION_LABEL } from "@/lib/entry-labels";
 
 export default async function LogbookPage() {
   const caller = await serverCaller();
@@ -9,14 +10,14 @@ export default async function LogbookPage() {
     <div>
       <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
         <PageTitle className="leading-none">
-          Logbook
+          Logboek
         </PageTitle>
         <Link href="/logbook/new" className={buttonClass("primary")}>
-          + Log a contact moment
+          + Contactmoment vastleggen
         </Link>
       </div>
       {entries.length === 0 ? (
-        <Empty title="Nothing logged yet — your first entry is one click away. 💪" />
+        <Empty title="Nog niets vastgelegd — je eerste regel is één klik weg. 💪" />
       ) : (
         <Panel lit className="px-[26px] py-[6px]">
           {entries.map((e) => (
@@ -35,8 +36,8 @@ export default async function LogbookPage() {
                   {e.summary}
                 </Link>
               }
-              kicker={`${e.channel} · ${e.direction} · ${new Date(e.occurredAt).toLocaleString("nl-NL")}`}
-              meta={e.supersedesId ? "correction" : undefined}
+              kicker={`${CHANNEL_LABEL[e.channel] ?? e.channel} · ${DIRECTION_LABEL[e.direction] ?? e.direction} · ${new Date(e.occurredAt).toLocaleString("nl-NL")}`}
+              meta={e.supersedesId ? "correctie" : undefined}
             />
           ))}
         </Panel>

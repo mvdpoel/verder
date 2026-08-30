@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { discardAction } from "./document-meta-form-actions";
 
 describe("discardAction", () => {
-  it("offers Discard on a document still in the inbox", () => {
-    expect(discardAction("inbox", "inbox")).toEqual({ label: "Discard", next: "discarded" });
+  it("offers Wegleggen on a document still in the inbox", () => {
+    expect(discardAction("inbox", "inbox")).toEqual({ label: "Wegleggen", next: "discarded" });
   });
 
-  it("offers Discard on a filed document too", () => {
-    expect(discardAction("filed", "inbox")).toEqual({ label: "Discard", next: "discarded" });
+  it("offers Wegleggen on a filed document too", () => {
+    expect(discardAction("filed", "inbox")).toEqual({ label: "Wegleggen", next: "discarded" });
   });
 
-  it("offers Undo discard on an already-discarded document", () => {
+  it("offers Terugzetten on an already-discarded document", () => {
     expect(discardAction("discarded", "inbox"))
-      .toEqual({ label: "Undo discard", next: "inbox" });
+      .toEqual({ label: "Terugzetten", next: "inbox" });
   });
 
   it("undoes back to FILED when that is what the document was before", () => {
@@ -23,13 +23,13 @@ describe("discardAction", () => {
     // docType must ride along across a reversible action; the filed state, the
     // one thing the status column exists to hold, gets the same treatment.
     expect(discardAction("discarded", "filed"))
-      .toEqual({ label: "Undo discard", next: "filed" });
+      .toEqual({ label: "Terugzetten", next: "filed" });
   });
 
   it("never undoes into another discard", () => {
     // Defensive: a history ending discarded → discarded would otherwise offer
     // an Undo button that changes nothing.
     expect(discardAction("discarded", "discarded"))
-      .toEqual({ label: "Undo discard", next: "inbox" });
+      .toEqual({ label: "Terugzetten", next: "inbox" });
   });
 });

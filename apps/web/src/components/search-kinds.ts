@@ -18,14 +18,14 @@ import type { ChipTone } from "./ui/chip";
 
 export const ENTITY_LABEL: Record<SearchEntityType, string> = {
   document: "Document",
-  entry: "Logbook",
+  entry: "Logboek",
   email: "E-mail",
-  financial_item: "Registry item",
-  debt: "Debt",
-  task: "Task",
+  financial_item: "Post",
+  debt: "Vordering",
+  task: "Taak",
   track: "Spoor",
   stop: "Halte",
-  party: "Party",
+  party: "Partij",
 };
 
 /**
@@ -54,7 +54,7 @@ export const ENTITY_BADGE: Record<SearchEntityType, ChipTone> = {
 
 // Why a result matched — the point is that Martin can see it, not guess it.
 export const MATCH_LABEL: Record<"keyword" | "semantic" | "both", string> = {
-  keyword: "keyword", semantic: "semantic", both: "keyword + semantic",
+  keyword: "op woord", semantic: "op betekenis", both: "woord + betekenis",
 };
 /**
  * The distinction worth a colour here is whether the MEANING half of the index
@@ -73,23 +73,23 @@ export const MATCH_BADGE: Record<"keyword" | "semantic" | "both", ChipTone> = {
 // Record<SearchStatus, string> means adding a status in @verder/core without a
 // label here is a compile error, not a blank <option>.
 const STATUS_LABEL: Record<SearchStatus, string> = {
-  inbox: "Document — inbox",
-  filed: "Document — filed",
-  open: "Task — open",
-  "in-progress": "Task — in progress",
-  waiting: "Task — waiting on someone",
-  done: "Task — done",
-  dropped: "Task — dropped",
-  identified: "Registry — identified (item or debt)",
-  mandatory: "Registry item — mandatory",
-  allowed: "Registry item — allowed",
-  requested: "Registry item — cancellation requested",
-  "to-cancel": "Registry item — to cancel",
-  canceled: "Registry item — canceled",
-  acknowledged: "Debt — acknowledged",
-  disputed: "Debt — disputed",
-  "in-settlement": "Debt — in settlement",
-  settled: "Debt — settled",
+  inbox: "Document — postvak",
+  filed: "Document — opgeborgen",
+  open: "Taak — open",
+  "in-progress": "Taak — mee bezig",
+  waiting: "Taak — wacht op iemand",
+  done: "Taak — klaar",
+  dropped: "Taak — laten vallen",
+  identified: "Register — geïnventariseerd (post of vordering)",
+  mandatory: "Post — noodzakelijk",
+  allowed: "Post — toegestaan",
+  requested: "Post — opzegging aangevraagd",
+  "to-cancel": "Post — op te zeggen",
+  canceled: "Post — beëindigd",
+  acknowledged: "Vordering — erkend",
+  disputed: "Vordering — betwist",
+  "in-settlement": "Vordering — in afwikkeling",
+  settled: "Vordering — afgewikkeld",
 };
 
 /** The status rail, derived from the router's own vocabulary so it can never drift. */

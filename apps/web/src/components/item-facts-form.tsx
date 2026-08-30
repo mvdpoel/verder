@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
+import { CATEGORY_LABEL } from "@/components/money-format";
+import { BILLING_CYCLE_LABEL, PAYMENT_CHANNEL_LABEL } from "@/components/registry-list";
 import { euroToCents } from "./registry-item-form";
 import {
   Button,
@@ -24,7 +26,7 @@ const CATEGORIES = ["energy", "insurance", "telecom", "streaming", "software", "
 const CYCLES = ["monthly", "quarterly", "yearly", "irregular"] as const;
 const CHANNELS = ["direct-debit", "paypal", "apple", "invoice"] as const;
 
-const AMOUNT_ERROR = "Use a plain amount like 12,50";
+const AMOUNT_ERROR = "Vul een gewoon bedrag in, zoals 12,50";
 
 /** Integer cents → "142,80" input text. Integer math only. */
 function centsToInput(cents: number): string {
@@ -88,60 +90,60 @@ export function ItemFactsForm({ item }: { item: ItemFacts }) {
 
   return (
     <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
-      <Label as="h2">The facts</Label>
-      <Field label="Name" htmlFor="facts-name">
+      <Label as="h2">De gegevens</Label>
+      <Field label="Naam" htmlFor="facts-name">
         <Input id="facts-name" value={form.name} onChange={(e) => set({ name: e.target.value })} />
       </Field>
       <div className="grid gap-[18px] sm:grid-cols-3">
-        <Field label="Category" htmlFor="facts-category">
+        <Field label="Categorie" htmlFor="facts-category">
           <Select id="facts-category" value={form.category}
             onChange={(e) => set({ category: e.target.value as typeof form.category })}>
-            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}
           </Select>
         </Field>
-        <Field label="Amount (€)" htmlFor="facts-amount" error={amountError ? AMOUNT_ERROR : undefined}>
+        <Field label="Bedrag (€)" htmlFor="facts-amount" error={amountError ? AMOUNT_ERROR : undefined}>
           <Input id="facts-amount" inputMode="decimal" className="font-mono" invalid={amountError}
             value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
         </Field>
-        <Field label="Billing cycle" htmlFor="facts-cycle">
+        <Field label="Frequentie" htmlFor="facts-cycle">
           <Select id="facts-cycle" value={form.billingCycle}
             onChange={(e) => set({ billingCycle: e.target.value as typeof form.billingCycle })}>
-            {CYCLES.map((c) => <option key={c}>{c}</option>)}
+            {CYCLES.map((c) => <option key={c} value={c}>{BILLING_CYCLE_LABEL[c] ?? c}</option>)}
           </Select>
         </Field>
       </div>
       <div className="grid gap-[18px] sm:grid-cols-3">
-        <Field label="Payment channel" htmlFor="facts-channel">
+        <Field label="Betaalwijze" htmlFor="facts-channel">
           <Select id="facts-channel" value={form.paymentChannel}
             onChange={(e) => set({ paymentChannel: e.target.value as typeof form.paymentChannel })}>
-            {CHANNELS.map((c) => <option key={c}>{c}</option>)}
+            {CHANNELS.map((c) => <option key={c} value={c}>{PAYMENT_CHANNEL_LABEL[c] ?? c}</option>)}
           </Select>
         </Field>
-        <Field label="Contract start" htmlFor="facts-start">
+        <Field label="Contract begint" htmlFor="facts-start">
           <Input id="facts-start" type="date" className="font-mono"
             value={form.contractStart} onChange={(e) => set({ contractStart: e.target.value })} />
         </Field>
-        <Field label="Contract end" htmlFor="facts-end">
+        <Field label="Contract eindigt" htmlFor="facts-end">
           <Input id="facts-end" type="date" className="font-mono"
             value={form.contractEnd} onChange={(e) => set({ contractEnd: e.target.value })} />
         </Field>
       </div>
       <div className="grid gap-[18px] sm:grid-cols-3">
-        <Field label="Notice period" htmlFor="facts-notice">
-          <Input id="facts-notice" placeholder="e.g. 1 month"
+        <Field label="Opzegtermijn" htmlFor="facts-notice">
+          <Input id="facts-notice" placeholder="bijv. 1 maand"
             value={form.noticePeriod} onChange={(e) => set({ noticePeriod: e.target.value })} />
         </Field>
-        <Field label="Cancellation via" htmlFor="facts-method">
-          <Input id="facts-method" placeholder="email, phone, letter, portal"
+        <Field label="Opzeggen via" htmlFor="facts-method">
+          <Input id="facts-method" placeholder="e-mail, telefoon, brief, portaal"
             value={form.cancellationMethod} onChange={(e) => set({ cancellationMethod: e.target.value })} />
         </Field>
-        <Field label="Account / customer nr" htmlFor="facts-account">
+        <Field label="Klant- of contractnummer" htmlFor="facts-account">
           <Input id="facts-account" className="font-mono"
             value={form.accountNumber} onChange={(e) => set({ accountNumber: e.target.value })} />
         </Field>
       </div>
-      <Field label="Cancellation details" htmlFor="facts-details">
-        <Textarea id="facts-details" rows={2} placeholder="address, portal link, what to mention…"
+      <Field label="Details voor opzeggen" htmlFor="facts-details">
+        <Textarea id="facts-details" rows={2} placeholder="adres, link naar het portaal, wat je moet vermelden…"
           value={form.cancellationDetails} onChange={(e) => set({ cancellationDetails: e.target.value })} />
       </Field>
       {update.error && (
@@ -150,7 +152,7 @@ export function ItemFactsForm({ item }: { item: ItemFacts }) {
       <div className="flex pt-1">
         <Button variant="ghost" size="sm"
           disabled={!form.name || amountCents === null || update.isPending} onClick={save}>
-          Save facts
+          Gegevens opslaan
         </Button>
       </div>
     </Panel>
@@ -201,39 +203,39 @@ export function DebtFactsForm({ debt }: { debt: DebtFacts }) {
 
   return (
     <Panel as="section" className="flex flex-col gap-[18px] p-[26px]">
-      <Label as="h2">The facts</Label>
-      <Field label="Creditor" htmlFor="debt-facts-creditor">
+      <Label as="h2">De gegevens</Label>
+      <Field label="Schuldeiser" htmlFor="debt-facts-creditor">
         <Input id="debt-facts-creditor" value={form.creditorName}
           onChange={(e) => set({ creditorName: e.target.value })} />
       </Field>
       <div className="grid gap-[18px] sm:grid-cols-3">
-        <Field label="Principal (€)" htmlFor="debt-facts-principal"
+        <Field label="Hoofdsom (€)" htmlFor="debt-facts-principal"
           error={principalOk ? undefined : AMOUNT_ERROR}>
           <Input id="debt-facts-principal" inputMode="decimal" className="font-mono"
-            placeholder="what it started as" invalid={!principalOk}
+            placeholder="waar het mee begon" invalid={!principalOk}
             value={form.principal} onChange={(e) => set({ principal: e.target.value })} />
         </Field>
         {/* An empty Claimed is a real answer — the KvK aanmaning states no
             total — so the placeholder says so rather than the field nagging. */}
-        <Field label="Claimed (€)" htmlFor="debt-facts-claimed"
+        <Field label="Gevorderd (€)" htmlFor="debt-facts-claimed"
           error={claimedOk ? undefined : AMOUNT_ERROR}>
           <Input id="debt-facts-claimed" inputMode="decimal" className="font-mono"
-            placeholder="leave empty if the notice states none" invalid={!claimedOk}
+            placeholder="laat leeg als de brief geen bedrag noemt" invalid={!claimedOk}
             value={form.claimed} onChange={(e) => set({ claimed: e.target.value })} />
         </Field>
-        <Field label="References" htmlFor="debt-facts-references">
-          <Input id="debt-facts-references" className="font-mono" placeholder="dossier / invoice nr"
+        <Field label="Kenmerk" htmlFor="debt-facts-references">
+          <Input id="debt-facts-references" className="font-mono" placeholder="dossier- of factuurnummer"
             value={form.references} onChange={(e) => set({ references: e.target.value })} />
         </Field>
       </div>
       <div className="grid gap-[18px] sm:grid-cols-3">
-        <Field label="Origin" htmlFor="debt-facts-origin">
-          <Input id="debt-facts-origin" placeholder="business / private"
+        <Field label="Herkomst" htmlFor="debt-facts-origin">
+          <Input id="debt-facts-origin" placeholder="zakelijk / privé"
             value={form.origin} onChange={(e) => set({ origin: e.target.value })} />
         </Field>
-        <Field label="Origin story" htmlFor="debt-facts-story" className="sm:col-span-2">
+        <Field label="Het verhaal erachter" htmlFor="debt-facts-story" className="sm:col-span-2">
           <Textarea id="debt-facts-story" rows={2}
-            placeholder="how this one came to be — no judgement, just the story"
+            placeholder="hoe dit is ontstaan — geen oordeel, gewoon het verhaal"
             value={form.originStory} onChange={(e) => set({ originStory: e.target.value })} />
         </Field>
       </div>
@@ -243,7 +245,7 @@ export function DebtFactsForm({ debt }: { debt: DebtFacts }) {
       <div className="flex pt-1">
         <Button variant="ghost" size="sm"
           disabled={!form.creditorName || !principalOk || !claimedOk || update.isPending} onClick={save}>
-          Save facts
+          Gegevens opslaan
         </Button>
       </div>
     </Panel>

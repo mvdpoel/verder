@@ -1,5 +1,8 @@
-import { serverCaller } from "@/lib/trpc-server";
-import { formatEuro } from "@/components/registry-list";
+import { redirect } from "next/navigation";
+import { getSessionUserId, serverCaller } from "@/lib/trpc-server";
+import {
+  BILLING_CYCLE_LABEL, DEBT_STATUS_LABEL, formatEuro,
+} from "@/components/registry-list";
 
 // VerderGroep report — formal, official register (tone rule), print-styled,
 // outside the (app) group so it renders without the app navigation.
@@ -33,25 +36,25 @@ const ITEM_STATUS_LABEL: Record<string, string> = {
   canceled: "Beëindigd",
 };
 
-const DEBT_STATUS_LABEL: Record<string, string> = {
-  identified: "Geïnventariseerd",
-  acknowledged: "Erkend",
-  disputed: "Betwist",
-  "in-settlement": "In afwikkeling",
-  settled: "Afgewikkeld",
-};
-
-const CYCLE_LABEL: Record<string, string> = {
-  monthly: "per maand",
-  quarterly: "per kwartaal",
-  yearly: "per jaar",
-  irregular: "onregelmatig",
-};
-
+// DEBT_STATUS_LABEL and the billing cycles come from components/registry-list,
+// which is where the screens read them too. This file kept its own copies, and
+// a report that names a status differently from the page it was printed from is
+// the drift that costs a conversation with the bewindvoerder.
+//
+// ITEM_STATUS_LABEL below is NOT the shared one and is deliberately its own:
+// these are the section HEADINGS of a formal document ("Geïnventariseerd — nog
+// geen besluit"), not the one-word chip a screen puts beside a row.
 const th = `border-b ${RULE} py-1 pr-4 text-left font-semibold`;
 const td = `border-b ${RULE_LIGHT} py-1 pr-4 align-top`;
 
 export default async function RegistryExportPage() {
+  // These two pages sit OUTSIDE the (app) group, so the layout's session check
+  // never runs for them and middleware.ts only proves a cookie EXISTS. An
+  // untrusted session's cookie outlives its database row by design (30-day
+  // max-age, 12-hour row), so without this the reader is handed an UNAUTHORIZED
+  // crash page instead of the login screen — on the one document in this app
+  // that gets printed and handed to somebody.
+  if (!(await getSessionUserId())) redirect("/login");
   const caller = await serverCaller();
   const report = await caller.registry.exportReport();
 
@@ -87,7 +90,7 @@ export default async function RegistryExportPage() {
           </p>
           {/* The head hash is what a reader checks this report against, so it is set in
               mono: in a proportional face 0/O and 1/l cannot be told apart by eye. */}
-          <p className={`text-xs break-all font-mono ${INK_MUTED}`}>Ledger head (SHA-256): {report.headHash ?? "—"}</p>
+          <p className={`text-xs break-all font-mono ${INK_MUTED}`}>Controlehash van het dossier (SHA-256): {report.headHash ?? "—"}</p>
         </header>
 
         {/* The tables scroll inside their own section on a narrow screen rather than
@@ -114,7 +117,7 @@ export default async function RegistryExportPage() {
                     <tr key={item.id}>
                       <td className={td}>{item.name}</td>
                       <td className={td}>{item.providerName ?? "—"}</td>
-                      <td className={td}>{formatEuro(item.amountCents)} {CYCLE_LABEL[item.billingCycle] ?? item.billingCycle}</td>
+                      <td className={td}>{formatEuro(item.amountCents)} {BILLING_CYCLE_LABEL[item.billingCycle] ?? item.billingCycle}</td>
                       <td className={td}>{formatEuro(item.monthlyCents)}</td>
                       <td className={td}>{item.latestExplanation ?? "—"}</td>
                     </tr>
@@ -183,7 +186,9 @@ export default async function RegistryExportPage() {
         </section>
 
         <footer className={`border-t ${RULE} pt-4 text-xs ${INK_MUTED}`}>
-          This report was generated from an append-only, hash-chained log. Any alteration of past entries or files is detectable via the ledger head hash above.
+          Dit overzicht is opgesteld uit een logboek dat alleen aangevuld kan worden en
+          per regel met een hash aan de vorige vastzit. Wijziging van een eerdere regel of
+          van een bijgevoegd bestand is aantoonbaar via de controlehash hierboven.
         </footer>
       </main>
     </div>

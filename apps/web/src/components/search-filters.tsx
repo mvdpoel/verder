@@ -28,12 +28,12 @@ export function SearchFilters({ parsed, parties }: {
   return (
     <Panel lit>
       <form method="get" action="/search" className="flex flex-col gap-[22px] p-[26px]">
-        <Field label="Search" htmlFor="search-q">
+        <Field label="Zoekterm" htmlFor="search-q">
           <Input id="search-q" name="q" defaultValue={parsed.q} placeholder="opzegging Ziggo" />
         </Field>
 
         <fieldset className="flex flex-col gap-[10px]">
-          <Label as="legend">Type</Label>
+          <Label as="legend">Soort</Label>
           <div className="flex flex-wrap gap-[8px]">
             {SEARCH_ENTITY_TYPES.map((t) => (
               <label key={t} className={TYPE_CHIP}>
@@ -47,28 +47,28 @@ export function SearchFilters({ parsed, parties }: {
         </fieldset>
 
         <div className="grid gap-[16px] sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="From" htmlFor="search-from">
+          <Field label="Van" htmlFor="search-from">
             <Input id="search-from" type="date" name="from" defaultValue={parsed.from} />
           </Field>
-          <Field label="To" htmlFor="search-to">
+          <Field label="Tot en met" htmlFor="search-to">
             <Input id="search-to" type="date" name="to" defaultValue={parsed.to} />
           </Field>
-          <Field label="Party" htmlFor="search-party">
+          <Field label="Partij" htmlFor="search-party">
             <Select id="search-party" name="party" defaultValue={parsed.partyId}>
-              <option value="">Anyone</option>
+              <option value="">Iedereen</option>
               {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Field>
           <Field label="Status" htmlFor="search-status">
             <Select id="search-status" name="status" defaultValue={parsed.status}>
-              <option value="">Any status</option>
+              <option value="">Elke status</option>
               {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </Select>
           </Field>
         </div>
 
         <div className="flex items-center">
-          <Button type="submit" variant="primary">Search</Button>
+          <Button type="submit" variant="primary">Zoeken</Button>
         </div>
       </form>
     </Panel>

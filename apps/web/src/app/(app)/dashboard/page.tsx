@@ -109,13 +109,19 @@ function RingValue({
 
 export default async function DashboardPage() {
   const caller = await serverCaller();
-  const stats = await caller.dashboard.stats();
-  const registry = await caller.registry.stats();
-  const taskStats = await caller.tasks.stats();
-  const clearedBlockers = await caller.registry.clearedBlockers();
-  const recent = await caller.entries.list({ limit: 5 });
+  // Six independent reads, and they used to run one after another — six full
+  // round trips, the last of them the whole case map with its evidence batched,
+  // before the landing page drew a single number. None of them depends on
+  // another, so the page now waits once instead of six times.
+  const [stats, registry, taskStats, clearedBlockers, recent, { map }] = await Promise.all([
+    caller.dashboard.stats(),
+    caller.registry.stats(),
+    caller.tasks.stats(),
+    caller.registry.clearedBlockers(),
+    caller.entries.list({ limit: 5 }),
+    caller.tracks.map(),
+  ]);
   const staleMs = 15 * 60 * 1000;
-  const { map } = await caller.tracks.map();
   // One line per open spoor: its newest stop that is not done yet, or its
   // newest stop if everything on it is done. `own[0]` can be undefined, because
   // a spoor with no haltes yet is a real state and the type should say so
@@ -145,7 +151,7 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageTitle>
-          Hi Martin 👋 — here&apos;s where things stand
+          Hoi Martin 👋 — dit is hoe het ervoor staat
         </PageTitle>
         <EnablePush />
       </div>
@@ -215,14 +221,14 @@ export default async function DashboardPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-8 lg:flex-nowrap">
             <div className="flex flex-col items-end gap-[17px]">
-              <RingValue label="overdue" value={taskStats.overdueCount} tone="attn" />
-              <RingValue label="waiting on others" value={taskStats.waitingOnOthersCount} tone="steel" />
+              <RingValue label="te laat" value={taskStats.overdueCount} tone="attn" />
+              <RingValue label="wacht op anderen" value={taskStats.waitingOnOthersCount} tone="steel" />
             </div>
             <TaskRing
               open={taskStats.openCount}
               overdue={taskStats.overdueCount}
               waiting={taskStats.waitingOnOthersCount}
-              label="tasks open"
+              label="taken open"
             />
           </div>
         </div>
@@ -235,8 +241,8 @@ export default async function DashboardPage() {
           {clearedBlockers.map((b) => (
             <Link key={b.id} href={`/registry/${b.id}`} className="block">
               <Notice tone="attn">
-                <span className="text-ink-bright">{b.name}</span> — blocker cleared, ready to decide?{" "}
-                <span className="text-ink-dim">(The note was: {b.blockerNote})</span>
+                <span className="text-ink-bright">{b.name}</span> — blokkade weg, klaar om te besluiten?{" "}
+                <span className="text-ink-dim">(De notitie was: {b.blockerNote})</span>
               </Notice>
             </Link>
           ))}
@@ -245,32 +251,35 @@ export default async function DashboardPage() {
 
       <StatRow className="grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Link href="/queue" className="grid bg-void">
-          <Stat label="to review" value={stats.pendingSuggestions} tone="signal" />
+          <Stat label="te beoordelen" value={stats.pendingSuggestions} tone="signal" />
         </Link>
         <Link href="/vault" className="grid bg-void">
-          <Stat label="documents to sort" value={stats.inboxDocs} />
+          <Stat label="te sorteren" value={stats.inboxDocs} />
         </Link>
-        <div className="grid bg-void">
-          <Stat label="open actions" value={stats.openActionItems} />
-        </div>
+        {/* A <Link> like its four neighbours. As a bare <div> it was pixel-identical
+            to them and did nothing when pressed, which reads as a broken tile
+            rather than as a deliberate exception. */}
+        <Link href="/tasks" className="grid bg-void">
+          <Stat label="open acties" value={stats.openActionItems} />
+        </Link>
         <Link href="/registry" className="grid bg-void">
           <Stat
-            label="registry items"
+            label="posten"
             value={registry.itemCount}
-            sub={`${formatEuro(registry.monthlyTotalCents)}/mo · ${registry.pendingDecisions} pending`}
+            sub={`${formatEuro(registry.monthlyTotalCents)}/mnd · ${registry.pendingDecisions} te besluiten`}
           />
         </Link>
         <Link href="/tasks" className="grid bg-void">
           <Stat
-            label="tasks open"
+            label="taken open"
             value={taskStats.openCount}
             sub={
               <>
                 <span className={cx(taskStats.overdueCount > 0 && "text-attn")}>
-                  {taskStats.overdueCount} overdue
+                  {taskStats.overdueCount} te laat
                 </span>
                 {" · "}
-                {taskStats.waitingOnOthersCount} waiting on others
+                {taskStats.waitingOnOthersCount} wacht op anderen
               </>
             }
           />
@@ -318,7 +327,7 @@ export default async function DashboardPage() {
 
           <Panel className="p-[26px]">
             <div className="flex flex-col gap-[14px]">
-              <Label as="h2">System health</Label>
+              <Label as="h2">Systeem</Label>
               <div className="flex flex-col gap-[11px]">
                 {stats.lastWorkerRuns.map((w) => {
                   const stale = Date.now() - w.ranAt.getTime() > staleMs;
@@ -339,7 +348,7 @@ export default async function DashboardPage() {
                           down ? "text-attn" : "text-ink-dim",
                         )}
                       >
-                        last ran {w.ranAt.toLocaleTimeString("nl-NL")} ({w.status})
+                        laatst {w.ranAt.toLocaleTimeString("nl-NL")} ({w.status})
                       </span>
                     </div>
                   );
@@ -348,7 +357,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <Dot state="waiting" />
                     <span className="text-[13.5px] font-light text-ink-mute">
-                      Watchers haven&apos;t reported yet.
+                      De watchers hebben zich nog niet gemeld.
                     </span>
                   </div>
                 )}
@@ -364,8 +373,15 @@ export default async function DashboardPage() {
           second, date-ordered list of stops would be the dashboard telling the
           same story twice — once without the map that gives it its meaning. */}
       <section className="flex flex-col gap-[14px]">
-        <Label as="h2">Recently logged</Label>
-        {recent.length > 0 && (
+        <Label as="h2">Laatst gelogd</Label>
+        {/* The heading used to render unconditionally over a guarded list, so a
+            dossier with no entries yet drew a title with nothing under it. */}
+        {recent.length === 0 ? (
+          <Empty title="Nog niets gelogd">
+            Leg een telefoontje, een brief of een gesprek vast — dat is waar het
+            bewijs vandaan komt.
+          </Empty>
+        ) : (
           <div className="grid gap-px bg-hairline-lit sm:grid-cols-2 lg:grid-cols-3">
             {recent.map((e) => (
               <Link

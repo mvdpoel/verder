@@ -8,39 +8,43 @@ export default async function RegistryPage({ searchParams }: {
   const { tab: tabParam } = await searchParams;
   const tab: "items" | "debts" = tabParam === "debts" ? "debts" : "items";
   const caller = await serverCaller();
-  const stats = await caller.registry.stats();
-  const items = tab === "items" ? await caller.registry.items.list() : [];
+  // Only the open tab's list is fetched, and it goes out alongside the totals
+  // rather than after them.
   // debts.list() carries its own eiser/intermediary/reported-to-Verder
   // projection, resolved server-side in one grouped query — no per-row fetch.
-  const debts = tab === "debts" ? await caller.registry.debts.list() : [];
+  const [stats, items, debts] = await Promise.all([
+    caller.registry.stats(),
+    tab === "items" ? caller.registry.items.list() : [],
+    tab === "debts" ? caller.registry.debts.list() : [],
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div className="flex min-w-0 flex-col gap-[14px]">
-          <PageTitle>Registry</PageTitle>
+          <PageTitle>Register</PageTitle>
           <p className="text-[13.5px] font-light text-ink-mute">
-            <span className="font-mono text-ink">{stats.itemCount}</span> item{stats.itemCount === 1 ? "" : "s"}
-            {" · "}<span className="font-mono text-ink">{formatEuro(stats.monthlyTotalCents)}</span>/mo total
-            {" · "}<span className="font-mono text-ink">{formatEuro(stats.toCancelMonthlyCents)}</span>/mo marked to cancel
+            <span className="font-mono text-ink">{stats.itemCount}</span> {stats.itemCount === 1 ? "post" : "posten"}
+            {" · "}<span className="font-mono text-ink">{formatEuro(stats.monthlyTotalCents)}</span>/mnd totaal
+            {" · "}<span className="font-mono text-ink">{formatEuro(stats.toCancelMonthlyCents)}</span>/mnd op te zeggen
             {/* A pending decision is one of the few things in this app that is
                 literally waiting on Martin, so the count carries the amber. */}
             {" · "}<span className={stats.pendingDecisions > 0 ? "font-mono text-attn" : "font-mono text-ink"}>
               {stats.pendingDecisions}
-            </span> decision{stats.pendingDecisions === 1 ? "" : "s"} pending
+            </span> {stats.pendingDecisions === 1 ? "besluit" : "besluiten"} te nemen
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-[10px]">
-          <Link href="/registry/new" className={buttonClass("primary")}>+ Add</Link>
-          <Link href="/registry/import" className={buttonClass("ghost")}>Import statement</Link>
-          <Link href="/registry/export" className={buttonClass("ghost")}>Export report</Link>
+          <Link href="/registry/new" className={buttonClass("primary")}>+ Post</Link>
+          <Link href="/registry/import" className={buttonClass("ghost")}>Afschrift inlezen</Link>
+          <Link href="/registry/export" className={buttonClass("ghost")}>Overzicht exporteren</Link>
         </div>
       </div>
       <Tabs
         active={tab}
         items={[
-          { key: "items", label: "Subscriptions & contracts", href: "/registry?tab=items" },
-          { key: "debts", label: "Debts", href: "/registry?tab=debts" },
+          { key: "items", label: "Abonnementen & contracten", href: "/registry?tab=items" },
+          { key: "debts", label: "Vorderingen", href: "/registry?tab=debts" },
         ]}
       />
       {tab === "items"

@@ -1,16 +1,33 @@
 import Link from "next/link";
 import { serverCaller } from "@/lib/trpc-server";
 import { UploadDrop } from "@/components/upload-drop";
-import { Label, PageTitle, Panel, Row, type DotState } from "@/components/ui";
+import { Empty, Label, Micro, PageTitle, Panel, Row, type DotState } from "@/components/ui";
+
+/**
+ * One page of documents per section.
+ *
+ * The lists are capped and the HEADINGS ARE NOT: they count with
+ * `documents.counts`, which asks the database rather than measuring the page it
+ * was just handed. Before this, "Postvak — 100 te sorteren" was what a vault of
+ * 100 documents and a vault of 1000 both said, and the missing 900 were not
+ * mentioned anywhere on the screen.
+ */
+const VAULT_PAGE = 100;
 
 export default async function VaultPage() {
   const caller = await serverCaller();
-  const inbox = await caller.documents.list({ status: "inbox", limit: 100 });
-  const filed = await caller.documents.list({ status: "filed", limit: 100 });
-  // The way back from a mistake. Without a surface that lists them, a document
-  // discarded in error is reachable only by typing its UUID — the Undo button
-  // exists but is unreachable for anything Martin cannot already name.
-  const discarded = await caller.documents.list({ status: "discarded", limit: 100 });
+  // Four independent reads. They used to run one after another, so the page
+  // waited on four full round trips before it drew anything at all.
+  const [inbox, filed, discarded, counts] = await Promise.all([
+    caller.documents.list({ status: "inbox", limit: VAULT_PAGE }),
+    caller.documents.list({ status: "filed", limit: VAULT_PAGE }),
+    // The way back from a mistake. Without a surface that lists them, a document
+    // discarded in error is reachable only by typing its UUID — the Undo button
+    // exists but is unreachable for anything Martin cannot already name.
+    caller.documents.list({ status: "discarded", limit: VAULT_PAGE }),
+    caller.documents.counts(),
+  ]);
+
   /**
    * One document.
    *
@@ -21,7 +38,7 @@ export default async function VaultPage() {
    *
    * The dot follows the app's legend and deliberately never turns amber: a
    * document in the inbox is a stop still running (cyan ring), not a deadline —
-   * the heading already says "no rush".
+   * the heading already says there is no rush.
    */
   const DocRow = ({ d, state }: { d: (typeof inbox)[number]; state: DotState }) => (
     <Row
@@ -38,23 +55,57 @@ export default async function VaultPage() {
     />
   );
 
+  /**
+   * Said out loud whenever a section shows fewer documents than it has.
+   *
+   * The alternative — a list that simply stops — is the one thing a vault may
+   * never do: its entire promise is that nothing goes missing, and a silent
+   * truncation is indistinguishable from a document that was never filed.
+   */
+  const Truncated = ({ shown, total }: { shown: number; total: number }) =>
+    total > shown ? (
+      <Micro className="mt-[10px]">
+        de {shown} nieuwste van {total} — zoek de rest via ⌘K of{" "}
+        <Link href="/search" className="text-signal transition-colors hover:text-signal-link">
+          zoeken
+        </Link>
+      </Micro>
+    ) : null;
+
   return (
     <div className="flex flex-col gap-8">
-      <PageTitle>Vault</PageTitle>
+      <PageTitle>Kluis</PageTitle>
       <UploadDrop />
       <Panel lit className="p-[26px]">
-        <Label as="h2">Inbox — {inbox.length ? `${inbox.length} to sort, no rush` : "all sorted, nice work ✨"}</Label>
-        <ul className="mt-[10px]">
-          {inbox.map((d) => <DocRow key={d.id} d={d} state="open" />)}
-        </ul>
+        <Label as="h2">
+          Postvak — {counts.inbox ? `${counts.inbox} te sorteren, geen haast` : "alles gesorteerd, netjes gedaan ✨"}
+        </Label>
+        {inbox.length > 0 && (
+          <ul className="mt-[10px]">
+            {inbox.map((d) => <DocRow key={d.id} d={d} state="open" />)}
+          </ul>
+        )}
+        <Truncated shown={inbox.length} total={counts.inbox} />
       </Panel>
       <Panel className="p-[26px]">
-        <Label as="h2">Filed documents</Label>
-        <ul className="mt-[10px]">
-          {filed.map((d) => <DocRow key={d.id} d={d} state="done" />)}
-        </ul>
+        <Label as="h2">Opgeborgen — {counts.filed}</Label>
+        {/* This had no empty state at all: a fresh dossier drew the heading over
+            nothing, which reads as a list that failed to load. */}
+        {filed.length === 0 ? (
+          <div className="mt-[14px]">
+            <Empty title="Nog niets opgeborgen">
+              Zodra je een document uit het postvak een naam en een soort geeft,
+              staat het hier.
+            </Empty>
+          </div>
+        ) : (
+          <ul className="mt-[10px]">
+            {filed.map((d) => <DocRow key={d.id} d={d} state="done" />)}
+          </ul>
+        )}
+        <Truncated shown={filed.length} total={counts.filed} />
       </Panel>
-      {discarded.length > 0 && (
+      {counts.discarded > 0 && (
         <Panel className="p-[26px]">
           {/*
             Collapsed, but never hidden: this section is the only route back to a
@@ -77,14 +128,15 @@ export default async function VaultPage() {
               >
                 <path d="M9 5l7 7-7 7" />
               </svg>
-              Discarded — {discarded.length} kept in the vault, hidden everywhere else
+              Weggelegd — {counts.discarded} blijven in de kluis, verder overal verborgen
             </summary>
             <p className="mt-[14px] text-[13px] font-light leading-relaxed text-ink-mute">
-              Nothing here was deleted. Open one to undo the discard.
+              Er is hier niets verwijderd. Open er een om het terug te zetten.
             </p>
             <ul className="mt-[6px]">
               {discarded.map((d) => <DocRow key={d.id} d={d} state="waiting" />)}
             </ul>
+            <Truncated shown={discarded.length} total={counts.discarded} />
           </details>
         </Panel>
       )}

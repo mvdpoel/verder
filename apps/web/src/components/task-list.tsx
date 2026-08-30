@@ -35,6 +35,22 @@ const TASK_STATUS_DOT: Record<string, DotState> = {
   dropped: "waiting",
 };
 
+/**
+ * The status in Dutch. The chips printed the database identifier itself —
+ * "in-progress", "dropped" — on screens that are otherwise Dutch. Exported so
+ * the task form's own dropdown reads the same words the rows do.
+ */
+export const TASK_STATUS_LABEL: Record<string, string> = {
+  open: "open",
+  "in-progress": "mee bezig",
+  waiting: "wacht op iemand",
+  done: "klaar",
+  // "Laten vallen" and not "geannuleerd": the task was let go, not cancelled by
+  // someone else, and the difference matters in a dossier that records who did
+  // what.
+  dropped: "laten vallen",
+};
+
 /** Tones for the status word itself — never amber, the dot already carries that. */
 const TASK_STATUS_CHIP: Record<string, ChipTone> = {
   open: "mute",
@@ -51,7 +67,7 @@ export function TaskStatusBadge({ status }: { status: string }) {
     <Chip
       tone={TASK_STATUS_CHIP[status] ?? "mute"}
       className={status === "dropped" ? "line-through" : undefined}>
-      {status}
+      {TASK_STATUS_LABEL[status] ?? status}
     </Chip>
   );
 }
@@ -74,10 +90,10 @@ export type TaskRow = {
  */
 function TaskLinkIcons({ task }: { task: TaskRow }) {
   const links: [string, string][] = [];
-  if (task.entryId) links.push(["entry", `/logbook/${task.entryId}`]);
-  if (task.financialItemId) links.push(["item", `/registry/${task.financialItemId}`]);
-  if (task.debtId) links.push(["debt", `/registry/debts/${task.debtId}`]);
-  if (task.documentId) links.push(["doc", `/vault/${task.documentId}`]);
+  if (task.entryId) links.push(["logboek", `/logbook/${task.entryId}`]);
+  if (task.financialItemId) links.push(["post", `/registry/${task.financialItemId}`]);
+  if (task.debtId) links.push(["vordering", `/registry/debts/${task.debtId}`]);
+  if (task.documentId) links.push(["document", `/vault/${task.documentId}`]);
   if (links.length === 0) return null;
   return (
     <span className="flex gap-1">
@@ -103,8 +119,8 @@ function dueMeta(task: TaskRow): { text: string; tone: "dim" | "attn" } | null {
   const overdue = OPEN_SET.includes(task.effectiveStatus) && due.getTime() < Date.now();
   const date = due.toLocaleDateString("nl-NL");
   return overdue
-    ? { text: `was due ${date}`, tone: "attn" }
-    : { text: `due ${date}`, tone: "dim" };
+    ? { text: `moest ${date} klaar zijn`, tone: "attn" }
+    : { text: `vóór ${date}`, tone: "dim" };
 }
 
 /**
@@ -119,7 +135,7 @@ function taskDot(task: TaskRow, due: ReturnType<typeof dueMeta>): DotState {
 
 export function TaskList({ tasks }: { tasks: TaskRow[] }) {
   if (tasks.length === 0) {
-    return <Empty title={"No tasks here — that's a good thing."} />;
+    return <Empty title="Hier staan geen taken — dat is goed nieuws." />;
   }
   return (
     // `Row as="li"` so the rows are real siblings inside a real list: a screen
@@ -167,7 +183,7 @@ export function TaskStatusTimeline({ changes }: { changes: TaskStatusChangeRow[]
   if (changes.length === 0) {
     return (
       <Empty
-        title={'No status changes yet — it starts as "open", and that\'s exactly where it is.'}
+        title={'Nog geen statuswijzigingen — het begint als "open", en daar staat het precies.'}
       />
     );
   }
@@ -193,7 +209,7 @@ export function TaskStatusTimeline({ changes }: { changes: TaskStatusChangeRow[]
           )}
           {c.overrideReason && (
             <p className="mt-[6px] pl-[19px] text-xs font-light text-ink-label">
-              Off the usual path — {c.overrideReason}
+              Buiten de gebruikelijke route — {c.overrideReason}
             </p>
           )}
         </li>

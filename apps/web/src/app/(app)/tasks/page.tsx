@@ -5,8 +5,8 @@ import { buttonClass, PageTitle, Panel, Tabs } from "@/components/ui";
 
 const TABS = [
   ["open", "Open"],
-  ["waiting", "Waiting on others"],
-  ["done", "Done"],
+  ["waiting", "Wacht op anderen"],
+  ["done", "Klaar"],
 ] as const;
 
 export default async function TasksPage({ searchParams }: {
@@ -21,13 +21,13 @@ export default async function TasksPage({ searchParams }: {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-[10px]">
-          <PageTitle>Tasks</PageTitle>
+          <PageTitle>Taken</PageTitle>
           <p className="max-w-lg text-[13.5px] font-light leading-relaxed text-ink-mute">
-            One step at a time — every task here has a tamper-proof status trail.
+            Stap voor stap — van elke taak blijft het volledige statusspoor bewaard.
           </p>
         </div>
         {/* The one thing to press on this screen, so the one glowing button. */}
-        <Link href="/tasks/new" className={buttonClass("primary")}>+ Add</Link>
+        <Link href="/tasks/new" className={buttonClass("primary")}>+ Taak</Link>
       </div>
       <Tabs
         items={TABS.map(([key, label]) => ({ key, label, href: `/tasks?tab=${key}` }))}

@@ -328,4 +328,22 @@ describe("documents router", () => {
     await expect(anonCaller().documents.sheetPreview({ sha256: "0".repeat(64) }))
       .rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
+  it("counts every document per effective status, past any page limit", async () => {
+    // DELTAS, not absolutes: this dev database is shared with every other test
+    // file and is deliberately never truncated, so the only stable assertion is
+    // how the numbers MOVE.
+    const before = await caller().documents.counts();
+    const doc = await seedDocument({ title: "counts-fixture.pdf", mime: "application/pdf" });
+    const afterIngest = await caller().documents.counts();
+    expect(afterIngest.inbox).toBe(before.inbox + 1);
+
+    await caller().documents.update({ id: doc.id, status: "discarded" });
+    const afterDiscard = await caller().documents.counts();
+    // The whole point of the procedure: a discard is APPENDED and never written
+    // back, so documents.status still reads "inbox" for this row. Counting the
+    // raw column would leave it in the inbox tally forever.
+    expect(afterDiscard.inbox).toBe(before.inbox);
+    expect(afterDiscard.discarded).toBe(before.discarded + 1);
+  });
+
 });
