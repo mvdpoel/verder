@@ -91,7 +91,7 @@ export function zipEntryName(title: string, mime: string, taken: Set<string>): s
 
 export function buildZip(entries: ZipEntry[]): Buffer {
   if (entries.length === 0) {
-    throw new Error("Een lege zip zeggen we niet: er is niets geselecteerd");
+    throw new Error("Een lege zip heeft geen zin: er is niets geselecteerd");
   }
   if (entries.length > ZIP_MAX_ENTRIES) {
     throw new Error(`Te veel bestanden in één zip (${entries.length}, maximum ${ZIP_MAX_ENTRIES})`);

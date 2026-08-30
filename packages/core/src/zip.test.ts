@@ -44,7 +44,7 @@ describe("buildZip", () => {
   });
 
   it("refuses an empty archive", () => {
-    expect(() => buildZip([])).toThrow(/leeg|empty/i);
+    expect(() => buildZip([])).toThrow(/lege zip/i);
   });
 
   it("refuses more entries than the cap", () => {
