@@ -7,7 +7,7 @@ const ID = "11111111-1111-1111-1111-111111111111";
 
 describe("entityHref", () => {
   it("maps every linkable type to a real route under apps/web/src/app/(app)", () => {
-    expect(entityHref("document", ID)).toBe(`/vault/${ID}`);
+    expect(entityHref("document", ID)).toBe(`/files/${ID}`);
     expect(entityHref("entry", ID)).toBe(`/logbook/${ID}`);
     expect(entityHref("financial_item", ID)).toBe(`/registry/${ID}`);
     expect(entityHref("debt", ID)).toBe(`/registry/debts/${ID}`);

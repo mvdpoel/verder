@@ -57,7 +57,7 @@ const RERANK_WORKER_NAME = "search-rerank";
  * screen they live on. A stop has no page either, but the map selects one from the
  * query string, so a hit can still land on the halte itself. */
 const HREF: Record<SearchEntityType, (id: string) => string> = {
-  document: (id) => `/vault/${id}`,
+  document: (id) => `/files/${id}`,
   entry: (id) => `/logbook/${id}`,
   email: () => "/queue",
   financial_item: (id) => `/registry/${id}`,

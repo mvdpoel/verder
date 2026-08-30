@@ -63,12 +63,6 @@ export async function FilesPreview({ doc }: { doc: DocRow | null }) {
         </div>
         <Micro className="break-all">sha256: {doc.sha256}</Micro>
         <div className="flex flex-wrap gap-2">
-          {/*
-            `/files/[id]` does not exist until a later task moves the detail
-            page here — the plan's own pre-flight calls this pairing clean
-            because there is no `typedRoutes` check to catch it. Until then
-            this button 404s; the document is still reachable at /vault/<id>.
-          */}
           <Link href={`/files/${doc.id}`} className={buttonClass("signal", "sm")}>
             Openen
           </Link>

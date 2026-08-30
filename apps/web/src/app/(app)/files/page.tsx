@@ -41,7 +41,7 @@ export default async function FilesPage({ searchParams }: {
       <PageTitle>Files</PageTitle>
       <UploadDrop />
       {/* One column below lg: three panes at 300px each are three unreadable
-          columns, the same reason /vault/[id] collapses its two. */}
+          columns, the same reason /files/[id] collapses its two. */}
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)_260px]">
         <FilesTree tree={tree} bundles={bundles} parsed={parsed} />
         {parsed.branch.kind === "bundels"

@@ -296,7 +296,7 @@ export default async function MoneyPage({
                           {doc ? (
                             <Link
                               className="w-full font-mono text-[10px] tracking-[0.1em] text-ink-dim transition-colors hover:text-signal"
-                              href={`/vault/${doc.id}`}>
+                              href={`/files/${doc.id}`}>
                               → afschrift: {doc.title}
                             </Link>
                           ) : (

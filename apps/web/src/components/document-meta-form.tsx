@@ -3,16 +3,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
-import { discardAction, type DocStatus } from "./document-meta-form-actions";
+import { discardAction, senderOptions, type DocStatus } from "./document-meta-form-actions";
 
-export function DocumentMetaForm({ doc, entries }: {
-  doc: { id: string; title: string; docType: string | null;
+export function DocumentMetaForm({ doc, entries, parties, docTypes }: {
+  doc: { id: string; title: string; docType: string | null; partyId: string | null;
     status: DocStatus; previousStatus: DocStatus };
   entries: { id: string; summary: string }[];
+  parties: { id: string; name: string }[];
+  docTypes: string[];
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(doc.title);
   const [docType, setDocType] = useState(doc.docType ?? "");
+  const [partyId, setPartyId] = useState(doc.partyId ?? "");
   const [entryId, setEntryId] = useState("");
   const update = trpc.documents.update.useMutation({ onSuccess: () => router.refresh() });
   const link = trpc.documents.linkToEntry.useMutation({ onSuccess: () => router.refresh() });
@@ -36,20 +39,38 @@ export function DocumentMetaForm({ doc, entries }: {
           onChange={(e) => setTitle(e.target.value)} />
       </Field>
       <Field label="Soort" htmlFor="doc-type">
-        <Input id="doc-type" placeholder="contract, loonstrook, brief…" value={docType}
-          disabled={discarded} onChange={(e) => setDocType(e.target.value)} />
+        {/* A datalist, not a fixed vocabulary: it keeps the soorten already in
+            use one keystroke away without blocking a new one Martin needs. */}
+        <Input id="doc-type" list="doc-types" placeholder="contract, loonstrook, brief…"
+          value={docType} disabled={discarded} onChange={(e) => setDocType(e.target.value)} />
+        <datalist id="doc-types">
+          {docTypes.map((t) => <option key={t} value={t} />)}
+        </datalist>
+      </Field>
+      <Field label="Van wie" htmlFor="doc-party">
+        <Select id="doc-party" value={partyId} disabled={discarded}
+          onChange={(e) => setPartyId(e.target.value)}>
+          <option value="">Onbekend</option>
+          {senderOptions(parties, doc.partyId).map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </Select>
       </Field>
       <div className="flex flex-wrap items-center gap-[10px]">
         {!discarded && (
           <Button variant="primary" disabled={update.isPending}
-            onClick={() => update.mutate({ id: doc.id, status: "filed", title, docType: docType || undefined })}>
+            onClick={() => update.mutate({ id: doc.id, status: "filed", title,
+              docType: docType || undefined, partyId: partyId || undefined })}>
             {doc.status === "inbox" ? "Opbergen ✔" : "Wijzigingen opslaan"}
           </Button>
         )}
         {/* Quiet secondary action: discard is never the primary path, and it is
             always reversible — the same button offers the opposite move.
-            The current title/type ride along so the transition does not reset
-            them: effectiveDocument reads only the LATEST status change row.
+            The current title/type/sender ride along so the transition does not
+            reset them: effectiveDocument reads only the LATEST status change
+            row, so a discard that omitted partyId here would write a row with
+            no opinion on the sender and silently revert a corrected one back
+            to the raw ingest-time value.
 
             It leads the screen only in the one state where it is the ONLY move
             left: on a discarded document the save button is gone, and the way
@@ -57,7 +78,8 @@ export function DocumentMetaForm({ doc, entries }: {
             either spelling — a discard waits on nobody. */}
         <Button variant={discarded ? "primary" : "ghost"} disabled={update.isPending}
           onClick={() => update.mutate({ id: doc.id, status: action.next,
-            title: doc.title, docType: doc.docType ?? undefined })}>
+            title: doc.title, docType: doc.docType ?? undefined,
+            partyId: doc.partyId ?? undefined })}>
           {action.label}
         </Button>
       </div>

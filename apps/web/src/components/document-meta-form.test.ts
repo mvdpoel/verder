@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discardAction } from "./document-meta-form-actions";
+import { discardAction, senderOptions } from "./document-meta-form-actions";
 
 describe("discardAction", () => {
   it("offers Wegleggen on a document still in the inbox", () => {
@@ -31,5 +31,27 @@ describe("discardAction", () => {
     // an Undo button that changes nothing.
     expect(discardAction("discarded", "discarded"))
       .toEqual({ label: "Terugzetten", next: "inbox" });
+  });
+});
+
+describe("senderOptions", () => {
+  it("offers every party as a sender and pre-selects the one on the document", () => {
+    // The form is a client component; this test asserts the pure helper it uses.
+    expect(senderOptions([{ id: "p1", name: "Woonhave" }], "p1")[0])
+      .toEqual({ value: "p1", label: "Woonhave", selected: true });
+  });
+
+  it("selects nothing when the document has no known sender", () => {
+    expect(senderOptions([{ id: "p1", name: "Woonhave" }], null)[0])
+      .toEqual({ value: "p1", label: "Woonhave", selected: false });
+  });
+
+  it("keeps every party in the list regardless of selection", () => {
+    expect(senderOptions(
+      [{ id: "p1", name: "Woonhave" }, { id: "p2", name: "VerderGroep" }], "p2",
+    )).toEqual([
+      { value: "p1", label: "Woonhave", selected: false },
+      { value: "p2", label: "VerderGroep", selected: true },
+    ]);
   });
 });

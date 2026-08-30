@@ -148,7 +148,7 @@ export default async function RegistryItemPage({ params }: { params: Promise<{ i
                   {item.documents.map((d) => (
                     <li key={d.id} className="border-b border-hairline py-[11px] last:border-0">
                       <TextLink
-                        href={`/vault/${d.id}`}
+                        href={`/files/${d.id}`}
                         className="text-[13.5px] font-light">
                         {d.title}
                       </TextLink>

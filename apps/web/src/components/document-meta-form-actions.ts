@@ -23,3 +23,18 @@ export function discardAction(
   return { label: "Terugzetten",
     next: previousStatus === "discarded" ? "inbox" : previousStatus };
 }
+
+/**
+ * The "Van wie" select's options, pure and separate from the JSX that renders
+ * them for the same reason `discardAction` is: a client component cannot be
+ * unit-tested directly, but the logic that decides which party is
+ * pre-selected can be.
+ *
+ * `selectedId` is `effectivePartyId`, not the raw ingest-time column — see
+ * `effectiveDocument`.
+ */
+export function senderOptions(
+  parties: { id: string; name: string }[], selectedId: string | null,
+): { value: string; label: string; selected: boolean }[] {
+  return parties.map((p) => ({ value: p.id, label: p.name, selected: p.id === selectedId }));
+}

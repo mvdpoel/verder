@@ -24,7 +24,7 @@ export type RecentRecord = {
 /** Detail route for a record. Every path here is a real route under apps/web/src/app/(app). */
 export function entityHref(entityType: LinkableEntityType, entityId: string): string {
   switch (entityType) {
-    case "document": return `/vault/${entityId}`;
+    case "document": return `/files/${entityId}`;
     case "entry": return `/logbook/${entityId}`;
     case "financial_item": return `/registry/${entityId}`;
     case "debt": return `/registry/debts/${entityId}`;

@@ -22,7 +22,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   if (linked.debt) evidence.push({
     label: "Vordering", text: linked.debt.creditorName, href: `/registry/debts/${linked.debt.id}` });
   if (linked.document) evidence.push({
-    label: "Document", text: linked.document.title, href: `/vault/${linked.document.id}` });
+    label: "Document", text: linked.document.title, href: `/files/${linked.document.id}` });
 
   return (
     <div className="flex flex-col gap-6">

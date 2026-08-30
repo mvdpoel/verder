@@ -246,7 +246,7 @@ export function DecisionTimeline({ decisions, kind, docTitles }: {
             <Micro>{new Date(d.createdAt).toLocaleString("nl-NL")}</Micro>
             {d.documentId && (
               <TextLink
-                href={`/vault/${d.documentId}`}
+                href={`/files/${d.documentId}`}
                 className="micro truncate">
                 {docTitles.get(d.documentId) ?? "document"}
               </TextLink>

@@ -176,7 +176,7 @@ export function DebtPartiesForm({ debtId, parties, debtDocuments, reportedToVerd
               {debtDocuments.map((d) => (
                 <li key={d.id} className="flex items-center gap-3 border-b border-hairline py-[11px] last:border-0">
                   <TextLink
-                    href={`/vault/${d.id}`}
+                    href={`/files/${d.id}`}
                     className="min-w-0 grow truncate text-[13.5px] font-light">
                     {d.title}
                   </TextLink>

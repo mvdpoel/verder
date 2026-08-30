@@ -171,7 +171,7 @@ export default async function TimelinePage({
                 <TextLink
                   key={d.id}
                   className="block text-[13.5px] font-light"
-                  href={`/vault/${d.id}`}>
+                  href={`/files/${d.id}`}>
                   → bestand: {d.title}
                 </TextLink>
               ))}

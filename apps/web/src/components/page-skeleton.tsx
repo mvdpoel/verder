@@ -20,17 +20,17 @@
  * started: a `loading.tsx` is a Suspense boundary, and a Suspense boundary makes
  * the response STREAM. Once the shell has been sent the status line is already
  * committed, so a `notFound()` resolved afterwards renders the right page under
- * a 200. Measured: with a group-level loading.tsx `/vault/<unknown-uuid>`
+ * a 200. Measured: with a group-level loading.tsx `/files/<unknown-uuid>`
  * answered 200, and without it 404.
  *
  * So the boundary is mounted per route, and only on routes with NO nested
  * detail page under them: /dashboard, /timeline, /money, /search, /queue and
  * /verify. A `loading.tsx` cascades over the WHOLE subtree below it, so one on
- * /vault streams /vault/[id] too and takes that page's 404 with it — measured,
+ * /files streams /files/[id] too and takes that page's 404 with it — measured,
  * after the first attempt put a skeleton on all ten list screens and every
  * detail route was still answering 200.
  *
- * /vault, /logbook, /registry and /tasks therefore have none, which is the
+ * /files, /logbook, /registry and /tasks therefore have none, which is the
  * cheaper half of the trade: each is a single list query, while the six that
  * keep a skeleton are the screens that assemble a whole map or a whole chart.
  */

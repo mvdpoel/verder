@@ -125,7 +125,7 @@ describe("retrieve (fast mode)", () => {
     const onlyDocs = await retrieve({ db, embed: fixedEmbed(null) },
       { q: "opzegging", from: w.from, to: w.to, entityTypes: ["document"] });
     expect(onlyDocs.hits.map((h) => h.entityId)).toEqual([docId]);
-    expect(onlyDocs.hits[0].href).toBe(`/vault/${docId}`);
+    expect(onlyDocs.hits[0].href).toBe(`/files/${docId}`);
   });
 
   it("applies the date range filter before fusion", async () => {

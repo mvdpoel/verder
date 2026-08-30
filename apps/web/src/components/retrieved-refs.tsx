@@ -9,7 +9,7 @@ export const ENTITY_LABEL: Record<string, string> = {
 };
 
 export function hrefForEntity(entityType: string, entityId: string): string | null {
-  if (entityType === "document") return `/vault/${entityId}`;
+  if (entityType === "document") return `/files/${entityId}`;
   if (entityType === "entry") return `/logbook/${entityId}`;
   if (entityType === "task") return `/tasks/${entityId}`;
   if (entityType === "financial_item") return `/registry/${entityId}`;

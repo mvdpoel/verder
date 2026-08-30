@@ -253,7 +253,7 @@ export default async function DashboardPage() {
         <Link href="/queue" className="grid bg-void">
           <Stat label="te beoordelen" value={stats.pendingSuggestions} tone="signal" />
         </Link>
-        <Link href="/vault" className="grid bg-void">
+        <Link href="/files" className="grid bg-void">
           <Stat label="te sorteren" value={stats.inboxDocs} />
         </Link>
         {/* A <Link> like its four neighbours. As a bare <div> it was pixel-identical

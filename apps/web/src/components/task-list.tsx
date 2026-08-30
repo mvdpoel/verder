@@ -93,7 +93,7 @@ function TaskLinkIcons({ task }: { task: TaskRow }) {
   if (task.entryId) links.push(["logboek", `/logbook/${task.entryId}`]);
   if (task.financialItemId) links.push(["post", `/registry/${task.financialItemId}`]);
   if (task.debtId) links.push(["vordering", `/registry/debts/${task.debtId}`]);
-  if (task.documentId) links.push(["document", `/vault/${task.documentId}`]);
+  if (task.documentId) links.push(["document", `/files/${task.documentId}`]);
   if (links.length === 0) return null;
   return (
     <span className="flex gap-1">

@@ -3,7 +3,7 @@ import { flatOrder, groupHits, nextIndex } from "./palette";
 
 const hits = [
   { entityType: "task", entityId: "t1", title: "Kopie paspoort opsturen", href: "/tasks/t1" },
-  { entityType: "document", entityId: "d1", title: "Brief VerderGroep", href: "/vault/d1" },
+  { entityType: "document", entityId: "d1", title: "Brief VerderGroep", href: "/files/d1" },
   { entityType: "task", entityId: "t2", title: "Ziggo opzeggen", href: "/tasks/t2" },
 ];
 
