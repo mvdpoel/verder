@@ -18,9 +18,7 @@ const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
 
 // Read 0033's exact CASE/substring extraction straight out of the migration
 // file, between its SENDER-EXTRACT markers, instead of keeping a hand-copied
-// twin here that could drift from what actually runs against the database —
-// the drift the docblock on `case-history.ts`'s doc-id lookup and this
-// project's other markers all guard against.
+// twin here that could drift from what actually runs against the database.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION_SQL = readFileSync(
   path.join(__dirname, "../drizzle/0033_sender_backfill.sql"),
@@ -89,25 +87,103 @@ describe("migration 0033 sender extraction", () => {
   it("refuses an unterminated <", async () => {
     expect(await extract("Demi Willemse <spoofed@watched.nl")).toBeNull();
   });
+
+  // CRITICAL round 2 findings: nine sender-controlled headers that resolved
+  // the decoy `demi@verdergroep.nl` before the WHOLE-VALUE anchor
+  // `^[^<>]*<[^<>]*>[[:space:]]*$` replaced the bare `~ '<'` branch
+  // condition. Each is pinned individually, by design: a future
+  // "simplification" of the anchor back to a bare `<` check would turn every
+  // one of these green tests red one at a time, rather than failing a single
+  // combined assertion that is easy to special-case away.
+  describe("nine decoy shapes a review found (all must resolve to NULL)", () => {
+    const REAL = "demi@verdergroep.nl";
+    const cases: [label: string, header: string][] = [
+      [
+        "quoted-string local part containing <real> (CRITICAL 1)",
+        `"<${REAL}>"@evil.tld`,
+      ],
+      [
+        "quoted-string local part, real address embedded mid-string",
+        `"a<${REAL}>b"@evil.tld`,
+      ],
+      [
+        "trailing bare address after the angle-addr",
+        `<${REAL}> attacker@evil.tld`,
+      ],
+      [
+        "trailing junk character after >",
+        `<${REAL}>x`,
+      ],
+      [
+        "a second > right after the first",
+        `<${REAL}>>`,
+      ],
+      [
+        "trailing ; and a second address",
+        `<${REAL}>; attacker@evil.tld`,
+      ],
+      [
+        "trailing tab and a second address",
+        `<${REAL}>\tattacker@evil.tld`,
+      ],
+      [
+        "trailing header-injection-shaped text",
+        `<${REAL}>\nFrom: attacker@evil.tld`,
+      ],
+      [
+        "RFC 5322 group syntax wrapping the real address",
+        `Groep: <${REAL}>;`,
+      ],
+    ];
+
+    it.each(cases)("%s", async (_label, header) => {
+      expect(await extract(header)).toBeNull();
+    });
+  });
+
+  // Documented, ACCEPTED trade-off (not a regression to chase): the anchor
+  // above has no quoted-string awareness, so a bare `>` sitting inside a
+  // quoted display name — itself legal `qtext`, RFC 5322 never requires it
+  // to be escaped — is indistinguishable in SQL from a `>` that terminates
+  // the real angle-addr. `apps/worker/src/gmail.ts`'s `senderAddress` DOES
+  // track quote state and correctly resolves this to the real address; this
+  // SQL expression cannot, and refuses instead. That is the same fail-closed
+  // trade-off already accepted for a `<` hidden inside a quoted string (see
+  // the migration's "more than one <" rule): refusing costs an "Onbekend" a
+  // human corrects, and the alternative is guessing inside a quoted string
+  // SQL cannot parse. Pinned so nobody "fixes" this into a re-opened decoy
+  // path.
+  it("refuses a legitimate address behind a quoted display name containing a bare > (accepted over-refusal)", async () => {
+    expect(await extract('"weird > name" <demi@verdergroep.nl>')).toBeNull();
+  });
 });
 
 describe("migration 0033 join safety", () => {
-  it("never folds a KELVIN SIGN header onto an ASCII party email", async () => {
+  it("never folds a party's KELVIN SIGN email onto a legitimate ASCII sender", async () => {
+    // THE DIRECTION THAT ACTUALLY EXERCISES THE GUARD. An earlier version of
+    // this test put the KELVIN SIGN in from_addr (the sender side) and
+    // asserted no match — it passed, but for the wrong reason: Postgres's
+    // case-insensitive `~*` bracket-class matching does not admit U+212A into
+    // `[a-z]`, so the extraction's own address-shape check already refuses
+    // that input, and `p."email" ~ '^[[:ascii:]]+$'` (migration line ~75) is
+    // never even reached. The row shape that actually needs the guard is a
+    // KELVIN SIGN sitting IN `parties.email` — exactly what
+    // apps/worker/src/mail/relevance.ts:26-39 records reaching production —
+    // compared via Postgres's Unicode-aware `lower()` against a perfectly
+    // ordinary ASCII sender.
     const name = `Kelvin Testfixture ${crypto.randomUUID()}`;
-    const email = "incasso@kvk.nl";
+    // U+212A KELVIN SIGN standing in for the leading "k" of "kvk.nl".
+    const email = "incasso@" + String.fromCharCode(0x212A) + "vk.nl";
+    expect(email).not.toBe("incasso@kvk.nl");
+    expect(email.toLowerCase()).toBe("incasso@kvk.nl"); // the fold that must NOT happen in SQL
+
     const [party] = await db.insert(schema.parties)
       .values({ kind: "organization", name, email }).returning();
     try {
-      // U+212A KELVIN SIGN standing in for the leading "k" of "kvk.nl" —
-      // folds to ASCII "k" under Unicode `lower()`, which is exactly the
-      // hazard apps/worker/src/mail/relevance.ts:26-39 documents.
-      const spoofed = "incasso@Kvk.nl";
-      expect(spoofed).not.toBe(email);
-      expect(spoofed.toLowerCase()).toBe(email); // the fold that must NOT happen in SQL
-
+      const senderAddr = "incasso@kvk.nl"; // pure ASCII, a legitimate sender
       const { rows } = await db.execute<{ id: string }>(sql`
         SELECT p."id"
-        FROM (VALUES (${spoofed}::text)) AS r(from_addr)
+        FROM (VALUES (${senderAddr}::text)) AS r(from_addr)
         JOIN "parties" p
           ON p."email" IS NOT NULL
          AND p."email" ~ '^[[:ascii:]]+$'
