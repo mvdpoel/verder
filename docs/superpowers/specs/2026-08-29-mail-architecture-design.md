@@ -334,13 +334,21 @@ arrives at a domain with no SPF, no DKIM and no DMARC.
    Takeout remains the export route. Phase 4's decommission is therefore a real
    saving rather than nothing.
 
-5. **What is the Gmail label `Forward to pullit@yukiworks.nl`?** Seen in
-   Takeout's per-label list on 2026-08-29. A label of that name is what Gmail
-   creates for a filter that forwards, so mail from this mailbox appears to be
-   going to a third party. It is not phase 1's problem — phase 1 reads, it does
-   not deliver — but phase 3 swaps the MX out from under whatever rule that is,
-   and a forward that silently stops is the kind of thing discovered late. Identify
-   it before phase 3, alongside `smtp._domainkey` in question 3.
+5. **What is the Gmail label `Forward to pullit@yukiworks.nl`? ANSWERED AND
+   CLOSED 2026-08-30.** Takeout's `User settings/Forwarding addresses.json` and
+   `Filters.json` show one forwarding address and exactly one filter feeding it:
+   `from:debiteuren@care4lease.nl to:martin@vanderpoel.pro subject:Digitale
+   subject:facturatie has:attachment -label:^b`, which labels, marks important,
+   archives and skips the inbox. So it forwards Care4Lease digital invoices and
+   nothing else — not a copy of the correspondence, which is what the bare label
+   name suggested.
+
+   **Martin confirms the rule is ancient and can be removed. Nothing needs to be
+   rebuilt in Stalwart.** That is the useful half of this answer: a Gmail-side
+   filter stops working the moment phase 3 moves the MX, so had it still been
+   wanted it would have needed a Sieve script on the new server. It is not, so
+   phase 3 carries no work here. Removing it in Gmail is optional tidying — the
+   MX move ends it either way, and the Workspace seat goes in phase 4.
 
 ## Risks, honestly
 
