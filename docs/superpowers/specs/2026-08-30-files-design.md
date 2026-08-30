@@ -88,7 +88,11 @@ The cost is honest and bounded: **no zip64**, so the writer refuses archives ove
 2 GB or 500 entries rather than emitting a file that silently truncates at 4 GB.
 Those two numbers are limits to be MEASURED during implementation against the
 real vault, in the manner of `readWorkbook`'s three caps, not guesses to be
-shipped.
+shipped. **Measured while planning: 500 entries and 512 MB.** The writer buffers
+each entry to compute its CRC32 before writing that entry's header, so the byte
+cap is a MEMORY bound and not a format bound — 2 GB was the zip64 boundary,
+which is the wrong number to hold. A streaming writer with data descriptors is
+the upgrade path if the cap is ever reached.
 
 ### 1.2 Why `doc_type` stays free text
 
@@ -124,7 +128,7 @@ wrong, which is why the builders are updated rather than left to the redirect.
 characters and `documents.bySha` would 404. Both facts are worth a line in the
 route file, because the arrangement looks ambiguous and is not.
 
-## 3. Schema — migration 0030
+## 3. Schema — migration 0032
 
 All additive. No table is dropped, no column removed, no grant weakened.
 
@@ -350,8 +354,8 @@ inclusion is the lie, not the inclusion.
 ### 6.3 The guards
 
 - Zero entries → refused with a message, never an empty archive.
-- More than 500 entries, or more than 2 GB total → refused, because there is no
-  zip64. Both numbers to be measured against the real vault before they ship.
+- More than 500 entries, or more than 512 MB total → refused. See §1.1: the byte
+  cap is a memory bound (the writer buffers), and zip64's 4 GB is far beyond it.
 - **Every file's bytes are verified present before one byte is streamed.** A
   missing file returns 409 listing exactly what is missing. Once the response has
   begun there is no way to report a failure, and an archive that is quietly one
@@ -394,6 +398,12 @@ Fixture parties keep the `<name> Testfixture ${crypto.randomUUID()}` convention 
 the debt slice showed what real names in fixtures do to a shared dev database.
 
 ## 9. Deploy
+
+**The tree is not clean.** Migrations 0030 and 0031 (`raw_emails.message_id` and
+its column-scoped grant) exist untracked from the JMAP work, alongside a modified
+`schema.ts` and `_journal.json`. This sub-project's migration is therefore
+**0032**, and neither that work nor this one may be rsynced over the other —
+deploy from a clean worktree of HEAD, with the full exclude list.
 
 The standing order, unchanged since 0020, and wrong in the other direction every
 time it is guessed:
