@@ -8,11 +8,16 @@ type Doc = { id: string; sha256: string; mime: string; effectiveTitle: string;
   effectiveDocType: string | null; effectiveStatus: string; sizeBytes: number;
   receivedAt: Date; effectivePartyId: string | null };
 
+type Bundle = { id: string; name: string; documentIds: string[]; broken: string | null };
+
 const docs = new Map<string, Doc>();
+const bundles = new Map<string, Bundle>();
 let missing = new Set<string>();
-// Ruling 26: documents.get is a protectedProcedure, so an unauthenticated
-// request throws UNAUTHORIZED there. The mock needs to be able to reproduce
-// that, distinctly from an ordinary "no such document" failure.
+// Ruling 26: documents.get, parties.list and bundles.get are all
+// protectedProcedure calls, so an unauthenticated request throws
+// UNAUTHORIZED at whichever of them the request path reaches first. The mock
+// needs to be able to reproduce that, distinctly from an ordinary
+// "no such document"/"no such bundle" failure.
 let unauthorized = false;
 
 vi.mock("@/lib/trpc-server", () => ({
@@ -30,6 +35,14 @@ vi.mock("@/lib/trpc-server", () => ({
         return [];
       },
     },
+    bundles: {
+      get: async ({ id }: { id: string }) => {
+        if (unauthorized) throw new TRPCError({ code: "UNAUTHORIZED" });
+        const b = bundles.get(id);
+        if (!b) throw new TRPCError({ code: "NOT_FOUND", message: "Bundle not found" });
+        return b;
+      },
+    },
   }),
 }));
 
@@ -41,6 +54,7 @@ beforeEach(async () => {
   vaultDir = await mkdtemp(join(tmpdir(), "verder-zip-route-"));
   process.env.VAULT_DIR = vaultDir;
   docs.clear();
+  bundles.clear();
   missing = new Set();
   unauthorized = false;
 });
@@ -59,6 +73,9 @@ const form = (ids: string[]) => {
   for (const id of ids) body.append("id", id);
   return new Request("http://localhost/api/files/zip", { method: "POST", body });
 };
+
+const getBundle = (bundleId: string) =>
+  GET(new Request(`http://localhost/api/files/zip?bundle=${bundleId}`));
 
 describe("POST /api/files/zip", () => {
   it("returns a zip with the manifest first", async () => {
@@ -86,6 +103,10 @@ describe("POST /api/files/zip", () => {
     const res = await POST(form([good, gone]));
     expect(res.status).toBe(409);
     expect(await res.text()).toContain("Zoek");
+    // The status check alone only implies nothing was streamed. This makes
+    // it a check rather than an inference: a 409 whose Content-Type were
+    // still application/zip would mean an archive body escaped anyway.
+    expect(res.headers.get("Content-Type")).not.toBe("application/zip");
   });
 
   it("names the download and does not serve it inline", async () => {
@@ -108,5 +129,57 @@ describe("GET /api/files/zip", () => {
   it("refuses a request with neither a bundle nor ids", async () => {
     const res = await GET(new Request("http://localhost/api/files/zip"));
     expect(res.status).toBe(400);
+  });
+
+  it("returns a zip named after the bundle, with the manifest first", async () => {
+    const a = await seed("Beschikking");
+    const b = await seed("Loonstrook");
+    const bundleId = crypto.randomUUID();
+    bundles.set(bundleId, { id: bundleId, name: "Team Opstart", documentIds: [a, b], broken: null });
+
+    const res = await getBundle(bundleId);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/zip");
+    const buf = Buffer.from(await res.arrayBuffer());
+    expect(buf.subarray(30, 30 + "inhoudsopgave.txt".length).toString())
+      .toBe("inhoudsopgave.txt");
+    // The bundle's own name, not the date-stamped ad-hoc fallback the POST
+    // path uses — computed the same way the route computes it, so this fails
+    // if the encoding ever changes rather than pinning today's output.
+    const expectedFilename = encodeURIComponent("Team Opstart.zip").replace(/['()*]/g, escape);
+    expect(res.headers.get("Content-Disposition"))
+      .toBe(`attachment; filename*=UTF-8''${expectedFilename}`);
+  });
+
+  // Mirror of the POST unauthenticated test: bundles.get is the call this
+  // path reaches first, and it is exactly the call-site the reviewer flagged
+  // as easiest to miss.
+  it("answers 401, not 404, for an unauthenticated request", async () => {
+    unauthorized = true;
+    const bundleId = crypto.randomUUID();
+    const res = await getBundle(bundleId);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses readably, not with an empty or malformed archive, when a bundle matches nothing", async () => {
+    const bundleId = crypto.randomUUID();
+    bundles.set(bundleId, { id: bundleId, name: "Leeg", documentIds: [], broken: null });
+    const res = await getBundle(bundleId);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Content-Type")).not.toBe("application/zip");
+    expect(await res.text()).toContain("geen stukken");
+  });
+
+  it("names the problem, rather than reusing the empty-selection message, when a bundle's rule is unreadable", async () => {
+    const bundleId = crypto.randomUUID();
+    bundles.set(bundleId, {
+      id: bundleId, name: "Kapot", documentIds: [],
+      broken: "regel: verplicht veld ontbreekt",
+    });
+    const res = await getBundle(bundleId);
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain("regel: verplicht veld ontbreekt");
+    expect(body).not.toContain("Er is niets geselecteerd");
   });
 });

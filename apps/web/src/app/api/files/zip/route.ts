@@ -19,10 +19,12 @@ import { buildManifest, type ManifestRow } from "@/lib/zip-manifest";
  */
 
 const MAX_IDS = ZIP_MAX_ENTRIES;
+const DEFAULT_EMPTY_MESSAGE = "Er is niets geselecteerd om te downloaden";
 
 type Caller = Awaited<ReturnType<typeof serverCaller>>;
 type DocRow = Awaited<ReturnType<Caller["documents"]["get"]>>;
 type PartyRow = Awaited<ReturnType<Caller["parties"]["list"]>>[number];
+type BundleRow = Awaited<ReturnType<Caller["bundles"]["get"]>>;
 
 /**
  * Ruling 26: the same discipline apps/web/src/app/api/files/[sha256]/route.ts
@@ -43,10 +45,11 @@ function mapTrpcError(e: unknown, notFoundMessage: string): NextResponse | null 
   return null;
 }
 
-async function archive(ids: string[], name: string): Promise<NextResponse> {
+async function archive(
+  ids: string[], name: string, emptyMessage: string = DEFAULT_EMPTY_MESSAGE,
+): Promise<NextResponse> {
   if (ids.length === 0) {
-    return NextResponse.json(
-      { error: "Er is niets geselecteerd om te downloaden" }, { status: 400 });
+    return NextResponse.json({ error: emptyMessage }, { status: 400 });
   }
   if (ids.length > MAX_IDS) {
     return NextResponse.json(
@@ -130,6 +133,19 @@ function stamp(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
 }
 
+/**
+ * A rule bundle that matched nothing and a manual bundle nobody put anything
+ * in are both real, ordinary states — not a user forgetting to select files,
+ * which is what DEFAULT_EMPTY_MESSAGE says. An unparseable rule gets its own
+ * message naming the problem, in the same words `bundles.get` already
+ * computed (`broken`), so this route never disagrees with the bundle card
+ * about why a bundle is empty.
+ */
+function emptyBundleMessage(bundle: BundleRow): string {
+  if (bundle.broken) return `De regel van deze bundel is niet leesbaar: ${bundle.broken}`;
+  return "Deze bundel bevat op dit moment geen stukken";
+}
+
 export async function POST(req: Request): Promise<NextResponse> {
   const form = await req.formData();
   const ids = form.getAll("id").map(String).filter(Boolean);
@@ -143,7 +159,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json(
       { error: "Geef een bundel op om te downloaden" }, { status: 400 });
   }
-  let bundle: { documentIds: string[]; name: string };
+  let bundle: BundleRow;
   try {
     const caller = await serverCaller(); // protectedProcedure rejects the unauthenticated
     bundle = await caller.bundles.get({ id: bundleId });
@@ -152,5 +168,5 @@ export async function GET(req: Request): Promise<NextResponse> {
     if (mapped) return mapped;
     throw e;
   }
-  return archive(bundle.documentIds, bundle.name);
+  return archive(bundle.documentIds, bundle.name, emptyBundleMessage(bundle));
 }
