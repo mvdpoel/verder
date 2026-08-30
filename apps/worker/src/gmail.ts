@@ -3,7 +3,7 @@ import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
-import { addressesInHeader, asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
+import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";
 import type { MailMessage, SkippedPart } from "./mail/port";
 
@@ -49,36 +49,144 @@ export function asMailMessage(msg: GmailMessage): MailMessage {
 }
 
 /**
+ * A whole address, ASCII only, already folded — the same shape as
+ * `mail/relevance.ts`'s private `ADDRESS_RE`. Duplicated deliberately rather
+ * than exported from there: `relevance.ts` is explicitly off limits for this
+ * fix (its two callers, `addressesInHeader` and `isRelevantMessage`, want
+ * every address a header names and must not change), and this module's
+ * notion of "one address" is a different, stricter question — see
+ * `senderAddress` below.
+ */
+const SENDER_ADDRESS_RE = /^[a-z0-9!#$%&'*+/=?^_`{|}~.-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+
+/**
+ * Strips RFC 5322 comments — parenthesised runs, which may nest — from a
+ * header. Returns `ok: false` on anything that does not balance (a stray
+ * `)`, or a `(` never closed): a malformed header is refused rather than
+ * guessed at, consistent with `senderAddress`'s whole bias.
+ *
+ * Does NOT track quoted strings: a display name containing a literal,
+ * unescaped `(` would have it treated as a comment opener too. That is safe
+ * here — the only thing this function's output feeds is address extraction,
+ * and stripping a few extra characters out of a display name can only ever
+ * remove a candidate address, never manufacture one that was not already
+ * address-shaped in the source text.
+ */
+function stripComments(header: string): { text: string; ok: boolean } {
+  let depth = 0;
+  let out = "";
+  for (const ch of header) {
+    if (ch === "(") { depth++; continue; }
+    if (ch === ")") {
+      if (depth === 0) return { text: "", ok: false }; // stray close, no opener
+      depth--;
+      continue;
+    }
+    if (depth === 0) out += ch;
+  }
+  return { text: out, ok: depth === 0 };
+}
+
+/**
+ * The ONE address a `From` header names, resolved by PARSING it rather than
+ * by picking an element out of a flat scan.
+ *
+ * This replaces two earlier, both wrong, attempts. `addressesInHeader(...)[0]`
+ * (round 1) took the FIRST address-shaped substring, which is the display
+ * name whenever it is itself address-shaped:
+ * `"demi@verdergroep.nl" <attacker@evil.tld>` attributed the message to
+ * Demi's party while the real mailbox was the attacker's.
+ * `addressesInHeader(...).at(-1)` (round 2) took the LAST one instead, which
+ * fixed that example but not the general case: a parenthesised COMMENT is
+ * legal RFC 5322 and may follow the addr-spec —
+ * `"Demi Willemse" <attacker@evil.tld> (demi@verdergroep.nl)` — and `.at(-1)`
+ * picked the comment's address instead. Neither a first-element nor a
+ * last-element pick over `addressesInHeader`'s flat output can be correct,
+ * because that function (deliberately, for its own callers) has no notion of
+ * angle brackets, quotes or comments at all.
+ *
+ * The actual RFC 5322 rule for a single mailbox: strip comments first — they
+ * carry no addressing information and may appear almost anywhere. What is
+ * left is either `[display-name] <addr-spec>` — the address is the content
+ * of the (last, if the header is somehow still ambiguous after that) `<...>`
+ * pair — or a bare `addr-spec` with no angle brackets at all.
+ *
+ * BIASED HARD TOWARD `null`. A wrong sender is written into an append-only
+ * `documents` row and a `document.ingested` ledger payload that can never be
+ * corrected — `documents` has no UPDATE grant — while a `null` sender renders
+ * as "Onbekend" and is simply a fact nobody supplied. So this function
+ * returns `null` rather than guess whenever: comments do not balance; a
+ * top-level comma outside any quoted string or `<...>` pair signals more
+ * than one mailbox; there are no angle brackets and the remaining text is
+ * not, in its entirety, one address; or the content of the (last) `<...>`
+ * pair is not, in its entirety, one address.
+ *
+ * Quoted strings ARE tracked here (unlike `stripComments`, which does not
+ * need to): a comma or `<` inside a quoted display name — `"Doe, John" <j@d.nl>`,
+ * `"<not an address>" <j@d.nl>` — must not be mistaken for the mailbox
+ * separator or the real angle-bracket pair.
+ */
+export function senderAddress(header: string): string | null {
+  const { text, ok } = stripComments(header);
+  if (!ok) return null;
+
+  let inQuotes = false;
+  let angleDepth = 0;
+  let angleStart = -1;
+  let lastAngleContent: string | null = null;
+  let sawTopLevelComma = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      // RFC 5322 quoted-pair: a backslash escapes the next character, which
+      // therefore cannot end the quoted string (or be mistaken for anything
+      // else) even if it is itself a `"`.
+      if (ch === "\\" && i + 1 < text.length) { i++; continue; }
+      if (ch === '"') inQuotes = false;
+      continue;
+    }
+    if (ch === '"') { inQuotes = true; continue; }
+    if (ch === "<") {
+      if (angleDepth === 0) angleStart = i + 1;
+      angleDepth++;
+      continue;
+    }
+    if (ch === ">") {
+      if (angleDepth === 0) return null; // stray close, malformed
+      angleDepth--;
+      if (angleDepth === 0) lastAngleContent = text.slice(angleStart, i);
+      continue;
+    }
+    if (angleDepth > 0) continue; // inside a mailbox's angle brackets: ignore
+    if (ch === ",") sawTopLevelComma = true;
+  }
+  if (inQuotes || angleDepth !== 0) return null; // unterminated quote or `<`
+  if (sawTopLevelComma) return null; // more than one mailbox — ambiguous
+
+  const candidate = (lastAngleContent ?? text).trim();
+  if (!candidate) return null;
+  const folded = asciiLower(candidate);
+  return SENDER_ADDRESS_RE.test(folded) ? folded : null;
+}
+
+/**
  * The sender of a message, resolved to a party — or undefined, the honest
  * outcome when no party matches (an upload and a scan legitimately have no
  * sender either, which is why `ingestDocument`'s `partyId` stays optional).
  *
- * `fromHeader` is PARSED, not compared as a whole string: under Gmail it is a
- * raw header (`Demi Willemse <demi@verdergroep.nl>`), and comparing that
- * against `parties.email` (a bare address) would never match real mail.
- * `addressesInHeader` is the same extraction `isRelevantMessage` already uses,
- * so a message this dossier considers relevant and a message whose sender
- * this resolves can never disagree about what the address IS.
- *
- * `.at(-1)`, NOT the first match. A display name comes BEFORE the addr-spec in
- * RFC 5322 (`Demi Willemse <demi@verdergroep.nl>`), and a display name is
- * whatever the sender wrote — including something that is itself address-
- * shaped: `"demi@verdergroep.nl" <attacker@evil.tld>` parses to
- * `["demi@verdergroep.nl", "attacker@evil.tld"]`, and taking the FIRST one
- * would attribute the document to Demi's party while the actual mailbox is
- * the attacker's. `documents` has no UPDATE, so a wrong attribution here is
- * permanent. The real addr-spec — the thing inside `<...>` when the header
- * has one, or the bare address when it does not — is always the LAST address
- * the regex finds, because nothing legitimate follows it in either form.
+ * `fromHeader` is PARSED by `senderAddress`, not compared as a whole string
+ * and not treated as a flat bag of addresses: under Gmail it is a raw header
+ * (`Demi Willemse <demi@verdergroep.nl>`, or worse — see `senderAddress`'s
+ * own docs for the attacks a naive extraction fell for), and comparing that
+ * whole string against `parties.email` (a bare address) would never match
+ * real mail.
  *
  * Folded with `asciiLower`, on BOTH sides, in JS — never SQL `lower()`, which
  * is Unicode-aware: U+212A KELVIN SIGN folds to ASCII "k" under `lower()`,
  * which would let a sender-chosen header fold into an address the dossier
- * watches (`mail/relevance.ts`'s own finding, word for word). An address that
- * fails to parse (an empty or malformed From) resolves no sender, rather than
- * matching every party whose email is also empty — `parties.email` is free
- * text, nullable and not unique, and a blank row has already reached
- * production once (relevance.ts, finding F).
+ * watches (`mail/relevance.ts`'s own finding, word for word). `senderAddress`
+ * already folds its return value, so only the party side needs it here.
  *
  * `ORDER BY created_at, id` is a deterministic tiebreak for the case two
  * parties share an email — there is no ranking rule for that, so "oldest
@@ -86,7 +194,7 @@ export function asMailMessage(msg: GmailMessage): MailMessage {
  * not an arbitrary one.
  */
 async function resolveSenderPartyId(tx: Db, fromHeader: string): Promise<string | undefined> {
-  const fromAddr = addressesInHeader(fromHeader).at(-1);
+  const fromAddr = senderAddress(fromHeader);
   if (!fromAddr) return undefined;
   const parties = await tx.select({ id: schema.parties.id, email: schema.parties.email })
     .from(schema.parties)

@@ -326,6 +326,104 @@ describe("ingestRawEmail resolves the sender", () => {
     expect(await partyIdOf(db, id)).toBeNull();
     await pool.end();
   });
+
+  // Round 3: `.at(-1)` (round 2's fix) is not correct either. A parenthesised
+  // COMMENT is legal RFC 5322 and may follow the addr-spec, so a display name
+  // that quotes a watched address now hides behind a TRAILING comment instead
+  // of a leading one — same attack, moved. This must resolve the real
+  // mailbox (the angle-bracket content), never the address inside the
+  // comment.
+  it("resolves the addr-spec, not an address hidden in a trailing comment", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const watchedEmail = `spoofed-${Date.now()}@watched.nl`;
+    const attackerEmail = `attacker-${Date.now()}@evil.tld`;
+    const [watched] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Watched Party", email: watchedEmail }).returning();
+    const [attacker] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Attacker Party", email: attackerEmail }).returning();
+    const id = `m-comment-trailing-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir },
+      mkMsg(id, `"Demi Willemse" <${attackerEmail}> (${watchedEmail})`));
+    const resolved = await partyIdOf(db, id);
+    expect(resolved).not.toBe(watched.id);
+    expect(resolved).toBe(attacker.id);
+    await pool.end();
+  });
+
+  // Same attack, comment LEADING instead of trailing — comments may appear
+  // almost anywhere in the header, so both positions have to be covered.
+  it("resolves the addr-spec, not an address hidden in a leading comment", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const watchedEmail = `spoofed-${Date.now()}@watched.nl`;
+    const attackerEmail = `attacker-${Date.now()}@evil.tld`;
+    const [watched] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Watched Party", email: watchedEmail }).returning();
+    const [attacker] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Attacker Party", email: attackerEmail }).returning();
+    const id = `m-comment-leading-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir },
+      mkMsg(id, `(${watchedEmail}) <${attackerEmail}>`));
+    const resolved = await partyIdOf(db, id);
+    expect(resolved).not.toBe(watched.id);
+    expect(resolved).toBe(attacker.id);
+    await pool.end();
+  });
+
+  it("resolves nothing when the header names two mailboxes", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const emailA = `demi-${Date.now()}@verdergroep.nl`;
+    const emailB = `attacker-${Date.now()}@evil.tld`;
+    await db.insert(schema.parties)
+      .values({ kind: "person", name: "Demi Willemse", email: emailA }).returning();
+    await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Attacker Party", email: emailB }).returning();
+    const id = `m-two-mailboxes-${Date.now()}`;
+    // No angle brackets at all here, deliberately: the ambiguity has to be
+    // caught by the top-level comma, not by there happening to be a bracket
+    // to fall back on.
+    await ingestRawEmail({ db, vaultDir }, mkMsg(id, `${emailA}, ${emailB}`));
+    expect(await partyIdOf(db, id)).toBeNull();
+    await pool.end();
+  });
+
+  // Nesting handled: a comment inside a comment must not leak the address it
+  // hides, and must not desynchronise the paren-depth count either.
+  it("strips a nested comment without leaking the address inside it", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const watchedEmail = `spoofed-${Date.now()}@watched.nl`;
+    const attackerEmail = `attacker-${Date.now()}@evil.tld`;
+    const [watched] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Watched Party", email: watchedEmail }).returning();
+    const [attacker] = await db.insert(schema.parties)
+      .values({ kind: "organization", name: "Attacker Party", email: attackerEmail }).returning();
+    const id = `m-nested-comment-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir },
+      mkMsg(id, `Demi Willemse <${attackerEmail}> (say hi (${watchedEmail}) to demi)`));
+    const resolved = await partyIdOf(db, id);
+    expect(resolved).not.toBe(watched.id);
+    expect(resolved).toBe(attacker.id);
+    await pool.end();
+  });
+
+  // A comment that never closes is malformed, not merely unusual — refusing
+  // to resolve a sender here is the safe failure this parser is built around,
+  // not an oversight to relax later.
+  it("resolves nothing when a comment is left unterminated", async () => {
+    const { db, pool } = createDb(URL);
+    const vaultDir = mkdtempSync(join(tmpdir(), "gmail-vault-"));
+    const email = `demi-${Date.now()}@verdergroep.nl`;
+    await db.insert(schema.parties)
+      .values({ kind: "person", name: "Demi Willemse", email }).returning();
+    const id = `m-unterminated-comment-${Date.now()}`;
+    await ingestRawEmail({ db, vaultDir },
+      mkMsg(id, `Demi Willemse (unterminated comment <${email}>`));
+    expect(await partyIdOf(db, id)).toBeNull();
+    await pool.end();
+  });
 });
 
 describe("buildQueries", () => {
