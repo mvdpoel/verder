@@ -8,6 +8,10 @@ describe("branch encoding", () => {
       { kind: "bundels" as const },
       { kind: "bundel" as const, id: "11111111-1111-4111-8111-111111111111" },
       { kind: "soort" as const, key: "loonstrook" },
+      // "Zonder soort" — the empty key is a real branch (documents.tree sorts
+      // it last on purpose and it is the biggest one in dev). It used to
+      // decode to "alles", so it could not be selected at all.
+      { kind: "soort" as const, key: "" },
       { kind: "party" as const, id: "22222222-2222-4222-8222-222222222222" },
       { kind: "party" as const, id: null },
       { kind: "periode" as const, month: "2026-08" },

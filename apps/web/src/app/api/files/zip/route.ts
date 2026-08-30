@@ -18,7 +18,13 @@ import { buildManifest, type ManifestRow } from "@/lib/zip-manifest";
  * own download progress and works without JavaScript.
  */
 
-const MAX_IDS = ZIP_MAX_ENTRIES;
+/**
+ * One SHORT of the writer's cap, because inhoudsopgave.txt is prepended and
+ * counts as an entry. At ZIP_MAX_ENTRIES this route accepted 500 ids and then
+ * handed buildZip 501, which refused with "501, maximum 500" — a request the
+ * route had already said it would serve.
+ */
+const MAX_IDS = ZIP_MAX_ENTRIES - 1;
 const DEFAULT_EMPTY_MESSAGE = "Er is niets geselecteerd om te downloaden";
 
 type Caller = Awaited<ReturnType<typeof serverCaller>>;

@@ -52,7 +52,12 @@ export function decodeBranch(raw: string): Branch {
   const kind = raw.slice(0, i);
   const v = raw.slice(i + 1);
   if (kind === "bundel") return UUID.test(v) ? { kind: "bundel", id: v } : { kind: "alles" };
-  if (kind === "soort") return v ? { kind: "soort", key: v } : { kind: "alles" };
+  // The EMPTY key is a real branch, not nonsense: "Zonder soort" is what
+  // documents.tree sorts last on purpose and what browse's soort branch
+  // matches with docTypeKeySql = ''. In dev it is 70 of 93 documents. Falling
+  // back to "alles" here made it the one branch that could not be selected —
+  // clicking it showed every document and never highlighted.
+  if (kind === "soort") return { kind: "soort", key: v };
   if (kind === "party") {
     if (v === "onbekend") return { kind: "party", id: null };
     return UUID.test(v) ? { kind: "party", id: v } : { kind: "alles" };
