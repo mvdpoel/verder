@@ -1130,6 +1130,24 @@ git commit -m "feat(ops): back the mail store up in two formats, one of them neu
 
 ### Task 11: The monthly restore drill
 
+> **SUPERSEDED — EXECUTED 2026-09-01, DIFFERENTLY. Do not build what is written
+> below.** The task as drafted is entirely mocked: every dependency is a fake and
+> step 3 delivers only the pure `runDrill` boolean, with no `main()`, no restore
+> and no scratch server. That is a green test over an unexercised backup. What
+> shipped restores for real — `ops/mail-restore-drill.sh`,
+> `ops/mail-drill.compose.yml`, `apps/worker/src/ops/mail-restore-drill.ts` —
+> and was run twice in production at 1m36s. Three concrete errors below, all
+> measured: `expectedCount` is **146,270**, not 4182; the neutral **Maildir**
+> export it says to exercise **does not exist** (`vandelay export --format
+> maildir` is not a thing), so tier 2 is a Vandelay SQLite archive checked with
+> `vandelay inspect`; and `jmapAnswers` **cannot be a search**, because
+> `Email/query` filters return nothing on this store in production too. It is
+> also not a pg-boss job — the restore is tens of minutes and pg-boss expires a
+> job at ~15. The measured record is in CLAUDE.md and the runbook in
+> `docs/deploy.md` §8.12. Kept, not deleted, so the diff between what was
+> planned and what was true stays readable.
+
+
 **Files:**
 - Create: `apps/worker/src/ops/mail-restore-drill.ts`
 - Test: `apps/worker/src/ops/mail-restore-drill.test.ts`
