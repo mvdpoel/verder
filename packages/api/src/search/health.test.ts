@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createDb, schema, type Db } from "@verder/db";
-import { DRAIN_WORKER_NAME, readIndexHealth } from "./health";
+import { DRAIN_STALE_MS, DRAIN_WORKER_NAME, readIndexHealth } from "./health";
+import { cadenceMs, declFor, workerState } from "../worker-health";
 
 // APP role: the same grants the web app runs with, so a missing SELECT on
 // search_outbox fails here rather than in production. Fixtures go in as the
@@ -52,5 +53,30 @@ describe("readIndexHealth", () => {
     const health = await readIndexHealth(app);
     expect(health.embedFailures).toBeGreaterThan(0);
     expect(health.degraded).toBe(true);
+  });
+});
+
+describe("DRAIN_STALE_MS — one cadence, two tolerances", () => {
+  it("derives from the declared cadence instead of hard-coding a second one", () => {
+    // THE BUG THIS PINS: this file used to carry its own 10 * 60 * 1000 while
+    // worker-health.ts separately declared search.drain at 60 s and judged it
+    // at three missed ticks. Nothing tied the two together, so a change to the
+    // boss.schedule line could only ever reach one of them, and the two screens
+    // already disagreed: a drain that died at 12:00 was amber on the dashboard
+    // at 12:04 while /verify still said "alles is doorzoekbaar" until 12:10.
+    expect(DRAIN_STALE_MS).toBe(cadenceMs(declFor(DRAIN_WORKER_NAME)) * 10);
+    // And it still comes out at the ten minutes this page has always used, so
+    // the refactor changed the SHAPE of the number and not the number.
+    expect(DRAIN_STALE_MS).toBe(10 * 60 * 1000);
+  });
+
+  it("stays deliberately looser than the dashboard's bound on the same row", () => {
+    // The two tolerances differ ON PURPOSE and this is where that is written
+    // down: the dashboard's job is to notice a dead watcher fast, /verify's job
+    // is to tell Martin whether what he searches is complete, and a queue a few
+    // minutes behind still answers his question. If these ever converge it
+    // should be because somebody decided so, not because a number drifted.
+    const ranAt = new Date(Date.now() - DRAIN_STALE_MS + 1_000);
+    expect(workerState(declFor(DRAIN_WORKER_NAME), "ok", ranAt, Date.now())).toBe("down");
   });
 });

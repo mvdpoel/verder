@@ -4,9 +4,12 @@ import { EnablePush } from "@/components/enable-push";
 import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
 import { caseTopRows, noOpenTracksLine } from "@/lib/track-marks";
+import { workerRowLabel } from "@/lib/worker-row-label";
+import type { WorkerState } from "@verder/api/src/worker-health";
 import {
   buttonClass,
   cx,
+  type DotState,
   Dot,
   Empty,
   Label,
@@ -107,6 +110,37 @@ function RingValue({
   );
 }
 
+/**
+ * The served worker state, drawn.
+ *
+ * THE JUDGEMENT IS NOT MADE HERE ANY MORE, and that is the whole change. This
+ * panel used to carry its own rule —
+ * `down = (now - ranAt > 15 min) || status !== "ok"` — applied to all fifteen
+ * rows. Measured on the homelab 2026-09-01: every row reported status ok and
+ * NINE drew amber, purely on the age half; it had been six two days earlier and
+ * drifted to nine with nothing broken. On this page amber means "work waiting
+ * on Martin", so nine dots asked for attention that did not exist, and a wall
+ * of meaningless amber is what teaches a reader to stop reading the panel.
+ *
+ * The rule now lives once, in packages/api/src/worker-health.ts, where it is
+ * unit-tested against the taxonomy it belongs to and served as data. One list
+ * judged in two places is how the two drift, and the drift stays invisible
+ * until a dead watcher renders green. The panel's job is to DRAW a state, never
+ * to decide one.
+ *
+ * `idle` and `off` both land on the neutral grey dot because neither is a
+ * verdict: an on-demand job with no work and a retired worker are equally not
+ * failing. They are told apart by the row's label and its opacity, not by
+ * colour — the palette has exactly one amber and spending it on "no news" is
+ * what broke this panel in the first place.
+ */
+const WORKER_DOT: Record<WorkerState, DotState> = {
+  ok: "ok",
+  down: "you",
+  idle: "waiting",
+  off: "waiting",
+};
+
 export default async function DashboardPage() {
   const caller = await serverCaller();
   // Six independent reads, and they used to run one after another — six full
@@ -121,7 +155,11 @@ export default async function DashboardPage() {
     caller.entries.list({ limit: 5 }),
     caller.tracks.map(),
   ]);
-  const staleMs = 15 * 60 * 1000;
+  // One instant for the whole "Systeem" panel, mirroring the single `now` that
+  // dashboard.stats uses to judge these same rows: two workers with the same
+  // ran_at must never be LABELLED differently by a clock that ticked mid-map,
+  // one landing on a clock time and the next on yesterday's date.
+  const renderedAt = Date.now();
   // One line per open spoor: its newest stop that is not done yet, or its
   // newest stop if everything on it is done. `own[0]` can be undefined, because
   // a spoor with no haltes yet is a real state and the type should say so
@@ -329,30 +367,33 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-[14px]">
               <Label as="h2">Systeem</Label>
               <div className="flex flex-col gap-[11px]">
-                {stats.lastWorkerRuns.map((w) => {
-                  const stale = Date.now() - w.ranAt.getTime() > staleMs;
-                  // The one place on this page where amber is not a task: a
-                  // watcher that stopped reporting is the dossier quietly
-                  // stopping, and that IS work waiting on Martin — nobody else
-                  // is going to restart it. The mint dot is the healthy case.
-                  const down = stale || w.status !== "ok";
-                  return (
-                    <div key={w.worker} className="flex items-center gap-3">
-                      <Dot state={down ? "you" : "ok"} />
-                      <span className="min-w-0 grow truncate font-mono text-[11px] tracking-[0.1em] uppercase text-ink-soft">
-                        {w.worker}
-                      </span>
-                      <span
-                        className={cx(
-                          "shrink-0 font-mono text-[10px] tracking-[0.1em]",
-                          down ? "text-attn" : "text-ink-dim",
-                        )}
-                      >
-                        laatst {w.ranAt.toLocaleTimeString("nl-NL")} ({w.status})
-                      </span>
-                    </div>
-                  );
-                })}
+                {stats.lastWorkerRuns.map((w) => (
+                  <div
+                    key={w.worker}
+                    // `off` is history, not health: a retired worker's last row
+                    // is a fact about the past and must not sit at the same
+                    // weight as the watchers that are actually reporting.
+                    className={cx("flex items-center gap-3", w.state === "off" && "opacity-55")}
+                  >
+                    <Dot state={WORKER_DOT[w.state]} />
+                    <span className="min-w-0 grow truncate font-mono text-[11px] tracking-[0.1em] uppercase text-ink-soft">
+                      {w.worker}
+                    </span>
+                    {/* The whole row is passed, not just its kind: an amber dot
+                        needs a reason as much as a grey one does, and only the
+                        label can tell "stale" from "it reported an error" —
+                        `fout · laatst 20:14` instead of a fresh timestamp
+                        sitting inexplicably beside an amber dot. */}
+                    <span
+                      className={cx(
+                        "shrink-0 font-mono text-[10px] tracking-[0.1em]",
+                        w.state === "down" ? "text-attn" : "text-ink-dim",
+                      )}
+                    >
+                      {workerRowLabel(w, renderedAt)}
+                    </span>
+                  </div>
+                ))}
                 {stats.lastWorkerRuns.length === 0 && (
                   <div className="flex items-center gap-3">
                     <Dot state="waiting" />

@@ -1,46 +1,7 @@
 import { sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../trpc";
 import { effectiveDocStatusSql } from "../effective-status";
-
-/**
- * `worker_runs` names that are INCIDENT MARKERS, not watchers — excluded from
- * the system-health list because that list means the opposite of what they do.
- *
- * Every other name in it is something that SHOULD be running, so the dashboard
- * reads silence as failure: `down = stale || status !== "ok"` with a 15-minute
- * staleness bound. That is right for a cron job and exactly inverted for a row
- * written only when something went wrong on an on-demand path, where silence is
- * the healthy state and the newest row is not "current health" but "the last
- * time this ever broke".
- *
- * MEASURED, and it is why this exists: `search-rerank` is written ONLY by
- * search/retrieve.ts, ONLY with status "error", when a DEEP search's LLM rerank
- * times out (the search still succeeds — it falls back to the fused order). No
- * code path anywhere writes it "ok". Nothing in apps/web ever requests
- * `mode: "deep"` — the router defaults to "fast" and deep is documented as agent
- * surfaces only. So one transient Ollama timeout on 2026-08-23 painted this tile
- * red and NOTHING COULD EVER CLEAR IT: going green needs a success row that no
- * code writes, from a mode no surface requests. It sat red for a week over an
- * optional feature CLAUDE.md already records as unproven ("Deep did NOT beat
- * fast"), which is precisely the permanent-red that trains a reader to stop
- * looking — the same argument poll.ts makes when it records a rate-limit skip as
- * `ok` rather than burying the failure that needs a human under noise.
- *
- * The rows are still WRITTEN and still queryable: this is a display decision,
- * not a decision to stop recording. When a surface actually uses deep search,
- * the degradation belongs in that search's own result, where the person who ran
- * it will see it — not as a dot on a page they may not open for days.
- *
- * A name missing from this set costs one spurious red dot; a watcher wrongly IN
- * it goes dark unnoticed. So it is a denylist of known markers and never an
- * allowlist of known watchers — the failure direction has to be the loud one.
- */
-const INCIDENT_MARKERS = ["search-rerank"];
-
-// Joined into individual bound parameters rather than passed as one array:
-// drizzle sends a JS array to pg as a plain string, and Postgres rejects it
-// with 22P02 `Array value must start with "{"`. Measured — it failed every
-// dashboard test, not just this one.
+import { declFor, workerState } from "../worker-health";
 
 export const dashboardRouter = router({
   stats: protectedProcedure.query(async ({ ctx }) => {
@@ -65,11 +26,38 @@ export const dashboardRouter = router({
       SELECT count(*)::int AS open FROM action_items a
       WHERE COALESCE((SELECT c.status FROM action_item_status_changes c
         WHERE c.action_item_id = a.id ORDER BY c.created_at DESC LIMIT 1), 'open') = 'open'`)).rows as [{ open: number }];
+    // The WHERE clause that used to exclude incident markers here is gone, and
+    // the exclusion now happens in JS below. Two reasons. First, one concept in
+    // one place: the taxonomy in worker-health.ts already knows what a marker
+    // is, and spelling a second copy of the list into SQL is how the two come
+    // to disagree — the list is a denylist, and a marker missing from the SQL
+    // half only shows up as a permanently red dot nobody can clear. Second,
+    // this query returns exactly one row per worker with no LIMIT, so filtering
+    // after the fact drops the same rows and can never eat a page budget the
+    // way an unfiltered documents.list would.
+    //
+    // It also retires the sql.join dance that clause needed: a JS array passed
+    // straight into a `sql` template goes to pg as a plain string and dies with
+    // 22P02 `Array value must start with "{"` — measured, and it failed every
+    // dashboard test, not just the one about markers.
     const workers = (await ctx.db.execute(sql`
       SELECT DISTINCT ON (worker) worker, status, ran_at FROM worker_runs
-      WHERE worker NOT IN (${sql.join(INCIDENT_MARKERS.map((m) => sql`${m}`), sql`, `)})
       ORDER BY worker, ran_at DESC`)).rows as { worker: string; status: string; ran_at: string }[];
+    // One instant for every row, so two workers with the same ran_at can never
+    // be judged differently by a clock that ticked mid-loop.
+    const now = Date.now();
     return { pendingSuggestions: pending, inboxDocs: inbox, openActionItems: open,
-      lastWorkerRuns: workers.map((w) => ({ worker: w.worker, status: w.status, ranAt: new Date(w.ran_at) })) };
+      // The judgement is served AS DATA — kind and state, decided here where
+      // they are unit-tested. The web app must never recompute staleness: a
+      // second copy of the rule in a React component is how the two drift, and
+      // the drift stays invisible until a dead watcher renders green.
+      lastWorkerRuns: workers
+        .map((w) => ({ ...w, decl: declFor(w.worker) }))
+        .filter((w) => w.decl.kind !== "incident")
+        .map((w) => {
+          const ranAt = new Date(w.ran_at);
+          return { worker: w.worker, status: w.status, ranAt, kind: w.decl.kind,
+            state: workerState(w.decl, w.status, ranAt, now) };
+        }) };
   }),
 });

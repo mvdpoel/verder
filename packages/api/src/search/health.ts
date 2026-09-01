@@ -1,17 +1,41 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "@verder/db";
+import { cadenceMs, declFor } from "../worker-health";
+import { DRAIN_WORKER_NAME } from "../worker-names";
 
 /**
- * The `worker_runs.worker` value written by the search.drain job in
- * apps/worker/src/search-drain.ts, and read back by index health on /verify.
- * Defined once, here, and imported by both — a typo on either side would make
- * a stalled index look healthy.
+ * Re-exported so the drain job and this reader still take the name from the
+ * module they already import; it is DEFINED in ../worker-names.ts, which the
+ * dashboard taxonomy reads too. See the note there for why it sits in a leaf.
  */
-export const DRAIN_WORKER_NAME = "search-drain";
+export { DRAIN_WORKER_NAME };
 
-// The drain job runs on a short cycle. Ten minutes of silence is a stalled
-// index, not a slow minute.
-export const DRAIN_STALE_MS = 10 * 60 * 1000;
+/**
+ * How many drain cycles of silence mean the INDEX is stale. Ten, and this is a
+ * POLICY that is deliberately looser than the dashboard's.
+ *
+ * THE BUG THIS SHAPE EXISTS TO FIX: this file used to hard-code 10 * 60 * 1000
+ * while packages/api/src/worker-health.ts declared search.drain's cadence as
+ * 60 s and judged it at three missed ticks. Two screens then disagreed about
+ * one worker — a drain that died at 12:00 was "down" on the dashboard at 12:04
+ * while /verify still printed its green "alles is doorzoekbaar" until 12:10 —
+ * and neither number said which of them was the cadence and which the
+ * tolerance, so a change to the schedule could only ever fix one of them.
+ *
+ * Unifying the NUMBERS would have been the wrong repair: the two pages want
+ * different tolerances honestly. A dead watcher should be caught fast, because
+ * the dashboard's job is to notice; index freshness can absorb a slow drain,
+ * because /verify's job is to tell Martin whether what he searches is complete,
+ * and a queue that is merely behind by a few minutes still answers his
+ * question. So the FACT is stated once — the cadence, in worker-health.ts's
+ * DECLS, copied from the boss.schedule call — and each page multiplies it by a
+ * named tolerance of its own, in the open where a reader can see the choice.
+ *
+ * Ten ticks × 60 s reproduces the ten minutes this file has always used; if the
+ * drain's schedule changes, both pages move with it and stay in proportion.
+ */
+const DRAIN_STALE_TICKS = 10;
+export const DRAIN_STALE_MS = cadenceMs(declFor(DRAIN_WORKER_NAME)) * DRAIN_STALE_TICKS;
 
 // Below this the queue is simply working; above it, it is behind.
 export const OUTBOX_WARN_DEPTH = 500;

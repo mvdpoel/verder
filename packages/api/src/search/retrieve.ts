@@ -5,6 +5,7 @@ import {
 } from "@verder/core";
 import { asQuery, type EmbedPort } from "./embed";
 import { RERANK_PROMPT_VERSION, type RerankPort } from "./rerank";
+import { RERANK_WORKER_NAME } from "../worker-names";
 
 /**
  * The single entry point for retrieval: the tRPC router, the ⌘K palette, the queue
@@ -48,9 +49,11 @@ const DEFAULT_LIMIT = 20;
 const MAX_OFFSET = 500;
 /** The spec's deep budget: rerank the top 20 collapsed entities, never the whole page set. */
 const RERANK_TOP_N = 20;
-/** worker_runs.worker for a degraded rerank, so a silently degraded search is visible
- * beside the other jobs on the dashboard's system-health list. */
-const RERANK_WORKER_NAME = "search-rerank";
+/* worker_runs.worker for a degraded rerank — RERANK_WORKER_NAME, imported from
+ * ../worker-names.ts. It used to be spelled here and again in worker-health.ts,
+ * which is the module that has to recognise it to classify it as an incident
+ * marker rather than a worker with health; a name that must match in two files
+ * and is written out twice is a rename waiting to go silently wrong. */
 
 /** Where a hit sends the reader. Tracks, raw emails and parties have no detail route
  * in this application (verified against apps/web/src/app/(app)) — they link to the
