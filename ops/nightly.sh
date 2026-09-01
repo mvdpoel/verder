@@ -42,4 +42,13 @@ rsync -a "${VAULT_HOST_DIR:?}/" "$BACKUP_DIR/vault/"
 # 4. Ollama model freshness check.
 "${COMPOSE[@]}" exec -T worker pnpm --filter worker model-check
 
+# 5. Mail store — native nightly, version-independent archive weekly.
+#    LAST ON PURPOSE. This script is `set -euo pipefail`, so every step
+#    suppresses the ones after it, and this is the longest step by far (a 7 GB
+#    tar, and once a week a ~12 GB pull over JMAP) and the only one that stops a
+#    running service. Ahead of nightly-verify — where the plan put it — a failed
+#    tar would silently skip the ledger integrity check, which is the one job
+#    here that must never be skipped. See ops/mail-backup.sh.
+./ops/mail-backup.sh
+
 echo "nightly.sh: done ($STAMP)"
