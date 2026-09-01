@@ -91,6 +91,15 @@ export MAIL_DRILL_ARCHIVE=""
 # worker's name. If that recording itself fails there is nothing left to do but
 # say so on stderr — but it is bounded (`timeout`), because a drill that hangs
 # while reporting a failure is the failure it was reporting plus a stuck cron.
+#
+# ITS EXIT CODE ANSWERS "DID YOU RECORD IT?", NOT "DID THE DRILL PASS?" — the
+# drill has already failed by the time we are here, and this script's own
+# `exit 1` below is what says so. MEASURED 2026-09-01 against a deliberately
+# truncated snapshot: the first version had the TS half exit 1 after recording
+# perfectly, so this `if !` fired and the cron log claimed the row could not be
+# written while the row sat in the database saying exactly the right thing. The
+# warning below is only worth printing if it is TRUE, because it is read on the
+# one night the operator most needs to trust what they are told.
 drill_fail() {
   echo "mail-restore-drill.sh: $1" >&2
   if ! MAIL_DRILL_SHELL_FAILURE="$1" timeout 120 "${COMPOSE[@]}" run --rm -T --no-deps \

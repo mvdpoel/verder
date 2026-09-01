@@ -791,14 +791,40 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       const archive = (process.env.MAIL_DRILL_ARCHIVE ?? "").trim() || "(archive not named)";
       console.error(`mail-drill: the drill script failed before the restore could be `
         + `judged — ${shellFailure}`);
+      /*
+       * EXIT 0 ON A RECORDED FAILURE, AND THIS IS NOT A TYPO. IT WAS MEASURED.
+       *
+       * On this path the script is not judging a restore — the shell already
+       * judged it and the drill has already failed. The ONLY thing this
+       * invocation does is write the row and send the push, and the only
+       * consumer of its exit code is `drill_fail` in ops/mail-restore-drill.sh,
+       * whose question is precisely "did you manage to record it?". The shell
+       * does its own `exit 1` immediately afterwards, so the drill still fails.
+       *
+       * Exiting 1 here — which is what the first version did — answers a
+       * question nobody asked and answers it wrongly. MEASURED on the homelab
+       * 2026-09-01 by drilling a deliberately truncated snapshot: the row was
+       * written correctly (`mail-drill | error | native-TRUNCATED.tar.zst could
+       * not be decompressed and extracted`) and the push went out, and the cron
+       * log still said "AND the mail-drill failure row could not be recorded —
+       * the dashboard tile still shows the PREVIOUS run". That message is a lie
+       * told on the one occasion the operator most needs the truth: it sends
+       * them hunting a monitoring bug that does not exist, and teaches them to
+       * distrust a tile that is correctly red. A failure path that misreports
+       * itself is worse than one that is merely loud.
+       *
+       * So: 0 means recorded, non-zero means the recording itself failed and the
+       * cron log really is the only witness. A throw from recordRun or a crash
+       * still reaches the catch below, which sets exitCode 1 — which is exactly
+       * the case the shell's warning is written for.
+       */
       await recordRun(db, DRILL_WORKER, "error",
         { archive, shellFailure, ok: false, reasons: [shellFailure] });
       await pushFailure(db, `${archive}: ${shellFailure}`);
-      process.exitCode = 1;
       await pool.end();
       // `process.exit` and not a fall-through: everything below assumes a
       // restored server to talk to, and there is not one.
-      process.exit(1);
+      process.exit(0);
     }
     // The LIVE side comes from the ordinary worker environment, read through the
     // one factory that builds it — empty-is-missing, one trailing slash, the
