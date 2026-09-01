@@ -127,6 +127,21 @@ export function workerRowLabel(row: WorkerRow, now: number): string {
       return `met de hand · ${last}`;
     case "retired":
       return `uit · ${last}`;
+    /*
+     * A KIND WORD, WHERE `watcher` AND `nightly` GET NONE — and the asymmetry is
+     * the point rather than an oversight. Those two are the default reading of
+     * this panel: a run from within the last few minutes or from last night is
+     * what a reader already expects, so the dot says everything.
+     *
+     * The restore drill runs on the 1st. For twenty-nine days of every thirty
+     * its newest row is a DATE, weeks old, beside a green dot — and a
+     * weeks-old timestamp next to "healthy" is precisely the mismatch the
+     * `fout ·` prefix exists to prevent one row up: it reads as the panel
+     * glitching, and a reader who decides the panel glitches stops reading it.
+     * `maandelijks` is the missing half of that sentence.
+     */
+    case "monthly":
+      return `maandelijks · ${last}`;
     // Filtered out of the list by dashboard.stats, because the newest row of a
     // failure-only marker is "the last time this ever broke" and not current
     // health. Labelled anyway so this function is total over WorkerKind: a

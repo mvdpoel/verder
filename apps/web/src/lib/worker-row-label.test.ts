@@ -66,6 +66,34 @@ describe("workerRowLabel", () => {
     )).toBe("uit · laatst 29-08");
   });
 
+  /*
+   * THE ROW THAT LOOKS BROKEN AND IS NOT. The restore drill runs on the 1st, so
+   * for twenty-nine days in thirty its newest row is weeks old beside a GREEN
+   * dot. Without the kind word that reads as a stalled worker — the same
+   * mismatch, inverted, that `fout ·` exists to prevent — and a reader who
+   * decides this panel glitches stops reading it, which is the failure the
+   * whole taxonomy was written to undo.
+   */
+  it("names the kind so a healthy month-old run is legible: monthly", () => {
+    expect(workerRowLabel(
+      row({ kind: "monthly", state: "ok", ranAt: at("2026-08-01T05:30:00Z") }), now,
+    )).toBe("maandelijks · laatst 01-08");
+  });
+
+  /*
+   * A FAILED DRILL DROPS THE KIND WORD, exactly as a failed hand-run script
+   * does: the row is amber for a stated reason and the reason wins. This one
+   * matters more than the others, because worker-health.ts gives `monthly` an
+   * error window of its own (35 days rather than 26 hours) precisely so a
+   * failed restore drill keeps saying so all month — so this is the label that
+   * has to stay legible longest.
+   */
+  it("says a failed drill failed, without the kind word", () => {
+    expect(workerRowLabel(
+      row({ kind: "monthly", state: "down", status: "error", ranAt: at("2026-08-01T05:30:00Z") }), now,
+    )).toBe("fout 01-08");
+  });
+
   // The router filters incident markers out of the list, so this never renders
   // today. It is asserted anyway because the function must be total over
   // WorkerKind — a caller that forgets to filter has to degrade to an honest
