@@ -39,3 +39,18 @@ export const DRAIN_WORKER_NAME = "search-drain";
  * declares it an incident marker rather than a worker with health.
  */
 export const RERANK_WORKER_NAME = "search-rerank";
+
+/**
+ * Written by apps/worker/src/ops/mail-restore-drill.ts — the monthly restore
+ * drill — and read back by the `monthly` declaration in worker-health.ts, which
+ * is the ONLY durable surface a failed drill has: /verify renders the ledger
+ * panel and index health and nothing else, and the push is one interruption that
+ * is gone once it is dismissed.
+ *
+ * The name is spelled here rather than in either of them because they sit in
+ * different packages and neither imports the other. A rename that missed the
+ * other half would not throw — the dashboard would simply find no `mail-drill`
+ * rows and show no tile, which is indistinguishable from a system that has no
+ * restore drill at all. That is the silence the whole drill exists to end.
+ */
+export const MAIL_DRILL_WORKER_NAME = "mail-drill";

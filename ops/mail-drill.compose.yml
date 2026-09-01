@@ -1,0 +1,145 @@
+# Scratch Stalwart for the monthly restore drill — ops/mail-restore-drill.sh.
+#
+# This is an OVERLAY on docker-compose.prod.yml, never a stack of its own:
+#
+#   docker compose --env-file .env.prod \
+#     -f docker-compose.prod.yml -f ops/mail-drill.compose.yml up -d stalwart-drill
+#
+# It is an overlay for one reason. The drill's assertions run inside the WORKER
+# image (`compose run --rm worker pnpm --filter worker mail-drill`), so the
+# restored server has to be reachable by NAME from a container on the production
+# project's network — `verder_default`. A separate project would get its own
+# network, `stalwart-drill` would not resolve, and the drill would fail as a DNS
+# error rather than as a restore result. The same lesson ops/mail-backup.sh
+# already records for the weekly Vandelay pull: on the HOST the name does not
+# resolve at all.
+#
+# THE COST OF THAT CHOICE, and the orchestrator carries the trap in full: with
+# both files on the command line, a bare `docker compose ... down` in a cleanup
+# path takes PRODUCTION down with it — postgres, web, worker and the production
+# stalwart. Cleanup is `rm -sf stalwart-drill` and nothing else.
+#
+# NOTHING HERE MAY USE `${VAR:?}`. Compose interpolates the WHOLE rendered file
+# on EVERY command, for every service, before it looks at which service you
+# named — docker-compose.prod.yml documents this at length and ops/nightly.sh
+# (03:30 cron, `set -euo pipefail`) would die on it. Defaults, never `:?`.
+services:
+  stalwart-drill:
+    # THE SAME PINNED TAG AS PRODUCTION, and it is the whole point of the drill:
+    # tier 1 is a native RocksDB snapshot, so what is being proven is that THIS
+    # Stalwart version opens THAT store. `:latest` here would test a version we
+    # do not run, and would quietly test a different question every month.
+    # Bump it in lockstep with docker-compose.prod.yml or the drill stops
+    # answering the question it exists for.
+    image: stalwartlabs/stalwart:v0.16.19
+    # A scratch server must never come back on its own. The drill deletes the
+    # store it is reading; `unless-stopped` would restart the container into a
+    # directory that no longer exists, on every boot, forever.
+    restart: "no"
+    environment:
+      # ================== THE MOST DANGEROUS LINE IN THIS TASK ==================
+      # The JMAP session object's apiUrl / downloadUrl / uploadUrl are built from
+      # the CONFIGURED public url, verbatim, and NEVER from the request that
+      # asked for the session (crates/common/src/config/network.rs:437-442 ->
+      # registry.public_url(); crates/jmap-proto/src/request/capability.rs:
+      # 379-388 formats every url off it).
+      #
+      # Inherit production's value — http://stalwart:8080 — and the restored
+      # server hands back `apiUrl: http://stalwart:8080/jmap/`. The drill would
+      # then authenticate against THIS container, discover that url, and send
+      # every Email/query, Email/get and download to PRODUCTION, comparing
+      # production against production and reporting that the backup restored
+      # perfectly. A green drill over a store that was never read. There is no
+      # symptom: the counts match, because they are the same server.
+      #
+      # The TS side asserts the session's apiUrl points back at MAIL_DRILL_BASE_URL
+      # for exactly this reason. Do not "simplify" either half.
+      - STALWART_PUBLIC_URL=http://stalwart-drill:8080
+      # Also the node identity: gethostname() otherwise returns the container id,
+      # and the node-id lease keys on hostname (crates/store/src/build/registry.rs:
+      # 108-135). Sharing production's hostname would make the scratch server look
+      # like the SAME node coming back, which is a lease fight over two different
+      # stores. Distinct name, distinct lease.
+      - STALWART_HOSTNAME=stalwart-drill
+      # The image healthcheck tries https://127.0.0.1:443/healthz/live first and
+      # falls back to http on 8080 (Dockerfile:42-44). This service has no
+      # certificate and only ever listens on 8080, exactly like production, so
+      # point it straight at the endpoint that can answer — the orchestrator's
+      # bounded wait reads this healthcheck's verdict and nothing else.
+      - STALWART_HEALTHCHECK_URL=http://127.0.0.1:8080/healthz/live
+      # NO STALWART_RECOVERY_ADMIN. The drill must prove that the RESTORED
+      # directory authenticates the real JMAP_USER / JMAP_APP_PASSWORD; handing
+      # the container a fresh admin credential would let it answer even if the
+      # restored directory came back empty.
+    volumes:
+      # The extracted snapshot, laid out exactly as the archive stores it —
+      # `etc`, `data`, `blobs` under one root, which is how ops/mail-backup.sh
+      # tars it (`tar -C "$STORE_ROOT" … etc data blobs`).
+      #
+      # THE DEFAULTS BELOW ARE NOT THE OPERATING PATHS. The orchestrator always
+      # exports all three, pointing at the per-run mktemp directory it just
+      # extracted into; these defaults exist only so interpolation can never
+      # fail (see the `:?` note above) and so that a hand-run `up -d
+      # stalwart-drill` with nothing exported still cannot touch production.
+      # They deliberately live under the drill scratch root and share NOTHING
+      # with /mnt/data/verder/stalwart/{etc,data,blobs}.
+      #
+      # `create_host_path: false` on all three, exactly as production does, and
+      # here it is the guard that matters most: without it a typo'd or unset
+      # scratch path is silently CREATED as an empty root-owned directory, the
+      # server finds no /etc/stalwart/config.json, enters BOOTSTRAP MODE on an
+      # empty store — and a drill against an empty store passes its connection
+      # check and finds zero mail, which reads as "the backup is broken" when in
+      # fact nothing was ever restored. With the flag, the typo cannot start:
+      # `bind source path does not exist: <path>`, naming it.
+      #
+      # Ownership is a separate matter the flag says nothing about: the archive
+      # carries uid/gid 2000 and the orchestrator extracts under sudo to keep it,
+      # because the image runs as uid 2000 and cannot read a store owned by the
+      # cron user.
+      - type: bind
+        source: "${MAIL_DRILL_ETC_DIR:-/mnt/data/verder/mail-drill-tmp/store/etc}"
+        target: /etc/stalwart
+        bind: { create_host_path: false }
+      - type: bind
+        source: "${MAIL_DRILL_DATA_DIR:-/mnt/data/verder/mail-drill-tmp/store/data}"
+        target: /var/lib/stalwart
+        bind: { create_host_path: false }
+      # Nested inside the mount above; Docker mounts by destination depth, so the
+      # parent lands first. Mirrors production so a restore is laid out the way
+      # the store expects to find itself.
+      - type: bind
+        source: "${MAIL_DRILL_BLOB_DIR:-/mnt/data/verder/mail-drill-tmp/store/blobs}"
+        target: /var/lib/stalwart/blobs
+        bind: { create_host_path: false }
+    # OUTBOUND IS A SEPARATE QUESTION FROM THE ONE BELOW, AND IT IS OPEN.
+    # `NO ports:` closes INBOUND completely — nothing outside the host can reach
+    # this server and no MX points at it. It says nothing about the server
+    # DELIVERING: the restored registry is production's, byte for byte, under
+    # production's identity, and this container sits on `verder_default` with
+    # ordinary internet egress. A Stalwart opening a store whose outbound queue is
+    # non-empty, or which owes DMARC/TLS aggregate reports, would try to send them
+    # — once a month, as production.
+    #
+    # TODAY IT CANNOT, on two measured grounds, which is why this is a note and
+    # not a config change. Only ONE listener exists in production's registry (TCP
+    # 8080; the six wizard listeners — smtp/25, submissions/465, imaps/993,
+    # pop3s/995, sieve/4190, https/443 — were deleted, verified from
+    # /proc/net/tcp), and phase 1 sends no mail at all: the store came from a
+    # Vandelay import and the queue is empty.
+    #
+    # PHASE 2 MOVES DELIVERY ONTO THIS STORE AND MAKES IT REAL. Decide it then,
+    # with a measurement — Stalwart's own knob for holding the outbound queue, or
+    # an internal network for this service. What must NOT happen is an invented
+    # environment variable put here on the strength of it looking plausible: a
+    # setting the server ignores is worse than a documented open question,
+    # because it reads as solved.
+    #
+    # NO `ports:` — DELIBERATELY, and it is not an oversight to be tidied up.
+    # The drill client runs inside the compose network and reaches this service
+    # by name. Publishing a port would put a SECOND mail server on the host's
+    # loopback, serving a month-old copy of the whole dossier, for the duration
+    # of the drill and for as long afterwards as anyone forgets to remove it.
+    # There is also nothing to publish it on: production already holds
+    # 127.0.0.1:8080, so any published port would have to be a different one,
+    # which is one more thing to get wrong.

@@ -1414,6 +1414,69 @@ select worker, status, ran_at, now() - ran_at as age, detail
   order by ran_at desc limit 5;
 ```
 
+### 8.12 The monthly restore drill — install its crontab line
+
+`ops/mail-backup.sh` proves an archive is well formed. **Only a restore proves a
+backup restores**, so `ops/mail-restore-drill.sh` performs one every month
+against a scratch Stalwart on the production compose project and throws it away.
+
+**Nothing in the repo installs this. It is a manual step and it is easy to
+forget, and forgetting it is invisible:** the dashboard's Systeem panel is built
+from `SELECT DISTINCT ON (worker) … FROM worker_runs`, so a worker that has never
+run has no row, no tile and no colour. A drill that was never scheduled looks
+exactly like a system with no restore drill concept at all — which is the state
+this whole task exists to leave behind.
+
+The crontab is `CRON_TZ=UTC`, and this line runs on the 1st at 05:30 UTC — after
+the 03:30 nightly, so the archive it drills is the one written a couple of hours
+earlier:
+
+```
+30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh >> /var/log/verder-drill.log 2>&1
+```
+
+That schedule is spelled in three places and they must move together: here, in
+`ops/mail-restore-drill.sh`'s header, and in `packages/api/src/worker-health.ts`,
+whose 35-day staleness bound (31 days of the longest month plus four days of
+slack) is reasoned *from* it.
+
+**Verify it, the same evening — do not wait a month for the first run.** The
+drill takes ~10–20 minutes and holds ~20 GB of `/mnt/data` while it runs:
+
+```bash
+ssh homelab
+cd ~/apps/verder
+./ops/mail-restore-drill.sh          # prints PASS, or FAIL and the reasons
+crontab -l | grep mail-restore-drill # the line is actually installed
+```
+
+Then confirm the row it wrote, which is what the dashboard reads:
+
+```sql
+select worker, status, ran_at, now() - ran_at as age, detail
+  from worker_runs where worker = 'mail-drill'
+  order by ran_at desc limit 3;
+```
+
+Reading the outcome:
+
+- **A green tile means a passing drill within the last 35 days.** Nothing else
+  turns it green — the row is written by the drill and by nothing else.
+- **A failed drill stays red for the whole month**, on purpose: it is declared
+  `monthly` with an error window as long as its silence bound, because "the
+  backup could not be restored" stays true until a human fixes it and the next
+  run is a month away. `/verify` does not cover it, so the tile and the push are
+  the only surfaces there are.
+- **The drill fails on a skipped tier 2 as well as on a bad restore.** A weekly
+  Vandelay archive that is missing, unreadable, or age-encrypted (this cron has
+  no key and must not acquire one) fails the drill with that reason quoted. The
+  spec forbids a generation where only the native snapshot is proven.
+- **A month with no row at all is the loud case.** Everything the shell half can
+  detect before the assertions run — no archive on the NAS, an archive that will
+  not extract, an extracted tree with no `etc/config.json`, a scratch server that
+  never became healthy — records its own `mail-drill` error row and pushes,
+  precisely so a missing row means the cron line itself is gone.
+
 
 ## Restore procedure
 

@@ -18,6 +18,7 @@
  *
  *  - watcher    a scheduled cron. Silence IS failure.
  *  - nightly    the 03:30 host crontab. Stale ~21 h of every day BY DESIGN.
+ *  - monthly    the 1st-of-the-month host crontab. Stale for WEEKS by design.
  *  - on-demand  runs when a job arrives. No cadence to be late against.
  *  - hand-run   an ops script somebody types. Silent for weeks by design.
  *  - retired    deliberately unscheduled, but can still be run by hand.
@@ -29,11 +30,12 @@
  * whose last word was a failure long enough ago to be history.
  */
 
-import { DRAIN_WORKER_NAME, RERANK_WORKER_NAME } from "./worker-names";
+import { DRAIN_WORKER_NAME, MAIL_DRILL_WORKER_NAME, RERANK_WORKER_NAME } from "./worker-names";
 
 export type WorkerKind =
   | "watcher"
   | "nightly"
+  | "monthly"
   | "on-demand"
   | "hand-run"
   | "retired"
@@ -57,6 +59,26 @@ export interface WorkerDecl {
    *  because a table of hand-picked timeouts is precisely how one 15-minute
    *  threshold came to judge fifteen unlike things. */
   everyMs?: number;
+  /**
+   * How long THIS worker's recorded failure stays actionable, overriding
+   * ERROR_ACTIONABLE_MS. Optional, and every kind that omits it keeps the 26 h
+   * window unchanged — see the constant for why 26 h is right for a worker that
+   * runs again today or tomorrow.
+   *
+   * IT EXISTS FOR THE MONTHLY KIND AND THE ARGUMENT IS SPECIFIC TO IT. Ageing
+   * an error out is safe exactly when the failure becomes STALE NEWS: ollama's
+   * 120 s timeout is a snapshot of a busy GPU, and by tomorrow the only honest
+   * thing to say about it is when it happened. A restore drill that failed is
+   * not that. It says the backup could not be restored, that stays true until a
+   * human fixes it, the next run is a MONTH away, and no other surface reports
+   * it — /verify renders the ledger panel and index health only, and the
+   * dashboard router is the sole reader of `worker_runs.status` in the whole
+   * app. Age it out at 26 h and the panel shows a failed drill for one day and
+   * then reports a healthy backup for twenty-nine, which is the original bug of
+   * this module in mirror image: not a dot claiming attention it does not
+   * deserve, but silence where the attention was earned.
+   */
+  errorActionableMs?: number;
 }
 
 const MINUTE = 60_000;
@@ -78,6 +100,36 @@ const WATCHER_MISSED_TICKS = 3;
  * whole day, which is the failure that matters — a backup that did not run.
  */
 const NIGHTLY_MAX_AGE_MS = 26 * 60 * MINUTE;
+
+/**
+ * A monthly job runs at 05:30 UTC on the 1st, so the longest LEGITIMATE gap
+ * between two runs is 31 days — February to March is 28, July to August is 31,
+ * and there is no month longer than that. 35 days is those 31 plus four days of
+ * slack for a homelab that was powered off over a long weekend, or a drill that
+ * started on the 1st and was still restoring 146 270 messages when the clock
+ * rolled over.
+ *
+ * WHY THIS IS ITS OWN BOUND AND NOT A MULTIPLIER. The obvious move was to
+ * declare the drill a watcher with a ~31-day cadence and let
+ * WATCHER_MISSED_TICKS carry it. That multiplier is 3 because a watcher runs
+ * every minute and a single slow tick — a GPU busy with an eval, a long drain —
+ * is noise that must never be an alarm. A monthly job has no tick noise: one
+ * missed run IS the news, and 3× would put the line at about a quarter, so a
+ * drill that stopped running entirely in September would go unreported until
+ * spring. Tolerance-as-a-multiple-of-cadence is the right shape only where the
+ * cadence is fast enough for a miss to be routine.
+ *
+ * A DIFFERENT FACT from the other 35 in this feature, and the coincidence is
+ * close enough to be worth naming: ops/mail-backup.sh prunes the weekly Vandelay
+ * archives with `find … -mtime +35 -delete`. Same number, unrelated question —
+ * that one is "how many weekly archives fit on the NAS", this one is "how long a
+ * month can be, plus room for a machine that was off". They must never become
+ * one constant, for exactly the reason NIGHTLY_MAX_AGE_MS and ERROR_ACTIONABLE_MS
+ * coincide at 26 h and are still spelled twice: the day somebody frees disk by
+ * cutting retention to 21 days, this line would silently follow and start
+ * calling a drill overdue three days after it ran on time.
+ */
+const MONTHLY_MAX_AGE_MS = 35 * 24 * 60 * MINUTE;
 
 /**
  * How long a recorded failure stays ACTIONABLE. Past this the row is history,
@@ -141,6 +193,38 @@ const DECLS: Record<string, WorkerDecl> = {
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
   "model-check": { kind: "nightly" },
+
+  // ---- monthly, from the HOST crontab on the 1st -------------------------
+  /*
+   * The mail restore drill: `30 5 1 * *` under CRON_TZ=UTC, its OWN crontab
+   * entry and deliberately NOT a line inside ops/nightly.sh — nightly.sh runs
+   * every night and this runs twelve times a year, and appending it there would
+   * make its own `mail` staleness a function of the nightly schedule.
+   *
+   * Not a pg-boss job either, for a measured reason: the drill restores a
+   * 5.59 GB native snapshot into a scratch Stalwart and counts the messages
+   * back, which is tens of minutes, and pg-boss expires a job at ~15 minutes and
+   * would re-run it — a second drill starting on top of the first, against the
+   * same scratch directory. That is the same argument that keeps mail-first-sync
+   * a hand-run script rather than a queued job.
+   *
+   * `errorActionableMs` is the whole point of this declaration and is set to the
+   * same bound as the silence rule, so a FAILED drill stays `down` until a
+   * passing run replaces the row — or until the schedule itself is overdue, at
+   * which point it is down anyway and the two answers agree. Leaving it at the
+   * default 26 h would report a healthy backup for the twenty-nine days after
+   * the one day it told the truth. See WorkerDecl.errorActionableMs.
+   *
+   * NOTHING IN THIS REPO INSTALLS THAT CRONTAB LINE, and the panel cannot warn
+   * about it: routers/dashboard.ts builds the list from
+   * `SELECT DISTINCT ON (worker) … FROM worker_runs`, so a worker that has never
+   * run has no row to be judged and no tile — a drill that was never scheduled
+   * is indistinguishable from a system with no drill at all. The mitigation is
+   * an install step with a verification, in docs/deploy.md §8.12; the schedule
+   * is spelled there, in ops/mail-restore-drill.sh's header, and here, and the
+   * three must stay in step.
+   */
+  [MAIL_DRILL_WORKER_NAME]: { kind: "monthly", errorActionableMs: MONTHLY_MAX_AGE_MS },
 
   // ---- event-driven. Runs only when a job arrives. -----------------------
   // task-mine rides suggest.entry, which rides an arriving email; ollama is
@@ -284,7 +368,14 @@ export function workerState(
   // and its worker stay registered. The person typing that backfill is the one
   // reader this panel has; showing them a calm grey "off" for the run they are
   // watching fail is the panel lying to the only person using it.
-  if (status !== "ok" && ageMs <= ERROR_ACTIONABLE_MS) return "down";
+  //
+  // The window is per-decl and defaults to ERROR_ACTIONABLE_MS, so every kind
+  // declared before mail-drill is judged by exactly the same 26 h as before.
+  // Only a kind that says so gets a different one, and only `monthly` does —
+  // because only there does the failure stay true for longer than the gap to
+  // the next run. See WorkerDecl.errorActionableMs.
+  if (status !== "ok" && ageMs <= (decl.errorActionableMs ?? ERROR_ACTIONABLE_MS))
+    return "down";
 
   // Past the window the failure is history and the kind's ordinary rule takes
   // over. For retired that is "off" — the rate-limit wall that got gmail
@@ -302,6 +393,11 @@ export function workerState(
       return ageMs > cadenceMs(decl) * WATCHER_MISSED_TICKS ? "down" : "ok";
     case "nightly":
       return ageMs > NIGHTLY_MAX_AGE_MS ? "down" : "ok";
+    // Silence IS failure here too, just on a calendar rather than a clock: the
+    // drill either ran on the 1st or nobody has proved the mail backup is
+    // restorable since the month before last.
+    case "monthly":
+      return ageMs > MONTHLY_MAX_AGE_MS ? "down" : "ok";
     // No cadence to be late against. The panel shows when these last ran and
     // says nothing more; there is no age at which their silence becomes news.
     case "on-demand":

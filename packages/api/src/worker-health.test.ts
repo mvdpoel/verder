@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { declFor, workerState } from "./worker-health";
+import { MAIL_DRILL_WORKER_NAME } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
 const agoMs = (ms: number) => new Date(NOW - ms);
@@ -142,6 +143,76 @@ describe("declFor — the workers that exist today", () => {
     // by registry.mine and only for an APPLE.COM/BILL-shaped statement line.
     expect(declFor("receipts").kind).toBe("on-demand");
   });
+
+  it("declares mail-drill monthly, with its own error window", () => {
+    // Spelled out rather than imported, like every other number in this file:
+    // the 35 days are the longest a calendar month can be (31) plus four days
+    // of slack for a homelab that was off, and this assertion has to fail if
+    // somebody moves it.
+    expect(declFor("mail-drill")).toEqual({ kind: "monthly", errorActionableMs: 35 * DAY });
+    // THE NAME, on the other hand, is ONE constant: its writer is
+    // apps/worker/src/ops/mail-restore-drill.ts and its reader is this module,
+    // in a different package, and a rename that missed one half would not throw
+    // — the panel would simply find no rows and show no tile, which reads as a
+    // system that has no restore drill at all.
+    expect(MAIL_DRILL_WORKER_NAME).toBe("mail-drill");
+    expect(declFor(MAIL_DRILL_WORKER_NAME).kind).toBe("monthly");
+  });
+});
+
+describe("workerState — the monthly restore drill", () => {
+  it("is ok mid-month and down once a whole run has been skipped", () => {
+    // `30 5 1 * *` on the host crontab (CRON_TZ=UTC), restoring the 5.59 GB
+    // native snapshot into a scratch Stalwart and counting 146 270 messages
+    // back. Three weeks of silence is the middle of an ordinary month; six is a
+    // drill that did not run on the 1st, and nothing else in the system would
+    // say so.
+    expect(state("mail-drill", "ok", agoMs(20 * DAY))).toBe("ok");
+    expect(state("mail-drill", "ok", agoMs(40 * DAY))).toBe("down");
+  });
+
+  it("is NOT judged as a watcher, which is the bug this kind was added to stop", () => {
+    // THE BUG THIS PINS, caught before it shipped. declFor defaults an
+    // undeclared name to a watcher at 5 min × 3, so a monthly job with no
+    // declaration is amber for roughly 29 days out of every 30 — the exact
+    // permanent-amber problem this module exists to remove, arriving through its
+    // own front door. The counterfactual is asserted on the next line rather
+    // than described: a name one typo away from this one IS down at three days.
+    expect(declFor("mail-drill").kind).toBe("monthly");
+    expect(declFor("mail-drill").everyMs).toBeUndefined();
+    expect(state("mail-drill", "ok", agoMs(3 * DAY))).toBe("ok");
+    expect(state("mail-drills", "ok", agoMs(3 * DAY))).toBe("down");
+  });
+
+  it("keeps a FAILED drill down long past the 26 h every other kind ages out at", () => {
+    // THE MIRROR-IMAGE BUG, and the reason WorkerDecl carries its own error
+    // window. Ageing an error out is right when the failure becomes stale news:
+    // ollama's 120 s timeout is a snapshot of a busy GPU, and a day later the
+    // only honest thing left to say is when it happened — which is why the
+    // hand-run reindex on the last line is `idle` at the same age. A drill that
+    // failed is not that. It says the mail backup could not be restored; that
+    // stays true until a human fixes it, the next run is a MONTH away, and no
+    // other surface reports it (/verify renders the ledger panel and index
+    // health only, and the dashboard router is the only reader of
+    // worker_runs.status in the app). At 26 h + 1 the default would hand this
+    // row back as a healthy `ok` for the next four weeks.
+    expect(state("mail-drill", "error", agoMs(2 * HOUR))).toBe("down");
+    expect(state("mail-drill", "error", agoMs(27 * HOUR))).toBe("down");
+    expect(state("mail-drill", "error", agoMs(5 * DAY))).toBe("down");
+    expect(state("reindex", "error", agoMs(5 * DAY))).toBe("idle");
+  });
+
+  it("falls through to the silence rule once even its own window has passed", () => {
+    // Past 35 days the failed row is history like any other, and the kind's
+    // ordinary rule takes over — which for `monthly` says down as well, because
+    // a drill that has not reported in 40 days is overdue whatever its last word
+    // was. THE TWO ANSWERS AGREEING IS THE POINT, not an accident: it is what
+    // makes it safe to set the error window equal to the silence bound. There is
+    // no age at which a failed drill quietly turns green, so nothing here needs
+    // a reader to know which of the two branches produced the verdict.
+    expect(state("mail-drill", "error", agoMs(40 * DAY))).toBe("down");
+    expect(state("mail-drill", "error", agoMs(400 * DAY))).toBe("down");
+  });
 });
 
 describe("workerState — an error ages out", () => {
@@ -235,6 +306,42 @@ describe("workerState — the boundaries themselves", () => {
     // And the retired case, which has a different resting state on the far side.
     expect(state("gmail", "error", agoMs(26 * HOUR))).toBe("down");
     expect(state("gmail", "error", agoMs(26 * HOUR + 1))).toBe("off");
+  });
+
+  it("puts the monthly line at exactly 35 days, inclusive", () => {
+    // 31 days — the longest a calendar month can be — plus four days of slack
+    // for a machine that was powered off, or a drill that started on the 1st and
+    // was still restoring when the clock rolled over. Move this number down and
+    // the panel calls an on-time drill overdue; move it past 62 and a drill that
+    // skipped a whole month is reported healthy, which is a page claiming the
+    // mail backup is restorable when the last thing anyone actually proved was
+    // two months ago.
+    expect(state("mail-drill", "ok", agoMs(35 * DAY))).toBe("ok");
+    expect(state("mail-drill", "ok", agoMs(35 * DAY + 1))).toBe("down");
+  });
+
+  it("leaves the 26-hour error window in place for every kind that does not ask for its own", () => {
+    // THE BLAST RADIUS OF THE PER-DECL WINDOW, pinned from both ends. No decl
+    // written before mail-drill may carry one, so every kind is judged by the
+    // same 26 h it was before the monthly kind existed.
+    for (const name of ["mail", "heartbeat", "nightly-verify", "model-check",
+                        "ollama", "extract", "reindex", "case-history", "gmail"]) {
+      expect(declFor(name).errorActionableMs).toBeUndefined();
+    }
+    // And the same line drawn through workerState, on the kinds where it is
+    // OBSERVABLE. It is not observable on a watcher or a nightly job: past 26 h
+    // their own cadence rule already says down, so both branches agree and no
+    // assertion can tell them apart — which is exactly the argument the
+    // "changes nothing for a watcher" test above makes. On-demand, hand-run and
+    // retired are where the window decides the answer.
+    expect(state("ollama", "error", agoMs(26 * HOUR))).toBe("down");
+    expect(state("ollama", "error", agoMs(26 * HOUR + 1))).toBe("idle");
+    expect(state("extract-texts", "error", agoMs(26 * HOUR))).toBe("down");
+    expect(state("extract-texts", "error", agoMs(26 * HOUR + 1))).toBe("idle");
+    expect(state("gmail", "error", agoMs(26 * HOUR + 1))).toBe("off");
+    // The unknown-name default is a watcher and must not have acquired one
+    // either, or a worker added next month would inherit a window nobody chose.
+    expect(declFor("some-worker-added-next-week").errorActionableMs).toBeUndefined();
   });
 });
 

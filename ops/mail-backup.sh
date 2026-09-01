@@ -68,6 +68,120 @@ mkdir -p "$OUT"
 # `mail` row within three minutes (worker-health.ts), and that signal is only
 # useful if the ledger check has already run.
 ARCHIVE="$OUT/native-$STAMP.tar.zst"
+MANIFEST="$OUT/native-$STAMP.json"
+
+# ---------------------------------------------------------------------------
+# The sidecar manifest reading, taken HERE — while the server is still up, and
+# BEFORE the stop below.
+#
+# WHY A MANIFEST EXISTS AT ALL. The monthly restore drill's acceptance test is a
+# SERVER-SIDE MESSAGE COUNT, for the same reason the config.json check below is
+# not "tar exited 0": "exited 0 is not evidence that anything arrived". To judge
+# a restore the drill needs the number the store held AT SNAPSHOT TIME.
+# Comparing against the LIVE count is exact only while no mail arrives — true in
+# phase 1, and false the hour phase 2 moves delivery to Stalwart, when the
+# snapshot is up to 24 h behind live, an equality check false-alarms EVERY
+# month, and the drill becomes a dot nobody reads. That is the permanent-amber
+# failure packages/api/src/worker-health.ts was written to remove. It is also
+# already wrong today for the documented case of drilling the SECOND-newest
+# archive when the newest is the one under suspicion — which is precisely why
+# tier 2 keeps five weeks.
+#
+# WHY BEFORE THE STOP RATHER THAN AFTER THE RESTART. In phase 1 the two readings
+# are the same number, because nothing writes to the store. The decider is not
+# accuracy but what the reading is allowed to DEPEND on: taken after the
+# restart, it depends on Stalwart coming back and finishing its RocksDB open —
+# the riskiest minute of this whole script, and the last place to add a second
+# consumer. Taken here it is one round trip (measured 35 ms for the session, 6 ms
+# for the query) against a server that has been answering all day, and the
+# manifest still exists for an archive on a night the restart goes wrong. Phase 2
+# adds a second reason pointing the same way: mail delivered between `start` and
+# a post-restart count would make the manifest claim MORE messages than the
+# archive holds, and a drill failing because its baseline is too HIGH is exactly
+# the false alarm the manifest exists to prevent.
+#
+# NO FILTER ON THE QUERY, and that is a measurement, not a style choice.
+# MEASURED against production 2026-09-01: Email/query FILTERS RETURN NOTHING on
+# this store. A `subject` filter for a subject known to be present returns 0, and
+# so does `header: ["Message-ID"]` — which asks only whether the header EXISTS
+# and cannot honestly be zero across 146,270 messages. The UNFILTERED
+# enumeration returns all of them, which is why ingestion is unaffected
+# (Email/changes and Email/get never filter). Narrow that query and the manifest
+# records 0, the guard below refuses it, and a full-text-index defect starts
+# reading as a backup defect. The query itself lives in
+# apps/worker/src/mail/jmap-counts.ts, which carries the same measurement and the
+# test that pins it — this script no longer spells a JMAP call of its own.
+#
+# THE COUNT IS A CONVENIENCE, NEVER A GATE. Worker down, JMAP unreachable, a
+# refused method, a wedged docker daemon — every one of them warns on stderr and
+# the backup carries on. A night with an archive and no manifest costs the drill
+# a fallback to the live count; a night with no archive costs everything. Hence
+# the `if` around the command substitution: `set -e` does not kill on a command
+# in a condition. The other half of that rule is below — a manifest is NEVER
+# written with a wrong or empty count, because no manifest is honest and one
+# saying 0 is a lie the drill would act on.
+# ---------------------------------------------------------------------------
+# ONE DEFINITION OF THE QUESTION, and this block used to be the counter-example.
+# It was a node heredoc that built its own Basic header, fetched its own session,
+# read primaryAccounts, POSTed methodCalls and walked methodResponses — a second
+# JMAP client beside apps/worker/src/mail/jmap-client.ts, reading JMAP_BASE_URL /
+# JMAP_USER / JMAP_APP_PASSWORD directly, in defiance of from-env.ts's own law
+# ("NOTHING else in `mail/` reads an env var for the connection … this is the
+# seam where configuration becomes a dependency, and it is the only one"). And it
+# had already drifted from the drill that consumes its output, before either half
+# had ever run: it kept the LAST of two mailboxes sharing a name where the drill
+# SUMS them, and dropped a mailbox with no `totalEmails` where the drill refuses
+# one. Both differences make a byte-perfect restore fail the drill's rule 3 every
+# month — the permanent red that ends with nobody reading the drill at all.
+#
+# `pnpm --filter worker mail-count` is the same call the drill makes, through the
+# same client, over the same env factory. Both halves now import
+# mail/jmap-counts.ts and there is nothing left to drift.
+#
+# `exec`, not `run --rm`, and the container start it saves is the LESSER reason.
+# The worker already holds JMAP_BASE_URL / JMAP_USER / JMAP_APP_PASSWORD from
+# `env_file: .env.prod`, so THIS SCRIPT NEVER HANDLES THE SECRET: no `-e` flag,
+# nothing on a command line, nothing in the host process table, nothing to leak
+# into a cron log. (Tier 2 below cannot do this — vandelay wants the password
+# under a different name, which is why it has to pass `-e VANDELAY_PASSWORD`
+# name-only.) The worker is up during a nightly run — nightly.sh has already
+# exec'd it twice, for nightly-verify and model-check — so `run --rm` would start
+# a second container beside a healthy one, and a killed script would leave it
+# behind.
+#
+# TWO timeouts, because there are two different hangs. `timedFetch` in
+# mail-count.ts bounds the JMAP round trips, which have NO timeout of their own
+# anywhere on this path (jmap-client.ts passes no signal; undici's 300 s default
+# is all that is under them, and it resets per chunk). `timeout 60` bounds
+# `docker compose exec` itself, which the JS cannot reach. A convenience step
+# that can hang is a gate wearing a different hat — and this one runs in front of
+# the tar.
+#
+# THE OUTPUT IS GREPPED, NOT TRUSTED WHOLE. `pnpm run` prints a banner of its own
+# on stdout, and its exact wording is a property of whichever pnpm the image
+# happens to carry. mail-count writes the manifest as one line and every
+# diagnosis to stderr, so the manifest is the line that starts like a manifest;
+# anything else on stdout is somebody else's noise and is dropped here rather
+# than being handed to the structural gate as a mystery.
+MANIFEST_JSON=""
+if ! COUNT_OUT=$(timeout 60 "${COMPOSE[@]}" exec -T worker \
+    pnpm --silent --filter worker mail-count "$(basename "$ARCHIVE")"); then
+  echo "mail-backup.sh: could not read the message count over JMAP — no manifest for" >&2
+  echo "mail-backup.sh: $(basename "$ARCHIVE"); the restore drill falls back to the live count" >&2
+  COUNT_OUT=""
+fi
+MANIFEST_JSON=$(printf '%s\n' "$COUNT_OUT" | grep -m1 '^{"archive":"native-' || true)
+
+# Structural gate, and the leading digit is the point of it: `[1-9][0-9]*`
+# refuses a count of 0 — an empty store, a filtered query that matched nothing,
+# a half-written response — and the anchored shape refuses any error text that
+# reached stdout instead of stderr. Everything that is not a manifest becomes NO
+# manifest.
+MANIFEST_RE='^\{"archive":"native-[^"]+","takenAt":"[^"]+","count":[1-9][0-9]*,"mailboxes":\{'
+if [ -n "$MANIFEST_JSON" ] && ! [[ "$MANIFEST_JSON" =~ $MANIFEST_RE ]]; then
+  echo "mail-backup.sh: JMAP answered with no usable count — no manifest written" >&2
+  MANIFEST_JSON=""
+fi
 
 # TWO things must happen however this exits, and the second was learned the
 # hard way on the first real run. Stalwart must come back up — without that a
@@ -146,10 +260,29 @@ mv -f "$STAGING" "$ARCHIVE"
 snapshot_ok=1
 trap - EXIT
 
+# ONLY NOW. The manifest is a claim about an archive, so it may not exist until
+# the archive does: written before the `mv` it would sit beside a `.partial`
+# that a failing verification is about to delete, and the drill would read a
+# baseline for a snapshot nobody ever took. Staged and renamed like the archive
+# itself, at a ten-millionth of the size and for the same reason — a torn
+# manifest is a drill that cannot parse its own baseline, and `printf` is only
+# atomic by luck.
+if [ -n "$MANIFEST_JSON" ]; then
+  printf '%s\n' "$MANIFEST_JSON" > "$MANIFEST.partial"
+  mv -f "$MANIFEST.partial" "$MANIFEST"
+fi
+
 # 14 days, not 30. The store is ~7.3 GB and compresses to a few GB a night; in
 # phase 1 it does not change at all, so thirty identical copies buy nothing that
 # fourteen do not. Revisit when mail actually starts arriving.
 find "$OUT" -name 'native-*.tar.zst' -mtime +14 -delete
+# The manifests age out WITH their archives, on the same clock. It needs its own
+# `find` because `-name 'native-*.tar.zst'` cannot match `native-<date>.json` —
+# left out, the manifests are the one thing this script writes that accumulates
+# forever, each one a baseline for an archive that was pruned a year ago. The
+# trailing `*` also sweeps a `.json.partial` orphaned by a run killed between
+# the printf and the mv.
+find "$OUT" -name 'native-*.json*' -mtime +14 -delete
 
 # ---------------------------------------------------------------------------
 # Tier 2 — version-independent archive, weekly.

@@ -21,6 +21,8 @@
     "case-history": "tsx src/ops/case-history.ts",
     "mail-first-sync": "tsx src/ops/mail-first-sync.ts",
     "backfill-message-ids": "tsx src/ops/backfill-message-ids.ts",
+    "mail-drill": "tsx src/ops/mail-restore-drill.ts",
+    "mail-count": "tsx src/ops/mail-count.ts",
     "reindex": "tsx src/ops/reindex.ts"
   },
   "dependencies": {

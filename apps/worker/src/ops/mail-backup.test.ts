@@ -187,6 +187,218 @@ describe("mail-backup.sh", () => {
     // that the cleanup cannot remove.
     expect(code).toMatch(/--user "\$\(id -u\):\$\(id -g\)"/);
   });
+
+  /*
+   * THE SIDECAR MANIFEST — the baseline the monthly restore drill measures a
+   * restored store against.
+   *
+   * Everything here is asserted on `code`, never on `sh`. The block it covers
+   * carries about sixty lines of comment explaining what it deliberately does
+   * NOT do — no filter, no `-e` with a value, no gate — and every one of those
+   * sentences would satisfy a naive grep for the thing it forbids.
+   */
+  describe("restore-drill manifest", () => {
+    // Boundaries of the manifest block, so the "no X anywhere near this" checks
+    // cannot be satisfied — or broken — by tier 2 forty lines further down,
+    // which legitimately does `run --rm` and legitimately passes an `-e`.
+    const blockStart = code.indexOf('MANIFEST_JSON=""');
+    const blockEnd = code.indexOf('STAGING="$ARCHIVE.partial"');
+    const block = code.slice(blockStart, blockEnd);
+
+    it("brackets the block the rest of these tests slice", () => {
+      expect(blockStart).toBeGreaterThan(-1);
+      expect(blockEnd).toBeGreaterThan(blockStart);
+    });
+
+    /*
+     * ONE DEFINITION OF THE QUESTION. This block used to be a node heredoc that
+     * built its own Basic header, fetched its own session, read primaryAccounts
+     * and walked methodResponses — a SECOND JMAP client beside
+     * mail/jmap-client.ts, reading JMAP_BASE_URL / JMAP_USER /
+     * JMAP_APP_PASSWORD directly, against from-env.ts's own law ("NOTHING else
+     * in `mail/` reads an env var for the connection … it is the only one").
+     *
+     * And it had already drifted from the drill that consumes its output, before
+     * either half had ever run: it kept the LAST of two mailboxes sharing a name
+     * where the drill SUMS them, and dropped a mailbox with no `totalEmails`
+     * where the drill refuses one. Either difference fails rule 3 on a
+     * byte-perfect restore, every month, permanently — which ends with nobody
+     * reading the drill. Both halves now call mail/jmap-counts.ts.
+     */
+    it("asks over the worker's own JMAP client, never a second copy of one", () => {
+      expect(block).toMatch(/pnpm --silent --filter worker mail-count/);
+      // No hand-rolled client anywhere in the script: no session fetch, no
+      // Basic header, no methodCalls, no method-response walking.
+      expect(code).not.toMatch(/well-known\/jmap/);
+      expect(code).not.toMatch(/methodCalls/);
+      expect(code).not.toMatch(/methodResponses/);
+      expect(code).not.toMatch(/primaryAccounts/);
+      // The credential checks are BLOCK-scoped, not script-wide: tier 2 forty
+      // lines below legitimately reads JMAP_APP_PASSWORD (to hand vandelay
+      // `VANDELAY_PASSWORD`, name-only) and JMAP_BASE_URL. What matters here is
+      // that the MANIFEST never touches them — the worker already holds them
+      // through `env_file: .env.prod`.
+      expect(block).not.toMatch(/JMAP_APP_PASSWORD/);
+      expect(block).not.toMatch(/JMAP_BASE_URL/);
+      expect(block).not.toMatch(/JMAP_USER/);
+      expect(block).not.toMatch(/[Aa]uthorization|Basic /);
+    });
+
+    /*
+     * MEASURED against production 2026-09-01: Email/query FILTERS RETURN
+     * NOTHING on this store. A `subject` filter for a subject known to be
+     * present returns 0, and so does `header: ["Message-ID"]` — which asks only
+     * whether the header EXISTS and cannot honestly be zero across 146,270
+     * messages. The query itself now lives in mail/jmap-counts.ts, where its own
+     * test pins the request body; what this file can still say is that the
+     * count is taken over that module and not over a filtered query of its own.
+     *
+     * NOTE WHAT THIS IS NOT: `expect(code).not.toMatch(/filter/i)` over the
+     * whole script, which is what it used to be. `pnpm --filter worker <script>`
+     * is how EVERY ops script in this repo invokes worker code, so that
+     * assertion forbade the fix rather than the fault.
+     */
+    it("takes the count from the module that carries the no-filter measurement", () => {
+      const counts = readFileSync(
+        new URL("../mail/jmap-counts.ts", import.meta.url), "utf8");
+      expect(counts).toMatch(/Email\/query/);
+      expect(counts).toMatch(/calculateTotal: true/);
+      expect(counts).toMatch(/Mailbox\/get/);
+      expect(counts).toMatch(/properties: \["name", "totalEmails"\]/);
+      // Summed, not last-wins — the drift that made this refactor necessary.
+      expect(counts).toMatch(/totals\[name\] = \(totals\[name\] \?\? 0\) \+ row\.totalEmails/);
+      // And a mailbox with no usable total throws rather than being dropped.
+      expect(counts).toMatch(/no usable totalEmails/);
+    });
+
+    /*
+     * THE COUNT IS TAKEN WHILE THE SERVER IS STILL UP. Taken after the restart
+     * it would depend on Stalwart finishing its RocksDB open — the riskiest
+     * minute in this script, and the last place to add a second consumer — and
+     * in phase 2 mail delivered between `start` and the count would make the
+     * baseline claim MORE messages than the archive holds, which is exactly the
+     * false alarm the manifest exists to prevent.
+     */
+    it("reads the count before the store is stopped", () => {
+      const counted = code.indexOf("exec -T worker");
+      const stopped = code.indexOf("stop stalwart");
+      expect(counted).toBeGreaterThan(-1);
+      expect(stopped).toBeGreaterThan(-1);
+      expect(counted).toBeLessThan(stopped);
+    });
+
+    /*
+     * A manifest is a claim about an archive, so it may not exist until the
+     * archive does. Written before the `mv` it would sit beside a `.partial`
+     * that a failed config.json verification is about to delete — a baseline
+     * for a snapshot nobody ever took, which is the same class of artifact as
+     * the 5.66 GB etc-less tar that taught this script to stage and rename.
+     */
+    it("writes the manifest only after the archive is verified and renamed", () => {
+      const archiveMv = code.indexOf('mv -f "$STAGING" "$ARCHIVE"');
+      const manifestMv = code.indexOf('mv -f "$MANIFEST.partial" "$MANIFEST"');
+      expect(archiveMv).toBeGreaterThan(-1);
+      expect(manifestMv).toBeGreaterThan(archiveMv);
+      // Staged and renamed like the archive: `printf` is atomic only by luck,
+      // and a torn manifest is a drill that cannot parse its own baseline.
+      expect(code).toMatch(/printf '%s\\n' "\$MANIFEST_JSON" > "\$MANIFEST\.partial"/);
+      // Nothing may write the real name directly.
+      expect(code).not.toMatch(/> "\$MANIFEST"/);
+    });
+
+    /*
+     * THE RULE THAT MATTERS MOST. A backup that stops happening because a
+     * nice-to-have failed is a far worse outcome than a drill falling back to
+     * the live count. Worker down, JMAP unreachable, docker daemon wedged —
+     * every one of them warns and carries on, so the count must live inside a
+     * condition (`set -e` does not kill there) and the block must hold no exit.
+     */
+    it("warns and carries on when the count cannot be taken", () => {
+      expect(code).toMatch(/if ! COUNT_OUT=\$\(timeout 60 "\$\{COMPOSE\[@\]\}" exec -T worker/);
+      // Exactly one invocation, so there is no unguarded second one.
+      expect(code.match(/exec -T worker/g)).toHaveLength(1);
+      expect(block).toMatch(/COUNT_OUT=""/);
+      // No shell `exit` anywhere in the block.
+      expect(block).not.toMatch(/^\s*exit\b/m);
+      expect(block).not.toMatch(/\|\| exit/);
+    });
+
+    /*
+     * `pnpm run` prints a banner of its own on stdout and its wording belongs to
+     * whichever pnpm the image carries. mail-count writes the manifest as one
+     * line and every diagnosis to stderr, so the manifest is the line that
+     * starts like a manifest; anything else is somebody else's noise and must
+     * not reach the structural gate as a mystery.
+     */
+    it("takes the manifest line out of the output rather than trusting all of it", () => {
+      expect(code).toMatch(/grep -m1 '\^\{"archive":"native-'/);
+    });
+
+    /*
+     * The other half of that rule: no manifest is honest, a manifest saying 0
+     * is a lie the drill would act on. The leading `[1-9]` is the whole point of
+     * the pattern — it refuses an empty store, a query that matched nothing,
+     * and any error text that reached stdout instead of stderr.
+     */
+    it("refuses to write a manifest with a wrong or empty count", () => {
+      expect(code).toMatch(/"count":\[1-9\]\[0-9\]\*/);
+      // The count < 1 refusal moved into mail-count.ts with the rest of it.
+      const counter = readFileSync(
+        new URL("./mail-count.ts", import.meta.url), "utf8");
+      expect(counter).toMatch(/count < 1/);
+      expect(counter).toMatch(/refusing to write a manifest/);
+      // Both rejections null the payload, and the write is guarded ON THAT
+      // EMPTINESS — asserted as the two adjacent lines, because `[ -n
+      // "$MANIFEST_JSON" ]` also appears in the rejection above and a looser
+      // match would survive the guard being deleted from the write.
+      expect(code).toMatch(/if \[ -n "\$MANIFEST_JSON" \]; then\n\s*printf/);
+    });
+
+    /*
+     * Manifests are the one thing this script writes that would otherwise
+     * accumulate forever: `-name 'native-*.tar.zst'` cannot match a `.json`, so
+     * without a second rule every baseline outlives its archive by years.
+     */
+    it("prunes the manifests on the same clock as the archives", () => {
+      expect(code).toMatch(/find "\$OUT" -name 'native-\*\.tar\.zst' -mtime \+14 -delete/);
+      expect(code).toMatch(/find "\$OUT" -name 'native-\*\.json\*' -mtime \+14 -delete/);
+      // The trailing `*` sweeps a `.json.partial` orphaned by a killed run.
+      expect("native-2026-09-01.json.partial").toMatch(/^native-.*\.json.*$/);
+      expect("native-2026-09-01.json").not.toMatch(/^native-.*\.tar\.zst$/);
+    });
+
+    /*
+     * `exec`, not `run --rm`, and the container start it saves is the lesser
+     * reason: the worker already holds the credentials from `env_file:
+     * .env.prod`, so this script never handles the secret at all — no `-e`, no
+     * command line, no host process table, nothing in a cron log. Tier 2 cannot
+     * do this because vandelay wants the password under a different name, which
+     * is why it has to pass `-e VANDELAY_PASSWORD` name-only.
+     */
+    it("keeps the app password out of the process table", () => {
+      // No docker env flag on the count, in either form.
+      expect(block).not.toMatch(/-e [A-Z_]+/);
+      expect(code).not.toMatch(/JMAP_APP_PASSWORD=/);
+      // The count container is the one already running, never a new one.
+      expect(block).not.toMatch(/run --rm/);
+    });
+
+    /*
+     * TWO hangs, two bounds. There is NO request timeout anywhere else on the
+     * JMAP path — jmap-client.ts passes no AbortSignal and undici's 300 s
+     * default is all that is under it — and `docker compose exec` can hang on
+     * its own for reasons the JS cannot reach. A convenience step that can hang
+     * is a gate wearing a different hat: it would hold the whole nightly run,
+     * and this one runs in front of the tar.
+     */
+    it("bounds both the JMAP call and the docker exec", () => {
+      const counter = readFileSync(
+        new URL("./mail-count.ts", import.meta.url), "utf8");
+      expect(counter).toMatch(/AbortSignal\.timeout\(ms\)/);
+      expect(counter).toMatch(/REQUEST_TIMEOUT_MS = \d[\d_]*/);
+      expect(code).toMatch(/timeout 60 "\$\{COMPOSE\[@\]\}" exec/);
+    });
+  });
 });
 
 describe("nightly.sh", () => {
