@@ -320,9 +320,23 @@ describe("mail-restore-drill.sh", () => {
     // fail on the correct line. The anchor is what distinguishes them.
     expect(sh).not.toMatch(/^#\s+0 5 1 \* \*/m);
     expect(health).toContain("30 5 1 * *");
-    expect(deploy).toContain("30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh");
+    // The SCHEDULE is the shared fact, not the path. An earlier version pinned
+    // `30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh` and broke the
+    // moment deploy.md was corrected to the real installed path — which is the
+    // test asserting a placeholder rather than the thing that has to agree.
+    // worker-health.ts's 35-day bound is reasoned from the CADENCE; where the
+    // script lives is the operator's business.
+    expect(deploy).toMatch(/30 5 1 \* \* \S*ops\/mail-restore-drill\.sh/);
     // And the deploy guide is what actually installs it.
     expect(deploy).toContain("8.12");
+    /*
+     * The log goes to nightly.log, and that is a SAFETY property rather than a
+     * tidiness one: `~/apps/verder/nightly.log` is in the canonical rsync
+     * exclude list and a `drill.log` beside it would not be, so `--delete`
+     * would erase the drill's history on the next deploy. CLAUDE.md records
+     * that exact near-miss for nightly.log itself.
+     */
+    expect(deploy).toMatch(/30 5 1 \* \* .*nightly\.log/);
   });
 
   /*

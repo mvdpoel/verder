@@ -1432,8 +1432,17 @@ the 03:30 nightly, so the archive it drills is the one written a couple of hours
 earlier:
 
 ```
-30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh >> /var/log/verder-drill.log 2>&1
+30 5 1 * * /home/homelab/apps/verder/ops/mail-restore-drill.sh >> /home/homelab/apps/verder/nightly.log 2>&1
 ```
+
+**It logs into `nightly.log`, beside the 03:30 run, and that is deliberate.** A
+`drill.log` of its own would sit in `~/apps/verder/` and is NOT in the canonical
+rsync exclude list, so `--delete` would erase it on the next deploy — the exact
+accident CLAUDE.md records for `nightly.log`, whose whole history exists only on
+the homelab and is protected by one `--exclude` line. Adding a second protected
+name is a change to the safety mechanism; reusing the one that is already
+protected is not. One log for all scheduled verder ops work also means one file
+to read when something went wrong overnight.
 
 That schedule is spelled in three places and they must move together: here, in
 `ops/mail-restore-drill.sh`'s header, and in `packages/api/src/worker-health.ts`,

@@ -22,7 +22,9 @@
 # with a plausible name and no etc/ in it. This is the replacement.
 #
 # Run by hand, or monthly from cron (the crontab is CRON_TZ=UTC):
-#   30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh >> /var/log/verder-drill.log 2>&1
+#   30 5 1 * * /home/homelab/apps/verder/ops/mail-restore-drill.sh >> /home/homelab/apps/verder/nightly.log 2>&1
+# It shares nightly.log because that name is in the rsync exclude list and a new
+# one would not be: `--delete` erases an unexcluded log on the next deploy.
 # THAT LINE IS SPELLED IN THREE PLACES — here, in docs/deploy.md §8.12 (which is
 # what actually installs it) and in packages/api/src/worker-health.ts, whose
 # 35-day staleness bound is reasoned FROM it. They must move together: nothing in
@@ -84,7 +86,7 @@ export MAIL_DRILL_ARCHIVE=""
 # `SELECT DISTINCT ON (worker) … ORDER BY ran_at DESC`, so the newest row stays
 # LAST month's `ok` and the monthly rule keeps calling the backup healthy for
 # another 35 days. The single most important thing a restore drill can say would
-# have lived in /var/log/verder-drill.log and nowhere else.
+# have lived in the cron log and nowhere else.
 #
 # The row is written by the TS half rather than here, through
 # MAIL_DRILL_SHELL_FAILURE: one row format, one push, one place that knows the
