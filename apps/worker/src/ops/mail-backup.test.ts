@@ -59,8 +59,61 @@ describe("mail-backup.sh", () => {
    * later. The backup must never be able to take the service down with it.
    */
   it("always restarts stalwart, even when the snapshot fails", () => {
-    expect(sh).toMatch(/trap\s+restart_stalwart\s+EXIT/);
-    expect(sh).toMatch(/start stalwart/);
+    expect(sh).toMatch(/trap\s+cleanup_snapshot\s+EXIT/);
+    expect(code).toMatch(/start stalwart/);
+  });
+
+  /*
+   * MEASURED ON THE FIRST REAL RUN, and it is why grep tests are not enough.
+   * tar died on `etc: Cannot open: Permission denied`, CARRIED ON past the
+   * error as tar does, and zstd wrote 5.66 GB holding data/ and blobs/ but not
+   * etc/ — exactly the restore-into-bootstrap-mode artifact the test above
+   * forbids, sitting on the NAS with a plausible name and size. A partial that
+   * survives is worse than a failure, because only the failure is honest.
+   */
+  it("removes the staging file when the snapshot did not complete", () => {
+    expect(code).toMatch(/snapshot_ok=0/);
+    expect(code).toMatch(/rm -f "\$STAGING"/);
+    expect(code).toMatch(/snapshot_ok=1/);
+  });
+
+  /*
+   * MEASURED, and caused by the previous fix rather than by the plan. `zstd -o`
+   * REFUSES to overwrite, so a second run on the same day failed instantly,
+   * snapshot_ok stayed 0, and the cleanup deleted the VERIFIED 5.59 GB archive
+   * the earlier run had written. A cron retry would have done the same. Staging
+   * to `.partial` and renaming only after verification — the crash-safe shape
+   * packages/api/src/storage.ts already uses for the vault — means a failed run
+   * cannot touch an archive that already exists, and the real name never exists
+   * incomplete.
+   */
+  it("never lets a failed run destroy the archive already in place", () => {
+    expect(code).toMatch(/STAGING="\$ARCHIVE\.partial"/);
+    expect(code).toMatch(/zstd -q -o "\$STAGING"/);
+    expect(code).toMatch(/mv -f "\$STAGING" "\$ARCHIVE"/);
+    // The destructive path must name the staging file and nothing else.
+    expect(code).not.toMatch(/rm -f "\$ARCHIVE"/);
+  });
+
+  /*
+   * "exited 0 is not evidence that anything arrived" — the lesson the Vandelay
+   * import already wrote down, applied to the one member whose absence is
+   * invisible until the day someone restores.
+   */
+  it("reads the archive back and requires config.json to be in it", () => {
+    expect(code).toMatch(/tar -tf -/);
+    expect(code).toMatch(/config\.json/);
+    expect(sh).toMatch(/BOOTSTRAP MODE/);
+  });
+
+  /*
+   * etc/ is 0750 owned by uid 2000, so the cron user cannot open it. sudo goes
+   * on the TAR only: zstd must stay unprivileged or the archive lands on the
+   * NAS owned by root and the retention find -delete can never remove it.
+   */
+  it("reads the store with sudo but writes the archive without it", () => {
+    expect(code).toMatch(/sudo tar/);
+    expect(code).not.toMatch(/sudo zstd/);
   });
 
   /*
@@ -95,12 +148,44 @@ describe("mail-backup.sh", () => {
    */
   it("stages the weekly pull off the root filesystem", () => {
     expect(sh).toMatch(/MAIL_BACKUP_SCRATCH/);
-    expect(sh).toMatch(/mktemp -d "\$SCRATCH_ROOT/);
+    expect(code).toMatch(/mktemp -d "\$SCRATCH_ROOT/);
+  });
+
+  /*
+   * /mnt/data/verder is root-owned 0755, so the cron user cannot mkdir inside
+   * it — measured, and only AFTER tier 1 had already succeeded, which is the
+   * shape that matters: a script needing a manual mkdir before it fully works
+   * does half its job in silence on a rebuilt machine, and a rebuilt machine is
+   * precisely what a backup exists for.
+   */
+  it("creates its own scratch directory rather than assuming one", () => {
+    expect(code).toMatch(/sudo mkdir -p "\$SCRATCH_ROOT"/);
+    expect(code).toMatch(/sudo chown .* "\$SCRATCH_ROOT"/);
   });
 
   it("keeps the app password out of the process table", () => {
     expect(code).toMatch(/VANDELAY_PASSWORD=/);
     expect(code).not.toMatch(/--auth-password/);
+    // `-e NAME` passes through from the environment; `-e NAME=value` would put
+    // the secret on the docker command line for every user on the box.
+    expect(code).toMatch(/-e VANDELAY_PASSWORD\b/);
+    expect(code).not.toMatch(/-e VANDELAY_PASSWORD=/);
+  });
+
+  /*
+   * MEASURED: `JMAP_BASE_URL` is http://stalwart:8080 and that name resolves
+   * only between containers — on the host, `failed to lookup address
+   * information: Try again`. deploy.md §8.7's /etc/hosts line would fix it and
+   * is host-wide state a rebuilt machine will not have; pointing at
+   * 127.0.0.1:8080 would not, because the session still hands back apiUrl
+   * http://stalwart:8080/jmap/. So the pull runs inside the network.
+   */
+  it("pulls the weekly archive from inside the compose network", () => {
+    expect(code).toMatch(/run --rm -T --no-deps/);
+    expect(code).toMatch(/--entrypoint \/usr\/local\/bin\/vandelay/);
+    // As the calling user, or a 12.5 GB root-owned archive lands on /mnt/data
+    // that the cleanup cannot remove.
+    expect(code).toMatch(/--user "\$\(id -u\):\$\(id -g\)"/);
   });
 });
 

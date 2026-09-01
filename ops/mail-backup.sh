@@ -67,8 +67,40 @@ mkdir -p "$OUT"
 # also why this runs after nightly-verify: a stopped Stalwart shows up as a red
 # `mail` row within three minutes (worker-health.ts), and that signal is only
 # useful if the ledger check has already run.
-restart_stalwart() { "${COMPOSE[@]}" start stalwart >/dev/null 2>&1 || true; }
-trap restart_stalwart EXIT
+ARCHIVE="$OUT/native-$STAMP.tar.zst"
+
+# TWO things must happen however this exits, and the second was learned the
+# hard way on the first real run. Stalwart must come back up — without that a
+# failing tar exits under `set -e` with the mail server down. And a FAILED
+# ARCHIVE MUST NOT SURVIVE: that run died on `tar: etc: Cannot open: Permission
+# denied`, tar carried on past the error as tar does, and zstd wrote 5.66 GB
+# containing data/ and blobs/ but NOT etc/ — the precise
+# restore-into-bootstrap-mode artifact this script exists to prevent, sitting on
+# the NAS with a plausible name and size. A backup that cannot restore is worse
+# than no backup, because only one of the two is honest about itself.
+#
+# STAGE THEN RENAME, the same crash-safe shape packages/api/src/storage.ts
+# already uses for the vault: build under a `.partial` name and move it into
+# place only once it is complete AND verified. The first version wrote straight
+# to $ARCHIVE and deleted it on failure, which was measured destroying a GOOD
+# backup: `zstd -o` refuses to overwrite, so a second run the same day failed at
+# once, snapshot_ok stayed 0, and the cleanup removed the verified 5.59 GB
+# archive the earlier run had written. A cron retry would have done the same.
+# With a staging name a failed run cannot touch the archive that already exists,
+# and $ARCHIVE only ever appears complete.
+STAGING="$ARCHIVE.partial"
+snapshot_ok=0
+cleanup_snapshot() {
+  "${COMPOSE[@]}" start stalwart >/dev/null 2>&1 || true
+  if [ "$snapshot_ok" -eq 0 ] && [ -e "$STAGING" ]; then
+    echo "mail-backup.sh: snapshot failed — removing $STAGING (the archive already" >&2
+    echo "mail-backup.sh: in place, if any, is untouched)" >&2
+    rm -f "$STAGING"
+  fi
+}
+trap cleanup_snapshot EXIT
+# A staging file left by a killed run must not be mistaken for progress.
+rm -f "$STAGING"
 
 "${COMPOSE[@]}" stop stalwart
 # -C the PARENT and name the three children, so the archive restores with the
@@ -76,14 +108,42 @@ trap restart_stalwart EXIT
 # split the store across volumes) are archived separately rather than silently
 # dropped — the `find` below only prunes what this script wrote.
 if [ "$(dirname "$ETC_DIR")" = "$STORE_ROOT" ] && [ "$(dirname "$BLOB_DIR")" = "$STORE_ROOT" ]; then
-  tar -C "$STORE_ROOT" -cf - \
+  # sudo ON THE TAR ONLY. /etc/stalwart is mode 0750 owned by uid 2000 (the
+  # image's unprivileged user), so the cron user cannot even open the directory
+  # — measured: `tar: etc: Cannot open: Permission denied`. Raising the mode
+  # instead would widen access to config.json, which holds the data-store
+  # connection, so the read is privileged rather than the file being exposed.
+  # zstd stays unprivileged, so the archive on the NAS is owned by the cron user
+  # and the retention `find -delete` below can still remove it.
+  sudo tar -C "$STORE_ROOT" -cf - \
     "$(basename "$ETC_DIR")" "$(basename "$DATA_DIR")" "$(basename "$BLOB_DIR")" \
-    | zstd -q -o "$OUT/native-$STAMP.tar.zst"
+    | zstd -q -o "$STAGING"
 else
   echo "mail-backup.sh: store is split across volumes, archiving absolute paths" >&2
-  tar -cf - "$ETC_DIR" "$DATA_DIR" "$BLOB_DIR" | zstd -q -o "$OUT/native-$STAMP.tar.zst"
+  sudo tar -cf - "$ETC_DIR" "$DATA_DIR" "$BLOB_DIR" | zstd -q -o "$STAGING"
 fi
 "${COMPOSE[@]}" start stalwart
+
+# THE ACCEPTANCE TEST, and it is not "tar exited 0" — the same lesson the
+# Vandelay import wrote down as "exited 0 is not evidence that anything
+# arrived". The archive is read back and the ONE member whose absence is
+# invisible at restore time is required to be in it. Listing costs a full
+# decompress, which is a minute at 03:30 and is the difference between a backup
+# and a rumour.
+LIST=$(mktemp)
+zstd -dc "$STAGING" | tar -tf - > "$LIST"
+if ! grep -qx "$(basename "$ETC_DIR")/config.json" "$LIST"; then
+  rm -f "$LIST"
+  echo "mail-backup.sh: archive is missing $(basename "$ETC_DIR")/config.json — a restore" >&2
+  echo "mail-backup.sh: from it would come up in BOOTSTRAP MODE on an empty store" >&2
+  exit 1
+fi
+rm -f "$LIST"
+
+# Verified, so it becomes the archive. `mv` within one filesystem is atomic:
+# there is no instant at which native-$STAMP.tar.zst exists and is incomplete.
+mv -f "$STAGING" "$ARCHIVE"
+snapshot_ok=1
 trap - EXIT
 
 # 14 days, not 30. The store is ~7.3 GB and compresses to a few GB a night; in
@@ -109,17 +169,47 @@ if [ ! -f "$OUT/archive-$WEEK.sqlite.zst" ] && [ ! -f "$OUT/archive-$WEEK.sqlite
   if [ ! -x "$VANDELAY" ]; then
     echo "mail-backup.sh: vandelay not executable at $VANDELAY — weekly archive SKIPPED" >&2
   else
-    mkdir -p "$SCRATCH_ROOT"
+    # Self-healing, because /mnt/data/verder is root-owned 0755 and the cron
+    # user cannot mkdir inside it — measured: `mkdir: cannot create directory
+    # '/mnt/data/verder/mail-backup-tmp': Permission denied`, AFTER tier 1 had
+    # already succeeded. A backup script that needs a manual mkdir before it
+    # works is one that silently does half its job on a rebuilt machine, which
+    # is exactly the machine a backup script is for. sudo creates it, then hands
+    # it to the caller so everything below runs unprivileged.
+    if [ ! -d "$SCRATCH_ROOT" ]; then
+      sudo mkdir -p "$SCRATCH_ROOT"
+      sudo chown "$(id -u):$(id -g)" "$SCRATCH_ROOT"
+    fi
     TMP=$(mktemp -d "$SCRATCH_ROOT/wk-XXXXXX")
     # shellcheck disable=SC2064
     trap "rm -rf '$TMP'" EXIT
-    # --auth-password is avoided: it would put the app password in the process
-    # table for every user on the box. Vandelay reads $VANDELAY_PASSWORD.
-    VANDELAY_PASSWORD="${JMAP_APP_PASSWORD:?}" "$VANDELAY" import jmap \
+    # RUN IT INSIDE THE COMPOSE NETWORK, not on the host. JMAP_BASE_URL is
+    # http://stalwart:8080 and that name resolves ONLY between containers —
+    # measured on the host as `failed to lookup address information: Try again`.
+    # docs/deploy.md §8.7 offers `127.0.0.1 stalwart` in /etc/hosts instead, and
+    # that works, but it is host-wide state a rebuilt machine will not have: the
+    # same silent half-working backup the scratch directory above already
+    # taught. Pointing at 127.0.0.1:8080 does not help either — discovery would
+    # succeed and the SESSION still hands back apiUrl http://stalwart:8080/jmap/
+    # (STALWART_PUBLIC_URL), so the first method call goes nowhere.
+    #
+    # --user runs it as the calling user, so the 12.5 GB archive lands owned by
+    # the cron user rather than root and the cleanup below can remove it.
+    # --no-deps because postgres is irrelevant here and starting it would be a
+    # side effect. -e passes the name only: `-e VAR=value` would put the app
+    # password in the process table for every user on the box, which is the same
+    # reason --auth-password is not used.
+    VANDELAY_PASSWORD="${JMAP_APP_PASSWORD:?}" "${COMPOSE[@]}" run --rm -T --no-deps \
+      --user "$(id -u):$(id -g)" \
+      -e VANDELAY_PASSWORD \
+      -v "$VANDELAY:/usr/local/bin/vandelay:ro" \
+      -v "$TMP:/out" \
+      --entrypoint /usr/local/bin/vandelay \
+      worker import jmap \
       --url "${JMAP_BASE_URL:?}" \
       --auth-basic "${JMAP_USER:?}" \
       --account-name "${JMAP_USER:?}" \
-      "$TMP/archive.sqlite"
+      /out/archive.sqlite
 
     if [ -n "${BACKUP_AGE_RECIPIENT:-}" ]; then
       # Encrypted BEFORE it can reach a third party. The key lives in the
