@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
-import { utimes, writeFile } from "node:fs/promises";
+import { readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import { sha256Hex } from "@verder/core";
 import { scanNasFolder } from "./nas";
+
+/**
+ * A real PDF, because the sweep now refuses one it cannot parse. Built from a
+ * path rather than a URL: this file shadows the global URL with the database
+ * connection string below.
+ */
+const realPdf = () => readFile(join(import.meta.dirname, "fixtures", "text-letter.pdf"));
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -16,7 +23,10 @@ describe("scanNasFolder", () => {
     const { db, pool } = createDb(URL);
     const scanDir = mkdtempSync(join(tmpdir(), "nas-"));
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-vault-"));
-    const content = Buffer.from(`scan-${Date.now()}`);
+    // Unique bytes per run, appended to a real PDF so it still parses: the
+    // sweep refuses a PDF it cannot read, and the shared dev DB dedups on sha.
+    const content = Buffer.concat([
+      await realPdf(), Buffer.from(`\n% scan-${Date.now()}\n`)]);
     const file = join(scanDir, "scan_0001.pdf");
     await writeFile(file, content);
     const old = new Date(Date.now() - 60_000);
@@ -70,7 +80,8 @@ describe("scanNasFolder", () => {
     const { db, pool } = createDb(URL);
     const scanDir = mkdtempSync(join(tmpdir(), "nas-reread-"));
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-reread-vault-"));
-    const content = Buffer.from(`reread-${Date.now()}`);
+    const content = Buffer.concat([
+      await realPdf(), Buffer.from(`\n% reread-${Date.now()}\n`)]);
     const name = `reread_${Date.now()}.pdf`;
     const file = join(scanDir, name);
     await writeFile(file, content);
@@ -85,6 +96,25 @@ describe("scanNasFolder", () => {
     expect(second.ingested).toBe(0);
     expect(second.read).toBe(0);
     await settleDocumentTexts(db, name);
+    await pool.end();
+  });
+});
+
+describe("scanNasFolder, half-written files", () => {
+  it("does not ingest a PDF that cannot be parsed, and takes it next time", async () => {
+    const { db, pool } = createDb(URL);
+    const scanDir = mkdtempSync(join(tmpdir(), "nas-partial-"));
+    const vaultDir = mkdtempSync(join(tmpdir(), "nas-partial-vault-"));
+    const file = join(scanDir, `partial_${Date.now()}.pdf`);
+    const old = new Date(Date.now() - 60_000);
+    // A flatbed writes progressively: this is a PDF header and nothing else,
+    // which is exactly what production ingested at 589 850 bytes.
+    await writeFile(file, Buffer.from("%PDF-1.4\nnot finished yet"));
+    await utimes(file, old, old);
+    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async () => {} };
+    const first = await scanNasFolder(deps);
+    expect(first.ingested).toBe(0);
+    expect(first.skipped).toBeGreaterThanOrEqual(1);
     await pool.end();
   });
 });

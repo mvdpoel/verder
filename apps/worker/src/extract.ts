@@ -28,9 +28,11 @@ export const MAX_OCR_PAGES = 20;
 // accents is never cut mid-code-point.
 export const MAX_TEXT_CHARS = 1_000_000;
 
+export interface OcrRect { left: number; top: number; width: number; height: number }
+
 export interface OcrPort {
   /** `rotateRadians` rotates the image before recognition; omitted means as-is. */
-  ocrImage(png: Buffer, rotateRadians?: number): Promise<string>;
+  ocrImage(png: Buffer, rotateRadians?: number, rectangle?: OcrRect): Promise<string>;
   /** Releases the tesseract worker, when the port owns one. */
   close?(): Promise<void>;
 }
@@ -45,7 +47,7 @@ export const RETRY_ANGLES = [Math.PI, Math.PI / 2, -Math.PI / 2];
 
 type Recognize = (img: Buffer, langs: string) => Promise<{ data: { text: string } }>;
 type CreateWorker = (langs: string) => Promise<{
-  recognize: (img: Buffer, opts?: { rotateRadians?: number })
+  recognize: (img: Buffer, opts?: { rotateRadians?: number; rectangle?: OcrRect })
     => Promise<{ data: { text: string } }>;
   terminate: () => Promise<void>;
 }>;
@@ -82,10 +84,12 @@ export function realOcrPort(): OcrPort {
     return worker;
   }
   return {
-    async ocrImage(png, rotateRadians) {
+    async ocrImage(png, rotateRadians, rectangle) {
       const w = await get();
-      const res = await w.recognize(png,
-        rotateRadians === undefined ? undefined : { rotateRadians });
+      const opts: { rotateRadians?: number; rectangle?: OcrRect } = {};
+      if (rotateRadians !== undefined) opts.rotateRadians = rotateRadians;
+      if (rectangle !== undefined) opts.rectangle = rectangle;
+      const res = await w.recognize(png, Object.keys(opts).length ? opts : undefined);
       return res.data.text;
     },
     async close() {
@@ -205,4 +209,32 @@ export async function extractDocumentText(
   } finally {
     await ownedOcr?.close?.();
   }
+}
+
+
+/**
+ * Width and height straight out of a PNG's IHDR, which is always the first
+ * chunk: 8 bytes of signature, 4 of length, 4 of type, then the two lengths.
+ * Needed because a tesseract rectangle is in pixels and the footer band is a
+ * fraction of the page.
+ */
+export function pngSize(png: Buffer): { width: number; height: number } | null {
+  if (png.length < 24 || png.toString("ascii", 12, 16) !== "IHDR") return null;
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+/** The strip of a page a printed page number lives in. */
+export const FOOTER_BAND = 0.14;
+
+/**
+ * OCR only the bottom of a page. Reading the footer of a six-page letter is
+ * cheap this way and a full recognition of every page is not — and the page
+ * number is the only thing being looked for.
+ */
+export async function ocrFooter(ocr: OcrPort, png: Buffer): Promise<string> {
+  const size = pngSize(png);
+  if (!size) return await ocr.ocrImage(png);
+  const height = Math.max(1, Math.round(size.height * FOOTER_BAND));
+  return await ocr.ocrImage(png, undefined, {
+    left: 0, top: size.height - height, width: size.width, height });
 }

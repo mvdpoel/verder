@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
@@ -6,6 +6,9 @@ import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
+import { detectPageOrder } from "./page-order";
+import { pdfPageCount, reorderPdf, MAX_REORDER_PAGES } from "./reorder-pdf";
+import { ocrFooter, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
 
 const MIME: Record<string, string> = { ".pdf": "application/pdf", ".png": "image/png",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".tiff": "image/tiff" };
@@ -20,13 +23,44 @@ const MAX_BYTES = 100 * 1024 * 1024;
 // Polling via cron, not fs-events: inotify is unreliable on a NAS mount, so a
 // periodic non-recursive scan is the boring correct choice. The NAS original is
 // never deleted or moved — the vault gets its own content-addressed copy.
+/**
+ * Put a multi-page scan back in the order its own pages claim, BEFORE it is
+ * ingested — so the vault holds the document as written rather than as fed.
+ *
+ * Only the footer band of each page is OCRed, because the page number is the
+ * only thing being read and a full recognition of every page of every new
+ * scan would cost more than the whole sweep. detectPageOrder refuses unless
+ * every page carries a marker and the numbers form an exact permutation, so
+ * the common case — an ordinary scan — costs one cheap OCR pass per page and
+ * changes nothing.
+ *
+ * Returns the corrected bytes, or null to leave the file exactly as it is.
+ */
+export async function reorderIfShuffled(
+  buf: Buffer, mime: string, ocr: OcrPort,
+  rasterize: typeof rasterizePdf = rasterizePdf,
+): Promise<{ bytes: Buffer; order: number[] } | null> {
+  if (mime !== "application/pdf") return null;
+  const pages = await rasterize(buf, { dpi: 100, maxPages: MAX_REORDER_PAGES });
+  if (pages.length < 2) return null;
+  const texts: string[] = [];
+  for (const page of pages) texts.push(await ocrFooter(ocr, page));
+  const order = detectPageOrder(texts);
+  if (!order) return null;
+  return { bytes: await reorderPdf(buf, order), order };
+}
+
 export async function scanNasFolder(deps: {
   db: Db; scanDir: string; vaultDir: string;
   maxBytes?: number;
+  /** Injected in tests; production creates and closes its own. */
+  ocr?: OcrPort;
   enqueueDocMeta: (documentId: string) => Promise<void>;
-}): Promise<{ ingested: number; skipped: number; read: number }> {
+}): Promise<{ ingested: number; skipped: number; read: number; reordered: number }> {
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
-  let ingested = 0, skipped = 0, read = 0;
+  let ingested = 0, skipped = 0, read = 0, reordered = 0;
+  const ownedOcr = deps.ocr ? null : realOcrPort();
+  const ocr = deps.ocr ?? ownedOcr!;
   try {
     for (const name of await readdir(deps.scanDir)) {
       const abs = join(deps.scanDir, name);
@@ -54,8 +88,37 @@ export async function scanNasFolder(deps: {
           eq(schema.documents.receivedAt, st.mtime),
         ));
       if (known) continue;
-      const buf = await readFile(abs);
+      let buf: Buffer = await readFile(abs);
       read++;
+      let receivedAt = st.mtime;
+      // A PDF that does not parse is a file still being written, not a
+      // document. Skipping leaves it for the next tick; ingesting it is
+      // permanent, because documents is append-only and the bytes are already
+      // in the ledger by the time anyone opens it.
+      if (mime === "application/pdf" && (await pdfPageCount(buf)) === null) {
+        await recordRun(deps.db, "page-order", "ok", { name, skipped: "unreadable-pdf" });
+        skipped++;
+        continue;
+      }
+      // Reorder BEFORE hashing: the sha256 that reaches the ledger must be the
+      // bytes the vault holds, and the file on the share is corrected too so
+      // the two never disagree.
+      try {
+        const fixed = await reorderIfShuffled(buf, mime, ocr);
+        if (fixed) {
+          await writeFile(abs, fixed.bytes);
+          buf = fixed.bytes;
+          // Rewriting the file changes its mtime, and the stat pre-check above
+          // matches on name+size+mtime. Recording the mtime read BEFORE the
+          // rewrite would make this file miss that check on every future tick
+          // and be fully re-read forever.
+          receivedAt = (await stat(abs)).mtime;
+          reordered++;
+        }
+      } catch (err) {
+        // A document that cannot be reordered is still a document.
+        await recordRun(deps.db, "page-order", "error", { name, message: String(err) });
+      }
       const sha = sha256Hex(buf);
       const [seen] = await deps.db.select().from(schema.documents)
         .where(eq(schema.documents.sha256, sha));
@@ -63,14 +126,16 @@ export async function scanNasFolder(deps: {
       await storeFile(deps.vaultDir, buf);
       const doc = await deps.db.transaction((tx) => ingestDocument(tx, {
         sha256: sha, sizeBytes: buf.length, mime,
-        title: name, source: "nas-scan", sourceRef: name, receivedAt: st.mtime }));
+        title: name, source: "nas-scan", sourceRef: name, receivedAt }));
       await deps.enqueueDocMeta(doc.id);
       ingested++;
     }
-    await recordRun(deps.db, "nas", "ok", { ingested, skipped, read });
+    await recordRun(deps.db, "nas", "ok", { ingested, skipped, read, reordered });
   } catch (err) {
     await recordRun(deps.db, "nas", "error", { message: String(err) });
     throw err;
+  } finally {
+    await ownedOcr?.close?.();
   }
-  return { ingested, skipped, read };
+  return { ingested, skipped, read, reordered };
 }
