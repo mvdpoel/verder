@@ -34,7 +34,7 @@ const OPAQUE = /^(scan|img|image|doc|document|untitled|foto|photo|dsc|pdf)[-_ ]?
  * control characters, and nothing Windows refuses (: * ? " < > |). A name that
  * fails this is skipped, never sanitised into something the model did not say.
  */
-const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9.,()' _-]{2,150}$/;
+const SAFE_NAME = /^[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F.,()' _-]{2,150}$/;
 
 export interface RenamePlan {
   documentId: string;
@@ -81,7 +81,11 @@ export function validateName(
 ): string | null {
   if (typeof proposed !== "string") return null;
   const ext = extname(oldName).toLowerCase();
-  let stem = proposed.trim();
+  // NFC, because the model emits composed characters while macOS hands back
+  // decomposed ones over SMB. Both spell an e-diaeresis; only one of them
+  // equals the title stored in the dossier, and the sweep's stat pre-check
+  // compares that title to the filename.
+  let stem = proposed.normalize("NFC").trim();
   if (stem.toLowerCase().endsWith(ext)) stem = stem.slice(0, -ext.length);
   // basename() defeats "../../etc/passwd" and "a/b" alike.
   stem = basename(stem).replace(/\s+/g, ".").replace(/\.{2,}/g, ".").replace(/^\.+|\.+$/g, "");

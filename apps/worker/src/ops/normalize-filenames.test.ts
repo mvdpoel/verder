@@ -66,3 +66,35 @@ describe("buildNamePrompt", () => {
     expect(p.length).toBeLessThan(8000);
   });
 });
+
+describe("validateName, accented Dutch", () => {
+  // "Beeindigingsovereenkomst" carries an e-diaeresis and is one of the
+  // commonest document types in this archive. An ASCII-only allowlist refused
+  // it twice in the first production run.
+  it("accepts the accented characters Dutch documents actually use", () => {
+    expect(validateName(
+      "Be\u00EBindigingsovereenkomst.Accenture.MP.van.der.Poel.2023", "vso.tdn.pdf", new Set()))
+      .toBe("Be\u00EBindigingsovereenkomst.Accenture.MP.van.der.Poel.2023.pdf");
+    expect(validateName("Verklaring.Caf\u00E9.Z\u00FCrich", "scan1.pdf", new Set()))
+      .toBe("Verklaring.Caf\u00E9.Z\u00FCrich.pdf");
+  });
+
+  it("normalises to NFC so one filename has one byte form", () => {
+    const decomposed = "Be\u00EBindiging.Test".normalize("NFD");
+    const out = validateName(decomposed, "scan1.pdf", new Set())!;
+    expect(out).toBe(out.normalize("NFC"));
+    expect(out).toBe("Be\u00EBindiging.Test.pdf");
+  });
+
+  // A newline is whitespace, so it is COLLAPSED to the separator rather than
+  // refused — the character never reaches the filesystem either way. A control
+  // character that is not whitespace has no such path and is refused outright.
+  it("collapses whitespace-like control characters and refuses the rest", () => {
+    expect(validateName("a" + String.fromCharCode(10) + "b", "scan1.pdf", new Set()))
+      .toBe("a.b.pdf");
+    for (const code of [0, 1, 7, 27]) {
+      expect(validateName("a" + String.fromCharCode(code) + "b", "scan1.pdf", new Set()))
+        .toBeNull();
+    }
+  });
+});
