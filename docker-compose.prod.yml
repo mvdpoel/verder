@@ -50,7 +50,12 @@ services:
     env_file: .env.prod
     volumes:
       - "${VAULT_HOST_DIR:?set in .env.prod}:/vault"
-      - "${NAS_SCAN_HOST_DIR:?set in .env.prod}:/scans:ro"
+      # Writable since auto-naming renames the scan it just filed. NOTHING in
+      # the worker unlinks under /scans -- scanNasFolder only reads, and
+      # auto-name only renames -- so the archive can be reorganised but not
+      # lost. The journal is a separate mount so an undo survives the container.
+      - "${NAS_SCAN_HOST_DIR:?set in .env.prod}:/scans"
+      - "${NAME_JOURNAL_DIR:-/srv/verder/normalize-journal}:/journal"
       - "./secrets:/repo/secrets"
     depends_on:
       postgres: { condition: service_healthy }

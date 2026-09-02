@@ -15,11 +15,16 @@ export async function storeDocumentText(
   deps: { db: Db; extract?: typeof extractDocumentText },
   doc: { id: string; sha256: string; mime: string },
   fileBuf: Buffer,
+  // `force` re-runs extraction for bytes already extracted. The "once, ever"
+  // rule above is about COST, not correctness: when the extractor itself gets
+  // better -- orientation detection made 25 upside-down scans readable that
+  // had been stored as gibberish -- the stored text is stale, not final.
+  opts: { force?: boolean } = {},
 ): Promise<StoredText> {
   const extract = deps.extract ?? extractDocumentText;
   const [existing] = await deps.db.select().from(schema.documentTexts)
     .where(eq(schema.documentTexts.documentId, doc.id));
-  if (existing && existing.sha256 === doc.sha256) {
+  if (!opts.force && existing && existing.sha256 === doc.sha256) {
     return { text: existing.text, extractor: existing.extractor as Extractor, reused: true };
   }
   const out = await extract(doc.mime, fileBuf);

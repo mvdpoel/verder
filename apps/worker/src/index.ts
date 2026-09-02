@@ -15,6 +15,7 @@ import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
 import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 import { storeDocumentText } from "./document-text";
+import { autoNameSafely } from "./auto-name";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
@@ -228,6 +229,28 @@ await boss.work("mail.poll", async () => {
 });
 
 const llm = realLlmPort();
+
+// Naming has its OWN endpoint and model. The M3 runs qwen3.8, which the
+// homelab's ollama 0.18.3 cannot load, and the homelab GPU is already
+// oversubscribed — but the default falls back to the worker's own OLLAMA_URL
+// so a machine that is asleep degrades to "not renamed", never to a failure.
+const NAME_OLLAMA = process.env.NORMALIZE_OLLAMA_URL ?? process.env.OLLAMA_URL
+  ?? "http://localhost:11434";
+const NAME_MODEL = process.env.NORMALIZE_MODEL ?? process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
+// One journal per worker boot; `normalize-names --undo` takes it by path.
+const NAME_JOURNAL = `/journal/auto-name-${new Date().toISOString().slice(0, 10)}.jsonl`;
+
+async function nameJson(prompt: string): Promise<unknown> {
+  const res = await fetch(`${NAME_OLLAMA}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: NAME_MODEL, messages: [{ role: "user", content: prompt }],
+      format: "json", stream: false, think: false }),
+    signal: AbortSignal.timeout(180_000),
+  });
+  if (!res.ok) throw new Error(`ollama ${res.status}`);
+  const data = (await res.json()) as { message: { content: string } };
+  return JSON.parse(data.message.content) as unknown;
+}
 const retrieveRefs = realRetrieveRefs(db);
 
 await boss.work("suggest.entry", async ([job]) => {
@@ -250,6 +273,10 @@ await boss.work("suggest.docmeta", async ([job]) => {
   // Extract once, store it, and hand the same text to the docmeta prompt: the
   // text the model saw is the text the search index holds.
   const stored = await storeDocumentText({ db }, doc, buf);
+  // Name it before suggesting metadata, so /queue shows the suggestion against
+  // the name the document will actually have. Never throws: see autoNameSafely.
+  await autoNameSafely({ db, nameLlm: nameJson, scanDir: process.env.NAS_SCAN_DIR ?? "/scans",
+    journalPath: NAME_JOURNAL, log: (l) => console.log(l) }, documentId, stored.text);
   await suggestDocMeta({ db, llm, extractText: async () => stored.text, sendPush },
     documentId, buf);
 });
