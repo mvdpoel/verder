@@ -21,6 +21,7 @@ import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { schema, createDb } from "@verder/db";
+import { effectiveTitleSql } from "@verder/api/src/effective-status";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
 
@@ -111,6 +112,7 @@ export async function normalizeFilenames(deps: Deps): Promise<{
   const rows = await deps.db.select({
     id: schema.documents.id,
     sourceRef: schema.documents.sourceRef,
+    effectiveTitle: effectiveTitleSql,
     text: schema.documentTexts.text,
   }).from(schema.documents)
     .innerJoin(schema.documentTexts, eq(schema.documentTexts.documentId, schema.documents.id))
@@ -127,6 +129,11 @@ export async function normalizeFilenames(deps: Deps): Promise<{
   for (const row of rows) {
     if (plans.length >= deps.limit) break;
     const oldName = row.sourceRef!;
+    // Already renamed — by an earlier run of this script, or by hand in the
+    // app. documents.title is frozen at ingest, so a title that has drifted
+    // from source_ref is the only evidence a rename happened, and without
+    // this a second --all pass would rename every file a second time.
+    if (row.effectiveTitle !== oldName) { skipped++; continue; }
     if (!deps.all && !OPAQUE.test(oldName)) { skipped++; continue; }
     const abs = join(deps.scanDir, oldName);
     if (!existsSync(abs)) { skipped++; continue; }
