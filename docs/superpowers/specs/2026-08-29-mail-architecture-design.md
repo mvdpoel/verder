@@ -323,9 +323,42 @@ arrives at a domain with no SPF, no DKIM and no DMARC.
    the import rather than before phase 3. The in-scope figure excludes
    `dytechsolutions.nl`, which is a separate account and out of scope.
 
-2. **Does TransIP allow inbound port 25 on the k8s LoadBalancer?** Their
-   published block is explicitly about OUTGOING mail ports. Unverified, and
-   phase 2 gate.
+2. **Does TransIP allow inbound port 25 on the k8s LoadBalancer? MEASURED
+   2026-09-02, and the answer invalidates §1's record set.**
+
+   Their published block is indeed outbound only — ports 25/465/587, on **VPS**,
+   toggleable in the control panel with reverse DNS. It never mentions inbound
+   and never mentions Kubernetes. So there is no *documented* inbound block. But
+   the empirical finding is more consequential than that:
+
+   **A bare listener on a node is unreachable from the internet on ANY port.**
+   Two socat listeners with `hostNetwork` were bound on the mx1/mx2 nodes and
+   answered locally (`220 probe-ok mx1 ESMTP` on 127.0.0.1:25), while nothing
+   traversed from outside — not on 25, not on 2525, not on 8080, and **not on
+   31999, which is inside the NodePort range**. The same port 31999 became
+   reachable on BOTH nodes, returning its banner, the moment it was backed by a
+   declared `type: NodePort` Service. So the edge opens only what Kubernetes
+   declares as a Service; a `hostPort`/`hostNetwork` listener is invisible.
+
+   **Therefore the target record set below CANNOT work as drawn.** `mx1` and
+   `mx2` are *node* external IPs (149.210.166.143 = node 470e9ebd,
+   37.97.184.180 = node 6b50f2a2), and Postfix on `:25` via hostPort would never
+   receive a packet. NodePort cannot rescue it either: the range is 30000-32767
+   and 25 is not in it.
+
+   **What is left is a `type: LoadBalancer` Service on port 25 → TransIP HA-IP**,
+   which is what this question originally asked and what §1's diagram does not
+   describe. HA-IP forwards arbitrary TCP ports in `tcp` mode, but only ports
+   explicitly configured in the control panel — anything else "will be dropped by
+   HA-IP". No port-25 exclusion is documented. **This remains the phase 2 gate
+   and is NOT yet measured**, because provisioning an HA-IP is a billable TransIP
+   resource and that is Martin's call, not a probe's.
+
+   **A measurement caveat for whoever runs that test:** repeated probing from one
+   source got that source rate-limited at TransIP's edge. A known-good control
+   port went open → blocked → open within minutes, which reads exactly like "the
+   port is filtered". Interleave a known-open control with every probe and treat
+   a control that flips as an invalidated run, not as a result.
 3. **What is `smtp._domainkey`?** A live DKIM record for an unidentified sender.
 4. **Is `vanderpoel.pro` a paid Workspace seat? ANSWERED 2026-08-29: yes.**
    Google Takeout shows the banner *"Your data for some services is unavailable
