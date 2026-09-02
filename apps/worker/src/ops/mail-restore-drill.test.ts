@@ -4,6 +4,7 @@ import {
   collectFacts, countMessages, judgeDrill, mailboxTotals, openDrillSession,
   parseManifest, parseSampleCount, parseTier2, rawSha256, sampleIds, samplePositions,
   assertDistinctApiUrls, shellFailureFrom, withinTier2Tolerance,
+  parseBackupAgeDays, MAX_BACKUP_AGE_DAYS,
   type DrillFacts,
 } from "./mail-restore-drill";
 
@@ -33,6 +34,9 @@ function passing(over: Partial<DrillFacts> = {}): DrillFacts {
     sampleFailures: [],
     tier2: { archive: "archive-2026-W36.sqlite.zst", emails: 146270 },
     jmap: { session: true, query: true, get: true },
+    // A backup that ran last night. The drill is monthly and the backup nightly,
+    // so on a healthy homelab this is 0 — the drill's own morning.
+    backupAgeDays: 0,
     ...over,
   };
 }
@@ -247,6 +251,72 @@ describe("judgeDrill", () => {
     }));
     expect(r.ok).toBe(false);
     expect(r.reasons.join("\n")).toMatch(/tier.?2/i);
+  });
+
+  /*
+   * RULE 6, AND IT IS ABOUT THE BACKUP RATHER THAN ABOUT THE ARCHIVE.
+   *
+   * THE HOLE, read out of the source 2026-09-02: ops/mail-backup.sh runs LAST in
+   * ops/nightly.sh, after nightly-verify and model-check have gone green, and the
+   * drill took the newest archive by mtime without ever asking how old it was. A
+   * nightly backup that died a fortnight ago WOULD therefore still have produced
+   * a clean monthly PASS, until retention's `find -mtime +14 -delete` removed the
+   * last archive and the drill failed with "there is NOTHING to restore from" —
+   * by which point there would genuinely be nothing. Conditional because it never
+   * happened: the backup first ran from cron on 2026-09-02.
+   */
+  it("passes a backup that ran last night", () => {
+    expect(judgeDrill(passing({ backupAgeDays: 0 })).ok).toBe(true);
+    expect(judgeDrill(passing({ backupAgeDays: 1 })).ok).toBe(true);
+  });
+
+  it("passes AT the boundary and fails one day past it", () => {
+    // The boundary is the constant itself, not a number copied beside it: this
+    // fails if MAX_BACKUP_AGE_DAYS moves without the reasoning moving with it,
+    // and it is what the `>` mutation is caught by.
+    expect(MAX_BACKUP_AGE_DAYS).toBe(3);
+    expect(judgeDrill(passing({ backupAgeDays: MAX_BACKUP_AGE_DAYS })).ok).toBe(true);
+    expect(judgeDrill(passing({ backupAgeDays: MAX_BACKUP_AGE_DAYS + 1 })).ok).toBe(false);
+  });
+
+  it("says the backup has STOPPED RUNNING rather than quoting a number at the operator", () => {
+    const r = judgeDrill(passing({ backupAgeDays: 14 }));
+    expect(r.ok).toBe(false);
+    const reason = r.reasons.join("\n");
+    // Both halves. A perfect restore and a dead cron look identical in every
+    // other line of the report, so the reason has to carry the meaning AND the
+    // fact that the restore itself may well have been fine — otherwise the
+    // operator goes hunting for a corrupt archive that does not exist.
+    expect(reason).toMatch(/STOPPED RUNNING/);
+    expect(reason).toContain("14");
+    expect(reason).toMatch(/restore .*may well have succeeded/i);
+  });
+
+  /*
+   * THE WHOLE POINT OF THE RULE, in one test: the counts, the mailboxes, the
+   * bytes and the tier-2 archive are all FLAWLESS, and the drill still fails
+   * because nothing new has been backed up for two weeks. Every other rule in
+   * this file judges the archive that was restored; only this one can see that
+   * no NEW archive exists.
+   */
+  it("fails a stale backup even when the restore itself was perfect", () => {
+    const r = judgeDrill(passing({ backupAgeDays: 14 }));
+    expect(r.ok).toBe(false);
+    // Exactly one rule caught it — proof the failure is the age and not some
+    // other mutation smuggled into the fixture.
+    expect(r.reasons).toHaveLength(1);
+  });
+
+  /*
+   * AN UNKNOWN AGE IS NOT A FRESH ONE. The shell leaves the variable EMPTY when
+   * there is no archive at all or the mtime could not be read, and 0 is the
+   * healthiest answer this field has — so a measurement that failed must fail
+   * the drill rather than render as the best possible news.
+   */
+  it("fails an age it could not determine rather than passing", () => {
+    const r = judgeDrill(passing({ backupAgeDays: null }));
+    expect(r.ok).toBe(false);
+    expect(r.reasons.join("\n")).toMatch(/could not be determined/);
   });
 
   it("reports every broken rule at once rather than the first", () => {
@@ -542,6 +612,7 @@ describe("collectFacts", () => {
       auth: { authorization: "Basic x" }, fetchFn: f,
       archive: "native-2026-09-01.tar.zst", samples: 4, manifest: null,
       tier2: { archive: "archive-2026-W36.sqlite.zst", emails: 16 },
+      backupAgeDays: 0,
     });
     expect(facts.expected.source).toBe("live");
     expect(facts.restored.total).toBe(16);
@@ -561,6 +632,7 @@ describe("collectFacts", () => {
       archive: "native-2026-09-01.tar.zst", samples: 2,
       manifest: { count: 16, mailboxes: { Inbox: 12, Archive: 4 } },
       tier2: { archive: "a", emails: 16 },
+      backupAgeDays: 0,
     });
     expect(facts.expected.source).toBe("manifest");
     expect(judgeDrill(facts).ok).toBe(true);
@@ -580,6 +652,7 @@ describe("collectFacts", () => {
       auth: { authorization: "Basic x" }, fetchFn: f,
       archive: "native-2026-09-01.tar.zst", samples: 4, manifest: null,
       tier2: { archive: "a", emails: 16 },
+      backupAgeDays: 0,
     });
     expect(facts.restored.total).toBe(16);
     expect(facts.sampleFailures.length).toBe(1);
@@ -619,6 +692,7 @@ describe("collectFacts", () => {
       auth: { authorization: "Basic x" }, fetchFn: halfBlind,
       archive: "native-2026-09-01.tar.zst", samples: 4, manifest: null,
       tier2: { archive: "a", emails: 16 },
+      backupAgeDays: 0,
     });
     // Counts and mailboxes all agree — nothing else in the judgement can see
     // this. Positions 5, 10 and 15 answered nothing and are named as failures.
@@ -630,6 +704,32 @@ describe("collectFacts", () => {
     expect(judgeDrill(facts).ok).toBe(false);
   });
 
+  /*
+   * THE AGE IS CARRIED, NOT MEASURED HERE. This half never sees a filesystem —
+   * $OUT lives on the homelab HOST and the worker container mounts it read-only
+   * for the manifest alone — so the shell measures it and hands it over. This
+   * pins the wiring, not just the pure rule: a fact that never reaches
+   * DrillFacts is a rule that never fires.
+   */
+  it("carries the backup age through to the verdict", async () => {
+    const { live, restored, f } = pair();
+    const facts = await collectFacts({
+      restoredBase: restored.base, liveBase: live.base,
+      auth: { authorization: "Basic x" }, fetchFn: f,
+      archive: "native-2026-08-19.tar.zst", samples: 4, manifest: null,
+      tier2: { archive: "a", emails: 16 },
+      backupAgeDays: 14,
+    });
+    expect(facts.backupAgeDays).toBe(14);
+    // Everything the drill restored is perfect and it still fails.
+    expect(facts.restored.total).toBe(16);
+    expect(facts.sampleFailures).toEqual([]);
+    const v = judgeDrill(facts);
+    expect(v.ok).toBe(false);
+    expect(v.reasons).toHaveLength(1);
+    expect(v.reasons[0]).toMatch(/STOPPED RUNNING/);
+  });
+
   it("records every requested position, so a partial comparison is visible after the fact",
     async () => {
       const { live, restored, f } = pair();
@@ -638,6 +738,7 @@ describe("collectFacts", () => {
         auth: { authorization: "Basic x" }, fetchFn: f,
         archive: "native-2026-09-01.tar.zst", samples: 8, manifest: null,
         tier2: { archive: "a", emails: 16 },
+        backupAgeDays: 0,
       });
       // 16 messages, 8 positions, all answered: eight compared and the
       // denominator recorded beside them.
@@ -694,6 +795,7 @@ describe("the same-server guard", () => {
       auth: { authorization: "Basic x" }, fetchFn: f,
       archive: "native-2026-09-01.tar.zst", samples: 2, manifest: null,
       tier2: { archive: "a", emails: 2 },
+      backupAgeDays: 0,
     })).rejects.toThrow(/STALWART_PUBLIC_URL/);
   });
 });
@@ -753,6 +855,41 @@ describe("parseTier2", () => {
   it("turns a well-formed object with the wrong shape into a skip", () => {
     const t = parseTier2('{"archive":"a","emails":"lots"}');
     expect(t && "skipped" in t).toBe(true);
+  });
+});
+
+/*
+ * THE SHELL MEASURES THE AGE OF THE BACKUP; THIS PARSES IT. Whole days, one unit
+ * in both files. The only interesting question here is what UNKNOWN turns into,
+ * and the answer must never be 0 — 0 is "the backup ran today", the healthiest
+ * answer this field has.
+ */
+describe("parseBackupAgeDays", () => {
+  it("reads whole days", () => {
+    expect(parseBackupAgeDays("0")).toBe(0);
+    expect(parseBackupAgeDays("14")).toBe(14);
+    expect(parseBackupAgeDays(" 3 ")).toBe(3);
+  });
+
+  it("treats absent and empty as UNKNOWN and never as fresh", () => {
+    // `??` does not fire on "", and the shell leaves the variable EMPTY when
+    // there is no archive at all or the mtime could not be read — which is the
+    // common case, not the exotic one. Reading that as 0 would report the
+    // healthiest possible answer for the worst possible state.
+    for (const raw of [undefined, "", "   "]) {
+      expect(parseBackupAgeDays(raw)).toBeNull();
+    }
+    expect(judgeDrill(passing({ backupAgeDays: parseBackupAgeDays(undefined) })).ok).toBe(false);
+  });
+
+  it("refuses anything that is not a whole non-negative number rather than coercing it", () => {
+    // `Number("3e1")` is 30 and `Number("2.5")` is 2.5. A NEGATIVE is refused
+    // too: it can only come from an archive dated in the future, i.e. a clock
+    // that should not be believed, and "I cannot date this backup" is the
+    // honest reading of that.
+    for (const bad of ["-1", "2.5", "3e1", "three", "NaN", "Infinity"]) {
+      expect(parseBackupAgeDays(bad)).toBeNull();
+    }
   });
 });
 

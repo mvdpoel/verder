@@ -200,19 +200,102 @@ json_string() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Pick the archive.
+# 1. Pick the archive to drill — and, SEPARATELY, measure how old the BACKUP is.
 # ---------------------------------------------------------------------------
+# Newest by MTIME, not by the date in the name: a re-run, a copy or a restored
+# NAS all put a name and a timestamp out of step, and the timestamp is the one
+# that says which file was actually written last. Taken here rather than inside
+# the `else` below because the age check needs it on EVERY path — see the block
+# under it.
+#
+# `|| true` IS NOT DECORATION, AND IT IS THE PRICE OF MOVING THIS TO TOP LEVEL.
+# MEASURED: GNU `find` exits 1 when its starting directory does not exist, the
+# `2>/dev/null` hides the message but NOT the status, `pipefail` propagates it and
+# `set -e` then kills the script — `V=$(find /nonexistent … | sort -rn | head -1)`
+# printed nothing and exited 1, with the following line never reached. That is the
+# realistic case here and not a hypothetical: $OUT is
+# /mnt/nas-download/verder-backups/mail, an NFS mount, and a drill that runs at
+# 05:30 on the 1st with the NAS not mounted is exactly when this fires. Unguarded
+# it dies at THIS line — above `trap cleanup EXIT`, above every `drill_fail` call
+# — so no `worker_runs` row, no push, nothing but a cron log, and the `mail-drill`
+# tile keeps last month's `ok` for another 35 days. That is precisely the silence
+# the drill_fail machinery exists to end, and rule 6 never gets to run.
+#
+# The `|| true` sits INSIDE the substitution, on the pipeline, so a partial
+# listing (one unreadable subdirectory) is still captured rather than thrown away
+# with the exit status. An unreadable $OUT then reaches rule 6 as an UNKNOWN age,
+# which fails the drill loudly — the same answer, arrived at through the reporting
+# path instead of around it. This file already states the rule at the cleanup
+# below: "NOT LEFT TO `set -e`. A bare pipeline here would exit the script with
+# the cleanup trap running and NOTHING recorded."
+NEWEST_LINE=$(find "$OUT" -maxdepth 1 -type f -name 'native-*.tar.zst' -printf '%T@ %p\n' 2>/dev/null \
+  | sort -rn | head -1 || true)
+NEWEST_NATIVE=$(printf '%s' "$NEWEST_LINE" | cut -d' ' -f2-)
+
+# ======= THE AGE IS A PROPERTY OF THE BACKUP, NOT OF THE ARCHIVE DRILLED =======
+#
+# THE HOLE THIS CLOSES, found 2026-09-02 BY READING — the conditional below is
+# deliberate, because it has not happened yet and this repo keeps "MEASURED" for
+# things somebody watched. WHAT IS TRUE FROM THE SOURCE: `ops/mail-backup.sh` is
+# the LAST step of ops/nightly.sh and writes no `worker_runs` row of its own, so
+# nightly-verify and model-check have already written their green rows above it;
+# and this drill picks the newest archive by mtime and NEVER ASKS HOW OLD IT IS.
+#
+# WHAT THAT WOULD COST: a nightly backup that died a fortnight ago would still
+# yield a clean monthly PASS, month after month, until retention's `find -mtime
+# +14 -delete` removed the last archive and the drill finally failed with "there
+# is NOTHING to restore from" — by which point there genuinely would be nothing.
+# The drill would be reporting on a corpse and calling it well. It has not done
+# so: the backup first ran from cron on 2026-09-02 and this drill has only ever
+# been run by hand. This rule is what keeps it that way.
+#
+# THE SUBTLETY, AND IT IS THE WHOLE POINT OF DOING IT HERE:
+# the age is measured from `$NEWEST_NATIVE`, the newest archive in $OUT, and
+# NEVER from `$ARCHIVE`, the file this run happens to be drilling. The header
+# documents a human passing an explicit archive so they can drill the
+# SECOND-NEWEST when the newest is the one under suspicion — the fallback this
+# file's own header documents. (Deliberately not repeating a retention figure
+# here: the archives THIS line ranks are `native-*.tar.zst`, pruned at 14 days,
+# while the header's "five-week" figure is tier 2's `-mtime +35`. One number per
+# fact, stated where the fact lives.) Compute staleness
+# from the drilled file and that documented path starts failing on a staleness
+# error that says nothing about what the operator asked for, every time it is
+# used. The question "is the backup still running?" and the question "does THIS
+# archive restore?" are two different questions and this script answers both.
+# Do not "simplify" this into `$ARCHIVE`.
+#
+# WHOLE DAYS, and the TS half parses whole days — one unit, stated in both
+# places, so nobody has to guess whether 259200 is seconds or milliseconds.
+#
+# AN UNKNOWN AGE IS NOT A FRESH ONE. No archive at all, or a `find` that printed
+# something that is not an epoch, leaves this EMPTY — never 0 — because 0 is the
+# healthiest possible answer and "we could not tell" must never render as the
+# best news there is. The TS half fails a drill it cannot date.
+#
+# Bash integer division truncates toward zero, so a backup whose mtime is a few
+# seconds in the future (a NAS clock a hair ahead) reads 0 and passes, while a
+# wildly future mtime yields a NEGATIVE number that the TS parser refuses as
+# unknown. Both are the honest reading of a timestamp that cannot be trusted.
+MAIL_DRILL_BACKUP_AGE_DAYS=""
+NEWEST_MTIME=$(printf '%s' "$NEWEST_LINE" | cut -d' ' -f1 | cut -d'.' -f1)
+case "$NEWEST_MTIME" in
+  '' | *[!0-9]*) ;;
+  *) MAIL_DRILL_BACKUP_AGE_DAYS=$(( ( $(date +%s) - NEWEST_MTIME ) / 86400 )) ;;
+esac
+export MAIL_DRILL_BACKUP_AGE_DAYS
+if [ -n "$MAIL_DRILL_BACKUP_AGE_DAYS" ]; then
+  echo "mail-restore-drill.sh: newest nightly backup in $OUT is ${MAIL_DRILL_BACKUP_AGE_DAYS} day(s) old"
+else
+  echo "mail-restore-drill.sh: the age of the newest nightly backup in $OUT is UNKNOWN"
+fi
+
 if [ "$#" -gt 0 ] && [ -n "${1:-}" ]; then
   # A bare name resolves inside $OUT, a path is taken as given — a human
   # reaching for yesterday's archive types the name they see in `ls`.
   if [ -f "$1" ]; then ARCHIVE="$1"; else ARCHIVE="$OUT/$1"; fi
   [ -f "$ARCHIVE" ] || drill_fail "no such archive: $1"
 else
-  # Newest by MTIME, not by the date in the name: a re-run, a copy or a restored
-  # NAS all put a name and a timestamp out of step, and the timestamp is the one
-  # that says which file was actually written last.
-  ARCHIVE=$(find "$OUT" -maxdepth 1 -type f -name 'native-*.tar.zst' -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | head -1 | cut -d' ' -f2-)
+  ARCHIVE="$NEWEST_NATIVE"
   if [ -z "$ARCHIVE" ]; then
     # The loudest possible failure, on purpose: a silent skip here is
     # indistinguishable from a month of green drills.
@@ -581,6 +664,7 @@ timeout "$DRILL_TIMEOUT" "${COMPOSE[@]}" run --rm -T --no-deps \
   -e MAIL_DRILL_MANIFEST \
   -e MAIL_DRILL_TIER2 \
   -e MAIL_DRILL_SAMPLES \
+  -e MAIL_DRILL_BACKUP_AGE_DAYS \
   -v "$OUT:/mail-backups:ro" \
   worker pnpm --filter worker mail-drill
 DRILL_RC=$?

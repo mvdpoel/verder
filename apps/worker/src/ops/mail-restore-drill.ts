@@ -138,6 +138,23 @@ export interface DrillFacts {
   tier2: { archive: string; emails: number } | { skipped: string } | null;
   /** The three probes that make up "JMAP answers" here. See rule 1. */
   jmap: { session: boolean; query: boolean; get: boolean };
+  /**
+   * How old the NEWEST nightly archive in the backup directory is, in WHOLE
+   * DAYS, or null when the shell could not tell.
+   *
+   * NOT THE AGE OF `archive` ABOVE, and the difference is the whole reason this
+   * field exists rather than a timestamp on the drilled file. The shell measures
+   * it from the newest `native-*.tar.zst` in $OUT WHATEVER archive this run was
+   * asked to restore, because a human drilling the second-newest on purpose —
+   * the documented fallback when the newest is under suspicion — must not be
+   * told the backup has stopped. "Is the backup still running?" and "does THIS
+   * archive restore?" are two questions and this drill answers both.
+   *
+   * Null is UNKNOWN and rule 6 fails it. It is deliberately not 0: 0 is the
+   * healthiest answer there is, and a measurement that failed must never render
+   * as the best possible news.
+   */
+  backupAgeDays: number | null;
 }
 
 /**
@@ -177,6 +194,57 @@ export function withinTier2Tolerance(emails: number, expected: number): boolean 
   if (expected <= 0) return emails === expected;
   return Math.abs(emails - expected) * 100 <= expected * TIER2_TOLERANCE_PERCENT;
 }
+
+/**
+ * How old the newest NIGHTLY mail backup may be before rule 6 says the backup
+ * itself has stopped running. WHOLE DAYS, the unit ops/mail-restore-drill.sh
+ * computes and exports; one unit, stated in both files.
+ *
+ * THREE, AND THE ARGUMENT IS ABOUT THE CADENCE. `ops/mail-backup.sh` runs from
+ * ops/nightly.sh at 03:30 UTC EVERY night and the drill at 05:30, so an age of n
+ * whole days is exactly n backup slots that produced nothing. One is a slow
+ * night — a long tar, a NAS that was busy, a machine rebooted at the wrong
+ * minute; two is bad luck; three is the edge and still passes. MORE than three
+ * consecutive nights with nothing written is not luck, it is a cron that has
+ * stopped — and it is still comfortably inside the 14-day tier-1 retention, so
+ * there is a fortnight of archives left to fix it with. This drill runs monthly,
+ * so it is the only surface that asks the question at all.
+ *
+ * TWO SURFACES NOW ASK THIS QUESTION AND THEY GIVE DIFFERENT NUMBERS ON PURPOSE.
+ * The same change that added this rule gave the backup a `worker_runs` row and a
+ * `nightly` declaration in worker-health.ts, which turns its tile down after
+ * NIGHTLY_MAX_AGE_MS = 26 h. This bound is 3 DAYS. A later reader finding 26 h
+ * and 3 days for what looks like one fact will want to delete one of them, so:
+ * THEY ARE NOT ONE FACT AND NEITHER IS REDUNDANT.
+ *
+ * The tile observes a ROW IN POSTGRES — "did the script run and what did it
+ * say?". This rule observes A FILE ON THE NAS — "is anything actually landing in
+ * the backup directory?". They fail in different directions and each is blind
+ * where the other sees: a script that runs nightly and writes its `ok` row while
+ * $BACKUP_DIR silently unmounts is GREEN on the tile and caught here; a machine
+ * whose worker container is down writes no row at all and is caught by the tile
+ * while the archives keep arriving. And the drill must not depend on anybody
+ * having opened the dashboard — it is the one surface that pushes.
+ *
+ * The numbers differ because the observations do. 26 h is "the 03:30 job has
+ * missed a night", which a row can say precisely. 3 days is the tolerance a
+ * FILESYSTEM reading has earned: mtimes cross a network mount, a drill on the 1st
+ * may run while that night's backup is still tarring, and this rule fires a
+ * PUSH rather than shading a dot. Loosening the tile to 3 days would hide a
+ * missed night; tightening this to 26 h would page on a slow tar. Both correct,
+ * both spelled once.
+ *
+ * THE SAME REASONING AS `WATCHER_MISSED_TICKS` IN packages/api/src/worker-health.ts,
+ * AND DELIBERATELY NOT THE SAME CONSTANT. That one is also 3 and is applied the
+ * same way — tolerance is cadence × 3 and the worker is down only PAST it, so a
+ * single missed tick is never an alarm — but it counts MINUTE ticks of a cron
+ * watcher and this counts NIGHTS of a backup. They are different facts about
+ * different jobs and they must be free to move independently: the day somebody makes the watchers twitchier, the backup must
+ * not silently follow. That module makes exactly this argument about its own
+ * NIGHTLY_MAX_AGE_MS and ERROR_ACTIONABLE_MS, which coincide at 26 h and are
+ * still spelled twice.
+ */
+export const MAX_BACKUP_AGE_DAYS = 3;
 
 const cap = (xs: string[]): string =>
   (xs.length <= REASON_LIST_LIMIT
@@ -304,6 +372,40 @@ export function judgeDrill(f: DrillFacts): { ok: boolean; reasons: string[] } {
     reasons.push(`the tier-2 archive ${f.tier2.archive} holds ${f.tier2.emails} `
       + `message(s), more than ${TIER2_TOLERANCE_PERCENT}% away from the `
       + `${f.expected.total} the snapshot recorded (${f.expected.source})`);
+  }
+
+  // RULE 6 — IS THE BACKUP STILL RUNNING AT ALL? Every rule above judges the
+  // archive this run restored. None of them can see that no NEW archive has been
+  // written for a fortnight, because the drill picks the newest file there is
+  // and a stale file restores exactly as well as a fresh one.
+  //
+  // Read from the source, and true when this was written: `ops/mail-backup.sh`
+  // runs LAST in ops/nightly.sh, after nightly-verify and model-check have
+  // already gone green. (It now writes a worker_runs row of its own — added in
+  // the same change as this rule — but that row is a SECOND surface, not a
+  // substitute: it says the script ran, and this says files are still landing on
+  // the NAS.) Without this rule a backup that stopped would go on producing a
+  // clean monthly PASS until retention deleted the last archive and the drill
+  // failed with "there is NOTHING to restore from", by which point there would
+  // genuinely be nothing left. Written in the conditional because it has not
+  // happened: the backup first ran from cron on 2026-09-02.
+  //
+  // THE REASON SAYS WHAT IT MEANS, NOT JUST THE NUMBER. A perfect restore and a
+  // dead cron look identical in every other line of this report, so the reason
+  // has to carry both halves: the backup has stopped, AND the restore itself may
+  // well have succeeded. An operator reading "12 days old" alone will go looking
+  // for a corrupt archive.
+  if (f.backupAgeDays === null) {
+    reasons.push("the age of the newest nightly backup could not be determined, so this "
+      + "drill cannot say whether the backup is still running — an undatable backup "
+      + "directory is not a healthy one");
+  } else if (f.backupAgeDays > MAX_BACKUP_AGE_DAYS) {
+    reasons.push(`THE NIGHTLY MAIL BACKUP HAS STOPPED RUNNING: the newest archive in the `
+      + `backup directory is ${f.backupAgeDays} day(s) old and the backup is nightly `
+      + `(more than ${MAX_BACKUP_AGE_DAYS} missed nights is a stopped cron, not a slow `
+      + `night). The restore below may well have succeeded — that is not the point, `
+      + `nothing new is being backed up and tier-1 retention deletes the last archive `
+      + `14 days after the last successful run`);
   }
 
   return { ok: reasons.length === 0, reasons };
@@ -436,6 +538,12 @@ export interface CollectDeps {
   samples: number;
   manifest: DrillManifest | null;
   tier2: DrillFacts["tier2"];
+  /** WHOLE DAYS since the newest nightly archive in the backup directory was
+   *  written, or null when the shell could not tell. Carried rather than
+   *  measured here: this half never sees a filesystem, and the age is a fact
+   *  about $OUT on the homelab HOST, which the worker container does not mount
+   *  (it gets $OUT read-only for the manifest and nothing else). */
+  backupAgeDays: number | null;
   fetchFn?: typeof fetch;
   /** Called for every probe that threw. The failure is already reflected in the
    *  facts (a false flag, a zero count, a sample failure), but the exception's
@@ -555,7 +663,7 @@ export async function collectFacts(deps: CollectDeps): Promise<DrillFacts> {
     archive: deps.archive,
     restored: { total: restoredTotal, mailboxes: restoredBoxes },
     expected, requestedSamples: deps.samples, samples, sampleFailures,
-    tier2: deps.tier2, jmap,
+    tier2: deps.tier2, jmap, backupAgeDays: deps.backupAgeDays,
   };
 }
 
@@ -643,6 +751,29 @@ export function parseTier2(raw: string | undefined): DrillFacts["tier2"] {
 }
 
 /**
+ * `MAIL_DRILL_BACKUP_AGE_DAYS` — how old the NEWEST nightly archive in the
+ * backup directory is, in WHOLE DAYS, as measured by the shell.
+ *
+ * ABSENT, EMPTY AND UNREADABLE ALL MEAN UNKNOWN, and unknown is null, which rule
+ * 6 FAILS. It must never fall back to 0: 0 is "the backup ran today", the
+ * healthiest answer this field has, and a measurement that could not be taken
+ * would then render as the best possible news — the exact shape of the hole this
+ * whole rule closes one level down.
+ *
+ * REFUSED RATHER THAN COERCED, for the reason parseSampleCount records:
+ * `Number("3e1")` is 30 and `Number("2.5")` is 2.5. A NEGATIVE value is refused
+ * too and is deliberately not clamped to 0 — it can only come from an archive
+ * dated in the future, i.e. a clock nobody should be believing, and "I cannot
+ * date this backup" is the honest reading of that. (The shell's own integer
+ * division already absorbs a mtime a few seconds ahead as 0.)
+ */
+export function parseBackupAgeDays(raw: string | undefined): number | null {
+  const v = raw?.trim();
+  if (!v || !/^[0-9]+$/.test(v)) return null;
+  return Number(v);
+}
+
+/**
  * The sidecar JSON written beside the archive at snapshot time.
  *
  * THE MAILBOX TOTALS ARE REQUIRED, AND AN EMPTY OBJECT IS NOT TOTALS. A manifest
@@ -686,6 +817,13 @@ function printReport(f: DrillFacts, verdict: { ok: boolean; reasons: string[] })
     console.log(`  ${label.padEnd(26)}${String(v).padStart(12)}`);
 
   console.log(`\nmail-drill: ${f.archive}`);
+  // Printed on EVERY run, pass or fail, beside the archive it belongs next to —
+  // the same discipline the tier-2 tolerance follows, and for the same reason:
+  // drift has to be readable in a green log long before it is a red one. "2
+  // day(s) old" three months running and then "3" is a story; a boolean is not.
+  console.log(`  newest nightly backup in the backup directory: `
+    + `${f.backupAgeDays === null ? "AGE UNKNOWN" : `${f.backupAgeDays} day(s) old`} `
+    + `(a backup older than ${MAX_BACKUP_AGE_DAYS} day(s) has stopped running)`);
   console.log(`\nwhat the restored store holds (expected figures from the ${f.expected.source})`);
   row("messages restored", f.restored.total);
   row("messages expected", f.expected.total);
@@ -861,6 +999,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       archive: (process.env.MAIL_DRILL_ARCHIVE ?? "").trim() || "(archive not named)",
       samples: parseSampleCount(process.env.MAIL_DRILL_SAMPLES),
       manifest, tier2: parseTier2(process.env.MAIL_DRILL_TIER2),
+      backupAgeDays: parseBackupAgeDays(process.env.MAIL_DRILL_BACKUP_AGE_DAYS),
       onProbeError: (where, err) => {
         probeErrors.push({ where, message: String(err) });
         console.error(`mail-drill: ${where} failed — ${String(err)}`);

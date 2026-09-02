@@ -54,3 +54,25 @@ export const RERANK_WORKER_NAME = "search-rerank";
  * restore drill at all. That is the silence the whole drill exists to end.
  */
 export const MAIL_DRILL_WORKER_NAME = "mail-drill";
+
+/**
+ * Written by apps/worker/src/ops/mail-backup-run.ts — the row ops/mail-backup.sh
+ * records for itself — and read back by the `nightly` declaration in
+ * worker-health.ts.
+ *
+ * THE SILENCE THIS ENDS, read out of the source 2026-09-02. Until this constant
+ * existed the nightly mail backup wrote no `worker_runs` row at all and had no
+ * entry in the taxonomy. It is the LAST step of ops/nightly.sh, so nightly-verify
+ * and model-check have already written their green rows before it starts, and the
+ * monthly restore drill took the newest archive by mtime without ever asking its
+ * age. So a night where the 5.59 GB snapshot failed WOULD have left the Systeem
+ * panel entirely green, and everything WOULD have stayed green for fourteen days
+ * until retention deleted the last archive and the drill failed with nothing left
+ * to restore. Conditional on purpose: it never got the chance — the backup first
+ * ran from cron on 2026-09-02, the same day this was written.
+ *
+ * Same reason for living in this leaf as the two above: writer and reader are in
+ * different packages and neither imports the other, and the failure mode of a
+ * rename is not an exception but a tile that quietly stops existing.
+ */
+export const MAIL_BACKUP_WORKER_NAME = "mail-backup";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { declFor, workerState } from "./worker-health";
-import { MAIL_DRILL_WORKER_NAME } from "./worker-names";
+import { MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
 const agoMs = (ms: number) => new Date(NOW - ms);
@@ -46,6 +46,82 @@ describe("workerState — nightly jobs", () => {
 
   it("still reports a failed verification as down", () => {
     expect(state("nightly-verify", "error", agoMs(HOUR))).toBe("down");
+  });
+
+  /*
+   * THE MAIL BACKUP, and the hole it closes is the reason this declaration
+   * exists at all. ops/mail-backup.sh wrote NO worker_runs row and had no entry
+   * in the taxonomy, and it is the LAST step of ops/nightly.sh — so
+   * nightly-verify and model-check have already written their green rows by the
+   * time it starts. The monthly drill did not cover it either:
+   * ops/mail-restore-drill.sh takes the newest archive by mtime and never asks
+   * how old it is. A night where the 5.59 GB snapshot failed WOULD therefore have
+   * left the panel entirely green, and stayed green for fourteen days until `find
+   * -mtime +14 -delete` took the last archive and the drill failed with nothing
+   * left to restore. The conditional is deliberate: the backup first ran from
+   * cron on 2026-09-02, so no such fortnight was ever observed.
+   */
+  describe("the mail backup", () => {
+    it("is nightly, like the two jobs it runs beside in the same cron entry", () => {
+      // It IS the same 03:30 UTC run — the last step of ops/nightly.sh — so its
+      // silence reads exactly as nightly-verify's does. A kind states HOW
+      // SILENCE IS READ and nothing else, and this one already fits: no new kind
+      // was invented for it.
+      expect(declFor("mail-backup")).toEqual({ kind: "nightly" });
+      // THE NAME is one constant, spelled in worker-names.ts, because its writer
+      // (apps/worker/src/ops/mail-backup-run.ts) and its reader (this module)
+      // are in different packages. A rename that missed one half would not
+      // throw: the panel would find no rows and show no tile, which is
+      // indistinguishable from a system that has no mail backup.
+      expect(MAIL_BACKUP_WORKER_NAME).toBe("mail-backup");
+      expect(declFor(MAIL_BACKUP_WORKER_NAME).kind).toBe("nightly");
+    });
+
+    it("tolerates a full day of silence and fails a skipped night", () => {
+      // ~21 h stale for most of every day BY DESIGN, and a night that was
+      // skipped is the failure that matters — a backup that did not run.
+      expect(state("mail-backup", "ok", agoMs(20 * HOUR))).toBe("ok");
+      expect(state("mail-backup", "ok", agoMs(30 * HOUR))).toBe("down");
+    });
+
+    it("reports a failed backup from this morning as down", () => {
+      // The whole point: a tar that died at 03:35 is amber over coffee instead
+      // of a line in a cron log nobody reads.
+      expect(state("mail-backup", "error", agoMs(2 * HOUR))).toBe("down");
+    });
+
+    it("needs no error window of its own, because the two rules agree", () => {
+      // The monthly drill needed errorActionableMs: its next run is a MONTH
+      // away, so ageing its failure out at 26 h would report a healthy backup
+      // for twenty-nine days. This one runs again tonight — past 26 h the
+      // default drops it through to the `nightly` silence rule, which also says
+      // down. There is no age at which a failed backup quietly turns green.
+      expect(declFor("mail-backup").errorActionableMs).toBeUndefined();
+      expect(state("mail-backup", "error", agoMs(27 * HOUR))).toBe("down");
+      expect(state("mail-backup", "error", agoMs(9 * DAY))).toBe("down");
+    });
+
+    it("is NOT judged as a watcher, which is what an undeclared name would be", () => {
+      // declFor defaults an unknown name to a watcher at 5 min × 3, so a nightly
+      // job with no declaration is amber for roughly 23 hours out of every 24 —
+      // the permanent-amber problem this module exists to remove, arriving
+      // through its own front door. The counterfactual is asserted rather than
+      // described: a name one typo away IS down at four hours, and would be
+      // down forever.
+      expect(declFor("mail-backup").everyMs).toBeUndefined();
+      expect(state("mail-backup", "ok", agoMs(4 * HOUR))).toBe("ok");
+      expect(state("mail-bakcup", "ok", agoMs(4 * HOUR))).toBe("down");
+    });
+
+    it("puts its line at exactly 26 hours, inclusive, like every nightly job", () => {
+      // Spelled out and deliberately not imported: a boundary test that reads
+      // the constant it pins proves only that arithmetic works. Move this number
+      // down and the tile turns amber every night before the 03:30 run clears
+      // it; move it past 27 h and a backup that skipped a whole night reports
+      // healthy — a page claiming the mail store is backed up when it is not.
+      expect(state("mail-backup", "ok", agoMs(26 * HOUR))).toBe("ok");
+      expect(state("mail-backup", "ok", agoMs(26 * HOUR + 1))).toBe("down");
+    });
   });
 });
 
@@ -324,7 +400,7 @@ describe("workerState — the boundaries themselves", () => {
     // THE BLAST RADIUS OF THE PER-DECL WINDOW, pinned from both ends. No decl
     // written before mail-drill may carry one, so every kind is judged by the
     // same 26 h it was before the monthly kind existed.
-    for (const name of ["mail", "heartbeat", "nightly-verify", "model-check",
+    for (const name of ["mail", "heartbeat", "nightly-verify", "model-check", "mail-backup",
                         "ollama", "extract", "reindex", "case-history", "gmail"]) {
       expect(declFor(name).errorActionableMs).toBeUndefined();
     }

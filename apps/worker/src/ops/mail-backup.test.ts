@@ -23,7 +23,11 @@ const code = sh.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
 
 describe("mail-backup.sh", () => {
   it("fails loudly rather than silently skipping", () => {
-    expect(sh).toMatch(/set -euo pipefail/);
+    // `-E` is errtrace and was added WITH the ERR trap below: without it the
+    // trap does not fire inside a shell function, and cleanup_snapshot and the
+    // tier-2 block are both functions' worth of the work that can fail. The
+    // three original flags must survive it.
+    expect(code).toMatch(/^set -Eeuo pipefail$/m);
   });
 
   /*
@@ -59,8 +63,23 @@ describe("mail-backup.sh", () => {
    * later. The backup must never be able to take the service down with it.
    */
   it("always restarts stalwart, even when the snapshot fails", () => {
-    expect(sh).toMatch(/trap\s+cleanup_snapshot\s+EXIT/);
+    expect(code).toMatch(/trap\s+cleanup_snapshot\s+EXIT/);
     expect(code).toMatch(/start stalwart/);
+    /*
+     * And the trap must still be armed with a body that does the restarting.
+     * Asserted on the FUNCTION BODY, sliced out rather than matched with a lazy
+     * `[\s\S]*?` — MEASURED: a version of this test that let the match run on
+     * from `cleanup_snapshot() {` passed with the restart deleted from the
+     * function, because it found the unconditional `start stalwart` on the happy
+     * path forty lines below. `trap cleanup_snapshot EXIT` beside a
+     * cleanup_snapshot that no longer starts anything is the whole outage this
+     * test exists to prevent, so the slice ends at the function's own closing
+     * brace in column 0.
+     */
+    const body = code.slice(code.indexOf("cleanup_snapshot() {"));
+    const fn = body.slice(0, body.indexOf("\n}") + 2);
+    expect(fn).toMatch(/start stalwart/);
+    expect(fn).toMatch(/\|\| true/);
   });
 
   /*
@@ -280,7 +299,20 @@ describe("mail-backup.sh", () => {
      * false alarm the manifest exists to prevent.
      */
     it("reads the count before the store is stopped", () => {
-      const counted = code.indexOf("exec -T worker");
+      /*
+       * ANCHORED ON THE MANIFEST INVOCATION, NOT ON `exec -T worker`, and that
+       * is a repair rather than a preference. This test used to say
+       * `code.indexOf("exec -T worker")`, which was the manifest read until
+       * record_backup was added ABOVE it — after which the first occurrence was
+       * the recorder at offset 779 and the manifest sat at 1524. MUTATION-TESTED
+       * at the time: moving the whole `if ! COUNT_OUT=$(…)` block to AFTER
+       * `stop stalwart` still gave 779 < 2118 and the test PASSED, so the
+       * property below was pinned by nothing. The property is worth pinning —
+       * reading the count after the stop makes it depend on Stalwart finishing
+       * its RocksDB open, and in phase 2 makes the baseline claim MORE messages
+       * than the archive holds — so the anchor names the manifest call itself.
+       */
+      const counted = code.indexOf("worker mail-count");
       const stopped = code.indexOf("stop stalwart");
       expect(counted).toBeGreaterThan(-1);
       expect(stopped).toBeGreaterThan(-1);
@@ -315,8 +347,13 @@ describe("mail-backup.sh", () => {
      */
     it("warns and carries on when the count cannot be taken", () => {
       expect(code).toMatch(/if ! COUNT_OUT=\$\(timeout 60 "\$\{COMPOSE\[@\]\}" exec -T worker/);
-      // Exactly one invocation, so there is no unguarded second one.
-      expect(code.match(/exec -T worker/g)).toHaveLength(1);
+      // Exactly one invocation IN THIS BLOCK, so there is no unguarded second
+      // one. Script-wide the count is two: the other is record_backup, which is
+      // guarded by its own `||` for the same reason and is asserted where it
+      // lives. A bare number here would have failed the day that was added and
+      // taught the next reader to raise it instead of checking why.
+      expect(block.match(/exec -T worker/g)).toHaveLength(1);
+      expect(code.match(/exec -T worker/g)).toHaveLength(2);
       expect(block).toMatch(/COUNT_OUT=""/);
       // No shell `exit` anywhere in the block.
       expect(block).not.toMatch(/^\s*exit\b/m);
@@ -397,6 +434,198 @@ describe("mail-backup.sh", () => {
       expect(counter).toMatch(/AbortSignal\.timeout\(ms\)/);
       expect(counter).toMatch(/REQUEST_TIMEOUT_MS = \d[\d_]*/);
       expect(code).toMatch(/timeout 60 "\$\{COMPOSE\[@\]\}" exec/);
+    });
+  });
+
+  /*
+   * THE ROW THIS SCRIPT WRITES ABOUT ITSELF.
+   *
+   * THE HOLE, found 2026-09-02: this script recorded nothing the app can see,
+   * and it is the LAST step of ops/nightly.sh — nightly-verify and model-check
+   * have already written their green rows by the time it starts. A night where
+   * the snapshot failed left the Systeem panel entirely green. The monthly drill
+   * did not cover it either: ops/mail-restore-drill.sh takes the newest archive
+   * by mtime and never asks how old it is, so it kept PASSING on a stale
+   * archive. Green for fourteen days, until `find -mtime +14 -delete` removed
+   * the last one and the drill failed with nothing left to restore.
+   */
+  describe("the worker_runs row", () => {
+    it("records ok and error under a name it cannot get wrong", () => {
+      expect(code).toMatch(/pnpm --silent --filter worker mail-backup-run "\$@"/);
+      expect(code).toMatch(/record_backup error "\$line" "\$rc"/);
+      expect(code).toMatch(/^record_backup ok$/m);
+      // The shell chooses the STATUS and never the worker name: mail-backup-run
+      // spells that from a constant, because declFor() defaults an unknown name
+      // to a watcher at 5 min × 3 and one typo would be a permanently amber row
+      // nothing could ever clear.
+      expect(code).not.toMatch(/mail-backup-run [^"\n]*mail-backup\b/);
+    });
+
+    /*
+     * ERR, NOT A SECOND EXIT TRAP, AND IT IS THE MOST IMPORTANT ASSERTION IN
+     * THIS FILE. Bash allows exactly ONE EXIT trap at a time. This script juggles
+     * three deliberately, and `trap cleanup_snapshot EXIT` is what guarantees the
+     * mail server comes back up when a tar fails — a `trap … EXIT` added for the
+     * reporting would silently replace it and leave stalwart DOWN on precisely
+     * the night something went wrong. ERR is a separate trap and composes.
+     */
+    it("reports through ERR and adds no second EXIT trap", () => {
+      expect(code).toMatch(/trap 'on_backup_error "\$\?" "\$LINENO"' ERR/);
+      // The EXIT traps are exactly the three that were already here: the
+      // snapshot cleanup, the tier-2 scratch removal, and nothing else. `trap -
+      // EXIT` disarms and is counted separately.
+      const armed = code.match(/^\s*trap\s+(?!-\s)\S.*\bEXIT\b/gm) ?? [];
+      expect(armed).toHaveLength(2);
+      expect(armed[0]).toMatch(/cleanup_snapshot/);
+      expect(armed[1]).toMatch(/rm -rf '\$TMP'/);
+    });
+
+    /*
+     * MEASURED, and nastier than it looks: an UNGUARDED failing command inside
+     * an ERR handler does not re-enter the trap — bash suppresses ERR while the
+     * handler runs — but it DOES overwrite the script's exit status. A run that
+     * failed with rc=3 exited 1 instead, and nightly.sh and the cron log read
+     * that status. A backup that cannot report its failure must still report the
+     * failure honestly, so the recorder lives in a `||` list and the handler
+     * returns 0 and lets `set -e` kill the script exactly as before.
+     */
+    it("cannot abort the script or rewrite its exit status while reporting", () => {
+      expect(code).toMatch(/mail-backup-run "\$@" >\/dev\/null \|\| \{/);
+      expect(code).toMatch(/on_backup_error\(\) \{[\s\S]*?\n\s*return 0\n\}/);
+      /*
+       * BOUNDED HARD, and `-k` is the assertion that matters. ERR fires BEFORE
+       * the EXIT traps, so on any failure between `stop stalwart` and `start
+       * stalwart` this call sits IN FRONT OF cleanup_snapshot's restart. A plain
+       * `timeout 60` is not a ceiling on that at all: `docker compose exec` need
+       * only ignore SIGTERM — a wedged docker daemon is one of the failure modes
+       * the manifest block already lists — and the mail server stays down
+       * indefinitely while the script waits to report. `-k 5` escalates to
+       * SIGKILL, which bounds the outage the reporting can add at 65 s.
+       */
+      expect(code).toMatch(/timeout -k 5 60 "\$\{COMPOSE\[@\]\}" exec -T worker \\\n\s*pnpm --silent --filter worker mail-backup-run/);
+    });
+
+    /*
+     * MEASURED: ERR fires AGAIN from inside an EXIT trap. A script that died at
+     * line N, recorded it, and then hit a failing command in cleanup_snapshot ran
+     * the handler a second time — two rows for one night, the second naming a
+     * line in the cleanup rather than the line that broke. The flag also stops
+     * the success and failure paths both writing.
+     */
+    it("writes one row per run and never two", () => {
+      expect(code).toMatch(/backup_reported=0/);
+      // Guard first, flag set before anything that can fail, then the call.
+      expect(code).toMatch(
+        /record_backup\(\) \{\n\s*if \[ "\$backup_reported" -ne 0 \]; then return 0; fi\n\s*backup_reported=1/);
+    });
+
+    /*
+     * NOTHING BUT DIGITS REACHES worker_runs.detail. It is rendered on the
+     * dashboard and dumped off-box by the nightly pg_dump, and this script is
+     * the one place that handles the JMAP app password — which is why tier 2
+     * passes `-e VANDELAY_PASSWORD` name-only. `$BASH_COMMAND` would name the
+     * failing command and is deliberately not sent; bash was measured NOT to
+     * expand it, but "the shell probably will not interpolate a credential into
+     * a string we archive for a year" is not a guarantee worth building on.
+     */
+    it("sends only the failing line and the exit status", () => {
+      expect(code).not.toMatch(/BASH_COMMAND/);
+      const handler = code.slice(
+        code.indexOf("on_backup_error() {"), code.indexOf("trap 'on_backup_error"));
+      expect(handler).toMatch(/local rc="\$1" line="\$2"/);
+      expect(handler).not.toMatch(/\$\{?(JMAP|VANDELAY|BACKUP_AGE)/);
+      // mail-backup-run.ts is the other half of the guarantee, and it refuses
+      // anything that is not a short run of digits.
+      const runner = readFileSync(new URL("./mail-backup-run.ts", import.meta.url), "utf8");
+      expect(runner).toMatch(/\/\^\\d\{1,6\}\$\//);
+      expect(runner).toMatch(/expected ok or error/);
+    });
+
+    /*
+     * ORDER. `record_backup ok` sits after BOTH tiers and both retention sweeps,
+     * so there is no partial green: a night either got all the way to the end or
+     * took the ERR path and recorded why. The weekly tier is inside an `if` that
+     * can legitimately skip, but everything that can FAIL is above this line.
+     */
+    it("records ok only after the weekly tier and its retention sweep", () => {
+      const weekly = code.indexOf("worker import jmap");
+      const prune = code.indexOf("find \"$OUT\" -name 'archive-*.sqlite.zst*'");
+      const ok = code.indexOf("\nrecord_backup ok");
+      const done = code.indexOf("mail-backup.sh: done");
+      expect(weekly).toBeGreaterThan(-1);
+      expect(prune).toBeGreaterThan(weekly);
+      expect(ok).toBeGreaterThan(prune);
+      expect(done).toBeGreaterThan(ok);
+    });
+
+    /*
+     * THE ASSERTION THAT WOULD HAVE CAUGHT THE HOLE THIS SUITE MISSED FIRST TIME.
+     *
+     * MEASURED (bash 5.3): THE ERR TRAP DOES NOT FIRE ON THE `exit` BUILTIN. A
+     * script with `set -Eeuo pipefail`, `trap 'on_err …' ERR` and `trap cleanup
+     * EXIT` whose `if ! grep -qx …; then exit 1; fi` fired printed only the EXIT
+     * trap and rc=1 — the ERR handler was never called. The first version of this
+     * change left two bare `exit 1`s in the script, and one of them was the
+     * archive acceptance test: the single most important failure this script can
+     * detect (an archive with no etc/config.json restores into BOOTSTRAP MODE on
+     * an empty store) recorded NO ROW, so the panel would have shown last night's
+     * `ok` on the night the backup produced something unrestorable. Every test in
+     * this describe block passed while that was true, because each of them
+     * asserted that `record_backup` EXISTS rather than that nothing escapes it.
+     *
+     * So this one is structural: the only `exit` in the whole file is the one
+     * INSIDE backup_fail, which records first. Anything else must be a failing
+     * command, which ERR catches.
+     */
+    it("has no exit that escapes the recorder", () => {
+      expect(code).toMatch(/backup_fail\(\) \{\n\s*record_backup error "\$1" 1\n\s*exit 1\n\}/);
+      const fail = code.indexOf("backup_fail() {");
+      const outside = [...code.matchAll(/^\s*exit\b.*$/gm)]
+        .filter((m) => {
+          const at = m.index ?? 0;
+          return at < fail || at > code.indexOf("\n}", fail);
+        })
+        .map((m) => m[0].trim());
+      expect(outside).toEqual([]);
+      // And all three deliberate refusals go through it, each carrying its own
+      // `$LINENO` so the row names the check that fired: the archive acceptance
+      // test, a missing `age` when BACKUP_AGE_RECIPIENT is set, and a vandelay
+      // binary that cannot produce the weekly survival archive.
+      expect(code.match(/backup_fail "\$LINENO"/g)).toHaveLength(3);
+    });
+
+    /*
+     * A SKIPPED SURVIVAL TIER IS A FAILURE, NOT A GREEN NIGHT. The `if` above the
+     * weekly block is a legitimate skip — six nights a week this week's archive
+     * already exists. A vandelay binary that is not executable is not: it does not
+     * heal, so the version-independent tier stops being produced FOREVER while
+     * tier 1 keeps writing a perfectly good nightly snapshot. Warned on stderr and
+     * allowed to fall through to `record_backup ok`, that is a green tile
+     * asserting a two-tier backup on a machine taking one tier — the same
+     * stderr-only failure behind a green surface this whole change removes, one
+     * tier down, and a direct breach of this file's first line ("never a
+     * generation where only the native form exists").
+     */
+    it("refuses to record ok when the weekly tier cannot be written at all", () => {
+      const branch = code.slice(
+        code.indexOf('if [ ! -x "$VANDELAY" ]; then'), code.indexOf("  else"));
+      expect(branch).toMatch(/backup_fail "\$LINENO"/);
+      expect(branch).not.toMatch(/record_backup ok/);
+    });
+
+    /*
+     * The ERR trap must be armed before the first thing that can fail, or a
+     * backup that died on `mkdir -p "$OUT"` — a NAS that did not mount, which is
+     * a real and silent failure — would take the ERR path with no handler and go
+     * unreported, which is the bug this whole change removes.
+     */
+    it("arms the trap before the first command that can fail", () => {
+      const armed = code.indexOf("trap 'on_backup_error");
+      const mkdir = code.indexOf('mkdir -p "$OUT"');
+      const stop = code.indexOf("stop stalwart");
+      expect(armed).toBeGreaterThan(-1);
+      expect(mkdir).toBeGreaterThan(armed);
+      expect(stop).toBeGreaterThan(armed);
     });
   });
 });

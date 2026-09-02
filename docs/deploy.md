@@ -1486,6 +1486,61 @@ Reading the outcome:
   never became healthy — records its own `mail-drill` error row and pushes,
   precisely so a missing row means the cron line itself is gone.
 
+### 8.13 The nightly mail backup — confirm its first row
+
+`ops/mail-backup.sh` now writes a `worker_runs` row about itself (`mail-backup`,
+declared `nightly` in `packages/api/src/worker-health.ts`). Until this it wrote
+nothing the app could see, and because it is the **last** step of
+`ops/nightly.sh` — after `nightly-verify` and `model-check` have already written
+their green rows — a night where the 5.59 GB snapshot failed would have left the
+Systeem panel entirely green.
+
+**The whole value of that rests on the first row appearing, and nothing verifies
+it for you.** `routers/dashboard.ts` builds the panel from `SELECT DISTINCT ON
+(worker) … FROM worker_runs`, so a worker that has never recorded has **no tile
+at all** — indistinguishable from "this system has no mail backup". If the
+recorder can never succeed (the worker container down at 03:30, no
+`WORKER_DATABASE_URL` in `.env.prod`, a `pnpm` script name that does not match),
+the script writes three lines to the cron log and the panel stays exactly as
+green as it was before. This is the same failure mode §8.12 records for
+`mail-drill`, arriving one job earlier.
+
+So after deploying the worker image, run the backup once by hand and read the
+row back — **do not wait for 03:30**:
+
+```bash
+ssh homelab
+cd ~/apps/verder
+./ops/mail-backup.sh                 # ~8 minutes; stops and restarts stalwart
+```
+
+```sql
+select worker, status, ran_at, now() - ran_at as age, detail
+  from worker_runs where worker = 'mail-backup'
+  order by ran_at desc limit 3;
+```
+
+Reading the outcome:
+
+- **One `ok` row per run, and never two.** The script reports through an `ERR`
+  trap guarded by a `backup_reported` flag, so the success path and the failure
+  path can never both write.
+- **`detail` is `{failedLine, exitStatus}` and nothing else — by construction.**
+  `mail-backup-run.ts` refuses anything that is not a short run of digits,
+  because this script is the one place that handles the JMAP app password and
+  `worker_runs.detail` is rendered on the dashboard and dumped off-box by the
+  nightly `pg_dump`. The script is in git; the line number finds the command.
+- **An `error` row is expected to be red until the next night fixes it.** Past
+  26 h the `nightly` silence rule says down as well, so there is no age at which
+  a failed backup quietly turns green.
+- **A failure the script makes on purpose records too.** The archive acceptance
+  test (no `etc/config.json` in the tar — a restore that comes up in bootstrap
+  mode on an empty store), a missing `age` binary when `BACKUP_AGE_RECIPIENT` is
+  set, and a `vandelay` that cannot write the weekly survival archive all go
+  through `backup_fail`, which records before exiting. Bash's `ERR` trap does
+  **not** fire on the `exit` builtin, so a bare `exit 1` at any of those would
+  have left the newest row saying the *previous* night's `ok`.
+
 
 ## Restore procedure
 

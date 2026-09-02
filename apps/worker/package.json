@@ -23,6 +23,7 @@
     "backfill-message-ids": "tsx src/ops/backfill-message-ids.ts",
     "mail-drill": "tsx src/ops/mail-restore-drill.ts",
     "mail-count": "tsx src/ops/mail-count.ts",
+    "mail-backup-run": "tsx src/ops/mail-backup-run.ts",
     "reindex": "tsx src/ops/reindex.ts"
   },
   "dependencies": {

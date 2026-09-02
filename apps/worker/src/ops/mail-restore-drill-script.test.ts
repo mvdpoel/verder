@@ -246,6 +246,7 @@ describe("mail-restore-drill.sh", () => {
       "MAIL_DRILL_MANIFEST",
       "MAIL_DRILL_TIER2",
       "MAIL_DRILL_SAMPLES",
+      "MAIL_DRILL_BACKUP_AGE_DAYS",
     ]) {
       expect(code).toMatch(new RegExp(`-e ${v}\\b`));
       expect(code).not.toMatch(new RegExp(`-e ${v}=`));
@@ -297,6 +298,113 @@ describe("mail-restore-drill.sh", () => {
     expect(code).toMatch(/ARCHIVE="\$OUT\/\$1"/);
     expect(code).toMatch(/no such archive/);
     expect(code).toMatch(/no native-\*\.tar\.zst in \$OUT/);
+  });
+
+  /*
+   * THE HOLE THIS CLOSES, found 2026-09-02. ops/mail-backup.sh writes no
+   * worker_runs row and runs LAST in ops/nightly.sh, after nightly-verify and
+   * model-check have already gone green. This drill picked the newest archive by
+   * mtime and NEVER ASKED HOW OLD IT WAS, so a nightly backup that died a
+   * fortnight ago still produced a clean monthly PASS — until retention's
+   * `find -mtime +14 -delete` removed the last archive and the drill finally
+   * failed with "there is NOTHING to restore from". By then there genuinely was
+   * nothing to restore from.
+   */
+  /*
+   * THE GUARD ON THE `find`, AND IT IS NOT STYLE. MEASURED: GNU `find` exits 1
+   * when its starting directory does not exist; `2>/dev/null` hides the message
+   * but NOT the status; under `pipefail` the pipeline inherits it and `set -e`
+   * then kills the script at the assignment — `V=$(find /nonexistent … | sort -rn
+   * | head -1)` printed nothing and exited 1, with the next line never reached.
+   *
+   * This line sits at TOP LEVEL, above `trap cleanup EXIT` and above every
+   * `drill_fail` call, and it now runs on EVERY invocation rather than only in
+   * the `else` branch. $OUT is an NFS mount on the NAS, so "the mount is gone at
+   * 05:30 on the 1st" is the realistic trigger, not a hypothetical — and
+   * unguarded it would kill the drill with NO worker_runs row, NO push and
+   * nothing but a cron log, leaving the `mail-drill` tile on last month's `ok`
+   * for another 35 days. That is the exact silence drill_fail exists to end, and
+   * rule 6 would never get to run.
+   *
+   * `|| true` goes INSIDE the substitution so a partial listing is still
+   * captured; an unreadable $OUT then reaches rule 6 as an UNKNOWN age, which
+   * fails the drill loudly through the reporting path instead of around it.
+   */
+  it("survives a backup directory that is missing or unreadable", () => {
+    const line = code.slice(code.indexOf("NEWEST_LINE=$("));
+    const assignment = line.slice(0, line.indexOf("\nNEWEST_NATIVE="));
+    expect(assignment).toMatch(/head -1 \|\| true\)/);
+    // The script must not have grown a second unguarded `find` into $OUT at top
+    // level: every one of them is above the cleanup trap.
+    for (const m of code.matchAll(/^[A-Z_]+=\$\(find "\$OUT".*$/gm)) {
+      expect(m[0]).toMatch(/\|\| true|^\S+=\$\(find "\$OUT"[^)]*\\$/);
+    }
+  });
+
+  it("measures how old the newest nightly backup is and hands it to the judge", () => {
+    expect(code).toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS=\$\(\( \( \$\(date \+%s\) - NEWEST_MTIME \) \/ 86400 \)\)/);
+    expect(code).toMatch(/export MAIL_DRILL_BACKUP_AGE_DAYS/);
+    // Printed every run, pass or fail, so drift is readable in a green log.
+    expect(code).toMatch(/newest nightly backup in \$OUT is/);
+  });
+
+  /*
+   * ============ THE SUBTLETY, AND THE ONE A LATER READER WILL "SIMPLIFY" ============
+   * The age comes from the NEWEST archive in $OUT, never from the archive this
+   * run was told to drill. The header documents a human passing an explicit
+   * archive so they can drill the SECOND-NEWEST when the newest is under
+   * suspicion (backed by mail-backup.sh's FOURTEEN-day tier-1 retention — the
+   * "five weeks" in that header is tier 2's `-mtime +35`, a different file and a
+   * different question) — and computing staleness from the drilled file would
+   * make that documented path
+   * fail on a staleness error that says nothing about what the operator asked
+   * for. Two different questions: "is the backup still running?" and "does THIS
+   * archive restore?".
+   */
+  it("dates the BACKUP, not the archive the operator chose to drill", () => {
+    // The mtime feeding the age is cut out of the `find` line for the newest
+    // archive, which is a different variable from $ARCHIVE by construction.
+    expect(code).toMatch(/NEWEST_MTIME=\$\(printf '%s' "\$NEWEST_LINE" \| cut -d' ' -f1/);
+    expect(code).toMatch(/NEWEST_NATIVE=\$\(printf '%s' "\$NEWEST_LINE" \| cut -d' ' -f2-\)/);
+    // And it is NOT derived from the drilled archive anywhere.
+    expect(code).not.toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS[^\n]*\$ARCHIVE/);
+    expect(code).not.toMatch(/stat[^\n]*"\$ARCHIVE"/);
+    // The age is computed BEFORE the archive is chosen, which is what makes it
+    // impossible for the explicit-archive branch to change it.
+    const ageAt = code.indexOf("MAIL_DRILL_BACKUP_AGE_DAYS=$((");
+    const chooseAt = code.indexOf('ARCHIVE="$OUT/$1"');
+    expect(ageAt).toBeGreaterThan(-1);
+    expect(chooseAt).toBeGreaterThan(-1);
+    expect(ageAt).toBeLessThan(chooseAt);
+  });
+
+  /*
+   * AN UNKNOWN AGE IS NOT A FRESH ONE. No archive at all, or a find that printed
+   * something that is not an epoch, must leave the variable EMPTY — the TS half
+   * reads empty as unknown and FAILS the drill. Defaulting to 0 would report the
+   * healthiest possible answer for the worst possible state, which is the hole
+   * this whole rule closes one level down.
+   */
+  it("leaves the age empty rather than zero when it cannot be measured", () => {
+    expect(code).toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS=""/);
+    expect(code).not.toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS="?0"?\s*$/m);
+    expect(code).not.toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS:-0/);
+    // The guard that produces the empty: a missing or non-numeric mtime.
+    expect(code).toMatch(/case "\$NEWEST_MTIME" in/);
+    expect(code).toMatch(/\*\[!0-9\]\*\)/);
+    expect(code).toMatch(/is UNKNOWN/);
+  });
+
+  /*
+   * ONE CONSTANT, ONE PLACE. The bound lives in the TS half, where every other
+   * rule of the drill lives; the shell measures and never judges. A second
+   * threshold out here is how two screens came to disagree by six minutes about
+   * one dead search-drain worker (packages/api/src/worker-health.ts).
+   */
+  it("measures the age and never judges it", () => {
+    expect(code).not.toMatch(/MAIL_DRILL_BACKUP_AGE_DAYS[^\n]*-gt/);
+    const ts = readFileSync(new URL("./mail-restore-drill.ts", import.meta.url), "utf8");
+    expect(ts).toMatch(/export const MAX_BACKUP_AGE_DAYS = 3;/);
   });
 
   it("propagates the TS exit code", () => {

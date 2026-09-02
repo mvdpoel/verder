@@ -30,7 +30,9 @@
  * whose last word was a failure long enough ago to be history.
  */
 
-import { DRAIN_WORKER_NAME, MAIL_DRILL_WORKER_NAME, RERANK_WORKER_NAME } from "./worker-names";
+import {
+  DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, RERANK_WORKER_NAME,
+} from "./worker-names";
 
 export type WorkerKind =
   | "watcher"
@@ -193,6 +195,44 @@ const DECLS: Record<string, WorkerDecl> = {
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
   "model-check": { kind: "nightly" },
+  /*
+   * The mail store backup: the LAST step of ops/nightly.sh, so the same
+   * `30 3 * * *` under CRON_TZ=UTC that already carries the two above. It is
+   * `nightly` for the reason a kind exists at all — a kind states HOW SILENCE IS
+   * READ and nothing else, and this job's silence reads exactly like
+   * nightly-verify's: legitimately ~21 h stale for most of the day, and news the
+   * moment it has missed a whole night. NIGHTLY_MAX_AGE_MS is already reasoned
+   * for precisely that schedule (03:30 plus two hours of slack), and "a backup
+   * that did not run" is the failure it names in as many words.
+   *
+   * NO NEW KIND, AND NO OWN ERROR WINDOW. The monthly drill needed
+   * errorActionableMs because its next run is a MONTH away, so ageing its
+   * failure out at 26 h would report a healthy backup for twenty-nine days. This
+   * one runs again tonight: past 26 h the default drops it through to the
+   * silence rule, which for `nightly` says down as well, so the two answers
+   * agree and there is no age at which a failed backup quietly turns green.
+   *
+   * WHAT IT ACTUALLY BUYS, read out of the source 2026-09-02. This script wrote
+   * nothing anywhere the app could see, and it runs AFTER nightly-verify and
+   * model-check have written their green rows. The monthly drill did not cover it
+   * either: ops/mail-restore-drill.sh takes the newest archive by mtime and never
+   * asks how old it is. So a night where the 5.59 GB snapshot failed WOULD have
+   * left the whole panel green, and it WOULD have stayed green for fourteen days
+   * until `find -mtime +14 -delete` removed the last archive and the drill failed
+   * with nothing left to restore. The conditional is the point: the backup first
+   * ran from cron on 2026-09-02, so this is a projection from the code, not a
+   * fortnight anybody watched. "MEASURED" is reserved in this repo for the other
+   * thing.
+   *
+   * AND THE SAME CAVEAT AS THE DRILL BELOW APPLIES, one job earlier: this panel
+   * lists the workers that HAVE a row (`SELECT DISTINCT ON (worker) … FROM
+   * worker_runs` in routers/dashboard.ts), so a `mail-backup` that never manages
+   * to record has no tile rather than a red one — indistinguishable from a system
+   * with no mail backup. Nothing here can warn about that, so the mitigation is a
+   * post-deploy check in docs/deploy.md §8.13: run the backup once by hand and
+   * read the row back, rather than waiting for 03:30 to find out.
+   */
+  [MAIL_BACKUP_WORKER_NAME]: { kind: "nightly" },
 
   // ---- monthly, from the HOST crontab on the 1st -------------------------
   /*
