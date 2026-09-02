@@ -27,7 +27,8 @@
     "reindex": "tsx src/ops/reindex.ts",
     "normalize-names": "tsx src/ops/run-normalize-filenames.ts",
     "discard-documents": "tsx src/ops/discard-documents.ts",
-    "re-extract": "tsx src/ops/re-extract.ts"
+    "re-extract": "tsx src/ops/re-extract.ts",
+    "fix-page-order": "tsx src/ops/fix-page-order.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",

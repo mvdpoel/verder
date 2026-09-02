@@ -6,14 +6,20 @@ const foot = (n: number) => `INL230-07 / V013                Paginanummer ${n} v
 
 describe("findPageMarkers", () => {
   it("reads the Dutch official footer", () => {
-    expect(findPageMarkers(foot(3))).toContainEqual({ page: 3, total: 6 });
+    expect(findPageMarkers(foot(3)))
+      .toContainEqual({ page: 3, total: 6, keyword: true });
   });
 
   it("reads the other spellings", () => {
-    expect(findPageMarkers("Pagina 2 van 4")).toContainEqual({ page: 2, total: 4 });
-    expect(findPageMarkers("Page 2 of 4")).toContainEqual({ page: 2, total: 4 });
-    expect(findPageMarkers("blad 2 van 4")).toContainEqual({ page: 2, total: 4 });
-    expect(findPageMarkers("2/4")).toContainEqual({ page: 2, total: 4 });
+    expect(findPageMarkers("Pagina 2 van 4"))
+      .toContainEqual({ page: 2, total: 4, keyword: true });
+    expect(findPageMarkers("Page 2 of 4"))
+      .toContainEqual({ page: 2, total: 4, keyword: true });
+    expect(findPageMarkers("blad 2 van 4"))
+      .toContainEqual({ page: 2, total: 4, keyword: true });
+    // No keyword: legible on both sides is the only thing vouching for it.
+    expect(findPageMarkers("2/4"))
+      .toContainEqual({ page: 2, total: 4, keyword: false });
   });
 
   it("never reads a page number out of a date or an amount", () => {
@@ -56,6 +62,21 @@ describe("detectPageOrder", () => {
   });
 
   // The reference number sits in the same footer as the page marker.
+  // Measured on the real scan: OCR renders "van 6" as "van &" on three of the
+  // six pages. Insisting on a legible total lost the whole document.
+  it("orders the letter even when OCR mangles the total", () => {
+    const mangled = (n: number, t: string) =>
+      `INL230-07 / vOI3 Paginanummer ${n} van ${t}`;
+    expect(detectPageOrder([
+      mangled(1, "&"), mangled(2, "6"), mangled(5, "6"),
+      mangled(6, "&"), mangled(3, "&"), mangled(4, "6"),
+    ])).toEqual([0, 1, 4, 5, 2, 3]);
+  });
+
+  it("still refuses when a legible total disagrees with the page count", () => {
+    expect(detectPageOrder(["Paginanummer 1 van 9", "Paginanummer 2 van 9"])).toBeNull();
+  });
+
   it("is not fooled by a reference number that looks like one", () => {
     const texts = [1, 2, 5, 6, 3, 4].map((n) =>
       `INL230-07 / V013 ref 12/99 Paginanummer ${n} van 6`);

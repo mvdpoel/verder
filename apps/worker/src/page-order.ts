@@ -21,22 +21,39 @@
  * the footer of that same letter, and a reference number that happens to look
  * like a page marker cannot survive the permutation test.
  */
-const MARKERS = [
-  /(?:paginanummer|pagina|bladzijde|blad|page|pag\.?)\s*(\d{1,3})\s*(?:van|of|\/)\s*(\d{1,3})/gi,
-  /(?<![\d.,\-\/])(\d{1,3})\s*(?:van|of)\s*(\d{1,3})(?![\d.,\-\/])/gi,
-  /(?<![\d.,\-\/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d.,\-\/])/g,
+const MARKERS: { re: RegExp; keyword: boolean }[] = [
+  // Keyword plus both numbers.
+  { re: /(?:paginanummer|paginanummber|faginanummer|pagina|bladzijde|blad|page|pag\.?)\s*(\d{1,3})\s*(?:van|of|\/)\s*(\d{1,3})/gi, keyword: true },
+  // Keyword plus the page number, TOTAL UNREADABLE. OCR renders the trailing
+  // "6" of "Paginanummer 1 van 6" as "&" on three of the six pages of the
+  // Belastingdienst letter, so insisting on a legible total loses half the
+  // document. The real page count is known from the PDF anyway; what the
+  // markers have to establish is the ORDER.
+  { re: /(?:paginanummer|paginanummber|faginanummer|pagina|bladzijde|blad|page|pag\.?)\s*(\d{1,3})\s*(?:van|of|\/)\s*\S{1,4}/gi, keyword: true },
+  // No keyword: both numbers must be legible, because nothing else vouches
+  // for this being a page marker at all.
+  { re: /(?<![\d.,\-\/])(\d{1,3})\s*(?:van|of)\s*(\d{1,3})(?![\d.,\-\/])/gi, keyword: false },
+  { re: /(?<![\d.,\-\/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d.,\-\/])/g, keyword: false },
 ];
 
-export interface PageMarker { page: number; total: number }
+export interface PageMarker {
+  page: number;
+  total: number | null;
+  /** Preceded by "Paginanummer", "Pagina", "Page"... — a marker that says so. */
+  keyword: boolean;
+}
 
 /** Every plausible "page n of total" in one page's text, best patterns first. */
 export function findPageMarkers(text: string): PageMarker[] {
   const out: PageMarker[] = [];
-  for (const re of MARKERS) {
+  for (const { re, keyword } of MARKERS) {
     re.lastIndex = 0;
     for (const m of text.matchAll(re)) {
-      const page = Number(m[1]), total = Number(m[2]);
-      if (page >= 1 && total >= 1 && page <= total && total <= 200) out.push({ page, total });
+      const page = Number(m[1]);
+      const total = m[2] === undefined ? null : Number(m[2]);
+      if (!Number.isInteger(page) || page < 1 || page > 200) continue;
+      if (total !== null && (!Number.isInteger(total) || total < page || total > 200)) continue;
+      out.push({ page, total, keyword });
     }
   }
   return out;
@@ -56,17 +73,27 @@ export function detectPageOrder(pageTexts: string[]): number[] | null {
   if (n < 2) return null;
   const perPage = pageTexts.map(findPageMarkers);
 
-  // The total must be the real page count. A letter scanned WITHOUT its last
-  // sheet says "van 6" on five pages, and reordering five pages as if they
-  // were six would be inventing a document.
-  const claimed = perPage.map((ms) => ms.find((m) => m.total === n));
-  if (claimed.some((m) => m === undefined)) return null;
+  // Any LEGIBLE total must be the real page count. A letter scanned without
+  // its last sheet says "van 6" on five pages, and reordering five pages as if
+  // they were six would be inventing a document. Illegible totals are ignored
+  // rather than trusted, and the permutation check below is what actually
+  // decides — six random numbers do not form an exact permutation of 1..6.
+  // Only a marker that CALLS ITSELF a page number gets a veto. A reference
+  // number elsewhere on the page ("ref 12/99") is not evidence about the
+  // document's length, and letting it refuse the whole reorder would make the
+  // feature fail on exactly the official letters it is for.
+  const declared = perPage.flat()
+    .filter((m) => m.keyword && m.total !== null)
+    .map((m) => m.total as number);
+  if (declared.some((t) => t !== n)) return null;
 
   const order = new Array<number>(n).fill(-1);
   for (let i = 0; i < n; i++) {
-    const pos = claimed[i]!.page - 1;
-    // Two sheets claiming the same page number: the markers are not what we
-    // think they are, so trust none of them.
+    const marker = perPage[i].find((m) => m.total === n) ?? perPage[i].find((m) => m.total === null);
+    if (!marker) return null;
+    const pos = marker.page - 1;
+    // Two sheets claiming the same page: the markers are not what we think
+    // they are, so trust none of them.
     if (pos < 0 || pos >= n || order[pos] !== -1) return null;
     order[pos] = i;
   }

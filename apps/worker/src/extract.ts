@@ -223,8 +223,16 @@ export function pngSize(png: Buffer): { width: number; height: number } | null {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
-/** The strip of a page a printed page number lives in. */
-export const FOOTER_BAND = 0.14;
+/**
+ * The strip of a page a printed page number lives in.
+ *
+ * MEASURED on the Belastingdienst letter, not guessed: at 0.14 the band cut
+ * through the footer line of a full page and tesseract dropped it entirely,
+ * so page 2 of 6 reported no marker at all and the whole document was left
+ * shuffled. 0.22 caught it; 0.25 leaves margin and is still four times
+ * cheaper than recognising the whole page.
+ */
+export const FOOTER_BAND = 0.25;
 
 /**
  * OCR only the bottom of a page. Reading the footer of a six-page letter is
