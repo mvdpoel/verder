@@ -175,3 +175,24 @@ describe("buildNamePrompt states the convention", () => {
   });
 });
 
+
+describe("retainsIdentifiers, years", () => {
+  // The first four automatic renames included this one, which the year
+  // exemption was supposed to allow and should not have.
+  it("refuses a rename that drops the year entirely", () => {
+    expect(retainsIdentifiers(
+      "Geheimhoudingsverklaring.Rabobank.MP.van.der.Poel.2026.pdf",
+      "Geheimhoudingsverklaring.Rabobank.M.van.der.Poel.pdf")).toBe(false);
+  });
+
+  it("still allows a year to be corrected by the document text", () => {
+    expect(retainsIdentifiers(
+      "2023 ARB OK CloudNation Martin van der Poel.pdf",
+      "Arbeidsovereenkomst.CloudNation.MP.van.der.Poel.2024.pdf")).toBe(true);
+  });
+
+  it("imposes nothing when the old name had no year", () => {
+    expect(retainsIdentifiers("machtiging.carolien.pdf",
+      "Machtiging.LBIO.Carolien.Vos.pdf")).toBe(true);
+  });
+});

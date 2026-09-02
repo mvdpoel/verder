@@ -165,7 +165,14 @@ function squash(s: string): string {
  */
 export function retainsIdentifiers(oldName: string, newName: string): boolean {
   const hay = squash(newName);
-  return identifierTokens(oldName).every((t) => hay.includes(squash(t)));
+  if (!identifierTokens(oldName).every((t) => hay.includes(squash(t)))) return false;
+  // A year may be CORRECTED — the document text outranks a filename — but not
+  // dropped. Geheimhoudingsverklaring.Rabobank.MP.van.der.Poel.2026 became
+  // .Rabobank.M.van.der.Poel with no year at all, and the exemption that was
+  // meant to allow 2023 -> 2024 allowed that too.
+  const oldYears = oldName.match(/\b(19|20)\d\d\b/g);
+  if (oldYears && oldYears.length > 0 && !/\b(19|20)\d\d\b/.test(newName)) return false;
+  return true;
 }
 
 /**

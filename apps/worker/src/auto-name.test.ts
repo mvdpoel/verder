@@ -92,3 +92,28 @@ describe("autoNameDocument", () => {
     await pool.end();
   });
 });
+
+describe("autoNameDocument, already named", () => {
+  it("never renames a document that has been named before", async () => {
+    const { db, pool } = createDb(URL);
+    // Digits only: scan0052.pdf is NOISE, scan0052d.pdf is an identifier
+    // that retention would then insist on keeping.
+    const ingestTitle = `scan${Date.now()}.pdf`;
+    const doc = await makeDoc(db, ingestTitle);
+    let called = 0;
+    const deps = {
+      db, scanDir: mkdtempSync(join(tmpdir(), "an6-")),
+      journalPath: join(mkdtempSync(join(tmpdir(), "anj6-")), "j.jsonl"),
+      nameLlm: async () => { called++; return { filename: `Eerste.Naam.T${Date.now()}`, confident: true }; },
+    };
+    const first = await autoNameDocument(deps, doc.id, PROSE);
+    expect(first.renamed).toBe(true);
+    const callsAfterFirst = called;
+    // suggest.docmeta can revisit a document; the second visit must not rename
+    // it again, and must not even spend an LLM call deciding that.
+    const second = await autoNameDocument(deps, doc.id, PROSE);
+    expect(second).toEqual({ renamed: false, reason: "already-named" });
+    expect(called).toBe(callsAfterFirst);
+    await pool.end();
+  });
+});

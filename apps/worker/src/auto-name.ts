@@ -51,6 +51,17 @@ export async function autoNameDocument(
   const from = current.effectiveTitle;
   if (!from) return { renamed: false, reason: "no-title" };
 
+  // ALREADY NAMED — by an earlier run, by the bulk pass, or by hand. The batch
+  // script has always had this guard and this one did not, so a document that
+  // suggest.docmeta revisited got renamed a second time: of the first four
+  // automatic renames three were of already-named documents, one of which
+  // dropped a year (Geheimhoudingsverklaring.Rabobank.MP.2026 became
+  // .Rabobank.M with no year at all). documents.title is frozen at ingest, so
+  // a title that has drifted from it is the evidence that naming happened.
+  const [raw] = await deps.db.select({ title: schema.documents.title })
+    .from(schema.documents).where(eq(schema.documents.id, documentId));
+  if (raw && raw.title !== from) return { renamed: false, reason: "already-named" };
+
   // Every name already in use, so an automatic rename can never collide with a
   // document someone is looking at. Effective titles, not documents.title:
   // the raw column is the ingest-time name and is stale for anything renamed.
