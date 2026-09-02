@@ -37,18 +37,49 @@ await boss.work("heartbeat", async () => { await recordRun(db, "heartbeat", "ok"
 
 await boss.createQueue("gmail.poll");
 await boss.createQueue("suggest.entry");
-// STOPPED 2026-08-29. Gmail polling is deliberately unscheduled: the account
+// RESUMED 2026-09-02, at `*/15` and NOT the `*/3` it stopped at.
+//
+// STOPPED 2026-08-29, and the history is the reason for the cadence. The account
 // sat in an account-level rate limit that EVERY attempt re-armed for another
 // fifteen minutes, so a 3-minute cron could never let it expire — measured at
-// 378 rate-limited skips in 24 hours, last successful poll 00:07. The ingest
-// path is being rewired onto JMAP, so rather than time a quiet window the
-// schedule is simply off.
+// 378 rate-limited skips in 24 hours, last successful poll 00:07.
 //
-// The queue and its worker stay registered, so `boss.send("gmail.poll")` still
-// runs one poll by hand. To resume, restore the line below AND note that
-// removing it here does NOT delete an existing row in `pgboss.schedule` — that
-// was deleted separately, and re-adding the call is what recreates it.
-// await boss.schedule("gmail.poll", "*/3 * * * *");
+// WHY IT IS BACK. Phase 1 moved ingestion to JMAP, which was true and did not
+// help: Stalwart holds the imported ARCHIVE and receives no new mail, because
+// the MX still points at Gmail. Measured 2026-09-02 — the newest message in the
+// dossier was 2026-08-28, five days stale, during an active bewindvoering with
+// live Verder correspondence. "Ingestion is back" was a statement about a path,
+// not about mail arriving. So this is a deliberate BRIDGE until phase 3 moves
+// the MX, not a reversal of the JMAP decision: both pollers run, and they cannot
+// duplicate each other because the Gmail path dedups on `gmail_message_id` and
+// the JMAP path on RFC 5322 `Message-ID`, which is what migrations 0030/0031
+// exist for.
+//
+// THE TWO THINGS THAT MADE IT SAFE, both measured before this line was
+// uncommented:
+//  1. THE BURN IS FIXED. The lockout was self-inflicted: pollGmail called
+//     getMessage on EVERY id BEFORE testing relevance, so a few hundred
+//     commercial mails were re-fetched in full, twice each, every three minutes,
+//     at a hit rate near zero. `buildQueries` now filters server-side, so a tick
+//     costs one `messages.list` plus gets for genuinely new case mail only.
+//  2. THE LOCKOUT HAD LIFTED. Nothing touched the API for 3 d 19 h after the
+//     last skip (retryAfter 2026-08-29T11:54Z), and a read-only probe then got
+//     `users.getProfile` AND `users.messages.list` answered — the 5-unit call
+//     that was refused throughout the lockout. A single hand-run poll ingested
+//     9 messages with no 429.
+//
+// `*/15` rather than `*/3` because the old cadence is precisely what made the
+// limit inescapable: `rateLimitedUntil` skipped the window correctly and then
+// the first tick past the deadline polled at full speed and bought another
+// fifteen minutes. With the burn fixed that loop should not exist at all, but
+// the poll is now the cheap half of a bridge and case mail does not need
+// three-minute latency — 15 minutes leaves a wide margin against the one failure
+// mode this poller has ever had.
+//
+// NOTE removing this call does NOT delete an existing row in `pgboss.schedule`
+// (that was done separately when it stopped), and adding it back is what
+// recreates the row. `boss.send("gmail.poll")` still runs one poll by hand.
+await boss.schedule("gmail.poll", "*/15 * * * *");
 await boss.work("gmail.poll", async () => {
   const gmail = await realGmailPort();
   await pollGmail({ db, gmail, vaultDir: process.env.VAULT_DIR ?? "./vault-files",

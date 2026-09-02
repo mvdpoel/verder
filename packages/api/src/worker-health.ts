@@ -22,6 +22,15 @@
  *  - on-demand  runs when a job arrives. No cadence to be late against.
  *  - hand-run   an ops script somebody types. Silent for weeks by design.
  *  - retired    deliberately unscheduled, but can still be run by hand.
+ *               NOTHING IS DECLARED retired TODAY. `gmail` was its only member
+ *               and became a watcher again on 2026-09-02 when the poll was
+ *               rescheduled as a bridge until the MX moves. The kind is kept,
+ *               not deleted: it is the correct reading for a worker somebody
+ *               switches off on purpose, the rule below is two lines, and
+ *               removing a WorkerKind member is a wider change than it looks —
+ *               apps/web/src/lib/worker-row-label.ts switches exhaustively over
+ *               this union and `next build` is the only thing that typechecks
+ *               it.
  *  - incident   written ONLY on failure; silence is health.
  *
  * A kind NEVER suppresses a failure the worker itself reported while that
@@ -292,19 +301,32 @@ const DECLS: Record<string, WorkerDecl> = {
   "backfill-message-ids": { kind: "hand-run" },
   "discard-signature-images": { kind: "hand-run" },
 
-  // ---- retired ------------------------------------------------------------
-  // Gmail polling is deliberately unscheduled (see index.ts): the account sat
-  // in a rate limit that every attempt re-armed for another fifteen minutes,
-  // and the ingest path moved to JMAP. The rate-limit row it left behind must
-  // not be a standing alarm, because no action can clear it — restarting the
-  // poller is exactly what nobody is going to do.
+  // `boss.schedule("gmail.poll", "*/15 * * * *")`, RESUMED 2026-09-02 — so this
+  // is a WATCHER again and was `retired` until that day.
   //
-  // Retired means UNSCHEDULED, not gone: `pnpm --filter worker backfill` calls
-  // pollGmail and records under this same name, and boss.send("gmail.poll")
-  // still runs one poll by hand. So the kind decides only what its SILENCE
-  // means; a failure from a hand-run backfill is still shown while it is recent
-  // (see workerState, and ERROR_ACTIONABLE_MS above).
-  gmail: { kind: "retired" },
+  // THE MOVE MATTERS MORE THAN THE CADENCE, because a kind states how SILENCE is
+  // read and the two kinds read it oppositely. `retired` says silence is health:
+  // the poller is off, nobody will restart it, and a standing red dot no action
+  // can clear is worse than no dot. `watcher` says silence IS failure. Leave
+  // this declared retired while the schedule is live and a Gmail poller that
+  // died — an expired refresh token, a fresh rate limit, a crash loop — renders
+  // as a calm grey "off" for as long as it takes somebody to notice by hand that
+  // the dossier stopped growing. That is exactly the blindness this module
+  // exists to remove, and it would arrive through the one kind whose whole
+  // purpose is to say nothing.
+  //
+  // WHY IT IS SCHEDULED AGAIN, in one line: phase 1 moved ingestion to JMAP, but
+  // Stalwart holds the imported archive and receives no new mail while the MX
+  // points at Gmail — measured 2026-09-02, the dossier's newest message was five
+  // days old. See apps/worker/src/index.ts for the full argument and for the two
+  // measurements that made re-arming safe.
+  //
+  // 15 minutes, not the 3 it stopped at: the old cadence is what made the rate
+  // limit inescapable, because the first tick past a deadline bought another
+  // fifteen minutes. Tolerance is the usual cadence x WATCHER_MISSED_TICKS, so
+  // 45 minutes of silence is down — a poll every quarter hour that has missed
+  // three in a row is not a slow tick.
+  gmail: { kind: "watcher", everyMs: 15 * MINUTE },
 
   // ---- incident markers ---------------------------------------------------
   /*

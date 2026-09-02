@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { declFor, workerState } from "./worker-health";
+import { cadenceMs, declFor, workerState } from "./worker-health";
 import { MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -155,27 +155,44 @@ describe("workerState — silence that is not failure", () => {
 });
 
 describe("workerState — retired and incident", () => {
-  it("reports gmail off once its rate-limit wall is history", () => {
-    // The last thing gmail recorded was the rate-limit wall that got it
-    // unscheduled. Nobody will restart it, so that row must not be a standing
-    // alarm — otherwise the panel carries a red dot no action can ever clear.
-    expect(declFor("gmail").kind).toBe("retired");
-    expect(state("gmail", "ok", agoMs(3 * DAY))).toBe("off");
-    expect(state("gmail", "error", agoMs(3 * DAY))).toBe("off");
+  /*
+   * GMAIL IS A WATCHER AGAIN as of 2026-09-02, and this test guards the MOVE
+   * rather than the cadence. It was `retired` while the poll was unscheduled —
+   * silence was health, because nobody was going to restart it and a red dot no
+   * action can clear is worse than no dot. The poll is scheduled again as a
+   * bridge until the MX moves, so silence is failure again.
+   *
+   * Left declared retired, a Gmail poller that died — an expired refresh token,
+   * a fresh rate limit, a crash loop — would render as a calm grey "off" for as
+   * long as it took somebody to notice by hand that the dossier had stopped
+   * growing. That is the blindness this whole module exists to remove, arriving
+   * through the one kind whose purpose is to say nothing.
+   */
+  it("judges gmail as a scheduled watcher now that the poll is back", () => {
+    expect(declFor("gmail").kind).toBe("watcher");
+    expect(cadenceMs(declFor("gmail"))).toBe(15 * MIN);
+    // Three missed quarter-hours is dead, not slow.
+    expect(state("gmail", "ok", agoMs(30 * MIN))).toBe("ok");
+    expect(state("gmail", "ok", agoMs(3 * DAY))).toBe("down");
+    expect(state("gmail", "error", agoMs(3 * DAY))).toBe("down");
   });
 
-  it("still reports a retired worker that somebody ran BY HAND and broke", () => {
-    // "Will never run again" was never quite true, and this is the case that
-    // proves it: `pnpm --filter worker backfill` calls pollGmail, which records
-    // under the name `gmail` with status "error" on a per-message failure and
-    // on a 429, and boss.send("gmail.poll") still runs a single poll by hand
-    // because the queue and its worker stay registered. Somebody typing a
-    // backfill and watching it fail is the one reader this panel has; showing
-    // them a calm grey "off" for the run they are in the middle of is the panel
-    // lying. Once the window passes it is history again and goes back to off.
-    expect(state("gmail", "error", agoMs(1_000))).toBe("down");
-    expect(state("gmail", "error", agoMs(2 * HOUR))).toBe("down");
-    expect(state("gmail", "error", agoMs(2 * DAY))).toBe("off");
+  /*
+   * NOTHING IS DECLARED `retired` TODAY — gmail was its only member — so the
+   * kind is exercised through declFor's shape rather than through a live name.
+   * It is kept because it is the right reading for a worker switched off on
+   * purpose, and because removing a WorkerKind member reaches further than it
+   * looks: worker-row-label.ts switches exhaustively over the union and only
+   * `next build` typechecks it.
+   */
+  it("still reads a retired worker's silence as health, and a fresh failure as news", () => {
+    const retired = { kind: "retired" } as const;
+    expect(workerState(retired, "ok", new Date(NOW - 3 * DAY), NOW)).toBe("off");
+    expect(workerState(retired, "error", new Date(NOW - 3 * DAY), NOW)).toBe("off");
+    // A recent failure outranks the kind, retired included: somebody running it
+    // by hand and watching it fail is the one reader this panel has.
+    expect(workerState(retired, "error", new Date(NOW - 1_000), NOW)).toBe("down");
+    expect(workerState(retired, "error", new Date(NOW - 2 * HOUR), NOW)).toBe("down");
   });
 
   it("classifies incident markers so the router can filter them", () => {
@@ -380,8 +397,11 @@ describe("workerState — the boundaries themselves", () => {
     expect(state("reindex", "error", agoMs(26 * HOUR))).toBe("down");
     expect(state("reindex", "error", agoMs(26 * HOUR + 1))).toBe("idle");
     // And the retired case, which has a different resting state on the far side.
-    expect(state("gmail", "error", agoMs(26 * HOUR))).toBe("down");
-    expect(state("gmail", "error", agoMs(26 * HOUR + 1))).toBe("off");
+    // Built inline: gmail carried this until 2026-09-02 and is a watcher again,
+    // and no declared worker is retired today.
+    const retired = { kind: "retired" } as const;
+    expect(workerState(retired, "error", new Date(NOW - 26 * HOUR), NOW)).toBe("down");
+    expect(workerState(retired, "error", new Date(NOW - (26 * HOUR + 1)), NOW)).toBe("off");
   });
 
   it("puts the monthly line at exactly 35 days, inclusive", () => {
@@ -414,7 +434,10 @@ describe("workerState — the boundaries themselves", () => {
     expect(state("ollama", "error", agoMs(26 * HOUR + 1))).toBe("idle");
     expect(state("extract-texts", "error", agoMs(26 * HOUR))).toBe("down");
     expect(state("extract-texts", "error", agoMs(26 * HOUR + 1))).toBe("idle");
-    expect(state("gmail", "error", agoMs(26 * HOUR + 1))).toBe("off");
+    // The retired arm, built inline: gmail carried it until 2026-09-02 and is a
+    // scheduled watcher again, so no DECLARED worker is retired today.
+    expect(workerState({ kind: "retired" }, "error", new Date(NOW - (26 * HOUR + 1)), NOW))
+      .toBe("off");
     // The unknown-name default is a watcher and must not have acquired one
     // either, or a worker added next month would inherit a window nobody chose.
     expect(declFor("some-worker-added-next-week").errorActionableMs).toBeUndefined();
