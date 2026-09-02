@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { effectiveMime, isSpreadsheetMime, readWorkbook } from "@verder/parsers";
-import { looksLikeProse, MIN_WORDS, stopwordShare, wordCount } from "./text-quality";
+import { looksLikeProse, stopwordShare, worthRotating } from "./text-quality";
 
 const run = promisify(execFile);
 
@@ -112,12 +112,13 @@ export async function ocrPageUpright(
   ocr: OcrPort, png: Buffer,
 ): Promise<{ text: string; rotatedRadians: number }> {
   const first = await ocr.ocrImage(png);
-  if (looksLikeProse(first)) return { text: first, rotatedRadians: 0 };
-  // Too little text to judge, so rotating is a guess paid for three times.
-  // A page that is genuinely upside down is not quiet — asml.pdf produced 503
-  // junk words — while a receipt or a mostly-blank page is, and no orientation
-  // makes a blank page readable.
-  if (wordCount(first) < MIN_WORDS) return { text: first, rotatedRadians: 0 };
+  // worthRotating decides the short-text case, which is the hard one: a blank
+  // page cannot be helped, a short page of whole words is a real short
+  // document, and a short page of fragments is one the scanner fed sideways.
+  // An earlier version refused on word count alone and thereby never rotated
+  // page 1 of the ASML Code of Conduct, which is 23 fragments at 0 degrees and
+  // reads correctly at -90.
+  if (!worthRotating(first)) return { text: first, rotatedRadians: 0 };
   let best = { text: first, rotatedRadians: 0, score: stopwordShare(first) };
   for (const angle of RETRY_ANGLES) {
     const text = await ocr.ocrImage(png, angle);

@@ -61,3 +61,40 @@ export function stopwordShare(text: string): number {
 export function looksLikeProse(text: string): boolean {
   return stopwordShare(text) >= MIN_STOPWORD_SHARE;
 }
+
+/** Nothing at all: rotating a blank page cannot make it readable. */
+export const BLANK_WORDS = 5;
+
+/**
+ * Share of words with four or more letters.
+ *
+ * The fallback for text too short to score stopwords on. Junk OCR is dense in
+ * one- and two-character fragments — page 1 of the ASML Code of Conduct read
+ * as "HL Ee 1H Di 1 3 OD an ET! meme x i D Ngo" at 0 degrees and as
+ * "principles We opera We commit people" at -90 — while a genuinely short
+ * real text ("Bonnetje 4,50") is made of whole words.
+ */
+export function longWordShare(text: string): number {
+  const words = text.toLowerCase().split(/[^a-zÀ-ɏ]+/).filter(Boolean);
+  if (words.length === 0) return 0;
+  return words.filter((w) => w.length >= 4).length / words.length;
+}
+
+/** Below this, short text is fragments rather than words, and worth rotating. */
+export const MIN_LONG_WORD_SHARE = 0.3;
+
+/**
+ * Whether a page is worth OCRing at other orientations.
+ *
+ * Short text is the hard case, and getting it wrong costs either three wasted
+ * OCR passes on every receipt or a page left unreadable forever. A page with
+ * almost no words is blank; a short page made of whole words is a real short
+ * document; a short page made of fragments is a page the scanner fed sideways.
+ */
+export function worthRotating(text: string): boolean {
+  if (looksLikeProse(text)) return false;
+  const words = wordCount(text);
+  if (words < BLANK_WORDS) return false;
+  if (words >= MIN_WORDS) return true;
+  return longWordShare(text) < MIN_LONG_WORD_SHARE;
+}

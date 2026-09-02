@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeProse, stopwordShare } from "./text-quality";
+import { longWordShare, looksLikeProse, stopwordShare, worthRotating } from "./text-quality";
 
 describe("looksLikeProse", () => {
   // Verbatim from asml.pdf, which was scanned upside down. The model, shown
@@ -61,5 +61,36 @@ describe("stopwordShare", () => {
     const readable = ("Geachte heer Van der Poel wij bevestigen de ontvangst van "
       + "uw verzoek en wij hebben dat in behandeling genomen ").repeat(4);
     expect(stopwordShare(readable)).toBeGreaterThan(0.047);
+  });
+});
+
+describe("worthRotating", () => {
+  // Verbatim OCR of page 1 of the ASML Code of Conduct at 0 degrees. 23 words,
+  // no stopwords, almost all fragments. At -90 the same page reads
+  // "principles We opera We commit people" at 17.2% stopwords.
+  const FRAGMENTS = "HL Ee 1H Di 1 3 OD an ET! | meme x i D Ngo + 7) rr 1 | Ray 1";
+
+  it("rotates a short page made of fragments", () => {
+    expect(worthRotating(FRAGMENTS)).toBe(true);
+  });
+
+  it("leaves a short page made of whole words alone", () => {
+    expect(worthRotating("Bonnetje Albert Heijn totaal 4,50 contant betaald")).toBe(false);
+  });
+
+  it("leaves a blank page alone, since no angle helps it", () => {
+    expect(worthRotating("")).toBe(false);
+    expect(worthRotating("1452018 332")).toBe(false);
+  });
+
+  it("leaves readable prose alone", () => {
+    const prose = ("Geachte heer Van der Poel wij bevestigen de ontvangst van uw "
+      + "verzoek en hebben dat in behandeling genomen bij de rechtbank ").repeat(3);
+    expect(worthRotating(prose)).toBe(false);
+  });
+
+  it("rotates a long garbled page", () => {
+    expect(worthRotating("uorpoIpsin SAISN Xe BABY IM LNOD YIJNG Jusladwiod ay yang Aq SI U "
+      + "uspun sIuL SME jLINJ pue eje eqeoijdde Ie Juensind suonebiigo ay pe qw ".repeat(3))).toBe(true);
   });
 });
