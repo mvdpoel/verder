@@ -1,8 +1,9 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
+import { effectiveTitleSql } from "@verder/api/src/effective-status";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
@@ -79,11 +80,17 @@ export async function scanNasFolder(deps: {
       // gigabytes: hashing every byte of every file on every tick never
       // finishes. name+size+mtime is exact enough to skip the read, and a miss
       // only falls through to the hash, which is the authority.
+      // source_ref is the name at INGEST and never changes -- documents has no
+      // UPDATE grant -- so after auto-name renames a file on the share the two
+      // no longer agree and this check misses every renamed file forever. It
+      // therefore also accepts the EFFECTIVE title, which auto-name sets to
+      // exactly the new filename. Measured: without this, 117 of 121 files
+      // were fully re-read from the NAS on every single tick.
       const [known] = await deps.db.select({ id: schema.documents.id })
         .from(schema.documents)
         .where(and(
           eq(schema.documents.source, "nas-scan"),
-          eq(schema.documents.sourceRef, name),
+          or(eq(schema.documents.sourceRef, name), eq(effectiveTitleSql, name)),
           eq(schema.documents.sizeBytes, st.size),
           eq(schema.documents.receivedAt, st.mtime),
         ));
@@ -91,6 +98,16 @@ export async function scanNasFolder(deps: {
       let buf: Buffer = await readFile(abs);
       read++;
       let receivedAt = st.mtime;
+      // Hash the file AS IT IS first. Reordering costs a rasterize plus a
+      // footer OCR per page, and doing it before this check spent that on
+      // every already-ingested file on every tick: the sweep's cadence fell
+      // from 2 minutes to 12. Only a file that is genuinely new is worth
+      // correcting, and one already in the dossier is fixed with
+      // `fix-page-order` instead.
+      const shaAsFound = sha256Hex(buf);
+      const [alreadyHeld] = await deps.db.select({ id: schema.documents.id })
+        .from(schema.documents).where(eq(schema.documents.sha256, shaAsFound));
+      if (alreadyHeld) continue;
       // A PDF that does not parse is a file still being written, not a
       // document. Skipping leaves it for the next tick; ingesting it is
       // permanent, because documents is append-only and the bytes are already
@@ -100,12 +117,12 @@ export async function scanNasFolder(deps: {
         skipped++;
         continue;
       }
-      // Reorder BEFORE hashing: the sha256 that reaches the ledger must be the
-      // bytes the vault holds, and the file on the share is corrected too so
-      // the two never disagree.
+      // The file on the share is corrected too, so the two never disagree.
+      let reordered0 = false;
       try {
         const fixed = await reorderIfShuffled(buf, mime, ocr);
         if (fixed) {
+          reordered0 = true;
           await writeFile(abs, fixed.bytes);
           buf = fixed.bytes;
           // Rewriting the file changes its mtime, and the stat pre-check above
@@ -119,10 +136,14 @@ export async function scanNasFolder(deps: {
         // A document that cannot be reordered is still a document.
         await recordRun(deps.db, "page-order", "error", { name, message: String(err) });
       }
-      const sha = sha256Hex(buf);
-      const [seen] = await deps.db.select().from(schema.documents)
-        .where(eq(schema.documents.sha256, sha));
-      if (seen) continue;
+      // Re-hash: reordering changed the bytes, and the sha256 that reaches the
+      // ledger must be the bytes the vault holds.
+      const sha = reordered0 ? sha256Hex(buf) : shaAsFound;
+      if (reordered0) {
+        const [seen] = await deps.db.select({ id: schema.documents.id })
+          .from(schema.documents).where(eq(schema.documents.sha256, sha));
+        if (seen) continue;
+      }
       await storeFile(deps.vaultDir, buf);
       const doc = await deps.db.transaction((tx) => ingestDocument(tx, {
         sha256: sha, sizeBytes: buf.length, mime,
