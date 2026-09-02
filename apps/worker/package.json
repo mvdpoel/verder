@@ -25,7 +25,8 @@
     "mail-count": "tsx src/ops/mail-count.ts",
     "mail-backup-run": "tsx src/ops/mail-backup-run.ts",
     "reindex": "tsx src/ops/reindex.ts",
-    "normalize-names": "tsx src/ops/run-normalize-filenames.ts"
+    "normalize-names": "tsx src/ops/run-normalize-filenames.ts",
+    "discard-documents": "tsx src/ops/discard-documents.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",
