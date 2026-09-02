@@ -7,10 +7,10 @@
  *   pnpm --filter worker normalize-names --all --commit
  *   pnpm --filter worker normalize-names --undo <journal.jsonl>
  */
-import { readFile, rename } from "node:fs/promises";
+import { appendFile, readFile, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
@@ -72,7 +72,52 @@ async function undo(path: string): Promise<void> {
 const journalPath = val("journal",
   `/journal/normalize-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
 
-if (flag("undo")) {
+/**
+ * Apply names decided outside the LLM path -- by a human, or by a model that
+ * READ THE PAGE rather than its OCR. Same two writes and the same journal as
+ * an automatic rename, so --undo reverses these identically.
+ *
+ * TSV: documentId <tab> filename-on-disk-or-"-" <tab> newName
+ * The disk column is separate from the title because an email attachment has
+ * a vault copy under a content hash and may ALSO sit on the share under an
+ * unrelated name; renaming the dossier and renaming the share are two facts.
+ */
+async function applyManual(path: string): Promise<void> {
+  const lines = (await readFile(path, "utf8")).trim().split("\n").filter(Boolean);
+  let done = 0;
+  for (const line of lines) {
+    const [documentId, diskName, newName] = line.split("\t").map((x) => x.trim());
+    if (!documentId || !newName) continue;
+    await appendFile(journalPath, JSON.stringify({
+      at: new Date().toISOString(), documentId,
+      oldName: diskName && diskName !== "-" ? diskName : newName, newName }) + "\n");
+    if (diskName && diskName !== "-") {
+      const from = join(scanDir, diskName);
+      if (existsSync(from)) await rename(from, join(scanDir, newName));
+      else console.log(`  (not on share) ${diskName}`);
+    }
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${documentId}::text, 0))`);
+      const current = await effectiveDocument(tx, documentId);
+      if (current.effectiveTitle === newName) return;
+      await tx.insert(schema.documentStatusChanges).values({
+        documentId, status: current.effectiveStatus, title: newName });
+      await appendLedgerEvent(tx, {
+        eventType: "document.updated", entityType: "document", entityId: documentId,
+        payload: { id: documentId, status: current.effectiveStatus,
+          title: newName, docType: null, partyId: null } });
+    });
+    console.log(`  ${diskName || "(vault only)"}  ->  ${newName}`);
+    done++;
+  }
+  console.log(`\napplied ${done}`);
+  console.log(`undo with: pnpm --filter worker normalize-names --undo ${journalPath}`);
+}
+
+if (flag("apply")) {
+  await applyManual(val("apply", ""));
+} else if (flag("undo")) {
   await undo(val("undo", ""));
 } else {
   const commit = flag("commit");
