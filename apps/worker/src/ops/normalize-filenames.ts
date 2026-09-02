@@ -22,6 +22,7 @@ import { basename, extname, join } from "node:path";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { schema, createDb } from "@verder/db";
 import { effectiveTitleSql } from "@verder/api/src/effective-status";
+import { looksLikeProse } from "../text-quality";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
 
@@ -43,53 +44,6 @@ export interface RenamePlan {
 }
 
 
-/**
- * Words frequent enough in Dutch and English that prose cannot avoid them.
- * Counting them is a cheap, language-agnostic-enough test for "is this text
- * at all", which is the only question being asked.
- */
-const STOPWORDS = [
-  "de", "het", "een", "van", "en", "in", "op", "te", "dat", "die", "voor",
-  "met", "zijn", "wordt", "aan", "bij", "the", "of", "and", "to", "in", "for",
-  "is", "that", "this", "shall", "will", "any",
-];
-
-/**
- * Minimum share of words that are stopwords. MEASURED across all 138 texts on
- * this share, not guessed: garbled OCR runs 0.7%-3.3% and every readable
- * document is 4.7% or above, so the threshold sits in a real gap. It is
- * deliberately far below the 21.8% median, because the sparse end of "real" is
- * a payslip (4.9%) or a passport MRZ (5.3%) -- documents that are tables, not
- * prose, and must not be refused.
- */
-const MIN_STOPWORD_SHARE = 0.04;
-
-/**
- * Whether extracted text is worth showing a model.
- *
- * asml.pdf was scanned UPSIDE DOWN, so OCR returned 3082 characters of
- * mirrored gibberish ("uorpoIpsin[ SAISN[9Xe BABY [IM LNOD YIJNG" is "Dutch
- * COURT will have exclusive jurisdiction" reversed). Asked to name it, the
- * model invented "Beschikking.UWV" -- a plausible Dutch document type with no
- * basis in the document at all. 25 documents on this share are in that state,
- * and for an opaque scan0063.pdf there is no original filename for
- * retainsIdentifiers to defend, so the invented name would stand.
- *
- * The share is measured per WORD, not per character: a per-character ratio
- * rewards garbled text for being dense in short junk tokens, which is exactly
- * backwards.
- *
- * Refusing costs an ugly filename. Accepting files a hallucination in a legal
- * archive under a name that reads as authoritative.
- */
-export function looksLikeProse(text: string): boolean {
-  const t = text.toLowerCase();
-  const words = t.split(/[^a-z\u00C0-\u024F]+/).filter(Boolean);
-  // Too little to judge. A real document this short is named by hand.
-  if (words.length < 40) return false;
-  const hits = words.filter((w) => STOPWORDS.includes(w)).length;
-  return hits / words.length >= MIN_STOPWORD_SHARE;
-}
 
 export function buildNamePrompt(currentName: string, text: string): string {
   const keep = identifierTokens(currentName);

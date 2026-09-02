@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { extractDocumentText, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
+import { extractDocumentText, rasterizePdf, realOcrPort, type OcrPort, ocrPageUpright } from "./extract";
 
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 
@@ -185,5 +185,69 @@ describe("extractDocumentText (spreadsheets)", () => {
     const out = await extractDocumentText("application/octet-stream", bomb);
     expect(out.extractor).toBe("none");
     expect(out.error).toMatch(/expands/);
+  });
+});
+
+describe("ocrPageUpright", () => {
+  const READABLE = ("Geachte heer Van der Poel wij bevestigen de ontvangst van uw "
+    + "verzoek en wij hebben dat in behandeling genomen bij de rechtbank ").repeat(3);
+  const GARBLED = "Ev ods E AE O5 od BL fs TIL go vie gm iF ej ou fe Bg Td wa br ee ie X TT "
+    + "UM ly aeg Nn emnjeuSig uorpoIpsin SAISN Xe BABY IM LNOD YIJNG Jusladwiod ay yang Aq "
+    + "SI U uspun sIuL SME jLINJ pue eje eqeoijdde Ie Juensind suonebiigo ay ";
+
+  function port(byAngle: Map<number | undefined, string>) {
+    const calls: (number | undefined)[] = [];
+    return {
+      calls,
+      ocrImage: async (_png: Buffer, r?: number) => { calls.push(r); return byAngle.get(r) ?? ""; },
+    };
+  }
+
+  it("does not rotate a page that already reads as prose", async () => {
+    const p = port(new Map([[undefined, READABLE]]));
+    const res = await ocrPageUpright(p, Buffer.from("x"));
+    expect(res.rotatedRadians).toBe(0);
+    // The whole point of the fast path: one OCR pass for a normal page.
+    expect(p.calls).toEqual([undefined]);
+  });
+
+  it("finds the upside-down page and stops there", async () => {
+    const p = port(new Map<number | undefined, string>([
+      [undefined, GARBLED], [Math.PI, READABLE],
+    ]));
+    const res = await ocrPageUpright(p, Buffer.from("x"));
+    expect(res.text).toBe(READABLE);
+    expect(res.rotatedRadians).toBe(Math.PI);
+    // 180 is tried first and wins, so the sideways angles cost nothing.
+    expect(p.calls).toEqual([undefined, Math.PI]);
+  });
+
+  it("finds a sideways page", async () => {
+    const p = port(new Map<number | undefined, string>([
+      [undefined, GARBLED], [Math.PI, GARBLED], [Math.PI / 2, READABLE],
+    ]));
+    const res = await ocrPageUpright(p, Buffer.from("x"));
+    expect(res.rotatedRadians).toBe(Math.PI / 2);
+  });
+
+  it("keeps the best attempt when no orientation reads as prose", async () => {
+    const half = "de " + GARBLED;  // scores above 0 but still under the 4% floor
+    const p = port(new Map<number | undefined, string>([
+      [undefined, GARBLED], [Math.PI, half], [Math.PI / 2, GARBLED], [-Math.PI / 2, GARBLED],
+    ]));
+    const res = await ocrPageUpright(p, Buffer.from("x"));
+    // A bad page still beats an empty one for a filename or a search hit.
+    expect(res.text).toBe(half);
+    expect(p.calls).toHaveLength(4);
+  });
+});
+
+describe("ocrPageUpright, cost", () => {
+  it("does not pay for rotations on a page too short to judge", async () => {
+    const calls: (number | undefined)[] = [];
+    const p = { ocrImage: async (_b: Buffer, r?: number) => { calls.push(r); return "Bonnetje 4,50"; } };
+    const res = await ocrPageUpright(p, Buffer.from("x"));
+    expect(res.text).toBe("Bonnetje 4,50");
+    expect(calls).toEqual([undefined]);
   });
 });

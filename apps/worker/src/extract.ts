@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { effectiveMime, isSpreadsheetMime, readWorkbook } from "@verder/parsers";
+import { looksLikeProse, MIN_WORDS, stopwordShare, wordCount } from "./text-quality";
 
 const run = promisify(execFile);
 
@@ -27,9 +28,27 @@ export const MAX_OCR_PAGES = 20;
 // accents is never cut mid-code-point.
 export const MAX_TEXT_CHARS = 1_000_000;
 
-export interface OcrPort { ocrImage(png: Buffer): Promise<string> }
+export interface OcrPort {
+  /** `rotateRadians` rotates the image before recognition; omitted means as-is. */
+  ocrImage(png: Buffer, rotateRadians?: number): Promise<string>;
+  /** Releases the tesseract worker, when the port owns one. */
+  close?(): Promise<void>;
+}
+
+/**
+ * Orientations tried when a page does not come out as language, in the order
+ * they are worth trying: 180 first, because a sheet fed the wrong way round is
+ * far commoner than one fed sideways, and every misread page found on the
+ * Workspace share was 180.
+ */
+export const RETRY_ANGLES = [Math.PI, Math.PI / 2, -Math.PI / 2];
 
 type Recognize = (img: Buffer, langs: string) => Promise<{ data: { text: string } }>;
+type CreateWorker = (langs: string) => Promise<{
+  recognize: (img: Buffer, opts?: { rotateRadians?: number })
+    => Promise<{ data: { text: string } }>;
+  terminate: () => Promise<void>;
+}>;
 
 /**
  * tesseract.js ships both an ESM and a CJS build, and which one a `import()`
@@ -46,17 +65,67 @@ type Recognize = (img: Buffer, langs: string) => Promise<{ data: { text: string 
  * find its OCR must say so, not quietly return nothing.
  */
 export function realOcrPort(): OcrPort {
+  // ONE worker per extraction, created on first use and terminated by close().
+  // The module-level recognize() spins a worker up and tears it down per call,
+  // which was already wasteful per page and becomes four times so once a bad
+  // page is retried at other orientations.
+  let worker: Awaited<ReturnType<CreateWorker>> | null = null;
+  async function get() {
+    if (worker) return worker;
+    const mod = await import("tesseract.js") as unknown as
+      { createWorker?: CreateWorker; default?: { createWorker?: CreateWorker } };
+    const createWorker = mod.createWorker ?? mod.default?.createWorker;
+    if (typeof createWorker !== "function") {
+      throw new Error("tesseract.js: no createWorker export (ESM/CJS interop)");
+    }
+    worker = await createWorker("nld+eng");
+    return worker;
+  }
   return {
-    async ocrImage(png) {
-      const mod = await import("tesseract.js") as unknown as
-        { recognize?: Recognize; default?: { recognize?: Recognize } };
-      const recognize = mod.recognize ?? mod.default?.recognize;
-      if (typeof recognize !== "function") {
-        throw new Error("tesseract.js: no recognize export (ESM/CJS interop)");
-      }
-      return (await recognize(png, "nld+eng")).data.text;
+    async ocrImage(png, rotateRadians) {
+      const w = await get();
+      const res = await w.recognize(png,
+        rotateRadians === undefined ? undefined : { rotateRadians });
+      return res.data.text;
+    },
+    async close() {
+      const w = worker;
+      worker = null;
+      // A failure to terminate must not fail an extraction that already
+      // produced its text.
+      if (w) { try { await w.terminate(); } catch { /* best effort */ } }
     },
   };
+}
+
+/**
+ * OCR one page, and if the result is not language, try it the other way up.
+ *
+ * A scanner fed a sheet the wrong way round produces a page tesseract reads as
+ * mirrored gibberish rather than as nothing, so the failure is silent: 25 of
+ * the 138 documents on the Workspace share were in that state, indexed and
+ * searchable on 3000 characters of noise. The first orientation that reads as
+ * prose wins; if none does, the highest-scoring one is kept, because a bad
+ * page still beats an empty one for a filename or a search hit.
+ */
+export async function ocrPageUpright(
+  ocr: OcrPort, png: Buffer,
+): Promise<{ text: string; rotatedRadians: number }> {
+  const first = await ocr.ocrImage(png);
+  if (looksLikeProse(first)) return { text: first, rotatedRadians: 0 };
+  // Too little text to judge, so rotating is a guess paid for three times.
+  // A page that is genuinely upside down is not quiet — asml.pdf produced 503
+  // junk words — while a receipt or a mostly-blank page is, and no orientation
+  // makes a blank page readable.
+  if (wordCount(first) < MIN_WORDS) return { text: first, rotatedRadians: 0 };
+  let best = { text: first, rotatedRadians: 0, score: stopwordShare(first) };
+  for (const angle of RETRY_ANGLES) {
+    const text = await ocr.ocrImage(png, angle);
+    const score = stopwordShare(text);
+    if (score > best.score) best = { text, rotatedRadians: angle, score };
+    if (looksLikeProse(text)) break;
+  }
+  return { text: best.text, rotatedRadians: best.rotatedRadians };
 }
 
 /** Rasterizes the first MAX_OCR_PAGES pages to PNG with poppler's pdftoppm. */
@@ -89,7 +158,10 @@ export async function extractDocumentText(
   recordedMime: string, buf: Buffer,
   deps: { ocr?: OcrPort; rasterize?: typeof rasterizePdf } = {},
 ): Promise<ExtractedText> {
-  const ocr = deps.ocr ?? realOcrPort();
+  // Only a port this function created may be closed by it: an injected port
+  // belongs to the caller, and terminating it would break the next document.
+  const ownedOcr = deps.ocr ? null : realOcrPort();
+  const ocr = deps.ocr ?? ownedOcr!;
   const rasterize = deps.rasterize ?? rasterizePdf;
   // Documents arrive from mail attachments and NAS scans, and the mime that
   // gets recorded is whatever the source claimed. Production held an ABN AMRO
@@ -107,11 +179,13 @@ export async function extractDocumentText(
       }
       const pages = await rasterize(buf);
       const texts: string[] = [];
-      for (const page of pages) texts.push(await ocr.ocrImage(page));
+      // Orientation is decided per PAGE, not per document: a scanner fed a
+      // stack the wrong way round rarely gets every sheet wrong the same way.
+      for (const page of pages) texts.push((await ocrPageUpright(ocr, page)).text);
       return { ...cap(texts.join("\n\n").trim()), extractor: "ocr-pdf" };
     }
     if (mime.startsWith("image/")) {
-      return { ...cap((await ocr.ocrImage(buf)).trim()), extractor: "ocr-image" };
+      return { ...cap((await ocrPageUpright(ocr, buf)).text.trim()), extractor: "ocr-image" };
     }
     if (isSpreadsheetMime(mime)) {
       // Tab-separated so the extracted text reads like the statement it is, and
@@ -127,5 +201,7 @@ export async function extractDocumentText(
     // Never throws: a document that cannot be read stays findable by its title
     // and metadata, and the caller records the reason in worker_runs.
     return { text: "", charCount: 0, extractor: "none", truncated: false, error: String(err) };
+  } finally {
+    await ownedOcr?.close?.();
   }
 }
