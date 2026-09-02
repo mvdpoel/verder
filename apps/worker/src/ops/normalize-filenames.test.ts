@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNamePrompt, validateName } from "./normalize-filenames";
+import { buildNamePrompt, identifierTokens, looksLikeProse, retainsIdentifiers, validateName } from "./normalize-filenames";
 
 describe("validateName", () => {
   const none = () => new Set<string>();
@@ -62,7 +62,7 @@ describe("buildNamePrompt", () => {
   it("carries the current name and the text, and bounds the text", () => {
     const p = buildNamePrompt("scan0063.pdf", "X".repeat(9000));
     expect(p).toContain("scan0063.pdf");
-    expect(p).toContain("Arbeidsovereenkomst.Airteq.MP.van.der.Poel.pdf");
+    expect(p).toContain("Arbeidsovereenkomst.Airteq.MP.van.der.Poel.2026.pdf");
     expect(p.length).toBeLessThan(8000);
   });
 });
@@ -96,5 +96,129 @@ describe("validateName, accented Dutch", () => {
       expect(validateName("a" + String.fromCharCode(code) + "b", "scan1.pdf", new Set()))
         .toBeNull();
     }
+  });
+});
+
+describe("identifierTokens", () => {
+  it("keeps what distinguishes a document and drops what does not", () => {
+    expect(identifierTokens("machtiging.carolien.pdf")).toEqual(["carolien"]);
+    expect(identifierTokens("verhuurdersverklaring.slauerhoffstraat.203.pdf"))
+      .toEqual(["slauerhoffstraat", "203"]);
+    expect(identifierTokens("Loonheffing.MP.SaurensMarketing.pdf"))
+      .toEqual(["saurensmarketing"]);
+  });
+
+  it("treats an opaque scan name as carrying nothing", () => {
+    expect(identifierTokens("scan0063.pdf")).toEqual([]);
+    expect(identifierTokens("IMG_2231.pdf")).toEqual([]);
+    expect(identifierTokens("scan_0007.pdf")).toEqual([]);
+  });
+
+  it("lets a document-type word be replaced by a better one", () => {
+    expect(identifierTokens("Accenture.vaststellingovereenkomst.pdf"))
+      .toEqual(["accenture"]);
+  });
+});
+
+describe("retainsIdentifiers", () => {
+  // Each of these is a rename the first production run actually made.
+  it("allows an abbreviation to be expanded", () => {
+    expect(identifierTokens("vso.tdn.pdf")).toEqual([]);
+    expect(retainsIdentifiers("vso.tdn.pdf",
+      "Beeindigingsovereenkomst.TrueFullstaq.mp.2026.pdf")).toBe(true);
+  });
+
+  it("does not insist on Martin's own name, which distinguishes nothing", () => {
+    expect(identifierTokens("2023 ARB OK CloudNation Martin van der Poel.pdf"))
+      .toEqual(["cloudnation"]);
+  });
+
+  it("rejects the renames that lost information", () => {
+    expect(retainsIdentifiers("machtiging.carolien.pdf", "Machtiging.pdf")).toBe(false);
+    expect(retainsIdentifiers(
+      "verhuurdersverklaring.slauerhoffstraat.203.pdf", "Verhuurdersverklaring.2023.pdf")).toBe(false);
+    expect(retainsIdentifiers(
+      "Loonheffing.MP.SaurensMarketing.pdf",
+      "Opgaaf.ggevens.loonheffingen.Belastingdienst.MP.van.der.Poel.2026.pdf")).toBe(false);
+  });
+
+  it("accepts a rename that keeps every identifier and improves the type", () => {
+    expect(retainsIdentifiers("machtiging.carolien.pdf", "Machtiging.LBIO.Carolien.pdf")).toBe(true);
+    expect(retainsIdentifiers(
+      "Accenture.vaststellingovereenkomst.pdf",
+      "Bee\u0308indigingsovereenkomst.Accenture.MP.van.der.Poel.2023.pdf".normalize("NFC"))).toBe(true);
+  });
+
+  it("matches across separator differences", () => {
+    expect(retainsIdentifiers("x.SaurensMarketing.pdf", "Nota.Saurens-Marketing.2026.pdf")).toBe(true);
+  });
+
+  it("imposes nothing on an opaque name", () => {
+    expect(retainsIdentifiers("scan0063.pdf", "Arbeidsovereenkomst.Airteq.pdf")).toBe(true);
+  });
+});
+
+describe("validateName enforces retention", () => {
+  it("refuses a proposal that drops the distinguishing part", () => {
+    expect(validateName("Machtiging", "machtiging.carolien.pdf", new Set())).toBeNull();
+    expect(validateName("Machtiging.LBIO.Carolien", "machtiging.carolien.pdf", new Set()))
+      .toBe("Machtiging.LBIO.Carolien.pdf");
+  });
+});
+
+describe("buildNamePrompt states the convention", () => {
+  it("names the words that must survive", () => {
+    const p = buildNamePrompt("machtiging.carolien.pdf", "tekst over LBIO");
+    expect(p).toContain("MOETEN terugkomen: carolien");
+    expect(p).toContain("LANGE NAMEN ZIJN PRIMA");
+  });
+});
+
+describe("looksLikeProse", () => {
+  // Verbatim from asml.pdf, which was scanned upside down. The model, shown
+  // this, answered "Beschikking.UWV" with confident:true.
+  const GARBLED = `Ev ods E AE - O5 3 od 1 1 BL | - : fs 783 g TIL go. vie 33 |
+    - 22 = = 8s o gm iF ej J ---- ou D = : 7 | 4 ] | 33 | <3 | | | 3 fe] 5
+    De HH | Bg Td | 5 = 1 q : *. : 5 2 = | wa . 5 4 br. ee g 3 ; % ie 9 X TT
+    1 van UM ly :99e|d {202 <o- 1% aeg ) Nn :emnjeuSig uorpoIpsin[ SAISN[9Xe
+    BABY [IM LNOD YIJNG Jusladwiod ay] me] yang Aq e= SI U uspun sIuL 2
+    SME| S8)jLINJ8s pue eje10d109 eqeoijdde Ie 0} Juensind suonebiigo ay)`;
+
+  const REAL = `Geachte heer Van der Poel, hierbij bevestigen wij de ontvangst
+    van uw verzoek. Wij hebben uw aanvraag in behandeling genomen en zullen u
+    binnen vier weken informeren over het besluit dat is genomen. Indien u het
+    niet eens bent met dit besluit kunt u bezwaar maken bij de rechtbank in
+    het arrondissement waar u woont. De termijn voor het indienen van een
+    bezwaarschrift bedraagt zes weken na de datum van deze beschikking.`;
+
+  it("refuses upside-down OCR", () => {
+    expect(looksLikeProse(GARBLED)).toBe(false);
+  });
+
+  it("accepts an ordinary Dutch letter", () => {
+    expect(looksLikeProse(REAL)).toBe(true);
+  });
+
+  it("accepts English contract text", () => {
+    expect(looksLikeProse(`The Recipient shall immediately inform ASML of any
+      inventions made and shall execute all documents required for perfecting
+      the transfer to ASML of all ownership rights, without any compensation
+      from ASML except for expenses agreed. At the first request of ASML the
+      Recipient shall fully assist in establishing such rights.`)).toBe(true);
+  });
+
+  it("refuses text too short to judge", () => {
+    expect(looksLikeProse("de van het een")).toBe(false);
+    expect(looksLikeProse("")).toBe(false);
+  });
+
+  // The sparse end of "real": a payslip is a table of numbers and labels and
+  // measured 4.9% on this share; refusing it would be a false positive.
+  it("accepts a document that is a table rather than prose", () => {
+    const payslip = ("Periode Loon Uren Tarief Bruto Netto Heffingskorting "
+      + "Pensioenpremie Vakantiegeld Reiskosten Werkgever Werknemer Bedrag "
+      + "Cumulatief Loonheffing Arbeidskorting Grondslag Premie Totaal ")
+      .repeat(3) + " van het de";  // 3 of 60 words = 5.0%, the real one is 4.9%
+    expect(looksLikeProse(payslip)).toBe(true);
   });
 });
