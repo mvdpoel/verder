@@ -187,6 +187,17 @@ export interface LedgerRecomputeContext {
   resolvedStatusHash: Map<number, string>; // seq -> payloadHash of document.updated events
   onFileChecked?: () => void;
   onFilePurged?: (stillOnDisk: boolean) => void;
+  /**
+   * entityIds with a document.purged event actually present IN THE LEDGER —
+   * never derived from the document_purges table alone. `verder_app` holds
+   * INSERT on document_purges, so a row by itself proves nothing: without
+   * this, destroying a vault file and INSERTing a matching tombstone row (no
+   * ledger event at all) would turn a genuine file-missing into a disclosed,
+   * green purge. The same law resolveDocumentUpdatedHashes already enforces
+   * one table over — "an UPDATE on that table hides a document from every
+   * surface while /verify reports ok" — applied here to INSERT instead.
+   */
+  purgedEntityIds?: Set<string>;
 }
 
 /**
@@ -229,8 +240,14 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
     }
   }
   const resolvedStatusHash = await resolveDocumentUpdatedHashes(db, rows);
+  // The set the document.ingested branch trusts for "was this really purged?"
+  // — built from the LEDGER rows, not from document_purges. See the doc
+  // comment on LedgerRecomputeContext.purgedEntityIds for the attack this
+  // closes.
+  const purgedEntityIds = new Set(
+    rows.filter((e) => e.eventType === "document.purged").map((e) => e.entityId));
   const res = await verifyChain(events, makeLedgerRecompute(db, vaultDir, {
-    linkedLater, resolvedLinkHash, resolvedStatusHash,
+    linkedLater, resolvedLinkHash, resolvedStatusHash, purgedEntityIds,
     onFileChecked: () => { checkedFiles++; },
     onFilePurged: (stillOnDisk) => { purgedFiles++; if (stillOnDisk) purgedFilesOnDisk++; } }));
   return { ...res, headHash: rows.at(-1)?.eventHash ?? null,
@@ -297,21 +314,28 @@ export function makeLedgerRecompute(
     if (!doc) return "missing-document-row".padEnd(64, "0");
     const [purged] = await db.select().from(schema.documentPurges)
       .where(eq(schema.documentPurges.documentId, e.entityId));
-    if (purged) {
+    // BOTH a purge row AND a matching document.purged event IN THE LEDGER are
+    // required — a row is never enough on its own. An orphan row (no ledger
+    // event, e.g. INSERTed directly, or left behind after its event was
+    // deleted) is never visited by any dispatch branch above, so trusting the
+    // row alone would let it launder a destroyed file as a disclosed purge.
+    if (purged && ctx.purgedEntityIds?.has(e.entityId)) {
       /*
        * The bytes are gone ON PURPOSE and the document.purged event is the
        * record of it. Verify against that record instead: the sha256 the purge
        * names must still be the sha256 the ingest recorded, or the tombstone is
        * describing a different document than the one it is attached to.
        *
-       * Deleting the purge row does NOT launder the deletion: this branch is
-       * simply not taken, and the file read below reports file-missing exactly
-       * as it does for any other vanished file.
+       * Deleting the purge row (or its ledger event) does NOT launder the
+       * deletion: this branch is simply not taken, and the file read below
+       * reports file-missing exactly as it does for any other vanished file.
        */
+      if (purged.sha256 !== doc.sha256) return "purge-sha-mismatch".padEnd(64, "0");
+      // Counted only once the tombstone checks out — a tampered one must not
+      // land in the disclosure figures as if it were a legitimate purge.
       ctx.onFilePurged?.(await access(readFilePath(vaultDir, purged.sha256))
         .then(() => true, () => false));
-      return purged.sha256 === doc.sha256
-        ? e.payloadHash : "purge-sha-mismatch".padEnd(64, "0");
+      return e.payloadHash;
     }
     try {
       const buf = await readFile(readFilePath(vaultDir, doc.sha256));
