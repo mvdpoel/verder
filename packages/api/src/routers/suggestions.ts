@@ -88,9 +88,16 @@ export const suggestionsRouter = router({
       // about those documents in between. Re-resolve them here, so a discarded
       // signature logo cannot be linked into entry_documents, into the entry's
       // indexed body, or into the signed export the bewindvoerder reads.
+      //
+      // A PURGE IS THE SAME BUG ONE STEP WORSE, and it needs its own question:
+      // it is a row in document_purges rather than a status, so no reading of
+      // effectiveStatus can see it. The consequence is heavier too — there is
+      // no DELETE grant on entry_documents, so approving a stale snapshot
+      // writes a PERMANENT citation of a file that was destroyed on purpose.
       const documentIds: string[] = [];
       for (const id of input.entry.documentIds) {
-        if ((await effectiveDocument(tx, id)).effectiveStatus !== "discarded") documentIds.push(id);
+        const doc = await effectiveDocument(tx, id);
+        if (doc.effectiveStatus !== "discarded" && doc.purge === null) documentIds.push(id);
       }
       const entry = await insertEntry(tx, ctx.userId, { ...input.entry, documentIds },
         { eventType: "entry.created" });
