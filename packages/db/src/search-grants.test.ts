@@ -109,7 +109,13 @@ describe("knowledge-base index grants", () => {
       .from(schema.searchChunks).where(eq(schema.searchChunks.id, chunk.id));
     expect(seen.map((r) => r.title)).toEqual(["Toelating WSNP"]);
 
-    // The web app searches the index; only the worker maintains it.
+    // The web app still never MAINTAINS the index: no INSERT, no UPDATE, on
+    // either table. But since migration 0034 it may DESTROY an entry — that
+    // is what "definitief verwijderen" needs in order to take a purged
+    // document's extracted text and search chunks down with it — and that is
+    // lawful precisely because neither table is evidence: both are derived
+    // and rebuildable (`pnpm --filter worker reindex`), so a DELETE here is
+    // not the same act as a DELETE on `documents` would be.
     await expect(
       app.insert(schema.searchChunks).values({
         entityType: "stop", entityId, chunkIndex: 1,
@@ -121,16 +127,46 @@ describe("knowledge-base index grants", () => {
         .where(eq(schema.searchChunks.id, chunk.id)),
     ).rejects.toThrow(/permission denied for table search_chunks/);
     await expect(
-      app.delete(schema.searchChunks).where(eq(schema.searchChunks.id, chunk.id)),
-    ).rejects.toThrow(/permission denied for table search_chunks/);
-    await expect(
       app.insert(schema.documentTexts).values({
         documentId: crypto.randomUUID(), sha256: "e".repeat(64),
         text: "verboden", extractor: "none", charCount: 8,
       }),
     ).rejects.toThrow(/permission denied for table document_texts/);
+    await expect(
+      app.update(schema.documentTexts).set({ text: "tampered" })
+        .where(eq(schema.documentTexts.documentId, crypto.randomUUID())),
+    ).rejects.toThrow(/permission denied for table document_texts/);
 
-    await worker.delete(schema.searchChunks).where(eq(schema.searchChunks.id, chunk.id));
+    // The purge path itself: the app role CAN delete a chunk...
+    const deletedChunk = await app.delete(schema.searchChunks)
+      .where(eq(schema.searchChunks.id, chunk.id)).returning();
+    expect(deletedChunk).toHaveLength(1);
+
+    // ...and a document_texts row.
+    const purgeSha = `kbg${crypto.randomUUID().replace(/-/g, "")}`.padEnd(64, "0").slice(0, 64);
+    const [purgedDoc] = await worker.insert(schema.documents).values({
+      sha256: purgeSha,
+      title: "Te vernietigen document",
+      mime: "application/pdf",
+      sizeBytes: 1234,
+      source: "nas-scan",
+      receivedAt: new Date("2026-08-02T00:00:00Z"),
+    }).returning();
+    await worker.insert(schema.documentTexts).values({
+      documentId: purgedDoc.id, sha256: purgeSha, text: "geheim", extractor: "pdf-parse", charCount: 6,
+    });
+    const deletedText = await app.delete(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, purgedDoc.id)).returning();
+    expect(deletedText).toHaveLength(1);
+
+    // SETTLE THE DOCUMENT the delete above just un-settled, for the same
+    // reason the worker-role test above does it: `documents` is append-only
+    // evidence nobody here may delete, so this fixture is permanent, and a
+    // document with no document_texts row is a permanent entry in
+    // pendingDocMeta's LIMIT 50 page on a dev database nothing truncates.
+    await worker.insert(schema.documentTexts).values({
+      documentId: purgedDoc.id, sha256: purgeSha, text: "", extractor: "none", charCount: 0,
+    });
   });
 
   it("forbids BOTH roles from inserting into the outbox", async () => {

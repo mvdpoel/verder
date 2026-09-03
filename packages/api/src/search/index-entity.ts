@@ -83,6 +83,21 @@ async function renderRow(
       const [row] = await db.select({ id: schema.documents.id }).from(schema.documents)
         .where(eq(schema.documents.id, entityId));
       if (!row) return null;
+      /*
+       * A purged document is gone from search in the strongest sense the app
+       * has: its bytes, its extracted text and its chunks were destroyed on
+       * purpose. Returning null here makes loadAndRender delete whatever chunks
+       * exist and write none — the same path a deleted row takes.
+       *
+       * WITHOUT THIS, `reindex` resurrects it. indexEntity rebuilds a chunk
+       * from title and metadata alone (the extracted text is optional, see
+       * below), so the nightly walk would put a definitief verwijderd document
+       * back into /search under its own name days after it was destroyed.
+       */
+      const [purged] = await db.select({ id: schema.documentPurges.id })
+        .from(schema.documentPurges)
+        .where(eq(schema.documentPurges.documentId, entityId));
+      if (purged) return null;
       // Title, doc type and status all move to document_status_changes the
       // moment a doc-meta suggestion is approved — the documents row itself is
       // never updated. effectiveDocument is the one helper that resolves that,
@@ -291,6 +306,31 @@ export async function indexEntity(
     // here is a crashed client, so it is left to propagate to the caller.
     vectors = await deps.embed.embed(
       pending.map((c) => asDocument(`${c.title}\n${c.body}`)));
+  }
+
+  /*
+   * ASK AGAIN, AFTER THE EMBED. renderRow's purge check ran before a NETWORK
+   * CALL that takes seconds under load, and a purge committing inside that gap
+   * deletes chunks that do not exist yet — this loop would then write the
+   * destroyed document's title and text straight back. Nothing repairs that on
+   * its own: a purge writes neither `documents` nor `document_status_changes`,
+   * so no search_outbox trigger fires and the document stays in /search and the
+   * ⌘K palette until somebody hand-runs `reindex`.
+   *
+   * Still check-then-act, so the window is narrowed and not closed — the purge
+   * mutation re-runs both DELETEs on a repeat click, which is the repair for
+   * whatever lands in what is left of it.
+   */
+  if (entityType === "document" && (pending.length > 0 || metadataOnly.length > 0)) {
+    const [purgedNow] = await deps.db.select({ id: schema.documentPurges.id })
+      .from(schema.documentPurges)
+      .where(eq(schema.documentPurges.documentId, entityId));
+    if (purgedNow) {
+      await deps.db.delete(schema.searchChunks).where(and(
+        eq(schema.searchChunks.entityType, entityType),
+        eq(schema.searchChunks.entityId, entityId)));
+      return { chunks: 0, embedded: 0, unchanged: 0 };
+    }
   }
 
   let embedded = 0;

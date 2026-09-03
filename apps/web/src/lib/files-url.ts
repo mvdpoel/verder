@@ -16,7 +16,7 @@ export type Branch =
   | { kind: "party"; id: string | null }
   | { kind: "periode"; month: string }
   | { kind: "bron"; source: "upload" | "nas-scan" | "email-attachment" }
-  | { kind: "status"; status: "inbox" | "filed" | "discarded" };
+  | { kind: "status"; status: "inbox" | "filed" | "discarded" | "purged" };
 
 export const SORTS = ["naam", "soort", "van", "datum", "grootte"] as const;
 export type Sort = (typeof SORTS)[number];
@@ -28,7 +28,7 @@ export interface ParsedFiles {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MONTH = /^\d{4}-\d{2}$/;
 const SOURCES = ["upload", "nas-scan", "email-attachment"] as const;
-const STATUSES = ["inbox", "filed", "discarded"] as const;
+const STATUSES = ["inbox", "filed", "discarded", "purged"] as const;
 
 export function encodeBranch(b: Branch): string {
   switch (b.kind) {

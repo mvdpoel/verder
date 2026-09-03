@@ -103,6 +103,34 @@ export const documentStatusChanges = pgTable("document_status_changes", {
   partyId: uuid("party_id").references(() => parties.id),
 });
 
+/**
+ * A destroyed document's obituary. EVIDENCE: SELECT, INSERT only.
+ *
+ * The `documents` row it points at SURVIVES — it anchors the document.ingested
+ * event, which can never leave the hash chain. What a purge destroys is the
+ * content: the vault file, the extracted text and the search chunks. Every
+ * ledgered citation (entry_documents, debt_documents, registry_decisions,
+ * stops, tasks) is deliberately left intact, so no other event's payload
+ * changes.
+ *
+ * NOT a fourth doc_status. A `purged` value appended through
+ * document_status_changes would need either its own document.updated event
+ * (two events for one action) or a status row with no event — and an unmatched
+ * row is exactly what resolveDocumentUpdatedHashes consumes when it looks for
+ * one, so a stray row could later vouch for an event it has nothing to do with.
+ */
+export const documentPurges = pgTable("document_purges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id").notNull().unique().references(() => documents.id),
+  // Copied rather than joined: the record of what was destroyed must not
+  // depend on another table still saying the same thing.
+  sha256: text("sha256").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  reason: text("reason"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const entryDocuments = pgTable("entry_documents", {
   entryId: uuid("entry_id").notNull().references(() => logEntries.id),
   documentId: uuid("document_id").notNull().references(() => documents.id),

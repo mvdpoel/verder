@@ -1,8 +1,11 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { formatBytes } from "@/lib/format-bytes";
 import { orNotFound } from "@/lib/not-found";
 import { DocumentMetaForm } from "@/components/document-meta-form";
 import { DocumentPreview } from "@/components/document-preview";
-import { PageTitle, Panel } from "@/components/ui";
+import { DocumentPurgeRetry } from "@/components/document-purge";
+import { purgeTombstoneLine } from "@/components/document-purge-copy";
+import { Notice, PageTitle, Panel } from "@/components/ui";
 
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,18 +38,43 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       </header>
       {/* One column below the breakpoint: a PDF and a form side by side at 600px
           each are two unreadable columns. */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel lit className="p-[22px]">
-          <DocumentPreview doc={{ sha256: d.sha256, title: d.effectiveTitle, mime: d.mime,
-            sizeBytes: d.sizeBytes }} />
+      {d.purge ? (
+        /*
+          A tombstone, not a two-column editor. There is no preview (the bytes
+          are gone), nothing to edit and no way back — so the page's whole job
+          is to say what was destroyed, when, and why.
+        */
+        <Panel className="p-[26px] flex flex-col gap-4">
+          <Notice tone="signal">{purgeTombstoneLine(d.purge)}</Notice>
+          <dl className="flex flex-col gap-2">
+            <div><dt className="micro">Soort</dt><dd>{d.effectiveDocType ?? "Zonder soort"}</dd></div>
+            <div><dt className="micro">Grootte</dt><dd>{formatBytes(d.purge.sizeBytes)}</dd></div>
+            <div><dt className="micro">sha256</dt><dd className="micro break-all">{d.purge.sha256}</dd></div>
+          </dl>
+          {/* Amber, and this one earns it: an unfinished action waiting on
+              somebody. The unlink runs after the purge transaction commits, so
+              this state means it failed and the bytes are still on disk. */}
+          {d.purge.bytesStillOnDisk && (
+            <Notice tone="attn">
+              Het bestand staat nog op schijf — de vernietiging is niet afgerond.
+              <DocumentPurgeRetry id={d.id} />
+            </Notice>
+          )}
         </Panel>
-        <Panel className="p-[26px]">
-          <DocumentMetaForm doc={{ id: d.id, title: d.effectiveTitle, docType: d.effectiveDocType,
-            partyId: d.effectivePartyId, status: d.effectiveStatus, previousStatus: d.previousStatus }}
-            entries={entries.map((e) => ({ id: e.id, summary: e.summary }))}
-            parties={parties.map((p) => ({ id: p.id, name: p.name }))} docTypes={docTypes} />
-        </Panel>
-      </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel lit className="p-[22px]">
+            <DocumentPreview doc={{ sha256: d.sha256, title: d.effectiveTitle, mime: d.mime,
+              sizeBytes: d.sizeBytes }} />
+          </Panel>
+          <Panel className="p-[26px]">
+            <DocumentMetaForm doc={{ id: d.id, title: d.effectiveTitle, docType: d.effectiveDocType,
+              partyId: d.effectivePartyId, status: d.effectiveStatus, previousStatus: d.previousStatus }}
+              entries={entries.map((e) => ({ id: e.id, summary: e.summary }))}
+              parties={parties.map((p) => ({ id: p.id, name: p.name }))} docTypes={docTypes} />
+          </Panel>
+        </div>
+      )}
     </div>
   );
 }

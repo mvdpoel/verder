@@ -1,14 +1,15 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile, unlink } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { sha256Hex } from "@verder/core";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import {
   docTypeKeySql, effectiveDocStatusSql, effectiveDocTypeSql, effectivePartyIdSql,
-  effectiveTitleSql, notDiscardedSql, receivedMonthSql,
+  effectiveTitleSql, notDiscardedSql, notPurgedSql, purgedSql, receivedMonthSql,
 } from "../effective-status";
 import { bundleWhere } from "./bundles";
 import { docTypeLabel } from "../doc-type";
@@ -48,6 +49,8 @@ export async function effectiveDocument(db: Db, id: string) {
   const changes = await db.select().from(schema.documentStatusChanges)
     .where(eq(schema.documentStatusChanges.documentId, id))
     .orderBy(desc(schema.documentStatusChanges.createdAt));
+  const [purged] = await db.select().from(schema.documentPurges)
+    .where(eq(schema.documentPurges.documentId, id));
   const latest = changes[0];
   /**
    * THE SAME RESOLUTION effectiveTitleSql / effectiveDocTypeSql /
@@ -78,7 +81,21 @@ export async function effectiveDocument(db: Db, id: string) {
     // with a null party reads as "no opinion", not as "cleared". Documented,
     // tested, and deliberate — see the "cannot clear a sender" test.
     effectivePartyId: newest((c) => c.partyId) ?? doc.partyId ?? null,
-    previousStatus: changes[1]?.status ?? doc.status };
+    previousStatus: changes[1]?.status ?? doc.status,
+    /**
+     * The tombstone, or null. `bytesStillOnDisk` is a live `access` check, not
+     * a stored flag: the unlink runs after the transaction commits (see the
+     * purge mutation), so a crash or an EACCES between the two leaves a purge
+     * record whose bytes are still there. Storing "we deleted it" would record
+     * an intention as a fact; asking the filesystem records what is true.
+     */
+    purge: purged ? {
+      at: purged.createdAt, reason: purged.reason,
+      sha256: purged.sha256, sizeBytes: purged.sizeBytes,
+      bytesStillOnDisk: await access(
+        readFilePath(process.env.VAULT_DIR ?? "./vault-files", purged.sha256),
+      ).then(() => true, () => false),
+    } : null };
 }
 
 /** Enough to see what a statement is; far short of hanging the tab on a big one. */
@@ -98,8 +115,26 @@ export const branchSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("party"), id: z.string().uuid().nullable() }),
   z.object({ kind: z.literal("periode"), month: z.string().regex(/^\d{4}-\d{2}$/) }),
   z.object({ kind: z.literal("bron"), source: z.enum(["upload", "nas-scan", "email-attachment"]) }),
-  z.object({ kind: z.literal("status"), status: z.enum(["inbox", "filed", "discarded"]) }),
+  // `purged` is not a doc_status — it is the presence of a document_purges row.
+  // It sits in this union anyway because it is the same QUESTION the status
+  // branch answers ("where is this document in its life?") and the tree renders
+  // it in the same list.
+  z.object({ kind: z.literal("status"),
+    status: z.enum(["inbox", "filed", "discarded", "purged"]) }),
 ]);
+
+/**
+ * The canonical payload a document.purged event carries. Exported because
+ * verification.ts recomputes it from the live document_purges row — editing a
+ * stored reason must surface as a payload_hash_mismatch, the same discipline
+ * registryDecisionPayload and taskStatusPayload already follow.
+ */
+export function documentPurgePayload(p: {
+  documentId: string; sha256: string; sizeBytes: number; reason: string | null;
+}) {
+  return { id: p.documentId, sha256: p.sha256, sizeBytes: p.sizeBytes,
+    reason: p.reason };
+}
 
 export const documentsRouter = router({
   registerUpload: protectedProcedure.input(z.object({
@@ -127,10 +162,14 @@ export const documentsRouter = router({
     // a discard is appended to document_status_changes and never written back,
     // so documents.status keeps reading "inbox" forever. Cast to text so the
     // comparison does not depend on the enum's own operator set.
-    const where = input.status
+    const base = input.status
       ? sql`${effectiveDocStatusSql} = ${input.status}`
       // IS DISTINCT FROM, not <>, for the same reason it is used in search.
       : input.includeDiscarded ? undefined : notDiscardedSql;
+    // A purged document is out of every list, including includeDiscarded and an
+    // explicit status filter: it is gone in a stronger sense than a discard,
+    // and the evidence pickers must never offer one.
+    const where = base ? sql`${base} AND ${notPurgedSql}` : notPurgedSql;
     const rows = await ctx.db.select().from(schema.documents).where(where)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
     return Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
@@ -171,14 +210,14 @@ export const documentsRouter = router({
    * is the branch that exists to find them again.
    */
   tree: protectedProcedure.query(async ({ ctx }) => {
-    const live = notDiscardedSql;
+    const live = sql`${notDiscardedSql} AND ${notPurgedSql}`;
     // docTypeKeySql and receivedMonthSql are the module-level constants
     // `browse`'s soort/periode branches filter on too — see their doc
     // comments for why grouping on the raw columns would disagree with the
     // effective document, and with browse's row query.
     const month = receivedMonthSql;
 
-    const [soortRows, vanWieRows, periodeRows, bronRows, statusRows] = await Promise.all([
+    const [soortRows, vanWieRows, periodeRows, bronRows, statusRows, purgedRows] = await Promise.all([
       ctx.db.select({
         // The raw spellings come back as an array, one entry PER ROW — no
         // DISTINCT — so docTypeLabel can count occurrences and pick the
@@ -220,7 +259,10 @@ export const documentsRouter = router({
         .from(schema.documents).where(live).groupBy(schema.documents.source),
 
       ctx.db.select({ status: effectiveDocStatusSql, n: sql<number>`count(*)::int` })
-        .from(schema.documents).groupBy(effectiveDocStatusSql),
+        .from(schema.documents).where(notPurgedSql).groupBy(effectiveDocStatusSql),
+
+      ctx.db.select({ n: sql<number>`count(*)::int` })
+        .from(schema.documents).where(purgedSql),
     ]);
 
     const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli",
@@ -241,7 +283,9 @@ export const documentsRouter = router({
         n: r.n,
       })),
       bron: bronRows,
-      status: statusRows,
+      status: purgedRows[0].n > 0
+        ? [...statusRows, { status: "purged", n: purgedRows[0].n }]
+        : statusRows,
     };
   }),
 
@@ -273,14 +317,18 @@ export const documentsRouter = router({
       // so the IN-subquery this used to spell by hand showed an empty table
       // under a tree count of 12 and a card that downloaded 12 files.
       b.kind === "bundel" ? await bundleWhere(ctx.db, b.id)
-      : b.kind === "status" ? sql`${effectiveDocStatusSql} = ${b.status}`
-      : b.kind === "soort" ? sql`${notDiscardedSql} AND ${docTypeKeySql} = ${b.key}`
+      // The one branch that LOOKS for purged documents. Everything else hides
+      // them, including the other three status values.
+      : b.kind === "status" ? (b.status === "purged"
+          ? purgedSql
+          : sql`${effectiveDocStatusSql} = ${b.status} AND ${notPurgedSql}`)
+      : b.kind === "soort" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${docTypeKeySql} = ${b.key}`
       : b.kind === "party" ? (b.id === null
-          ? sql`${notDiscardedSql} AND ${effectivePartyIdSql} IS NULL`
-          : sql`${notDiscardedSql} AND ${effectivePartyIdSql} = ${b.id}`)
-      : b.kind === "periode" ? sql`${notDiscardedSql} AND ${receivedMonthSql} = ${b.month}`
-      : b.kind === "bron" ? sql`${notDiscardedSql} AND documents.source = ${b.source}`
-      : notDiscardedSql; // "alles"
+          ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${effectivePartyIdSql} IS NULL`
+          : sql`${notDiscardedSql} AND ${notPurgedSql} AND ${effectivePartyIdSql} = ${b.id}`)
+      : b.kind === "periode" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${receivedMonthSql} = ${b.month}`
+      : b.kind === "bron" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND documents.source = ${b.source}`
+      : sql`${notDiscardedSql} AND ${notPurgedSql}`; // "alles"
 
     // Sort by the sender's NAME, resolved through the same effective party id
     // the row and the `party` branch use — sorting on the raw column would
@@ -437,6 +485,152 @@ export const documentsRouter = router({
           partyId: input.partyId ?? null } });
       return effectiveDocument(tx, input.id);
     })),
+
+  /**
+   * Definitief verwijderen: destroy a document's CONTENT and record that we did.
+   *
+   * What is destroyed: the vault file, the extracted text, the search chunks.
+   * What survives: the `documents` row (it anchors the document.ingested event,
+   * which can never leave the hash chain) and every ledgered citation —
+   * entry_documents, debt_documents, registry_decisions, stops, tasks. Removing
+   * an entry_documents row would change that ENTRY's recomputed payload hash,
+   * because entryEventPayload carries documentIds, and read as tampering with
+   * the logbook.
+   *
+   * Irreversible, and doubly so: documents.sha256 is UNIQUE and ingestDocument
+   * dedups on it, so those bytes can never re-enter the vault. That is the rule
+   * discard already carries ("a discarded document stays discarded for those
+   * bytes forever"), applied to a stronger action.
+   */
+  purge: protectedProcedure.input(z.object({
+    id: z.string().uuid(), reason: z.string().trim().min(1).optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const vaultDir = process.env.VAULT_DIR ?? "./vault-files";
+    /*
+     * A PURGE MUST NOT SILENCE A file-hash-mismatch, and it would.
+     *
+     * /verify re-hashes every vault file, so altered bytes turn it red; the
+     * purged branch then compares two DATABASE columns and never touches the
+     * disk, so purging that document turns /verify green again and the record
+     * says only "destroyed" — never "altered, then destroyed". Refuse instead
+     * of recording it: bytes that do not match the ledger are evidence of
+     * tampering, and destroying them is worse than leaving them where /verify
+     * keeps pointing at them.
+     *
+     * Before the transaction, because the answer decides whether there is one:
+     * a first purge must be refused before ANYTHING is written or deleted, and
+     * a check inside the transaction would leave a window where the refusal
+     * has already swept the two derived tables.
+     *
+     * ONLY ON A FIRST PURGE. A repeat purge is the documented repair for a
+     * half-done one (deploy.md calls the retry button the only repair) and it
+     * has nothing left to protect: the record already exists and the
+     * destruction is already ledgered. If a purged document's bytes come back
+     * ALTERED — a partial restore, a corrupted mirror — refusing there would
+     * strand the leftover text and chunks with no way to clear them through
+     * the app, which is a worse outcome than the one the refusal prevents.
+     *
+     * A read that FAILS is not a mismatch and must not refuse. ENOENT is the
+     * ordinary case (a repeat purge, or the file was cleaned up by hand) and
+     * there is nothing left to protect; any other read error leaves the bytes
+     * on disk anyway — the unlink below fails the same way — where
+     * effectiveDocument reports them as bytesStillOnDisk and /verify counts
+     * them. Refusing on an unreadable file would instead make the tombstone
+     * unwritable with no repair.
+     *
+     * WHY THE PURGE ROW IS LOOKED UP TWICE. This unlocked read only decides
+     * whether the hash check applies; the locked read inside the transaction
+     * stays the source of truth for whether to insert and ledger. It cannot be
+     * stale in the dangerous direction: no role holds DELETE on
+     * document_purges, so a row seen here never disappears, and the only race
+     * is a concurrent first purge committing in between — which leaves this
+     * call applying the check to a document it believes unpurged, i.e. erring
+     * towards refusing, and a refusal writes nothing.
+     */
+    const [pre] = await ctx.db
+      .select({ sha256: schema.documents.sha256,
+        purgedAt: schema.documentPurges.createdAt })
+      .from(schema.documents)
+      .leftJoin(schema.documentPurges,
+        eq(schema.documentPurges.documentId, schema.documents.id))
+      .where(eq(schema.documents.id, input.id));
+    if (pre && pre.purgedAt === null) {
+      const onDisk = await readFile(readFilePath(vaultDir, pre.sha256))
+        .then((buf) => sha256Hex(buf), () => null);
+      if (onDisk !== null && onDisk !== pre.sha256) throw new TRPCError({
+        code: "CONFLICT",
+        message: "Het bestand in de kluis komt niet overeen met wat het dossier "
+          + "heeft vastgelegd. Het wordt daarom niet vernietigd — controleer eerst /verify.",
+      });
+    }
+    const sha = await ctx.db.transaction(async (tx) => {
+      // The same per-document serialisation `update` uses: two clicks landing
+      // together would otherwise both find no purge row and both insert, and
+      // the UNIQUE constraint would turn the loser into a 500.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.id}::text, 0))`);
+      const [doc] = await tx.select().from(schema.documents)
+        .where(eq(schema.documents.id, input.id));
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+      const [already] = await tx.select().from(schema.documentPurges)
+        .where(eq(schema.documentPurges.documentId, input.id));
+      // A no-op RECORD, not an error: one decision must not appear in the
+      // record twice, and the button is one click Martin can land twice. The
+      // FIRST reason stands — a second call may not rewrite the record.
+      if (!already) {
+        await tx.insert(schema.documentPurges).values({
+          documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
+          reason: input.reason ?? null, createdBy: ctx.userId });
+        await appendLedgerEvent(tx, {
+          eventType: "document.purged", entityType: "document", entityId: doc.id,
+          payload: documentPurgePayload({ documentId: doc.id, sha256: doc.sha256,
+            sizeBytes: doc.sizeBytes, reason: input.reason ?? null }) });
+      }
+      /*
+       * The derived layer, destroyed in the same transaction as the record.
+       * These are the two tables that hold the document's CONTENT outside the
+       * vault: without this the button is a lie, and `reindex` would rebuild
+       * the chunk from the text on its next run.
+       *
+       * BOTH DELETES RUN ON THE REPEAT CLICK TOO, not only the unlink below.
+       * Three writers can put back what a purge destroyed — suggest.docmeta's
+       * OCR, the search drain's embed, extract-texts — and every guard against
+       * them is check-then-act, so the window is narrowed and not closed. A
+       * purge writes neither `documents` nor `document_status_changes`, so no
+       * search_outbox trigger fires and nothing re-enqueues the document
+       * afterwards: whatever lands in that window stays. This is the repair,
+       * and it must sweep all three kinds of leftover or the retry button only
+       * fixes the one that happens to be visible.
+       */
+      await tx.delete(schema.documentTexts)
+        .where(eq(schema.documentTexts.documentId, doc.id));
+      await tx.delete(schema.searchChunks)
+        .where(and(eq(schema.searchChunks.entityType, "document"),
+          eq(schema.searchChunks.entityId, doc.id)));
+      return already ? already.sha256 : doc.sha256;
+    });
+    /*
+     * THE UNLINK IS AFTER THE COMMIT AND THAT ORDERING IS NOT INTERCHANGEABLE.
+     * unlink is not transactional. Inside the transaction, a rollback after a
+     * successful unlink destroys the bytes with NO RECORD of it — permanently
+     * red on /verify with nothing explaining why, which is the one outcome
+     * this whole design exists to prevent. After the commit, the failure mode
+     * is the harmless one: a purge record whose bytes are still on disk, which
+     * effectiveDocument reports as bytesStillOnDisk, /verify counts, and a
+     * second click repairs.
+     *
+     * ENOENT is success, not an error: the file is gone, which is the goal.
+     * Anything else IS still swallowed — the leftover is detected either way,
+     * by /verify and by the tombstone's own retry button — but it is logged,
+     * because a persistently failing unlink (a read-only mount, a permission
+     * change) is a real fault and an empty catch makes it invisible.
+     */
+    await unlink(readFilePath(vaultDir, sha)).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return;
+      console.warn(`documents.purge: unlink failed for ${sha} — ${String(err)}`);
+    });
+    return effectiveDocument(ctx.db, input.id);
+  }),
 
   linkToEntry: protectedProcedure.input(z.object({
     documentId: z.string().uuid(), entryId: z.string().uuid(),

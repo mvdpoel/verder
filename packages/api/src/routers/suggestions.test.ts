@@ -620,6 +620,29 @@ describe("suggestions router", () => {
     expect(linked.map((l) => l.documentId)).toEqual([keep.id]);
   });
 
+  it("approveEntry never cites a document that has been purged", async () => {
+    // The same class of bug as the discard above, one step worse: an
+    // entry_documents row has no DELETE grant, so approving a snapshot whose
+    // attachment was definitief verwijderd in the meantime writes a PERMANENT
+    // citation of a destroyed file into the ledgered entry, into its search
+    // body and into the signed export.
+    const gone = await makeDocument("Per ongeluk gescand.pdf", "application/pdf");
+    const keep = await makeDocument("Beschikking bewind.pdf", "application/pdf");
+    await caller().documents.purge({ id: gone.id, reason: "hoort niet in het dossier" });
+    const s = await makeSuggestion();
+
+    const { entryId } = await caller().suggestions.approveEntry({
+      id: s.id,
+      entry: { occurredAt: new Date(), channel: "email", direction: "inbound",
+        summary: "Stukken ontvangen", source: "gmail-watch",
+        participantPartyIds: [], documentIds: [gone.id, keep.id], actionItems: [] },
+    });
+
+    const linked = await db.select().from(schema.entryDocuments)
+      .where(eq(schema.entryDocuments.entryId, entryId));
+    expect(linked.map((l) => l.documentId)).toEqual([keep.id]);
+  });
+
   it("list flags a document request and approving links the picked document to the entry", async () => {
     const [raw] = await db.insert(schema.rawEmails).values({
       gmailMessageId: `msg-${crypto.randomUUID()}`, gmailThreadId: "t-doc",

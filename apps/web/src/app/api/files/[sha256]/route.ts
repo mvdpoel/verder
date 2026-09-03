@@ -27,6 +27,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ sha256:
   try {
     const caller = await serverCaller(); // protectedProcedure rejects unauthenticated calls
     const doc = await caller.documents.bySha({ sha256 });
+    // 410, not 404. The document exists and the app knows exactly what happened
+    // to it — the bytes were destroyed on purpose and there is a ledgered
+    // record saying so. Reading the file here would ENOENT into a 500.
+    if (doc.purge) return NextResponse.json({ error: "purged" }, { status: 410 });
     const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", sha256));
     // The stored mime is whatever the source claimed. When it says nothing,
     // the bytes decide — otherwise a spreadsheet recorded as octet-stream is

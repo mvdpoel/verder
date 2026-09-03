@@ -17,6 +17,7 @@ describe("branch encoding", () => {
       { kind: "periode" as const, month: "2026-08" },
       { kind: "bron" as const, source: "email-attachment" as const },
       { kind: "status" as const, status: "discarded" as const },
+      { kind: "status" as const, status: "purged" as const },
     ]) {
       expect(decodeBranch(encodeBranch(b))).toEqual(b);
     }

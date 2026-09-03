@@ -5,7 +5,7 @@ import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { bundleRuleSchema, parseBundleRule, type BundleRule } from "../bundle-rule";
 import {
-  docTypeKeySql, effectiveDocStatusSql, effectivePartyIdSql, notDiscardedSql,
+  docTypeKeySql, effectiveDocStatusSql, effectivePartyIdSql, notDiscardedSql, notPurgedSql,
 } from "../effective-status";
 import { docTypeKey } from "../doc-type";
 
@@ -80,11 +80,15 @@ const manualMembershipSql = (bundleId: string): SQL =>
 export async function bundleWhere(db: Db, bundleId: string): Promise<SQL> {
   const [b] = await db.select().from(schema.bundles).where(eq(schema.bundles.id, bundleId));
   if (!b) return sql`false`;
-  if (b.kind === "manual") return manualMembershipSql(bundleId);
+  // A purged document is out of every bundle, whichever kind. Applied HERE
+  // rather than at each call site so the tree count, the table and the zip
+  // cannot disagree — the drift that once showed 12 over an empty table.
+  const membership = b.kind === "manual" ? manualMembershipSql(bundleId) : null;
+  if (membership) return sql`${membership} AND ${notPurgedSql}`;
   const parsed = parseBundleRule(b.rule);
   // An unreadable rule matches nothing — the same answer
   // resolveBundleDocumentIds gives it, and the bundle card says why.
-  return parsed.ok ? ruleWhere(parsed.rule) : sql`false`;
+  return parsed.ok ? sql`${ruleWhere(parsed.rule)} AND ${notPurgedSql}` : sql`false`;
 }
 
 /**
@@ -103,14 +107,15 @@ export async function resolveBundleDocumentIds(db: Db, bundleId: string): Promis
   if (b.kind === "manual") {
     const rows = await db.select({ id: schema.bundleDocuments.documentId })
       .from(schema.bundleDocuments)
-      .where(eq(schema.bundleDocuments.bundleId, bundleId))
+      .innerJoin(schema.documents, eq(schema.documents.id, schema.bundleDocuments.documentId))
+      .where(and(eq(schema.bundleDocuments.bundleId, bundleId), notPurgedSql))
       .orderBy(schema.bundleDocuments.addedAt);
     return rows.map((r) => r.id);
   }
   const parsed = parseBundleRule(b.rule);
   if (!parsed.ok) return [];
   const rows = await db.select({ id: schema.documents.id })
-    .from(schema.documents).where(ruleWhere(parsed.rule))
+    .from(schema.documents).where(sql`${ruleWhere(parsed.rule)} AND ${notPurgedSql}`)
     .orderBy(desc(schema.documents.receivedAt));
   return rows.map((r) => r.id);
 }

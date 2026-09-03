@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { discardAction, senderOptions, type DocStatus } from "./document-meta-form-actions";
+import { DocumentPurge } from "./document-purge";
 
 export function DocumentMetaForm({ doc, entries, parties, docTypes }: {
   doc: { id: string; title: string; docType: string | null; partyId: string | null;
@@ -93,6 +94,7 @@ export function DocumentMetaForm({ doc, entries, parties, docTypes }: {
         <Button disabled={!entryId || link.isPending}
           onClick={() => link.mutate({ documentId: doc.id, entryId })}>Koppelen</Button>
       </div>
+      <DocumentPurge doc={{ id: doc.id }} />
     </div>
   );
 }

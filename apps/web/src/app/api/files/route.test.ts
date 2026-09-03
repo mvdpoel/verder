@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 
-type Doc = { sha256: string; mime: string; title: string; effectiveTitle?: string };
+type Purge = { at: Date; reason: string | null; sha256: string; sizeBytes: number; bytesStillOnDisk: boolean };
+type Doc = { sha256: string; mime: string; title: string; effectiveTitle?: string; purge?: Purge | null };
 
 const docs = new Map<string, Doc>();
 
@@ -17,7 +18,7 @@ vi.mock("@/lib/trpc-server", () => ({
         if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "no such document" });
         // bySha returns effectiveDocument(): the immutable evidence title AND
         // the current one. The route has to pick, so the mock offers both.
-        return { ...doc, effectiveTitle: doc.effectiveTitle ?? doc.title };
+        return { ...doc, effectiveTitle: doc.effectiveTitle ?? doc.title, purge: doc.purge ?? null };
       },
     },
   }),
@@ -128,5 +129,22 @@ describe("GET /api/files/[sha256]", () => {
       { params: Promise.resolve({ sha256 }) });
     expect(res.headers.get("x-injected")).toBeNull();
     expect(res.headers.get("content-disposition")).not.toContain("\n");
+  });
+
+  /**
+   * 410, not 404. The document exists and we know exactly what happened to it;
+   * "not found" would be a smaller truth than the one the app can tell. The
+   * body names the reason so the page can say it in Dutch.
+   */
+  it("answers 410 Gone for a purged document", async () => {
+    const sha256 = "b".repeat(64);
+    registerDoc({
+      sha256, mime: "application/pdf", title: "beschikking.pdf",
+      purge: { at: new Date(), reason: null, sha256, sizeBytes: 3, bytesStillOnDisk: false },
+    });
+    const res = await GET(new Request("http://x/api/files/" + "b".repeat(64)),
+      { params: Promise.resolve({ sha256: "b".repeat(64) }) });
+    expect(res.status).toBe(410);
+    await expect(res.json()).resolves.toMatchObject({ error: "purged" });
   });
 });

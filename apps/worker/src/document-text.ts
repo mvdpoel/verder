@@ -22,6 +22,26 @@ export async function storeDocumentText(
   opts: { force?: boolean } = {},
 ): Promise<StoredText> {
   const extract = deps.extract ?? extractDocumentText;
+  /*
+   * THE CHOKE POINT FOR A PURGE, and it has to be here rather than at the two
+   * callers. Both text writers run long: suggest.docmeta reads the vault file
+   * and OCRs it (seconds to minutes) before calling this, and extract-texts
+   * does the same for the whole backlog. A purge committing inside that window
+   * deletes a document_texts row that does not exist yet, and the caller then
+   * puts the destroyed document's full text back — permanently, since nothing
+   * afterwards looks for it. Likeliest for a JUST-ARRIVED document, which is
+   * precisely the "per ongeluk gescand" case the button exists for.
+   *
+   * A throw, not a silent skip: the caller asked to store the content of a
+   * document whose content was destroyed on purpose, and there is no partial
+   * outcome worth returning. One indexed lookup on a UNIQUE column, paid once
+   * per document rather than once per chunk.
+   */
+  const [purged] = await deps.db.select({ id: schema.documentPurges.id })
+    .from(schema.documentPurges)
+    .where(eq(schema.documentPurges.documentId, doc.id));
+  if (purged) throw new Error(
+    `storeDocumentText: document ${doc.id} was purged; its content must not come back`);
   const [existing] = await deps.db.select().from(schema.documentTexts)
     .where(eq(schema.documentTexts.documentId, doc.id));
   if (!opts.force && existing && existing.sha256 === doc.sha256) {

@@ -124,6 +124,43 @@ describe("extractMissingTexts", () => {
     await pool.end();
   });
 
+  /**
+   * The backfill's pending query is pendingDocMeta's twin — "no document_texts
+   * row, or extractor 'none' on a retryable mime" — and a purge deletes exactly
+   * that row, so a purged document qualifies forever. Two harms, not one: every
+   * future run counts it as `failed` (the vault file is gone), and on the
+   * repairable state this design leans on, where the unlink did not land, the
+   * bytes are still readable and the purged text is extracted and stored again.
+   */
+  it("never offers a purged document to the extractor", async () => {
+    const { db, pool } = createDb(DB_URL);
+    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-"));
+    // No document in the shared dev database has bytes in this throwaway vault,
+    // so a run changes nothing and `scanned` is a stable population count —
+    // which is what makes the assertion below about the QUERY and not about
+    // whatever else is pending on this machine today.
+    const baseline = await extractMissingTexts({ db, vaultDir });
+
+    const doc = await seedDoc(db, vaultDir, await fixture("text-letter.pdf"));
+    const [u] = await db.insert(schema.users)
+      .values({ email: `${RUN_REF}-purger@test.local`, name: "Martin" }).returning();
+    await db.insert(schema.documentPurges).values({
+      documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
+      reason: null, createdBy: u.id });
+
+    const after = await extractMissingTexts({ db, vaultDir });
+    // Not selected at all — not selected and then failed, which is the shape
+    // that quietly inflates `failed` on every run from here on.
+    expect(after.scanned).toBe(baseline.scanned);
+    expect(after.failed).toBe(baseline.failed);
+    // Its bytes ARE readable here (seedDoc wrote them), so this is the
+    // dangerous half: without the filter the destroyed text comes straight back.
+    const rows = await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id));
+    expect(rows).toHaveLength(0);
+    await pool.end();
+  });
+
   it("leaves the docmeta sweep's backlog exactly as it found it", async () => {
     // The guard, not a formality: it FAILS if any test above starts ingesting a
     // fixture whose text row nobody writes. Zero means every document this run

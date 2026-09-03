@@ -8,6 +8,7 @@ const NL_SOURCE: Record<string, string> = {
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "Te sorteren", filed: "Opgeborgen", discarded: "Weggelegd",
+  purged: "Definitief verwijderd",
 };
 
 // The narrow slices of `Branch` that carry a value pulled straight off the
