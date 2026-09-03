@@ -8,6 +8,12 @@ import { createDb, schema, type Db } from "./index";
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 const RUN_REF = `purge-grants-test-${crypto.randomUUID()}`;
 
+// Derived per run, never a constant: this dev database is NEVER truncated and
+// `documents.sha256` is UNIQUE, so a hardcoded fixture hash makes the file pass
+// exactly once and then fail in beforeAll forever — the "test that breaks itself
+// a little more every time it passes" failure docmeta-sweep.test.ts documents.
+const FIXTURE_SHA = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+
 describe("document_purges grants", () => {
   let db: Db; let close: () => Promise<void>;
   let documentId: string; let userId: string;
@@ -20,7 +26,7 @@ describe("document_purges grants", () => {
       .values({ email: `${RUN_REF}@test.local`, name: "Martin" }).returning();
     userId = u.id;
     const [d] = await db.insert(schema.documents).values({
-      sha256: "a".repeat(63) + "1", title: "Purge grant fixture", mime: "text/plain",
+      sha256: FIXTURE_SHA, title: "Purge grant fixture", mime: "text/plain",
       sizeBytes: 12, source: "upload", sourceRef: RUN_REF, receivedAt: new Date(),
     }).returning();
     documentId = d.id;
@@ -29,7 +35,7 @@ describe("document_purges grants", () => {
 
   it("lets the app role INSERT a purge", async () => {
     const [row] = await db.insert(schema.documentPurges).values({
-      documentId, sha256: "a".repeat(63) + "1", sizeBytes: 12,
+      documentId, sha256: FIXTURE_SHA, sizeBytes: 12,
       reason: "verkeerd gescand", createdBy: userId,
     }).returning();
     expect(row.documentId).toBe(documentId);
@@ -38,7 +44,7 @@ describe("document_purges grants", () => {
 
   it("refuses a second purge of the same document", async () => {
     await expect(db.insert(schema.documentPurges).values({
-      documentId, sha256: "a".repeat(63) + "1", sizeBytes: 12, createdBy: userId,
+      documentId, sha256: FIXTURE_SHA, sizeBytes: 12, createdBy: userId,
     })).rejects.toThrow();
   });
 
