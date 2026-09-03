@@ -114,7 +114,12 @@ export const branchSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("party"), id: z.string().uuid().nullable() }),
   z.object({ kind: z.literal("periode"), month: z.string().regex(/^\d{4}-\d{2}$/) }),
   z.object({ kind: z.literal("bron"), source: z.enum(["upload", "nas-scan", "email-attachment"]) }),
-  z.object({ kind: z.literal("status"), status: z.enum(["inbox", "filed", "discarded"]) }),
+  // `purged` is not a doc_status — it is the presence of a document_purges row.
+  // It sits in this union anyway because it is the same QUESTION the status
+  // branch answers ("where is this document in its life?") and the tree renders
+  // it in the same list.
+  z.object({ kind: z.literal("status"),
+    status: z.enum(["inbox", "filed", "discarded", "purged"]) }),
 ]);
 
 /**
@@ -156,10 +161,14 @@ export const documentsRouter = router({
     // a discard is appended to document_status_changes and never written back,
     // so documents.status keeps reading "inbox" forever. Cast to text so the
     // comparison does not depend on the enum's own operator set.
-    const where = input.status
+    const base = input.status
       ? sql`${effectiveDocStatusSql} = ${input.status}`
       // IS DISTINCT FROM, not <>, for the same reason it is used in search.
       : input.includeDiscarded ? undefined : notDiscardedSql;
+    // A purged document is out of every list, including includeDiscarded and an
+    // explicit status filter: it is gone in a stronger sense than a discard,
+    // and the evidence pickers must never offer one.
+    const where = base ? sql`${base} AND ${notPurgedSql}` : notPurgedSql;
     const rows = await ctx.db.select().from(schema.documents).where(where)
       .orderBy(desc(schema.documents.createdAt)).limit(input.limit);
     return Promise.all(rows.map((r) => effectiveDocument(ctx.db, r.id)));
@@ -200,14 +209,14 @@ export const documentsRouter = router({
    * is the branch that exists to find them again.
    */
   tree: protectedProcedure.query(async ({ ctx }) => {
-    const live = notDiscardedSql;
+    const live = sql`${notDiscardedSql} AND ${notPurgedSql}`;
     // docTypeKeySql and receivedMonthSql are the module-level constants
     // `browse`'s soort/periode branches filter on too — see their doc
     // comments for why grouping on the raw columns would disagree with the
     // effective document, and with browse's row query.
     const month = receivedMonthSql;
 
-    const [soortRows, vanWieRows, periodeRows, bronRows, statusRows] = await Promise.all([
+    const [soortRows, vanWieRows, periodeRows, bronRows, statusRows, purgedRows] = await Promise.all([
       ctx.db.select({
         // The raw spellings come back as an array, one entry PER ROW — no
         // DISTINCT — so docTypeLabel can count occurrences and pick the
@@ -249,7 +258,10 @@ export const documentsRouter = router({
         .from(schema.documents).where(live).groupBy(schema.documents.source),
 
       ctx.db.select({ status: effectiveDocStatusSql, n: sql<number>`count(*)::int` })
-        .from(schema.documents).groupBy(effectiveDocStatusSql),
+        .from(schema.documents).where(notPurgedSql).groupBy(effectiveDocStatusSql),
+
+      ctx.db.select({ n: sql<number>`count(*)::int` })
+        .from(schema.documents).where(purgedSql),
     ]);
 
     const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli",
@@ -270,7 +282,9 @@ export const documentsRouter = router({
         n: r.n,
       })),
       bron: bronRows,
-      status: statusRows,
+      status: purgedRows[0].n > 0
+        ? [...statusRows, { status: "purged", n: purgedRows[0].n }]
+        : statusRows,
     };
   }),
 
@@ -302,14 +316,18 @@ export const documentsRouter = router({
       // so the IN-subquery this used to spell by hand showed an empty table
       // under a tree count of 12 and a card that downloaded 12 files.
       b.kind === "bundel" ? await bundleWhere(ctx.db, b.id)
-      : b.kind === "status" ? sql`${effectiveDocStatusSql} = ${b.status}`
-      : b.kind === "soort" ? sql`${notDiscardedSql} AND ${docTypeKeySql} = ${b.key}`
+      // The one branch that LOOKS for purged documents. Everything else hides
+      // them, including the other three status values.
+      : b.kind === "status" ? (b.status === "purged"
+          ? purgedSql
+          : sql`${effectiveDocStatusSql} = ${b.status} AND ${notPurgedSql}`)
+      : b.kind === "soort" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${docTypeKeySql} = ${b.key}`
       : b.kind === "party" ? (b.id === null
-          ? sql`${notDiscardedSql} AND ${effectivePartyIdSql} IS NULL`
-          : sql`${notDiscardedSql} AND ${effectivePartyIdSql} = ${b.id}`)
-      : b.kind === "periode" ? sql`${notDiscardedSql} AND ${receivedMonthSql} = ${b.month}`
-      : b.kind === "bron" ? sql`${notDiscardedSql} AND documents.source = ${b.source}`
-      : notDiscardedSql; // "alles"
+          ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${effectivePartyIdSql} IS NULL`
+          : sql`${notDiscardedSql} AND ${notPurgedSql} AND ${effectivePartyIdSql} = ${b.id}`)
+      : b.kind === "periode" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND ${receivedMonthSql} = ${b.month}`
+      : b.kind === "bron" ? sql`${notDiscardedSql} AND ${notPurgedSql} AND documents.source = ${b.source}`
+      : sql`${notDiscardedSql} AND ${notPurgedSql}`; // "alles"
 
     // Sort by the sender's NAME, resolved through the same effective party id
     // the row and the `party` branch use — sorting on the raw column would

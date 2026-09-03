@@ -142,4 +142,72 @@ describe("documents.browse", () => {
       expect(res.total).toBe(bundle.count);
     }
   });
+
+  it("hides a purged document from every branch but its own", async () => {
+    const doc = await add(`${mark} purge-1`, { docType: `purge ${mark}` });
+    await caller().documents.purge({ id: doc.id, reason: "test" });
+
+    const inAlles = await caller().documents.browse({ branch: { kind: "alles" } });
+    expect(inAlles.rows.map((r) => r.id)).not.toContain(doc.id);
+
+    const inSoort = await caller().documents.browse({
+      branch: { kind: "soort", key: `purge ${mark}` } });
+    expect(inSoort.rows.map((r) => r.id)).not.toContain(doc.id);
+
+    const inList = await caller().documents.list({ limit: 200, includeDiscarded: true });
+    expect(inList.map((r) => r.id)).not.toContain(doc.id);
+
+    // Its own branch is where the record of what was destroyed stays findable.
+    // A record reachable only by typing a UUID is not a record.
+    const purged = await caller().documents.browse({
+      branch: { kind: "status", status: "purged" } });
+    expect(purged.rows.map((r) => r.id)).toContain(doc.id);
+  });
+
+  it("moves a document from its status branch to the purged one", async () => {
+    const count = async (status: string) => (await caller().documents.tree()).status
+      .find((s) => s.status === status)?.n ?? 0;
+    const purgedBefore = await count("purged");
+    const doc = await add(`${mark} purge-2`);
+    const inboxBefore = await count("inbox");
+    await caller().documents.purge({ id: doc.id });
+    // Both sides of the move, measured against the same fixture — a purged
+    // document must LEAVE its old branch, not merely appear in a new one.
+    expect(await count("purged")).toBe(purgedBefore + 1);
+    expect(await count("inbox")).toBe(inboxBefore - 1);
+  });
+
+  // THE INVARIANT documents-browse.test.ts already enforces for every branch:
+  // the tree's count and browse's total are one definition. A purge that left
+  // them disagreeing would show "12" over a table of 11.
+  it("keeps every tree count equal to its branch total after a purge", async () => {
+    const doc = await add(`${mark} purge-3`, { docType: `purge-inv ${mark}` });
+    await caller().documents.purge({ id: doc.id });
+    const tree = await caller().documents.tree();
+    for (const s of tree.soort) {
+      const got = await caller().documents.browse({ branch: { kind: "soort", key: s.key } });
+      expect(got.total).toBe(s.n);
+    }
+    for (const s of tree.status) {
+      const status = s.status as "inbox" | "filed" | "discarded" | "purged";
+      const got = await caller().documents.browse({ branch: { kind: "status", status } });
+      expect(got.total).toBe(s.n);
+    }
+  });
+
+  it("drops a purged document out of its bundle", async () => {
+    const doc = await add(`${mark} purge-4`);
+    const bundle = await caller().bundles.create({
+      name: `Purge bundel ${mark} ${crypto.randomUUID()}`, kind: "manual" });
+    await caller().bundles.addDocuments({ id: bundle.id, documentIds: [doc.id] });
+    expect((await caller().documents.browse({ branch: { kind: "bundel", id: bundle.id } }))
+      .rows.map((r) => r.id)).toContain(doc.id);
+    await caller().documents.purge({ id: doc.id });
+    const after = await caller().documents.browse({ branch: { kind: "bundel", id: bundle.id } });
+    expect(after.rows.map((r) => r.id)).not.toContain(doc.id);
+    // The zip's membership must agree with the table's, or the card downloads
+    // a file the page says is not there — and the zip route would 409 on it.
+    const listed = (await caller().bundles.list()).find((b) => b.id === bundle.id);
+    expect(listed?.count).toBe(after.total);
+  });
 });
