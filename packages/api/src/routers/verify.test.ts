@@ -261,6 +261,55 @@ describe("verify router", () => {
     expect((await c.verify.run()).purgedContentLeftovers).toBe(0);
   });
 
+  /**
+   * THE COUNT IS LEDGER-DRIVEN ALL THE WAY DOWN, not only in the id set it is
+   * handed. `verder_app` holds INSERT on document_purges, so a row vouching for
+   * a purge that never happened is one INSERT away — the same attack the
+   * "refuses to treat an orphan purge row as a purge" test below covers for the
+   * chain, aimed at the leftover count instead.
+   *
+   * It is a test the obvious one cannot replace: the case above is ledger-backed
+   * AND has both leftovers, so it counts 1 under either reading of the
+   * predicate. Only an orphan row with surviving chunks separates
+   * `inLedgerSet AND (text OR chunks)` from the operator-precedence reading
+   * `(inLedgerSet AND text) OR chunks`, which counts any purge row whose chunks
+   * survive no matter who wrote it.
+   */
+  it("does not count leftovers under an orphan purge row", async () => {
+    const c = caller();
+    // A genuine, fully-swept purge: purgedEntityIds must be non-empty or the
+    // count short-circuits to 0 and the test proves nothing.
+    const real = await mkVaultDoc("Echte purge naast de wees");
+    await c.documents.purge({ id: real.id });
+    const before = (await c.verify.run()).purgedContentLeftovers;
+
+    const orphan = await mkVaultDoc("Wees-purge met chunk");
+    const admin = createDb(ADMIN_URL);
+    const worker = createDb(WORKER_URL);
+    try {
+      // Bytes stay on disk: this document was never purged, so the chain must
+      // stay green and the only thing under test is the leftover count.
+      await admin.db.execute(sql`INSERT INTO document_purges
+        (document_id, sha256, size_bytes, reason, created_by)
+        VALUES (${orphan.id}, ${orphan.sha256}, ${orphan.sizeBytes},
+                'geen echte purge', ${userId})`);
+      await worker.db.execute(sql`INSERT INTO search_chunks
+        (entity_type, entity_id, chunk_index, title, body, source_hash)
+        VALUES ('document', ${orphan.id}, 0, 'Wees-purge met chunk',
+                ${'inhoud die nooit gepurged is'}, 'orphan')`);
+
+      const res = await c.verify.run();
+      expect(res.purgedContentLeftovers).toBe(before);
+    } finally {
+      await admin.db.execute(
+        sql`DELETE FROM document_purges WHERE document_id = ${orphan.id}`);
+      await admin.db.execute(
+        sql`DELETE FROM search_chunks WHERE entity_id = ${orphan.id}`);
+      await admin.pool.end();
+      await worker.pool.end();
+    }
+  });
+
   // The whole reason this shape was chosen over deleting the row: an entry's
   // ledgered payload carries documentIds, and entry_documents is untouched.
   it("stays green when the purged document is cited by a logbook entry", async () => {

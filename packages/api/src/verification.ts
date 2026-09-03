@@ -288,11 +288,18 @@ async function countPurgedContentLeftovers(
     .from(schema.documentPurges)
     .where(and(
       inArray(schema.documentPurges.documentId, [...purgedEntityIds]),
-      sql`EXISTS (SELECT 1 FROM document_texts t
-                  WHERE t.document_id = document_purges.document_id)
-       OR EXISTS (SELECT 1 FROM search_chunks c
-                  WHERE c.entity_type = 'document'
-                    AND c.entity_id = document_purges.document_id)`));
+      // THE OUTER PARENTHESES AROUND THE OR ARE LOAD-BEARING. Both EXISTS
+      // clauses reach drizzle as ONE raw operand, and drizzle parenthesises
+      // the and() list as a whole and never its operands — so without them
+      // AND binds tighter than OR and the emitted predicate reads
+      // `(inLedgerSet AND text) OR chunks`, counting ANY document_purges row
+      // whose chunks survive, ledger-backed or not. That is precisely the
+      // discipline the doc comment above claims to enforce.
+      sql`(EXISTS (SELECT 1 FROM document_texts t
+                   WHERE t.document_id = document_purges.document_id)
+        OR EXISTS (SELECT 1 FROM search_chunks c
+                   WHERE c.entity_type = 'document'
+                     AND c.entity_id = document_purges.document_id))`));
   return row.n;
 }
 
