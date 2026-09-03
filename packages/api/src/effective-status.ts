@@ -25,6 +25,20 @@ export const effectiveDocStatusSql: SQL<string> = sql`COALESCE((
 export const notDiscardedSql: SQL = sql`${effectiveDocStatusSql} IS DISTINCT FROM 'discarded'`;
 
 /**
+ * Whether a document's content has been destroyed.
+ *
+ * A purge is a row in its own table rather than a status, so it needs its own
+ * predicate — and it needs one everywhere `notDiscardedSql` is used, because a
+ * purged document is gone in a stronger sense than a discarded one: its bytes,
+ * its extracted text and its chunks no longer exist. Like every expression in
+ * this file it assumes the query selects FROM documents, unaliased.
+ */
+export const purgedSql: SQL = sql`EXISTS (
+  SELECT 1 FROM document_purges p WHERE p.document_id = documents.id)`;
+
+export const notPurgedSql: SQL = sql`NOT ${purgedSql}`;
+
+/**
  * A document's soort as it actually stands.
  *
  * Unlike status, a docType correction on document_status_changes can be
