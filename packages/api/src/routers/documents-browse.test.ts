@@ -125,8 +125,9 @@ describe("documents.browse", () => {
     for (const st of tree.status) {
       // tree.status's status column is typed as a bare `string` (it comes
       // straight off effectiveDocStatusSql), but it is always one of the
-      // three doc_status enum values in practice.
-      const status = st.status as "inbox" | "filed" | "discarded";
+      // four doc_status branch values in practice — "purged" included, since
+      // purgedRows is appended onto statusRows there.
+      const status = st.status as "inbox" | "filed" | "discarded" | "purged";
       const res = await caller().documents.browse({ branch: { kind: "status", status } });
       expect(res.total).toBe(st.n);
     }

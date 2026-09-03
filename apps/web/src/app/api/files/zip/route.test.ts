@@ -6,7 +6,9 @@ import { TRPCError } from "@trpc/server";
 
 type Doc = { id: string; sha256: string; mime: string; effectiveTitle: string;
   effectiveDocType: string | null; effectiveStatus: string; sizeBytes: number;
-  receivedAt: Date; effectivePartyId: string | null };
+  receivedAt: Date; effectivePartyId: string | null;
+  purge: { at: Date; reason: string | null; sha256: string; sizeBytes: number;
+    bytesStillOnDisk: boolean } | null };
 
 type Bundle = { id: string; name: string; documentIds: string[]; broken: string | null };
 
@@ -64,7 +66,8 @@ const seed = async (title: string) => {
   const id = crypto.randomUUID();
   docs.set(id, { id, sha256, mime: "application/pdf", effectiveTitle: title,
     effectiveDocType: "brief", effectiveStatus: "filed", sizeBytes: 12,
-    receivedAt: new Date("2026-08-01T10:00:00Z"), effectivePartyId: null });
+    receivedAt: new Date("2026-08-01T10:00:00Z"), effectivePartyId: null,
+    purge: null });
   return id;
 };
 
@@ -99,13 +102,33 @@ describe("POST /api/files/zip", () => {
     const gone = crypto.randomUUID();
     docs.set(gone, { id: gone, sha256: "f".repeat(64), mime: "application/pdf",
       effectiveTitle: "Zoek", effectiveDocType: null, effectiveStatus: "filed",
-      sizeBytes: 10, receivedAt: new Date(), effectivePartyId: null });
+      sizeBytes: 10, receivedAt: new Date(), effectivePartyId: null, purge: null });
     const res = await POST(form([good, gone]));
     expect(res.status).toBe(409);
     expect(await res.text()).toContain("Zoek");
     // The status check alone only implies nothing was streamed. This makes
     // it a check rather than an inference: a 409 whose Content-Type were
     // still application/zip would mean an archive body escaped anyway.
+    expect(res.headers.get("Content-Type")).not.toBe("application/zip");
+  });
+
+  // Finding 1: the purge branch (`if (doc.purge) { ... continue; }`) sat
+  // before the readFile call with zero coverage — verified only by reading
+  // the code. A stale ?ids= list from an open tab can still name a purged
+  // document, and it must be reported as purged, in Dutch, not as a generic
+  // missing file.
+  it("reports a purged document as purged, not as a generic missing file", async () => {
+    const good = await seed("Aanwezig");
+    const purgedId = crypto.randomUUID();
+    docs.set(purgedId, { id: purgedId, sha256: "e".repeat(64), mime: "application/pdf",
+      effectiveTitle: "Verwijderd stuk", effectiveDocType: null, effectiveStatus: "filed",
+      sizeBytes: 10, receivedAt: new Date(), effectivePartyId: null,
+      purge: { at: new Date(), reason: "dubbel", sha256: "e".repeat(64),
+        sizeBytes: 10, bytesStillOnDisk: false } });
+    const res = await POST(form([good, purgedId]));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.missing).toContain("Verwijderd stuk (definitief verwijderd)");
     expect(res.headers.get("Content-Type")).not.toBe("application/zip");
   });
 
