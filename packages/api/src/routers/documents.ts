@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { sha256Hex } from "@verder/core";
 import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
@@ -505,6 +506,38 @@ export const documentsRouter = router({
     id: z.string().uuid(), reason: z.string().trim().min(1).optional(),
   })).mutation(async ({ ctx, input }) => {
     const vaultDir = process.env.VAULT_DIR ?? "./vault-files";
+    /*
+     * A PURGE MUST NOT SILENCE A file-hash-mismatch, and it would.
+     *
+     * /verify re-hashes every vault file, so altered bytes turn it red; the
+     * purged branch then compares two DATABASE columns and never touches the
+     * disk, so purging that document turns /verify green again and the record
+     * says only "destroyed" — never "altered, then destroyed". Refuse instead
+     * of recording it: bytes that do not match the ledger are evidence of
+     * tampering, and destroying them is worse than leaving them where /verify
+     * keeps pointing at them.
+     *
+     * Before the transaction, because the answer decides whether there is one.
+     *
+     * A read that FAILS is not a mismatch and must not refuse. ENOENT is the
+     * ordinary case (a repeat purge, or the file was cleaned up by hand) and
+     * there is nothing left to protect; any other read error leaves the bytes
+     * on disk anyway — the unlink below fails the same way — where
+     * effectiveDocument reports them as bytesStillOnDisk and /verify counts
+     * them. Refusing on an unreadable file would instead make the tombstone
+     * unwritable with no repair.
+     */
+    const [pre] = await ctx.db.select({ sha256: schema.documents.sha256 })
+      .from(schema.documents).where(eq(schema.documents.id, input.id));
+    if (pre) {
+      const onDisk = await readFile(readFilePath(vaultDir, pre.sha256))
+        .then((buf) => sha256Hex(buf), () => null);
+      if (onDisk !== null && onDisk !== pre.sha256) throw new TRPCError({
+        code: "CONFLICT",
+        message: "Het bestand in de kluis komt niet overeen met wat het dossier "
+          + "heeft vastgelegd. Het wordt daarom niet vernietigd — controleer eerst /verify.",
+      });
+    }
     const sha = await ctx.db.transaction(async (tx) => {
       // The same per-document serialisation `update` uses: two clicks landing
       // together would otherwise both find no purge row and both insert, and
@@ -562,8 +595,15 @@ export const documentsRouter = router({
      * second click repairs.
      *
      * ENOENT is success, not an error: the file is gone, which is the goal.
+     * Anything else IS still swallowed — the leftover is detected either way,
+     * by /verify and by the tombstone's own retry button — but it is logged,
+     * because a persistently failing unlink (a read-only mount, a permission
+     * change) is a real fault and an empty catch makes it invisible.
      */
-    await unlink(readFilePath(vaultDir, sha)).catch(() => {});
+    await unlink(readFilePath(vaultDir, sha)).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return;
+      console.warn(`documents.purge: unlink failed for ${sha} — ${String(err)}`);
+    });
     return effectiveDocument(ctx.db, input.id);
   }),
 

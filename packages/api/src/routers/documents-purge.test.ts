@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -58,7 +58,7 @@ describe("documents.purge", () => {
     await writer.execute(sql`INSERT INTO search_chunks
       (entity_type, entity_id, chunk_index, title, body, source_hash)
       VALUES ('document', ${doc.id}, 0, ${label}, ${'geheime inhoud'}, 'h')`);
-    return { doc, sha, abs };
+    return { doc, sha, abs, buf };
   }
 
   it("destroys the bytes, the text and the chunks, and records one purge", async () => {
@@ -121,12 +121,14 @@ describe("documents.purge", () => {
   // silent and permanent.
   it("reports bytes still on disk, and a repeat purge clears them", async () => {
     const c = caller();
-    const { doc, sha } = await makeDoc("Achtergebleven bytes");
+    const { doc, sha, buf } = await makeDoc("Achtergebleven bytes");
     await c.documents.purge({ id: doc.id });
-    // Simulate the failed unlink by putting the file back.
+    // Simulate the failed unlink by putting the file back — the ORIGINAL bytes,
+    // which is what a failed unlink actually leaves. Arbitrary bytes would now
+    // be refused by the pre-purge hash check, and would be testing that instead.
     const abs = readFilePath(vaultDir, sha);
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, Buffer.from("resurrected"));
+    await writeFile(abs, buf);
     const stale = await c.documents.get({ id: doc.id });
     expect(stale.purge?.bytesStillOnDisk).toBe(true);
     const retried = await c.documents.purge({ id: doc.id });
@@ -170,6 +172,57 @@ describe("documents.purge", () => {
     const { doc } = await makeDoc("Nog springlevend");
     const got = await c.documents.get({ id: doc.id });
     expect(got.purge).toBeNull();
+  });
+
+  /**
+   * A PURGE MUST NOT SILENCE A file-hash-mismatch. /verify re-hashes every
+   * vault file, so altered bytes turn it red; the purged branch then compares
+   * two DATABASE columns and never touches the disk, so purging the document
+   * would turn /verify green again and the record would say only "destroyed",
+   * never "altered, then destroyed".
+   *
+   * Refused rather than recorded: bytes that do not match the ledger are
+   * evidence of tampering, and destroying them is worse than leaving them
+   * where /verify keeps pointing at them. Recording the mismatch instead would
+   * need a column, and migration 0034 is already applied.
+   */
+  it("refuses to destroy bytes that do not match what the dossier recorded", async () => {
+    const c = caller();
+    const { doc, abs } = await makeDoc("Aangetast in de kluis");
+    await writeFile(abs, Buffer.from("iemand heeft hieraan gezeten"));
+
+    await expect(c.documents.purge({ id: doc.id })).rejects.toThrow(/kluis/i);
+
+    // Nothing at all happened: no record, no event, and above all the bytes
+    // are still there for /verify to keep reporting.
+    expect(await exists(abs)).toBe(true);
+    expect(await db.select().from(schema.documentPurges)
+      .where(eq(schema.documentPurges.documentId, doc.id))).toHaveLength(0);
+    expect(await db.select().from(schema.ledgerEvents)
+      .where(and(eq(schema.ledgerEvents.eventType, "document.purged"),
+        eq(schema.ledgerEvents.entityId, doc.id)))).toHaveLength(0);
+    expect(await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id))).toHaveLength(1);
+  });
+
+  it("purges normally when the bytes still match", async () => {
+    const c = caller();
+    const { doc, abs } = await makeDoc("Ongeschonden");
+    const res = await c.documents.purge({ id: doc.id });
+    expect(res.purge).not.toBeNull();
+    expect(await exists(abs)).toBe(false);
+  });
+
+  // There is nothing left to protect, so the check must not stand in the way:
+  // this is the repairable half-done state /verify already reports (a purge
+  // whose ledger event exists and whose bytes are gone), and the second click
+  // still has both DELETEs and the tombstone to write.
+  it("purges normally when the file is already gone", async () => {
+    const c = caller();
+    const { doc, abs } = await makeDoc("Bestand al weg");
+    await unlink(abs);
+    const res = await c.documents.purge({ id: doc.id, reason: "handmatig opgeruimd" });
+    expect(res.purge).toMatchObject({ reason: "handmatig opgeruimd" });
   });
 
   it("is NOT_FOUND for an unknown document", async () => {
