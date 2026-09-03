@@ -125,7 +125,8 @@ describe("documents.purge", () => {
     await c.documents.purge({ id: doc.id });
     // Simulate the failed unlink by putting the file back — the ORIGINAL bytes,
     // which is what a failed unlink actually leaves. The altered-bytes variant
-    // of this same repair is the last test in this file.
+    // of this same repair is "still repairs an already-purged document whose
+    // bytes came back altered".
     const abs = readFilePath(vaultDir, sha);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, buf);
