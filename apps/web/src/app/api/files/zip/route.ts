@@ -85,6 +85,10 @@ async function archive(
   const loaded: { doc: DocRow; bytes: Buffer }[] = [];
   const gone: string[] = [];
   for (const doc of docs) {
+    // A purged document should never reach here — bundleWhere and browse both
+    // exclude them — but a stale ?ids= list from an open tab can still name
+    // one. Say what actually happened rather than "bestand ontbreekt".
+    if (doc.purge) { gone.push(`${doc.effectiveTitle} (definitief verwijderd)`); continue; }
     try {
       loaded.push({ doc, bytes: await readFile(readFilePath(vaultDir, doc.sha256)) });
     } catch {
