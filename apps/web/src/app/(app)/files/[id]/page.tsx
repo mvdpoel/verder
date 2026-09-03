@@ -1,4 +1,5 @@
 import { serverCaller } from "@/lib/trpc-server";
+import { formatBytes } from "@/lib/format-bytes";
 import { orNotFound } from "@/lib/not-found";
 import { DocumentMetaForm } from "@/components/document-meta-form";
 import { DocumentPreview } from "@/components/document-preview";
@@ -47,7 +48,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           <Notice tone="signal">{purgeTombstoneLine(d.purge)}</Notice>
           <dl className="flex flex-col gap-2">
             <div><dt className="micro">Soort</dt><dd>{d.effectiveDocType ?? "Zonder soort"}</dd></div>
-            <div><dt className="micro">Grootte</dt><dd>{d.purge.sizeBytes} bytes</dd></div>
+            <div><dt className="micro">Grootte</dt><dd>{formatBytes(d.purge.sizeBytes)}</dd></div>
             <div><dt className="micro">sha256</dt><dd className="micro break-all">{d.purge.sha256}</dd></div>
           </dl>
           {/* Amber, and this one earns it: an unfinished action waiting on

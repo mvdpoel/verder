@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc-client";
 import { buttonClass } from "@/components/ui";
+import { formatBytes } from "@/lib/format-bytes";
 import { needsSniffing, previewKind, rowCountLabel } from "./preview-kind";
 
 export interface PreviewDoc {
@@ -20,14 +21,6 @@ const FRAME = { tall: "h-[70vh]", short: "h-48" } as const;
  * no edge at all — it reads as a hole rather than as a page.
  */
 const PAGE = "rounded-panel border border-edge";
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["kB", "MB", "GB"];
-  let value = bytes / 1024; let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
-}
 
 function DownloadLink({ doc }: { doc: PreviewDoc }) {
   return (
