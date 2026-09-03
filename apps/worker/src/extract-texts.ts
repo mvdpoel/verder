@@ -1,6 +1,7 @@
 import { inArray, isNull, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
+import { notPurgedSql } from "@verder/api/src/effective-status";
 import { UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME } from "@verder/parsers";
 import { readFile } from "node:fs/promises";
 import { storeDocumentText } from "./document-text";
@@ -61,10 +62,19 @@ export async function extractMissingTexts(
   })
     .from(schema.documents)
     .leftJoin(schema.documentTexts, eq(schema.documentTexts.documentId, schema.documents.id))
-    .where(sql`${schema.documentTexts.documentId} IS NULL OR (
+    // A purge deletes the document_texts row this query looks for, so without
+    // notPurgedSql a purged document qualifies for the first population FOREVER:
+    // every run counts it `failed` on a vault file that is gone on purpose, and
+    // in the repairable state where the unlink did not land it is re-extracted
+    // and the destroyed text is stored again. Same predicate, same reason, as
+    // pendingDocMeta — the two queries are twins and must stay twins.
+    // The fragment reads `documents.id` unaliased, which is what
+    // `.from(schema.documents)` emits.
+    .where(sql`(${schema.documentTexts.documentId} IS NULL OR (
       ${schema.documentTexts.extractor} = 'none'
       AND (${schema.documents.mime} LIKE 'image/%'
-        OR ${inArray(schema.documents.mime, RETRYABLE_MIMES)}))`)
+        OR ${inArray(schema.documents.mime, RETRYABLE_MIMES)})))
+      AND ${notPurgedSql}`)
     .orderBy(sql`${schema.documents.receivedAt} ASC`)
     .limit(opts.limit ?? 100_000);
 

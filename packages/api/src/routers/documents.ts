@@ -516,29 +516,40 @@ export const documentsRouter = router({
       if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
       const [already] = await tx.select().from(schema.documentPurges)
         .where(eq(schema.documentPurges.documentId, input.id));
-      // A no-op, not an error: one decision must not appear in the record
-      // twice, and the button is one click Martin can land twice. The FIRST
-      // reason stands — a second call may not rewrite the record. It still
-      // falls through to the unlink below, which is the repair path for a
-      // purge whose bytes survived the first attempt.
-      if (already) return already.sha256;
-      await tx.insert(schema.documentPurges).values({
-        documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
-        reason: input.reason ?? null, createdBy: ctx.userId });
-      await appendLedgerEvent(tx, {
-        eventType: "document.purged", entityType: "document", entityId: doc.id,
-        payload: documentPurgePayload({ documentId: doc.id, sha256: doc.sha256,
-          sizeBytes: doc.sizeBytes, reason: input.reason ?? null }) });
-      // The derived layer, destroyed in the same transaction as the record.
-      // These are the two tables that hold the document's CONTENT outside the
-      // vault: without this the button is a lie, and `reindex` would rebuild
-      // the chunk from the text on its next run.
+      // A no-op RECORD, not an error: one decision must not appear in the
+      // record twice, and the button is one click Martin can land twice. The
+      // FIRST reason stands — a second call may not rewrite the record.
+      if (!already) {
+        await tx.insert(schema.documentPurges).values({
+          documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
+          reason: input.reason ?? null, createdBy: ctx.userId });
+        await appendLedgerEvent(tx, {
+          eventType: "document.purged", entityType: "document", entityId: doc.id,
+          payload: documentPurgePayload({ documentId: doc.id, sha256: doc.sha256,
+            sizeBytes: doc.sizeBytes, reason: input.reason ?? null }) });
+      }
+      /*
+       * The derived layer, destroyed in the same transaction as the record.
+       * These are the two tables that hold the document's CONTENT outside the
+       * vault: without this the button is a lie, and `reindex` would rebuild
+       * the chunk from the text on its next run.
+       *
+       * BOTH DELETES RUN ON THE REPEAT CLICK TOO, not only the unlink below.
+       * Three writers can put back what a purge destroyed — suggest.docmeta's
+       * OCR, the search drain's embed, extract-texts — and every guard against
+       * them is check-then-act, so the window is narrowed and not closed. A
+       * purge writes neither `documents` nor `document_status_changes`, so no
+       * search_outbox trigger fires and nothing re-enqueues the document
+       * afterwards: whatever lands in that window stays. This is the repair,
+       * and it must sweep all three kinds of leftover or the retry button only
+       * fixes the one that happens to be visible.
+       */
       await tx.delete(schema.documentTexts)
         .where(eq(schema.documentTexts.documentId, doc.id));
       await tx.delete(schema.searchChunks)
         .where(and(eq(schema.searchChunks.entityType, "document"),
           eq(schema.searchChunks.entityId, doc.id)));
-      return doc.sha256;
+      return already ? already.sha256 : doc.sha256;
     });
     /*
      * THE UNLINK IS AFTER THE COMMIT AND THAT ORDERING IS NOT INTERCHANGEABLE.

@@ -134,6 +134,37 @@ describe("documents.purge", () => {
     expect(await exists(abs)).toBe(false);
   });
 
+  /**
+   * THE RETRY BUTTON IS THE REPAIR FOR ALL THREE KINDS OF LEFTOVER, not only
+   * for bytes. Both guards that keep a concurrent writer out of these tables
+   * (storeDocumentText, indexEntity's re-check after the embed) are
+   * check-then-act, so the window is narrow and not zero — and a purge writes
+   * neither `documents` nor `document_status_changes`, so nothing re-enqueues
+   * the document afterwards and nothing notices on its own. A second click has
+   * to sweep whatever landed, which is why both DELETEs run on the no-op path.
+   */
+  it("re-runs both deletes on a repeat purge, not only the unlink", async () => {
+    const c = caller();
+    const { doc, sha } = await makeDoc("Nagekomen tekst");
+    await c.documents.purge({ id: doc.id });
+
+    // A writer that was already running when the purge committed.
+    await writer.execute(sql`INSERT INTO document_texts
+      (document_id, sha256, text, extractor, char_count)
+      VALUES (${doc.id}, ${sha}, ${'teruggekomen inhoud'}, 'none', 19)`);
+    await writer.execute(sql`INSERT INTO search_chunks
+      (entity_type, entity_id, chunk_index, title, body, source_hash)
+      VALUES ('document', ${doc.id}, 0, 'Nagekomen tekst', ${'teruggekomen inhoud'}, 'h2')`);
+
+    await c.documents.purge({ id: doc.id });
+
+    expect(await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id))).toHaveLength(0);
+    expect(await db.select().from(schema.searchChunks)
+      .where(and(eq(schema.searchChunks.entityType, "document"),
+        eq(schema.searchChunks.entityId, doc.id)))).toHaveLength(0);
+  });
+
   it("reports purge: null for a document nobody purged", async () => {
     const c = caller();
     const { doc } = await makeDoc("Nog springlevend");

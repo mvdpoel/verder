@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { access, readFile } from "node:fs/promises";
 import { canonicalJson, sha256Hex, verifyChain, type ChainEvent, type VerifyResult } from "@verder/core";
 import { schema, type Db } from "@verder/db";
@@ -24,6 +24,20 @@ export type FullVerificationResult = VerifyResult & {
    * an unlink failed — repairable by purging the document again.
    */
   purgedFilesOnDisk: number;
+  /**
+   * Of those, how many still have a `document_texts` row or any `search_chunks`
+   * row — the two tables that hold a document's CONTENT outside the vault.
+   *
+   * THE SAME LAW purgedFilesOnDisk carries, applied to the rest of what a purge
+   * destroys: the leftover is DETECTED, not assumed away. Three writers can put
+   * these rows back after the purge transaction commits (suggest.docmeta's OCR,
+   * the search drain's embed, extract-texts), each of them guarded by a
+   * check-then-act that narrows the window without closing it — and a purge
+   * fires no search_outbox trigger, so nothing re-enqueues the document and
+   * nothing notices on its own. Non-zero means the text or the search entry of
+   * a definitief verwijderd document is back; purging it again is the repair.
+   */
+  purgedContentLeftovers: number;
 };
 
 /**
@@ -251,7 +265,35 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
     onFileChecked: () => { checkedFiles++; },
     onFilePurged: (stillOnDisk) => { purgedFiles++; if (stillOnDisk) purgedFilesOnDisk++; } }));
   return { ...res, headHash: rows.at(-1)?.eventHash ?? null,
-    checkedFiles, purgedFiles, purgedFilesOnDisk };
+    checkedFiles, purgedFiles, purgedFilesOnDisk,
+    purgedContentLeftovers: await countPurgedContentLeftovers(db, purgedEntityIds) };
+}
+
+/**
+ * How many purged documents still hold content in a derived table.
+ *
+ * Driven by the LEDGER-derived id set, never by `document_purges` alone — the
+ * same discipline the document.ingested branch follows, and for the same
+ * reason: `verder_app` holds INSERT on that table, so a row by itself proves
+ * nothing about whether a purge happened.
+ *
+ * One query rather than a per-event check: this is a property of the store as
+ * it stands now, not of any single event, and the ids are already in hand.
+ */
+async function countPurgedContentLeftovers(
+  db: Db, purgedEntityIds: Set<string>,
+): Promise<number> {
+  if (purgedEntityIds.size === 0) return 0;
+  const [row] = await db.select({ n: sql<number>`count(*)::int` })
+    .from(schema.documentPurges)
+    .where(and(
+      inArray(schema.documentPurges.documentId, [...purgedEntityIds]),
+      sql`EXISTS (SELECT 1 FROM document_texts t
+                  WHERE t.document_id = document_purges.document_id)
+       OR EXISTS (SELECT 1 FROM search_chunks c
+                  WHERE c.entity_type = 'document'
+                    AND c.entity_id = document_purges.document_id)`));
+  return row.n;
 }
 
 /**

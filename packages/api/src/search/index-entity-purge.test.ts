@@ -74,4 +74,41 @@ describe("indexEntity on a purged document", () => {
     await indexEntity({ db: worker, embed: fakeEmbed() }, "document", doc.id);
     expect(await chunks(doc.id)).toHaveLength(0);
   });
+
+  /**
+   * THE WINDOW THE renderRow CHECK CANNOT SEE. renderRow asks about the purge,
+   * then the EMBED runs — a network call to Ollama, seconds under load — and
+   * only then are the chunks written. A purge committing inside that gap
+   * deletes chunks that do not exist yet, and this function writes them back
+   * afterwards.
+   *
+   * Nothing repairs it on its own: a purge writes neither `documents` nor
+   * `document_status_changes`, so no search_outbox trigger fires and the
+   * destroyed document sits in /search and the palette until somebody hand-runs
+   * `reindex`. The purge lands INSIDE the fake port here, which is exactly the
+   * ordering production produces.
+   */
+  it("writes no chunks when the purge commits during the embed", async () => {
+    const c = appRouter.createCaller(createContext({ db: app, userId }));
+    const buf = Buffer.from(`race-${crypto.randomUUID()}`);
+    const sha = sha256Hex(buf);
+    const abs = join(vaultDir, relPathFor(sha));
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, buf);
+    const doc = await c.documents.registerUpload({ sha256: sha, sizeBytes: buf.length,
+      mime: "text/plain", title: "Verdwijnt tijdens het indexeren", source: "upload",
+      sourceRef: RUN_REF, receivedAt: new Date() });
+
+    const embedThenPurge: EmbedPort = {
+      embed: async (texts: string[]) => {
+        await c.documents.purge({ id: doc.id, reason: "tijdens het indexeren" });
+        return texts.map(() =>
+          Array.from({ length: EMBED_DIMENSIONS }, (_, i) => (i === 0 ? 1 : 0)));
+      },
+    };
+    const res = await indexEntity({ db: worker, embed: embedThenPurge }, "document", doc.id);
+
+    expect(await chunks(doc.id)).toHaveLength(0);
+    expect(res).toEqual({ chunks: 0, embedded: 0, unchanged: 0 });
+  });
 });

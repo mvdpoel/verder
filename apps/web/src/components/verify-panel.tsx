@@ -43,6 +43,15 @@ export function VerifyPanel() {
                 <p className="text-[13.5px] font-light leading-relaxed text-okay">
                   ✔ Alles klopt. <span className="font-mono">{run.data.count}</span> gebeurtenissen gecontroleerd, <span className="font-mono">{run.data.checkedFiles}</span> bestanden opnieuw gehasht{run.data.purgedFiles > 0 && <>, <span className="font-mono">{run.data.purgedFiles}</span> definitief verwijderd</>}.
                   {run.data.purgedFilesOnDisk > 0 && <> <span className="text-attn">{run.data.purgedFilesOnDisk} daarvan staan nog op schijf — verwijder ze opnieuw.</span></>}
+                  {/*
+                    The bytes are only one of the three things a purge destroys.
+                    A document_texts row or a search chunk that came back is the
+                    same unfinished action wearing another hat, and it is just as
+                    invisible: nothing re-enqueues a purged document, so without
+                    this line the text of a definitief verwijderd document sits
+                    in the database and in /search with every surface green.
+                  */}
+                  {run.data.purgedContentLeftovers > 0 && <> <span className="text-attn">Van {run.data.purgedContentLeftovers} daarvan staat de tekst of de zoekregel er nog — verwijder ze opnieuw.</span></>}
                 </p>
                 <p className="break-all font-mono text-[11px] leading-relaxed tracking-[0.04em] text-ink-dim">
                   Kop van de keten: <span className="text-okay">{run.data.headHash}</span>

@@ -14,6 +14,10 @@ import { assertSafeToTruncate } from "../test-db-guard";
 
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+// document_texts and search_chunks are worker-owned (0016): verder_app holds
+// SELECT and, since 0034, DELETE — never INSERT. The leftover test below has to
+// write them the way the racing production writers do.
+const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
 describe("verify router", () => {
   let db: Db; let userId: string; let vaultDir: string;
@@ -217,6 +221,44 @@ describe("verify router", () => {
       // first — an order dependency this cleanup removes.
       await unlink(abs);
     }
+  });
+
+  /**
+   * THE LEFTOVER IS DETECTED, NOT ASSUMED AWAY — the law this design already
+   * applies to the vault file, applied to the other two tables the purge
+   * destroys. Three writers can put them back (suggest.docmeta's OCR, the
+   * search drain's embed, extract-texts), every guard against them is
+   * check-then-act, and a purge fires no search_outbox trigger, so nothing
+   * notices on its own. /verify is the surface that has to say so.
+   */
+  it("counts a purged document whose text or chunks came back", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Purge leftover rows");
+    await c.documents.purge({ id: doc.id });
+    expect((await c.verify.run()).purgedContentLeftovers).toBe(0);
+
+    const worker = createDb(WORKER_URL);
+    try {
+      await worker.db.execute(sql`INSERT INTO document_texts
+        (document_id, sha256, text, extractor, char_count)
+        VALUES (${doc.id}, ${doc.sha256}, ${'teruggekomen inhoud'}, 'none', 19)`);
+      await worker.db.execute(sql`INSERT INTO search_chunks
+        (entity_type, entity_id, chunk_index, title, body, source_hash)
+        VALUES ('document', ${doc.id}, 0, 'Purge leftover rows',
+                ${'teruggekomen inhoud'}, 'leftover')`);
+      const res = await c.verify.run();
+      // Still green — the CHAIN is intact, and this is a repairable leftover
+      // rather than tampering. It is disclosed, not turned into a failure.
+      expect(res.ok).toBe(true);
+      expect(res.purgedContentLeftovers).toBe(1);
+    } finally {
+      await worker.pool.end();
+    }
+
+    // The repair, which is also this test's cleanup: a second purge re-runs
+    // both DELETEs.
+    await c.documents.purge({ id: doc.id });
+    expect((await c.verify.run()).purgedContentLeftovers).toBe(0);
   });
 
   // The whole reason this shape was chosen over deleting the row: an entry's

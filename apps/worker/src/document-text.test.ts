@@ -103,6 +103,34 @@ describe("storeDocumentText", () => {
     await pool.end();
   });
 
+  /**
+   * THE RACE THE PURGE CANNOT WIN ON ITS OWN. suggest.docmeta reads the vault
+   * file, then OCRs it — seconds to minutes — and only then calls this. A purge
+   * committing inside that window deletes a document_texts row that does not
+   * exist yet, and the job puts the destroyed document's full text back
+   * permanently. That is likeliest for a JUST-ARRIVED document, which is
+   * exactly the "per ongeluk gescand" case the button exists for.
+   *
+   * The guard lives here rather than at each caller because this is the one
+   * function both text writers (the docmeta job and extract-texts) go through.
+   */
+  it("refuses to write text for a document that was purged mid-extraction", async () => {
+    const { db, pool } = createDb(DB_URL);
+    const { doc, unique } = await insertDoc(db, await fixture("text-letter.pdf"));
+    const [u] = await db.insert(schema.users)
+      .values({ email: `${RUN_REF}-purger@test.local`, name: "Martin" }).returning();
+    await db.insert(schema.documentPurges).values({
+      documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
+      reason: null, createdBy: u.id });
+
+    await expect(storeDocumentText({ db }, doc, unique)).rejects.toThrow(/purged/);
+
+    const rows = await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id));
+    expect(rows).toHaveLength(0);
+    await pool.end();
+  });
+
   it("leaves the docmeta sweep's backlog exactly as it found it", async () => {
     // Zero owing, and NOT because this file settles anything by hand — because
     // storeDocumentText writes a row for EVERY attempt, extractor "none" and an

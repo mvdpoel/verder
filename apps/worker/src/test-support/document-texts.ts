@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { notPurgedSql } from "@verder/api/src/effective-status";
 
 /**
  * Leave every document a test ingested under `sourceRef` the `document_texts`
@@ -33,8 +34,12 @@ export async function settleDocumentTexts(db: Db, sourceRef: string): Promise<nu
     .from(schema.documents)
     .leftJoin(schema.documentTexts,
       eq(schema.documentTexts.documentId, schema.documents.id))
+    // A purged document owes the sweep nothing — pendingDocMeta already
+    // excludes it — and writing it the row this helper writes would put back a
+    // (empty, but real) document_texts row the purge deleted on purpose. Same
+    // law as the guard in storeDocumentText, spelled where the shortcut is.
     .where(and(eq(schema.documents.sourceRef, sourceRef),
-      isNull(schema.documentTexts.documentId)));
+      isNull(schema.documentTexts.documentId), notPurgedSql));
   if (pending.length === 0) return 0;
   await db.insert(schema.documentTexts).values(pending.map((d) => ({
     documentId: d.id, sha256: d.sha256, text: "", charCount: 0,

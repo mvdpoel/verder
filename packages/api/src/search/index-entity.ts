@@ -308,6 +308,31 @@ export async function indexEntity(
       pending.map((c) => asDocument(`${c.title}\n${c.body}`)));
   }
 
+  /*
+   * ASK AGAIN, AFTER THE EMBED. renderRow's purge check ran before a NETWORK
+   * CALL that takes seconds under load, and a purge committing inside that gap
+   * deletes chunks that do not exist yet — this loop would then write the
+   * destroyed document's title and text straight back. Nothing repairs that on
+   * its own: a purge writes neither `documents` nor `document_status_changes`,
+   * so no search_outbox trigger fires and the document stays in /search and the
+   * ⌘K palette until somebody hand-runs `reindex`.
+   *
+   * Still check-then-act, so the window is narrowed and not closed — the purge
+   * mutation re-runs both DELETEs on a repeat click, which is the repair for
+   * whatever lands in what is left of it.
+   */
+  if (entityType === "document" && (pending.length > 0 || metadataOnly.length > 0)) {
+    const [purgedNow] = await deps.db.select({ id: schema.documentPurges.id })
+      .from(schema.documentPurges)
+      .where(eq(schema.documentPurges.documentId, entityId));
+    if (purgedNow) {
+      await deps.db.delete(schema.searchChunks).where(and(
+        eq(schema.searchChunks.entityType, entityType),
+        eq(schema.searchChunks.entityId, entityId)));
+      return { chunks: 0, embedded: 0, unchanged: 0 };
+    }
+  }
+
   let embedded = 0;
   for (const [i, chunk] of pending.entries()) {
     const embedding = vectors[i] ?? null;

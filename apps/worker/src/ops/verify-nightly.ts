@@ -16,7 +16,10 @@ try {
   const result = await runFullVerification(db, vaultDir);
   await recordRun(db, "nightly-verify", result.ok ? "ok" : "error", result);
   if (result.ok) {
-    console.log(`nightly-verify: OK — ${result.count} events, ${result.checkedFiles} files checked, ${result.purgedFiles} purged (${result.purgedFilesOnDisk} still on disk), head=${result.headHash}`);
+    // The two leftover counts are printed on a green run ON PURPOSE: they are
+    // repairable states nothing else reports, and a cron log that only speaks
+    // up when the chain breaks would never mention them.
+    console.log(`nightly-verify: OK — ${result.count} events, ${result.checkedFiles} files checked, ${result.purgedFiles} purged (${result.purgedFilesOnDisk} still on disk, ${result.purgedContentLeftovers} with text or chunks left), head=${result.headHash}`);
   } else {
     console.error(`nightly-verify: BROKEN at seq ${result.brokenAtSeq} (${result.reason})`);
     process.exitCode = 1;
