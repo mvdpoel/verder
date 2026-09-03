@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
-import { notDiscardedSql } from "@verder/api/src/effective-status";
+import { notDiscardedSql, notPurgedSql } from "@verder/api/src/effective-status";
 
 /**
  * Documents whose text has never been extracted.
@@ -25,6 +25,13 @@ import { notDiscardedSql } from "@verder/api/src/effective-status";
  * Discarded documents are excluded via the effective status (document_status_changes
  * wins over documents.status, which reads "inbox" forever). IS DISTINCT FROM, not
  * <>: NULL <> 'discarded' is NULL and would drop every document with no status row.
+ *
+ * PURGED documents are excluded for a stronger reason than discarded ones, and
+ * it is a LOOP rather than a cosmetic miss: a purge deletes the document_texts
+ * row this query looks for, so a purged document would be pending forever and
+ * the sweep would send it to OCR a file that no longer exists, every minute,
+ * on the shared GPU. The convergence argument above does not cover a row that
+ * was deleted after it was written.
  */
 export async function pendingDocMeta(db: Db, limit: number): Promise<string[]> {
   const rows = (await db.execute(sql`
@@ -33,6 +40,7 @@ export async function pendingDocMeta(db: Db, limit: number): Promise<string[]> {
     LEFT JOIN ${schema.documentTexts} t ON t.document_id = documents.id
     WHERE t.document_id IS NULL
       AND ${notDiscardedSql}
+      AND ${notPurgedSql}
     ORDER BY documents.created_at ASC
     LIMIT ${limit}
   `)).rows as { id: string }[];

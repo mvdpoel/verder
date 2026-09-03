@@ -99,6 +99,35 @@ describe("pendingDocMeta", () => {
     expect(await pendingDocMeta(db, 2)).toHaveLength(2);
     expect(await pendingDocMeta(db, 1)).toHaveLength(1);
   });
+
+  /**
+   * THE LOOP THIS CLOSES, and it is not a cosmetic miss. pendingDocMeta selects
+   * documents with NO document_texts row, and a purge DELETES exactly that row.
+   * So without the purge filter the destroyed document is pending forever and
+   * the sweep sends it to OCR a file that no longer exists — every minute, on
+   * the GPU that is shared with the evals.
+   *
+   * The sweep's documented convergence argument ("storeDocumentText writes a
+   * row for EVERY attempt, including extractor 'none'") does NOT cover a row
+   * that was deleted afterwards.
+   */
+  it("never returns a purged document", async () => {
+    const [doc] = await db.insert(schema.documents).values({
+      sha256: crypto.randomUUID().replace(/-/g, "") + "0".repeat(32),
+      title: "Definitief verwijderd", mime: "text/plain", sizeBytes: 9,
+      source: "upload", sourceRef: RUN_REF, receivedAt: new Date(),
+    }).returning();
+    // No document_texts row — exactly the state a purge leaves behind.
+    expect(await pendingDocMeta(db, NO_PAGE_LIMIT)).toContain(doc.id);
+
+    const [u] = await db.insert(schema.users)
+      .values({ email: `${RUN_REF}-purger@test.local`, name: "Martin" }).returning();
+    await db.insert(schema.documentPurges).values({
+      documentId: doc.id, sha256: doc.sha256, sizeBytes: doc.sizeBytes,
+      reason: null, createdBy: u.id });
+
+    expect(await pendingDocMeta(db, NO_PAGE_LIMIT)).not.toContain(doc.id);
+  });
 });
 
 describe("makeEnqueueGuard", () => {
