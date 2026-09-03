@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
-import { writeFile, mkdir, unlink } from "node:fs/promises";
+import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { sql } from "drizzle-orm";
@@ -344,11 +344,49 @@ describe("verify router", () => {
       await admin.db.execute(sql`DELETE FROM ledger_events WHERE seq = ${ev.seq}`);
       const broken = await c.verify.run();
       expect(broken.ok).toBe(false);
+      // The REASON, not merely "not ok": the ingested branch falls through to
+      // the file read and reports the bytes missing, which is what proves the
+      // orphan row bought nothing. Asserting ok alone would also pass if the
+      // chain had simply broken elsewhere.
+      if (!broken.ok) expect(broken.reason).toBe("payload_hash_mismatch");
       // Restore, so the rest of this file's chain stays green.
       await admin.db.execute(sql`INSERT INTO ledger_events
         (seq, event_type, entity_type, entity_id, payload_hash, prev_hash, event_hash, created_at)
         VALUES (${ev.seq}, ${ev.event_type}, ${ev.entity_type}, ${ev.entity_id},
                 ${ev.payload_hash}, ${ev.prev_hash}, ${ev.event_hash}, ${ev.created_at})`);
+      expect((await c.verify.run()).ok).toBe(true);
+    } finally {
+      await admin.pool.end();
+    }
+  });
+
+  /**
+   * THE ATTACK ITSELF, rather than a proxy for it. The test above reaches the
+   * ledger-driven guard by DELETING a genuine purge's event, which only works
+   * because that event happens to be the chain head — a coincidence of
+   * ordering, not the shape an attacker produces. This is the real one:
+   * `verder_app` holds INSERT on document_purges, so destroying a vault file
+   * and vouching for it with a tombstone row that no ledger event backs is one
+   * INSERT away. It must buy nothing.
+   */
+  it("refuses to treat an orphan purge row as a purge", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Orphan purge row");
+    const abs = join(vaultDir, relPathFor(doc.sha256));
+    const bytes = await readFile(abs);
+    const admin = createDb(ADMIN_URL);
+    try {
+      await unlink(abs);
+      await admin.db.execute(sql`INSERT INTO document_purges
+        (document_id, sha256, size_bytes, reason, created_by)
+        VALUES (${doc.id}, ${doc.sha256}, ${doc.sizeBytes}, 'geen echte purge', ${userId})`);
+      const broken = await c.verify.run();
+      expect(broken.ok).toBe(false);
+      if (!broken.ok) expect(broken.reason).toBe("payload_hash_mismatch");
+
+      // Restore both halves, so the rest of this file's chain stays green.
+      await admin.db.execute(sql`DELETE FROM document_purges WHERE document_id = ${doc.id}`);
+      await writeFile(abs, bytes);
       expect((await c.verify.run()).ok).toBe(true);
     } finally {
       await admin.pool.end();
