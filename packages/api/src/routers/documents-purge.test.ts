@@ -124,8 +124,8 @@ describe("documents.purge", () => {
     const { doc, sha, buf } = await makeDoc("Achtergebleven bytes");
     await c.documents.purge({ id: doc.id });
     // Simulate the failed unlink by putting the file back — the ORIGINAL bytes,
-    // which is what a failed unlink actually leaves. Arbitrary bytes would now
-    // be refused by the pre-purge hash check, and would be testing that instead.
+    // which is what a failed unlink actually leaves. The altered-bytes variant
+    // of this same repair is the last test in this file.
     const abs = readFilePath(vaultDir, sha);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, buf);
@@ -203,6 +203,48 @@ describe("documents.purge", () => {
         eq(schema.ledgerEvents.entityId, doc.id)))).toHaveLength(0);
     expect(await db.select().from(schema.documentTexts)
       .where(eq(schema.documentTexts.documentId, doc.id))).toHaveLength(1);
+  });
+
+  /**
+   * THE REFUSAL MUST NOT DISABLE THE REPAIR. A repeat purge is the documented
+   * repair for a half-done one (deploy.md calls the retry button the only
+   * repair), and it has nothing left to protect: the record exists and the
+   * destruction is already ledgered. So if a purged document's bytes come back
+   * ALTERED — a partial restore, a corrupted mirror — the hash check must stand
+   * aside, or the leftover text and chunks can never be swept through the app.
+   *
+   * The first-purge half of this law is "refuses to destroy bytes that do not
+   * match what the dossier recorded" above; the two are one rule seen from
+   * either side of the tombstone.
+   */
+  it("still repairs an already-purged document whose bytes came back altered", async () => {
+    const c = caller();
+    const { doc, sha, abs } = await makeDoc("Aangetast na de purge");
+    const first = await c.documents.purge({ id: doc.id, reason: "eerste" });
+
+    // Bytes back on disk and NOT the ones the dossier recorded, plus the two
+    // leftovers a racing writer puts back.
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, Buffer.from("een half teruggezette kopie"));
+    await writer.execute(sql`INSERT INTO document_texts
+      (document_id, sha256, text, extractor, char_count)
+      VALUES (${doc.id}, ${sha}, ${'teruggekomen inhoud'}, 'none', 19)`);
+    await writer.execute(sql`INSERT INTO search_chunks
+      (entity_type, entity_id, chunk_index, title, body, source_hash)
+      VALUES ('document', ${doc.id}, 0, 'Aangetast na de purge',
+              ${'teruggekomen inhoud'}, 'h3')`);
+
+    const retried = await c.documents.purge({ id: doc.id });
+
+    // Still one record, still the first reason — the repair records nothing new.
+    expect(retried.purge?.reason).toBe("eerste");
+    expect(retried.purge?.at).toEqual(first.purge?.at);
+    expect(await exists(abs)).toBe(false);
+    expect(await db.select().from(schema.documentTexts)
+      .where(eq(schema.documentTexts.documentId, doc.id))).toHaveLength(0);
+    expect(await db.select().from(schema.searchChunks)
+      .where(and(eq(schema.searchChunks.entityType, "document"),
+        eq(schema.searchChunks.entityId, doc.id)))).toHaveLength(0);
   });
 
   it("purges normally when the bytes still match", async () => {

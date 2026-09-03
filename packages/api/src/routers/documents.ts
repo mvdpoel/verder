@@ -517,7 +517,18 @@ export const documentsRouter = router({
      * tampering, and destroying them is worse than leaving them where /verify
      * keeps pointing at them.
      *
-     * Before the transaction, because the answer decides whether there is one.
+     * Before the transaction, because the answer decides whether there is one:
+     * a first purge must be refused before ANYTHING is written or deleted, and
+     * a check inside the transaction would leave a window where the refusal
+     * has already swept the two derived tables.
+     *
+     * ONLY ON A FIRST PURGE. A repeat purge is the documented repair for a
+     * half-done one (deploy.md calls the retry button the only repair) and it
+     * has nothing left to protect: the record already exists and the
+     * destruction is already ledgered. If a purged document's bytes come back
+     * ALTERED — a partial restore, a corrupted mirror — refusing there would
+     * strand the leftover text and chunks with no way to clear them through
+     * the app, which is a worse outcome than the one the refusal prevents.
      *
      * A read that FAILS is not a mismatch and must not refuse. ENOENT is the
      * ordinary case (a repeat purge, or the file was cleaned up by hand) and
@@ -526,10 +537,24 @@ export const documentsRouter = router({
      * effectiveDocument reports them as bytesStillOnDisk and /verify counts
      * them. Refusing on an unreadable file would instead make the tombstone
      * unwritable with no repair.
+     *
+     * WHY THE PURGE ROW IS LOOKED UP TWICE. This unlocked read only decides
+     * whether the hash check applies; the locked read inside the transaction
+     * stays the source of truth for whether to insert and ledger. It cannot be
+     * stale in the dangerous direction: no role holds DELETE on
+     * document_purges, so a row seen here never disappears, and the only race
+     * is a concurrent first purge committing in between — which leaves this
+     * call applying the check to a document it believes unpurged, i.e. erring
+     * towards refusing, and a refusal writes nothing.
      */
-    const [pre] = await ctx.db.select({ sha256: schema.documents.sha256 })
-      .from(schema.documents).where(eq(schema.documents.id, input.id));
-    if (pre) {
+    const [pre] = await ctx.db
+      .select({ sha256: schema.documents.sha256,
+        purgedAt: schema.documentPurges.createdAt })
+      .from(schema.documents)
+      .leftJoin(schema.documentPurges,
+        eq(schema.documentPurges.documentId, schema.documents.id))
+      .where(eq(schema.documents.id, input.id));
+    if (pre && pre.purgedAt === null) {
       const onDisk = await readFile(readFilePath(vaultDir, pre.sha256))
         .then((buf) => sha256Hex(buf), () => null);
       if (onDisk !== null && onDisk !== pre.sha256) throw new TRPCError({
