@@ -1,15 +1,29 @@
 import { asc, eq } from "drizzle-orm";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { canonicalJson, sha256Hex, verifyChain, type ChainEvent, type VerifyResult } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { readFilePath } from "./storage";
 import { entryEventPayload } from "./routers/entries";
 import { registryDecisionPayload } from "./registry-decide";
 import { taskStatusPayload } from "./task-decide";
+import { documentPurgePayload } from "./routers/documents";
 
 export type FullVerificationResult = VerifyResult & {
   headHash: string | null;
   checkedFiles: number;
+  /**
+   * Documents whose bytes were destroyed on purpose. Counted SEPARATELY from
+   * checkedFiles — a purged document is not a file that was checked — and
+   * surfaced on /verify, because a design where files can vanish without the
+   * verification page saying so is exactly the hole this avoids.
+   */
+  purgedFiles: number;
+  /**
+   * Of those, how many still have bytes on disk. The unlink runs after the
+   * purge transaction commits, so this is normally 0 and a non-zero value means
+   * an unlink failed — repairable by purging the document again.
+   */
+  purgedFilesOnDisk: number;
 };
 
 /**
@@ -36,6 +50,21 @@ export async function taskStatusPayloadHash(db: Db, changeId: string): Promise<s
     .where(eq(schema.taskStatusChanges.id, changeId));
   if (!change) return "missing-task-status-row".padEnd(64, "0");
   return sha256Hex(canonicalJson(taskStatusPayload(change)));
+}
+
+/**
+ * Recomputes the payload hash of a document.purged event from the live
+ * document_purges row — editing a stored reason surfaces as a
+ * payload_hash_mismatch at that event's seq. The same discipline
+ * registryDecisionPayloadHash and taskStatusPayloadHash follow.
+ */
+export async function documentPurgePayloadHash(db: Db, documentId: string): Promise<string> {
+  const [p] = await db.select().from(schema.documentPurges)
+    .where(eq(schema.documentPurges.documentId, documentId));
+  if (!p) return "missing-purge-row".padEnd(64, "0");
+  return sha256Hex(canonicalJson(documentPurgePayload({
+    documentId: p.documentId, sha256: p.sha256, sizeBytes: p.sizeBytes,
+    reason: p.reason })));
 }
 
 /**
@@ -157,6 +186,7 @@ export interface LedgerRecomputeContext {
   resolvedLinkHash: Map<number, string>; // seq -> payloadHash of document.linked events
   resolvedStatusHash: Map<number, string>; // seq -> payloadHash of document.updated events
   onFileChecked?: () => void;
+  onFilePurged?: (stillOnDisk: boolean) => void;
 }
 
 /**
@@ -173,6 +203,8 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
     entityId: e.entityId, payloadHash: e.payloadHash,
     prevHash: e.prevHash, eventHash: e.eventHash }));
   let checkedFiles = 0;
+  let purgedFiles = 0;
+  let purgedFilesOnDisk = 0;
   // Documents can be legitimately linked to an entry AFTER its creation via
   // documents.linkToEntry, which appends a document.linked event. The
   // entry.created/entry.corrected rebuild below therefore must not compare
@@ -199,8 +231,10 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
   const resolvedStatusHash = await resolveDocumentUpdatedHashes(db, rows);
   const res = await verifyChain(events, makeLedgerRecompute(db, vaultDir, {
     linkedLater, resolvedLinkHash, resolvedStatusHash,
-    onFileChecked: () => { checkedFiles++; } }));
-  return { ...res, headHash: rows.at(-1)?.eventHash ?? null, checkedFiles };
+    onFileChecked: () => { checkedFiles++; },
+    onFilePurged: (stillOnDisk) => { purgedFiles++; if (stillOnDisk) purgedFilesOnDisk++; } }));
+  return { ...res, headHash: rows.at(-1)?.eventHash ?? null,
+    checkedFiles, purgedFiles, purgedFilesOnDisk };
 }
 
 /**
@@ -255,10 +289,30 @@ export function makeLedgerRecompute(
       return registryDecisionPayloadHash(db, e.entityId);
     if (e.eventType === "task.status")
       return taskStatusPayloadHash(db, e.entityId);
+    if (e.eventType === "document.purged")
+      return documentPurgePayloadHash(db, e.entityId);
     if (e.eventType !== "document.ingested") return e.payloadHash;
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.id, e.entityId));
     if (!doc) return "missing-document-row".padEnd(64, "0");
+    const [purged] = await db.select().from(schema.documentPurges)
+      .where(eq(schema.documentPurges.documentId, e.entityId));
+    if (purged) {
+      /*
+       * The bytes are gone ON PURPOSE and the document.purged event is the
+       * record of it. Verify against that record instead: the sha256 the purge
+       * names must still be the sha256 the ingest recorded, or the tombstone is
+       * describing a different document than the one it is attached to.
+       *
+       * Deleting the purge row does NOT launder the deletion: this branch is
+       * simply not taken, and the file read below reports file-missing exactly
+       * as it does for any other vanished file.
+       */
+      ctx.onFilePurged?.(await access(readFilePath(vaultDir, purged.sha256))
+        .then(() => true, () => false));
+      return purged.sha256 === doc.sha256
+        ? e.payloadHash : "purge-sha-mismatch".padEnd(64, "0");
+    }
     try {
       const buf = await readFile(readFilePath(vaultDir, doc.sha256));
       ctx.onFileChecked?.();

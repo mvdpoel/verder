@@ -16,7 +16,7 @@ try {
   const result = await runFullVerification(db, vaultDir);
   await recordRun(db, "nightly-verify", result.ok ? "ok" : "error", result);
   if (result.ok) {
-    console.log(`nightly-verify: OK — ${result.count} events, ${result.checkedFiles} files checked, head=${result.headHash}`);
+    console.log(`nightly-verify: OK — ${result.count} events, ${result.checkedFiles} files checked, ${result.purgedFiles} purged (${result.purgedFilesOnDisk} still on disk), head=${result.headHash}`);
   } else {
     console.error(`nightly-verify: BROKEN at seq ${result.brokenAtSeq} (${result.reason})`);
     process.exitCode = 1;

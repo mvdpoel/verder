@@ -170,4 +170,103 @@ describe("verify router", () => {
       await admin.pool.end();
     }
   });
+  /** A document with bytes on disk, ready to be purged. */
+  async function mkVaultDoc(label: string) {
+    const c = caller();
+    const buf = Buffer.from(`${label}-${crypto.randomUUID()}`);
+    const sha = sha256Hex(buf);
+    const abs = join(vaultDir, relPathFor(sha));
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, buf);
+    return c.documents.registerUpload({ sha256: sha, sizeBytes: buf.length,
+      mime: "text/plain", title: label, source: "upload", receivedAt: new Date() });
+  }
+
+  it("stays green after a purge, and counts it instead of hashing it", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Purge and verify");
+    const before = await c.verify.run();
+    expect(before.ok).toBe(true);
+    await c.documents.purge({ id: doc.id, reason: "dubbel gescand" });
+    const after = await c.verify.run();
+    expect(after.ok).toBe(true);
+    // The file is no longer hashed, and the deletion is DISCLOSED rather than
+    // silently absorbed. A design where files vanish without /verify saying so
+    // is the hole this whole sub-project avoids.
+    expect(after.checkedFiles).toBe(before.checkedFiles - 1);
+    expect(after.purgedFiles).toBe(before.purgedFiles + 1);
+    expect(after.purgedFilesOnDisk).toBe(0);
+  });
+
+  it("counts a purge whose bytes survived the unlink", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Purge that left bytes");
+    await c.documents.purge({ id: doc.id });
+    const fresh = await c.documents.get({ id: doc.id });
+    const abs = join(vaultDir, relPathFor(fresh.sha256));
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, Buffer.from("leftover"));
+    const res = await c.verify.run();
+    expect(res.ok).toBe(true);
+    expect(res.purgedFilesOnDisk).toBeGreaterThan(0);
+  });
+
+  // The whole reason this shape was chosen over deleting the row: an entry's
+  // ledgered payload carries documentIds, and entry_documents is untouched.
+  it("stays green when the purged document is cited by a logbook entry", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Cited then purged");
+    await c.entries.create({ occurredAt: new Date(), channel: "email",
+      direction: "inbound", summary: "Entry citing a document that gets purged",
+      participantPartyIds: [], documentIds: [doc.id], actionItems: [] });
+    expect((await c.verify.run()).ok).toBe(true);
+    await c.documents.purge({ id: doc.id });
+    const res = await c.verify.run();
+    expect(res).toMatchObject({ ok: true });
+  });
+
+  it("detects an edited purge reason", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Purge to be tampered");
+    await c.documents.purge({ id: doc.id, reason: "de echte reden" });
+    const admin = createDb(ADMIN_URL);
+    try {
+      await admin.db.execute(sql`UPDATE document_purges SET reason = 'herschreven'
+        WHERE document_id = ${doc.id}`);
+      const broken = await c.verify.run();
+      expect(broken.ok).toBe(false);
+      if (!broken.ok) expect(broken.reason).toBe("payload_hash_mismatch");
+      await admin.db.execute(sql`UPDATE document_purges SET reason = 'de echte reden'
+        WHERE document_id = ${doc.id}`);
+      expect((await c.verify.run()).ok).toBe(true);
+    } finally {
+      await admin.pool.end();
+    }
+  });
+
+  // A purge cannot be laundered by removing its record: without the purge row
+  // the ingested branch falls through to the file read and reports the bytes
+  // missing, exactly as it does for any other vanished file.
+  it("detects a purge record deleted to hide a destroyed file", async () => {
+    const c = caller();
+    const doc = await mkVaultDoc("Purge record to be deleted");
+    await c.documents.purge({ id: doc.id });
+    const admin = createDb(ADMIN_URL);
+    try {
+      const [row] = (await admin.db.execute(
+        sql`SELECT sha256, size_bytes, reason FROM document_purges
+            WHERE document_id = ${doc.id}`)).rows as
+        { sha256: string; size_bytes: string; reason: string | null }[];
+      await admin.db.execute(sql`DELETE FROM document_purges WHERE document_id = ${doc.id}`);
+      const broken = await c.verify.run();
+      expect(broken.ok).toBe(false);
+      // Restore, so the rest of this file's chain stays green.
+      await admin.db.execute(sql`INSERT INTO document_purges
+        (document_id, sha256, size_bytes, reason, created_by)
+        VALUES (${doc.id}, ${row.sha256}, ${row.size_bytes}, ${row.reason}, ${userId})`);
+      expect((await c.verify.run()).ok).toBe(true);
+    } finally {
+      await admin.pool.end();
+    }
+  });
 });

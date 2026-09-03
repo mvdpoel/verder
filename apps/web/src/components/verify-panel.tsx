@@ -41,7 +41,8 @@ export function VerifyPanel() {
             ? (
               <Callout tone="ok" className="flex-col gap-[9px]">
                 <p className="text-[13.5px] font-light leading-relaxed text-okay">
-                  ✔ Alles klopt. <span className="font-mono">{run.data.count}</span> gebeurtenissen gecontroleerd, <span className="font-mono">{run.data.checkedFiles}</span> bestanden opnieuw gehasht.
+                  ✔ Alles klopt. <span className="font-mono">{run.data.count}</span> gebeurtenissen gecontroleerd, <span className="font-mono">{run.data.checkedFiles}</span> bestanden opnieuw gehasht{run.data.purgedFiles > 0 && <>, <span className="font-mono">{run.data.purgedFiles}</span> definitief verwijderd</>}.
+                  {run.data.purgedFilesOnDisk > 0 && <> <span className="text-attn">{run.data.purgedFilesOnDisk} daarvan staan nog op schijf — verwijder ze opnieuw.</span></>}
                 </p>
                 <p className="break-all font-mono text-[11px] leading-relaxed tracking-[0.04em] text-ink-dim">
                   Kop van de keten: <span className="text-okay">{run.data.headHash}</span>
