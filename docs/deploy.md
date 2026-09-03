@@ -1589,6 +1589,28 @@ provider, which is worse than failing.
    Confirm the run is green (exit 0) and the Verify page agrees before
    trusting the restored system.
 
+6. **Re-destroy every document that had been purged.** A restore brings back
+   both halves of what a purge destroyed: `ops/nightly.sh` mirrors the vault
+   with `rsync -a` and deliberately NO `--delete` ("the backup only ever
+   grows"), so the bytes come back, and the dump deliberately keeps
+   `document_texts`, so the extracted text comes back with them. **A purge is
+   therefore not a guarantee against a restore** — it destroys what is live,
+   and the backups taken before it still hold the content.
+
+   Nothing is hidden by that: `/verify` reports both leftovers on the run in
+   step 5 — `N still on disk` and `N with text or chunks left` — because the
+   purged branch `stat`s the path and counts the derived rows instead of
+   assuming them gone. Read those two numbers, then repair them:
+
+   ```
+   /files → tak "Definitief verwijderd" → open each → "Definitief verwijderen"
+   ```
+
+   Purging a purged document is idempotent (no second `document_purges` row,
+   no second ledger event) and re-runs the unlink and both DELETEs — it is the
+   repair, and it is the only one. Repeat until `nightly-verify` reports 0 and
+   0 on both counts.
+
    **`stalwart` is deliberately not in that list, and this is the step where it
    matters most.** Nothing in this backup contains the mail store (§8.10): the
    dump is postgres, the mirror is the vault. If the disk that held

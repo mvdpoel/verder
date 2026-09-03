@@ -276,3 +276,18 @@ and drops `checkedFiles` by one.
   is equally true here. A purge destroys the vault copy and the extracted text;
   it does not claim to have erased every trace of the content from the dossier,
   and the tombstone should not pretend otherwise.
+
+- **The backups.** `ops/nightly.sh` mirrors the vault with `rsync -a` and
+  deliberately no `--delete` ("the backup only ever grows"), and the nightly
+  dump deliberately keeps `document_texts`. So a restore brings back both the
+  bytes and the text of a purged document: **a purge is not a guarantee against
+  a restore.** It is the same concession as the archived `.eml` above, one
+  layer down.
+
+  It is disclosed rather than assumed away, which is this design's rule
+  throughout: `/verify` reports returning bytes (`purgedFilesOnDisk`) and
+  returning text or chunks (`purgedContentLeftovers`) on every run, nightly
+  included. After ANY restore the purged set must be re-destroyed — purging a
+  purged document is idempotent and re-runs the unlink and both DELETEs, so
+  clicking the button again is the repair. The restore procedure in
+  `docs/deploy.md` carries this as a numbered step.
