@@ -1747,7 +1747,7 @@ ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
 
 ```bash
 ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
-  -f docker-compose.prod.yml exec -T worker pnpm --filter worker verify-nightly'
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
 ```
 
 Expected: `OK`, ledger head **unchanged**, 140 events, 75 files checked, **0 purged**. A moved head here would mean something wrote evidence during the deploy, which nothing in this sub-project may do.
@@ -1758,7 +1758,7 @@ Pick a document that genuinely should not be in the vault, purge it through the 
 
 ```bash
 ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
-  -f docker-compose.prod.yml exec -T worker pnpm --filter worker verify-nightly'
+  -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
 ```
 
 Expected: `OK`, ledger **141** events (exactly one `document.purged`), **74** files checked, **1 purged (0 still on disk)**.
