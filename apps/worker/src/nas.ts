@@ -5,7 +5,9 @@ import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
+import { sendPush } from "./push";
 import { recordRun } from "./heartbeat";
+import { DUPLEX_HOLD_MS, SCANNER_NAME, duplexPass } from "./duplex";
 import { isKnownNasFile } from "./nas-known";
 import { detectPageOrder } from "./page-order";
 import { pdfPageCount, reorderPdf, MAX_REORDER_PAGES } from "./reorder-pdf";
@@ -57,12 +59,23 @@ export async function scanNasFolder(deps: {
   /** Injected in tests; production creates and closes its own. */
   ocr?: OcrPort;
   enqueueDocMeta: (documentId: string) => Promise<void>;
+  /** Injected in tests; the default needs VAPID keys. */
+  push?: typeof sendPush;
 }): Promise<{ ingested: number; skipped: number; read: number; reordered: number }> {
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
   let ingested = 0, skipped = 0, read = 0, reordered = 0;
   const ownedOcr = deps.ocr ? null : realOcrPort();
   const ocr = deps.ocr ?? ownedOcr!;
   try {
+    // BEFORE the directory is read for ingest: a merged pair must already have
+    // left the root (originals parked, merged file written) or the ordinary
+    // path would take the originals as two separate documents. A failure here
+    // costs the merge, never the sweep.
+    try {
+      await duplexPass({ db: deps.db, scanDir: deps.scanDir, ocr, maxBytes, push: deps.push });
+    } catch (err) {
+      await recordRun(deps.db, "duplex", "error", { message: String(err) });
+    }
     for (const name of await readdir(deps.scanDir)) {
       const abs = join(deps.scanDir, name);
       const st = await stat(abs);
@@ -74,6 +87,10 @@ export async function scanNasFolder(deps: {
       // 22 GB general archive of zips and disk images.
       const mime = MIME[extname(name).toLowerCase()];
       if (!mime || st.size > maxBytes) { skipped++; continue; }
+      // A scanner-named file may be the fronts of a duplex pair whose backs
+      // have not been fed yet. Ingesting it now is permanent, so it waits out
+      // the pairing window; renamed files and the merged output do not.
+      if (SCANNER_NAME.test(name) && Date.now() - st.mtimeMs < DUPLEX_HOLD_MS) continue;
       if (await isKnownNasFile(deps.db, name, st)) continue;
       let buf: Buffer = await readFile(abs);
       read++;
