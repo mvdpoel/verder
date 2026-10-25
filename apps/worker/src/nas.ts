@@ -1,12 +1,12 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { and, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
-import { effectiveTitleSql } from "@verder/api/src/effective-status";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
+import { isKnownNasFile } from "./nas-known";
 import { detectPageOrder } from "./page-order";
 import { pdfPageCount, reorderPdf, MAX_REORDER_PAGES } from "./reorder-pdf";
 import { ocrFooter, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
@@ -74,27 +74,7 @@ export async function scanNasFolder(deps: {
       // 22 GB general archive of zips and disk images.
       const mime = MIME[extname(name).toLowerCase()];
       if (!mime || st.size > maxBytes) { skipped++; continue; }
-      // Recognise an already-ingested file from its stat alone. The dedup that
-      // matters is still sha256 below, but reaching it costs a full read, and
-      // this sweep runs every 2 minutes over NFS against a folder measured in
-      // gigabytes: hashing every byte of every file on every tick never
-      // finishes. name+size+mtime is exact enough to skip the read, and a miss
-      // only falls through to the hash, which is the authority.
-      // source_ref is the name at INGEST and never changes -- documents has no
-      // UPDATE grant -- so after auto-name renames a file on the share the two
-      // no longer agree and this check misses every renamed file forever. It
-      // therefore also accepts the EFFECTIVE title, which auto-name sets to
-      // exactly the new filename. Measured: without this, 117 of 121 files
-      // were fully re-read from the NAS on every single tick.
-      const [known] = await deps.db.select({ id: schema.documents.id })
-        .from(schema.documents)
-        .where(and(
-          eq(schema.documents.source, "nas-scan"),
-          or(eq(schema.documents.sourceRef, name), eq(effectiveTitleSql, name)),
-          eq(schema.documents.sizeBytes, st.size),
-          eq(schema.documents.receivedAt, st.mtime),
-        ));
-      if (known) continue;
+      if (await isKnownNasFile(deps.db, name, st)) continue;
       let buf: Buffer = await readFile(abs);
       read++;
       let receivedAt = st.mtime;
