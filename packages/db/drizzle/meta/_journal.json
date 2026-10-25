@@ -246,6 +246,13 @@
       "when": 1788361200000,
       "tag": "0034_document_purge",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788447600000,
+      "tag": "0035_doc_source_loondossier",
+      "breakpoints": true
     }
   ]
 }

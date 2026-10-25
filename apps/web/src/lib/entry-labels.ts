@@ -51,4 +51,5 @@ export const DOC_SOURCE_LABEL: Record<string, string> = {
   upload: "geüpload",
   "nas-scan": "scanner",
   "email-attachment": "e-mailbijlage",
+  loondossier: "Mijn LoonDossier",
 };

@@ -17,7 +17,7 @@ import { readFilePath, relPathFor } from "../storage";
 
 export async function ingestDocument(tx: Db, input: {
   sha256: string; sizeBytes: number; mime: string; title: string;
-  source: "upload" | "nas-scan" | "email-attachment"; sourceRef?: string;
+  source: "upload" | "nas-scan" | "email-attachment" | "loondossier"; sourceRef?: string;
   receivedAt: Date; docType?: string; partyId?: string;
 }) {
   const [existing] = await tx.select().from(schema.documents)
@@ -114,7 +114,7 @@ export const branchSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("soort"), key: z.string() }),
   z.object({ kind: z.literal("party"), id: z.string().uuid().nullable() }),
   z.object({ kind: z.literal("periode"), month: z.string().regex(/^\d{4}-\d{2}$/) }),
-  z.object({ kind: z.literal("bron"), source: z.enum(["upload", "nas-scan", "email-attachment"]) }),
+  z.object({ kind: z.literal("bron"), source: z.enum(["upload", "nas-scan", "email-attachment", "loondossier"]) }),
   // `purged` is not a doc_status — it is the presence of a document_purges row.
   // It sits in this union anyway because it is the same QUESTION the status
   // branch answers ("where is this document in its life?") and the tree renders
@@ -140,7 +140,7 @@ export const documentsRouter = router({
   registerUpload: protectedProcedure.input(z.object({
     sha256: z.string().regex(/^[0-9a-f]{64}$/), sizeBytes: z.number().int().positive(),
     mime: z.string(), title: z.string().min(1),
-    source: z.enum(["upload", "nas-scan", "email-attachment"]),
+    source: z.enum(["upload", "nas-scan", "email-attachment", "loondossier"]),
     sourceRef: z.string().optional(), receivedAt: z.coerce.date(),
     docType: z.string().optional(), partyId: z.string().uuid().optional(),
   })).mutation(({ ctx, input }) =>

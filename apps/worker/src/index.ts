@@ -13,6 +13,7 @@ import { makeSingleFlight } from "./mail/single-flight";
 import { realLlmPort, suggestDocMeta, suggestEntry } from "./ollama";
 import { realRetrieveRefs } from "./retrieval-refs";
 import { scanNasFolder } from "./nas";
+import { fetchLoondossier } from "./loondossier";
 import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 import { storeDocumentText } from "./document-text";
 import { autoNameSafely } from "./auto-name";
@@ -287,6 +288,14 @@ await boss.work("nas.scan", async () => {
   await scanNasFolder({ db, scanDir: process.env.NAS_SCAN_DIR ?? "/mnt/nas/scans",
     vaultDir: process.env.VAULT_DIR ?? "./vault-files",
     enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); } });
+});
+
+await boss.createQueue("loondossier.fetch");
+await boss.schedule("loondossier.fetch", "20 6 * * *");
+await boss.work("loondossier.fetch", async () => {
+  await fetchLoondossier({ db, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+    enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); },
+    push: (payload) => sendPush(db, payload) });
 });
 
 // Extraction-coverage sweep: gmail.poll and documents.registerUpload cannot

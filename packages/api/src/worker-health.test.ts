@@ -228,6 +228,7 @@ describe("declFor — the workers that exist today", () => {
     expect(declFor("nas")).toEqual({ kind: "watcher", everyMs: 2 * MIN });
     expect(declFor("registry-mine")).toEqual({ kind: "watcher", everyMs: 2 * MIN });
     expect(declFor("heartbeat")).toEqual({ kind: "watcher", everyMs: 5 * MIN });
+    expect(declFor("loondossier")).toEqual({ kind: "watcher", everyMs: 24 * 60 * MIN });
   });
 
   it("declares receipts as event-driven — it runs only when registry.mine finds an aggregator", () => {
