@@ -48,7 +48,7 @@ look like:
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys` |
 | `POSTGRES_PASSWORD` | password for the `verder` superuser inside the postgres container |
 | `VAULT_HOST_DIR` | host path mounted as `/vault`, e.g. `/srv/verder/vault` |
-| `NAS_SCAN_HOST_DIR` | host NAS mount, mounted read-only as `/scans` |
+| `NAS_SCAN_HOST_DIR` | host NAS mount, mounted read-only as `/scans`; must contain `.verder-nas` (see Resilience guards) |
 | `BACKUP_DIR` | nightly backup target, default `/mnt/nas/verder-backups` |
 
 Also drop the OAuth client JSON in place:
@@ -1541,6 +1541,72 @@ Reading the outcome:
   **not** fire on the `exit` builtin, so a bare `exit 1` at any of those would
   have left the newest row saying the *previous* night's `ok`.
 
+
+## Resilience guards: watchdog, NAS marker, backup target check
+
+Three guards close failures that used to be silent. None needs a migration;
+rebuild the worker and web images, rsync (`ops/watchdog.sh` is new), then do the
+host steps below.
+
+### The NAS scan marker
+
+`nas.scan` refuses to run unless `.verder-nas` exists in the scan directory.
+When the NAS mounts after the worker container started, the bind keeps showing
+the empty directory underneath, and without the marker "no scans" and "no NAS"
+look the same. Create it once, on the share itself:
+
+```bash
+touch /mnt/nas-workspace/.verder-nas
+```
+
+Without it the `nas` row is `error` ("NAS-map niet gekoppeld ...") and nothing
+is ingested, so create it **before** deploying the worker image.
+
+### Nightly backup target check
+
+`ops/nightly.sh` checks that `BACKUP_DIR` sits on a real mount (not `/`) and is
+writable (under `timeout`, because a hard NFS mount that is gone hangs). If not,
+the dump, the vault mirror and the mail backup are skipped, `nightly-verify` and
+`model-check` still run, a `db-backup` row (`error`) is written and the script
+exits non-zero. The dump must end in "PostgreSQL database dump complete"; the
+20-byte gzip of a dump against a dead postgres no longer counts as a backup. The
+dump is staged as `.partial`, so a failed re-run never replaces a good dump.
+`db-backup` is a `nightly` row in the Systeem panel.
+
+### The watchdog
+
+Every 5 minutes it checks postgres, web, worker and stalwart (running, and
+healthy where a healthcheck exists). On the **second** consecutive bad check
+(about 10 minutes) it runs `docker compose up -d <service>` (`restart` for a
+running-but-unhealthy one). It also recreates the worker when the host share has
+the marker and `/scans/.verder-nas` is missing inside the container, and tries
+`sudo -n mount` on `/mnt/nas-workspace` or `/mnt/nas-download` when they are not
+mounted. A heal writes a `watchdog` row with status `error` and sends the push
+"verder hersteld". A clean run writes `ok`. It skips the whole run while
+`nightly.sh`, `mail-backup.sh` or `mail-restore-drill.sh` is running.
+
+Install on the homelab (`crontab -e`; this host's crontab is `CRON_TZ=UTC`, which
+does not matter for a 5-minute line):
+
+```cron
+*/5 * * * * /home/martin/apps/verder/ops/watchdog.sh >> /home/martin/.local/state/verder-watchdog/cron.log 2>&1
+```
+
+`mkdir -p ~/.local/state/verder-watchdog` first. Add to sudoers (`visudo -f
+/etc/sudoers.d/verder-watchdog`) so the mount attempts work without a password:
+
+```
+martin ALL=(root) NOPASSWD: /usr/bin/mount /mnt/nas-workspace, /usr/bin/mount /mnt/nas-download
+```
+
+State lives in `~/.local/state/verder-watchdog/` (`bad.<service>` strike counters,
+`watchdog.log` with one line per action, `pending-restarted`), **outside the repo
+dir** on purpose: `~/apps/verder` is rsynced with `--delete`, and the exclude
+list is not the place to depend on for host state.
+
+**Maintenance.** `docker compose stop <service>` will be undone by the watchdog
+within about 10 minutes. Comment out the crontab line first, and put it back when
+you are done. A deploy (`up -d` / rebuild) is fine: it is faster than two ticks.
 
 ## Restore procedure
 

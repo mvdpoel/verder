@@ -76,3 +76,18 @@ export const MAIL_DRILL_WORKER_NAME = "mail-drill";
  * rename is not an exception but a tile that quietly stops existing.
  */
 export const MAIL_BACKUP_WORKER_NAME = "mail-backup";
+
+/**
+ * Written by apps/worker/src/ops/db-backup-run.ts, the row ops/nightly.sh
+ * records for the Postgres dump and vault mirror, and read back by the
+ * `nightly` declaration in worker-health.ts. A rename missed on one side leaves
+ * a tile that quietly stops existing, not an exception.
+ */
+export const DB_BACKUP_WORKER_NAME = "db-backup";
+
+/**
+ * Written by apps/worker/src/ops/watchdog-run.ts for ops/watchdog.sh (host
+ * crontab, every 5 minutes) and read back by the `watcher` declaration in
+ * worker-health.ts, so a dead watchdog cron goes amber.
+ */
+export const WATCHDOG_WORKER_NAME = "watchdog";

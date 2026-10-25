@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { eq } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
@@ -15,6 +15,11 @@ import { ocrFooter, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
 
 const MIME: Record<string, string> = { ".pdf": "application/pdf", ".png": "image/png",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".tiff": "image/tiff" };
+
+// Present only on the real share. When the NAS is not mounted, the bind shows
+// the empty directory underneath; without this file, "no scans" and "no NAS"
+// look identical and the sweep records green forever.
+export const NAS_MARKER = ".verder-nas";
 
 // Anything larger is not a scan. The cap is a MEMORY bound, not a policy:
 // ingest reads the whole file to hash it, and the share this now points at
@@ -63,6 +68,12 @@ export async function scanNasFolder(deps: {
   push?: typeof sendPush;
 }): Promise<{ ingested: number; skipped: number; read: number; reordered: number }> {
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
+  try { await access(join(deps.scanDir, NAS_MARKER)); }
+  catch {
+    await recordRun(deps.db, "nas", "error", {
+      message: "NAS-map niet gekoppeld: markering .verder-nas ontbreekt in de scanmap" });
+    return { ingested: 0, skipped: 0, read: 0, reordered: 0 };
+  }
   let ingested = 0, skipped = 0, read = 0, reordered = 0;
   const ownedOcr = deps.ocr ? null : realOcrPort();
   const ocr = deps.ocr ?? ownedOcr!;
@@ -77,6 +88,7 @@ export async function scanNasFolder(deps: {
       await recordRun(deps.db, "duplex", "error", { message: String(err) });
     }
     for (const name of await readdir(deps.scanDir)) {
+      if (name === NAS_MARKER) continue;
       const abs = join(deps.scanDir, name);
       const st = await stat(abs);
       // Skip files modified <10s ago — the scanner may still be writing them.

@@ -24,6 +24,8 @@
     "mail-drill": "tsx src/ops/mail-restore-drill.ts",
     "mail-count": "tsx src/ops/mail-count.ts",
     "mail-backup-run": "tsx src/ops/mail-backup-run.ts",
+    "db-backup-run": "tsx src/ops/db-backup-run.ts",
+    "watchdog-run": "tsx src/ops/watchdog-run.ts",
     "reindex": "tsx src/ops/reindex.ts",
     "normalize-names": "tsx src/ops/run-normalize-filenames.ts",
     "discard-documents": "tsx src/ops/discard-documents.ts",
