@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
-import { readFile, utimes, writeFile } from "node:fs/promises";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { readdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
 import { sha256Hex } from "@verder/core";
 import { scanNasFolder } from "./nas";
@@ -16,12 +16,19 @@ import { scanNasFolder } from "./nas";
 const realPdf = () => readFile(join(import.meta.dirname, "fixtures", "text-letter.pdf"));
 import { settleDocumentTexts } from "./test-support/document-texts";
 
+// The sweep refuses a share without the marker; every scanDir here is a real one.
+const scanShare = (prefix: string) => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  writeFileSync(join(dir, ".verder-nas"), "");
+  return dir;
+};
+
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
 describe("scanNasFolder", () => {
   it("ingests settled files once and enqueues docmeta suggestions", async () => {
     const { db, pool } = createDb(URL);
-    const scanDir = mkdtempSync(join(tmpdir(), "nas-"));
+    const scanDir = scanShare("nas-");
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-vault-"));
     // Unique bytes per run, appended to a real PDF so it still parses: the
     // sweep refuses a PDF it cannot read, and the shared dev DB dedups on sha.
@@ -55,7 +62,7 @@ describe("scanNasFolder", () => {
 
   it("skips files it cannot ingest, and never reads their bytes", async () => {
     const { db, pool } = createDb(URL);
-    const scanDir = mkdtempSync(join(tmpdir(), "nas-skip-"));
+    const scanDir = scanShare("nas-skip-");
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-skip-vault-"));
     const old = new Date(Date.now() - 60_000);
     // A .zip is not a document: the real share holds a 21.8 GB Downloads.zip,
@@ -78,7 +85,7 @@ describe("scanNasFolder", () => {
 
   it("does not re-read a file it has already ingested", async () => {
     const { db, pool } = createDb(URL);
-    const scanDir = mkdtempSync(join(tmpdir(), "nas-reread-"));
+    const scanDir = scanShare("nas-reread-");
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-reread-vault-"));
     const content = Buffer.concat([
       await realPdf(), Buffer.from(`\n% reread-${Date.now()}\n`)]);
@@ -103,7 +110,7 @@ describe("scanNasFolder", () => {
 describe("scanNasFolder, half-written files", () => {
   it("does not ingest a PDF that cannot be parsed, and takes it next time", async () => {
     const { db, pool } = createDb(URL);
-    const scanDir = mkdtempSync(join(tmpdir(), "nas-partial-"));
+    const scanDir = scanShare("nas-partial-");
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-partial-vault-"));
     const file = join(scanDir, `partial_${Date.now()}.pdf`);
     const old = new Date(Date.now() - 60_000);
@@ -115,6 +122,46 @@ describe("scanNasFolder, half-written files", () => {
     const first = await scanNasFolder(deps);
     expect(first.ingested).toBe(0);
     expect(first.skipped).toBeGreaterThanOrEqual(1);
+    await pool.end();
+  });
+
+  it("refuses an unmounted share: error row, nothing read, nothing ingested", async () => {
+    const { db, pool } = createDb(URL);
+    const scanDir = mkdtempSync(join(tmpdir(), "nas-nomarker-"));
+    const vaultDir = mkdtempSync(join(tmpdir(), "nas-nomarker-vault-"));
+    // A settled scan lying in the bare directory underneath the missing mount.
+    const file = join(scanDir, "scan_9999.pdf");
+    await writeFile(file, Buffer.concat([await realPdf(), Buffer.from(`\n% nomarker-${Date.now()}\n`)]));
+    const old = new Date(Date.now() - 60_000);
+    await utimes(file, old, old);
+    const enq: string[] = [];
+    const since = new Date();
+    const res = await scanNasFolder({ db, scanDir, vaultDir,
+      enqueueDocMeta: async (d: string) => { enq.push(d); } });
+    expect(res).toEqual({ ingested: 0, skipped: 0, read: 0, reordered: 0 });
+    expect(enq).toEqual([]);
+    const [row] = await db.select().from(schema.workerRuns)
+      .where(eq(schema.workerRuns.worker, "nas"))
+      .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+    expect(row.status).toBe("error");
+    expect(row.ranAt.getTime()).toBeGreaterThanOrEqual(since.getTime() - 1000);
+    expect(row.detail).toEqual({
+      message: "NAS-map niet gekoppeld: markering .verder-nas ontbreekt in de scanmap" });
+    expect(await db.select().from(schema.documents)
+      .where(eq(schema.documents.title, "scan_9999.pdf"))).toEqual([]);
+    expect((await readdir(scanDir)).sort()).toEqual(["scan_9999.pdf"]);
+    await pool.end();
+  });
+
+  it("never counts or touches the marker itself", async () => {
+    const { db, pool } = createDb(URL);
+    const scanDir = scanShare("nas-marker-only-");
+    const vaultDir = mkdtempSync(join(tmpdir(), "nas-marker-only-vault-"));
+    const old = new Date(Date.now() - 60_000);
+    await utimes(join(scanDir, ".verder-nas"), old, old);
+    const res = await scanNasFolder({ db, scanDir, vaultDir, enqueueDocMeta: async () => {} });
+    expect(res).toEqual({ ingested: 0, skipped: 0, read: 0, reordered: 0 });
+    expect(await readdir(scanDir)).toEqual([".verder-nas"]);
     await pool.end();
   });
 });

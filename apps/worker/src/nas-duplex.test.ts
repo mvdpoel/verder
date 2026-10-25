@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { readdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,9 +45,15 @@ async function pdfText(file: string): Promise<string[]> {
   return stdout.split("\f").map((p) => p.trim()).filter(Boolean);
 }
 
+const shareDir = (prefix: string) => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  writeFileSync(join(dir, ".verder-nas"), "");
+  return dir;
+};
+
 const setup = (prefix: string) => {
   const { db, pool } = createDb(DB);
-  return { db, pool, scanDir: mkdtempSync(join(tmpdir(), `${prefix}-`)), vaultDir: mkdtempSync(join(tmpdir(), `${prefix}-v-`)) };
+  return { db, pool, scanDir: shareDir(`${prefix}-`), vaultDir: mkdtempSync(join(tmpdir(), `${prefix}-v-`)) };
 };
 
 describe("duplex pairs in the NAS sweep", () => {
@@ -71,7 +77,7 @@ describe("duplex pairs in the NAS sweep", () => {
     // The merged file is brand new, so it waits out the 10 s settle window.
     expect((await scanNasFolder(deps as never)).ingested).toBe(0);
     expect(ocr.left()).toBe(0);
-    expect((await readdir(scanDir)).sort()).toEqual(["duplex-originals", "duplex-scan0101-scan0102.pdf"]);
+    expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["duplex-originals", "duplex-scan0101-scan0102.pdf"]);
     expect((await readdir(join(scanDir, "duplex-originals"))).sort()).toEqual(["scan0101.pdf", "scan0102.pdf"]);
     expect(pushed).toEqual([{
       title: "Dubbelzijdige scan samengevoegd",
@@ -102,7 +108,7 @@ describe("duplex pairs in the NAS sweep", () => {
     const deps = { db, scanDir, vaultDir, ocr, enqueueDocMeta: async () => {} };
     expect((await scanNasFolder(deps)).ingested).toBe(2);
     expect(ocr.left()).toBe(0);
-    expect((await readdir(scanDir)).sort()).toEqual(["scan0111.pdf", "scan0112.pdf"]);
+    expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["scan0111.pdf", "scan0112.pdf"]);
     // Refused once, not re-judged: a second sweep must not touch OCR again.
     expect((await scanNasFolder({ ...deps, ocr: noOcr() })).ingested).toBe(0);
     await settleDocumentTexts(db, "scan0111.pdf");
@@ -136,7 +142,7 @@ describe("duplex pairs in the NAS sweep", () => {
     const enq: string[] = [];
     const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async (d: string) => { enq.push(d); } };
     expect((await scanNasFolder(deps)).ingested).toBe(1);
-    expect((await readdir(scanDir)).sort()).toEqual(["duplex-originals", "duplex-scan0131-scan0132.pdf"]);
+    expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["duplex-originals", "duplex-scan0131-scan0132.pdf"]);
     expect((await readdir(join(scanDir, "duplex-originals"))).sort()).toEqual(["scan0131.pdf", "scan0132.pdf"]);
     expect((await scanNasFolder(deps)).ingested).toBe(0);
     expect(enq).toHaveLength(1);
@@ -159,7 +165,7 @@ describe("duplex pairs in the NAS sweep", () => {
     const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async () => {} };
     const res = await scanNasFolder(deps);
     expect(res.ingested).toBe(3); // stale merged + both new scans, nothing parked or overwritten
-    expect((await readdir(scanDir)).sort()).toEqual(
+    expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(
       ["duplex-scan0141-scan0142.pdf", "scan0141.pdf", "scan0142.pdf"]);
     for (const n of ["duplex-scan0141-scan0142.pdf", "scan0141.pdf", "scan0142.pdf"]) await settleDocumentTexts(db, n);
     await pool.end();

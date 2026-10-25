@@ -40,7 +40,8 @@
  */
 
 import {
-  DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, RERANK_WORKER_NAME,
+  DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
+  RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -201,6 +202,8 @@ const DECLS: Record<string, WorkerDecl> = {
   loondossier: { kind: "watcher", everyMs: 24 * 60 * MINUTE },
   "registry-mine": { kind: "watcher", everyMs: 2 * MINUTE },
   heartbeat: { kind: "watcher", everyMs: 5 * MINUTE },
+  // Host cron `*/5`, not pg-boss: silence means the cron line or the host died.
+  [WATCHDOG_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
@@ -243,6 +246,9 @@ const DECLS: Record<string, WorkerDecl> = {
    * read the row back, rather than waiting for 03:30 to find out.
    */
   [MAIL_BACKUP_WORKER_NAME]: { kind: "nightly" },
+  // Postgres dump + vault mirror, the first step of ops/nightly.sh. An error
+  // row (NAS not mounted, truncated dump) ages into `down` past the nightly bound.
+  [DB_BACKUP_WORKER_NAME]: { kind: "nightly" },
 
   // ---- monthly, from the HOST crontab on the 1st -------------------------
   /*
