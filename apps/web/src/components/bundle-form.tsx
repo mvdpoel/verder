@@ -13,7 +13,7 @@ import {
  */
 type DocTypeOption = { key: string; label: string; n: number };
 type PartyOption = { id: string; name: string };
-type SourceValue = "" | "upload" | "nas-scan" | "email-attachment";
+type SourceValue = "" | "upload" | "nas-scan" | "email-attachment" | "loondossier";
 type StatusValue = "" | "inbox" | "filed" | "discarded";
 
 // Same Dutch words `describeRule` (packages/api/src/bundle-rule.ts) renders a
@@ -23,6 +23,7 @@ const SOURCE_OPTIONS: { value: Exclude<SourceValue, "">; label: string }[] = [
   { value: "upload", label: "geüpload" },
   { value: "nas-scan", label: "gescand" },
   { value: "email-attachment", label: "uit de mail" },
+  { value: "loondossier", label: "Mijn LoonDossier" },
 ];
 const STATUS_OPTIONS: { value: Exclude<StatusValue, "">; label: string }[] = [
   { value: "inbox", label: "te sorteren" },

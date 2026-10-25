@@ -11,7 +11,7 @@ import { z } from "zod";
 export const bundleRuleSchema = z.object({
   docType: z.string().min(1).optional(),
   partyId: z.string().uuid().optional(),
-  source: z.enum(["upload", "nas-scan", "email-attachment"]).optional(),
+  source: z.enum(["upload", "nas-scan", "email-attachment", "loondossier"]).optional(),
   status: z.enum(["inbox", "filed", "discarded"]).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -32,6 +32,7 @@ export function parseBundleRule(raw: unknown):
 
 const NL_SOURCE: Record<string, string> = {
   upload: "geüpload", "nas-scan": "gescand", "email-attachment": "uit de mail",
+  loondossier: "Mijn LoonDossier",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "te sorteren", filed: "opgeborgen", discarded: "weggelegd",

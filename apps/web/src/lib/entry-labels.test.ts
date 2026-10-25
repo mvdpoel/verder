@@ -11,7 +11,7 @@ const CHANNELS = ["call", "meeting", "email", "whatsapp", "voicemail", "letter",
 const DIRECTIONS = ["inbound", "outbound", "internal"];
 const CLARITIES = ["clear", "ambiguous", "already-provided"];
 const ENTRY_SOURCES = ["manual", "gmail-watch", "nas-watch"];
-const DOC_SOURCES = ["upload", "nas-scan", "email-attachment"];
+const DOC_SOURCES = ["upload", "nas-scan", "email-attachment", "loondossier"];
 
 describe("entry labels", () => {
   it.each([

@@ -5,6 +5,7 @@ import { buildFilesHref, encodeBranch, type Branch, type ParsedFiles } from "@/l
 
 const NL_SOURCE: Record<string, string> = {
   upload: "Geüpload", "nas-scan": "Gescand", "email-attachment": "Uit de mail",
+  loondossier: "Mijn LoonDossier",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "Te sorteren", filed: "Opgeborgen", discarded: "Weggelegd",

@@ -198,6 +198,7 @@ const DECLS: Record<string, WorkerDecl> = {
   "docmeta-sweep": { kind: "watcher", everyMs: MINUTE },
   [DRAIN_WORKER_NAME]: { kind: "watcher", everyMs: MINUTE },
   nas: { kind: "watcher", everyMs: 2 * MINUTE },
+  loondossier: { kind: "watcher", everyMs: 24 * 60 * MINUTE },
   "registry-mine": { kind: "watcher", everyMs: 2 * MINUTE },
   heartbeat: { kind: "watcher", everyMs: 5 * MINUTE },
 
