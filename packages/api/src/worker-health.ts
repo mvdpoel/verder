@@ -285,6 +285,10 @@ const DECLS: Record<string, WorkerDecl> = {
   "task-mine": { kind: "on-demand" },
   ollama: { kind: "on-demand" },
   extract: { kind: "on-demand" },
+  // duplex writes a row only when two scanner files form a candidate pair
+  // (merged or refused), which happens when Martin feeds a stack twice, not on
+  // any cadence; the sweep around it is `nas`, which is the watcher.
+  duplex: { kind: "on-demand" },
   // NOT in the inventory this change started from, and the one that would have
   // sat amber longest: receipts.resolve is enqueued by registry.mine and only
   // for an aggregator line (APPLE.COM/BILL, PayPal), so on a quiet registry it

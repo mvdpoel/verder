@@ -1,12 +1,14 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { and, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
-import { effectiveTitleSql } from "@verder/api/src/effective-status";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
+import { sendPush } from "./push";
 import { recordRun } from "./heartbeat";
+import { DUPLEX_HOLD_MS, SCANNER_NAME, duplexPass } from "./duplex";
+import { isKnownNasFile } from "./nas-known";
 import { detectPageOrder } from "./page-order";
 import { pdfPageCount, reorderPdf, MAX_REORDER_PAGES } from "./reorder-pdf";
 import { ocrFooter, rasterizePdf, realOcrPort, type OcrPort } from "./extract";
@@ -57,12 +59,23 @@ export async function scanNasFolder(deps: {
   /** Injected in tests; production creates and closes its own. */
   ocr?: OcrPort;
   enqueueDocMeta: (documentId: string) => Promise<void>;
+  /** Injected in tests; the default needs VAPID keys. */
+  push?: typeof sendPush;
 }): Promise<{ ingested: number; skipped: number; read: number; reordered: number }> {
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
   let ingested = 0, skipped = 0, read = 0, reordered = 0;
   const ownedOcr = deps.ocr ? null : realOcrPort();
   const ocr = deps.ocr ?? ownedOcr!;
   try {
+    // BEFORE the directory is read for ingest: a merged pair must already have
+    // left the root (originals parked, merged file written) or the ordinary
+    // path would take the originals as two separate documents. A failure here
+    // costs the merge, never the sweep.
+    try {
+      await duplexPass({ db: deps.db, scanDir: deps.scanDir, ocr, maxBytes, push: deps.push });
+    } catch (err) {
+      await recordRun(deps.db, "duplex", "error", { message: String(err) });
+    }
     for (const name of await readdir(deps.scanDir)) {
       const abs = join(deps.scanDir, name);
       const st = await stat(abs);
@@ -74,27 +87,11 @@ export async function scanNasFolder(deps: {
       // 22 GB general archive of zips and disk images.
       const mime = MIME[extname(name).toLowerCase()];
       if (!mime || st.size > maxBytes) { skipped++; continue; }
-      // Recognise an already-ingested file from its stat alone. The dedup that
-      // matters is still sha256 below, but reaching it costs a full read, and
-      // this sweep runs every 2 minutes over NFS against a folder measured in
-      // gigabytes: hashing every byte of every file on every tick never
-      // finishes. name+size+mtime is exact enough to skip the read, and a miss
-      // only falls through to the hash, which is the authority.
-      // source_ref is the name at INGEST and never changes -- documents has no
-      // UPDATE grant -- so after auto-name renames a file on the share the two
-      // no longer agree and this check misses every renamed file forever. It
-      // therefore also accepts the EFFECTIVE title, which auto-name sets to
-      // exactly the new filename. Measured: without this, 117 of 121 files
-      // were fully re-read from the NAS on every single tick.
-      const [known] = await deps.db.select({ id: schema.documents.id })
-        .from(schema.documents)
-        .where(and(
-          eq(schema.documents.source, "nas-scan"),
-          or(eq(schema.documents.sourceRef, name), eq(effectiveTitleSql, name)),
-          eq(schema.documents.sizeBytes, st.size),
-          eq(schema.documents.receivedAt, st.mtime),
-        ));
-      if (known) continue;
+      // A scanner-named file may be the fronts of a duplex pair whose backs
+      // have not been fed yet. Ingesting it now is permanent, so it waits out
+      // the pairing window; renamed files and the merged output do not.
+      if (SCANNER_NAME.test(name) && Date.now() - st.mtimeMs < DUPLEX_HOLD_MS) continue;
+      if (await isKnownNasFile(deps.db, name, st)) continue;
       let buf: Buffer = await readFile(abs);
       read++;
       let receivedAt = st.mtime;
