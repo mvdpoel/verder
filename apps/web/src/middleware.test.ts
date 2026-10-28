@@ -16,4 +16,11 @@ describe("middleware", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("https://verder.vanderpoel.pro/login");
   });
+
+  it("answers the mobile API with a JSON 401, never a redirect", async () => {
+    const res = middleware(new NextRequest("https://verder.vanderpoel.pro/api/mobile/v1/documents", { method: "POST" }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+    expect(await res.json()).toEqual({ error: "unauthorized" });
+  });
 });

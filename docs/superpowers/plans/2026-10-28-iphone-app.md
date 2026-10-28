@@ -150,7 +150,7 @@
   - `429 maps to rateLimited`, `401 maps to unauthorized`.
   - `keychainRoundTrip`: save, load and clear on `KeychainSessionStore` in the test host.
 - [ ] **Step 2:** Run `xcodebuild test …`; expected FAIL.
-- [ ] **Step 3:** Implement. `URLSession` uses `httpCookieStorage = nil` and `httpShouldSetCookies = false`, so the Keychain is the only place a session lives. `SignInView` uses Dutch copy: "Inloggen", "E-mail", "Wachtwoord", and on `.rateLimited` "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw."
+- [ ] **Step 3:** Implement. The client NEVER follows redirects (a `URLSessionTaskDelegate` returning nil from `willPerformHTTPRedirection`), and any 3xx maps to `.unauthorized`: a followed redirect to /login reads as a 200 and would mark a scan sent. Add the test `redirectMapsToUnauthorized`. `URLSession` uses `httpCookieStorage = nil` and `httpShouldSetCookies = false`, so the Keychain is the only place a session lives. `SignInView` uses Dutch copy: "Inloggen", "E-mail", "Wachtwoord", and on `.rateLimited` "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw."
 - [ ] **Step 4:** Run the tests; expected PASS.
 - [ ] **Step 5: Verify on the phone.** Sign in with the password. Expected: `/settings/security` on the web lists a new device whose expiry is about 30 days out. If better-auth rejects the Origin, record the exact error and fix it via `TRUSTED_ORIGINS`, never by dropping the header.
 - [ ] **Step 6:** Commit: `feat(ios): Keychain session and password sign-in`.
