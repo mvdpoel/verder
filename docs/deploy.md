@@ -233,6 +233,14 @@ Two environment variables in `.env.prod` drive the passkey:
 | --- | --- |
 | `PASSKEY_RP_ID` | `<your-tunnel-hostname>` (no scheme, no path) |
 | `PASSKEY_RP_NAME` | `Verder` |
+| `APPLE_TEAM_ID` | the Apple developer team id that signs the iPhone app (10 characters) |
+
+`APPLE_TEAM_ID` feeds `GET /.well-known/apple-app-site-association`, which
+returns `{"webcredentials":{"apps":["<APPLE_TEAM_ID>.pro.vanderpoel.verder"]}}`
+so the iPhone app can use passkeys for this hostname. Unset, the route answers
+404 rather than publish a wrong app id. The path is public (no session, no
+redirect); verify from outside with
+`curl -si https://<your-tunnel-hostname>/.well-known/apple-app-site-association`.
 
 A passkey is cryptographically bound to its `rpID`, so one registered against
 `localhost` in development will never work in production. Register the
