@@ -16,7 +16,7 @@
 
 ## Global Constraints
 
-- iPhone only, portrait, deployment target **iOS 26.0**. Bundle id **`pro.vanderpoel.verder`**, App Group **`group.pro.vanderpoel.verder`**.
+- iPhone only, portrait, deployment target **iOS 27.0** (Martin's phone runs 27.2, measured 2026-10-28; Team ID 7RKC7FRL24). Bundle id **`pro.vanderpoel.verder`**, App Group **`group.pro.vanderpoel.verder`**.
 - Development signing with Martin's paid team. Install on his iPhone 16 Pro only (devicectl id `4151AD85-3F8B-5DE7-9B5F-CCD2534206A5`). Never the App Store.
 - The production origin is `https://verder.vanderpoel.pro`, and it is the passkey RP ID.
 - The app UI is Dutch. Code, comments and commits are English.
@@ -60,7 +60,7 @@
 - Produces: the targets `Verder` (app) and `VerderTests`; the scheme `Verder`; `scripts/install.sh` (builds Release-signed for the device and installs it with `xcrun devicectl device install app`).
 
 - [ ] **Step 1:** Run `brew install xcodegen`. Write `project.yml`:
-  - Settings: `DEVELOPMENT_TEAM: $(APPLE_TEAM_ID)` read from `apps/ios/Local.xcconfig` (gitignored; `Local.xcconfig.example` committed), `IPHONEOS_DEPLOYMENT_TARGET: 26.0`, `TARGETED_DEVICE_FAMILY: 1`, `SWIFT_VERSION: 6`.
+  - Settings: `DEVELOPMENT_TEAM: $(APPLE_TEAM_ID)` read from `apps/ios/Local.xcconfig` (gitignored; `Local.xcconfig.example` committed), `IPHONEOS_DEPLOYMENT_TARGET: 27.0`, `TARGETED_DEVICE_FAMILY: 1`, `SWIFT_VERSION: 6`.
   - Entitlements: `com.apple.developer.associated-domains: [webcredentials:verder.vanderpoel.pro?mode=developer]`, `com.apple.security.application-groups: [group.pro.vanderpoel.verder]`, `keychain-access-groups`.
   - Info.plist: `NSCameraUsageDescription` "verder gebruikt de camera om brieven te scannen.", `NSFaceIDUsageDescription` "verder vraagt Face ID zodat alleen jij je dossier opent.", portrait only.
   - `.gitignore`: `*.xcodeproj`, `Local.xcconfig`, `build/`.
