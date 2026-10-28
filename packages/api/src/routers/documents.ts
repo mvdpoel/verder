@@ -147,7 +147,24 @@ export const documentsRouter = router({
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction((tx) => ingestDocument(tx, input))),
 
-  list: protectedProcedure.input(z.object({
+  /**
+   * The document a client already delivered under this reference, if any.
+   *
+   * The phone upload route asks this BEFORE storing anything: a retry after a
+   * lost response carries the same clientId, and its PDF may be re-encoded, so
+   * sha256 dedup alone would ingest it a second time.
+   */
+  bySourceRef: protectedProcedure.input(z.object({
+    source: z.enum(DOC_SOURCES), sourceRef: z.string().min(1),
+  })).query(async ({ ctx, input }) => {
+    const [row] = await ctx.db.select({ id: schema.documents.id }).from(schema.documents)
+      .where(and(eq(schema.documents.source, input.source),
+        eq(schema.documents.sourceRef, input.sourceRef)))
+      .orderBy(asc(schema.documents.createdAt)).limit(1);
+    return row ?? null;
+  }),
+
+  list:protectedProcedure.input(z.object({
     status: z.enum(["inbox", "filed", "discarded"]).optional(),
     limit: z.number().int().min(1).max(200).default(50),
     // Discarded documents stay reachable by direct URL and by asking for them

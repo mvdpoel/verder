@@ -55,6 +55,26 @@ describe("documents router", () => {
     expect(one.status).toBe("inbox");
   });
 
+  it("finds a document by source and sourceRef, and nothing for another source", async () => {
+    const c = caller();
+    const ref = `phone:${crypto.randomUUID()}`;
+    expect(await c.documents.bySourceRef({ source: "phone-scan", sourceRef: ref })).toBeNull();
+    const doc = await c.documents.registerUpload({ sha256: sha(), sizeBytes: 10,
+      mime: "application/pdf", title: "Brief.pdf", source: "phone-scan", sourceRef: ref,
+      receivedAt: new Date() });
+    // Keep pendingDocMeta's backlog on the shared dev DB from growing: an
+    // ingested fixture gets the row storeDocumentText writes for an unreadable
+    // file. Admin connection, because verder_app holds SELECT only there.
+    const admin = createDb(ADMIN_URL).db;
+    await admin.insert(schema.documentTexts).values({ documentId: doc.id, sha256: doc.sha256,
+      text: "", extractor: "none", charCount: 0 });
+    expect(await c.documents.bySourceRef({ source: "phone-scan", sourceRef: ref }))
+      .toEqual({ id: doc.id });
+    expect(await c.documents.bySourceRef({ source: "phone-share", sourceRef: ref })).toBeNull();
+    await expect(anonCaller().documents.bySourceRef({ source: "phone-scan", sourceRef: ref }))
+      .rejects.toThrow();
+  });
+
   it("rejects a sha256 that is not 64 lowercase hex chars", async () => {
     const c = caller();
     const base = { sizeBytes: 10, mime: "application/pdf", title: "Evil",
