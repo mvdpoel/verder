@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
 
 /**
  * A rule bundle's membership, in the same vocabulary the tree filters on.
@@ -11,7 +12,7 @@ import { z } from "zod";
 export const bundleRuleSchema = z.object({
   docType: z.string().min(1).optional(),
   partyId: z.string().uuid().optional(),
-  source: z.enum(["upload", "nas-scan", "email-attachment", "loondossier"]).optional(),
+  source: z.enum(DOC_SOURCES).optional(),
   status: z.enum(["inbox", "filed", "discarded"]).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -30,9 +31,9 @@ export function parseBundleRule(raw: unknown):
     message: first ? `${first.path.join(".") || "regel"}: ${first.message}` : "onleesbare regel" };
 }
 
-const NL_SOURCE: Record<string, string> = {
+const NL_SOURCE: Record<DocSource, string> = {
   upload: "geüpload", "nas-scan": "gescand", "email-attachment": "uit de mail",
-  loondossier: "Mijn LoonDossier",
+  loondossier: "Mijn LoonDossier", "phone-scan": "telefoon", "phone-share": "gedeeld",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "te sorteren", filed: "opgeborgen", discarded: "weggelegd",

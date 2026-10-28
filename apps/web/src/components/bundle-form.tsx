@@ -1,6 +1,7 @@
 "use client";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
 import { trpc } from "@/lib/trpc-client";
 import {
   Button, Dialog, Field, FormError, Input, Micro, Notice, Select, Textarea,
@@ -13,18 +14,24 @@ import {
  */
 type DocTypeOption = { key: string; label: string; n: number };
 type PartyOption = { id: string; name: string };
-type SourceValue = "" | "upload" | "nas-scan" | "email-attachment" | "loondossier";
+type SourceValue = "" | DocSource;
 type StatusValue = "" | "inbox" | "filed" | "discarded";
 
 // Same Dutch words `describeRule` (packages/api/src/bundle-rule.ts) renders a
 // saved rule back into, so a rule reads the same whether it is being built or
 // being shown.
-const SOURCE_OPTIONS: { value: Exclude<SourceValue, "">; label: string }[] = [
-  { value: "upload", label: "geüpload" },
-  { value: "nas-scan", label: "gescand" },
-  { value: "email-attachment", label: "uit de mail" },
-  { value: "loondossier", label: "Mijn LoonDossier" },
-];
+// A Record rather than a list, so a new source that is not given a word here
+// fails to typecheck instead of silently missing from the dropdown.
+const SOURCE_LABEL: Record<DocSource, string> = {
+  upload: "geüpload",
+  "nas-scan": "gescand",
+  "email-attachment": "uit de mail",
+  loondossier: "Mijn LoonDossier",
+  "phone-scan": "telefoon",
+  "phone-share": "gedeeld",
+};
+const SOURCE_OPTIONS: { value: DocSource; label: string }[] = DOC_SOURCES.map(
+  (value) => ({ value, label: SOURCE_LABEL[value] }));
 const STATUS_OPTIONS: { value: Exclude<StatusValue, "">; label: string }[] = [
   { value: "inbox", label: "te sorteren" },
   { value: "filed", label: "opgeborgen" },

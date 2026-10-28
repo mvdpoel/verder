@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
+import { DOC_SOURCES } from "./doc-sources";
 import { bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
 export const channelEnum = pgEnum("channel", ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]);
 export const directionEnum = pgEnum("direction", ["inbound", "outbound", "internal"]);
 export const entrySourceEnum = pgEnum("entry_source", ["manual", "gmail-watch", "nas-watch"]);
-export const docSourceEnum = pgEnum("doc_source", ["upload", "nas-scan", "email-attachment", "loondossier"]);
+export { DOC_SOURCES, type DocSource } from "./doc-sources";
+export const docSourceEnum = pgEnum("doc_source", DOC_SOURCES);
 export const docStatusEnum = pgEnum("doc_status", ["inbox", "filed", "discarded"]);
 export const partyKindEnum = pgEnum("party_kind", ["person", "organization"]);
 export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-provided"]);

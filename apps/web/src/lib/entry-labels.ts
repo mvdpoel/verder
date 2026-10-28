@@ -1,3 +1,5 @@
+import type { DocSource } from "@verder/db/doc-sources";
+
 /**
  * The logbook's enum values, in Dutch.
  *
@@ -47,9 +49,11 @@ export const ENTRY_SOURCE_LABEL: Record<string, string> = {
 };
 
 /** How a document reached the vault. */
-export const DOC_SOURCE_LABEL: Record<string, string> = {
+export const DOC_SOURCE_LABEL: Record<DocSource, string> = {
   upload: "geüpload",
   "nas-scan": "scanner",
   "email-attachment": "e-mailbijlage",
   loondossier: "Mijn LoonDossier",
+  "phone-scan": "telefoon",
+  "phone-share": "gedeeld",
 };

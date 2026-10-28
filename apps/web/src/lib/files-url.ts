@@ -1,3 +1,5 @@
+import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
+
 /**
  * Everything /files shows comes from the URL and is rendered on the server, so
  * a link Martin sends himself reproduces exactly this view — the same rule
@@ -15,7 +17,7 @@ export type Branch =
   | { kind: "soort"; key: string }
   | { kind: "party"; id: string | null }
   | { kind: "periode"; month: string }
-  | { kind: "bron"; source: "upload" | "nas-scan" | "email-attachment" | "loondossier" }
+  | { kind: "bron"; source: DocSource }
   | { kind: "status"; status: "inbox" | "filed" | "discarded" | "purged" };
 
 export const SORTS = ["naam", "soort", "van", "datum", "grootte"] as const;
@@ -27,7 +29,6 @@ export interface ParsedFiles {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MONTH = /^\d{4}-\d{2}$/;
-const SOURCES = ["upload", "nas-scan", "email-attachment", "loondossier"] as const;
 const STATUSES = ["inbox", "filed", "discarded", "purged"] as const;
 
 export function encodeBranch(b: Branch): string {
@@ -64,7 +65,7 @@ export function decodeBranch(raw: string): Branch {
   }
   if (kind === "periode") return MONTH.test(v) ? { kind: "periode", month: v } : { kind: "alles" };
   if (kind === "bron") {
-    return (SOURCES as readonly string[]).includes(v)
+    return (DOC_SOURCES as readonly string[]).includes(v)
       ? ({ kind: "bron", source: v } as Branch) : { kind: "alles" };
   }
   if (kind === "status") {

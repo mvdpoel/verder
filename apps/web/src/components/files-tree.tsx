@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
+import type { DocSource } from "@verder/db/doc-sources";
 import { buildFilesHref, encodeBranch, type Branch, type ParsedFiles } from "@/lib/files-url";
 
-const NL_SOURCE: Record<string, string> = {
+const NL_SOURCE: Record<DocSource, string> = {
   upload: "Geüpload", "nas-scan": "Gescand", "email-attachment": "Uit de mail",
-  loondossier: "Mijn LoonDossier",
+  loondossier: "Mijn LoonDossier", "phone-scan": "Telefoon", "phone-share": "Gedeeld",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "Te sorteren", filed: "Opgeborgen", discarded: "Weggelegd",
@@ -99,7 +100,7 @@ export function FilesTree({ tree, bundles, parsed }: FilesTreeProps) {
       <Group label="bron">
         {tree.bron.map((b) => (
           <Item key={b.source} branch={{ kind: "bron", source: b.source as BronSource }}
-            label={NL_SOURCE[b.source] ?? b.source} n={b.n} />
+            label={NL_SOURCE[b.source as BronSource] ?? b.source} n={b.n} />
         ))}
       </Group>
 
