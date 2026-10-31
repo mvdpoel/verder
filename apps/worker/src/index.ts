@@ -21,6 +21,7 @@ import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
+import { buildProposalPrompt } from "./proposals/draft-prompt";
 import { PROPOSAL_CREATE_WORKER_NAME } from "@verder/api/src/worker-names";
 import { resolveAggregator } from "./receipts";
 import { notifier } from "./notify/notify";
@@ -279,8 +280,13 @@ await boss.work("suggest.entry", async ([job]) => {
   // at-least-once delivery (the trigger unique index). Error-isolated like the
   // two above, and a row is recorded only when something happened.
   try {
-    const r = await proposalsForMail(
-      { db, retrieveRefs, vaultDir: process.env.VAULT_DIR ?? "./vault-files" }, rawEmailId);
+    const r = await proposalsForMail({
+      db, retrieveRefs, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+      // The prompt is stored at creation: the host drafter only pipes it into
+      // `claude -p` (ops/proposal-drafter.sh), so the row records exactly what
+      // the model saw.
+      buildPrompt: buildProposalPrompt,
+    }, rawEmailId);
     if (r.created || r.superseded > 0) {
       await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "ok", { rawEmailId, ...r });
     }

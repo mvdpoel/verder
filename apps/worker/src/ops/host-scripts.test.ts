@@ -291,3 +291,164 @@ describe("ops/watchdog.sh", () => {
       ["backup", "bin", "dl", "home", "ops", "scan", "state", "stub.log", "vault", ".env.prod"].sort());
   });
 });
+
+describe("ops/proposal-drafter.sh", () => {
+  const SCRIPT = readFileSync(join(OPS, "proposal-drafter.sh"), "utf8");
+  // A value that must never surface anywhere: argv, logs, stdout or stderr.
+  const TOKEN = `sk-ant-oat01-test-${crypto.randomUUID()}`;
+  const ID1 = crypto.randomUUID();
+  const ID2 = crypto.randomUUID();
+
+  const DRAFTER_STUBS: Record<string, string> = {
+    // Logs exactly how it was called, then drops `-k N` and the duration.
+    timeout: `#!/bin/sh
+echo "timeout $*" >> "$STUB_LOG"
+while :; do case "$1" in -k) shift 2;; -*) shift;; ''|*[!0-9]*) break;; *) shift; break;; esac; done
+exec "$@"
+`,
+    docker: `#!/bin/sh
+echo "docker $*" >> "$STUB_LOG"
+case " $* " in
+  *" proposals-pending --ids "*) [ -n "$PENDING_IDS" ] && printf '%s\\n' $PENDING_IDS; exit "\${PENDING_RC:-0}";;
+  *" proposals-pending --prompt "*) for id; do :; done; printf 'PROMPT for %s\\nline two' "$id"; exit 0;;
+  *" proposals-store --heartbeat "*) echo heartbeat >> "$STUB_STATE/store"; exit 0;;
+  *" proposals-store "*) echo "store $*" >> "$STUB_STATE/store"; cat >> "$STUB_STATE/store"; echo >> "$STUB_STATE/store"; exit 0;;
+esac
+exit 0
+`,
+    claude: `#!/bin/sh
+echo "claude $*" >> "$STUB_LOG"
+if [ "$1" = "--version" ]; then echo "2.1.0 (Claude Code)"; exit 0; fi
+[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && echo "token-in-env" >> "$STUB_STATE/claude"
+cat >> "$STUB_STATE/claude"
+printf '%s' "$CLAUDE_ANSWER"
+exit "\${CLAUDE_RC:-0}"
+`,
+  };
+
+  function drafterTree() {
+    const root = mkdtempSync(join(tmpdir(), "drafter-"));
+    trees.push(root);
+    for (const d of ["ops", "bin", "state", "home/.config/claude-agent"]) mkdirSync(join(root, d), { recursive: true });
+    copyFileSync(join(OPS, "proposal-drafter.sh"), join(root, "ops/proposal-drafter.sh"));
+    for (const [name, body] of Object.entries(DRAFTER_STUBS)) {
+      writeFileSync(join(root, "bin", name), body);
+      chmodSync(join(root, "bin", name), 0o755);
+    }
+    const tokenFile = join(root, "home/.config/claude-agent/oauth-token");
+    writeFileSync(tokenFile, TOKEN, { mode: 0o600 });
+    writeFileSync(join(root, "stub.log"), "");
+    const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
+    const stateDir = join(root, "home/.local/state/verder-drafter");
+    return {
+      root, tokenFile,
+      log: () => read(join(root, "stub.log")),
+      store: () => read(join(root, "state/store")),
+      claudeIn: () => read(join(root, "state/claude")),
+      drafterLog: () => read(join(stateDir, "drafter.log")),
+      stateDir,
+      run(env: Record<string, string> = {}) {
+        const r = spawnSync("/bin/bash", [join(root, "ops/proposal-drafter.sh")], {
+          encoding: "utf8", timeout: 30_000,
+          env: {
+            PATH: `${join(root, "bin")}:/usr/bin:/bin`, HOME: join(root, "home"),
+            STUB_LOG: join(root, "stub.log"), STUB_STATE: join(root, "state"), ...env,
+          },
+        });
+        return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+      },
+    };
+  }
+
+  it("drafter never prints the token", () => {
+    // Static: no xtrace, and the token variable is never echoed or printed.
+    expect(SCRIPT).not.toMatch(/^\s*set\s+[^#\n]*-[a-z]*x/m);
+    expect(SCRIPT).not.toMatch(/bash\s+-x/);
+    for (const line of SCRIPT.split("\n")) {
+      if (/\b(echo|printf|log)\b/.test(line)) {
+        expect(line, line).not.toMatch(/OAUTH_TOKEN|TOKEN_FILE\)|\$\(cat/);
+      }
+    }
+    // The token reaches claude only through its environment, from the file.
+    const uses = SCRIPT.split("\n").filter((l) => l.includes("CLAUDE_CODE_OAUTH_TOKEN") && !l.trim().startsWith("#"));
+    expect(uses).toHaveLength(1);
+    expect(uses[0]).toMatch(/CLAUDE_CODE_OAUTH_TOKEN="\$\(cat "\$TOKEN_FILE"\)" timeout -k 5 300 claude -p --tools "" --no-session-persistence/);
+
+    // Dynamic: a full run with a draft and a failure leaves the token nowhere.
+    const t = drafterTree();
+    const r = t.run({ PENDING_IDS: `${ID1} ${ID2}`, CLAUDE_ANSWER: '{"ask":"x"}' });
+    expect(r.status).toBe(0);
+    expect(t.claudeIn()).toContain("token-in-env");
+    for (const out of [r.stdout, r.stderr, t.log(), t.store(), t.claudeIn(), t.drafterLog()]) {
+      expect(out).not.toContain(TOKEN);
+    }
+  });
+
+  it("every docker compose exec in the drafter is wrapped in timeout -k 5 60", () => {
+    const code = SCRIPT.split("\n").filter((l) => !l.trim().startsWith("#"));
+    const compose = code.map((l, i) => [l, code[i + 1] ?? ""] as const)
+      .filter(([l]) => l.includes("docker compose"));
+    expect(compose.length).toBeGreaterThan(0);
+    for (const [l, next] of compose) {
+      expect(l).toMatch(/timeout -k 5 60 docker compose/);
+      expect(`${l} ${next}`).toMatch(/exec -T worker/);
+    }
+    // And at run time: each docker call is immediately preceded by its timeout.
+    const t = drafterTree();
+    t.run({ PENDING_IDS: ID1, CLAUDE_ANSWER: "{}" });
+    const lines = t.log().trim().split("\n");
+    const dockerAt = lines.flatMap((l, i) => (l.startsWith("docker ") ? [i] : []));
+    expect(dockerAt.length).toBeGreaterThanOrEqual(3);
+    for (const i of dockerAt) expect(lines[i - 1]).toMatch(/^timeout -k 5 60 docker compose /);
+  });
+
+  it("nothing pending: records the heartbeat, calls no claude", () => {
+    const t = drafterTree();
+    const r = t.run({ PENDING_IDS: "" });
+    expect(r.status).toBe(0);
+    expect(t.store()).toBe("heartbeat\n");
+    expect(t.log()).not.toContain("claude ");
+  });
+
+  it("pipes each prompt into claude -p and its answer into proposals-store", () => {
+    const t = drafterTree();
+    const r = t.run({ PENDING_IDS: `${ID1} ${ID2}`, CLAUDE_ANSWER: '{"ask":"Loonstrook"}' });
+    expect(r.status).toBe(0);
+    expect(t.claudeIn()).toContain(`PROMPT for ${ID1}\nline two`);
+    expect(t.claudeIn()).toContain(`PROMPT for ${ID2}\nline two`);
+    const store = t.store();
+    expect(store).toContain(`proposals-store --id ${ID1} --model claude-cli 2.1.0 (Claude Code)`);
+    expect(store).toContain(`proposals-store --id ${ID2} --model claude-cli 2.1.0 (Claude Code)`);
+    expect(store).toContain('{"ask":"Loonstrook"}');
+    expect(store).not.toContain("heartbeat");
+    expect(t.log()).toContain('claude -p --tools  --no-session-persistence');
+  });
+
+  it("claude failing marks the proposal draft-failed with the exit code", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: ID1, CLAUDE_ANSWER: "", CLAUDE_RC: "124" });
+    expect(t.store()).toContain(`proposals-store --id ${ID1} --model claude-cli 2.1.0 (Claude Code) --failed claude-exit-124`);
+  });
+
+  it("refuses a malformed id rather than passing it to the worker", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: "--heartbeat;rm", CLAUDE_ANSWER: "{}" });
+    expect(t.log()).not.toContain("--prompt");
+    expect(t.store()).toBe("");
+  });
+
+  it("no token: exits 1, touches neither the worker nor claude", () => {
+    const t = drafterTree();
+    rmSync(t.tokenFile);
+    const r = t.run({ PENDING_IDS: ID1 });
+    expect(r.status).toBe(1);
+    expect(t.log()).toBe("");
+  });
+
+  it("keeps all state under the state dir, nothing inside the repo tree", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: ID1, CLAUDE_ANSWER: "{}" });
+    expect(readdirSync(t.root).sort()).toEqual(["bin", "home", "ops", "state", "stub.log"].sort());
+    expect(t.drafterLog()).toContain(`${ID1} stored after`);
+  });
+});

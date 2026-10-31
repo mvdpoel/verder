@@ -52,6 +52,9 @@ export interface ContextItem {
   text?: string;
   /** For a thread email: its effective (not discarded, not purged) attachments. */
   attachments?: ContextItem[];
+  /** For a task: its effective status when the context was gathered, so
+   *  `validateDraft` can judge a `set-task-status` option without the DB. */
+  status?: string;
 }
 
 export interface ProposalContext {
@@ -400,7 +403,7 @@ export async function gatherContext(deps: ContextDeps, trigger: ProposalTrigger)
   const statuses = await effectiveTaskStatuses(db, taskRows.map((t) => t.id));
   const liveTasks = taskRows.filter((t) => LIVE_TASK_STATUSES.has(statuses.get(t.id) ?? "open"));
   const tasks: ContextItem[] = liveTasks.map((t) => ({
-    type: "task", id: t.id,
+    type: "task", id: t.id, status: statuses.get(t.id) ?? "open",
     label: `${t.title} [${statuses.get(t.id)}]${t.dueAt ? ` · uiterlijk ${dayKey(t.dueAt)}` : ""}`,
     text: clip(t.details, THREAD_TEXT_CHARS),
   }));

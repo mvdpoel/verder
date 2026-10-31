@@ -286,3 +286,18 @@ describe("supersedeOnOwnReply", () => {
     });
   });
 });
+
+describe("createProposal with the drafter's prompt", () => {
+  it("stores the exact prompt the host drafter will pipe into claude", async () => {
+    const { buildProposalPrompt } = await import("./draft-prompt");
+    await isolated(async (db) => {
+      const m = await mail(db, { threadId: `t-${uid()}`, from: verder(), sentAt: new Date() });
+      const { id } = await createProposal({ ...deps(db), buildPrompt: buildProposalPrompt },
+        { rawEmailId: m.id }, "verder");
+      const row = await byId(db, id);
+      expect(row.prompt).toBe(buildProposalPrompt(row.context as never, "reply"));
+      expect(row.prompt).toContain(`id=${m.id}`);
+      expect(row.prompt).toContain("<<<DATA");
+    });
+  });
+});

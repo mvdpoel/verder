@@ -189,6 +189,7 @@ describe("gatherContext", () => {
       expect(ids(ctx.debts)).toEqual([w.debt.id]);
       expect(ctx.debts[0].label).toContain("incasso");
       expect(ids(ctx.tasks)).toEqual([w.openTask.id]);
+      expect(ctx.tasks[0].status).toBe("open");
       expect(ids(ctx.stops)).toEqual([w.stop.id]);
       expect(ids(ctx.kb)).toEqual([w.kbDoc.id, w.entry.id]);
       expect(ids(ctx.sentDocuments)).toEqual([w.sentDoc.id]);

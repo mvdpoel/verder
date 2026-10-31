@@ -35,8 +35,8 @@ import { gatherContext, type ContextDeps, type ProposalContext, type ProposalTri
  */
 
 export interface CreateDeps extends ContextDeps {
-  /** Task 14's `buildReplyPrompt`. Until the drafter lands the prompt is NULL
-   *  and the drafter builds it from the stored `context`. */
+  /** Task 14's `buildProposalPrompt`. Without it the prompt is NULL and
+   *  `proposals-pending` builds it from the stored `context` (and stores it). */
   buildPrompt?: (ctx: ProposalContext, kind: ProposalKind) => string;
 }
 

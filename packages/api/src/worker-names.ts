@@ -106,3 +106,11 @@ export const NOTIFY_WORKER_NAME = "notify";
  * only when something happened or failed, so silence is health.
  */
 export const PROPOSAL_CREATE_WORKER_NAME = "proposal-create";
+
+/**
+ * Written by apps/worker/src/ops/proposals-store.ts — one row per stored draft,
+ * drafter failure, or empty run (`--heartbeat`, `{drafted: 0}`) of the host
+ * drafter ops/proposal-drafter.sh (cron every 5 minutes) — and read back by the
+ * `watcher` declaration in worker-health.ts: silence means the host cron died.
+ */
+export const PROPOSAL_DRAFT_WORKER_NAME = "proposal-draft";

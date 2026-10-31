@@ -41,7 +41,8 @@
 
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
-  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
+  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME, RERANK_WORKER_NAME,
+  WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -204,6 +205,11 @@ const DECLS: Record<string, WorkerDecl> = {
   heartbeat: { kind: "watcher", everyMs: 5 * MINUTE },
   // Host cron `*/5`, not pg-boss: silence means the cron line or the host died.
   [WATCHDOG_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
+  // The HOST drafter (ops/proposal-drafter.sh, cron */5) runs `claude -p` with
+  // Martin's token outside every container and writes a row per stored draft,
+  // or a `{drafted: 0}` heartbeat when nothing was pending — so silence means
+  // the cron line or the host script died, which is exactly a watcher.
+  [PROPOSAL_DRAFT_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
