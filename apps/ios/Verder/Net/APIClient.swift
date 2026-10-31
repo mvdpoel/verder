@@ -103,11 +103,18 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate, Sendable {
 /// URL is https (production). The secure name wins when both are present.
 /// An empty value is a deletion (sign-out sends Max-Age=0), never a session.
 func sessionCookie(from response: HTTPURLResponse, url: URL) -> SessionCookie? {
+    responseCookie(named: SessionCookie.names, from: response, url: url)
+}
+
+/// The first of `names` (in order of preference) that the response sets to a
+/// live, non-empty value. Shared by the session cookie and the passkey
+/// challenge cookie (PasskeyAuth.swift), which is set the same way.
+func responseCookie(named names: [String], from response: HTTPURLResponse, url: URL) -> SessionCookie? {
     let headers = response.allHeaderFields.reduce(into: [String: String]()) { out, pair in
         if let k = pair.key as? String, let v = pair.value as? String { out[k] = v }
     }
     let cookies = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url)
-    for name in SessionCookie.names {
+    for name in names {
         if let c = cookies.first(where: { $0.name == name }), !c.value.isEmpty {
             if let expires = c.expiresDate, expires <= Date() { return nil }
             return SessionCookie(name: c.name, value: c.value, expires: c.expiresDate)

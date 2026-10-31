@@ -10,18 +10,37 @@ final class AuthModel {
         static let wrongCredentials = "Dat werkte niet — controleer je e-mailadres en wachtwoord en probeer het nog eens."
         static let offline = "Geen verbinding met verder. Controleer je internet en probeer het opnieuw."
         static let generic = "Inloggen lukte niet. Probeer het over een moment opnieuw."
+        static let passkeyFailed = "Inloggen met passkey lukte niet. Probeer het opnieuw, of log in met je wachtwoord."
+        static let passkeyAdded = "Passkey toegevoegd. Voortaan log je in met Face ID."
+        static let passkeyAddFailed = "Passkey toevoegen lukte niet. Probeer het over een moment opnieuw."
+        /// better-auth registers a passkey only on a session younger than a day.
+        static let passkeyNeedsFreshSignIn = "Log eerst opnieuw in; daarna kun je een passkey toevoegen."
     }
+
+    /// Default label for a passkey registered on the phone, as
+    /// /settings/security lists it.
+    static let passkeyName = "verder op iPhone"
+    private static let offerShownKey = "passkeyOfferShown"
 
     private(set) var isSignedIn: Bool
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// After a password sign-in with no passkey on the account yet: offer one,
+    /// once per install.
+    private(set) var passkeyOfferPending = false
+    /// The outcome of adding a passkey, for the signed-in screen.
+    private(set) var passkeyMessage: String?
 
     @ObservationIgnored let client: APIClient
     @ObservationIgnored let store: any SessionStore
+    @ObservationIgnored let passkeys: PasskeyAuth
+    @ObservationIgnored let defaults: UserDefaults
 
-    init(client: APIClient, store: any SessionStore) {
+    init(client: APIClient, store: any SessionStore, passkeys: PasskeyAuth? = nil, defaults: UserDefaults = .standard) {
         self.client = client
         self.store = store
+        self.passkeys = passkeys ?? PasskeyAuth(client: client, store: store, authenticator: PlatformPasskeyAuthenticator())
+        self.defaults = defaults
         self.isSignedIn = store.load()?.isLive() ?? false
     }
 
@@ -54,9 +73,82 @@ final class AuthModel {
             isSignedIn = true
         } catch let error as APIError {
             errorMessage = Self.message(for: error)
+            return
         } catch {
             errorMessage = Copy.generic
+            return
         }
+        await offerPasskeyIfNone()
+    }
+
+    /// Face ID, then the session. One attempt per tap, like the password.
+    func signInWithPasskey() async {
+        guard !isBusy else { return }
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+
+        do {
+            try await passkeys.signIn()
+            isSignedIn = true
+        } catch PasskeyError.cancelled {
+            // Martin closed the sheet; nothing to say.
+        } catch let error as APIError {
+            errorMessage = error == .unauthorized ? Copy.passkeyFailed : Self.message(for: error)
+        } catch {
+            errorMessage = Copy.passkeyFailed
+        }
+    }
+
+    /// Registers a passkey for the signed-in user.
+    func addPasskey() async {
+        guard !isBusy else { return }
+        isBusy = true
+        passkeyMessage = nil
+        defer { isBusy = false }
+
+        do {
+            try await passkeys.register(name: Self.passkeyName)
+            passkeyOfferPending = false
+            passkeyMessage = Copy.passkeyAdded
+        } catch PasskeyError.cancelled {
+            // Martin closed the sheet; nothing to say.
+        } catch APIError.rejected(403), APIError.unauthorized, PasskeyError.notSignedIn {
+            passkeyMessage = Copy.passkeyNeedsFreshSignIn
+        } catch APIError.rateLimited {
+            passkeyMessage = Copy.rateLimited
+        } catch APIError.transport {
+            passkeyMessage = Copy.offline
+        } catch {
+            passkeyMessage = Copy.passkeyAddFailed
+        }
+    }
+
+    func dismissPasskeyOffer() {
+        passkeyOfferPending = false
+    }
+
+    /// Ends the session on the server when it can, and ALWAYS forgets it here:
+    /// a phone that could not reach verder must still drop what Martin asked
+    /// it to drop. A session left alive server-side expires on its own and
+    /// can be revoked from /settings/security.
+    func signOut() async {
+        let req = client.request("/api/auth/sign-out", method: "POST", body: Data("{}".utf8), contentType: "application/json")
+        _ = try? await client.send(req)
+        store.clear()
+        isSignedIn = false
+        passkeyOfferPending = false
+        passkeyMessage = nil
+    }
+
+    /// The offer is made at most once per install, and only when the account
+    /// has no passkey at all — one made in Safari on this phone already works
+    /// here. A failed lookup offers nothing: an offer is never worth an error.
+    private func offerPasskeyIfNone() async {
+        guard !defaults.bool(forKey: Self.offerShownKey) else { return }
+        guard let has = try? await passkeys.hasAnyPasskey(), !has else { return }
+        defaults.set(true, forKey: Self.offerShownKey)
+        passkeyOfferPending = true
     }
 
     static func message(for error: APIError) -> String {

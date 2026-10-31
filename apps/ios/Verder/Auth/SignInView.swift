@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Password sign-in, the web's /login on the phone. Task 6 puts the passkey
-/// first and the password second; until then this is the only way in.
+/// The web's /login on the phone: the passkey first (one tap and Face ID),
+/// the password second as the fallback.
 ///
 /// No amber here: an error is not something waiting on Martin in the dossier.
 struct SignInView: View {
@@ -23,6 +23,16 @@ struct SignInView: View {
                         Text("Inloggen")
                             .font(.display(26, relativeTo: .title, weight: .ultraLight))
                             .foregroundStyle(Color.inkBright)
+
+                        AuthButton(title: "Inloggen met passkey", enabled: !auth.isBusy) {
+                            Task { await auth.signInWithPasskey() }
+                        }
+
+                        Text("of met je wachtwoord")
+                            .font(.mono(11, relativeTo: .caption))
+                            .foregroundStyle(Color.inkLabel)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 4)
 
                         field("E-mail") {
                             TextField("", text: $email)
@@ -50,19 +60,8 @@ struct SignInView: View {
                                 .accessibilityAddTraits(.isStaticText)
                         }
 
-                        Button(action: submit) {
-                            Text(auth.isBusy ? "Bezig…" : "Inloggen")
-                                .font(.mono(14, relativeTo: .body, weight: .medium))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .foregroundStyle(Color.onSignal)
-                                .background(
-                                    LinearGradient(colors: [.signalLit, .signal], startPoint: .top, endPoint: .bottom),
-                                    in: RoundedRectangle(cornerRadius: Radius.chip)
-                                )
-                                .glow(Glow.action)
-                        }
-                        .disabled(!canSubmit)
-                        .opacity(canSubmit ? 1 : 0.5)
+                        AuthButton(title: auth.isBusy ? "Bezig…" : "Inloggen met wachtwoord",
+                                   weight: .secondary, enabled: canSubmit, action: submit)
                     }
                     .padding(26)
                     .glassPanel()
