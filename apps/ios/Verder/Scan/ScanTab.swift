@@ -2,9 +2,13 @@ import SwiftUI
 import VisionKit
 
 /// The first tab, and the reason the app exists: the camera is live on launch
-/// with no tap, a finished capture is cleaned, packed and queued off the main
-/// thread, and the camera is back at once for the next letter (spec §7.1,
-/// anti-goal "snapping is slower than walking upstairs").
+/// with no tap, and a finished capture is cleaned, packed and queued off the
+/// main thread (spec §7.1, anti-goal "snapping is slower than walking upstairs").
+///
+/// ✓ and ✗ CLOSE the camera and land on a calm idle screen with one button to
+/// scan the next letter. The first version re-armed a fresh camera in place on
+/// both buttons, so on the phone neither ever visibly closed the camera and the
+/// tab bar was unreachable (measured with Martin, 2026-10-31).
 ///
 /// NOT lock-gated (plan Task 7 step 3): the camera and the queue work before
 /// Face ID, because a queued scan reveals nothing. This view must never read
@@ -16,6 +20,10 @@ struct ScanTab: View {
     /// A fresh camera per capture: VisionKit's controller keeps its finished
     /// pages, so "back at once" means a new one.
     @State private var cameraID = UUID()
+    /// Open on launch (no tap); closed by ✓ or ✗.
+    @State private var cameraOpen = true
+    /// Pages in the last capture, for the idle screen's confirmation.
+    @State private var lastPages: Int?
     @State private var showSignIn = false
 
     var body: some View {
@@ -34,7 +42,11 @@ struct ScanTab: View {
             QueueStrip(summary: summaryWithPreparing) {
                 Task { await center.retryFailed() }
             }
-            camera
+            if cameraOpen {
+                camera
+            } else {
+                idle
+            }
         }
         .background(Color.void.ignoresSafeArea())
         .sheet(isPresented: $showSignIn) {
@@ -59,11 +71,14 @@ struct ScanTab: View {
             DocumentCamera(
                 onFinish: { pages in
                     center.capture(pages)
-                    cameraID = UUID()
+                    lastPages = pages.count
+                    cameraOpen = false
                 },
-                onCancel: { cameraID = UUID() })
+                onCancel: {
+                    lastPages = nil
+                    cameraOpen = false
+                })
             .id(cameraID)
-            .ignoresSafeArea(edges: .bottom)
         } else {
             // The simulator has no document camera.
             VStack {
@@ -75,6 +90,25 @@ struct ScanTab: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// Between scans: what just went, and one button for the next letter.
+    private var idle: some View {
+        VStack(spacing: 21) {
+            Spacer()
+            if let n = lastPages {
+                Text(n == 1 ? "1 pagina in de wachtrij" : "\(n) pagina's in de wachtrij")
+                    .font(.display(20, relativeTo: .title3, weight: .light))
+                    .foregroundStyle(Color.inkBright)
+            }
+            AuthButton(title: lastPages == nil ? "Scan een brief" : "Volgende brief scannen") {
+                cameraID = UUID()
+                cameraOpen = true
+            }
+            .padding(.horizontal, 34)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// Amber-free: the session ran out, which is the system's state, not an
