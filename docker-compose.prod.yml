@@ -57,6 +57,11 @@ services:
       - "${NAS_SCAN_HOST_DIR:?set in .env.prod}:/scans"
       - "${NAME_JOURNAL_DIR:-/srv/verder/normalize-journal}:/journal"
       - "./secrets:/repo/secrets"
+      # The gmail.send token for approved proposals, READ-ONLY: this nested bind
+      # shadows the read-write ./secrets one at that path (Plan 2 Task 21).
+      # ./secrets/send must exist on the host before `up`, or compose creates it
+      # root-owned and empty.
+      - "./secrets/send:/repo/secrets/send:ro"
     depends_on:
       postgres: { condition: service_healthy }
 
