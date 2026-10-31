@@ -141,6 +141,29 @@ describe("storeDraft", () => {
     });
   });
 
+  it("a letter's proposal push replaces the letter push (collapse id letter:<documentId>)", async () => {
+    await isolated(async (db) => {
+      const [d] = await db.insert(schema.documents).values({
+        sha256: (uid() + uid()).replaceAll("-", ""), title: `Brief ${uid()}.pdf`, mime: "application/pdf",
+        sizeBytes: 10, source: "nas-scan", sourceRef: `store-letter-${uid()}`, receivedAt: new Date(),
+      }).returning();
+      await db.insert(schema.documentTexts).values({
+        documentId: d.id, sha256: d.sha256, text: "", charCount: 0, extractor: "none",
+      });
+      const ctx = fixtureContext();
+      const [p] = await db.insert(schema.proposals).values({
+        kind: "reply", status: "drafting", priority: "verder", triggerDocumentId: d.id,
+        senderGuess: { kind: "verder" }, context: { ...ctx, party: null }, prompt: "the prompt",
+      }).returning();
+      const fake = fakeNotify();
+      await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: replyAnswer(ctx) });
+      expect(fake.calls[0]).toMatchObject({
+        level: "time-sensitive", body: "Antwoord klaar voor Verder. Bekijk en verstuur.",
+        threadId: `letter:${d.id}`, collapseId: `letter:${d.id}`,
+      });
+    });
+  });
+
   it("invalid answer is draft-failed with the raw output kept", async () => {
     await isolated(async (db) => {
       const since = new Date((await db.execute<{ now: string }>("select now() as now")).rows[0].now);

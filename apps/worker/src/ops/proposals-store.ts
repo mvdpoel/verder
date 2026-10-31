@@ -59,7 +59,10 @@ function partyLabel(row: Row, ctx: ProposalContext): string {
 
 function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): NotifyInput {
   const who = partyLabel(row, ctx);
-  const mailKey = row.triggerRawEmailId ? `mail:${row.triggerRawEmailId}` : undefined;
+  // The key of the push that announced the trigger (Task 10's mail push,
+  // Task 18's letter push), so this one replaces it.
+  const triggerKey = row.triggerRawEmailId ? `mail:${row.triggerRawEmailId}`
+    : row.triggerDocumentId ? `letter:${row.triggerDocumentId}` : undefined;
   return {
     kind: "proposal",
     level: row.priority === "verder" ? "time-sensitive" : "active",
@@ -70,9 +73,9 @@ function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): No
       : `Antwoord klaar voor ${who}. Bekijk en verstuur.`,
     link: `verder://proposal/${row.id}`,
     dedupKey: `proposal:${row.id}`,
-    // Same thread and collapse id as Task 10's mail push, so this one REPLACES
-    // it on the lock screen instead of stacking a second alert for one mail.
-    ...(mailKey ? { threadId: mailKey, collapseId: mailKey } : {}),
+    // Same thread and collapse id as the mail or letter push, so this one
+    // REPLACES it on the lock screen instead of stacking a second alert.
+    ...(triggerKey ? { threadId: triggerKey, collapseId: triggerKey } : {}),
   };
 }
 

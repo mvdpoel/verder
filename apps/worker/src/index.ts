@@ -21,6 +21,7 @@ import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
+import { proposalForLetter } from "./proposals/letters";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
 import { PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
@@ -364,6 +365,24 @@ await boss.work("suggest.docmeta", async ([job]) => {
     journalPath: NAME_JOURNAL, log: (l) => console.log(l) }, documentId, stored.text);
   await suggestDocMeta({ db, llm, extractText: async () => stored.text },
     documentId, buf);
+  // A scanned letter that looks like Verder's (or a creditor's) gets the same
+  // treatment as their mail (spec §6.7, §12.5): a push, then a drafting
+  // proposal. Same text the index holds. Error-isolated like the mail path, so
+  // a failure here never re-runs OCR and the docmeta suggestion; a re-run is
+  // one push and one proposal anyway (`letter:<id>`, the doc trigger index).
+  try {
+    const r = await proposalForLetter({
+      db, notify, retrieveRefs, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+      buildPrompt: buildProposalPrompt,
+    }, documentId, stored.text);
+    if (r.created) {
+      await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "ok",
+        { documentId, sender: r.sender, proposalId: r.proposalId });
+    }
+  } catch (err) {
+    await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "error", { documentId, message: String(err) })
+      .catch((e) => console.error(`proposal-create ${documentId}: ${String(err)} / ${String(e)}`));
+  }
 });
 
 await boss.createQueue("nas.scan");
