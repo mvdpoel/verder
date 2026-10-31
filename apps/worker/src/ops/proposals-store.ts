@@ -86,6 +86,15 @@ function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): No
     // Same thread and collapse id as the mail or letter push, so this one
     // REPLACES it on the lock screen instead of stacking a second alert.
     ...(triggerKey ? { threadId: triggerKey, collapseId: triggerKey } : {}),
+    // A question is answerable from the notification (spec §7.2): its labels
+    // become the actions, and the revision travels with them because the
+    // answer route requires it and an action has no screen to read it from.
+    // storeDraft does not bump the revision, so this is the revision the
+    // answer is checked against — a question answered on the web meanwhile
+    // answers 409 and runs nothing, which is the safe direction.
+    ...(payload.question
+      ? { options: payload.question.options.map((o) => o.label), revision: row.revision }
+      : {}),
   };
 }
 

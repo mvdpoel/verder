@@ -23,12 +23,13 @@ import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { proposalForLetter } from "./proposals/letters";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { BADGE_SYNC_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
 import { followUpCreator, runClocks } from "./proposals/clocks";
 import { realSendPort } from "./gmail-send";
 import { resolveAggregator } from "./receipts";
-import { notifier } from "./notify/notify";
+import { notifier, pushToDevices } from "./notify/notify";
+import { syncBadge } from "./badge-sync";
 import { realEmbedPort } from "@verder/api/src/search/embed";
 import { drainOnce } from "./search-drain";
 
@@ -345,6 +346,24 @@ await boss.work("proposals.clock", async () => {
     } catch (err) {
       await recordRun(db, PROPOSAL_CLOCK_WORKER_NAME, "error", { message: String(err) })
         .catch((e) => console.error(`proposal-clock: ${String(err)} / ${String(e)}`));
+    }
+  });
+});
+
+// The app icon's number between alerts (badge-sync.ts, spec §7.3): every five
+// minutes, compare what waits on Martin with the count last told the phone and,
+// on a change, send a badge-only push plus a silent refresh. One run row per
+// tick either way — this is a watcher. Single-flight like the clocks above.
+const badgeSync = makeSingleFlight();
+await boss.createQueue("badge.sync");
+await boss.schedule("badge.sync", "*/5 * * * *");
+await boss.work("badge.sync", async () => {
+  await badgeSync.run(async () => {
+    try {
+      await syncBadge(db, { push: (raw) => pushToDevices({ db }, raw) });
+    } catch (err) {
+      await recordRun(db, BADGE_SYNC_WORKER_NAME, "error", { message: String(err) })
+        .catch((e) => console.error(`badge-sync: ${String(err)} / ${String(e)}`));
     }
   });
 });

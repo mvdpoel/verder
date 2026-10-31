@@ -222,6 +222,31 @@ describe("storeDraft", () => {
     });
   });
 
+  it("a question push carries its option labels and revision", async () => {
+    await isolated(async (db) => {
+      const { p, ctx } = await proposal(db);
+      const fake = fakeNotify();
+      await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: questionAnswer(ctx) });
+      const row = await byId(db, p.id);
+      expect(fake.calls[0]).toMatchObject({
+        kind: "proposal", link: `verder://proposal/${p.id}`,
+        options: ["Ja, klaar", "Nee"], revision: row.revision,
+      });
+      // Storing the draft does not bump it: this IS the revision the answer is checked against.
+      expect(row.revision).toBe(p.revision);
+    });
+  });
+
+  it("a reply push carries no options", async () => {
+    await isolated(async (db) => {
+      const { p, ctx } = await proposal(db);
+      const fake = fakeNotify();
+      await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: replyAnswer(ctx) });
+      expect("options" in fake.calls[0]).toBe(false);
+      expect("revision" in fake.calls[0]).toBe(false);
+    });
+  });
+
   it("an unknown id writes an error row and notifies nothing", async () => {
     await isolated(async (db) => {
       const fake = fakeNotify();

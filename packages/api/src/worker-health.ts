@@ -43,7 +43,7 @@ import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
   NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
   PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
-  RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
+  RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME, BADGE_SYNC_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -222,6 +222,9 @@ const DECLS: Record<string, WorkerDecl> = {
   // per run — the empty-watchlist refusal and the rate-limited skip included —
   // so silence means the cron line or the host script died.
   [MAIL_AGENT_WORKER_NAME]: { kind: "watcher", everyMs: 15 * MINUTE },
+  // `boss.schedule("badge.sync", "*/5 * * * *")`: one row per tick, an
+  // unchanged count included, so silence means the icon's number is going stale.
+  [BADGE_SYNC_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cadenceMs, declFor, workerState } from "./worker-health";
 import {
   MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME,
-  PROPOSAL_SEND_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME, BADGE_SYNC_WORKER_NAME,
 } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -248,6 +248,17 @@ describe("declFor — the workers that exist today", () => {
     // superseded, or creating one failed: silence is health.
     expect(PROPOSAL_CREATE_WORKER_NAME).toBe("proposal-create");
     expect(declFor(PROPOSAL_CREATE_WORKER_NAME)).toEqual({ kind: "on-demand" });
+  });
+
+  it("badge-sync is a 5-minute watcher", () => {
+    // One row per badge.sync tick, an unchanged count included: silence means
+    // the job died and the icon's number is going stale.
+    expect(BADGE_SYNC_WORKER_NAME).toBe("badge-sync");
+    expect(declFor(BADGE_SYNC_WORKER_NAME)).toEqual({ kind: "watcher", everyMs: 5 * MIN });
+    // The DEFAULT for an undeclared name is also a 5-minute watcher, so the
+    // shape alone cannot prove the declaration exists. A declared name returns
+    // the one DECLS entry; the default is a fresh object on every call.
+    expect(declFor(BADGE_SYNC_WORKER_NAME)).toBe(declFor(BADGE_SYNC_WORKER_NAME));
   });
 
   it("proposal-send is a one-minute watcher", () => {

@@ -94,7 +94,77 @@ describe("apnsPayload", () => {
   });
 });
 
+describe("apnsPayload — badge and question options (Plan 3 Task 5)", () => {
+  type P = { aps: Record<string, unknown>; link?: string; options?: string[]; revision?: number };
+
+  it("proposal with options carries options, revision and mutable-content", () => {
+    const p = apnsPayload({ ...ALERT, category: "PROPOSAL", link: "verder://proposal/abc",
+      options: ["Ja, klaar", "Nee"], revision: 3 }) as P;
+    expect(p.aps["mutable-content"]).toBe(1);
+    expect(p.options).toEqual(["Ja, klaar", "Nee"]);
+    expect(p.revision).toBe(3);
+    // The deep link stays Plan 2's, beside aps.
+    expect(p.link).toBe("verder://proposal/abc");
+    expect(p.aps.category).toBe("PROPOSAL");
+  });
+
+  it("alert without options never carries options or mutable-content", () => {
+    const p = apnsPayload({ ...ALERT, revision: 3 }) as P;
+    expect(p.aps["mutable-content"]).toBeUndefined();
+    expect("options" in p).toBe(false);
+    // revision only travels with options: on its own it answers nothing.
+    expect("revision" in p).toBe(false);
+  });
+
+  it("options are capped at four and forty characters", () => {
+    const long = "x".repeat(39) + "😀😀";
+    const p = apnsPayload({ ...ALERT, options: ["a", "b", "c", "d", "e", long], revision: 1 }) as P;
+    expect(p.options).toEqual(["a", "b", "c", "d"]);
+    const q = apnsPayload({ ...ALERT, options: [long, "k".repeat(41)], revision: 1 }) as P;
+    // Cut by code point: the emoji is kept whole or dropped, never halved.
+    expect(q.options).toEqual(["x".repeat(39) + "😀", "k".repeat(40)]);
+    expect(Array.from(q.options![0])).toHaveLength(40);
+  });
+
+  it("badge is emitted when given", () => {
+    expect((apnsPayload({ ...ALERT, badge: 3 }) as P).aps.badge).toBe(3);
+    // Zero is a real value: it clears the icon.
+    expect((apnsPayload({ ...ALERT, badge: 0 }) as P).aps.badge).toBe(0);
+    expect("badge" in (apnsPayload(ALERT) as P).aps).toBe(false);
+  });
+});
+
 describe("http2ApnsSender", () => {
+  it("sendRaw background sets apns-push-type background and priority 5", async () => {
+    const seen: { headers: http2.IncomingHttpHeaders; body: string }[] = [];
+    const port = await listen((stream, headers) => {
+      const chunks: Buffer[] = [];
+      stream.on("data", (c: Buffer) => chunks.push(c));
+      stream.on("end", () => {
+        seen.push({ headers, body: Buffer.concat(chunks).toString("utf8") });
+        stream.respond({ ":status": 200, "apns-id": "raw-1" });
+        stream.end();
+      });
+    });
+    const sender = http2ApnsSender(CFG, { connect: (_a, o) => http2.connect(`http://127.0.0.1:${port}`, o) });
+    try {
+      expect(await sender.sendRaw("development", TOKEN, {
+        pushType: "background", priority: 5, payload: { aps: { "content-available": 1 } } }))
+        .toEqual({ statusCode: 200, apnsId: "raw-1", reason: null });
+      await sender.sendRaw("development", TOKEN, { pushType: "alert", priority: 5, payload: { aps: { badge: 2 } } });
+      await expect(sender.sendRaw("development", "../x", {
+        pushType: "background", priority: 5, payload: {} })).rejects.toThrow(/device token/);
+    } finally { sender.close(); }
+    expect(seen[0].headers["apns-push-type"]).toBe("background");
+    expect(seen[0].headers["apns-priority"]).toBe("5");
+    expect(seen[0].headers["apns-topic"]).toBe("pro.vanderpoel.verder");
+    expect(seen[0].headers[":path"]).toBe(`/3/device/${TOKEN}`);
+    expect(seen[0].headers["apns-collapse-id"]).toBeUndefined();
+    expect(JSON.parse(seen[0].body)).toEqual({ aps: { "content-available": 1 } });
+    expect(seen[1].headers["apns-push-type"]).toBe("alert");
+    expect(JSON.parse(seen[1].body)).toEqual({ aps: { badge: 2 } });
+  });
+
   it("development device goes to the sandbox host", async () => {
     const port = await listen((stream) => { stream.respond({ ":status": 200 }); stream.end(); });
     const authorities: string[] = [];

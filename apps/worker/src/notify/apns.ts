@@ -73,12 +73,37 @@ export class TokenCache {
 export interface ApnsAlert {
   title: string; body: string; level: "time-sensitive" | "active" | "passive";
   category: string; threadId?: string; collapseId?: string; link?: string;
+  /** The app icon's number: what waits on Martin (`loadWaiting`). Omitted = the icon keeps its last value. */
+  badge?: number;
+  /**
+   * A question's option labels, in order (Plan 3 Task 5). Present ONLY on a
+   * question push: the service extension (Task 8) turns them into a per-proposal
+   * `q.<id>` category, which is why they come with `mutable-content`.
+   */
+  options?: string[];
+  /** The proposal revision the question is announced at; the answer route requires it (409 when stale). */
+  revision?: number;
 }
+
+/** A question shows at most this many options as notification actions… */
+export const MAX_PUSH_OPTIONS = 4;
+/** …each cut to this many characters, so a long label cannot blow the 4 KB payload. */
+export const MAX_PUSH_OPTION_CHARS = 40;
 
 export interface ApnsResult { statusCode: number; apnsId: string | null; reason: string | null }
 
+/**
+ * A push that is not an alert: the badge-only push (`alert`, priority 5, only
+ * `aps.badge`) and the silent refresh (`background`, priority 5, only
+ * `aps.content-available`). Apple says a background push must not carry a
+ * badge, and throttles it, so the two are always separate pushes.
+ */
+export interface ApnsRaw { pushType: "alert" | "background"; priority: 5 | 10; payload: object }
+
 export interface ApnsSender {
   send(env: ApnsEnvironment, deviceToken: string, alert: ApnsAlert): Promise<ApnsResult>;
+  /** Same session, token cache, timeout and token check as `send`; the payload goes out as given. */
+  sendRaw(env: ApnsEnvironment, deviceToken: string, raw: ApnsRaw): Promise<ApnsResult>;
   close(): void;
 }
 
@@ -92,8 +117,17 @@ export function apnsPayload(a: ApnsAlert): object {
   // screen dark, and omitting sound keeps it silent on every iOS version.
   if (a.level !== "passive") aps.sound = "default";
   if (a.threadId) aps["thread-id"] = a.threadId;
+  if (a.badge !== undefined) aps.badge = a.badge;
   const payload: Record<string, unknown> = { aps };
   if (a.link) payload.link = a.link;
+  if (a.options !== undefined) {
+    // Only a question carries options, and only then may the service extension
+    // rewrite the notification. Cut by code point, so an emoji is never split.
+    aps["mutable-content"] = 1;
+    payload.options = a.options.slice(0, MAX_PUSH_OPTIONS)
+      .map((o) => Array.from(o).slice(0, MAX_PUSH_OPTION_CHARS).join(""));
+    if (a.revision !== undefined) payload.revision = a.revision;
+  }
   return payload;
 }
 
@@ -133,61 +167,74 @@ export function http2ApnsSender(
     return s;
   }
 
+  function post(
+    env: ApnsEnvironment, deviceToken: string,
+    opts: { pushType: "alert" | "background"; priority: 5 | 10; collapseId?: string; payload: object },
+  ): Promise<ApnsResult> {
+    return new Promise<ApnsResult>((resolve, reject) => {
+      if (!DEVICE_TOKEN_RE.test(deviceToken)) {
+        reject(new Error("APNs: device token is not hex"));
+        return;
+      }
+      const headers: http2.OutgoingHttpHeaders = {
+        ":method": "POST",
+        ":path": `/3/device/${deviceToken}`,
+        authorization: `bearer ${tokens.get()}`,
+        "apns-topic": cfg.topic,
+        "apns-push-type": opts.pushType,
+        "apns-priority": String(opts.priority),
+        "apns-expiration": String(Math.floor(now() / 1000) + EXPIRATION_SEC),
+      };
+      if (opts.collapseId) headers["apns-collapse-id"] = opts.collapseId;
+
+      let settled = false;
+      const done = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+      let stream: http2.ClientHttp2Stream;
+      try {
+        stream = session(env).request(headers);
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      let statusCode = 0;
+      let apnsId: string | null = null;
+      const chunks: Buffer[] = [];
+      stream.setTimeout(timeoutMs, () => {
+        done(() => reject(new Error(`APNs request timed out after ${timeoutMs} ms`)));
+        stream.close(http2.constants.NGHTTP2_CANCEL);
+      });
+      stream.on("response", (h) => {
+        statusCode = Number(h[":status"] ?? 0);
+        const id = h["apns-id"];
+        apnsId = typeof id === "string" ? id : null;
+      });
+      stream.on("data", (c: Buffer) => chunks.push(c));
+      stream.on("end", () => done(() => {
+        let reason: string | null = null;
+        const text = Buffer.concat(chunks).toString("utf8");
+        if (text) {
+          try {
+            const r = (JSON.parse(text) as { reason?: unknown }).reason;
+            reason = typeof r === "string" ? r : null;
+          } catch { reason = null; }
+        }
+        resolve({ statusCode, apnsId, reason });
+      }));
+      stream.on("error", (err) => done(() => reject(err)));
+      stream.on("close", () => done(() => reject(new Error("APNs stream closed without an answer"))));
+      stream.end(JSON.stringify(opts.payload));
+    });
+  }
+
   return {
     send(env, deviceToken, alert) {
-      return new Promise<ApnsResult>((resolve, reject) => {
-        if (!DEVICE_TOKEN_RE.test(deviceToken)) {
-          reject(new Error("APNs: device token is not hex"));
-          return;
-        }
-        const headers: http2.OutgoingHttpHeaders = {
-          ":method": "POST",
-          ":path": `/3/device/${deviceToken}`,
-          authorization: `bearer ${tokens.get()}`,
-          "apns-topic": cfg.topic,
-          "apns-push-type": "alert",
-          "apns-priority": alert.level === "passive" ? "5" : "10",
-          "apns-expiration": String(Math.floor(now() / 1000) + EXPIRATION_SEC),
-        };
-        if (alert.collapseId) headers["apns-collapse-id"] = alert.collapseId;
-
-        let settled = false;
-        const done = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
-        let stream: http2.ClientHttp2Stream;
-        try {
-          stream = session(env).request(headers);
-        } catch (err) {
-          reject(err instanceof Error ? err : new Error(String(err)));
-          return;
-        }
-        let statusCode = 0;
-        let apnsId: string | null = null;
-        const chunks: Buffer[] = [];
-        stream.setTimeout(timeoutMs, () => {
-          done(() => reject(new Error(`APNs request timed out after ${timeoutMs} ms`)));
-          stream.close(http2.constants.NGHTTP2_CANCEL);
-        });
-        stream.on("response", (h) => {
-          statusCode = Number(h[":status"] ?? 0);
-          const id = h["apns-id"];
-          apnsId = typeof id === "string" ? id : null;
-        });
-        stream.on("data", (c: Buffer) => chunks.push(c));
-        stream.on("end", () => done(() => {
-          let reason: string | null = null;
-          const text = Buffer.concat(chunks).toString("utf8");
-          if (text) {
-            try {
-              const r = (JSON.parse(text) as { reason?: unknown }).reason;
-              reason = typeof r === "string" ? r : null;
-            } catch { reason = null; }
-          }
-          resolve({ statusCode, apnsId, reason });
-        }));
-        stream.on("error", (err) => done(() => reject(err)));
-        stream.on("close", () => done(() => reject(new Error("APNs stream closed without an answer"))));
-        stream.end(JSON.stringify(apnsPayload(alert)));
+      return post(env, deviceToken, {
+        pushType: "alert", priority: alert.level === "passive" ? 5 : 10,
+        collapseId: alert.collapseId, payload: apnsPayload(alert),
       });
+    },
+    sendRaw(env, deviceToken, raw) {
+      return post(env, deviceToken, { pushType: raw.pushType, priority: raw.priority, payload: raw.payload });
     },
     close() {
       for (const s of sessions.values()) s.close();

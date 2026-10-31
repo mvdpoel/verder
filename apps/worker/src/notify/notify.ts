@@ -15,9 +15,12 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
+import { loadWaiting } from "@verder/api/src/waiting";
 import { recordRun } from "../heartbeat";
 import { realTransport, type PushTransport } from "../push";
-import { http2ApnsSender, loadApnsConfig, type ApnsEnvironment, type ApnsSender } from "./apns";
+import {
+  http2ApnsSender, loadApnsConfig, type ApnsEnvironment, type ApnsRaw, type ApnsResult, type ApnsSender,
+} from "./apns";
 
 export type NotifyLevel = "time-sensitive" | "active" | "passive";
 export type NotifyKind =
@@ -27,6 +30,10 @@ export type NotifyKind =
 export interface NotifyInput {
   kind: NotifyKind; level: NotifyLevel; title: string; body: string;
   link?: string; dedupKey?: string; threadId?: string; collapseId?: string;
+  /** A question's option labels (Plan 3 Task 5); only a question push sets them. */
+  options?: string[];
+  /** The proposal revision a question is announced at — the answer route requires it. */
+  revision?: number;
 }
 
 export interface NotifyDeps {
@@ -35,6 +42,22 @@ export interface NotifyDeps {
   apns?: () => Promise<ApnsSender | null>;
   /** Defaults to the VAPID transport; null = VAPID keys unset. */
   webPush?: () => PushTransport | null;
+  /** The badge number. Defaults to `countWaiting`; tests inject a failing one. */
+  waitingCount?: (db: Db) => Promise<number>;
+}
+
+/**
+ * The badge: how many items wait on Martin, from THE one definition
+ * (`loadWaiting`, spec §12.9) — the same list Voor jou shows, so the icon can
+ * never say 3 over a list of 2.
+ *
+ * Deliberately NOT wrapped in a transaction: `loadWaiting` runs its reads in
+ * parallel, which on the pool means parallel connections, while inside one
+ * transaction they would queue on a single client (deprecated in pg 8,
+ * removed in pg 9). Every production notify() runs on the pool.
+ */
+export async function countWaiting(db: Db): Promise<number> {
+  return (await loadWaiting(db)).length;
 }
 
 export interface NotifyResult {
@@ -147,6 +170,60 @@ export async function notify(deps: NotifyDeps, n: NotifyInput): Promise<NotifyRe
 }
 
 async function fanOutApns(deps: NotifyDeps, n: NotifyInput, record: RecordAttempt): Promise<void> {
+  // The badge is read here, never passed in, so a caller can never send a
+  // stale number. A failure omits the key (the icon keeps its last value) and
+  // never fails the alert: the alert is the point, the number is a courtesy.
+  let badge: number | undefined;
+  await apnsDeviceLoop(deps, record, async () => {
+    try { badge = await (deps.waitingCount ?? countWaiting)(deps.db); }
+    catch (err) { console.error(`notify: badge count failed, sending without one: ${message(err)}`); }
+  }, (sender, env, token) => sender.send(env, token, {
+    title: n.title, body: n.body, level: n.level, category: CATEGORY[n.kind],
+    threadId: n.threadId, collapseId: n.collapseId, link: n.link,
+    ...(badge !== undefined ? { badge } : {}),
+    ...(n.options !== undefined ? { options: n.options } : {}),
+    ...(n.revision !== undefined ? { revision: n.revision } : {}),
+  }));
+}
+
+export interface PushCounts { delivered: number; failed: number; skipped: number }
+
+/**
+ * A push to every live device that is NOT an alert: the badge-only push and
+ * the silent refresh (badge-sync.ts). Same device loop as notify() — the
+ * session check, the lazy sender, the 410 / BadDeviceToken revoke — but it
+ * writes NO `notifications` row (a badge change is not an alert) and so no
+ * `notification_attempts` row either, whose notification_id is NOT NULL. The
+ * caller's run row carries the counts instead. Never throws.
+ */
+export async function pushToDevices(
+  deps: Pick<NotifyDeps, "db" | "apns">, raw: ApnsRaw,
+): Promise<PushCounts> {
+  const counts: PushCounts = { delivered: 0, failed: 0, skipped: 0 };
+  const tally: RecordAttempt = async (a) => {
+    if (a.outcome === "delivered") counts.delivered++;
+    else if (a.outcome === "skipped") counts.skipped++;
+    else counts.failed++;
+  };
+  try {
+    await apnsDeviceLoop(deps, tally, async () => {},
+      (sender, env, token) => sender.sendRaw(env, token, raw));
+  } catch (err) {
+    console.error(`pushToDevices: ${raw.pushType} push failed: ${message(err)}`);
+    counts.failed++;
+  }
+  return counts;
+}
+
+/**
+ * THE device loop, once: the device query with its session check, the
+ * `session-ended` revoke, the lazy sender, and the 410 / 400 dead-token revoke.
+ * `beforeSend` runs once, only when there is a live device to send to.
+ */
+async function apnsDeviceLoop(
+  deps: Pick<NotifyDeps, "db" | "apns">, record: RecordAttempt, beforeSend: () => Promise<void>,
+  send: (sender: ApnsSender, env: ApnsEnvironment, token: string) => Promise<ApnsResult>,
+): Promise<void> {
   const { db } = deps;
   // The session check rides the device query: the worker holds column-level
   // SELECT on session(id, expires_at) and nothing else (0037), so it can tell a
@@ -176,16 +253,14 @@ async function fanOutApns(deps: NotifyDeps, n: NotifyInput, record: RecordAttemp
   let setupError: string | null = null;
   try { sender = await (deps.apns ?? defaultApns)(); }
   catch (err) { setupError = `apns-setup: ${message(err)}`; }
+  if (sender !== null) await beforeSend();
 
   for (const d of live) {
     const base = { channel: "apns", pushDeviceId: d.id, environment: d.environment } as const;
     if (setupError !== null) { await record({ ...base, outcome: "error", reason: setupError }); continue; }
     if (sender === null) { await record({ ...base, outcome: "skipped", reason: "no-apns-key" }); continue; }
     try {
-      const r = await sender.send(d.environment as ApnsEnvironment, d.token, {
-        title: n.title, body: n.body, level: n.level, category: CATEGORY[n.kind],
-        threadId: n.threadId, collapseId: n.collapseId, link: n.link,
-      });
+      const r = await send(sender, d.environment as ApnsEnvironment, d.token);
       const answer = { statusCode: r.statusCode, reason: r.reason, apnsId: r.apnsId };
       if (r.statusCode >= 200 && r.statusCode < 300) {
         await record({ ...base, ...answer, outcome: "delivered" });

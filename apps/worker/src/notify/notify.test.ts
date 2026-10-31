@@ -2,9 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
-import type { ApnsAlert, ApnsEnvironment, ApnsResult, ApnsSender } from "./apns";
+import type { ApnsAlert, ApnsEnvironment, ApnsRaw, ApnsResult, ApnsSender } from "./apns";
 import type { PushTransport } from "../push";
-import { CATEGORY, notify, type NotifyInput } from "./notify";
+import { CATEGORY, notify, pushToDevices, type NotifyInput } from "./notify";
+import { loadWaiting } from "@verder/api/src/waiting";
 
 // notify() runs as verder_worker, the role it meets in production — which also
 // proves the column-level SELECT on "session" (0037) is enough for the session
@@ -81,14 +82,17 @@ async function subscription(db: Db) {
 }
 
 type Call = { env: ApnsEnvironment; token: string; alert: ApnsAlert };
-function fakeApns(answer: (c: Call) => ApnsResult | Promise<ApnsResult> = () =>
+type RawCall = { env: ApnsEnvironment; token: string; raw: ApnsRaw };
+function fakeApns(answer: (c: { token: string }) => ApnsResult | Promise<ApnsResult> = () =>
   ({ statusCode: 200, apnsId: "apns-ok", reason: null })) {
   const calls: Call[] = [];
+  const rawCalls: RawCall[] = [];
   const sender: ApnsSender = {
     async send(env, token, alert) { const c = { env, token, alert }; calls.push(c); return answer(c); },
+    async sendRaw(env, token, raw) { const c = { env, token, raw }; rawCalls.push(c); return answer(c); },
     close() {},
   };
-  return { calls, factory: async () => sender };
+  return { calls, rawCalls, factory: async () => sender };
 }
 
 function fakeWebPush(fail?: (endpoint: string) => number | undefined) {
@@ -358,11 +362,99 @@ describe("notify", () => {
     expect(r).toEqual({ notificationId: null, duplicate: false, delivered: 0, failed: 0, skipped: 0 });
   });
 
+  it("every alert carries the waiting count as badge", async () => {
+    await isolated(async (db) => {
+      await device(db);
+      const apns = fakeApns();
+      // The real default: THE one definition of what waits on Martin, read in
+      // the same transaction the expectation is read in.
+      const expected = (await loadWaiting(db)).length;
+      await notify({ db, apns: apns.factory, webPush: () => null }, N);
+      expect(apns.calls[0].alert.badge).toBe(expected);
+      // And it is what the counter says, not a number a caller passed.
+      await notify({ db, apns: apns.factory, webPush: () => null, waitingCount: async () => 7 }, N);
+      expect(apns.calls[1].alert.badge).toBe(7);
+    });
+  });
+
+  it("a failing badge count omits the key and still delivers", async () => {
+    await isolated(async (db) => {
+      const d = await device(db);
+      const apns = fakeApns();
+      const r = await notify({ db, apns: apns.factory, webPush: () => null,
+        waitingCount: async () => { throw new Error("count failed"); } }, N);
+      expect(r).toMatchObject({ delivered: 1, failed: 0 });
+      expect("badge" in apns.calls[0].alert).toBe(false);
+      const [a] = await attempts(db, r.notificationId!);
+      expect(a).toMatchObject({ pushDeviceId: d.id, outcome: "delivered" });
+    });
+  });
+
+  it("options and revision reach the APNs sender", async () => {
+    await isolated(async (db) => {
+      await device(db);
+      const apns = fakeApns();
+      await notify({ db, apns: apns.factory, webPush: () => null },
+        { ...N, kind: "proposal", link: "verder://proposal/x", options: ["Ja", "Nee"], revision: 2 });
+      expect(apns.calls[0].alert).toMatchObject({ category: "PROPOSAL", options: ["Ja", "Nee"], revision: 2 });
+      await notify({ db, apns: apns.factory, webPush: () => null }, N);
+      expect("options" in apns.calls[1].alert).toBe(false);
+      expect("revision" in apns.calls[1].alert).toBe(false);
+    });
+  });
+
   it("maps every kind to an iOS category", () => {
     expect(CATEGORY).toEqual({
       "verder-mail": "VERDER_MAIL", "creditor-mail": "CREDITOR_MAIL", proposal: "PROPOSAL",
       reminder: "REMINDER", "follow-up": "FOLLOW_UP", "task-due": "TASK_DUE",
       filing: "FILING", system: "SYSTEM", weekly: "WEEKLY",
+    });
+  });
+});
+
+describe("pushToDevices", () => {
+  const BADGE: ApnsRaw = { pushType: "alert", priority: 5, payload: { aps: { badge: 2 } } };
+
+  it("sends the raw push to every live device and writes no notification", async () => {
+    await isolated(async (db) => {
+      const a = await device(db, { environment: "development" });
+      const b = await device(db, { environment: "production" });
+      const apns = fakeApns();
+      const [{ n: before }] = (await db.execute<{ n: string }>("select count(*)::text as n from notifications")).rows;
+      const r = await pushToDevices({ db, apns: apns.factory }, BADGE);
+      expect(r).toEqual({ delivered: 2, failed: 0, skipped: 0 });
+      expect(apns.calls).toHaveLength(0);
+      expect(apns.rawCalls.map((c) => [c.token, c.env]).sort())
+        .toEqual([[a.token, "development"], [b.token, "production"]].sort());
+      expect(apns.rawCalls[0].raw).toEqual(BADGE);
+      const [{ n: after }] = (await db.execute<{ n: string }>("select count(*)::text as n from notifications")).rows;
+      expect(after).toBe(before);
+    });
+  });
+
+  it("still revokes a dead token and an ended session", async () => {
+    const sessionId = await liveSession();
+    await admin.db.delete(schema.session).where(eq(schema.session.id, sessionId));
+    await isolated(async (db) => {
+      const gone = await device(db);
+      const ended = await device(db, { sessionId });
+      const apns = fakeApns((c) => c.token === gone.token
+        ? { statusCode: 410, apnsId: null, reason: "Unregistered" } : { statusCode: 200, apnsId: null, reason: null });
+      const r = await pushToDevices({ db, apns: apns.factory }, BADGE);
+      expect(r).toEqual({ delivered: 0, failed: 1, skipped: 1 });
+      const rows = await db.select().from(schema.pushDevices)
+        .where(inArray(schema.pushDevices.id, [gone.id, ended.id]));
+      expect(Object.fromEntries(rows.map((d) => [d.id, d.revokedReason])))
+        .toEqual({ [gone.id]: "Unregistered", [ended.id]: "session-ended" });
+    });
+  });
+
+  it("no key skips, and a throwing sender is counted, never thrown", async () => {
+    await isolated(async (db) => {
+      await device(db);
+      expect(await pushToDevices({ db, apns: async () => null }, BADGE)).toEqual({ delivered: 0, failed: 0, skipped: 1 });
+      const apns = fakeApns(() => { throw new Error("timed out"); });
+      expect(await pushToDevices({ db, apns: apns.factory }, BADGE)).toEqual({ delivered: 0, failed: 1, skipped: 0 });
     });
   });
 });

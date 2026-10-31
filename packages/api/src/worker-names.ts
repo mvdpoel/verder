@@ -145,3 +145,12 @@ export const PROPOSAL_CLOCK_WORKER_NAME = "proposal-clock";
  * let a 429 it hit re-arm the lockout from every other path.
  */
 export const MAIL_AGENT_WORKER_NAME = "mail-agent";
+
+/**
+ * Written by apps/worker/src/badge-sync.ts — one row per `badge.sync` tick
+ * (every 5 minutes), whether or not the count changed, carrying `detail.count`,
+ * the number it last told the phone — and read back by the SAME module (its
+ * previous count) and by the `watcher` declaration in worker-health.ts, so a
+ * dead badge job goes amber instead of leaving a stale number on the icon.
+ */
+export const BADGE_SYNC_WORKER_NAME = "badge-sync";
