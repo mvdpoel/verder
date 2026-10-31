@@ -91,3 +91,10 @@ export const DB_BACKUP_WORKER_NAME = "db-backup";
  * worker-health.ts, so a dead watchdog cron goes amber.
  */
 export const WATCHDOG_WORKER_NAME = "watchdog";
+
+/**
+ * Written by apps/worker/src/notify/notify.ts — one row per notify() call — and
+ * read back by the `on-demand` declaration in worker-health.ts. The row is the
+ * summary; the per-destination history lives in `notification_attempts`.
+ */
+export const NOTIFY_WORKER_NAME = "notify";

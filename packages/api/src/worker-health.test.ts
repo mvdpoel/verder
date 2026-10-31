@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cadenceMs, declFor, workerState } from "./worker-health";
-import { MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME } from "./worker-names";
+import { MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, NOTIFY_WORKER_NAME } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
 const agoMs = (ms: number) => new Date(NOW - ms);
@@ -229,6 +229,15 @@ describe("declFor — the workers that exist today", () => {
     expect(declFor("registry-mine")).toEqual({ kind: "watcher", everyMs: 2 * MIN });
     expect(declFor("heartbeat")).toEqual({ kind: "watcher", everyMs: 5 * MIN });
     expect(declFor("loondossier")).toEqual({ kind: "watcher", everyMs: 24 * 60 * MIN });
+  });
+
+  it("notify is on-demand", () => {
+    // notify() records one row per call, and calls arrive only when something
+    // happened (a heal, a Verder mail, a clock firing) — there is no cadence to
+    // be late against. The name is the shared constant: the writer is
+    // apps/worker/src/notify/notify.ts, the reader is this module.
+    expect(NOTIFY_WORKER_NAME).toBe("notify");
+    expect(declFor(NOTIFY_WORKER_NAME)).toEqual({ kind: "on-demand" });
   });
 
   it("declares receipts as event-driven — it runs only when registry.mine finds an aggregator", () => {

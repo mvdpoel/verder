@@ -41,7 +41,7 @@
 
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
-  RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
+  NOTIFY_WORKER_NAME, RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -301,6 +301,11 @@ const DECLS: Record<string, WorkerDecl> = {
   // for an aggregator line (APPLE.COM/BILL, PayPal), so on a quiet registry it
   // can legitimately go months without a row.
   receipts: { kind: "on-demand" },
+  // notify() writes one row per call, and calls come only when something
+  // happened (a heal, a Verder mail, a clock firing). `error` means no
+  // destination delivered; like every on-demand error it ages out after 26 h,
+  // and the per-destination history stays in notification_attempts.
+  [NOTIFY_WORKER_NAME]: { kind: "on-demand" },
 
   // ---- hand-run ops scripts. Silent for weeks by design. -----------------
   // `pnpm --filter worker <script>`, typed by a human during a deploy or a
