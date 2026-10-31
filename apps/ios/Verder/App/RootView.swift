@@ -2,8 +2,14 @@ import SwiftUI
 
 /// Placeholder root on `void`, behind sign-in. Task 11 replaces the placeholder
 /// with the tab bar (Scan first).
+///
+/// The app lock is judged here, once for the whole app. Task 11: the Scan tab
+/// goes in UN-gated (the camera opens before Face ID), every other tab gets
+/// `.lockGated(by: lock)` — see `AppLock` for the rule.
 struct RootView: View {
     let auth: AuthModel
+    let lock: AppLock
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         #if DEBUG
@@ -17,11 +23,24 @@ struct RootView: View {
         #endif
     }
 
-    @ViewBuilder private var signedInOrSignIn: some View {
-        if auth.isSignedIn {
-            placeholder
-        } else {
-            SignInView(auth: auth)
+    private var signedInOrSignIn: some View {
+        Group {
+            if auth.isSignedIn {
+                // The account actions are the dossier's, not the camera's.
+                placeholder.lockGated(by: lock)
+            } else {
+                SignInView(auth: auth)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background: lock.sceneDidEnterBackground()
+            case .active: lock.sceneDidBecomeActive()
+            default: break
+            }
+        }
+        .onChange(of: auth.isSignedIn) { _, signedIn in
+            if signedIn { lock.didSignIn() }
         }
     }
 
