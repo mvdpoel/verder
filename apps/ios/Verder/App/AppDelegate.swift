@@ -8,7 +8,7 @@ import UserNotifications
 /// tap that launched the app cold is still delivered — into `links`, which
 /// holds it until `RootView` exists to take it.
 @MainActor
-final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     let links = DeepLinkInbox()
     private var registrar: PushRegistrar?
     /// A token that arrived before `attach` (cannot happen today — only the
@@ -41,16 +41,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// A tap on the notification, or on "Bekijken". Both only OPEN: nothing
     /// is ever sent from a notification.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            didReceive response: UNNotificationResponse) async {
-        let link = DeepLink(userInfo: response.notification.request.content.userInfo)
-        await MainActor.run { links.deliver(link) }
+    ///
+    /// MAIN-ACTOR ISOLATED ON PURPOSE, with the completion-handler signature.
+    /// The first version was a `nonisolated … async` method: Swift's bridge then
+    /// called UIKit's completion handler from a cooperative background thread,
+    /// and UIKit's main-thread assertion in
+    /// `_performBlockAfterCATransactionCommitSynchronizes` aborted the app on
+    /// EVERY tap (two crashes on Martin's phone, 2026-10-31 16:45 — it looked
+    /// like "tapping does not open the app").
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        links.deliver(DeepLink(userInfo: response.notification.request.content.userInfo))
+        completionHandler()
     }
 
     /// While verder is in front, still show it: a Verder question is worth
-    /// the banner even mid-scan.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    /// the banner even mid-scan. Main thread, for the same reason as above.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list, .sound])
     }
 }
