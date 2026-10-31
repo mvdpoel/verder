@@ -11,14 +11,15 @@ struct RootView: View {
     let uploads: UploadCenter
     let push: PushRegistrar
     let links: DeepLinkInbox
+    let inbox: InboxStore
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case scan, voorJou, dossier, meer }
     @State private var tab: TabID = .scan
-    /// The proposal stack of Voor jou. Held HERE, not in the tab: a gated tab's
-    /// content does not exist while locked, so a deep link that arrives on the
-    /// lock screen must wait somewhere that survives it.
-    @State private var proposalPath: [String] = []
+    /// The Voor jou stack. Held HERE, not in the tab: a gated tab's content
+    /// does not exist while locked, so a deep link that arrives on the lock
+    /// screen must wait somewhere that survives it.
+    @State private var inboxPath: [InboxRoute] = []
 
     var body: some View {
         #if DEBUG
@@ -72,7 +73,7 @@ struct RootView: View {
         .onChange(of: links.pending, initial: true) { _, _ in
             let link = links.take()
             if let target = link.tab { tab = target }
-            if case .proposal(let id) = link { proposalPath = [id.uuidString.lowercased()] }
+            if case .proposal(let id) = link { inboxPath = [.proposal(id.uuidString.lowercased())] }
         }
         // Never stacked on the passkey offer: that one waits in Meer first.
         .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
@@ -109,8 +110,8 @@ struct RootView: View {
                 ScanTab(center: uploads, auth: auth)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
-                ProposalListView(client: auth.client, gate: ApprovalGate(), path: $proposalPath,
-                                 onUnauthorized: { auth.sessionRejected() })
+                VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
+                           onUnauthorized: { auth.sessionRejected() })
                     .lockGated(by: lock)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {

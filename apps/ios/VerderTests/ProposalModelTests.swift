@@ -207,6 +207,19 @@ struct ProposalModelTests {
         #expect(Set(sent.keys) == ["option", "revision"])
     }
 
+    /// "Iets anders…": the trimmed text and the revision the question was
+    /// loaded at, and nothing else — never an option index beside it.
+    @Test func freeTextPostsFreeTextAndRevision() async throws {
+        let server = ProposalServer(detail: ProposalFixture.question())
+        let m = model(server)
+        await m.load(id: ProposalFixture.id)
+        #expect(await m.answer(freeText: "  Eerst bellen met Demi  "))
+        let sent = try json(server.requests(to: "/answer").first)
+        #expect(sent["freeText"] as? String == "Eerst bellen met Demi")
+        #expect(sent["revision"] as? Int == 4)
+        #expect(Set(sent.keys) == ["freeText", "revision"])
+    }
+
     @Test func cancelledFaceIDSendsNothing() async {
         let server = ProposalServer(detail: ProposalFixture.reply())
         let auth = StubOwnerAuth(.failure(.cancelled))

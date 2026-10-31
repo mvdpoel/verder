@@ -27,7 +27,7 @@ struct VerderApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links)
+            RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in
