@@ -632,6 +632,11 @@ export const proposals = pgTable("proposals", {
     .where(sql`${t.triggerRawEmailId} IS NOT NULL AND ${t.kind} <> 'follow-up'`),
   uniqueIndex("proposals_doc_trigger_uq").on(t.triggerDocumentId)
     .where(sql`${t.triggerDocumentId} IS NOT NULL`),
+  // One follow-up per outbound message (0039): the outbound message is the key.
+  uniqueIndex("proposals_followup_raw_uq").on(t.triggerRawEmailId)
+    .where(sql`${t.kind} = 'follow-up' AND ${t.triggerRawEmailId} IS NOT NULL`),
+  uniqueIndex("proposals_followup_parent_uq").on(t.parentProposalId)
+    .where(sql`${t.kind} = 'follow-up' AND ${t.parentProposalId} IS NOT NULL`),
   index("proposals_status_idx").on(t.status),
   index("proposals_thread_key_idx").on(t.threadKey),
   check("proposals_kind_check", sql`${t.kind} IN ('reply', 'question', 'follow-up')`),

@@ -82,10 +82,18 @@ function triggerColumns(trigger: ProposalTrigger) {
 }
 
 /** The row an earlier delivery of the same trigger already made. */
-async function existingFor(db: Db, trigger: ProposalTrigger): Promise<string | null> {
-  const where = "rawEmailId" in trigger
-    ? and(eq(schema.proposals.triggerRawEmailId, trigger.rawEmailId), ne(schema.proposals.kind, "follow-up"))
-    : "documentId" in trigger ? eq(schema.proposals.triggerDocumentId, trigger.documentId) : undefined;
+async function existingFor(db: Db, trigger: ProposalTrigger, kind: "reply" | "follow-up"): Promise<string | null> {
+  // A follow-up conflicts only with the follow-up for the same outbound message
+  // (0039); a reply only with the non-follow-up row for its trigger (0038).
+  const where = kind === "follow-up"
+    ? "rawEmailId" in trigger
+      ? and(eq(schema.proposals.triggerRawEmailId, trigger.rawEmailId), eq(schema.proposals.kind, "follow-up"))
+      : "parentProposalId" in trigger
+        ? and(eq(schema.proposals.parentProposalId, trigger.parentProposalId), eq(schema.proposals.kind, "follow-up"))
+        : undefined
+    : "rawEmailId" in trigger
+      ? and(eq(schema.proposals.triggerRawEmailId, trigger.rawEmailId), ne(schema.proposals.kind, "follow-up"))
+      : "documentId" in trigger ? eq(schema.proposals.triggerDocumentId, trigger.documentId) : undefined;
   if (!where) return null;
   const [p] = await db.select({ id: schema.proposals.id }).from(schema.proposals).where(where).limit(1);
   return p?.id ?? null;
@@ -127,7 +135,7 @@ export async function createProposal(
     }).onConflictDoNothing().returning({ id: schema.proposals.id });
 
     if (!inserted) {
-      const id = await existingFor(tx, trigger);
+      const id = await existingFor(tx, trigger, kind);
       if (!id) throw new Error("proposal insert conflicted but no existing row was found");
       return { id, created: false };
     }

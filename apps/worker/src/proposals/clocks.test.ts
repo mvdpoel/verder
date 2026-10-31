@@ -2,14 +2,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { storeFile } from "@verder/api/src/storage";
 import { setTaskStatus } from "@verder/api/src/task-decide";
+import { PROPOSAL_CLOCK_WORKER_NAME } from "@verder/api/src/worker-names";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
 import type { RetrieveRefsFn } from "../retrieval-refs";
 import {
-  followUpCreator, followUpDue, runClocks, silentFor, type ClockDeps, type ThreadState,
+  dueAlert, followUpCreator, followUpDue, isAlertHour, runClocks, silentFor, type ClockDeps, type ThreadState,
 } from "./clocks";
 
 // Runs as verder_worker, the role the proposals.clock job meets in production.
@@ -52,9 +53,11 @@ const DAY = 24 * HOUR;
 const MARTIN = "Martin van der Poel <martin@vanderpoel.pro>";
 
 /** A controlled clock far past anything the shared dev database holds, so no
- *  committed row from another suite can fall inside a clock's window. */
-function clock() {
-  let t = Date.parse("2031-03-03T09:00:00Z") + Math.floor(Math.random() * 1000) * MIN;
+ *  committed row from another suite can fall inside a clock's window. It starts
+ *  between 10:00 and 18:00 CET, inside the daytime alert window, with room for
+ *  the hour the tests advance within a day. */
+function clock(start = Date.parse("2031-03-03T09:00:00Z") + Math.floor(Math.random() * 480) * MIN) {
+  let t = start;
   return { now: () => new Date(t), advance: (ms: number) => { t += ms; }, at: (ms: number) => new Date(t + ms) };
 }
 
@@ -180,7 +183,7 @@ describe("silentFor", () => {
   });
 
   it("followUpDue needs the outbound to be the newest word", () => {
-    const t: ThreadState = { threadKey: "gmail:x", priority: "verder", counterparty: "Verder",
+    const t: ThreadState = { threadKey: "gmail:x", priority: "verder",
       lastOutbound: { kind: "raw-email", id: "a" },
       lastOutboundAt: new Date("2026-10-20T10:00:00Z"), lastInboundAt: null };
     const now = new Date("2026-10-27T10:00:00Z");
@@ -188,6 +191,145 @@ describe("silentFor", () => {
     expect(followUpDue(t, new Date("2026-10-26T21:00:00Z"), 7)).toBe(false);
     expect(followUpDue({ ...t, lastInboundAt: new Date("2026-10-21T10:00:00Z") }, now, 7)).toBe(false);
     expect(followUpDue({ ...t, lastInboundAt: new Date("2026-10-19T10:00:00Z") }, now, 7)).toBe(true);
+  });
+});
+
+describe("daytime only", () => {
+  it("isAlertHour is 08:00 up to 22:00 in Amsterdam, on either side of DST", () => {
+    // CET (UTC+1), 2026-11-02.
+    expect(isAlertHour(new Date("2026-11-02T06:59:00Z"))).toBe(false); // 07:59
+    expect(isAlertHour(new Date("2026-11-02T07:00:00Z"))).toBe(true); //  08:00
+    expect(isAlertHour(new Date("2026-11-02T20:59:00Z"))).toBe(true); //  21:59
+    expect(isAlertHour(new Date("2026-11-02T21:00:00Z"))).toBe(false); // 22:00
+    // CEST (UTC+2), 2026-07-01.
+    expect(isAlertHour(new Date("2026-07-01T05:59:00Z"))).toBe(false); // 07:59
+    expect(isAlertHour(new Date("2026-07-01T06:00:00Z"))).toBe(true); //  08:00
+    expect(isAlertHour(new Date("2026-07-01T23:30:00Z"))).toBe(false); // 01:30
+  });
+
+  it("dueAlert reads a date-only deadline as the end of its Amsterdam day", () => {
+    // What task-form.tsx and the suggestion card store: new Date("YYYY-MM-DD").
+    const due = new Date("2026-11-03");
+    expect(dueAlert(due, new Date("2026-11-02T00:15:00Z"))).toBeNull(); // 01:15 the night before
+    expect(dueAlert(due, new Date("2026-11-02T20:00:00Z"))).toBeNull(); // the evening before
+    expect(dueAlert(due, new Date("2026-11-02T23:15:00Z"))).toBe("Vandaag"); // 00:15 on the day
+    expect(dueAlert(due, new Date("2026-11-03T07:00:00Z"))).toBe("Vandaag"); // 08:00, not overdue
+    expect(dueAlert(due, new Date("2026-11-03T22:59:00Z"))).toBe("Vandaag"); // 23:59
+    expect(dueAlert(due, new Date("2026-11-03T23:00:00Z"))).toBe("Te laat"); // 00:00 the day after
+  });
+
+  it("dueAlert reads any other deadline as an instant, within 24 h", () => {
+    const now = new Date("2026-11-02T09:00:00Z"); // 10:00 CET
+    expect(dueAlert(new Date("2026-11-02T15:00:00Z"), now)).toBe("Vandaag");
+    expect(dueAlert(new Date("2026-11-03T08:00:00Z"), now)).toBe("Morgen");
+    expect(dueAlert(new Date("2026-11-03T09:00:00Z"), now)).toBeNull();
+    expect(dueAlert(new Date("2026-11-02T08:59:00Z"), now)).toBe("Te laat");
+  });
+
+  it("a date-only deadline alerts once, at the first morning tick of its day, never at night", async () => {
+    await isolated(async (db) => {
+      // Ticks every 15 minutes from 22:00 CET two days before to noon on the day.
+      const c = clock(Date.parse("2031-03-03T21:00:00Z"));
+      const u = await user(db);
+      const t = await task(db, u.id, new Date("2031-03-05"));
+      const { deps, n } = depsFor(db, c);
+      const at: Date[] = [];
+      while (c.now().getTime() <= Date.parse("2031-03-05T11:00:00Z")) {
+        const before = n.mine(`due:${t.id}:`).length;
+        await runClocks(deps);
+        if (n.mine(`due:${t.id}:`).length > before) at.push(c.now());
+        c.advance(15 * MIN);
+      }
+      expect(at).toEqual([new Date("2031-03-05T07:00:00Z")]); // 08:00 CET on the day
+      expect(n.mine(`due:${t.id}:`)[0].title).toBe(`Vandaag: ${t.title}`);
+    });
+  });
+
+  it("a silence clock that runs out at midnight is chased at the first morning tick", async () => {
+    await isolated(async (db) => {
+      const th = `th-${uid()}`;
+      const vAddr = verderAddr();
+      // Martin wrote at 11:30 CET; seven Amsterdam days run out at midnight.
+      await mail(db, { threadId: th, from: verder(vAddr), sentAt: new Date("2031-03-02T09:00:00Z") });
+      await mail(db, { threadId: th, from: MARTIN, to: vAddr, sentAt: new Date("2031-03-03T10:30:00Z") });
+      const c = clock(Date.parse("2031-03-09T21:00:00Z")); // 22:00 CET, the evening before
+      const { deps, n, f } = depsFor(db, c);
+      const at: Date[] = [];
+      while (c.now().getTime() <= Date.parse("2031-03-10T09:00:00Z")) {
+        const before = f.calls.length;
+        await runClocks(deps);
+        if (f.calls.length > before) at.push(c.now());
+        c.advance(15 * MIN);
+      }
+      expect(at).toEqual([new Date("2031-03-10T07:00:00Z")]);
+      expect(n.mine(`followup:gmail:${th}:`)).toHaveLength(1);
+    });
+  });
+
+  it("a reminder that comes due at night waits for the morning, and the quiet tick still records", async () => {
+    await isolated(async (db) => {
+      const p = await pending(db, { createdAt: new Date("2031-03-02T02:00:00Z") });
+      const c = clock(Date.parse("2031-03-03T02:30:00Z")); // 03:30 CET
+      const { deps, n } = depsFor(db, c);
+      const r = await runClocks(deps);
+      expect(r.quiet).toBe(true);
+      expect(n.mine(`reminder:${p.id}`)).toHaveLength(0);
+      const [run] = await db.select().from(schema.workerRuns)
+        .where(eq(schema.workerRuns.worker, PROPOSAL_CLOCK_WORKER_NAME)).orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+      expect(run).toMatchObject({ status: "ok", detail: { quiet: true } });
+      c.advance(5 * HOUR); // 08:30 CET
+      await runClocks(deps);
+      expect(n.mine(`reminder:${p.id}`)).toHaveLength(1);
+    });
+  });
+});
+
+describe("runClocks: dedup against real notifications rows", () => {
+  const throwingNotify: NotifyFn = async (x) => { throw new Error(`notify called for ${x.dedupKey}`); };
+  const row = (dedupKey: string) => ({ kind: "system", level: "active", title: "eerder", body: "eerder", dedupKey });
+
+  it("a due alert already in notifications is not asked again", async () => {
+    await isolated(async (db) => {
+      const c = clock();
+      const u = await user(db);
+      const t = await task(db, u.id, c.at(2 * HOUR));
+      await db.insert(schema.notifications).values(row(`due:${t.id}:${c.at(2 * HOUR).toISOString()}`));
+      const { deps } = depsFor(db, c, { notify: throwingNotify });
+      const r = await runClocks(deps);
+      expect(r.due).toBe(0);
+    });
+  });
+
+  it("a follow-up that exists and was pushed is not pushed again", async () => {
+    await isolated(async (db) => {
+      const c = clock();
+      const th = `th-${uid()}`;
+      const vAddr = verderAddr();
+      const out = await mail(db, { threadId: th, from: MARTIN, to: vAddr, sentAt: c.at(-8 * DAY) });
+      const { deps, f } = depsFor(db, c, { notify: throwingNotify });
+      await f.create({ threadKey: `gmail:${th}`, priority: "verder",
+        lastOutbound: { kind: "raw-email", id: out.id }, lastOutboundAt: out.sentAt, lastInboundAt: null });
+      await db.insert(schema.notifications).values(row(`followup:gmail:${th}:raw-email:${out.id}`));
+      const r = await runClocks(deps);
+      expect(r.followUps).toBe(0);
+      expect(f.calls).toHaveLength(1); // only the setup call
+    });
+  });
+
+  it("the database refuses a second follow-up for one outbound message", async () => {
+    await isolated(async (db) => {
+      const c = clock();
+      const th = `th-${uid()}`;
+      const out = await mail(db, { threadId: th, from: MARTIN, to: verderAddr(), sentAt: c.at(-8 * DAY) });
+      const followUp = (tx: Db) => tx.insert(schema.proposals).values({
+        kind: "follow-up", status: "drafting", priority: "verder", threadKey: `gmail:${th}`,
+        triggerRawEmailId: out.id, context: {},
+      });
+      await followUp(db);
+      // A savepoint, so the refusal does not abort the test's transaction.
+      await expect(db.transaction(async (tx) => { await followUp(tx as unknown as Db); }))
+        .rejects.toThrow(/proposals_followup_raw_uq/);
+    });
   });
 });
 

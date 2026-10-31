@@ -274,6 +274,13 @@
       "when": 1793692800000,
       "tag": "0038_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793779200000,
+      "tag": "0039_proposals_followup_once",
+      "breakpoints": true
     }
   ]
 }

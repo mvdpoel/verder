@@ -213,6 +213,14 @@ describe("createProposal", () => {
       expect(f.created).toBe(true);
       expect(await byId(db, f.id)).toMatchObject({ kind: "follow-up", status: "drafting" });
       expect((await byId(db, p1.id)).status).toBe("pending");
+
+      // One follow-up per outbound message: a second create (a second process,
+      // a redelivered clock job) returns the first, never a second row.
+      const again = await createProposal(deps(db), { rawEmailId: own.id }, "verder", "follow-up");
+      expect(again).toEqual({ id: f.id, created: false });
+      const viaParent = await createProposal(deps(db), { parentProposalId: p1.id }, "verder", "follow-up");
+      const viaParentAgain = await createProposal(deps(db), { parentProposalId: p1.id }, "verder", "follow-up");
+      expect(viaParentAgain).toEqual({ id: viaParent.id, created: false });
     });
   });
 });

@@ -17,10 +17,20 @@ import { createProposal, type CreateDeps } from "./create";
  * THE CLOCKS (spec §6.4 "keep after it", §6.3, §12.10). One worker tick, every
  * 15 minutes, that notices time passing:
  *
+ *   0. DAYTIME ONLY. Every push here is a nudge, two of the three at
+ *      `time-sensitive`, which breaks through Focus. Outside ALERT_DAY_START_HOUR
+ *      to ALERT_DAY_END_HOUR Amsterdam time the tick does nothing but record its
+ *      row; what came due at night goes out on the first morning tick. Without
+ *      it the plan's literal rules fire at night EVERY time, not by accident:
+ *      a silence clock counts Amsterdam calendar days, so it becomes due on the
+ *      first tick after midnight, and a date-only deadline is stored as UTC
+ *      midnight, so "within 24 h" first held at ~01:15 the night before.
+ *
  *   1. REMINDER. A `pending` proposal untouched for 24 elapsed hours gets ONE
- *      push, ever: `reminded_at` is set by a conditional UPDATE in the same
- *      transaction as the notify, and the notify carries `reminder:<id>` as its
- *      dedup key, so a crash between the two re-asks a notify that dedups.
+ *      push, ever. The notify goes FIRST, outside any transaction (no DB
+ *      transaction is held open across APNs/web-push I/O), carrying
+ *      `reminder:<id>` as its dedup key; then a conditional UPDATE sets
+ *      `reminded_at`. A crash between the two re-asks a notify that dedups.
  *
  *   2. SILENCE (§12.10). One clock per Gmail thread, started only by an
  *      outbound message — Martin's own `raw_emails` row, or a `sent` proposal —
@@ -37,9 +47,10 @@ import { createProposal, type CreateDeps } from "./create";
  *          the PROPOSAL (matched on Message-ID or Gmail id, as
  *          `proposalForOwnSentMail` does), so its re-ingest landing between two
  *          ticks changes neither the clock's identity nor its dedup key.
- *        - Idempotent twice over: a follow-up that already exists for this
- *          outbound message is never created again, and the push dedups on
- *          `followup:<threadKey>:<kind>:<id>`.
+ *        - Idempotent three times over: a follow-up that already exists for
+ *          this outbound message is never created again, the database refuses a
+ *          second one (0039, for a second process or a redelivered job), and
+ *          the push dedups on `followup:<threadKey>:<kind>:<id>`.
  *        - BOUNDED BY FOLLOWUP_MAX_SILENCE_DAYS. Not in the plan: the Gmail
  *          backfill put years of Martin's outbound mail in `raw_emails`, so an
  *          unbounded first tick would chase every old thread whose last word
@@ -48,10 +59,15 @@ import { createProposal, type CreateDeps } from "./create";
  *
  *   3. DUE (§6.3). A task Martin is the one to act on — effective status
  *      `open` or `in-progress` (Martin 2026-10-31: in-progress counts as waiting
- *      on him; `waiting` waits on someone else) — whose `due_at` falls within
- *      24 elapsed hours, overdue included. The dedup key is
- *      `due:<taskId>:<dueAt ISO>`, so a task alerts once per due date: an
- *      overdue task once, not every quarter hour, and a moved deadline once more.
+ *      on him; `waiting` waits on someone else) — whose deadline falls within
+ *      24 elapsed hours, overdue included (`dueAlert`). A DATE-ONLY deadline —
+ *      every one the web form and the suggestion card write, `new Date("YYYY-
+ *      MM-DD")`, i.e. UTC midnight — means the END of that day, so it alerts
+ *      "Vandaag" on the morning of the day and is "Te laat" only the day after;
+ *      read as an instant it was already overdue at 01:00 on its own day. The
+ *      dedup key is `due:<taskId>:<dueAt ISO>`, so a task alerts once per due
+ *      date: an overdue task once, not every quarter hour, and a moved
+ *      deadline once more.
  *
  * Nothing here is evidence and nothing appends a ledger event. Each section is
  * error-isolated from the other two, and the tick records one `proposal-clock`
@@ -59,6 +75,9 @@ import { createProposal, type CreateDeps } from "./create";
  */
 
 export const DEFAULT_FOLLOWUP_DAYS = 7;
+/** Pushes go out from 08:00 up to (not including) 22:00, Amsterdam time. */
+export const ALERT_DAY_START_HOUR = 8;
+export const ALERT_DAY_END_HOUR = 22;
 /** A clock past this many silent days is a closed matter and is never chased. */
 export const FOLLOWUP_MAX_SILENCE_DAYS = 30;
 const HOUR = 3_600_000;
@@ -70,9 +89,13 @@ export interface ThreadState {
   lastOutbound: { kind: "raw-email" | "proposal"; id: string };
   lastOutboundAt: Date;
   lastInboundAt: Date | null;
-  /** Who has been silent, for the push text: a party name, else an address. */
-  counterparty: string;
+  /** What the push text's "who has been silent" is resolved from — lazily, and
+   *  only for a thread that is actually chased. */
+  who?: Who;
 }
+
+/** The proposal's party, the inbound senders newest first, whom Martin wrote to. */
+export interface Who { partyId: string | null; inboundFrom: string[]; to: string | null }
 
 export interface ClockDeps {
   db: Db;
@@ -84,7 +107,7 @@ export interface ClockDeps {
   followUpDays?: number;
 }
 
-export interface ClockResult { reminded: number; followUps: number; due: number }
+export interface ClockResult { reminded: number; followUps: number; due: number; quiet?: true }
 
 // ---- pure ------------------------------------------------------------------
 
@@ -103,6 +126,39 @@ export function silentFor(lastOutbound: Date, now: Date): number {
 export function followUpDue(t: ThreadState, now: Date, days: number): boolean {
   if (t.lastInboundAt && t.lastInboundAt.getTime() >= t.lastOutboundAt.getTime()) return false;
   return silentFor(t.lastOutboundAt, now) >= days;
+}
+
+const HOUR_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Amsterdam", hour: "2-digit", hourCycle: "h23",
+});
+
+/** True while a push may go out: daytime in Amsterdam. */
+export function isAlertHour(now: Date): boolean {
+  const h = Number(HOUR_FMT.format(now));
+  return h >= ALERT_DAY_START_HOUR && h < ALERT_DAY_END_HOUR;
+}
+
+/** A deadline the web form or the suggestion card wrote from a bare date. */
+export function isDateOnly(d: Date): boolean {
+  return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0
+    && d.getUTCMilliseconds() === 0;
+}
+
+/**
+ * Whether a deadline alerts at `now`, and how it is worded; null while it is
+ * more than 24 hours off. A date-only deadline (UTC midnight of the day typed)
+ * is the END of that Amsterdam day: due from the start of the day, overdue the
+ * day after. Any other value is an instant.
+ */
+export function dueAlert(dueAt: Date, now: Date): "Te laat" | "Vandaag" | "Morgen" | null {
+  const today = dayKey(now);
+  if (isDateOnly(dueAt)) {
+    const day = dueAt.toISOString().slice(0, 10);
+    return today > day ? "Te laat" : today === day ? "Vandaag" : null;
+  }
+  if (dueAt.getTime() < now.getTime()) return "Te laat";
+  if (dueAt.getTime() >= now.getTime() + DAY) return null;
+  return dayKey(dueAt) === today ? "Vandaag" : "Morgen";
 }
 
 export function followUpDays(): number {
@@ -127,28 +183,27 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 async function remind(deps: ClockDeps, now: Date): Promise<number> {
   const { db } = deps;
-  const due = await db.select({ id: schema.proposals.id }).from(schema.proposals)
+  const due = await db.select({
+    id: schema.proposals.id, payload: schema.proposals.payload, priority: schema.proposals.priority,
+  }).from(schema.proposals)
     .where(and(eq(schema.proposals.status, "pending"), isNull(schema.proposals.remindedAt),
       lt(schema.proposals.createdAt, new Date(now.getTime() - DAY))));
   let reminded = 0;
-  for (const { id } of due) {
-    await db.transaction(async (txRaw) => {
-      const tx = txRaw as unknown as Db;
-      // The claim: a second tick (or process) finds reminded_at already set.
-      const [p] = await tx.update(schema.proposals).set({ remindedAt: now })
-        .where(and(eq(schema.proposals.id, id), eq(schema.proposals.status, "pending"),
-          isNull(schema.proposals.remindedAt)))
-        .returning();
-      if (!p) return;
-      const ask = (p.payload as { ask?: unknown } | null)?.ask;
-      const r = await deps.notify({
-        kind: "reminder", level: LEVEL[p.priority as MailPriority] ?? "active",
-        title: `Wacht nog: ${typeof ask === "string" && ask ? ask : "een voorstel"}`,
-        body: "Dit voorstel wacht al een dag op je.",
-        link: `verder://proposal/${p.id}`, dedupKey: `reminder:${p.id}`,
-      });
-      if (!r.duplicate) reminded++;
+  for (const p of due) {
+    // Notify first, outside any transaction: the dedup key makes a repeat (a
+    // crash before the UPDATE below, a second process) send nothing, and no DB
+    // transaction waits on APNs.
+    const ask = (p.payload as { ask?: unknown } | null)?.ask;
+    const r = await deps.notify({
+      kind: "reminder", level: LEVEL[p.priority as MailPriority] ?? "active",
+      title: `Wacht nog: ${typeof ask === "string" && ask ? ask : "een voorstel"}`,
+      body: "Dit voorstel wacht al een dag op je.",
+      link: `verder://proposal/${p.id}`, dedupKey: `reminder:${p.id}`,
     });
+    // Once, ever: a later tick no longer selects it.
+    await db.update(schema.proposals).set({ remindedAt: now })
+      .where(and(eq(schema.proposals.id, p.id), isNull(schema.proposals.remindedAt)));
+    if (!r.duplicate) reminded++;
   }
   return reminded;
 }
@@ -239,7 +294,10 @@ export async function threadStates(db: Db, now: Date, sets?: PrioritySets): Prom
     out.push({
       threadKey: `gmail:${threadId}`, priority,
       lastOutbound: { kind: last.kind, id: last.id }, lastOutboundAt: last.at, lastInboundAt: lastIn,
-      counterparty: await counterpartyName(db, prio, t, last),
+      who: {
+        partyId: last.partyId, to: last.to,
+        inboundFrom: [...t.inbound].sort((a, b) => b.at.getTime() - a.at.getTime()).map((i) => i.from),
+      },
     });
   }
   return out;
@@ -268,19 +326,18 @@ async function partyName(db: Db, id: string): Promise<string | null> {
 
 /** Who has been silent: the proposal's party, else the party or address of the
  *  newest inbound sender, else whom Martin wrote to. */
-async function counterpartyName(
-  db: Db, sets: PrioritySets, t: { inbound: { at: Date; from: string }[] }, last: Outbound,
-): Promise<string> {
-  if (last.partyId) {
-    const n = await partyName(db, last.partyId);
+export async function counterpartyName(db: Db, sets: PrioritySets, who: Who | undefined): Promise<string> {
+  if (!who) return "de andere kant";
+  if (who.partyId) {
+    const n = await partyName(db, who.partyId);
     if (n) return n;
   }
   const addrs: string[] = [];
-  for (const i of [...t.inbound].sort((a, b) => b.at.getTime() - a.at.getTime())) {
-    const a = senderAddress(i.from);
+  for (const from of who.inboundFrom) {
+    const a = senderAddress(from);
     if (a) addrs.push(a);
   }
-  for (const m of last.to ? mailboxList(last.to) : []) {
+  for (const m of who.to ? mailboxList(who.to) : []) {
     const a = senderAddress(m);
     if (a && !isOwn(sets, a)) addrs.push(a);
   }
@@ -304,19 +361,20 @@ async function existingFollowUp(db: Db, t: ThreadState): Promise<string | null> 
 async function chase(deps: ClockDeps, now: Date, errors: string[]): Promise<number> {
   const { db } = deps;
   const days = deps.followUpDays ?? followUpDays();
+  const sets = await prioritySets(db);
   let chased = 0;
-  for (const t of await threadStates(db, now)) {
+  for (const t of await threadStates(db, now, sets)) {
     if (!followUpDue(t, now, days)) continue;
     if (silentFor(t.lastOutboundAt, now) > FOLLOWUP_MAX_SILENCE_DAYS) continue;
     // One thread's failure (a context the kb lookup could not build) must not
     // keep the other threads from being chased.
-    try { if (await chaseOne(deps, t)) chased++; }
+    try { if (await chaseOne(deps, sets, t)) chased++; }
     catch (err) { errors.push(`${t.threadKey}: ${message(err)}`); }
   }
   return chased;
 }
 
-async function chaseOne(deps: ClockDeps, t: ThreadState): Promise<boolean> {
+async function chaseOne(deps: ClockDeps, sets: PrioritySets, t: ThreadState): Promise<boolean> {
   const { db } = deps;
   const dedupKey = `followup:${t.threadKey}:${t.lastOutbound.kind}:${t.lastOutbound.id}`;
   // Created first, so the push can open it; a crash before the push leaves a
@@ -328,7 +386,7 @@ async function chaseOne(deps: ClockDeps, t: ThreadState): Promise<boolean> {
   if (existing && seen) return false;
   const r = await deps.notify({
     kind: "follow-up", level: LEVEL[t.priority],
-    title: `Nog geen antwoord van ${t.counterparty} sinds ${dayMonth(t.lastOutboundAt)}`,
+    title: `Nog geen antwoord van ${await counterpartyName(db, sets, t.who)} sinds ${dayMonth(t.lastOutboundAt)}`,
     body: "verder heeft een herinnering voor je klaargezet.",
     link: `verder://proposal/${proposalId}`, dedupKey,
   });
@@ -357,7 +415,9 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
     .where(and(isNotNull(schema.tasks.dueAt), lt(schema.tasks.dueAt, new Date(now.getTime() + DAY))));
   if (rows.length === 0) return 0;
   const statuses = await effectiveTaskStatuses(db, rows.map((r) => r.id));
-  const live = rows.filter((r) => ON_MARTIN.has(statuses.get(r.id) ?? "open"));
+  // The SQL window is a superset (a date-only deadline's UTC midnight is
+  // before now + 24 h from the day before); dueAlert decides.
+  const live = rows.filter((r) => ON_MARTIN.has(statuses.get(r.id) ?? "open") && dueAlert(r.dueAt!, now));
   if (live.length === 0) return 0;
 
   const keyOf = (r: (typeof live)[number]) => `due:${r.id}:${r.dueAt!.toISOString()}`;
@@ -370,8 +430,7 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
     const dedupKey = keyOf(r);
     if (seen.has(dedupKey)) continue;
     const dueAt = r.dueAt!;
-    const prefix = dueAt.getTime() < now.getTime() ? "Te laat"
-      : dayKey(dueAt) === dayKey(now) ? "Vandaag" : "Morgen";
+    const prefix = dueAlert(dueAt, now)!;
     const res = await deps.notify({
       kind: "task-due", level: "time-sensitive", title: `${prefix}: ${r.title}`,
       body: `Deadline ${dayMonth(dueAt)}.`, link: "verder://inbox", dedupKey,
@@ -386,6 +445,12 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
 export async function runClocks(deps: ClockDeps): Promise<ClockResult> {
   const now = (deps.now ?? (() => new Date()))();
   const result: ClockResult = { reminded: 0, followUps: 0, due: 0 };
+  if (!isAlertHour(now)) {
+    // Night: nothing is due to anyone at 03:00. The row still goes, because
+    // `proposal-clock` is a watcher and its silence would read as a dead worker.
+    await recordRun(deps.db, PROPOSAL_CLOCK_WORKER_NAME, "ok", { ...result, quiet: true });
+    return { ...result, quiet: true };
+  }
   const errors: Record<string, string> = {};
   try { result.reminded = await remind(deps, now); } catch (err) { errors.reminder = message(err); }
   const threadErrors: string[] = [];
