@@ -11,8 +11,8 @@ struct VerderApp: App {
     @State private var uploads: UploadCenter
     @State private var push: PushRegistrar
     /// Voor jou's data, the icon badge and the widget snapshot. One per
-    /// process, beside the registrar: the silent-push refresh (Task 8) and the
-    /// tab (Task 7) read the same store.
+    /// process, beside the registrar: the silent-push refresh (AppDelegate) and
+    /// the tab read the same store.
     @State private var inbox: InboxStore
 
     init() {
@@ -22,7 +22,11 @@ struct VerderApp: App {
         _auth = State(initialValue: auth)
         _uploads = State(initialValue: UploadCenter.live(client: client))
         _push = State(initialValue: PushRegistrar(client: client, auth: auth))
-        _inbox = State(initialValue: InboxStore(client: client, onUnauthorized: { auth.sessionRejected() }))
+        let inbox = InboxStore(client: client, onUnauthorized: { auth.sessionRejected() })
+        _inbox = State(initialValue: inbox)
+        // Before any delegate callback, so a background launch for a question
+        // answer or a silent refresh finds them (see `AppDelegate.Services`).
+        AppDelegate.services = .init(client: client, inbox: inbox)
     }
 
     var body: some Scene {

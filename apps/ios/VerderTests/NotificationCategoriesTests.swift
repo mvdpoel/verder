@@ -41,8 +41,8 @@ struct NotificationCategoriesTests {
         }
     }
 
-    /// "Bekijken" opens the draft behind Face ID and never sends. Answer
-    /// actions are Plan 3.
+    /// "Bekijken" opens the draft behind Face ID and never sends. A question's
+    /// answer buttons live in its own `q.<id>` category, never in this set.
     @Test func onlyDraftCategoriesHaveOneOpenAction() {
         let withAction: Set = ["PROPOSAL", "REMINDER", "FOLLOW_UP"]
         for category in NotificationCategories.all() {
@@ -58,5 +58,27 @@ struct NotificationCategoriesTests {
                 #expect(category.actions.isEmpty, "\(category.identifier)")
             }
         }
+    }
+
+    /// No STATIC category may run anything in the background: every action
+    /// they carry brings the app forward (behind Face ID) and only opens. The
+    /// one background action is a question's answer, which lives in the
+    /// per-question `q.*` categories (`QuestionCategories`) and never sends.
+    @Test func onlyQuestionActionsWorkInBackground() {
+        for category in NotificationCategories.all() {
+            #expect(!QuestionCategories.isQuestion(category.identifier))
+            for action in category.actions {
+                #expect(action.options.contains(.foreground), "\(category.identifier).\(action.identifier)")
+            }
+        }
+    }
+
+    /// The app re-registers on every launch: the static set is restored in
+    /// full, the extension's `q.*` categories are kept, anything else dropped.
+    @Test func launchRegistrationKeepsQuestionsAndHealsTheStaticSet() {
+        let q = QuestionCategories.make(proposalId: "6f9619ff-8b86-d011-b42d-00c04fc964ff", options: ["Ja"])
+        let stray = UNNotificationCategory(identifier: "OLD", actions: [], intentIdentifiers: [])
+        let union = NotificationCategories.union(existing: [q, stray])
+        #expect(Set(union.map(\.identifier)) == Set(NotificationCategories.ids).union([q.identifier]))
     }
 }

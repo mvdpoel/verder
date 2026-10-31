@@ -17,6 +17,15 @@ struct DeepLinkTests {
         #expect(DeepLink(userInfo: ["link": "verder://inbox"]) == .inbox)
     }
 
+    @Test func deepLinkParsesSuggestionAndTask() {
+        #expect(DeepLink(userInfo: ["link": "verder://suggestion/6f9619ff-8b86-d011-b42d-00c04fc964ff"]) == .suggestion(id))
+        #expect(DeepLink(userInfo: ["link": "verder://task/6F9619FF-8B86-D011-B42D-00C04FC964FF"]) == .task(id))
+        #expect(DeepLink.parse("verder://suggestion/s1") == DeepLink.none)
+        #expect(DeepLink.parse("verder://task/6f9619ff-8b86-d011-b42d-00c04fc964ff/x") == DeepLink.none)
+        #expect(DeepLink.suggestion(id).tab == .voorJou)
+        #expect(DeepLink.task(id).tab == .voorJou)
+    }
+
     @Test(arguments: [
         "",
         "verder://",

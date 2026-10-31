@@ -61,12 +61,49 @@ targets:
           - group.pro.vanderpoel.verder
         keychain-access-groups:
           - $(AppIdentifierPrefix)pro.vanderpoel.verder
+    dependencies:
+      # Embedded in the app (the default for an app-extension dependency).
+      - target: VerderNotify
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: "1"
         PRODUCT_NAME: Verder
+  # The notification service extension: turns a question push's options into
+  # answer buttons (a per-question `q.<id>` category) before it is shown. A
+  # fourth target beyond spec §7's three — see VerderNotify/NotificationService.swift.
+  VerderNotify:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: VerderNotify
+        excludes:
+          - Info.plist
+          - VerderNotify.entitlements
+      - path: Verder/Push/NotificationCategories.swift
+      - path: Verder/Push/QuestionCategories.swift
+      - path: Verder/Shared/AppGroup.swift
+    info:
+      path: VerderNotify/Info.plist
+      properties:
+        CFBundleDisplayName: verder
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: VerderNotify/VerderNotify.entitlements
+      properties:
+        # For push/q-order.json, the order of the registered question categories.
+        com.apple.security.application-groups:
+          - group.pro.vanderpoel.verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.notify
+        CURRENT_PROJECT_VERSION: "1"
+        PRODUCT_NAME: VerderNotify
   VerderTests:
     type: bundle.unit-test
     platform: iOS

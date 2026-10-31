@@ -1,15 +1,5 @@
 import Foundation
 
-/// The App Group the app, the widget and the share extension share.
-enum AppGroup {
-    static let id = "group.pro.vanderpoel.verder"
-
-    /// Nil only when the entitlement is missing (a misconfigured build).
-    static var containerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id)
-    }
-}
-
 /// What the widget draws, written by the app (`InboxStore.refresh`) and read by
 /// the widget. The widget never calls the network: this one small file is all
 /// it knows.

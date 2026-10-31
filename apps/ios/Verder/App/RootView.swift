@@ -73,8 +73,17 @@ struct RootView: View {
         .onChange(of: links.pending, initial: true) { _, _ in
             let link = links.take()
             if let target = link.tab { tab = target }
-            if case .proposal(let id) = link { inboxPath = [.proposal(id.uuidString.lowercased())] }
+            switch link {
+            case .proposal(let id): inboxPath = [.proposal(id.uuidString.lowercased())]
+            case .suggestion(let id): inboxPath = [.suggestion(id.uuidString.lowercased())]
+            case .task(let id): inboxPath = [.task(id.uuidString.lowercased())]
+            case .inbox: inboxPath = []
+            case .document, .none: break
+            }
         }
+        // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
+        // so only its own widget reaches this; the strict parse still applies.
+        .onOpenURL { url in links.deliver(DeepLink.parse(url.absoluteString)) }
         // Never stacked on the passkey offer: that one waits in Meer first.
         .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
             get: { push.prePromptPending && auth.isSignedIn && !auth.passkeyOfferPending },
