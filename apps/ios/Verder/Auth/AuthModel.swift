@@ -104,7 +104,7 @@ final class AuthModel {
         } catch let error as APIError {
             errorMessage = error == .unauthorized ? Copy.passkeyFailed : Self.message(for: error)
         } catch {
-            errorMessage = Copy.passkeyFailed
+            errorMessage = Copy.passkeyFailed + "\n" + Self.diagnostic(error)
         }
     }
 
@@ -128,8 +128,22 @@ final class AuthModel {
         } catch APIError.transport {
             passkeyMessage = Copy.offline
         } catch {
-            passkeyMessage = Copy.passkeyAddFailed
+            passkeyMessage = Copy.passkeyAddFailed + "\n" + Self.diagnostic(error)
         }
+    }
+
+    /// A short, secret-free cause under a generic failure, e.g.
+    /// `ASAuthorizationError 1004` or `PasskeyError.noChallengeCookie`. Without it
+    /// "lukte niet" is all the phone can tell anyone, and nothing logs on the
+    /// server side (measured 2026-10-31: the first real passkey attempt failed
+    /// and left no trace anywhere).
+    static func diagnostic(_ error: any Error) -> String {
+        if error is PasskeyError || error is APIError {
+            return "(\(String(describing: type(of: error))).\(error))"
+        }
+        let ns = error as NSError
+        let domain = ns.domain.split(separator: ".").last.map(String.init) ?? ns.domain
+        return "(\(domain) \(ns.code))"
     }
 
     func dismissPasskeyOffer() {
