@@ -22,8 +22,9 @@ import { suggestTask } from "./task-mine";
 import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
+import { followUpCreator, runClocks } from "./proposals/clocks";
 import { realSendPort } from "./gmail-send";
 import { resolveAggregator } from "./receipts";
 import { notifier } from "./notify/notify";
@@ -321,6 +322,28 @@ await boss.work("proposals.send", async () => {
       // the path it cannot (the database itself failing mid-tick).
       await recordRun(db, PROPOSAL_SEND_WORKER_NAME, "error", { message: String(err) })
         .catch((e) => console.error(`proposal-send: ${String(err)} / ${String(e)}`));
+    }
+  });
+});
+
+// The clocks (spec §6.4, §6.3, §12.10; proposals/clocks.ts): the 24 h reminder
+// on an untouched proposal, the follow-up when Verder or a creditor has been
+// silent PROPOSAL_FOLLOWUP_DAYS Amsterdam days after Martin's last word, and
+// the due-within-24 h task alert. Every quarter hour; each alert is idempotent
+// on its notification dedup key, so a slow tick overlapping the next costs a
+// duplicate query, never a duplicate push — the latch only saves the work.
+const proposalClock = makeSingleFlight();
+await boss.createQueue("proposals.clock");
+await boss.schedule("proposals.clock", "*/15 * * * *");
+await boss.work("proposals.clock", async () => {
+  await proposalClock.run(async () => {
+    try {
+      await runClocks({ db, notify, createFollowUp: followUpCreator({
+        db, retrieveRefs, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
+      }) });
+    } catch (err) {
+      await recordRun(db, PROPOSAL_CLOCK_WORKER_NAME, "error", { message: String(err) })
+        .catch((e) => console.error(`proposal-clock: ${String(err)} / ${String(e)}`));
     }
   });
 });

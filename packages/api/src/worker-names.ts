@@ -124,3 +124,12 @@ export const PROPOSAL_DRAFT_WORKER_NAME = "proposal-draft";
  * side would make a 429 hit by a send invisible to the poller.
  */
 export const PROPOSAL_SEND_WORKER_NAME = "proposal-send";
+
+/**
+ * Written by apps/worker/src/proposals/clocks.ts — one row per `proposals.clock`
+ * tick (every 15 minutes): the 24 h reminder, the follow-up clock and the
+ * due-within-24 h task alert — and read back by the `watcher` declaration in
+ * worker-health.ts, so a dead clock goes amber instead of quietly never
+ * reminding anyone of anything.
+ */
+export const PROPOSAL_CLOCK_WORKER_NAME = "proposal-clock";

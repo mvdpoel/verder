@@ -41,7 +41,8 @@
 
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
-  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME,
+  NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
@@ -214,6 +215,9 @@ const DECLS: Record<string, WorkerDecl> = {
   // rate-limited skip included, so silence means the send job is dead — and an
   // approved reply would then sit unsent with nothing else to say so.
   [PROPOSAL_SEND_WORKER_NAME]: { kind: "watcher", everyMs: MINUTE },
+  // `boss.schedule("proposals.clock", "*/15 * * * *")`: one row per tick, so
+  // silence means no reminder, no follow-up and no deadline alert will come.
+  [PROPOSAL_CLOCK_WORKER_NAME]: { kind: "watcher", everyMs: 15 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
