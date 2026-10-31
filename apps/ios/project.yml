@@ -36,6 +36,11 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
+        UIAppFonts:
+          - Saira-Variable.ttf
+          - IBMPlexMono-Regular.ttf
+          - IBMPlexMono-Medium.ttf
+          - IBMPlexMono-SemiBold.ttf
         NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
         NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
     entitlements:

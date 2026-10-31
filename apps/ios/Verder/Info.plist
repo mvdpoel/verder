@@ -24,6 +24,13 @@
 	<string>verder gebruikt de camera om brieven te scannen.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>verder vraagt Face ID zodat alleen jij je dossier opent.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Saira-Variable.ttf</string>
+		<string>IBMPlexMono-Regular.ttf</string>
+		<string>IBMPlexMono-Medium.ttf</string>
+		<string>IBMPlexMono-SemiBold.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
