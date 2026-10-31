@@ -167,6 +167,16 @@ final class AuthModel {
         passkeyMessage = nil
     }
 
+    /// The server answered 401 to a call that needs the session (the push
+    /// registration): forget it here and show sign-in. No sign-out request —
+    /// the server already holds no such session.
+    func sessionRejected() {
+        store.clear()
+        isSignedIn = false
+        passkeyOfferPending = false
+        passkeyMessage = nil
+    }
+
     /// The offer is made at most once per install, and only when the account
     /// has no passkey at all — one made in Safari on this phone already works
     /// here. A failed lookup offers nothing: an offer is never worth an error.

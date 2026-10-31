@@ -43,12 +43,18 @@ targets:
           - IBMPlexMono-SemiBold.ttf
         NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
         NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
+        UIBackgroundModes: [remote-notification]
         # The keychain-access-groups entitlement below, resolved by the same
         # build setting, so KeychainSessionStore names the group it is entitled to.
         VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
     entitlements:
       path: Verder/Verder.entitlements
       properties:
+        # Development-signed builds talk to the APNs SANDBOX; the environment
+        # the server stores is read from the embedded profile at runtime
+        # (Push/ProvisioningEnvironment.swift), never from this line.
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
         com.apple.developer.associated-domains:
           - webcredentials:verder.vanderpoel.pro?mode=developer
         com.apple.security.application-groups:

@@ -6,6 +6,7 @@ import SwiftUI
 struct MoreTab: View {
     let auth: AuthModel
     let center: UploadCenter
+    let push: PushRegistrar
 
     @State private var confirmResend = false
 
@@ -21,6 +22,7 @@ struct MoreTab: View {
                     if auth.passkeyOfferPending { passkeyOffer }
 
                     account
+                    notifications
                     developer
 
                     Text("Instellingen en de rest komen binnenkort.")
@@ -57,6 +59,53 @@ struct MoreTab: View {
             AuthButton(title: "Uitloggen", weight: .secondary, enabled: !auth.isBusy) {
                 Task { await auth.signOut() }
             }
+        }
+    }
+
+    /// Meldingen: what the system allows, and which APNs environment verder
+    /// stored for this phone — the first thing to read when a push does not
+    /// arrive (a sandbox token on the production host is the classic silent
+    /// failure, spec §6.3).
+    private var notifications: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            label("Meldingen")
+            Text(permissionText)
+                .font(.display(14, relativeTo: .callout, weight: .light))
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("omgeving: \(push.registeredEnvironment ?? "nog niet aangemeld")")
+                .font(.mono(11, relativeTo: .caption2))
+                .foregroundStyle(Color.inkDim)
+            if let error = push.lastError {
+                Text(error)
+                    .font(.mono(11, relativeTo: .caption2))
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            switch push.permission {
+            case .notDetermined:
+                AuthButton(title: PushRegistrar.Copy.allow, weight: .secondary, enabled: true) {
+                    Task { await push.acceptPrePrompt() }
+                }
+            case .denied:
+                AuthButton(title: "Open Instellingen", weight: .secondary, enabled: true) {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            case .allowed, nil:
+                EmptyView()
+            }
+        }
+        .task { await push.refresh() }
+    }
+
+    private var permissionText: String {
+        switch push.permission {
+        case .allowed: "Meldingen staan aan."
+        case .denied: "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt."
+        case .notDetermined: "Meldingen zijn nog niet aangezet."
+        case nil: "Meldingen worden gecontroleerd…"
         }
     }
 

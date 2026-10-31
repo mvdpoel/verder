@@ -9,6 +9,8 @@ struct RootView: View {
     let auth: AuthModel
     let lock: AppLock
     let uploads: UploadCenter
+    let push: PushRegistrar
+    let links: DeepLinkInbox
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case scan, voorJou, dossier, meer }
@@ -46,6 +48,36 @@ struct RootView: View {
         .onChange(of: auth.isSignedIn) { _, signedIn in
             if signedIn { lock.didSignIn() }
         }
+        // Push permission is asked after a sign-in or an unlock — moments
+        // Martin chose to look at verder — and never on a cold launch, which
+        // belongs to the camera (plan 2 Task 7 step 3). Both are idempotent:
+        // the pre-prompt is offered once per install.
+        .onChange(of: auth.sessionGeneration) { _, _ in
+            Task { await push.requestPermissionIfNeeded() }
+        }
+        .onChange(of: lock.isLocked) { _, locked in
+            if !locked && auth.isSignedIn { Task { await push.requestPermissionIfNeeded() } }
+        }
+        // Every launch with a session refreshes the APNs token (tokens change);
+        // this never prompts.
+        .task(id: auth.isSignedIn) {
+            if auth.isSignedIn { await push.registerIfAllowed() }
+        }
+        // A tapped notification. The target tabs are lock-gated, so what the
+        // link points at shows only after unlock.
+        .onChange(of: links.pending, initial: true) { _, _ in
+            if let target = links.take().tab { tab = target }
+        }
+        // Never stacked on the passkey offer: that one waits in Meer first.
+        .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
+            get: { push.prePromptPending && auth.isSignedIn && !auth.passkeyOfferPending },
+            set: { _ in }
+        )) {
+            Button(PushRegistrar.Copy.allow) { Task { await push.acceptPrePrompt() } }
+            Button(PushRegistrar.Copy.notNow, role: .cancel) { push.declinePrePrompt() }
+        } message: {
+            Text(PushRegistrar.Copy.prePrompt)
+        }
         // The one-time passkey offer lives in Meer; it only ever appears right
         // after an interactive password sign-in, so Martin is looking.
         .onChange(of: auth.passkeyOfferPending) { _, pending in
@@ -77,7 +109,7 @@ struct RootView: View {
                 ComingSoon(title: "Dossier").lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
-                MoreTab(auth: auth, center: uploads).lockGated(by: lock)
+                MoreTab(auth: auth, center: uploads, push: push).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
