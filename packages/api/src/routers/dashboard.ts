@@ -18,7 +18,12 @@ export const dashboardRouter = router({
           (SELECT c.status FROM document_status_changes c
             WHERE c.document_id = s.document_id ORDER BY c.created_at DESC LIMIT 1),
           (SELECT d.status FROM documents d WHERE d.id = s.document_id))
-          IS DISTINCT FROM 'discarded')`)).rows as [{ pending: number }];
+          IS DISTINCT FROM 'discarded')
+        -- A purge is a row of its own, not a status, so the line above cannot
+        -- see it. Spelled out rather than purgedSql because that expression
+        -- assumes an unaliased documents. Same definition as suggestions.list
+        -- and loadWaiting (waiting.ts): the document_purges ROW.
+        AND NOT EXISTS (SELECT 1 FROM document_purges p WHERE p.document_id = s.document_id)`)).rows as [{ pending: number }];
     const [{ inbox }] = (await ctx.db.execute(sql`
       SELECT count(*)::int AS inbox FROM documents
       WHERE ${effectiveDocStatusSql} = 'inbox'`)).rows as [{ inbox: number }];

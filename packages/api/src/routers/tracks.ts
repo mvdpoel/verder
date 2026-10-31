@@ -119,6 +119,20 @@ async function assertBranchPointsBelongToParent(db: Db, opts: {
   }
 }
 
+/**
+ * Every track and stop, in the order buildTrackMap expects. The one row load
+ * behind the map: `tracks.map` and `loadWaiting` (waiting.ts) both read it, so
+ * the stop the map draws as current is the stop Voor jou counts.
+ */
+export async function loadTrackMapRows(db: Db): Promise<{ tracks: TrackRow[]; stops: StopRow[] }> {
+  const [tracks, stops] = await Promise.all([
+    db.select().from(schema.tracks).orderBy(asc(schema.tracks.createdAt)),
+    db.select().from(schema.stops)
+      .orderBy(asc(schema.stops.trackId), asc(schema.stops.orderIndex)),
+  ]);
+  return { tracks: tracks as TrackRow[], stops: stops as StopRow[] };
+}
+
 /** % and _ typed into the search box are characters Martin meant, not wildcards. */
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
@@ -136,14 +150,8 @@ export const tracksRouter = router({
   map: protectedProcedure
     .input(z.object({ hideDebtEpisodes: z.boolean().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const [tracks, stops] = await Promise.all([
-        ctx.db.select().from(schema.tracks).orderBy(asc(schema.tracks.createdAt)),
-        ctx.db.select().from(schema.stops)
-          .orderBy(asc(schema.stops.trackId), asc(schema.stops.orderIndex)),
-      ]);
-      const filtered = filterDebtEpisodes({
-        tracks: tracks as TrackRow[], stops: stops as StopRow[],
-      }, input?.hideDebtEpisodes ?? false);
+      const filtered = filterDebtEpisodes(await loadTrackMapRows(ctx.db),
+        input?.hideDebtEpisodes ?? false);
       const map = buildTrackMap(filtered);
       const evidence = await resolveStopEvidence(ctx.db, map.stops.map((s) => ({
         id: s.id, entryId: s.entryId, taskId: s.taskId, documentId: s.documentId,

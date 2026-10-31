@@ -14,6 +14,7 @@ import { searchRouter } from "./routers/search";
 import { moneyRouter } from "./routers/money";
 import { bundlesRouter } from "./routers/bundles";
 import { proposalsRouter } from "./routers/proposals";
+import { inboxRouter } from "./routers/inbox";
 
 export const appRouter = router({
   parties: partiesRouter,
@@ -32,6 +33,7 @@ export const appRouter = router({
   money: moneyRouter,
   bundles: bundlesRouter,
   proposals: proposalsRouter,
+  inbox: inboxRouter,
 });
 export type AppRouter = typeof appRouter;
 export { createContext, type Context } from "./trpc";

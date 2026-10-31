@@ -67,8 +67,13 @@ export const suggestionsRouter = router({
       document: s.documentId ? await effectiveDocument(ctx.db, s.documentId) : null,
     })));
     // Martin already judged this one junk; asking him to file it again is the
-    // whole bug. Suggestions with no document at all are untouched.
-    return enriched.filter((s) => s.document?.effectiveStatus !== "discarded");
+    // whole bug. A purged document is gone in a stronger sense still, and a
+    // suggestion on it is one nothing can ever decide — left in, it holds the
+    // badge up forever. The purge is the document_purges ROW, the definition
+    // dashboard.stats and loadWaiting (waiting.ts) share. Suggestions with no
+    // document at all are untouched.
+    return enriched.filter((s) =>
+      s.document?.effectiveStatus !== "discarded" && (s.document?.purge ?? null) === null);
   }),
 
   approveEntry: protectedProcedure.input(z.object({
