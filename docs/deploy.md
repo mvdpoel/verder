@@ -242,6 +242,19 @@ so the iPhone app can use passkeys for this hostname. Unset, the route answers
 redirect); verify from outside with
 `curl -si https://<your-tunnel-hostname>/.well-known/apple-app-site-association`.
 
+iPhone push (APNs) reads three more, used by the worker's `notify()`:
+
+| Variable | Value |
+| --- | --- |
+| `APNS_KEY_ID` | the 10-character Key ID of the `.p8` auth key (Apple Developer → Keys) |
+| `APNS_KEY_PATH` | `/repo/secrets/apns-<KEY_ID>.p8` — the key file lives in `secrets/` (mode 600, never committed, in the rsync exclude list) |
+| `APNS_TOPIC` | `pro.vanderpoel.verder` (the app's bundle id) |
+
+The team comes from `APPLE_TEAM_ID` (or `APNS_TEAM_ID` if set). Unset or
+unreadable, `notify()` records each APNs attempt as skipped (`no-apns-key`)
+and still sends web-push. The sandbox or production host is chosen per device
+row, never globally: a development-signed app only receives via the sandbox.
+
 A passkey is cryptographically bound to its `rpID`, so one registered against
 `localhost` in development will never work in production. Register the
 production passkey against the production hostname, and confirm it signs you
