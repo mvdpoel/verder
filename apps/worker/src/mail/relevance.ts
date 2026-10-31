@@ -227,12 +227,30 @@ function mergeFilters(...parts: AddressFilter[]): AddressFilter {
  *  default (see ownMailboxAddresses). */
 export async function relevanceFilter(db: Db): Promise<AddressFilter> {
   const own = ownMailboxAddresses();
-  const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
   const partyEmails = (await db.select().from(schema.parties)).map((p) => p.email ?? "");
   return mergeFilters(
-    sanitizeAddresses(senders, own, "operator"),
+    operatorAddresses(),
     sanitizeAddresses(partyEmails, own, "party"),
   );
+}
+
+/**
+ * THE VERDER LIST — and THE ONLY READER OF `RELEVANT_SENDERS`.
+ *
+ * Relevance (above) and priority (`mail/priority.ts`) both call this, so the
+ * organisation whose mail is worth ingesting and the organisation whose mail
+ * is worth a time-sensitive push are one definition, default included (spec
+ * §6.4: "keep the list in ONE place that both relevance and priority read").
+ * A second `process.env.RELEVANT_SENDERS` read anywhere is a list that drifts;
+ * `priority.test.ts` pins the default against this function.
+ *
+ * Sanitised as `"operator"`, exactly as relevanceFilter always did: a bare
+ * `@domain` is legal here because a human typed it into a deploy command, and
+ * the owner's own mailbox is refused because it is on every message.
+ */
+export function operatorAddresses(): AddressFilter {
+  const senders = (process.env.RELEVANT_SENDERS ?? "@verdergroep.nl").split(",");
+  return sanitizeAddresses(senders, ownMailboxAddresses(), "operator");
 }
 
 /** The same call with the report dropped — what pollGmail wants. One policy,
