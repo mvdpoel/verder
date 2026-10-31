@@ -43,6 +43,9 @@ targets:
           - IBMPlexMono-SemiBold.ttf
         NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
         NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
+        # The keychain-access-groups entitlement below, resolved by the same
+        # build setting, so KeychainSessionStore names the group it is entitled to.
+        VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
     entitlements:
       path: Verder/Verder.entitlements
       properties:
