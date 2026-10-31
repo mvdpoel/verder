@@ -4,10 +4,11 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "//exports": "The barrel reaches pg. Client components need only the document-source vocabulary, so that leaf module is published as its own subpath.",
+  "//exports": "The barrel reaches pg. Client components need only the document- and entry-source vocabularies, so those leaf modules are published as their own subpaths.",
   "exports": {
     ".": "./src/index.ts",
-    "./doc-sources": "./src/doc-sources.ts"
+    "./doc-sources": "./src/doc-sources.ts",
+    "./entry-sources": "./src/entry-sources.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate",

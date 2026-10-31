@@ -11,7 +11,7 @@ const entryInput = z.object({
   direction: z.enum(["inbound", "outbound", "internal"]),
   summary: z.string().min(1),
   details: z.string().optional(),
-  source: z.enum(["manual", "gmail-watch", "nas-watch"]).default("manual"),
+  source: z.enum(schema.ENTRY_SOURCES).default("manual"),
   sourceRef: z.string().optional(),
   participantPartyIds: z.array(z.string().uuid()),
   documentIds: z.array(z.string().uuid()),

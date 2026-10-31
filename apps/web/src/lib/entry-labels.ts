@@ -1,4 +1,5 @@
 import type { DocSource } from "@verder/db/doc-sources";
+import type { EntrySource } from "@verder/db/entry-sources";
 
 /**
  * The logbook's enum values, in Dutch.
@@ -41,11 +42,17 @@ export const CLARITY_LABEL: Record<string, string> = {
   "already-provided": "al aangeleverd",
 };
 
-/** Where an entry came from. `manual` is Martin typing it; the rest are watchers. */
-export const ENTRY_SOURCE_LABEL: Record<string, string> = {
+/**
+ * Where an entry came from. `manual` is Martin typing it; the watchers are
+ * `gmail-watch` and `nas-watch`; `proposal` is a mail verder sent for him after
+ * he approved its final text. Keyed on `EntrySource`, so a value added to the
+ * enum and not here fails to typecheck.
+ */
+export const ENTRY_SOURCE_LABEL: Record<EntrySource, string> = {
   manual: "handmatig",
   "gmail-watch": "e-mailwatcher",
   "nas-watch": "scanwatcher",
+  proposal: "verstuurd via verder",
 };
 
 /** How a document reached the vault. */

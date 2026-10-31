@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import { DOC_SOURCES } from "./doc-sources";
-import { bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
+import { ENTRY_SOURCES } from "./entry-sources";
+import { type AnyPgColumn, bigint, bigserial, boolean, check, customType, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
 export const channelEnum = pgEnum("channel", ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]);
 export const directionEnum = pgEnum("direction", ["inbound", "outbound", "internal"]);
-export const entrySourceEnum = pgEnum("entry_source", ["manual", "gmail-watch", "nas-watch"]);
+export { ENTRY_SOURCES, type EntrySource } from "./entry-sources";
+export const entrySourceEnum = pgEnum("entry_source", ENTRY_SOURCES);
 export { DOC_SOURCES, type DocSource } from "./doc-sources";
 export const docSourceEnum = pgEnum("doc_source", DOC_SOURCES);
 export const docStatusEnum = pgEnum("doc_status", ["inbox", "filed", "discarded"]);
@@ -574,6 +576,69 @@ export const notificationAttempts = pgTable("notification_attempts", {
   check("notification_attempts_channel_check", sql`${t.channel} IN ('apns', 'web-push')`),
   check("notification_attempts_outcome_check",
     sql`${t.outcome} IN ('delivered', 'rejected', 'error', 'skipped')`),
+]);
+
+// Operational (0038): proposals — something verder wants Martin to approve
+// (spec §6.5). NOT evidence and appends no ledger event: the evidence of a send
+// is the outbound log entry (source 'proposal', source_ref 'proposal:<id>')
+// written through insertEntry once Gmail has the message. Full CRUD for both
+// roles. `verdict` is the golden-rule verdict, separate from the lifecycle.
+export const proposals = pgTable("proposals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull(),
+  verdict: text("verdict"),
+  priority: text("priority").notNull(),
+  triggerRawEmailId: uuid("trigger_raw_email_id").references(() => rawEmails.id),
+  triggerDocumentId: uuid("trigger_document_id").references(() => documents.id),
+  triggerTaskId: uuid("trigger_task_id").references(() => tasks.id),
+  // The mail agent's non-dossier message {gmailId, threadId, messageId, from, to, subject, date, body}.
+  triggerExternal: jsonb("trigger_external"),
+  // Self-reference: drizzle needs the AnyPgColumn annotation to break the cycle.
+  parentProposalId: uuid("parent_proposal_id").references((): AnyPgColumn => proposals.id),
+  // `gmail:<gmail_thread_id>` for source='gmail' rows, NULL otherwise.
+  threadKey: text("thread_key"),
+  partyId: uuid("party_id").references(() => parties.id),
+  senderGuess: jsonb("sender_guess"),
+  createdTaskId: uuid("created_task_id").references(() => tasks.id),
+  finishFailures: integer("finish_failures").notNull().default(0),
+  context: jsonb("context").notNull(),
+  prompt: text("prompt"),
+  model: text("model"),
+  promptVersion: text("prompt_version"),
+  modelOutput: text("model_output"),
+  payload: jsonb("payload"),
+  finalPayload: jsonb("final_payload"),
+  diff: jsonb("diff"),
+  revision: integer("revision").notNull().default(1),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decidedBy: uuid("decided_by").references(() => users.id),
+  rejectReason: text("reject_reason"),
+  // RFC 5322 Message-ID, generated before the send; recovery finds it in Sent.
+  messageId: text("message_id").unique(),
+  gmailMessageId: text("gmail_message_id"),
+  gmailThreadId: text("gmail_thread_id"),
+  sendingAt: timestamp("sending_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  error: text("error"),
+  remindedAt: timestamp("reminded_at", { withTimezone: true }),
+  resultEntryId: uuid("result_entry_id").references(() => logEntries.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  // One proposal per raw-email trigger, keyed on the trigger ALONE (a `reply`
+  // may become a `question`); follow-ups exempt.
+  uniqueIndex("proposals_trigger_uq").on(t.triggerRawEmailId)
+    .where(sql`${t.triggerRawEmailId} IS NOT NULL AND ${t.kind} <> 'follow-up'`),
+  uniqueIndex("proposals_doc_trigger_uq").on(t.triggerDocumentId)
+    .where(sql`${t.triggerDocumentId} IS NOT NULL`),
+  index("proposals_status_idx").on(t.status),
+  index("proposals_thread_key_idx").on(t.threadKey),
+  check("proposals_kind_check", sql`${t.kind} IN ('reply', 'question', 'follow-up')`),
+  check("proposals_status_check", sql`${t.status} IN ('drafting', 'draft-failed', 'pending', 'approved', 'sending', 'sent', 'failed', 'rejected', 'superseded')`),
+  check("proposals_verdict_check", sql`${t.verdict} IN ('approved', 'edited', 'rejected')`),
+  check("proposals_priority_check", sql`${t.priority} IN ('verder', 'creditor', 'other')`),
+  check("proposals_has_trigger_ck", sql`num_nonnulls(${t.triggerRawEmailId}, ${t.triggerDocumentId}, ${t.triggerTaskId}, ${t.triggerExternal}, ${t.parentProposalId}) >= 1`),
 ]);
 
 // --- better-auth managed tables (schema generated by @better-auth/cli, adapted
