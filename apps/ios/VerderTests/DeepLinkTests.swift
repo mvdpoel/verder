@@ -45,7 +45,7 @@ struct DeepLinkTests {
         #expect(DeepLink(userInfo: ["aps": ["alert": "x"]]) == DeepLink.none)
     }
 
-    /// Where each link lands until Task 19's proposal screen exists.
+    /// Where each link lands; a proposal also opens its own screen on Voor jou.
     @Test func linksOpenTheirTab() {
         #expect(DeepLink.proposal(id).tab == .voorJou)
         #expect(DeepLink.inbox.tab == .voorJou)

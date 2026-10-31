@@ -40,9 +40,9 @@ enum DeepLink: Equatable, Sendable {
         }
     }
 
-    /// The tab a link opens. Until the proposal screen exists (Plan 2 Task 19)
-    /// a proposal opens Voor jou; both tabs are lock-gated, so whatever the
-    /// link points at is shown only after unlock.
+    /// The tab a link opens. A proposal opens Voor jou with that proposal on
+    /// top (RootView pushes it); both tabs are lock-gated, so whatever the link
+    /// points at is shown only after unlock.
     var tab: RootView.TabID? {
         switch self {
         case .proposal, .inbox: .voorJou

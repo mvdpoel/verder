@@ -15,6 +15,10 @@ struct RootView: View {
 
     enum TabID: Hashable { case scan, voorJou, dossier, meer }
     @State private var tab: TabID = .scan
+    /// The proposal stack of Voor jou. Held HERE, not in the tab: a gated tab's
+    /// content does not exist while locked, so a deep link that arrives on the
+    /// lock screen must wait somewhere that survives it.
+    @State private var proposalPath: [String] = []
 
     var body: some View {
         #if DEBUG
@@ -66,7 +70,9 @@ struct RootView: View {
         // A tapped notification. The target tabs are lock-gated, so what the
         // link points at shows only after unlock.
         .onChange(of: links.pending, initial: true) { _, _ in
-            if let target = links.take().tab { tab = target }
+            let link = links.take()
+            if let target = link.tab { tab = target }
+            if case .proposal(let id) = link { proposalPath = [id.uuidString.lowercased()] }
         }
         // Never stacked on the passkey offer: that one waits in Meer first.
         .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
@@ -103,7 +109,9 @@ struct RootView: View {
                 ScanTab(center: uploads, auth: auth)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
-                ComingSoon(title: "Voor jou").lockGated(by: lock)
+                ProposalListView(client: auth.client, gate: ApprovalGate(), path: $proposalPath,
+                                 onUnauthorized: { auth.sessionRejected() })
+                    .lockGated(by: lock)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
                 ComingSoon(title: "Dossier").lockGated(by: lock)
