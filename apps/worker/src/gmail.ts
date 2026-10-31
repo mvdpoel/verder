@@ -2,6 +2,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
+import { PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";
@@ -273,7 +274,16 @@ export function retryAfterFrom(err: unknown): Date | null {
 }
 
 /**
- * The retry instant the last `gmail` run recorded, if it is still in the future.
+ * The `worker_runs` names whose rows may carry a Gmail rate-limit deadline:
+ * every path that calls the Gmail API on Martin's account. One account, one
+ * user-rate limit — a 429 hit by ANY of them is a deadline for ALL of them.
+ */
+//
+// `mail-agent` is spelled literally until Plan 2 Task 20 gives it a constant.
+export const GMAIL_RATE_LIMIT_WORKERS = ["gmail", PROPOSAL_SEND_WORKER_NAME, "mail-agent"] as const;
+
+/**
+ * The latest still-future retry instant any Gmail path recorded, or null.
  *
  * WHY THIS EXISTS. A Gmail user-rate limit is account-wide and every attempt
  * against it RESETS the deadline to a fresh fifteen minutes. With `gmail.poll`
@@ -288,15 +298,31 @@ export function retryAfterFrom(err: unknown): Date | null {
  * SAME instant forward, because this reads the latest run: a skip that dropped
  * it would clear the memory and the next tick would poll straight into the
  * limit again.
+ *
+ * SHARED ACROSS PATHS (Plan 2 Task 16). It reads the newest row of EACH name in
+ * GMAIL_RATE_LIMIT_WORKERS and returns the latest future deadline among them —
+ * never "the newest row across all three", because `proposal-send` writes a
+ * routine green row every minute and that row would erase a `gmail` deadline
+ * the moment it landed. Reading `gmail` alone (as this did until then) left a
+ * 429 hit by a send, a recovery search or the mail agent invisible to the
+ * poller and to the next recovery tick, which would re-arm the account-wide
+ * lockout every minute.
+ *
+ * `now` is injectable so the send job's tests can run on a controlled clock.
  */
-async function rateLimitedUntil(db: Db): Promise<Date | null> {
-  const [last] = await db.select({ detail: schema.workerRuns.detail })
-    .from(schema.workerRuns).where(eq(schema.workerRuns.worker, "gmail"))
-    .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
-  const raw = (last?.detail as { retryAfter?: unknown } | null)?.retryAfter;
-  if (typeof raw !== "string") return null;
-  const when = new Date(raw);
-  return !Number.isNaN(when.getTime()) && when > new Date() ? when : null;
+export async function rateLimitedUntil(db: Db, now: Date = new Date()): Promise<Date | null> {
+  let latest: Date | null = null;
+  for (const worker of GMAIL_RATE_LIMIT_WORKERS) {
+    const [last] = await db.select({ detail: schema.workerRuns.detail })
+      .from(schema.workerRuns).where(eq(schema.workerRuns.worker, worker))
+      .orderBy(desc(schema.workerRuns.ranAt)).limit(1);
+    const raw = (last?.detail as { retryAfter?: unknown } | null)?.retryAfter;
+    if (typeof raw !== "string") continue;
+    const when = new Date(raw);
+    if (Number.isNaN(when.getTime()) || when <= now) continue;
+    if (!latest || when > latest) latest = when;
+  }
+  return latest;
 }
 
 /**

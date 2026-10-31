@@ -40,6 +40,7 @@ look like:
 | `OLLAMA_MODEL` | e.g. `qwen3.5:9b` |
 | `GMAIL_CREDENTIALS_PATH` | `./secrets/gmail-oauth.json` (compose mounts `./secrets` into the worker at `/repo/secrets`) |
 | `GMAIL_TOKEN_PATH` | `./secrets/gmail-token.json` |
+| `GMAIL_SEND_TOKEN_PATH` | `/repo/secrets/send/gmail-send-token.json` — the `gmail.send` token for approved proposals, in `./secrets/send/` mounted READ-ONLY into the worker (`./secrets/send:/repo/secrets/send:ro`, after the `./secrets` line). Unset: nothing is sent, approvals wait, and `proposal-send` records `error` "not configured". Never read or print the file. |
 | `RELEVANT_SENDERS` | comma-separated From-address filters, e.g. `@verdergroep.nl` |
 | `AUTH_SECRET` | long random string: `openssl rand -hex 32` |
 | `APP_URL` | `https://<your-tunnel-hostname>` |

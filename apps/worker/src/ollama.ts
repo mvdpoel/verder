@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { recordRun } from "./heartbeat";
+import { proposalForOwnSentMail } from "./proposals/own-sent";
 import { buildDocMetaPrompt, buildEntryPrompt, DOCMETA_PROMPT_VERSION, PROMPT_VERSION } from "./prompts";
 import type { RetrievedRef, RetrieveRefsFn } from "./retrieval-refs";
 
@@ -47,6 +48,16 @@ export async function suggestEntry(
   const [email] = await deps.db.select().from(schema.rawEmails)
     .where(eq(schema.rawEmails.id, rawEmailId));
   if (!email) return;
+  // A mail verder itself sent for a proposal, coming back through the poll.
+  // Its outbound entry is written by finishSent (proposals/send.ts) from the
+  // text Martin approved, so a log-entry suggestion here would be a second
+  // entry for one mail. `sending` counts too: the re-ingest can overtake a slow
+  // or crashed finishSent.
+  const sentBy = await proposalForOwnSentMail(deps.db, email);
+  if (sentBy) {
+    await recordRun(deps.db, "ollama", "ok", { rawEmailId, skipped: "sent-by-verder", proposalId: sentBy });
+    return;
+  }
   const attachmentDocs = await deps.db.select().from(schema.documents)
     .where(eq(schema.documents.sourceRef, email.gmailMessageId));
   const base = { occurredAt: email.sentAt.toISOString(), channel: "email" as const,

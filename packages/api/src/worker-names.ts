@@ -114,3 +114,13 @@ export const PROPOSAL_CREATE_WORKER_NAME = "proposal-create";
  * `watcher` declaration in worker-health.ts: silence means the host cron died.
  */
 export const PROPOSAL_DRAFT_WORKER_NAME = "proposal-draft";
+
+/**
+ * Written by apps/worker/src/proposals/send.ts — one row per `proposals.send`
+ * tick (every minute), including a rate-limited skip — and read back by the
+ * `watcher` declaration in worker-health.ts AND by `rateLimitedUntil` in
+ * apps/worker/src/gmail.ts, which treats a `detail.retryAfter` on this name's
+ * newest row as an account-wide Gmail deadline. A rename missed on the reader
+ * side would make a 429 hit by a send invisible to the poller.
+ */
+export const PROPOSAL_SEND_WORKER_NAME = "proposal-send";

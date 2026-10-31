@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, schema } from "@verder/db";
 import { readFilePath } from "@verder/api/src/storage";
-import { pollGmail, retryAfterFrom, buildQueries, ingestRawEmail, type GmailPort } from "./gmail";
+import {
+  pollGmail, rateLimitedUntil, retryAfterFrom, buildQueries, ingestRawEmail, type GmailPort,
+} from "./gmail";
+import type { Db } from "@verder/db";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -226,6 +229,48 @@ describe("Gmail rate-limit backoff", () => {
     await expect(pollGmail(deps)).rejects.toThrow(/socket hang up/);
     expect(listCalls).toBe(2);                 // tried again, as it should
     await pool.end();
+  });
+});
+
+describe("rateLimitedUntil is shared across every Gmail path", () => {
+  class Rollback extends Error {}
+  async function isolated(fn: (db: Db) => Promise<void>) {
+    const { db, pool } = createDb(URL);
+    try {
+      await db.transaction(async (tx) => { await fn(tx as unknown as Db); throw new Rollback(); });
+    } catch (err) { if (!(err instanceof Rollback)) throw err; }
+    finally { await pool.end(); }
+  }
+  // A clock far past anything the shared dev database holds, so a deadline a
+  // concurrently running suite committed for `gmail` cannot leak in.
+  const NOW = new Date("2031-03-01T12:00:00Z");
+  const at = (min: number) => new Date(NOW.getTime() + min * 60_000);
+
+  it("rateLimitedUntil reads a proposal-send deadline", async () => {
+    await isolated(async (db) => {
+      await db.insert(schema.workerRuns).values([
+        { worker: "gmail", status: "ok", detail: { ingested: 0 }, ranAt: at(-1) },
+        { worker: "proposal-send", status: "error",
+          detail: { message: "429", retryAfter: at(14).toISOString() }, ranAt: at(-2) },
+      ]);
+      expect((await rateLimitedUntil(db, NOW))?.toISOString()).toBe(at(14).toISOString());
+    });
+  });
+
+  it("a routine green row on one path never erases another path's deadline", async () => {
+    await isolated(async (db) => {
+      await db.insert(schema.workerRuns).values([
+        { worker: "gmail", status: "error",
+          detail: { message: "429", retryAfter: at(9).toISOString() }, ranAt: at(-3) },
+        { worker: "proposal-send", status: "ok", detail: { sent: 0 }, ranAt: at(-1) },
+        { worker: "mail-agent", status: "error",
+          detail: { message: "429", retryAfter: at(12).toISOString() }, ranAt: at(-2) },
+      ]);
+      // The LATEST future deadline among the newest row of each name.
+      expect((await rateLimitedUntil(db, NOW))?.toISOString()).toBe(at(12).toISOString());
+      // ...and a past one is no deadline at all.
+      expect(await rateLimitedUntil(db, at(20))).toBeNull();
+    });
   });
 });
 

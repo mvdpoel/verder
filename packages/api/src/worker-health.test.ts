@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cadenceMs, declFor, workerState } from "./worker-health";
 import {
   MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME,
 } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -247,6 +248,13 @@ describe("declFor — the workers that exist today", () => {
     // superseded, or creating one failed: silence is health.
     expect(PROPOSAL_CREATE_WORKER_NAME).toBe("proposal-create");
     expect(declFor(PROPOSAL_CREATE_WORKER_NAME)).toEqual({ kind: "on-demand" });
+  });
+
+  it("proposal-send is a one-minute watcher", () => {
+    // One row per proposals.send tick, a rate-limited skip included: silence
+    // means the send job died with approved replies possibly waiting.
+    expect(PROPOSAL_SEND_WORKER_NAME).toBe("proposal-send");
+    expect(declFor(PROPOSAL_SEND_WORKER_NAME)).toEqual({ kind: "watcher", everyMs: MIN });
   });
 
   it("declares receipts as event-driven — it runs only when registry.mine finds an aggregator", () => {

@@ -22,7 +22,9 @@ import { suggestTask } from "./task-mine";
 import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { PROPOSAL_CREATE_WORKER_NAME } from "@verder/api/src/worker-names";
+import { PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { sendApproved } from "./proposals/send";
+import { realSendPort } from "./gmail-send";
 import { resolveAggregator } from "./receipts";
 import { notifier } from "./notify/notify";
 import { realEmbedPort } from "@verder/api/src/search/embed";
@@ -294,6 +296,33 @@ await boss.work("suggest.entry", async ([job]) => {
     await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "error", { rawEmailId, message: String(err) })
       .catch((e) => console.error(`proposal-create ${rawEmailId}: ${String(err)} / ${String(e)}`));
   }
+});
+
+// Approved proposals are sent here, once (spec §12.3; proposals/send.ts). Every
+// minute, single-flight: a tick that outlasts its minute must not race a second
+// one over the same `sending` rows. The claim itself is a conditional UPDATE,
+// so even two PROCESSES cannot send one proposal twice; the latch only keeps
+// one process from spending recovery's Gmail budget twice per minute.
+//
+// The port reads nothing until a send or a search needs it: without
+// GMAIL_SEND_TOKEN_PATH (it is mounted read-only in Plan 2 Task 21) `ready`
+// says so, nothing is claimed, and the tick records `error` while an approval
+// waits — every other job runs as before.
+const proposalSend = makeSingleFlight();
+await boss.createQueue("proposals.send");
+await boss.schedule("proposals.send", "* * * * *");
+await boss.work("proposals.send", async () => {
+  await proposalSend.run(async () => {
+    try {
+      await sendApproved({ db, port: await realSendPort(), notify,
+        vaultDir: process.env.VAULT_DIR ?? "./vault-files" });
+    } catch (err) {
+      // sendApproved records its own row on every path it can reach; this is
+      // the path it cannot (the database itself failing mid-tick).
+      await recordRun(db, PROPOSAL_SEND_WORKER_NAME, "error", { message: String(err) })
+        .catch((e) => console.error(`proposal-send: ${String(err)} / ${String(e)}`));
+    }
+  });
 });
 
 await boss.createQueue("suggest.docmeta");

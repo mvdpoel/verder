@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { normalizeName } from "@verder/parsers";
 import { recordRun } from "./heartbeat";
+import { proposalForOwnSentMail } from "./proposals/own-sent";
 import { buildTaskPrompt, TASK_PROMPT_VERSION } from "./prompts";
 import type { LlmPort } from "./ollama";
 
@@ -42,6 +43,14 @@ export async function suggestTask(
     const [email] = await deps.db.select().from(schema.rawEmails)
       .where(eq(schema.rawEmails.id, rawEmailId));
     if (!email) return;
+
+    // Verder's own sent mail for a proposal: nothing in it is a task for Martin
+    // that he did not already approve (see suggestEntry for the same skip).
+    const sentBy = await proposalForOwnSentMail(deps.db, email);
+    if (sentBy) {
+      await recordRun(deps.db, "task-mine", "ok", { rawEmailId, skipped: "sent-by-verder", proposalId: sentBy });
+      return;
+    }
 
     // Pre-LLM guard: one mining attempt per email (see doc comment above).
     const prior = await deps.db.select({ id: schema.suggestions.id })

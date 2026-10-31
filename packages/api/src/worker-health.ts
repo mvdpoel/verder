@@ -41,8 +41,8 @@
 
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
-  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME, RERANK_WORKER_NAME,
-  WATCHDOG_WORKER_NAME,
+  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME,
+  RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -210,6 +210,10 @@ const DECLS: Record<string, WorkerDecl> = {
   // or a `{drafted: 0}` heartbeat when nothing was pending — so silence means
   // the cron line or the host script died, which is exactly a watcher.
   [PROPOSAL_DRAFT_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
+  // `boss.schedule("proposals.send", "* * * * *")`: one row per tick, a
+  // rate-limited skip included, so silence means the send job is dead — and an
+  // approved reply would then sit unsent with nothing else to say so.
+  [PROPOSAL_SEND_WORKER_NAME]: { kind: "watcher", everyMs: MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },
