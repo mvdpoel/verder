@@ -20,6 +20,8 @@ import { autoNameSafely } from "./auto-name";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { notifyForMail } from "./mail/priority-notify";
+import { proposalsForMail } from "./proposals/create";
+import { PROPOSAL_CREATE_WORKER_NAME } from "@verder/api/src/worker-names";
 import { resolveAggregator } from "./receipts";
 import { notifier } from "./notify/notify";
 import { realEmbedPort } from "@verder/api/src/search/embed";
@@ -272,6 +274,20 @@ await boss.work("suggest.entry", async ([job]) => {
   // re-run of the job is deduplicated on `mail:<rawEmailId>`.
   try { await notifyForMail({ db, notify }, rawEmailId); }
   catch (err) { console.error(`notifyForMail ${rawEmailId}: ${String(err)}`); }
+  // Verder and creditor mail get a drafting proposal (spec §6.5); Martin's own
+  // reply supersedes the drafts it answered. One proposal per raw email under
+  // at-least-once delivery (the trigger unique index). Error-isolated like the
+  // two above, and a row is recorded only when something happened.
+  try {
+    const r = await proposalsForMail(
+      { db, retrieveRefs, vaultDir: process.env.VAULT_DIR ?? "./vault-files" }, rawEmailId);
+    if (r.created || r.superseded > 0) {
+      await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "ok", { rawEmailId, ...r });
+    }
+  } catch (err) {
+    await recordRun(db, PROPOSAL_CREATE_WORKER_NAME, "error", { rawEmailId, message: String(err) })
+      .catch((e) => console.error(`proposal-create ${rawEmailId}: ${String(err)} / ${String(e)}`));
+  }
 });
 
 await boss.createQueue("suggest.docmeta");

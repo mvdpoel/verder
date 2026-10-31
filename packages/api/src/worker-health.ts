@@ -41,7 +41,7 @@
 
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
-  NOTIFY_WORKER_NAME, RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
+  NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -306,6 +306,9 @@ const DECLS: Record<string, WorkerDecl> = {
   // destination delivered; like every on-demand error it ages out after 26 h,
   // and the per-destination history stays in notification_attempts.
   [NOTIFY_WORKER_NAME]: { kind: "on-demand" },
+  // proposal-create rides suggest.entry for Verder/creditor mail and Martin's
+  // own replies, and records a row only when it created, superseded or failed.
+  [PROPOSAL_CREATE_WORKER_NAME]: { kind: "on-demand" },
 
   // ---- hand-run ops scripts. Silent for weeks by design. -----------------
   // `pnpm --filter worker <script>`, typed by a human during a deploy or a

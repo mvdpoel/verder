@@ -98,3 +98,11 @@ export const WATCHDOG_WORKER_NAME = "watchdog";
  * summary; the per-destination history lives in `notification_attempts`.
  */
 export const NOTIFY_WORKER_NAME = "notify";
+
+/**
+ * Written by the `suggest.entry` handler in apps/worker/src/index.ts when it
+ * creates or supersedes a proposal (apps/worker/src/proposals/create.ts), and
+ * read back by the `on-demand` declaration in worker-health.ts. A row is written
+ * only when something happened or failed, so silence is health.
+ */
+export const PROPOSAL_CREATE_WORKER_NAME = "proposal-create";
