@@ -12,6 +12,7 @@ import { pdfPageCount } from "./reorder-pdf";
 import type { OcrPort } from "./extract";
 import { makePdf } from "./test-support/make-pdf";
 import { settleDocumentTexts } from "./test-support/document-texts";
+import { fakeNotify } from "./test-support/fake-notify";
 
 const run = promisify(execFile);
 const DB = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -69,17 +70,16 @@ describe("duplex pairs in the NAS sweep", () => {
     await age(join(scanDir, "scan0101.pdf"), 30);
     await age(join(scanDir, "scan0102.pdf"), 29);
     const ocr = scripted([LETTER(1, 3), PLAIN("de afrekening"), "", LETTER(2, 3)]);
-    const pushed: { title: string; body: string }[] = [];
+    const { notify, sent: pushed } = fakeNotify();
     const enq: string[] = [];
-    const deps = { db, scanDir, vaultDir, ocr, enqueueDocMeta: async (d: string) => { enq.push(d); },
-      push: async (_db: unknown, p: { title: string; body: string }) => { pushed.push(p); } };
+    const deps = { db, scanDir, vaultDir, ocr, enqueueDocMeta: async (d: string) => { enq.push(d); }, notify };
 
     // The merged file is brand new, so it waits out the 10 s settle window.
-    expect((await scanNasFolder(deps as never)).ingested).toBe(0);
+    expect((await scanNasFolder(deps)).ingested).toBe(0);
     expect(ocr.left()).toBe(0);
     expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["duplex-originals", "duplex-scan0101-scan0102.pdf"]);
     expect((await readdir(join(scanDir, "duplex-originals"))).sort()).toEqual(["scan0101.pdf", "scan0102.pdf"]);
-    expect(pushed).toEqual([{
+    expect(pushed).toEqual([{ kind: "filing", level: "passive",
       title: "Dubbelzijdige scan samengevoegd",
       body: "scan0101.pdf + scan0102.pdf → één document, 3 pagina's (1 lege achterkanten weggelaten)" }]);
 
@@ -88,12 +88,36 @@ describe("duplex pairs in the NAS sweep", () => {
     expect(await pdfText(merged)).toEqual([`${tag} F0`, `${tag} B0`, `${tag} F1`]);
 
     await age(merged, 1);
-    expect((await scanNasFolder(deps as never)).ingested).toBe(1);
+    expect((await scanNasFolder(deps)).ingested).toBe(1);
     expect(enq).toHaveLength(1);
     const [doc] = await db.select().from(schema.documents)
       .where(eq(schema.documents.sourceRef, "duplex-scan0101-scan0102.pdf"));
     expect(doc.source).toBe("nas-scan");
     await settleDocumentTexts(db, "duplex-scan0101-scan0102.pdf");
+    await pool.end();
+  });
+
+  it("duplex merge notifies passive filing via index wiring", async () => {
+    // The notify handed to scanNasFolder — what index.ts's nas.scan handler
+    // passes — is the one duplexPass alerts through. There is no default to
+    // fall back on: nas.ts requires it, so forgetting it fails to typecheck.
+    const { db, pool, scanDir, vaultDir } = setup("dx-notify");
+    const tag = `T${Date.now()}`;
+    await writeFile(join(scanDir, "scan0141.pdf"), makePdf([`${tag} F0`]));
+    await writeFile(join(scanDir, "scan0142.pdf"), makePdf([`${tag} B0`]));
+    await age(join(scanDir, "scan0141.pdf"), 30);
+    await age(join(scanDir, "scan0142.pdf"), 29);
+    const { notify, sent } = fakeNotify();
+    await scanNasFolder({ db, scanDir, vaultDir, ocr: scripted([LETTER(1, 2), LETTER(2, 2)]),
+      enqueueDocMeta: async () => {}, notify });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ kind: "filing", level: "passive", title: "Dubbelzijdige scan samengevoegd" });
+    expect(sent[0].body).toContain("scan0141.pdf + scan0142.pdf");
+    const merged = join(scanDir, "duplex-scan0141-scan0142.pdf");
+    await age(merged, 1);
+    expect((await scanNasFolder({ db, scanDir, vaultDir, ocr: noOcr(),
+      enqueueDocMeta: async () => {}, notify })).ingested).toBe(1);
+    await settleDocumentTexts(db, "duplex-scan0141-scan0142.pdf");
     await pool.end();
   });
 
@@ -105,7 +129,7 @@ describe("duplex pairs in the NAS sweep", () => {
     await age(join(scanDir, "scan0111.pdf"), 30);
     await age(join(scanDir, "scan0112.pdf"), 29);
     const ocr = scripted([PLAIN("de huur"), PLAIN("de verzekering")]);
-    const deps = { db, scanDir, vaultDir, ocr, enqueueDocMeta: async () => {} };
+    const deps = { db, scanDir, vaultDir, ocr, enqueueDocMeta: async () => {}, notify: fakeNotify().notify };
     expect((await scanNasFolder(deps)).ingested).toBe(2);
     expect(ocr.left()).toBe(0);
     expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["scan0111.pdf", "scan0112.pdf"]);
@@ -121,7 +145,7 @@ describe("duplex pairs in the NAS sweep", () => {
     const file = join(scanDir, "scan0121.pdf");
     await writeFile(file, makePdf([`T${Date.now()} alleen`]));
     await age(file, 5);
-    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async () => {} };
+    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async () => {}, notify: fakeNotify().notify };
     expect((await scanNasFolder(deps)).ingested).toBe(0);
     await age(file, 13);
     expect((await scanNasFolder(deps)).ingested).toBe(1);
@@ -140,7 +164,7 @@ describe("duplex pairs in the NAS sweep", () => {
     await writeFile(merged, makePdf([`${tag} F0`]));
     await age(merged, 1);
     const enq: string[] = [];
-    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async (d: string) => { enq.push(d); } };
+    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async (d: string) => { enq.push(d); }, notify: fakeNotify().notify };
     expect((await scanNasFolder(deps)).ingested).toBe(1);
     expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(["duplex-originals", "duplex-scan0131-scan0132.pdf"]);
     expect((await readdir(join(scanDir, "duplex-originals"))).sort()).toEqual(["scan0131.pdf", "scan0132.pdf"]);
@@ -162,7 +186,7 @@ describe("duplex pairs in the NAS sweep", () => {
     await writeFile(join(scanDir, "scan0142.pdf"), makePdf([`${tag} nieuw twee`]));
     await age(join(scanDir, "scan0141.pdf"), 30);
     await age(join(scanDir, "scan0142.pdf"), 29);
-    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async () => {} };
+    const deps = { db, scanDir, vaultDir, ocr: noOcr(), enqueueDocMeta: async () => {}, notify: fakeNotify().notify };
     const res = await scanNasFolder(deps);
     expect(res.ingested).toBe(3); // stale merged + both new scans, nothing parked or overwritten
     expect((await readdir(scanDir)).filter((n) => n !== ".verder-nas").sort()).toEqual(

@@ -1,7 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { desc, eq } from "drizzle-orm";
 import { createDb, schema } from "@verder/db";
-import { suggestEntry, type LlmPort } from "./ollama";
+import { sha256Hex } from "@verder/core";
+import { settleDocumentTexts } from "./test-support/document-texts";
+import { suggestDocMeta, suggestEntry, type LlmPort } from "./ollama";
+
+// Spies on the one alert path (push.test.ts pins that push.ts no longer exports
+// a sender of its own), so a suggestion that alerts fails "sends no push"
+// below. The generic "something new to review" push is exactly the "nieuwe
+// mail" push spec §6.4 forbids; priority mail gets its own push.
+const alerts = vi.hoisted(() => ({ notify: vi.fn(async () => ({
+  notificationId: null, duplicate: false, delivered: 0, failed: 0, skipped: 0 })) }));
+vi.mock("./notify/notify", async (orig) => ({ ...(await orig<object>()), notify: alerts.notify }));
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 
@@ -25,7 +35,7 @@ describe("suggestEntry", () => {
       details: "Huurcontract voor vrijdag opsturen.",
       direction: "inbound",
       actionItems: [{ description: "Huurcontract opsturen", clarity: "clear" }] }) };
-    await suggestEntry({ db, llm, sendPush: async () => {} }, raw.id);
+    await suggestEntry({ db, llm }, raw.id);
     const [s] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.rawEmailId, raw.id));
     expect(s.status).toBe("pending");
@@ -38,7 +48,7 @@ describe("suggestEntry", () => {
     const { db, pool } = createDb(URL);
     const raw = await insertEmail(db);
     const llm: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
-    await suggestEntry({ db, llm, sendPush: async () => {} }, raw.id);
+    await suggestEntry({ db, llm }, raw.id);
     const [s] = await db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.rawEmailId, raw.id))
       .orderBy(desc(schema.suggestions.createdAt)).limit(1);
@@ -56,7 +66,7 @@ describe("suggestEntry", () => {
       direction: "inbound", actionItems: [] }) };
     const queries: string[] = [];
     await suggestEntry({
-      db, llm, sendPush: async () => {},
+      db, llm,
       retrieveRefs: async (q) => {
         queries.push(q);
         return [{ entityType: "document",
@@ -80,7 +90,7 @@ describe("suggestEntry", () => {
     const raw = await insertEmail(db);
     const llm: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
     await suggestEntry({
-      db, llm, sendPush: async () => {},
+      db, llm,
       retrieveRefs: async () => [{ entityType: "entry",
         entityId: "33333333-3333-3333-3333-333333333333",
         title: "Gesprek met bewindvoerder", score: 0.02, snippet: "…leefgeld…" }],
@@ -90,6 +100,37 @@ describe("suggestEntry", () => {
       .orderBy(desc(schema.suggestions.createdAt)).limit(1);
     expect(s.status).toBe("needs-manual");
     expect(s.retrievedRefs).toHaveLength(1);
+    await pool.end();
+  });
+});
+
+describe("no generic suggestion push", () => {
+  it("suggestEntry sends no push", async () => {
+    const { db, pool } = createDb(URL);
+    alerts.notify.mockClear();
+    const ok: LlmPort = { chatJson: async () => ({ summary: "s", details: "", direction: "inbound", actionItems: [] }) };
+    const down: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
+    await suggestEntry({ db, llm: ok }, (await insertEmail(db)).id);
+    await suggestEntry({ db, llm: down }, (await insertEmail(db)).id);
+    expect(alerts.notify.mock.calls.length).toBe(0);
+    await pool.end();
+  });
+
+  it("suggestDocMeta sends no push", async () => {
+    const { db, pool } = createDb(URL);
+    alerts.notify.mockClear();
+    const buf = Buffer.from(`docmeta-${crypto.randomUUID()}`);
+    const sourceRef = `ollama-test-${crypto.randomUUID()}`;
+    const [doc] = await db.insert(schema.documents).values({
+      sha256: sha256Hex(buf), sizeBytes: buf.length,
+      mime: "application/pdf", title: `Testfixture ${crypto.randomUUID()}.pdf`,
+      source: "upload", sourceRef, receivedAt: new Date() }).returning();
+    // Shared-dev-DB hygiene: a fixture document with no document_texts row
+    // would sit in pendingDocMeta's backlog forever.
+    await settleDocumentTexts(db, sourceRef);
+    const ok: LlmPort = { chatJson: async () => ({ title: "t", docType: null }) };
+    await suggestDocMeta({ db, llm: ok, extractText: async () => "" }, doc.id, buf);
+    expect(alerts.notify.mock.calls.length).toBe(0);
     await pool.end();
   });
 });

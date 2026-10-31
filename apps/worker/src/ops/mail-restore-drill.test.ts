@@ -4,7 +4,7 @@ import {
   collectFacts, countMessages, judgeDrill, mailboxTotals, openDrillSession,
   parseManifest, parseSampleCount, parseTier2, rawSha256, sampleIds, samplePositions,
   assertDistinctApiUrls, shellFailureFrom, withinTier2Tolerance,
-  parseBackupAgeDays, MAX_BACKUP_AGE_DAYS,
+  parseBackupAgeDays, MAX_BACKUP_AGE_DAYS, notifyDrillFailure,
   type DrillFacts,
 } from "./mail-restore-drill";
 
@@ -940,5 +940,32 @@ describe("shellFailureFrom", () => {
     expect(shellFailureFrom({})).toBeNull();
     expect(shellFailureFrom({ MAIL_DRILL_SHELL_FAILURE: "" })).toBeNull();
     expect(shellFailureFrom({ MAIL_DRILL_SHELL_FAILURE: "   " })).toBeNull();
+  });
+});
+
+describe("notifyDrillFailure", () => {
+  it("drill failure notifies system/active and closes the sender", async () => {
+    const sent: unknown[] = [];
+    let closed = 0;
+    await notifyDrillFailure({
+      notify: async (n) => { sent.push(n);
+        return { notificationId: null, duplicate: false, delivered: 1, failed: 0, skipped: 0 }; },
+      close: async () => { closed++; },
+    }, "native-2026-09-01.tar.zst: the restore holds 0 message(s)");
+    expect(sent).toEqual([{ kind: "system", level: "active", title: "Hersteltest mail MISLUKT",
+      body: "native-2026-09-01.tar.zst: the restore holds 0 message(s)" }]);
+    expect(closed).toBe(1);
+  });
+
+  it("a throwing notify still closes the sender and never throws out", async () => {
+    // The crash handler calls this: an alert-path failure must not replace the
+    // drill's own diagnosis, and an open HTTP/2 session must not keep a
+    // one-shot process alive.
+    let closed = 0;
+    await expect(notifyDrillFailure({
+      notify: async () => { throw new Error("apns down"); },
+      close: async () => { closed++; },
+    }, "x")).resolves.toBeUndefined();
+    expect(closed).toBe(1);
   });
 });

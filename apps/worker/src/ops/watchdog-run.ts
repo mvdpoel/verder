@@ -1,14 +1,14 @@
-// The `worker_runs` row for ops/watchdog.sh, plus the push when it healed
-// something:
+// The `worker_runs` row for ops/watchdog.sh, plus the notification when it
+// healed something:
 //
 //   pnpm --filter worker watchdog-run --checked a,b --restarted a --problems code
 //
 // Every list item comes from a closed vocabulary and is validated here, so the
-// row (and the push body) can only ever contain names this file knows.
+// row (and the notification body) can only ever contain names this file knows.
 import { createDb, type Db } from "@verder/db";
 import { WATCHDOG_WORKER_NAME } from "@verder/api/src/worker-names";
 import { recordRun } from "../heartbeat";
-import { sendPush } from "../push";
+import { closeNotify, notifier, type NotifyFn, type NotifyInput } from "../notify/notify";
 
 const SERVICES = ["postgres", "web", "worker", "stalwart"] as const;
 const MOUNTS = ["nas-workspace", "nas-download"] as const;
@@ -20,7 +20,7 @@ const PROBLEMS = {
 export interface WatchdogReport {
   status: "ok" | "error";
   detail: { checked: string[] } | { restarted: string[]; reason: string };
-  push: { title: string; body: string } | undefined;
+  notify: NotifyInput | undefined;
 }
 
 function list(arg: string | undefined, allowed: readonly string[], flag: string): string[] {
@@ -44,7 +44,7 @@ export function buildReport(args: string[]): WatchdogReport {
   const problems = list(flags.get("--problems"), Object.keys(PROBLEMS), "problems");
 
   if (restarted.length === 0 && problems.length === 0) {
-    return { status: "ok", detail: { checked }, push: undefined };
+    return { status: "ok", detail: { checked }, notify: undefined };
   }
   const parts: string[] = [];
   if (restarted.length) parts.push(`Hersteld: ${restarted.join(", ")}`);
@@ -52,20 +52,24 @@ export function buildReport(args: string[]): WatchdogReport {
   return {
     status: "error",
     detail: { restarted, reason: `${parts.join(". ")}.` },
-    push: restarted.length
-      ? { title: "verder hersteld", body: `Automatisch hersteld: ${restarted.join(", ")}.` }
+    // Active, not time-sensitive: something broke and is already fixed. An
+    // unfixable problem is an error row on the dashboard and never a notification.
+    notify: restarted.length
+      ? { kind: "system", level: "active",
+        title: "verder hersteld", body: `Automatisch hersteld: ${restarted.join(", ")}.` }
       : undefined,
   };
 }
 
 export async function runWatchdogReport(
-  db: Db, report: WatchdogReport, push: typeof sendPush = sendPush,
+  db: Db, report: WatchdogReport, notify: NotifyFn = notifier(db),
 ): Promise<void> {
   await recordRun(db, WATCHDOG_WORKER_NAME, report.status, report.detail);
-  if (!report.push) return;
-  // The row is the durable record; a push failure must not undo it.
-  try { await push(db, report.push); }
-  catch (err) { console.error(`watchdog-run: push failed: ${String(err)}`); }
+  if (!report.notify) return;
+  // The row is the durable record; a notification failure must not undo it.
+  // notify() never throws, but an injected one may.
+  try { await notify(report.notify); }
+  catch (err) { console.error(`watchdog-run: notify failed: ${String(err)}`); }
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
@@ -78,6 +82,8 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     console.error(`watchdog-run: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
   } finally {
+    // One-shot: an open APNs HTTP/2 session would keep the process alive.
+    await closeNotify();
     await pool.end();
   }
 }

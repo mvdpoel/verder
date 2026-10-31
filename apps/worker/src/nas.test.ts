@@ -15,6 +15,7 @@ import { scanNasFolder } from "./nas";
  */
 const realPdf = () => readFile(join(import.meta.dirname, "fixtures", "text-letter.pdf"));
 import { settleDocumentTexts } from "./test-support/document-texts";
+import { fakeNotify } from "./test-support/fake-notify";
 
 // The sweep refuses a share without the marker; every scanDir here is a real one.
 const scanShare = (prefix: string) => {
@@ -39,7 +40,7 @@ describe("scanNasFolder", () => {
     const old = new Date(Date.now() - 60_000);
     await utimes(file, old, old); // settled
     const enq: string[] = [];
-    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async (d: string) => { enq.push(d); } };
+    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async (d: string) => { enq.push(d); }, notify: fakeNotify().notify };
     expect((await scanNasFolder(deps)).ingested).toBe(1);
     expect((await scanNasFolder(deps)).ingested).toBe(0); // idempotent
     expect(enq).toHaveLength(1);
@@ -76,7 +77,7 @@ describe("scanNasFolder", () => {
     await utimes(fat, old, old);
     const enq: string[] = [];
     const res = await scanNasFolder({ db, scanDir, vaultDir, maxBytes: 512,
-      enqueueDocMeta: async (d: string) => { enq.push(d); } });
+      enqueueDocMeta: async (d: string) => { enq.push(d); }, notify: fakeNotify().notify });
     expect(res.ingested).toBe(0);
     expect(res.skipped).toBe(2);
     expect(enq).toHaveLength(0);
@@ -94,7 +95,7 @@ describe("scanNasFolder", () => {
     await writeFile(file, content);
     const old = new Date(Date.now() - 60_000);
     await utimes(file, old, old);
-    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async () => {} };
+    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async () => {}, notify: fakeNotify().notify };
     expect((await scanNasFolder(deps)).ingested).toBe(1);
     // Second pass must recognise it from stat alone. On a 22 GB share the
     // old code read and hashed every byte of every file on every 2-minute
@@ -118,7 +119,7 @@ describe("scanNasFolder, half-written files", () => {
     // which is exactly what production ingested at 589 850 bytes.
     await writeFile(file, Buffer.from("%PDF-1.4\nnot finished yet"));
     await utimes(file, old, old);
-    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async () => {} };
+    const deps = { db, scanDir, vaultDir, enqueueDocMeta: async () => {}, notify: fakeNotify().notify };
     const first = await scanNasFolder(deps);
     expect(first.ingested).toBe(0);
     expect(first.skipped).toBeGreaterThanOrEqual(1);
@@ -137,7 +138,7 @@ describe("scanNasFolder, half-written files", () => {
     const enq: string[] = [];
     const since = new Date();
     const res = await scanNasFolder({ db, scanDir, vaultDir,
-      enqueueDocMeta: async (d: string) => { enq.push(d); } });
+      enqueueDocMeta: async (d: string) => { enq.push(d); }, notify: fakeNotify().notify });
     expect(res).toEqual({ ingested: 0, skipped: 0, read: 0, reordered: 0 });
     expect(enq).toEqual([]);
     const [row] = await db.select().from(schema.workerRuns)
@@ -159,7 +160,7 @@ describe("scanNasFolder, half-written files", () => {
     const vaultDir = mkdtempSync(join(tmpdir(), "nas-marker-only-vault-"));
     const old = new Date(Date.now() - 60_000);
     await utimes(join(scanDir, ".verder-nas"), old, old);
-    const res = await scanNasFolder({ db, scanDir, vaultDir, enqueueDocMeta: async () => {} });
+    const res = await scanNasFolder({ db, scanDir, vaultDir, enqueueDocMeta: async () => {}, notify: fakeNotify().notify });
     expect(res).toEqual({ ingested: 0, skipped: 0, read: 0, reordered: 0 });
     expect(await readdir(scanDir)).toEqual([".verder-nas"]);
     await pool.end();

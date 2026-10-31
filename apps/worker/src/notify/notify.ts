@@ -42,6 +42,14 @@ export interface NotifyResult {
   delivered: number; failed: number; skipped: number;
 }
 
+/** What every alerting caller takes in its deps (Plan 2 Task 5): tests inject a fake. */
+export type NotifyFn = (n: NotifyInput) => Promise<NotifyResult>;
+
+/** notify() bound to a database with the default APNs and web-push senders. */
+export function notifier(db: Db): NotifyFn {
+  return (n) => notify({ db }, n);
+}
+
 /** The iOS notification category per kind. MIRRORED in the iOS app (Plan 2 Task 7): a rename here must be made there too. */
 export const CATEGORY: Record<NotifyKind, string> = {
   "verder-mail": "VERDER_MAIL",
@@ -227,12 +235,12 @@ async function fanOutWebPush(deps: NotifyDeps, n: NotifyInput, record: RecordAtt
       const code = (err as { statusCode?: unknown }).statusCode;
       const statusCode = typeof code === "number" ? code : null;
       if (statusCode === 404 || statusCode === 410) {
-        // Gone for good, as sendPush always treated it.
+        // Gone for good, as the old web-push sender always treated it.
         await db.update(schema.pushSubscriptions).set({ revoked: true })
           .where(eq(schema.pushSubscriptions.id, sub.id));
         await record({ ...base, outcome: "rejected", statusCode, reason: message(err) });
       } else {
-        // EVERY other error is now recorded. sendPush dropped these on the floor.
+        // EVERY other error is now recorded. The old sender dropped these on the floor.
         await record({ ...base, outcome: "error", statusCode, reason: message(err) });
       }
     }

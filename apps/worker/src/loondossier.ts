@@ -5,6 +5,7 @@ import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
 import { recordRun } from "./heartbeat";
+import type { NotifyFn } from "./notify/notify";
 
 const BASE = "https://mijn.loondossier.nl";
 
@@ -203,7 +204,7 @@ export interface LoondossierDeps {
   client?: PortalClient;
   credentialsPath?: string;
   enqueueDocMeta(documentId: string): Promise<void>;
-  push(payload: { title: string; body: string }): Promise<void>;
+  notify: NotifyFn;
 }
 
 export async function fetchLoondossier(deps: LoondossierDeps): Promise<
@@ -248,7 +249,7 @@ export async function fetchLoondossier(deps: LoondossierDeps): Promise<
         if (doc.source !== "loondossier" || doc.sourceRef !== refFor(f)) continue;
         await deps.enqueueDocMeta(doc.id);
         result.ingested.push(title);
-        await deps.push({ title: "Nieuwe loonstrook", body: title });
+        await deps.notify({ kind: "filing", level: "passive", title: "Nieuwe loonstrook", body: title });
       } catch (err) {
         failed++;
         if (!(err instanceof PortalError)) throw err;

@@ -21,7 +21,7 @@ import { isKnownNasFile } from "./nas-known";
 import { ocrPageUpright, rasterizePdf, type OcrPort } from "./extract";
 import { recordRun } from "./heartbeat";
 import { findPageMarkers } from "./page-order";
-import { sendPush } from "./push";
+import type { NotifyFn } from "./notify/notify";
 import { MAX_REORDER_PAGES, pdfPageCount } from "./reorder-pdf";
 
 const run = promisify(execFile);
@@ -145,8 +145,8 @@ const pairKey = (a: ScanCandidate & { size: number }, b: ScanCandidate & { size:
 export interface DuplexDeps {
   db: Db; scanDir: string; ocr: OcrPort;
   maxBytes: number;
-  /** Injected in tests; the default needs VAPID keys. */
-  push?: typeof sendPush;
+  /** Required: a merge Martin is not told about is a merge he cannot check. */
+  notify: NotifyFn;
 }
 
 /** Settled, parseable, not yet ingested scanner-named files. */
@@ -230,12 +230,15 @@ export async function duplexPass(deps: DuplexDeps): Promise<{ merged: number }> 
     const droppedBlank = j.evidence.filter((e) => e === "blank").length;
     await recordRun(db, "duplex", "ok", {
       fronts: A.name, backs: B.name, merged: outName, pages: j.order.length, droppedBlank, evidence: j.evidence });
+    // Passive: verder's own filing action, worth knowing, never an interruption.
+    // notify never throws, but an injected one might, and the merge happened:
+    // a missing notification must not undo the record.
     try {
-      await (deps.push ?? sendPush)(db, {
+      await deps.notify({ kind: "filing", level: "passive",
         title: "Dubbelzijdige scan samengevoegd",
         body: `${A.name} + ${B.name} → één document, ${j.order.length} pagina's (${droppedBlank} lege achterkanten weggelaten)`,
       });
-    } catch { /* the merge happened; a missing notification must not undo the record */ }
+    } catch { /* see above */ }
   }
   return { merged };
 }

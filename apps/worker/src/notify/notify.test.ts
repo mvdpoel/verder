@@ -12,7 +12,7 @@ import { CATEGORY, notify, type NotifyInput } from "./notify";
 // worker cannot write, so they are made on the ADMIN connection and committed.
 //
 // THE SHARED DEV DATABASE IS NEVER TRUNCATED, and other suites leave live
-// push_subscriptions (push.test.ts inserts one per run). So every test runs
+// push_subscriptions (push.test.ts used to insert one per run). So every test runs
 // inside a transaction that first revokes every existing destination and is
 // ROLLED BACK at the end: notify sees only this test's fixtures, and nothing
 // it writes — notifications, attempts, worker_runs, revocations — survives.

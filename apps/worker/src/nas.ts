@@ -5,7 +5,7 @@ import { sha256Hex } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
-import { sendPush } from "./push";
+import type { NotifyFn } from "./notify/notify";
 import { recordRun } from "./heartbeat";
 import { DUPLEX_HOLD_MS, SCANNER_NAME, duplexPass } from "./duplex";
 import { isKnownNasFile } from "./nas-known";
@@ -64,8 +64,11 @@ export async function scanNasFolder(deps: {
   /** Injected in tests; production creates and closes its own. */
   ocr?: OcrPort;
   enqueueDocMeta: (documentId: string) => Promise<void>;
-  /** Injected in tests; the default needs VAPID keys. */
-  push?: typeof sendPush;
+  /**
+   * REQUIRED, with no default: duplexPass alerts through it, and a caller that
+   * forgets it must fail to typecheck rather than silently drop the alert.
+   */
+  notify: NotifyFn;
 }): Promise<{ ingested: number; skipped: number; read: number; reordered: number }> {
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
   try { await access(join(deps.scanDir, NAS_MARKER)); }
@@ -83,7 +86,7 @@ export async function scanNasFolder(deps: {
     // path would take the originals as two separate documents. A failure here
     // costs the merge, never the sweep.
     try {
-      await duplexPass({ db: deps.db, scanDir: deps.scanDir, ocr, maxBytes, push: deps.push });
+      await duplexPass({ db: deps.db, scanDir: deps.scanDir, ocr, maxBytes, notify: deps.notify });
     } catch (err) {
       await recordRun(deps.db, "duplex", "error", { message: String(err) });
     }

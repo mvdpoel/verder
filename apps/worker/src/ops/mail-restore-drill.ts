@@ -45,7 +45,7 @@ import {
 import { USING, countMessages, mailboxTotals } from "../mail/jmap-counts";
 import { mailEnvFrom } from "../mail/from-env";
 import { recordRun } from "../heartbeat";
-import { sendPush } from "../push";
+import { closeNotify, notifier, type NotifyFn } from "../notify/notify";
 
 /**
  * The worker name this drill records under, taken from the leaf module that
@@ -868,24 +868,32 @@ function printReport(f: DrillFacts, verdict: { ok: boolean; reasons: string[] })
 // --- entry point ---------------------------------------------------------------
 
 /**
- * The failure notification, best-effort.
+ * The failure notification, best-effort, and the one place that closes the
+ * alert path.
  *
- * WHAT IT CATCHES, stated correctly because an earlier version of this comment
- * asserted a mechanism that does not exist. `sendPush`'s default transport is
- * `realTransport()`, evaluated when the call is made, and it calls
- * `webpush.setVapidDetails` with VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY, which
- * throws when they are absent or malformed. That throw is NOT synchronous:
- * `sendPush` is an `async function`, so an abrupt completion while its
- * parameter defaults are evaluated rejects the returned promise (verified in
- * node — a throwing default parameter on an async function yields a rejected
- * Promise, never a sync throw). Awaiting inside try/catch catches it either way,
- * which is the point: in the crash handler below an escaping VAPID complaint
- * would replace the real diagnosis — the failure this drill exists to report,
- * buried under a misconfiguration in the thing reporting it.
+ * notify() never throws, but this is called from the crash handler too, where
+ * an escaping complaint from the thing REPORTING the failure would replace the
+ * failure this drill exists to report — so an injected notify that throws is
+ * caught here as well. `close` runs in a `finally` because this is a one-shot
+ * process: an APNs HTTP/2 session left open keeps it alive after its work is
+ * done. A run notifies at most once (one verdict, or one crash), so closing
+ * after the call is closing after the last one.
+ *
+ * `system` / `active`: a backup that cannot be restored is worth an interruption
+ * but is never minutes-urgent. The title is Dutch, like every alert verder
+ * raises; the body stays the drill's own `reasons`, which are the machine's
+ * engineering statements about a backup, quoted rather than translated.
  */
-async function pushFailure(db: Db, body: string): Promise<void> {
-  try { await sendPush(db, { title: "Mail restore drill FAILED 🚨", body }); }
-  catch (err) { console.error(`mail-drill: could not push — ${String(err)}`); }
+export async function notifyDrillFailure(
+  deps: { notify: NotifyFn; close: () => Promise<void> }, body: string,
+): Promise<void> {
+  try {
+    await deps.notify({ kind: "system", level: "active", title: "Hersteltest mail MISLUKT", body });
+  } catch (err) {
+    console.error(`mail-drill: could not notify — ${String(err)}`);
+  } finally {
+    await deps.close().catch(() => {});
+  }
 }
 
 /**
@@ -918,6 +926,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
     ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
   const { db, pool } = createDb(url);
+  const alert = { notify: notifier(db), close: closeNotify };
   const probeErrors: { where: string; message: string }[] = [];
   try {
     // BEFORE anything else, including mailEnvFrom: the shell calls this way
@@ -958,7 +967,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
        */
       await recordRun(db, DRILL_WORKER, "error",
         { archive, shellFailure, ok: false, reasons: [shellFailure] });
-      await pushFailure(db, `${archive}: ${shellFailure}`);
+      await notifyDrillFailure(alert, `${archive}: ${shellFailure}`);
       await pool.end();
       // `process.exit` and not a fall-through: everything below assumes a
       // restored server to talk to, and there is not one.
@@ -1015,14 +1024,12 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       ...facts, ok: verdict.ok, reasons: verdict.reasons, probeErrors,
     });
 
-    // A GREEN MONTH IS SILENT. The push exists to interrupt someone, and a
-    // notification that arrives when nothing is wrong teaches its reader to
-    // dismiss the one that matters. It is written in English rather than the
-    // app's Dutch on purpose: the body is `reasons`, which are the machine's own
-    // engineering statements about a backup, and a Dutch title over English
-    // reasons would be politeness pretending to be a translation.
+    // A GREEN MONTH IS SILENT. The notification exists to interrupt someone,
+    // and one that arrives when nothing is wrong teaches its reader to dismiss
+    // the one that matters. Its body is `reasons`, quoted as the machine wrote
+    // them (see notifyDrillFailure).
     if (!verdict.ok) {
-      await pushFailure(db, `${facts.archive}: ${verdict.reasons.join(" · ")}`);
+      await notifyDrillFailure(alert, `${facts.archive}: ${verdict.reasons.join(" · ")}`);
     }
     process.exitCode = verdict.ok ? 0 : 1;
   } catch (err) {
@@ -1034,9 +1041,12 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     console.error(`mail-drill: crashed — ${String(err)}`);
     await recordRun(db, DRILL_WORKER, "error",
       { message: String(err), probeErrors }).catch(() => {});
-    await pushFailure(db, String(err));
+    await notifyDrillFailure(alert, String(err));
     process.exitCode = 1;
   } finally {
+    // notifyDrillFailure already closed it on a failure; a green run never
+    // opened it. Idempotent, and here so no future path can forget.
+    await closeNotify();
     await pool.end();
   }
 }

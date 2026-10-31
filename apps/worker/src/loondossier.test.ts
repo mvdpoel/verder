@@ -11,6 +11,7 @@ import {
   type PortalFile,
 } from "./loondossier";
 import { settleDocumentTexts } from "./test-support/document-texts";
+import { fakeNotify } from "./test-support/fake-notify";
 
 const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
 const SECRETS = { username: "martin-secret-user", password: "hunter2-secret-pass" };
@@ -131,7 +132,7 @@ describe("fetchLoondossier", () => {
   it("skips cleanly without a credentials file", async () => {
     const { db, pool } = createDb(DB_URL);
     const res = await fetchLoondossier({ db, vaultDir: tmpdir(), credentialsPath: "/nonexistent/x.json",
-      enqueueDocMeta: async () => {}, push: async () => {} });
+      enqueueDocMeta: async () => {}, notify: fakeNotify().notify });
     expect(res).toEqual({ listed: 0, new: 0, ingested: [] });
     expect((await lastRun(db)).detail).toEqual({ skipped: "no credentials" });
     await pool.end();
@@ -141,7 +142,7 @@ describe("fetchLoondossier", () => {
     const { db, pool } = createDb(DB_URL);
     await fetchLoondossier({ db, vaultDir: tmpdir(), credentialsPath: await credsFile(),
       client: createPortalClient(fakePortal({ bytes: {}, login: false })),
-      enqueueDocMeta: async () => {}, push: async () => {} });
+      enqueueDocMeta: async () => {}, notify: fakeNotify().notify });
     const run = await lastRun(db);
     expect(run.status).toBe("error");
     expect(run.detail).toEqual({
@@ -156,19 +157,20 @@ describe("fetchLoondossier", () => {
     const stamp = `${Date.now()}-${Math.random()}`;
     const bytes: Record<number, string> = Object.fromEntries(
       BASE_IDS.map((id, i) => [id, `%PDF fake ${NAMES[i]} ${stamp}`]));
-    const pushes: { title: string; body: string }[] = [];
+    const { notify, sent: pushes } = fakeNotify();
     const enq: string[] = [];
     const deps = { db, vaultDir: mkdtempSync(join(tmpdir(), "ld-vault-")),
       credentialsPath: await credsFile(),
       client: createPortalClient(fakePortal({ bytes, offset })),
       enqueueDocMeta: async (id: string) => { enq.push(id); },
-      push: async (p: { title: string; body: string }) => { pushes.push(p); } };
+      notify };
 
     const first = await fetchLoondossier(deps);
     expect(first).toEqual({ listed: 4, new: 4, ingested: [
       "Loonstrook.mp.2026-06.Saurens.pdf", "Loonstrook.mp.2026-07.Saurens.pdf",
       "Loonstrook.mp.2026-08.Saurens.pdf", "Loonstrook.mp.2026-09.Saurens.pdf"] });
-    expect(pushes).toEqual(first.ingested.map((t) => ({ title: "Nieuwe loonstrook", body: t })));
+    expect(pushes).toEqual(first.ingested.map((t) =>
+      ({ kind: "filing", level: "passive", title: "Nieuwe loonstrook", body: t })));
     expect(enq).toHaveLength(4);
 
     const [sept] = await db.select().from(schema.documents)
@@ -197,6 +199,24 @@ describe("fetchLoondossier", () => {
     await pool.end();
   });
 
+  it("a new payslip notifies passive filing", async () => {
+    const { db, pool } = createDb(DB_URL);
+    const offset = uniqueOffset();
+    const stamp = `${Date.now()}-${Math.random()}`;
+    const bytes: Record<number, string> = Object.fromEntries(
+      BASE_IDS.map((id, i) => [id, `%PDF fake ${NAMES[i]} ${stamp}`]));
+    const { notify, sent } = fakeNotify();
+    const res = await fetchLoondossier({ db, vaultDir: mkdtempSync(join(tmpdir(), "ld-vault-")),
+      credentialsPath: await credsFile(), client: createPortalClient(fakePortal({ bytes, offset })),
+      enqueueDocMeta: async () => {}, notify });
+    expect(res.ingested).toHaveLength(4);
+    expect(sent).toHaveLength(4);
+    for (const n of sent) expect(n).toMatchObject({ kind: "filing", level: "passive", title: "Nieuwe loonstrook" });
+    expect(sent.map((n) => n.body)).toEqual(res.ingested);
+    for (const id of BASE_IDS) await settleDocumentTexts(db, `loondossier:${id + offset}`);
+    await pool.end();
+  });
+
   it("does not report or push a file whose bytes the vault already holds", async () => {
     const { db, pool } = createDb(DB_URL);
     const offset = uniqueOffset();
@@ -206,12 +226,12 @@ describe("fetchLoondossier", () => {
     await db.insert(schema.documents).values({ sha256: sha256Hex(buf), sizeBytes: buf.length,
       mime: "application/pdf", title: "scan_0042.pdf", source: "nas-scan",
       sourceRef: heldRef, receivedAt: new Date() });
-    const pushes: unknown[] = [];
+    const { notify, sent: pushes } = fakeNotify();
     const res = await fetchLoondossier({ db, vaultDir: mkdtempSync(join(tmpdir(), "ld-vault-")),
       credentialsPath: await credsFile(),
       client: createPortalClient(fakePortal({
         bytes: { 33033493: content, 33349930: content, 33700516: content, 33993690: content }, offset })),
-      enqueueDocMeta: async () => {}, push: async (x) => { pushes.push(x); } });
+      enqueueDocMeta: async () => {}, notify });
     expect(res).toEqual({ listed: 4, new: 4, ingested: [] });
     expect(pushes).toEqual([]);
     await settleDocumentTexts(db, heldRef);

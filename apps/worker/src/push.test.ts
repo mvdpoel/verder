@@ -1,26 +1,33 @@
-import { describe, expect, it } from "vitest";
-import { createDb, schema } from "@verder/db";
-import { eq } from "drizzle-orm";
-import { sendPush, type PushTransport } from "./push";
+import { describe, expect, it, vi } from "vitest";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+// realTransport is the only thing left in push.ts: notify() owns the fan-out,
+// the revocation of dead subscriptions and the recording of every attempt
+// (notify/notify.test.ts). What is left to pin here is the VAPID wiring itself.
+// web-push is mocked, so nothing is ever sent.
+const wp = vi.hoisted(() => ({ setVapidDetails: vi.fn(), sendNotification: vi.fn(async () => ({ statusCode: 201 })) }));
+vi.mock("web-push", () => ({ default: wp }));
 
-describe("sendPush", () => {
-  it("sends to live subscriptions and revokes dead ones", async () => {
-    const { db, pool } = createDb(URL);
-    const [live] = await db.insert(schema.pushSubscriptions).values({
-      endpoint: `https://push.example/${crypto.randomUUID()}`, p256dh: "k", auth: "a" }).returning();
-    const [dead] = await db.insert(schema.pushSubscriptions).values({
-      endpoint: `https://push.example/dead-${crypto.randomUUID()}`, p256dh: "k", auth: "a" }).returning();
-    const sent: string[] = [];
-    const transport: PushTransport = { send: async (sub) => {
-      if (sub.endpoint.includes("dead")) { const e = new Error("gone") as Error & { statusCode: number }; e.statusCode = 410; throw e; }
-      sent.push(sub.endpoint); } };
-    await sendPush(db, { title: "t", body: "b" }, transport);
-    expect(sent).toContain(live.endpoint);
-    const [deadAfter] = await db.select().from(schema.pushSubscriptions)
-      .where(eq(schema.pushSubscriptions.id, dead.id));
-    expect(deadAfter.revoked).toBe(true);
-    await pool.end();
+import { realTransport } from "./push";
+
+describe("realTransport", () => {
+  it("sets the VAPID details from the environment and sends the subscription's keys", async () => {
+    vi.stubEnv("VAPID_PUBLIC_KEY", "pub-key");
+    vi.stubEnv("VAPID_PRIVATE_KEY", "priv-key");
+    try {
+      const t = realTransport();
+      expect(wp.setVapidDetails).toHaveBeenCalledWith("mailto:martin@vanderpoel.pro", "pub-key", "priv-key");
+      const r = await t.send({ endpoint: "https://push.example/x", p256dh: "k", auth: "a" }, "{\"title\":\"t\"}");
+      expect(wp.sendNotification).toHaveBeenCalledWith(
+        { endpoint: "https://push.example/x", keys: { p256dh: "k", auth: "a" } }, "{\"title\":\"t\"}");
+      expect(r).toEqual({ statusCode: 201 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("exports nothing that sends on its own", async () => {
+    // The old sender dropped every non-404/410 error on the floor and recorded
+    // nothing; every alert now goes through notify().
+    expect(Object.keys(await import("./push")).sort()).toEqual(["realTransport"]);
   });
 });

@@ -20,7 +20,7 @@ import { autoNameSafely } from "./auto-name";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
 import { resolveAggregator } from "./receipts";
-import { sendPush } from "./push";
+import { notifier } from "./notify/notify";
 import { realEmbedPort } from "@verder/api/src/search/embed";
 import { drainOnce } from "./search-drain";
 
@@ -253,10 +253,13 @@ async function nameJson(prompt: string): Promise<unknown> {
   return JSON.parse(data.message.content) as unknown;
 }
 const retrieveRefs = realRetrieveRefs(db);
+// Every alert the worker raises goes through this one notify() (spec §6.3):
+// it fans out to APNs and web-push and records every attempt.
+const notify = notifier(db);
 
 await boss.work("suggest.entry", async ([job]) => {
   const { rawEmailId } = job.data as { rawEmailId: string };
-  await suggestEntry({ db, llm, sendPush, retrieveRefs }, rawEmailId);
+  await suggestEntry({ db, llm, retrieveRefs }, rawEmailId);
   // Action-item mining rides along, error-isolated: suggestTask swallows its
   // own failures, and this guard makes sure a task-mine crash can never fail
   // (and re-run) the entry suggestion above.
@@ -278,7 +281,7 @@ await boss.work("suggest.docmeta", async ([job]) => {
   // the name the document will actually have. Never throws: see autoNameSafely.
   await autoNameSafely({ db, nameLlm: nameJson, scanDir: process.env.NAS_SCAN_DIR ?? "/scans",
     journalPath: NAME_JOURNAL, log: (l) => console.log(l) }, documentId, stored.text);
-  await suggestDocMeta({ db, llm, extractText: async () => stored.text, sendPush },
+  await suggestDocMeta({ db, llm, extractText: async () => stored.text },
     documentId, buf);
 });
 
@@ -287,7 +290,8 @@ await boss.schedule("nas.scan", "*/2 * * * *");
 await boss.work("nas.scan", async () => {
   await scanNasFolder({ db, scanDir: process.env.NAS_SCAN_DIR ?? "/mnt/nas/scans",
     vaultDir: process.env.VAULT_DIR ?? "./vault-files",
-    enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); } });
+    enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); },
+    notify });
 });
 
 await boss.createQueue("loondossier.fetch");
@@ -295,7 +299,7 @@ await boss.schedule("loondossier.fetch", "20 6 * * *");
 await boss.work("loondossier.fetch", async () => {
   await fetchLoondossier({ db, vaultDir: process.env.VAULT_DIR ?? "./vault-files",
     enqueueDocMeta: async (documentId) => { await boss.send("suggest.docmeta", { documentId }); },
-    push: (payload) => sendPush(db, payload) });
+    notify });
 });
 
 // Extraction-coverage sweep: gmail.poll and documents.registerUpload cannot
