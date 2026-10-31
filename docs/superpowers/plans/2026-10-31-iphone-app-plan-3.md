@@ -101,7 +101,7 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 - [ ] **Step 1:** For every row of "What this plan takes from Plan 2", confirm the file and the signature exist with `grep -rn` in `apps/worker/src`, `packages/api/src`, `packages/db/src/schema.ts`, `apps/web/src/app/api/mobile/v1` and `apps/ios`. Where the merged code differs from Plan 2's text, rewrite this file. Where a file this plan would create already exists, the task MODIFIES it instead; this plan never creates a second file for a type Plan 2 owns.
 - [ ] **Step 2:** Run `ls packages/db/drizzle/*.sql | tail -3` and read the last entry of `meta/_journal.json`. Renumber migrations M-A (Task 11) and M-B (Task 24) to the next free numbers. **Expected: M-A = 0039, M-B = 0040.** Both journal `when` values must be larger than 0038's `1793692800000`.
 - [ ] **Step 3:** Confirm on the homelab that Plan 2's migrations are applied: `select count(*) from drizzle.__drizzle_migrations`. **Expected 39** (0000–0038; 37 today plus Plan 2's two). After M-A it is 40, after M-B 41. If it is not 39, stop.
-- [ ] **Step 4: Ask Martin before Task 1** whether an `in-progress` task counts as "waiting on you" (spec §12.9 names `open` only). Record his answer, dated, in spec §12.9, and set `WAITING_TASK_STATUSES` from it.
+- [x] **Step 4: Settled 2026-10-31.** Martin: an `in-progress` task DOES count as waiting on him (recorded in spec §12.9). `WAITING_TASK_STATUSES = ["open", "in-progress"]`.
 - [ ] **Step 5:** Commit: `docs(plan-3): rescope against the merged Plan 2`.
 
 ### Task 1: One definition of "waiting on Martin" (server)
@@ -112,7 +112,7 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 
 **Interfaces:**
 - Produces, in `waiting.ts` (pure, no DB imports):
-  - `export const WAITING_TASK_STATUSES = ["open", "in-progress"] as const;` (default; Task 0 Step 4's answer from Martin decides whether `in-progress` stays)
+  - `export const WAITING_TASK_STATUSES = ["open", "in-progress"] as const;` (Martin, 2026-10-31: `in-progress` counts)
   - `export type WaitingKind = "proposal" | "question" | "suggestion" | "task" | "stop";`
   - `export interface WaitingItem { kind: WaitingKind; id: string; title: string; subtitle: string | null; priority: 1 | 2 | 3; at: string /* ISO */; dueAt: string | null; verder: boolean }`
   - `export function waitingOnMartin(input: { proposals: ProposalRow[]; suggestions: SuggestionRow[]; tasks: TaskRow[]; currentStop: StopRow | null; now: Date }): WaitingItem[]`. It returns the ranked list.

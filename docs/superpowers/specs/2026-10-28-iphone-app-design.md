@@ -117,6 +117,8 @@ The drafter must say in the proposal what it relied on (cited ids), so Martin ca
 - The send is idempotent: one proposal id gives at most one message (record the Gmail message id before marking `sent`, and refuse a second send).
 - After sending, the outbound mail is ingested like any other through the existing dedup.
 
+**Settled by Martin 2026-10-31:** every mail verder sends for him, watchlist replies included, becomes an outbound logbook entry with its ledger event.
+
 **The mail agent folds in.** `/mnt/data/verder/mail-agent/` (cron, watchlist, `context.md`, drafts as `.md` files, handled at session start) becomes a producer of proposals through the same API instead of `.md` files. Its watchlist senders (Statiegeld Nederland, Bungas, Tikkie, Hanneke) stay out of the dossier unless Martin files them, which is why the agent exists alongside ingest. Generate `context.md` from the DB rather than hand-maintaining it, or retire it once proposals carry their own context. Keep `handled.log` until the app is proven.
 
 **Answering a question** resolves to an ordinary existing action: link the document to debt X, set a task's status, create the suggested task. Every write goes through its existing ledgered path.
@@ -279,6 +281,8 @@ Each of these is my call unless it says otherwise.
    - pending suggestions;
    - tasks in status `open` (not `waiting`, which means waiting on someone else);
    - the map's current open stop.
+
+   **Settled by Martin 2026-10-31:** tasks in status `in-progress` count too (he is the one doing them); `waiting` does not.
 
    This one definition lives on the server and drives the inbox, the badge, the widget and the use of amber.
 10. **Follow-up clock.** One clock per thread, started only by an outbound message verder sent or ingested. Threads without an outbound message have no clock.

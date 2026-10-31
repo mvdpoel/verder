@@ -923,6 +923,6 @@ export async function runClocks(deps: { db: Db; notify: NotifyFn; createFollowUp
 
 - **Spec §6.4 "one poll cycle".** The live path is `gmail.poll` at `*/15`, and `mail.poll` over Stalwart receives nothing new while the MX is Gmail. The bound is therefore about 15 minutes plus the entry LLM call, not a minute.
 - **The 7-day clock** needs an outbound row in the same Gmail thread. JMAP thread ids are a different namespace, so archive threads never get a clock. That is a direct consequence of §12.10 plus the data, and is not configurable.
-- **External (mail-agent) replies entering the logbook** follows the letter of §6.5, but puts non-dossier correspondence into the ledger. Martin decides before the first one (Task 20).
+- **External (mail-agent) replies entering the logbook:** settled by Martin 2026-10-31: YES, every send is logged, watchlist replies included (spec §6.5). Task 20 builds it that way; no gate before the first one.
 - **Badge count, the §12.9 waiting set, `content-available` refreshes, and notification answer actions** are Plan 3. Pushes in this plan carry no `badge` key, which leaves the icon unchanged.
 - **Face ID before a send** is enforced on the phone only. The server cannot see it and relies on the session plus the `revision` check, so a stolen session could approve a pending proposal. The 30-day session and device revocation in `/settings/security` are the existing mitigations. This is recorded rather than solved.
