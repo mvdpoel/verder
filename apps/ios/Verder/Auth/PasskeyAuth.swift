@@ -70,6 +70,11 @@ enum PasskeyError: Error, Equatable, Sendable {
     case notSignedIn
     /// iOS returned a registration without an attestation object.
     case noAttestation
+    /// Registering found a passkey for this account already on the device:
+    /// iCloud Keychain synced the one made on the Mac (ASAuthorizationError
+    /// 1006, measured on Martin's iPhone 2026-10-31). Not a failure — he can
+    /// sign in with it as it is.
+    case alreadyOnDevice
     /// AuthenticationServices refused: no passkey for this RP, the associated
     /// domain does not validate, Face ID failed, …
     case failed(String)
@@ -236,12 +241,7 @@ final class PlatformPasskeyAuthenticator: NSObject, PasskeyAuthenticator,
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: any Error) {
-        if let e = error as? ASAuthorizationError, e.code == .canceled {
-            finish(.failure(PasskeyError.cancelled))
-        } else {
-            let ns = error as NSError
-            finish(.failure(PasskeyError.failed("\(ns.domain) \(ns.code): \(ns.localizedDescription)")))
-        }
+        finish(.failure(passkeyError(from: error)))
     }
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
@@ -252,4 +252,17 @@ final class PlatformPasskeyAuthenticator: NSObject, PasskeyAuthenticator,
         guard let scene = scenes.first else { preconditionFailure("passkey ceremony without a window scene") }
         return ASPresentationAnchor(windowScene: scene)
     }
+}
+
+/// Maps what AuthenticationServices hands back to the app's own cases.
+func passkeyError(from error: any Error) -> PasskeyError {
+    if let e = error as? ASAuthorizationError {
+        switch e.code {
+        case .canceled: return .cancelled
+        case .matchedExcludedCredential: return .alreadyOnDevice
+        default: break
+        }
+    }
+    let ns = error as NSError
+    return .failed("\(ns.domain) \(ns.code): \(ns.localizedDescription)")
 }

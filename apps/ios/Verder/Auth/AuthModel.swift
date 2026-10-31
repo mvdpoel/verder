@@ -11,6 +11,7 @@ final class AuthModel {
         static let offline = "Geen verbinding met verder. Controleer je internet en probeer het opnieuw."
         static let generic = "Inloggen lukte niet. Probeer het over een moment opnieuw."
         static let passkeyFailed = "Inloggen met passkey lukte niet. Probeer het opnieuw, of log in met je wachtwoord."
+        static let passkeyAlreadyOnDevice = "Er staat al een passkey voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
         static let passkeyAdded = "Passkey toegevoegd. Voortaan log je in met Face ID."
         static let passkeyAddFailed = "Passkey toevoegen lukte niet. Probeer het over een moment opnieuw."
         /// better-auth registers a passkey only on a session younger than a day.
@@ -121,6 +122,9 @@ final class AuthModel {
             passkeyMessage = Copy.passkeyAdded
         } catch PasskeyError.cancelled {
             // Martin closed the sheet; nothing to say.
+        } catch PasskeyError.alreadyOnDevice {
+            passkeyOfferPending = false
+            passkeyMessage = Copy.passkeyAlreadyOnDevice
         } catch APIError.rejected(403), APIError.unauthorized, PasskeyError.notSignedIn {
             passkeyMessage = Copy.passkeyNeedsFreshSignIn
         } catch APIError.rateLimited {
