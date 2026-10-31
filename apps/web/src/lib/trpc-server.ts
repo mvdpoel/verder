@@ -12,10 +12,22 @@ import { getDb } from "./db";
  * outside tRPC (e.g. writing to the vault) MUST check this first — the
  * middleware only checks cookie presence, not validity.
  */
-export const getSessionUserId = cache(async (): Promise<string | null> => {
-  const session = await getAuth().api.getSession({ headers: await headers() });
-  return session ? await appUserId(session.user.email) : null;
-});
+export const getSessionUserId = cache(async (): Promise<string | null> =>
+  (await getSessionIdentity())?.userId ?? null);
+
+/**
+ * The same validation, plus the better-auth session id it was made under.
+ * A push device is bound to that session so a revoke in /settings/security
+ * (a lost phone) stops its pushes; the id is read here, from the validated
+ * cookie, and never taken from a request body.
+ */
+export const getSessionIdentity = cache(
+  async (): Promise<{ userId: string; sessionId: string } | null> => {
+    const session = await getAuth().api.getSession({ headers: await headers() });
+    if (!session) return null;
+    const userId = await appUserId(session.user.email);
+    return userId === null ? null : { userId, sessionId: session.session.id };
+  });
 
 export const serverCaller = cache(async () => {
   const { db } = getDb();
