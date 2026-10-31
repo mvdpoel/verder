@@ -241,6 +241,79 @@ describe("watchMail", () => {
   });
 });
 
+describe("watchMail never re-fetches a skip", () => {
+  const WATCH = "@bungas.example\n@verdergroep.nl\n";
+  // Newest first, like Gmail's list: 25 Verder mails ahead of one watchlist mail.
+  const setup = () => {
+    const verder = Array.from({ length: 25 }, () => msg({ from: "Demi <demi@verdergroep.nl>" }));
+    const bungas = msg({ from: "service@bungas.example", date: new Date("2031-02-27T09:00:00Z") });
+    return { verder, bungas, port: fakePort([...verder, bungas]) };
+  };
+
+  it("ids ingest already stored are never fetched, so a watchlist mail behind them is emitted", async () => {
+    await isolated(async (db) => {
+      const { verder, bungas, port } = setup();
+      await db.insert(schema.rawEmails).values(verder.map((m) => ({
+        gmailMessageId: m.id, gmailThreadId: m.threadId, fromAddr: m.from, toAddr: m.to, subject: m.subject,
+        sentAt: m.date, rawRfc822Sha256: hex(), bodyText: m.body, suggestQueuedAt: NOW,
+      })));
+      const r = await watchMail({ db, port: port.factory, input: WATCH, now: () => NOW });
+      expect(r.lines.map((l) => l.gmailId)).toEqual([bungas.id]);
+      expect(port.calls.get).toEqual([bungas.id]);
+      expect(r.detail).toMatchObject({ ingested: 25, deferred: 0 });
+    });
+  });
+
+  it("20+ relevant ids ahead of a watchlist id: marked seen, not fetched again, and the watchlist id is emitted", async () => {
+    await isolated(async (db) => {
+      const { verder, bungas, port } = setup();
+      const first = await watchMail({ db, port: port.factory, input: WATCH, now: () => NOW });
+      expect(first.lines).toEqual([]);
+      expect(first.detail).toMatchObject({ fetched: 20, relevant: 20, deferred: 6 });
+      expect(first.skipped).toEqual(verder.slice(0, 20).map((m) => m.id));
+
+      // The host appended them to seen.txt and hands them back.
+      const seen = first.skipped.map((id) => `seen:${id}`).join("\n");
+      const again = fakePort([...verder, bungas]);
+      const second = await watchMail({ db, port: again.factory, input: `${WATCH}${seen}\n`, now: () => NOW });
+      expect(second.lines.map((l) => l.gmailId)).toEqual([bungas.id]);
+      expect(again.calls.get).toEqual([...verder.slice(20).map((m) => m.id), bungas.id]);
+      expect(again.calls.get.filter((id) => first.skipped.includes(id))).toEqual([]);
+    });
+  });
+
+  it("an earlier thread member of an existing proposal is known, so a lost seen append makes no second proposal", async () => {
+    await isolated(async (db) => {
+      const thread = hex();
+      const older = msg({ from: "service@bungas.example", threadId: thread, date: new Date("2031-02-28T09:00:00Z") });
+      const newer = msg({ from: "service@bungas.example", threadId: thread });
+      await db.insert(schema.proposals).values({
+        kind: "reply", status: "pending", priority: "other",
+        triggerExternal: toExternal(newer, [older]), context: fixtureContext(),
+      });
+      const { factory, calls } = fakePort([newer, older]);
+      const r = await watchMail({ db, port: factory, input: WATCH, now: () => NOW });
+      expect(r.lines).toEqual([]);
+      expect(calls.get).toEqual([]);
+      expect(r.detail).toMatchObject({ known: 2 });
+    });
+  });
+
+  it("the empty-watchlist error row carries a live retryAfter forward", async () => {
+    await isolated(async (db) => {
+      const deadline = new Date(NOW.getTime() + 10 * 60_000);
+      await db.insert(schema.workerRuns).values({ worker: MAIL_AGENT_WORKER_NAME, status: "error",
+        // Older than the row the run writes (recordRun stamps the DB clock).
+        detail: { message: "429", retryAfter: deadline.toISOString() }, ranAt: new Date("2020-01-01T00:00:00Z") });
+      const { factory } = fakePort([]);
+      const r = await watchMail({ db, port: factory, input: "", now: () => new Date(NOW.getTime() + 1000) });
+      expect(r.status).toBe("error");
+      expect((await lastRun(db)).detail).toMatchObject({ reason: "empty-watchlist", retryAfter: deadline.toISOString() });
+      expect((await rateLimitedUntil(db, NOW))?.toISOString()).toBe(deadline.toISOString());
+    });
+  });
+});
+
 describe("proposals-store --external", () => {
   const deps = (db: Db) => ({ db, retrieveRefs: async () => [], vaultDir: "/nonexistent" });
 

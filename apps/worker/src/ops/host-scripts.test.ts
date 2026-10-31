@@ -475,6 +475,7 @@ case " $* " in
   *" proposals-store --external "*)
     line=$(cat); echo "$line" >> "$STUB_STATE/store"
     id=$(printf '%s' "$line" | sed -n 's/.*"gmailId":"\\([^"]*\\)".*/\\1/p')
+    [ -n "$STORE_RC" ] && exit "$STORE_RC"
     echo "seen $id"; echo "proposals-store: external created p-$id"
     exit 0;;
 esac
@@ -517,13 +518,13 @@ exit 0
 
   const line = (id: string) => JSON.stringify({ gmailId: id, threadId: "t", subject: "Uw bestelling" });
 
-  it("every docker compose exec in mail-agent.sh is wrapped in timeout -k 5 60", () => {
+  it("every docker compose exec in mail-agent.sh is wrapped in timeout -k 5 (60 for the watcher, 180 for the store)", () => {
     const code = SCRIPT.split("\n").filter((l) => !l.trim().startsWith("#"));
     const compose = code.map((l, i) => [l, code[i + 1] ?? ""] as const)
       .filter(([l]) => l.includes("docker compose"));
     expect(compose.length).toBeGreaterThan(0);
     for (const [l, next] of compose) {
-      expect(l).toMatch(/timeout -k 5 60 docker compose/);
+      expect(l).toMatch(/timeout -k 5 "\$bound" docker compose/);
       expect(`${l} ${next}`).toMatch(/exec -T worker/);
     }
     // And at run time, on the busy path and on the fail-closed one.
@@ -532,8 +533,27 @@ exit 0
       const lines = t.log().trim().split("\n");
       const dockerAt = lines.flatMap((l, i) => (l.startsWith("docker ") ? [i] : []));
       expect(dockerAt.length).toBeGreaterThanOrEqual(1);
-      for (const i of dockerAt) expect(lines[i - 1]).toMatch(/^timeout -k 5 60 docker compose /);
+      for (const i of dockerAt) {
+        const bound = lines[i].includes("proposals-store") ? 180 : 60;
+        expect(lines[i - 1]).toMatch(new RegExp(`^timeout -k 5 ${bound} docker compose `));
+      }
     }
+  });
+
+  it("appends the watcher's `seen <id>` lines (fetched and dropped) without a store call", () => {
+    const t = agentTree();
+    const r = t.run({ WATCH_OUT: `seen ${G0}\n${line(G1)}\nseen ${G2}\nseen ../../etc` });
+    expect(r.status).toBe(0);
+    expect(t.store().trim()).toBe(line(G1));
+    expect(t.seen().trim().split("\n").sort()).toEqual([G0, G1, G2].sort());
+    expect(t.handled().trim().split("\n")).toHaveLength(1);
+  });
+
+  it("a store that times out marks nothing seen and says so in handled.log", () => {
+    const t = agentTree();
+    expect(t.run({ WATCH_OUT: line(G1), STORE_RC: "124" }).status).toBe(0);
+    expect(t.seen()).toBe("");
+    expect(t.handled()).toContain("proposals-store timed out after 180s");
   });
 
   it("pipes the watchlist and seen ids in, each line to proposals-store --external, ids to seen.txt", () => {

@@ -14,7 +14,10 @@
 #   1. the watchlist (and seen.txt, each line prefixed `seen:`) goes to the
 #      worker on STDIN — the worker has no mount for this directory, and stdin
 #      needs no compose change;
-#   2. `mail-agent-watch` prints one JSON line per new thread, READ-ONLY;
+#   2. `mail-agent-watch` prints one JSON line per new thread, READ-ONLY, plus a
+#      `seen <id>` line for every message it fetched and DROPPED (relevant, or
+#      not on the watchlist) — appended to seen.txt straight away, or that
+#      message is fetched in full again every run for three days;
 #   3. each line goes to `proposals-store --external`, which makes a `drafting`
 #      proposal and prints `seen <id>` for every Gmail id it covers;
 #   4. those ids are appended to seen.txt, and one line to handled.log.
@@ -24,8 +27,12 @@
 # `mail-agent` error row — an empty `from:()` query would be the whole mailbox,
 # and silence would read as a healthy agent with nothing to do.
 #
-# EVERY `docker compose exec` IS WRAPPED IN `timeout -k 5 60`: a hung exec would
-# otherwise hold the flock and silence the agent for good.
+# EVERY `docker compose exec` IS WRAPPED IN `timeout -k 5 <bound>`: a hung exec
+# would otherwise hold the flock and silence the agent for good. The bound is 60
+# s, except `proposals-store --external` at 180 s: it runs the kb lookup (an
+# Ollama embed, measured timing out at 120 s on this box) inside createProposal,
+# and under 60 s that timeout killed it silently every run. A timeout is written
+# to handled.log as `timed out`, so it is not only visible in agent.log.
 #
 # STATE LIVES OUTSIDE THE REPO (/mnt/data/verder/mail-agent): ~/apps/verder is
 # rsynced with --delete, and anything written in there is erased on the next
@@ -44,11 +51,15 @@ SEEN_TAIL=5000
 mkdir -p "$STATE_DIR"
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"; }
 
-# The ONE place this script reaches the worker. Bounded, always.
+WATCH_BOUND=60
+STORE_BOUND=180
+# The ONE place this script reaches the worker. Bounded, always: $1 is the bound.
 worker() {
-  timeout -k 5 60 docker compose --env-file .env.prod -f docker-compose.prod.yml \
+  local bound=$1; shift
+  timeout -k 5 "$bound" docker compose --env-file .env.prod -f docker-compose.prod.yml \
     exec -T worker pnpm --silent --filter worker "$@"
 }
+SEEN_LINE='^seen [0-9A-Za-z_-]{1,64}$'
 
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$STATE_DIR/lock"
@@ -60,7 +71,7 @@ if [ ! -s "$WATCHLIST" ]; then
   echo "mail-agent.sh: watchlist missing or empty" >&2
   # Empty stdin: the worker records `mail-agent` error {reason: empty-watchlist}
   # and makes no Gmail call.
-  worker mail-agent-watch < /dev/null >> "$LOG" 2>&1 \
+  worker "$WATCH_BOUND" mail-agent-watch < /dev/null >> "$LOG" 2>&1 \
     || log "recorded the empty-watchlist error (or could not reach the worker)"
   exit 1
 fi
@@ -73,23 +84,33 @@ watch_input() {
 
 # A non-zero exit still prints every line it could (one bad message does not
 # hide the rest), so the output is used either way.
-lines=$(watch_input | worker mail-agent-watch 2>>"$LOG")
+lines=$(watch_input | worker "$WATCH_BOUND" mail-agent-watch 2>>"$LOG")
 rc=$?
 [ "$rc" -ne 0 ] && log "mail-agent-watch exited $rc"
 
 [ -z "$lines" ] && exit 0
 
+# Dropped messages first: they need no store call, only never to be fetched again.
+skips=$(printf '%s\n' "$lines" | grep -E "$SEEN_LINE" | cut -d' ' -f2)
+[ -n "$skips" ] && printf '%s\n' "$skips" >> "$SEEN"
+
 while IFS= read -r line; do
   [ -z "$line" ] && continue
   case "$line" in
     "{"*) ;;
+    "seen "*) continue ;;
     *) log "refusing a line that is not a JSON object"; continue ;;
   esac
-  out=$(printf '%s\n' "$line" | worker proposals-store --external 2>>"$LOG")
+  out=$(printf '%s\n' "$line" | worker "$STORE_BOUND" proposals-store --external 2>>"$LOG")
   src=$?
-  ids=$(printf '%s\n' "$out" | grep -E '^seen [0-9A-Za-z_-]{1,64}$' | cut -d' ' -f2)
+  ids=$(printf '%s\n' "$out" | grep -E "$SEEN_LINE" | cut -d' ' -f2)
   [ -n "$ids" ] && printf '%s\n' "$ids" >> "$SEEN"
   status=$(printf '%s\n' "$out" | grep '^proposals-store: ' | head -n 1)
+  # 124: timeout's TERM; 137: its KILL after -k. Retried next run (idempotent).
+  if [ "$src" -eq 124 ] || [ "$src" -eq 137 ]; then
+    status="proposals-store timed out after ${STORE_BOUND}s"
+    log "$status"
+  fi
   [ "$src" -ne 0 ] && status="${status:-proposals-store exited $src}"
   printf '%s %s %s\n' "$(date -u +%FT%TZ)" "$(printf '%s' "$ids" | tr '\n' ',')" "${status:-no answer}" >> "$HANDLED"
 done <<< "$lines"

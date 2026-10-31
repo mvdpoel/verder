@@ -22,16 +22,29 @@
 //   - SKIPS what ingest already handles (`isRelevantMessage`, the same predicate
 //     `pollGmail` uses): `verderbewindmidden.nl` is on both lists today, so every
 //     Verder mail would otherwise get two proposals.
-//   - SKIPS seen ids BEFORE fetching (seen.txt, from the host) and ids that
-//     already have an external proposal (the DB, so a lost seen.txt append can
-//     never make a second proposal).
+//   - SKIPS seen ids BEFORE fetching (seen.txt, from the host), ids ingest has
+//     already stored (`raw_emails`), and ids that already have an external
+//     proposal — as its trigger OR as an earlier message in its `thread[]`, so a
+//     lost seen.txt append cannot re-fetch a thread's older mail and make a
+//     second proposal with one of them as the trigger.
+//   - NEVER RE-FETCHES A SKIP: a message fetched and then dropped (relevant, or
+//     not on the watchlist) is printed as a `seen <id>` line, which the host
+//     appends to seen.txt. Without it every such message inside the 3-day window
+//     was fetched in full every run — the burn pattern `pollGmail` once had —
+//     and, list order being newest first, twenty of them ahead of a real
+//     watchlist mail pushed that mail into `deferred` on every run until it fell
+//     out of the window.
 //   - SHARES the Gmail rate-limit memory: a live `rateLimitedUntil` deadline from
 //     ANY path skips the run (recorded `ok`, carrying the instant forward), and a
 //     429 here is persisted on this name's row, where every other path reads it.
+//     A row written while a deadline is live CARRIES it forward (the empty-
+//     watchlist error included), because `rateLimitedUntil` reads only the
+//     newest row per name.
 //   - BOUNDED: at most MAX_FETCH_PER_RUN `messages.get` calls per run, at the
 //     old agent's own cadence, so no new Gmail load.
 //
-// It prints ONLY the listed fields. No token, no raw header block, no raw bytes:
+// stdout is one JSON line per thread plus `seen <id>` lines; it prints ONLY the
+// listed fields. No token, no raw header block, no raw bytes:
 // stdout goes into the host's cron log and into a proposal row.
 import { inArray, sql } from "drizzle-orm";
 import { google } from "googleapis";
@@ -169,15 +182,34 @@ export interface WatchDeps {
 export interface WatchResult {
   status: "ok" | "error" | "skipped";
   lines: ExternalMail[];
+  /** Fetched and deliberately dropped: the host marks these seen, so they are
+   *  never fetched again. A message that FAILED to fetch is not in here. */
+  skipped: string[];
   detail: Record<string, unknown>;
 }
 
-/** Gmail ids that already have an external proposal. */
+/** Gmail ids an external proposal already covers: its trigger, or any earlier
+ *  message carried in its `thread[]`. */
 async function knownExternal(db: Db, ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const rows = await db.select({ id: sql<string>`${schema.proposals.triggerExternal}->>'gmailId'` })
-    .from(schema.proposals)
-    .where(inArray(sql`${schema.proposals.triggerExternal}->>'gmailId'`, ids));
+  const list = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+  const res = await db.execute<{ id: string }>(sql`
+    SELECT p.trigger_external->>'gmailId' AS id FROM proposals p
+     WHERE p.trigger_external->>'gmailId' IN (${list})
+    UNION
+    SELECT t->>'gmailId' FROM proposals p
+     CROSS JOIN LATERAL jsonb_array_elements(
+       CASE WHEN jsonb_typeof(p.trigger_external->'thread') = 'array'
+            THEN p.trigger_external->'thread' ELSE '[]'::jsonb END) t
+     WHERE p.trigger_external IS NOT NULL AND t->>'gmailId' IN (${list})`);
+  return new Set(res.rows.map((r) => r.id));
+}
+
+/** Gmail ids ingest has already stored: relevant by definition, never fetched. */
+async function ingested(db: Db, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.select({ id: schema.rawEmails.gmailMessageId }).from(schema.rawEmails)
+    .where(inArray(schema.rawEmails.gmailMessageId, ids));
   return new Set(rows.map((r) => r.id));
 }
 
@@ -186,22 +218,28 @@ export async function watchMail(deps: WatchDeps): Promise<WatchResult> {
   const now = deps.now ?? (() => new Date());
   const { addrs, rejected, seen } = parseWatchInput(deps.input);
 
-  // Fail closed BEFORE anything else: no list, no query, no Gmail call.
-  if (addrs.length === 0) {
-    const detail = { reason: "empty-watchlist", rejected };
-    await recordRun(db, MAIL_AGENT_WORKER_NAME, "error", detail);
-    return { status: "error", lines: [], detail };
-  }
-
   // One account, one user-rate limit: a deadline ANY path recorded holds here.
   const until = await rateLimitedUntil(db, now());
+
+  // Fail closed BEFORE anything else: no list, no query, no Gmail call. The
+  // live deadline rides along, or this row would erase a 429 that only this
+  // name remembered.
+  if (addrs.length === 0) {
+    const detail = { reason: "empty-watchlist", rejected, ...(until ? { retryAfter: until.toISOString() } : {}) };
+    await recordRun(db, MAIL_AGENT_WORKER_NAME, "error", detail);
+    return { status: "error", lines: [], skipped: [], detail };
+  }
+
   if (until) {
     const detail = { skipped: "rate-limited", retryAfter: until.toISOString() };
     await recordRun(db, MAIL_AGENT_WORKER_NAME, "ok", detail);
-    return { status: "skipped", lines: [], detail };
+    return { status: "skipped", lines: [], skipped: [], detail };
   }
 
-  const counts = { listed: 0, fetched: 0, seen: 0, known: 0, relevant: 0, notOnWatchlist: 0, deferred: 0 };
+  const counts = {
+    listed: 0, fetched: 0, seen: 0, ingested: 0, known: 0, relevant: 0, notOnWatchlist: 0, deferred: 0,
+  };
+  const skipped: string[] = [];
   const failures: { id: string; message: string }[] = [];
   try {
     const port = await deps.port();
@@ -215,8 +253,13 @@ export async function watchMail(deps: WatchDeps): Promise<WatchResult> {
     }
     counts.listed = ids.length;
     const fresh = ids.filter((id) => { if (seen.has(id)) { counts.seen++; return false; } return true; });
+    const stored = await ingested(db, fresh);
     const known = await knownExternal(db, fresh);
-    const todo = fresh.filter((id) => { if (known.has(id)) { counts.known++; return false; } return true; });
+    const todo = fresh.filter((id) => {
+      if (stored.has(id)) { counts.ingested++; return false; }
+      if (known.has(id)) { counts.known++; return false; }
+      return true;
+    });
 
     const kept: WatchMessage[] = [];
     for (const id of todo) {
@@ -232,8 +275,8 @@ export async function watchMail(deps: WatchDeps): Promise<WatchResult> {
         continue;
       }
       const sender = senderAddress(m.from);
-      if (!sender || !matchesList(addrs, sender)) { counts.notOnWatchlist++; continue; }
-      if (isRelevantMessage(relevant, m)) { counts.relevant++; continue; }
+      if (!sender || !matchesList(addrs, sender)) { counts.notOnWatchlist++; skipped.push(id); continue; }
+      if (isRelevantMessage(relevant, m)) { counts.relevant++; skipped.push(id); continue; }
       kept.push(m);
     }
 
@@ -251,7 +294,7 @@ export async function watchMail(deps: WatchDeps): Promise<WatchResult> {
 
     const detail = { ...counts, emitted: lines.length, failures, rejected };
     await recordRun(db, MAIL_AGENT_WORKER_NAME, failures.length ? "error" : "ok", detail);
-    return { status: failures.length ? "error" : "ok", lines, detail };
+    return { status: failures.length ? "error" : "ok", lines, skipped, detail };
   } catch (err) {
     // Persisted where `rateLimitedUntil` reads it, so the poller, the send job
     // and the next run all wait it out instead of re-arming the lockout.
@@ -261,7 +304,8 @@ export async function watchMail(deps: WatchDeps): Promise<WatchResult> {
       ...(retryAfter ? { retryAfter: retryAfter.toISOString() } : {}),
     };
     await recordRun(db, MAIL_AGENT_WORKER_NAME, "error", detail);
-    return { status: "error", lines: [], detail };
+    // What was already fetched and dropped is still marked seen.
+    return { status: "error", lines: [], skipped, detail };
   }
 }
 
@@ -337,7 +381,9 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       port: () => (cached ??= realWatchPort()),
     });
     for (const line of r.lines) process.stdout.write(`${JSON.stringify(line)}\n`);
-    // The summary goes to stderr, so stdout stays exactly one JSON line per thread.
+    // Fetched and dropped: ops/mail-agent.sh appends these to seen.txt.
+    for (const id of r.skipped) process.stdout.write(`seen ${id}\n`);
+    // The summary goes to stderr, so stdout holds only JSON lines and `seen` lines.
     console.error(`mail-agent-watch: ${r.status} ${JSON.stringify({ ...r.detail, rejected: undefined, failures: undefined })}`);
     if (r.status === "error") process.exitCode = 1;
   } catch (err) {
