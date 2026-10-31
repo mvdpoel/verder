@@ -13,14 +13,24 @@ import { Empty, PageTitle } from "@/components/ui";
  */
 export default async function QueuePage() {
   const caller = await serverCaller();
-  const [pending, manual] = await Promise.all([
+  const [pending, manual, waitingCount] = await Promise.all([
     caller.suggestions.list({ status: "pending" }),
     caller.suggestions.list({ status: "needs-manual" }),
+    caller.inbox.count(),
   ]);
   const all = [...pending, ...manual];
+  // This page lists suggestions only, so the whole-set count (tasks, proposals
+  // and the open stop too — the number the phone's badge carries) is labelled
+  // as the total, never as the length of the list below it.
+  const totalLine = waitingCount > 0
+    ? `${waitingCount} ${waitingCount === 1 ? "wacht" : "wachten"} op je in totaal`
+    : null;
   return (
     <div className="flex max-w-2xl flex-col gap-7">
       <PageTitle>Te beoordelen</PageTitle>
+      {totalLine ? (
+        <p className="-mt-4 font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim">{totalLine}</p>
+      ) : null}
       {all.length ? (
         <>
           <p className="text-sm font-light leading-relaxed text-ink-mute">

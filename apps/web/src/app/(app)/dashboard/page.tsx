@@ -147,13 +147,16 @@ export default async function DashboardPage() {
   // round trips, the last of them the whole case map with its evidence batched,
   // before the landing page drew a single number. None of them depends on
   // another, so the page now waits once instead of six times.
-  const [stats, registry, taskStats, clearedBlockers, recent, { map }] = await Promise.all([
+  const [stats, registry, taskStats, clearedBlockers, recent, { map }, waitingCount] = await Promise.all([
     caller.dashboard.stats(),
     caller.registry.stats(),
     caller.tasks.stats(),
     caller.registry.clearedBlockers(),
     caller.entries.list({ limit: 5 }),
     caller.tracks.map(),
+    // The same number the phone's badge and Voor jou list carry (spec §12.9):
+    // one server-side definition, never a second count made up here.
+    caller.inbox.count(),
   ]);
   // One instant for the whole "Systeem" panel, mirroring the single `now` that
   // dashboard.stats uses to judge these same rows: two workers with the same
@@ -200,9 +203,17 @@ export default async function DashboardPage() {
       <Panel lit>
         <div className="grid gap-10 p-[30px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-10">
           <div className="flex min-w-0 flex-col">
+            {/* The count stands on its own: tying it to the open stop would make
+                it vanish whenever no stop is open, while tasks and proposals
+                still wait. Inside the stop branch it replaces the bare label. */}
+            {!currentStop && waitingCount > 0 ? (
+              <Label className="text-attn">wacht op jou · {waitingCount}</Label>
+            ) : null}
             {currentStop ? (
               <>
-                <Label className="text-attn">wacht op jou</Label>
+                <Label className="text-attn">
+                  {waitingCount > 0 ? `wacht op jou · ${waitingCount}` : "wacht op jou"}
+                </Label>
                 {currentTrack ? (
                   <div className="mt-[14px] text-[19px] font-light leading-tight text-signal">
                     {currentTrack.title}
