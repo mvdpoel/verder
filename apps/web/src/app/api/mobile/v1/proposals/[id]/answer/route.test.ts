@@ -66,4 +66,22 @@ describe("POST /api/mobile/v1/proposals/[id]/answer", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "the task cannot move done → done" });
   });
+
+  // The server half of "a notification may never send" (Plan 3 Task 4): the
+  // router refuses any proposal that is not a question with BAD_REQUEST, and a
+  // reply or follow-up is a mail. The phone must see 400, not a 409 it would
+  // treat as "reload and try again".
+  it("answer on a reply proposal answers 400", async () => {
+    mocks.proc.mockRejectedValue(new TRPCError({ code: "BAD_REQUEST", message: "only a question can be answered" }));
+    const res = await POST(jsonRequest({ revision: 1, option: 0 }), params);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "only a question can be answered" });
+  });
+
+  it("answer on a follow-up proposal answers 400", async () => {
+    mocks.proc.mockRejectedValue(new TRPCError({ code: "BAD_REQUEST", message: "only a question can be answered" }));
+    const res = await POST(jsonRequest({ revision: 1, freeText: "Ik bel zelf" }), params);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "only a question can be answered" });
+  });
 });

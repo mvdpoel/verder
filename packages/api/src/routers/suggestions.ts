@@ -10,24 +10,10 @@ import { effectiveDocument } from "./documents";
 import { debtFields, itemFields } from "./registry";
 import { taskFields } from "./tasks";
 import { documentRequestText } from "../search/document-request";
+import { entryForApproval } from "../entry-from-proposed";
 
-const entryForApproval = z.object({
-  occurredAt: z.coerce.date(),
-  channel: z.enum(["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]),
-  direction: z.enum(["inbound", "outbound", "internal"]),
-  summary: z.string().min(1),
-  details: z.string().optional(),
-  source: z.enum(schema.ENTRY_SOURCES),
-  sourceRef: z.string().optional(),
-  participantPartyIds: z.array(z.string().uuid()),
-  documentIds: z.array(z.string().uuid()),
-  actionItems: z.array(z.object({
-    description: z.string().min(1),
-    ownerPartyId: z.string().uuid().optional(),
-    dueAt: z.coerce.date().optional(),
-    clarity: z.enum(["clear", "ambiguous", "already-provided"]).default("clear"),
-  })),
-});
+// The input shape lives beside the one mapping that builds it from a proposal
+// (entry-from-proposed.ts), which the web card and the phone route share.
 
 /**
  * True when every create-input field the miner actually proposed matches the
@@ -44,6 +30,13 @@ function unchangedFromProposal(
   return shapeKeys.every((key) =>
     !(key in p) || canonicalJson(final[key] ?? null) === canonicalJson(p[key] ?? null));
 }
+
+/**
+ * A verdict already given stands. CONFLICT (409 on the phone), not a bare
+ * Error: a stale approve is a state the client must reload from, not a crash.
+ */
+const notOpen = () =>
+  new TRPCError({ code: "CONFLICT", message: "Suggestion not open for review" });
 
 type SuggestionRecord = typeof schema.suggestions.$inferSelect;
 
@@ -110,7 +103,7 @@ export const suggestionsRouter = router({
       const [s] = await tx.select().from(schema.suggestions)
         .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
-        throw new Error("Suggestion not open for review");
+        throw notOpen();
       // The document ids on an entry suggestion are an INGEST-TIME snapshot:
       // suggestEntry copies every attachment of the email into `proposed` when
       // the message is polled, and the queue card sends that snapshot back
@@ -148,9 +141,15 @@ export const suggestionsRouter = router({
     id: z.string().uuid(), title: z.string().min(1), docType: z.string().optional(),
   })).mutation(({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
+      // FOR UPDATE plus the open-for-review check, as every other approve has:
+      // without them a second approve of the same suggestion — a double click,
+      // or the phone retrying a POST whose answer the network lost — appended
+      // a SECOND document_status_changes row and document.updated event.
       const [s] = await tx.select().from(schema.suggestions)
-        .where(eq(schema.suggestions.id, input.id));
-      if (!s?.documentId) throw new Error("Suggestion has no document");
+        .where(eq(schema.suggestions.id, input.id)).for("update");
+      if (!s || (s.status !== "pending" && s.status !== "needs-manual")) throw notOpen();
+      if (!s.documentId)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Suggestion has no document" });
       // Carry the effective sender forward (Task 3 fix): this row only ever
       // corrects title/docType, and effectiveDocument reads partyId from the
       // LATEST change row same as title/docType — writing this row without it
@@ -180,8 +179,9 @@ export const suggestionsRouter = router({
       const [s] = await tx.select().from(schema.suggestions)
         .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
-        throw new Error("Suggestion not open for review");
-      if (s.kind !== "registry-item") throw new Error("Not a registry-item suggestion");
+        throw notOpen();
+      if (s.kind !== "registry-item")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Not a registry-item suggestion" });
       const p = (s.proposed ?? {}) as {
         name?: string; category?: string; transactionIds?: unknown; discoveredVia?: string };
       // discoveredVia comes from the mining payload (bank/paypal/apple), not
@@ -236,8 +236,9 @@ export const suggestionsRouter = router({
       const [s] = await tx.select().from(schema.suggestions)
         .where(eq(schema.suggestions.id, input.id)).for("update");
       if (!s || (s.status !== "pending" && s.status !== "needs-manual"))
-        throw new Error("Suggestion not open for review");
-      if (s.kind !== "debt") throw new Error("Not a debt suggestion");
+        throw notOpen();
+      if (s.kind !== "debt")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Not a debt suggestion" });
       const { references, ...rest } = input.debt;
       const [debt] = await tx.insert(schema.debts)
         .values({ ...rest, references_: references }).returning();
@@ -326,6 +327,6 @@ export const suggestionsRouter = router({
     }).where(and(eq(schema.suggestions.id, input.id),
       inArray(schema.suggestions.status, ["pending", "needs-manual"])))
       .returning({ id: schema.suggestions.id });
-    if (claimed.length === 0) throw new Error("Suggestion not open for review");
+    if (claimed.length === 0) throw notOpen();
   }),
 });

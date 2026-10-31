@@ -334,6 +334,17 @@ describe("proposals router", () => {
     expect(await code(caller(db, f.user.id).proposals.answer({ id: p.id, revision: 1, option: 0 }))).toBe("BAD_REQUEST");
   }));
 
+  // A follow-up is a mail to send, never a question: answering one would run an
+  // option on a proposal whose only legal outcome is an approved send. It
+  // carries a question payload here so the KIND is what refuses it, not the
+  // payload (Plan 3 Task 4: the server half of "a notification may never send").
+  it("answer refuses a follow-up proposal", () => isolated(async (db, f) => {
+    const p = await proposal(db, f, { kind: "follow-up", payload: questionPayload(f) });
+    expect(await code(caller(db, f.user.id).proposals.answer({ id: p.id, revision: 1, option: 0 }))).toBe("BAD_REQUEST");
+    expect(await code(caller(db, f.user.id).proposals.answer({ id: p.id, revision: 1, freeText: "Ik bel zelf" }))).toBe("BAD_REQUEST");
+    expect((await row(db, p.id)).status).toBe("pending");
+  }));
+
   it("get returns dueAt and missing", () => isolated(async (db, f) => {
     const [raw] = await db.insert(schema.rawEmails).values({
       gmailMessageId: `prop-${uid()}`, gmailThreadId: `t-${uid()}`,

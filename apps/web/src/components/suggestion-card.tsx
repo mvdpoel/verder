@@ -2,6 +2,7 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
+import { entryFromProposed } from "@verder/api/src/entry-from-proposed";
 import { formatEuro } from "@/components/registry-list";
 import { RetrievedRefs } from "@/components/retrieved-refs";
 import { AlreadyHaveThis } from "@/components/already-have-this";
@@ -26,6 +27,7 @@ type ProposedTask = { title?: string; details?: string; dueAt?: string | null;
   assigneeHint?: "martin" | "verdergroep" | "other"; rawEmailId?: string };
 
 type Suggestion = { id: string; kind: string; model: string | null; proposed: unknown;
+  rawEmailId: string | null; promptVersion: string | null;
   retrievedRefs: unknown; documentRequest: string | null;
   rawEmail: { fromAddr: string; subject: string; bodyText: string } | null;
   document: { sha256: string; mime: string; title: string; sizeBytes: number } | null };
@@ -187,9 +189,25 @@ function EntryCard({ s }: { s: Suggestion }) {
   const [summary, setSummary] = useState(p?.summary ?? "");
   const [details, setDetails] = useState(p?.details ?? "");
   const [pickedDocIds, setPickedDocIds] = useState<string[]>([]);
+  const [invalid, setInvalid] = useState(false);
   const approve = trpc.suggestions.approveEntry.useMutation({ onSuccess: () => router.refresh() });
   const reject = trpc.suggestions.reject.useMutation({ onSuccess: () => router.refresh() });
   if (!p) return null;
+  // entryFromProposed is the ONE mapping from a proposal to an entry, shared
+  // with the phone's approve route; it throws on a proposal that makes no
+  // valid entry, which the server would have refused anyway.
+  const onApprove = () => {
+    let entry;
+    try {
+      entry = entryFromProposed(s, { summary, details,
+        attachmentDocumentIds: [...new Set([...p.attachmentDocumentIds, ...pickedDocIds])] });
+    } catch {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    approve.mutate({ id: s.id, entry });
+  };
   return (
     <Card>
       <Source model={s.model}>
@@ -208,14 +226,10 @@ function EntryCard({ s }: { s: Suggestion }) {
           prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
       <RetrievedRefs refs={s.retrievedRefs} />
       {s.rawEmail && <OriginalEmail bodyText={s.rawEmail.bodyText} />}
+      {invalid && <Notice tone="signal">Dit voorstel kan zo niet worden vastgelegd; controleer de velden.</Notice>}
       <Verdict>
-        <Button variant="signal" size="sm"
-          onClick={() => approve.mutate({ id: s.id, entry: {
-            occurredAt: new Date(p.occurredAt), channel: p.channel as "email", direction: p.direction,
-            summary, details: details || undefined, source: "gmail-watch",
-            participantPartyIds: [],
-            documentIds: [...new Set([...p.attachmentDocumentIds, ...pickedDocIds])],
-            actionItems: p.actionItems } })}>Vastleggen in het dossier</Button>
+        <Button variant="signal" size="sm" disabled={!summary.trim() || approve.isPending}
+          onClick={onApprove}>Vastleggen in het dossier</Button>
         <Button variant="ghost" size="sm"
           onClick={() => reject.mutate({ id: s.id })}>Niet relevant</Button>
       </Verdict>

@@ -7,6 +7,9 @@ import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+// Only to give a fixture document its extractor-`none` text row, which the app
+// role cannot write (it would otherwise grow pendingDocMeta's backlog).
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
 
 describe("suggestions router", () => {
   let db: Db; let userId: string;
@@ -716,6 +719,35 @@ describe("suggestions router", () => {
     expect(got.rawEmail?.subject).toBe("Documents needed");
     expect(got.document).toBeNull();
     expect(got).toEqual(listed);
+  });
+
+  // --- a second approve is refused (Plan 3 Task 4: the phone retries) --------
+
+  it("a second approveDocumentMeta is CONFLICT and appends nothing", async () => {
+    const doc = await makeDocument(`Brief ${crypto.randomUUID()}.pdf`, "application/pdf");
+    const admin = createDb(ADMIN_URL).db;
+    await admin.insert(schema.documentTexts).values({ documentId: doc.id, sha256: doc.sha256,
+      text: "", extractor: "none", charCount: 0 });
+    const s = await makeDocumentMetaSuggestion(doc.id);
+    await caller().suggestions.approveDocumentMeta({ id: s.id, title: "Beschikking.pdf" });
+    const count = async () => (await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id))).length;
+    expect(await count()).toBe(1);
+    await expect(caller().suggestions.approveDocumentMeta({ id: s.id, title: "Beschikking.pdf" }))
+      .rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await count()).toBe(1);
+  });
+
+  it("a second approveEntry and a reject after it are CONFLICT", async () => {
+    const s = await makeSuggestion();
+    const entry = { occurredAt: new Date(), channel: "email" as const, direction: "inbound" as const,
+      summary: "VerderGroep requests payslips", source: "gmail-watch" as const,
+      participantPartyIds: [], documentIds: [], actionItems: [] };
+    await caller().suggestions.approveEntry({ id: s.id, entry });
+    await expect(caller().suggestions.approveEntry({ id: s.id, entry }))
+      .rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(caller().suggestions.reject({ id: s.id }))
+      .rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("get answers NOT_FOUND for an unknown id", async () => {
