@@ -286,3 +286,4 @@ Each of these is my call unless it says otherwise.
 ## 13. Open question for Martin
 
 - **Leefgeld per week.** The money glance can show "leefgeld over deze week" only if verder knows the weekly amount VerderGroep pays out. Until Martin answers, the glance shows the per-account months and no budget figure.
+  - **Answered 2026-10-31:** VerderGroep pays € 100 per week. Plan 3 (`docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md`, Task 17) stores it as `LEEFGELD_WEEKLY_CENTS=10000` in `.env.prod` and shows "leefgeld over deze week" only for days the bank statements cover; an uncovered week reads `geen data`, never a figure.
