@@ -72,7 +72,7 @@ export async function prioritySets(db: Db): Promise<PrioritySets> {
 /** The same whole-domain-or-whole-address rule as `isRelevantMessage`: a
  *  `@domain` entry is that domain EXACTLY (no subdomains), an address entry is
  *  the whole address. `addr` is already folded by `senderAddress`. */
-function matchesList(list: string[], addr: string): boolean {
+export function matchesList(list: string[], addr: string): boolean {
   const domain = addr.slice(addr.lastIndexOf("@"));
   for (const raw of list) {
     const a = asciiLower(raw.trim());
@@ -145,9 +145,11 @@ const MIN_CREDITOR_NAME = 6;
  * (`Het CAK`, `Woonhave`, Unicode is legitimate there), and a wrong creditor
  * hit costs only an `active` push.
  */
+export type LetterSender = { kind: "verder" } | { kind: "creditor"; partyId: string };
+
 export function letterSender(
   sets: PrioritySets, text: string, creditorNames: CreditorParty[],
-): { kind: "verder" } | { kind: "creditor"; partyId: string } | null {
+): LetterSender | null {
   const folded = asciiLower(text);
   for (const raw of sets.verder) {
     const a = asciiLower(raw.trim());

@@ -178,8 +178,12 @@ export function senderAddress(header: string): string | null {
  * parties share an email — there is no ranking rule for that, so "oldest
  * wins" is at least the same choice `case-history`'s document lookup makes,
  * not an arbitrary one.
+ *
+ * Exported for the proposal context (`proposals/context.ts`), which passes the
+ * `senderAddress` RESULT rather than the raw header — `senderAddress` accepts a
+ * bare address, so that is the same call and the display name is never read.
  */
-async function resolveSenderPartyId(tx: Db, fromHeader: string): Promise<string | undefined> {
+export async function resolveSenderPartyId(tx: Db, fromHeader: string): Promise<string | undefined> {
   const fromAddr = senderAddress(fromHeader);
   if (!fromAddr) return undefined;
   const parties = await tx.select({ id: schema.parties.id, email: schema.parties.email })

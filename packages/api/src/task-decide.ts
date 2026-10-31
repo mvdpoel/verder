@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "./ledger";
 import { isValidTaskTransition } from "./task-status";
@@ -51,6 +51,47 @@ export async function effectiveTaskStatus(db: Db, taskId: string): Promise<strin
     .where(eq(schema.taskStatusChanges.taskId, taskId))
     .orderBy(desc(schema.ledgerEvents.seq)).limit(1);
   return latest?.status ?? "open";
+}
+
+/**
+ * effectiveTaskStatus for many tasks in ONE query.
+ *
+ * MUST STAY IN LOCKSTEP WITH effectiveTaskStatus (task-decide.ts): same join,
+ * same definition of "latest" — the ledger seq of the task.status event, never
+ * createdAt, because createdAt is the transaction timestamp and two changes
+ * made in one transaction tie exactly — and the same "open" default for a task
+ * nobody has decided on. This is the exact shape effectiveStatuses in
+ * registry-decide.ts already uses for financial items, deliberately: DISTINCT
+ * ON keeps one row per task, and Postgres requires the ORDER BY to lead with
+ * the DISTINCT ON expression, so the seq ordering sits behind it as the
+ * tiebreaker — which is precisely the LIMIT 1 the single-task version does.
+ *
+ * It lived in track-evidence.ts while the map was its only caller, and moved
+ * here when the proposal context (apps/worker/src/proposals/context.ts) became
+ * the second. Keep the three in lockstep.
+ *
+ * The returned Map has an entry for EVERY id asked about, so a caller never has
+ * to re-apply the default and the two functions cannot drift on it.
+ */
+export async function effectiveTaskStatuses(
+  db: Db, taskIds: string[]
+): Promise<Map<string, string>> {
+  const statuses = new Map(taskIds.map((id) => [id, "open"]));
+  if (taskIds.length === 0) return statuses;
+  const rows = await db
+    .selectDistinctOn([schema.taskStatusChanges.taskId], {
+      taskId: schema.taskStatusChanges.taskId,
+      status: schema.taskStatusChanges.status,
+    })
+    .from(schema.taskStatusChanges)
+    .innerJoin(schema.ledgerEvents, and(
+      eq(schema.ledgerEvents.entityId, schema.taskStatusChanges.id),
+      eq(schema.ledgerEvents.eventType, "task.status"),
+    ))
+    .where(inArray(schema.taskStatusChanges.taskId, taskIds))
+    .orderBy(schema.taskStatusChanges.taskId, desc(schema.ledgerEvents.seq));
+  for (const r of rows) statuses.set(r.taskId, r.status);
+  return statuses;
 }
 
 /**

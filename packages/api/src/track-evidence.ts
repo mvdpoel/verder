@@ -14,9 +14,10 @@
  * discarded or was never there.
  */
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { effectiveTitleSql, notDiscardedSql } from "./effective-status";
+import { effectiveTaskStatuses } from "./task-decide";
 
 export interface EvidenceInput {
   id: string;
@@ -41,46 +42,10 @@ const EMPTY: StopEvidence = { entry: null, task: null, documents: [], email: nul
 const idsOf = <T>(rows: T[], pick: (r: T) => string | null) =>
   [...new Set(rows.map(pick).filter((v): v is string => v !== null))];
 
-/**
- * effectiveTaskStatus for many tasks in ONE query.
- *
- * MUST STAY IN LOCKSTEP WITH effectiveTaskStatus (task-decide.ts): same join,
- * same definition of "latest" — the ledger seq of the task.status event, never
- * createdAt, because createdAt is the transaction timestamp and two changes
- * made in one transaction tie exactly — and the same "open" default for a task
- * nobody has decided on. This is the exact shape effectiveStatuses in
- * registry-decide.ts already uses for financial items, deliberately: DISTINCT
- * ON keeps one row per task, and Postgres requires the ORDER BY to lead with
- * the DISTINCT ON expression, so the seq ordering sits behind it as the
- * tiebreaker — which is precisely the LIMIT 1 the single-task version does.
- *
- * It lives here rather than beside effectiveTaskStatus only because the map is
- * its one caller today; move it to task-decide.ts the moment a second surface
- * needs it, and keep the three in lockstep.
- *
- * The returned Map has an entry for EVERY id asked about, so a caller never has
- * to re-apply the default and the two functions cannot drift on it.
- */
-export async function effectiveTaskStatuses(
-  db: Db, taskIds: string[]
-): Promise<Map<string, string>> {
-  const statuses = new Map(taskIds.map((id) => [id, "open"]));
-  if (taskIds.length === 0) return statuses;
-  const rows = await db
-    .selectDistinctOn([schema.taskStatusChanges.taskId], {
-      taskId: schema.taskStatusChanges.taskId,
-      status: schema.taskStatusChanges.status,
-    })
-    .from(schema.taskStatusChanges)
-    .innerJoin(schema.ledgerEvents, and(
-      eq(schema.ledgerEvents.entityId, schema.taskStatusChanges.id),
-      eq(schema.ledgerEvents.eventType, "task.status"),
-    ))
-    .where(inArray(schema.taskStatusChanges.taskId, taskIds))
-    .orderBy(schema.taskStatusChanges.taskId, desc(schema.ledgerEvents.seq));
-  for (const r of rows) statuses.set(r.taskId, r.status);
-  return statuses;
-}
+// effectiveTaskStatuses moved to task-decide.ts, beside the single-task
+// version it must stay in lockstep with, once the proposal context became its
+// second caller. Re-exported so the map's imports do not move.
+export { effectiveTaskStatuses };
 
 export async function resolveStopEvidence(
   db: Db, stops: EvidenceInput[]
