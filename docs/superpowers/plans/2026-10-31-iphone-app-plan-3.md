@@ -14,25 +14,25 @@
 
 **Tech Stack:** Swift 6 / SwiftUI, iOS 27, WidgetKit, UserNotifications, a Notification Service Extension, a Share Extension, Speech (`SpeechAnalyzer`/`SpeechTranscriber`), LocalAuthentication, Swift Testing, XcodeGen; Next 15 route handlers, tRPC routers, vitest, hand-written drizzle SQL migrations, pg-boss 10.4.2 (its `ScheduleOptions` has `tz`).
 
-**Spec:** `docs/superpowers/specs/2026-10-28-iphone-app-design.md`. This plan covers §10 slices 6, 7 and 8. Plan 1 (`docs/superpowers/plans/2026-10-28-iphone-app.md`, slices 1–3) is done and verified on the phone. Plan 2 (`docs/superpowers/plans/2026-10-31-iphone-app-plan-2.md`, slices 4–5: APNs, `notify()`, Verder priority, proposals, sending) is written and this plan builds ON it; see "What this plan takes from Plan 2".
+**Spec:** `docs/superpowers/specs/2026-10-28-iphone-app-design.md`. This plan covers §10 slices 6, 7 and 8. Plan 1 (`docs/superpowers/plans/2026-10-28-iphone-app.md`, slices 1–3) is done and verified on the phone. Plan 2 (`docs/superpowers/plans/2026-10-31-iphone-app-plan-2.md`, slices 4–5: APNs, `notify()`, Verder priority, proposals, sending) is merged and deployed, with 40 migrations applied in production (0000–0039), and this plan builds ON it; see "What this plan takes from Plan 2".
 
 ## What this plan takes from Plan 2
 
-Plan 2 is written, and this plan reuses its files and interfaces rather than creating its own. **Task 0 checks each row against the MERGED code before any other task starts**, and stops if Plan 2 has not shipped: slice 6 is not useful without proposals, and slice 7's digest needs `notify()`.
+Plan 2 is MERGED and DEPLOYED (slices 4 and 5). Task 0 re-checked every row below against the merged code on 2026-10-31 and rewrote this plan wherever the code differs from what Plan 2's text promised; the corrections are marked **(merged)**. This plan reuses Plan 2's files and interfaces and never creates a second file for a type Plan 2 owns.
 
-| Plan 2 provides (task) | This plan uses it as-is in | This plan adds |
+| Plan 2 provides (as merged) | This plan uses it as-is in | This plan adds |
 |---|---|---|
-| `apps/worker/src/notify/notify.ts`: `notify(deps: NotifyDeps, n: NotifyInput)`, `NotifyKind` = `verder-mail\|creditor-mail\|proposal\|reminder\|follow-up\|task-due\|filing\|system\|weekly`, `CATEGORY` (`VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP`, `TASK_DUE`, `FILING`, `SYSTEM`, `WEEKLY`), `link` = `verder://<kind>/<uuid>`, `dedupKey` (P2 T4) | Tasks 5, 15, 26 | a `badge` on every alert, `options` for question proposals, and a device-level `pushToDevices` for badge-only and background pushes (Task 5). **No new `NotifyKind`, no new category id.** |
-| `apps/worker/src/notify/apns.ts`: `ApnsSender`, `apnsPayload(ApnsAlert)`, `http2ApnsSender` (always `apns-push-type: alert`) (P2 T3) | Task 5 | `ApnsSender.sendRaw(env, token, { pushType, priority, payload })` for the badge-only and background pushes |
-| Every existing alert already moved onto `notify()`, and the generic "Something new to review" push DELETED (P2 T5) | — | nothing: suggestions reach Martin through the badge and Voor jou only (spec §6.4) |
-| `push_devices`, `notifications`, `notification_attempts` (P2 T2, migration 0037); `POST /api/mobile/v1/push/register` (P2 T6) | Tasks 5, 8, 23 | — |
-| iOS `AppDelegate.swift` (`UIApplicationDelegateAdaptor`), `Push/NotificationCategories.swift`, `Push/DeepLink.swift` (`.proposal`, `.document`, `.none`, parsed from `userInfo["link"]`), `project.yml` with `aps-environment`, time-sensitive and `remote-notification` (P2 T7) | Tasks 8, 23 | `DeepLink` cases `.inbox`, `.suggestion`, `.task`; `didReceiveRemoteNotification`; the `q.<id>` answer categories |
-| `proposals` (P2 T11, migration 0038): `kind` `reply\|question\|follow-up`; `status` `drafting\|draft-failed\|pending\|approved\|sending\|sent\|failed\|rejected\|superseded`; `verdict` a SEPARATE column; `priority` TEXT `verder\|creditor\|other` | Tasks 1, 26 | — |
-| `proposals` router and its mobile routes `apps/web/src/app/api/mobile/v1/proposals/{route,[id]/route,[id]/approve,[id]/reject,[id]/answer}` (P2 T15): approve `{id, revision, payload:{to,cc,subject,body,attachmentDocumentIds}}`, answer `{id, option: number} \| {id, freeText: string}` | Tasks 4, 7, 8 | only the tests that pin "answer is for questions only" (Task 4) |
-| iOS `Net/APIClient+JSON.swift` (`getJSON`/`postJSON`), `VerderTests/APIClientJSONTests.swift`, `Proposals/ProposalScreen.swift`, `ProposalModel`, `ApprovalGate` (P2 T19) | Tasks 6, 7 | the inbox store and the question, suggestion and task screens |
+| `apps/worker/src/notify/notify.ts`: `notify(deps: NotifyDeps, n: NotifyInput): Promise<NotifyResult>` (never throws; `NotifyResult = { notificationId, duplicate, delivered, failed, skipped }`), `NotifyInput = { kind, level, title, body, link?, dedupKey?, threadId?, collapseId? }`, `NotifyKind` = `verder-mail\|creditor-mail\|proposal\|reminder\|follow-up\|task-due\|filing\|system\|weekly`, `CATEGORY` (`VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP`, `TASK_DUE`, `FILING`, `SYSTEM`, `WEEKLY`). **(merged)** Callers do not call `notify()` directly: they take `deps.notify: NotifyFn` (`type NotifyFn = (n: NotifyInput) => Promise<NotifyResult>`), bound in `index.ts` as `const notify = notifier(db)`, and tests inject `fakeNotify()` from `apps/worker/src/test-support/fake-notify.ts` (see `duplex.ts:237`, `loondossier.ts:252`). Links in use: `verder://proposal/<uuid>` and `verder://inbox` (the task-due, letter and priority-mail pushes link to `verder://inbox`, not to an item). | Tasks 5, 15, 26 | `badge`, `options` and `revision` on an alert, and a device-level `pushToDevices` for badge-only and background pushes (Task 5). **No new `NotifyKind`, no new category id.** |
+| `apps/worker/src/notify/apns.ts`: `ApnsSender { send(env, deviceToken, alert: ApnsAlert); close() }`, `ApnsAlert = { title, body, level, category, threadId?, collapseId?, link? }`, `apnsPayload(ApnsAlert)` (top-level `link` beside `aps`), `http2ApnsSender(cfg, opts)` (always `apns-push-type: alert`; **(merged)** `apns-priority` is `5` for `passive` and `10` otherwise), `loadApnsConfig`, `TokenCache`. **(merged)** The device loop in `notify.ts` (`fanOutApns`) also does the session check (`session-ended` revoke) and the 410 / 400 `BadDeviceToken`/`Unregistered` revoke, by UPDATE. | Task 5 | `ApnsSender.sendRaw(env, token, { pushType, priority, payload })` for the badge-only and background pushes |
+| Every existing alert already moved onto `notify()`, and the generic "Something new to review" push DELETED (P2 T5). **(merged)** The only remaining mention is the explanatory comment at `apps/worker/src/ollama.ts:11`. | — | nothing: suggestions reach Martin through the badge and Voor jou only (spec §6.4) |
+| `push_devices`, `notifications`, `notification_attempts` (migration 0037; `notification_attempts.notification_id` is NOT NULL); `POST /api/mobile/v1/push/register` | Tasks 5, 8, 23 | — |
+| **(merged)** iOS `App/AppDelegate.swift`: `@MainActor final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate`, holding `links: DeepLinkInbox` and `attach(_ registrar: PushRegistrar)`; its two delegate methods use the COMPLETION-HANDLER signatures and stay main-actor isolated (a `nonisolated … async` version aborted the app on every notification tap in production, 2026-10-31 — see the comment in the file and `36eb24d`). `Push/NotificationCategories.swift`: `ids` (the nine), `all() -> [UNNotificationCategory]` (a FUNCTION), `register()`, `openAction = "OPEN"` ("Bekijken", options `[.foreground, .authenticationRequired]`) on `PROPOSAL`, `REMINDER`, `FOLLOW_UP` only, every other category has NO action; `hiddenPlaceholder`. `Push/DeepLink.swift`: cases `.proposal(UUID)`, `.document(UUID)`, **`.inbox`**, `.none`; `init(userInfo:)` (from `userInfo["link"]`), `static parse(_ link: String)`, `var tab: RootView.TabID?`; `DeepLinkInbox` (`deliver`/`take`). **Plan 2 deliberately registers NO `verder://` URL scheme** ("these links arrive only inside a push, so no web page or other app can fire one"). `Push/PushRegistrar.swift`, `Push/ProvisioningEnvironment.swift`. `project.yml` with `aps-environment: development`, the time-sensitive entitlement, `UIBackgroundModes: [remote-notification]`, the App Group `group.pro.vanderpoel.verder` and `keychain-access-groups`. | Tasks 8, 23 | `DeepLink` cases `.suggestion(UUID)` and `.task(UUID)` (`.inbox` exists); `didReceiveRemoteNotification`; the `q.<id>` answer categories |
+| `proposals` (migration 0038, plus 0039 `proposals_followup_once`): `kind` `reply\|question\|follow-up`; `status` `drafting\|draft-failed\|pending\|approved\|sending\|sent\|failed\|rejected\|superseded`; `verdict` a SEPARATE column; `priority` TEXT `verder\|creditor\|other`; `revision` integer (default 1, bumped by every decision, NOT by `storeDraft`). Questions live in `payload.question = { prompt, options: { action, label, … }[] }` (2 to 4 options). | Tasks 1, 26 | — |
+| `proposals` router (`packages/api/src/routers/proposals.ts`) and the mobile routes `apps/web/src/app/api/mobile/v1/proposals/{route,[id]/route,[id]/approve,[id]/reject,[id]/answer,[id]/task}`. **(merged)** approve body `{ revision, payload: { to, cc, subject, body, attachmentDocumentIds, entrySummary } }`; answer body `{ revision, option: number } \| { revision, freeText: string }` (strict; `revision` is REQUIRED — a stale one is 409 CONFLICT); reject `{ reason? }`; `[id]/task` (`createProposedTask`, no body). `answer` on a non-question throws **BAD_REQUEST (400)**, not CONFLICT, and the router test `answer refuses a reply` already pins it (`proposals.test.ts:332`). The routes share **`apps/web/src/lib/mobile-json.ts`**: `fail(error, status)`, `readJsonObject(req, limit = 256 KB)` (413 over the limit, 400 on invalid JSON, `{}` for an empty body) and `trpcErrorResponse(e)` (UNAUTHORIZED 401, FORBIDDEN 403, NOT_FOUND 404, CONFLICT 409, BAD_REQUEST 400, anything else rethrown). | Tasks 3, 4, 7, 8 | only the tests that pin "answer is for questions only" for `follow-up` and on the route (Task 4) |
+| iOS `Net/APIClient+JSON.swift` (`getJSON`/`postJSON`, `jsonDecoder` **already** accepting ISO 8601 with and without fractional seconds, pinned by `APIClientJSONTests.getJSONDecodesDatesWithAndWithoutFractionalSeconds`), `Proposals/ProposalScreen.swift`, `Proposals/ProposalModel.swift`, `Proposals/ProposalDTO.swift` (`ProposalSummary`, `ProposalList`, `ProposalDetail`, `AnswerOptionRequest{revision, option}`, `AnswerTextRequest{revision, freeText}`, `Ignored`), `Proposals/ApprovalGate.swift`, `Proposals/ProposalListView.swift` (the current whole Voor jou tab). **(merged)** `ProposalScreen` ALREADY renders a question: its options as buttons behind a confirmation dialog showing the server's `target` text, and an "Iets anders…" free-text field; `ProposalModel.answer(option:)` / `answer(freeText:)` post `{revision, option}` / `{revision, freeText}` with no Face ID. | Tasks 6, 7 | the inbox store and the suggestion and task screens (NO question screen: Task 7) |
 | Deploys D3 and D4 (P2 T8, T21) | — | this plan's deploys are named **P3-D1, P3-D2, P3-D3** so the two plans never collide |
 
-The Face ID check: Plan 1 already has `DeviceOwnerAuthenticator` (`apps/ios/Verder/Auth/AppLock.swift:33`). This plan adds no third abstraction: it calls whatever `ApprovalGate` Plan 2 shipped, and if Plan 2's `Authenticator` protocol is still unbuilt when Task 0 runs, Task 0 notes that it should be `DeviceOwnerAuthenticator` with a fresh `LAContext` per call.
+The Face ID check: **(merged)** `ApprovalGate` wraps Plan 1's `protocol DeviceOwnerAuthenticator` (`apps/ios/Verder/Auth/AppLock.swift:33`), defaulting to `PlatformOwnerAuthenticator`, which makes a fresh `LAContext` per call. This plan adds no third abstraction.
 
 ## Global Constraints
 
@@ -80,8 +80,8 @@ The Face ID check: Plan 1 already has `DeviceOwnerAuthenticator` (`apps/ios/Verd
 ## Review Focus
 
 1. **The badge never drains.** A docmeta suggestion on a PURGED document stays in `suggestions.list` and in `dashboard.stats.pendingSuggestions` today, because both exclude discarded but not purged. Expected: Task 1 test `purged document's suggestion is not waiting` passes, and the count matches what Voor jou lists.
-2. **`in-progress` tasks.** Spec §12.9 names `open` (as opposed to `waiting`) and does not mention `in-progress`. The plan's default is to count `in-progress` too, because he is the one doing it, but that deviates from the spec, so **Task 0 Step 4 asks Martin BEFORE Task 1 and records his answer in spec §12.9**. Whatever he says becomes one constant, `WAITING_TASK_STATUSES` in `waiting.ts`.
-3. **A notification that sends.** Expected: no registered `UNNotificationAction` reaches a send path. A forged `answer` call on a `reply` proposal is refused by the server (Task 4 test `answer refuses a reply proposal`), and the iOS test `onlyQuestionActionsWorkInBackground` passes.
+2. **`in-progress` tasks.** Spec §12.9 names `open` (as opposed to `waiting`) and does not mention `in-progress`. **Settled by Martin 2026-10-31 (Task 0 Step 4, recorded in spec §12.9):** `in-progress` counts, because he is the one doing it; `waiting` does not. It is one constant, `WAITING_TASK_STATUSES = ["open", "in-progress"]` in `waiting.ts`. Expected: Task 1 tests `in-progress task is waiting on Martin` and `waiting task is not waiting on Martin` pass.
+3. **A notification that sends.** Expected: no registered `UNNotificationAction` reaches a send path. A forged `answer` call on a `reply` or `follow-up` proposal is refused by the server with 400 (`BAD_REQUEST`; the router test `answer refuses a reply` already exists in `proposals.test.ts`, Task 4 adds `answer refuses a follow-up proposal` and the route tests), and the iOS test `onlyQuestionActionsWorkInBackground` passes.
 4. **An old ledger row that changes hash.** Expected: `nightly-verify` is OK on the full pre-existing chain after migration M-A, and an admin UPDATE that sets `actor` on an old row is reported as a mismatch (Task 11 test `setting actor on an old row is detected`).
 5. **Undo overwrites Martin.** He renames a document after verder filed it, then taps undo on verder's change. Expected: 409 `al aangepast`, and nothing is appended (Task 15 test `undo refuses when a newer change exists`). The same for a document purged since (`vernietigd`), and an auto-NAME is never offered as undoable at all, because the name also lives on the NAS share (Task 15).
 6. **A leefgeld figure invented from missing data.** Expected: a week with no statement coverage renders `geen data`, never `€ 100,00 over` (Task 17 test `uncovered week shows no figure`).
@@ -98,9 +98,9 @@ The Face ID check: Plan 1 already has `DeviceOwnerAuthenticator` (`apps/ios/Verd
 
 This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). This task repeats the check against the MERGED code, because a plan is not what shipped.
 
-- [ ] **Step 1:** For every row of "What this plan takes from Plan 2", confirm the file and the signature exist with `grep -rn` in `apps/worker/src`, `packages/api/src`, `packages/db/src/schema.ts`, `apps/web/src/app/api/mobile/v1` and `apps/ios`. Where the merged code differs from Plan 2's text, rewrite this file. Where a file this plan would create already exists, the task MODIFIES it instead; this plan never creates a second file for a type Plan 2 owns.
-- [ ] **Step 2:** Run `ls packages/db/drizzle/*.sql | tail -3` and read the last entry of `meta/_journal.json`. Renumber migrations M-A (Task 11) and M-B (Task 24) to the next free numbers. **Expected: M-A = 0039, M-B = 0040.** Both journal `when` values must be larger than 0038's `1793692800000`.
-- [ ] **Step 3:** Confirm on the homelab that Plan 2's migrations are applied: `select count(*) from drizzle.__drizzle_migrations`. **Expected 39** (0000–0038; 37 today plus Plan 2's two). After M-A it is 40, after M-B 41. If it is not 39, stop.
+- [x] **Step 1: Done 2026-10-31.** Every row of "What this plan takes from Plan 2" was checked with `grep -rn` in `apps/worker/src`, `packages/api/src`, `packages/db/src/schema.ts`, `apps/web/src/app/api/mobile/v1` and `apps/ios`, and the table and the tasks below were rewritten where the merged code differs (marked **(merged)**). The material differences: the answer body REQUIRES `revision` (so a question push now carries `revision` beside `options`, Task 5, and the notification action posts `{ revision, option }`, Task 8), and a non-question answer is 400, not 409; approve carries `entrySummary`; the mobile routes share `apps/web/src/lib/mobile-json.ts`; callers take `deps.notify: NotifyFn`; `ProposalScreen` already answers questions, so Task 7 creates no `QuestionView`; `DeepLink` already has `.inbox`; `NotificationCategories.all()` is a function and only three categories carry an action; Plan 2 registers NO `verder://` URL scheme on purpose; the `suggest.docmeta` handler moved to `apps/worker/src/index.ts:352-370`; `packages/db/src/doc-source-phone.test.ts` pins the exact `doc_source` list, so M-B must update it.
+- [x] **Step 2: Done 2026-10-31.** The newest migration is `0039_proposals_followup_once.sql` (Plan 2 T17's review added it), journal `when` `1793779200000`. **M-A = `0040_auto_applied.sql` (Task 11), M-B = `0041_doc_source_phone_voice.sql` (Task 24).** Both journal `when` values must be larger than 0039's `1793779200000` (M-A `1793865600000`, M-B `1793952000000`, one day apart as the journal already does).
+- [x] **Step 3: Measured 2026-10-31 (main session):** production `drizzle.__drizzle_migrations` holds **40** rows (0000–0039). After M-A it is **41**, after M-B **42**.
 - [x] **Step 4: Settled 2026-10-31.** Martin: an `in-progress` task DOES count as waiting on him (recorded in spec §12.9). `WAITING_TASK_STATUSES = ["open", "in-progress"]`.
 - [ ] **Step 5:** Commit: `docs(plan-3): rescope against the merged Plan 2`.
 
@@ -176,11 +176,11 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 
 **Interfaces:**
 - `mobile-route.ts`: `export function mobileGet(handler: (caller: Caller, req: Request, params: Record<string,string>) => Promise<unknown>): (req: Request, ctx: { params: Promise<Record<string,string>> }) => Promise<NextResponse>`.
-  - It calls `getSessionUserId()` first (`apps/web/src/lib/trpc-server.ts:15`); null gives JSON 401.
-  - It maps `TRPCError` `UNAUTHORIZED` to 401 and `NOT_FOUND` to 404.
+  - **(merged)** It is built ON Plan 2's `apps/web/src/lib/mobile-json.ts` and duplicates none of it: `fail("unauthorized", 401)` for the auth refusal and `trpcErrorResponse(e)` for every `TRPCError` (that map already covers 401/403/404/409/400 and rethrows the rest). Do not write a second error map.
+  - It calls `getSessionUserId()` first (`apps/web/src/lib/trpc-server.ts:15`); null gives JSON 401 before `serverCaller()`.
   - It sets `cache-control: no-store`.
   - Every existing mobile route keeps its own code, Plan 2's proposal routes included; only new routes use the helper.
-- **No proposal route here.** `GET /api/mobile/v1/proposals/:id` and `/proposals` are Plan 2 Task 15's, and the phone reads proposal detail from them.
+- **No proposal route here.** `GET /api/mobile/v1/proposals/:id` and `/proposals` are Plan 2's (merged), and the phone reads proposal detail from them. A `WaitingItem` of kind `proposal` or `question` carries the proposal id, and the phone opens it with Plan 2's `GET /proposals/:id`.
 - `suggestions.get: protectedProcedure.input(z.object({ id: z.string().uuid() }))`. It returns the same enriched row `list` produces (`rawEmail`, `document` via `effectiveDocument`, `documentRequest`), or NOT_FOUND.
 - DTOs in `mobile-dto.ts`, plain JSON with dates as ISO strings and every field named:
   - `InboxDTO = { count: number; items: WaitingItem[]; doneByVerder: VerderActionDTO[] /* filled by Task 15, [] until then */ }`
@@ -208,18 +208,18 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 **Files:**
 - Create: `apps/web/src/app/api/mobile/v1/suggestions/[id]/approve/route.ts`, `…/suggestions/[id]/reject/route.ts`, `…/tasks/[id]/status/route.ts`, a `route.test.ts` beside each
 - Create also: `packages/api/src/entry-from-proposed.ts` (+ test)
-- Modify: `apps/web/src/lib/mobile-route.ts` (add `mobilePost`), `apps/web/src/components/suggestion-card.tsx` (call `entryFromProposed`), Plan 2's `apps/web/src/app/api/mobile/v1/proposals/[id]/answer/route.test.ts` and `packages/api/src/routers/proposals.test.ts` (add the question-only tests below; the routes themselves are Plan 2 Task 15's and are not recreated)
+- Modify: `apps/web/src/lib/mobile-route.ts` (add `mobilePost`), `apps/web/src/components/suggestion-card.tsx` (call `entryFromProposed`), Plan 2's `apps/web/src/app/api/mobile/v1/proposals/[id]/answer/route.test.ts` and `packages/api/src/routers/proposals.test.ts` (add the question-only tests below; the routes themselves are Plan 2's, merged, and are not recreated)
 
 **Interfaces:**
-- `mobilePost(handler)`: auth before the body, as `mobileGet`. A body over 64 KB answers 413, and invalid JSON answers 400.
+- `mobilePost(handler)`: auth before the body, as `mobileGet`. **(merged)** The body is read with Plan 2's `readJsonObject(req, 64 * 1024)` from `mobile-json.ts` (its `limit` parameter; the 256 KB default is sized for a mail body, a suggestion edit is not), which already answers 413 over the limit and 400 on invalid JSON or a non-object.
 - Suggestion approve dispatches on the suggestion's stored `kind`, never on a client-sent kind. **The phone never sends a whole procedure input.** Its body is `{ edits?: Record<string, unknown> }`: only the fields Martin changed on the card. The route loads the suggestion (`suggestions.get`), builds the full input as `{ ...proposed, ...edits }`, parses it with the procedure's OWN zod schema (so an unknown or wrongly-typed edit is a 400, never silently dropped), and calls:
   - `log-entry` → `suggestions.approveEntry({ id, entry })`. `proposed` is NOT `entryForApproval`'s shape (it has `attachmentDocumentIds`, no `source`), and today the mapping lives inline in `SuggestionCard` (`apps/web/src/components/suggestion-card.tsx:213-218`). Extract it into a pure `entryFromProposed(suggestion, edits)` in `packages/api/src/entry-from-proposed.ts`, used by BOTH the card and this route, so web and phone cannot build different entries: `documentIds` from `attachmentDocumentIds`, `source` derived from the suggestion and never from the client (`"gmail-watch"` when it has a `raw_email_id`, `"manual"` for a `voice-v1` suggestion, Task 24), then `entryForApproval.parse`. A `source` key in `edits` is a 400. Editable: `occurredAt`, `channel`, `direction`, `summary`, `details`, `participantPartyIds`, `attachmentDocumentIds`.
   - `document-meta` → `approveDocumentMeta({ id, title, docType })` from `proposed.title`/`proposed.docType` overlaid with `edits.title`/`edits.docType`.
   - `debt` → `approveDebt({ id, debt })`, `debt` = `debtFields.parse({ ...proposed, ...edits })` (`packages/api/src/routers/registry.ts`).
   - `task` → `approveTask({ id, task })`, `task` = `taskFields.parse({ ...proposed, ...edits })` (`packages/api/src/routers/tasks.ts`).
   - `registry-item` → 409 `{ error: "open op de website" }`, because the card has no phone form.
-- Proposal approve and reject are Plan 2's routes, unchanged: approve `{ revision, payload: { to, cc, subject, body, attachmentDocumentIds } }`. The phone has already shown the final text and asked for Face ID. The server never sends from that request; the worker sends.
-- Proposal answer is Plan 2's route, `{ option: number } | { freeText: string }`. Plan 2's router already restricts it to `kind = 'question'`; this task adds the tests that PIN that, because it is the server half of "a notification may never send": a non-question answers 409.
+- Proposal approve and reject are Plan 2's routes, unchanged: **(merged)** approve `{ revision, payload: { to, cc, subject, body, attachmentDocumentIds, entrySummary } }`, reject `{ reason? }`. The phone has already shown the final text and asked for Face ID. The server never sends from that request; the worker sends.
+- Proposal answer is Plan 2's route, **(merged)** `{ revision, option: number } | { revision, freeText: string }` — `revision` is required, a stale one is 409. Plan 2's router already restricts it to `kind = 'question'` with `BAD_REQUEST` ("only a question can be answered") and already has the router test `answer refuses a reply`. This task adds the tests still missing, because it is the server half of "a notification may never send": a non-question answers **400** (not 409: that is what the merged router throws and what `trpcErrorResponse` maps it to).
 - Task status → `tasks.setStatus({ taskId, status })` (`packages/api/src/routers/tasks.ts:165`; input `{ taskId, status, note?, overrideReason? }`). The route body is `{ status, note? }`, and an `overrideReason` key is a 400: it is never offered from the phone.
 
 - [ ] **Step 1: Failing tests:**
@@ -227,7 +227,7 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
   - `approve dispatches on stored kind, ignoring client kind`;
   - per kind: `log-entry approve builds entry from proposed plus edits`, `entryFromProposed matches what SuggestionCard sent before the extraction` (in `packages/api`), `log-entry approve refuses an edited source`, `document-meta approve overlays title and docType`, `debt approve parses through debtFields`, `task approve parses through taskFields`, `an unknown edit key is 400`;
   - `registry-item answers 409`;
-  - in Plan 2's files: `answer refuses a reply proposal`, `answer refuses a follow-up proposal` (router and route);
+  - in Plan 2's files: `answer refuses a follow-up proposal` (router; `answer refuses a reply` exists already), and on the route `answer on a reply proposal answers 400` and `answer on a follow-up proposal answers 400` (mocking the router's `BAD_REQUEST`, as the existing `400 maps from BAD_REQUEST` test does);
   - `task status passes taskId, never id`;
   - `task status rejects an override reason field`.
 - [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`.
@@ -237,31 +237,33 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 
 **Files:**
 - Create: `apps/worker/src/badge-sync.ts`, `apps/worker/src/badge-sync.test.ts`
-- Modify (all Plan 2's files, extended, never duplicated): `apps/worker/src/notify/apns.ts` + `apns.test.ts` (`ApnsAlert` gains `badge?` and `options?`; `ApnsSender.sendRaw`), `apps/worker/src/notify/notify.ts` + `notify.test.ts` (badge on every alert; extract `pushToDevices`), `apps/worker/src/index.ts` (queue + schedule + worker), `packages/api/src/worker-health.ts` (`DECLS`), `packages/api/src/worker-names.ts`
+- Modify (all Plan 2's files, extended, never duplicated): `apps/worker/src/notify/apns.ts` + `apns.test.ts` (`ApnsAlert` gains `badge?`, `options?` and `revision?`; `ApnsSender.sendRaw`), `apps/worker/src/notify/notify.ts` + `notify.test.ts` (`NotifyInput` gains `options?` and `revision?`; badge on every alert; extract `pushToDevices`), `apps/worker/src/ops/proposals-store.ts` + `proposals-store.test.ts` (`proposalPush` passes `options` and `revision` for a question), `apps/worker/src/index.ts` (queue + schedule + worker), `packages/api/src/worker-health.ts` (`DECLS`), `packages/api/src/worker-names.ts` (`BADGE_SYNC_WORKER_NAME`)
 
 **Interfaces:**
 - **No new `NotifyKind` and no new category id.** A question is a Plan 2 proposal (`kind = 'question'`), so its push is Plan 2's `proposal` kind and `PROPOSAL` category. What makes it answerable is the `options` key plus `mutable-content`, which the service extension (Task 8) turns into a per-proposal `q.<id>` category.
-- `ApnsAlert` (Plan 2) gains `badge?: number` and `options?: string[]`. `apnsPayload` then emits `aps.badge` when given, and, only when `options` is present, `aps["mutable-content"] = 1` and a top-level `options` beside Plan 2's top-level `link`. `options` holds at most 4 entries of at most 40 characters each, cut on build. The deep link stays Plan 2's `link: "verder://proposal/<uuid>"`.
-- `notify()` reads `badge` itself, via `loadWaiting(db).length`, so a caller can never pass a stale number. A failure to compute it omits the key (the icon keeps its last value) and never fails the notify.
-- Plan 2's proposals-store passes `options: question.options.map((o) => o.label)` when a `question` proposal becomes `pending` (one line in `apps/worker/src/ops/proposals-store.ts`).
+- `ApnsAlert` (Plan 2) gains `badge?: number`, `options?: string[]` and `revision?: number`. `apnsPayload` then emits `aps.badge` when given, and, only when `options` is present, `aps["mutable-content"] = 1` plus a top-level `options` and a top-level `revision` beside Plan 2's top-level `link`. `options` holds at most 4 entries of at most 40 characters each, cut on build. The deep link stays Plan 2's `link: "verder://proposal/<uuid>"`. `NotifyInput` gains the same `options?` and `revision?`, and `fanOutApns` passes them through to `sender.send`.
+- **(merged) Why `revision` travels in the push.** Plan 2's answer route REQUIRES `revision` (`answerInput` is strict, and a stale revision is 409). A notification action has no detail screen to read it from, and a GET before the POST would put a network round trip and a second failure mode into a background action. The revision a question is announced with is the one it is answered at: `storeDraft` moves `drafting → pending` without bumping it, and every later decision bumps it, so a push for a question that was meanwhile answered on the web answers 409 and runs nothing — the safe direction.
+- `notify()` reads `badge` itself, via `loadWaiting(db).length`, so a caller can never pass a stale number. A failure to compute it omits the key (the icon keeps its last value) and never fails the notify (Plan 2's notify never throws, and this must not change that).
+- Plan 2's `proposalPush(row, ctx, payload)` in `apps/worker/src/ops/proposals-store.ts` passes `options: payload.question.options.map((o) => o.label)` and `revision: row.revision` when `payload.question` is set, and neither for a reply.
 - `ApnsSender.sendRaw(env, token, { pushType: "alert" | "background", priority: 5 | 10, payload: object })`, the same session, token cache and timeout as `send`.
-- `pushToDevices(deps, raw)`, extracted from `notify()`'s device loop so the session check, the 410/`BadDeviceToken` revoke and the attempt accounting exist once. It writes NO `notifications` row (a badge change is not an alert) and therefore no `notification_attempts` row either (its `notification_id` is NOT NULL); it returns `{ delivered, failed, skipped }` and the caller's run row carries them. The 410 revoke still happens.
+- `pushToDevices(deps, raw)`, extracted from `notify()`'s device loop (**(merged)** `fanOutApns` in `notify.ts`: the device query with its `session.expires_at` join, the `session-ended` revoke, the lazy sender, and the 410 / 400 `BadDeviceToken`/`Unregistered` revoke) so those exist once. It writes NO `notifications` row (a badge change is not an alert) and therefore no `notification_attempts` row either (its `notification_id` is NOT NULL); it returns `{ delivered, failed, skipped }` and the caller's run row carries them. The 410 revoke still happens.
 - `badge-sync.ts`: `export async function syncBadge(db: Db, deps: { push: (raw) => Promise<{ delivered; failed; skipped }> }): Promise<{ count: number; sent: boolean }>`.
   - It reads the previous count from the newest `badge-sync` `worker_runs` row's `detail.count`.
   - On a change it sends TWO distinct pushes, because Apple says a background push must not carry a badge, and background pushes are throttled and never delivered to a force-quit app:
     1. **the badge:** apns-push-type `alert`, priority 5, payload exactly `{ aps: { badge: N } }`. No `alert`, no `sound`. iOS updates the icon even when the app was force-quit.
     2. **the refresh:** apns-push-type `background`, priority 5, payload exactly `{ aps: { "content-available": 1 } }`. It refreshes the widget snapshot and the inbox cache when iOS lets it, and nothing depends on it arriving.
   - It records `badge-sync` `ok` with `{ count, sent, delivered, failed }` on every tick, because a watcher's silence must mean failure.
-- Schedule: `boss.schedule("badge.sync", "*/5 * * * *")`. DECLS: `"badge-sync": { kind: "watcher", everyMs: 5 * MINUTE }`.
+- Schedule: `boss.schedule("badge.sync", "*/5 * * * *")`. DECLS: `[BADGE_SYNC_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE }`, the name `"badge-sync"` exported from `worker-names.ts` (writer in the worker, reader in `packages/api`).
 
 - [ ] **Step 1: Failing tests:**
   - `apns.test.ts`:
-    - `proposal with options carries options and mutable-content`;
+    - `proposal with options carries options, revision and mutable-content`;
     - `alert without options never carries options or mutable-content`;
     - `options are capped at four and forty characters`;
     - `badge is emitted when given`;
     - `sendRaw background sets apns-push-type background and priority 5`.
-  - `notify.test.ts`: `every alert carries the waiting count as badge`; `a failing badge count omits the key and still delivers`.
+  - `notify.test.ts`: `every alert carries the waiting count as badge`; `a failing badge count omits the key and still delivers`; `options and revision reach the APNs sender`.
+  - `proposals-store.test.ts`: `a question push carries its option labels and revision`; `a reply push carries no options`.
   - `badge-sync.test.ts` (dev DB, `verder_worker`, injected `push`):
     - `first run sends`;
     - `unchanged count does not send but still records`;
@@ -270,7 +272,7 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
     - `background payload carries no badge`.
   - `worker-health` test: `badge-sync is a 5-minute watcher`.
 - [ ] **Step 2:** Run `env -u NODE_ENV pnpm --filter worker test -- badge apns notify` and `env -u NODE_ENV pnpm --filter @verder/api test -- worker-health`. Expected: FAIL. Implement. Run again; expected PASS.
-- [ ] **Step 3:** There is NO caller repointing here. Plan 2 Task 5 already moved every alert onto `notify()` and deliberately deleted the generic "something new" suggestion push (spec §6.4: never just "nieuwe mail"; spec §4's anti-goals). Suggestions reach Martin through the badge and Voor jou only. `grep -rn "Iets nieuws\|Something new" apps/worker/src` must return nothing.
+- [ ] **Step 3:** There is NO caller repointing here. Plan 2 Task 5 already moved every alert onto `notify()` and deliberately deleted the generic "something new" suggestion push (spec §6.4: never just "nieuwe mail"; spec §4's anti-goals). Suggestions reach Martin through the badge and Voor jou only. **(merged)** `grep -rn "Iets nieuws\|Something new" apps/worker/src` must return exactly one line, the explanatory comment at `apps/worker/src/ollama.ts:11` ("NO PUSH FROM HERE…"), and nothing that builds a push.
 - [ ] **Step 4:** Commit: `feat(worker): badge on every alert, badge sync, answerable question pushes`.
 - [ ] **Step 5: Deploy P3-D1 [main session].** No migration.
   1. Record the ledger `max(seq)`, count and head.
@@ -289,25 +291,24 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
   - `apps/ios/Verder/Shared/WidgetSnapshot.swift` (compiled into the app AND the widget target in Task 23)
   - `apps/ios/VerderTests/InboxStoreTests.swift`
   - `apps/ios/VerderTests/WidgetSnapshotTests.swift`
-- Modify (Plan 2 Task 19's, not recreated): `apps/ios/Verder/Net/APIClient+JSON.swift`, `apps/ios/VerderTests/APIClientJSONTests.swift`
+- **Not modified (merged):** `apps/ios/Verder/Net/APIClient+JSON.swift` already decodes ISO 8601 with and without fractional seconds, and `APIClientJSONTests.getJSONDecodesDatesWithAndWithoutFractionalSeconds` already pins it.
 
 **Interfaces:**
-- The JSON client is Plan 2's `getJSON`/`postJSON`. This task only adds what the inbox needs and Plan 2 may not have: a decoder that accepts ISO 8601 WITH and WITHOUT fractional seconds (Postgres `timestamptz` serialised by `Date.toISOString()` carries milliseconds). If Plan 2's decoder already does, Step 1's first test passes immediately and nothing changes.
-- `struct WaitingItem: Codable, Identifiable, Equatable`, `InboxDTO`, `SuggestionDTO`, `TaskDTO`, `DashboardSummaryDTO`, mirroring Task 3 field for field. Proposal detail uses Plan 2's `ProposalDTO` (`apps/ios/Verder/Proposals/ProposalDTO.swift`).
-- `@MainActor @Observable final class InboxStore { var inbox: InboxDTO?; var lastError: APIError?; func refresh() async; }`.
+- The JSON client is Plan 2's `getJSON`/`postJSON`, used unchanged (**(merged)** its decoder already accepts fractional seconds, so nothing is added to it).
+- `struct WaitingItem: Codable, Identifiable, Equatable, Sendable`, `InboxDTO`, `SuggestionDTO`, `TaskDTO`, `DashboardSummaryDTO`, mirroring Task 3 field for field. Proposal detail uses Plan 2's `ProposalDetail` (`apps/ios/Verder/Proposals/ProposalDTO.swift`; **(merged)** the file is named `ProposalDTO.swift` but holds `ProposalSummary`, `ProposalList` and `ProposalDetail` — there is no type called `ProposalDTO`).
+- `@MainActor @Observable final class InboxStore { var inbox: InboxDTO?; var lastError: APIError?; func refresh() async; }`, made once in `VerderApp` beside `PushRegistrar` (it is what `AppDelegate`'s background refresh calls in Task 8).
   - `refresh` writes a `WidgetSnapshot` and calls `UNUserNotificationCenter.current().setBadgeCount(count)`.
 - `struct WidgetSnapshot: Codable, Equatable { let count: Int; let topTitle: String?; let topKind: String?; let headline: String?; let updatedAt: Date }`.
   - `static func write(_:to dir: URL, writer: (Data, URL, Data.WritingOptions) throws -> Void = { try $0.write(to: $1, options: $2) }) throws` and `static func read(from dir: URL) -> WidgetSnapshot?`. The writer is injected so a test can assert the OPTIONS passed: the simulator does not enforce data protection, and `FileAttributeKey.protectionKey` is often nil there, so reading the attribute back proves nothing.
   - The file is `<group>/widget/snapshot.json`, written atomically with `.completeFileProtectionUntilFirstUserAuthentication`. The widget renders while the phone is locked, so this one small file cannot be `.complete`.
 
 - [ ] **Step 1: Failing tests:**
-  - `getJSONDecodesFractionalAndPlainISODates` (in Plan 2's `APIClientJSONTests`);
   - `refreshWritesSnapshotWithTopItem`;
   - `refreshSetsTheBadgeToTheCount`;
   - `snapshotRoundTrip`;
   - `snapshotIsWrittenAtomicallyUntilFirstUserAuthentication` (the injected writer records `[.atomic, .completeFileProtectionUntilFirstUserAuthentication]`, and never `.completeFileProtection`).
   - The on-disk protection class is checked on the DEVICE in Task 9, not in the simulator.
-- [ ] **Step 2:** Run `xcodebuild test …`. Expected: FAIL. Implement. Run again; expected PASS (129 + new).
+- [ ] **Step 2:** Run `xcodebuild test …`. Expected: FAIL. Implement. Run again; expected PASS (**(merged)** 182 + new).
 - [ ] **Step 3:** Commit: `feat(ios): inbox store and widget snapshot`.
 
 ### Task 7: The Voor jou tab and its detail screens
@@ -315,19 +316,20 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 **Files:**
 - Create:
   - `apps/ios/Verder/Inbox/VoorJouTab.swift`
-  - `apps/ios/Verder/Inbox/QuestionView.swift`
   - `apps/ios/Verder/Inbox/SuggestionDetailView.swift`
   - `apps/ios/Verder/Inbox/TaskRowView.swift`
   - `apps/ios/VerderTests/InboxRankingTests.swift`
-  - `apps/ios/VerderTests/QuestionViewModelTests.swift`
-- Modify: `apps/ios/Verder/App/RootView.swift` (the Voor jou tab shows `VoorJouTab` in place of Plan 2's `ProposalListView`; it stays `.lockGated(by: lock)`)
-- **Not created, reused from Plan 2 Task 19:** the reply/follow-up proposal screen (`Proposals/ProposalScreen.swift`, `ProposalModel`) and the send gate (`ApprovalGate`). This task adds no Face ID abstraction of its own: there is already `DeviceOwnerAuthenticator` (Plan 1) and whatever Plan 2's `ApprovalGate` wraps.
+  - `apps/ios/VerderTests/SuggestionDetailTests.swift`
+- Modify:
+  - `apps/ios/Verder/App/RootView.swift`: the Voor jou tab shows `VoorJouTab` in place of Plan 2's `ProposalListView`; it stays `.lockGated(by: lock)`. **(merged)** RootView holds the tab's stack as `@State private var proposalPath: [String]` (it must survive the lock, see its comment) and fills it from `.onChange(of: links.pending)` for `.proposal(id)`. That becomes a typed path, `@State private var inboxPath: [InboxRoute]` with `enum InboxRoute: Hashable { case proposal(String), suggestion(String), task(String) }`, still held in RootView, and the deep-link handler maps `.proposal` (and Task 8's `.suggestion`/`.task`) onto it.
+  - `apps/ios/VerderTests/ProposalModelTests.swift`: add `freeTextPostsFreeTextAndRevision` (the option path is already covered by `optionButtonShowsServerTarget`, which asserts the posted `option` index).
+- Delete: `apps/ios/Verder/Proposals/ProposalListView.swift` (`ProposalListView` + `ProposalListModel`, which its own comment says Plan 3 replaces). First `grep -rn "ProposalList" apps/ios/Verder apps/ios/VerderTests`: only `RootView` and the file itself may reference it, and `ProposalList`/`ProposalSummary` in `ProposalDTO.swift` stay (no other caller needs them after this, but deleting a DTO is not this task's business).
+- **Not created, reused from Plan 2 (merged):** the proposal screen for ALL three kinds — `Proposals/ProposalScreen.swift` with `ProposalModel` — and the send gate (`ApprovalGate`). **There is no `QuestionView`:** `ProposalScreen` already renders a question (its options as buttons behind a confirmation dialog that shows the server's `target` text, plus an "Iets anders…" free-text field) and `ProposalModel.answer(option:)`/`answer(freeText:)` already post `{revision, option}`/`{revision, freeText}` without Face ID. A second question screen would be a second definition of what an answer sends. This task adds no Face ID abstraction of its own: `ApprovalGate` wraps Plan 1's `DeviceOwnerAuthenticator`.
 
 **Interfaces:**
 - Screens (Dutch copy):
   - **List.** Rows in server order (the phone never re-ranks). Amber dot only on rows in the list; a collapsed "Door verder gedaan" section (filled by Task 15) is never amber. Pull to refresh. Empty state: "Niets wacht op je."
-  - **Reply or follow-up proposal.** A tap pushes Plan 2's `ProposalScreen` unchanged. Versturen, Aanpassen, Afwijzen and the fresh Face ID on every send are its behaviour, not this task's.
-  - **Question** (`QuestionView`, new). The prompt, the options as buttons, and a free-text field "Anders, namelijk". It posts Plan 2's answer body: `{ option: <index> }` or `{ freeText }`. An answer runs a ledgered action on Martin's behalf (`tasks.setStatus`, `registry.debts.linkDocument`, `tasks.create`) but sends nothing outbound, so it asks no Face ID inside the app lock's grace.
+  - **Reply, follow-up or question proposal.** A tap pushes Plan 2's `ProposalScreen` unchanged. Versturen, Aanpassen, Afwijzen and the fresh Face ID on every send are its behaviour, and so is answering a question (options plus "Iets anders…", no Face ID inside the app lock's grace, because an answer runs a ledgered action — `tasks.setStatus`, `registry.debts.linkDocument`, `tasks.create` — but sends nothing outbound). None of it is this task's.
   - **Suggestion.** Per kind, mirroring `/queue`'s `SuggestionCard` (`apps/web/src/components/suggestion-card.tsx:107`): log-entry, document-meta (title + soort), debt, task. Buttons "Klopt zo", "Aanpassen" and "Niet relevant". Approve posts `{ edits }` with only the changed fields (Task 4). `registry-item` shows "Open op de website".
   - **Task.** The status picker offers only `validNext`.
 - Never: a send outside Plan 2's `ApprovalGate`, an approve from the list row, or an auto-advance after a send.
@@ -335,11 +337,11 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
 - [ ] **Step 1: Failing tests:**
   - `InboxRankingTests.rendersServerOrderUnchanged`;
   - `InboxRankingTests.doneByVerderIsNeverAmber`;
-  - `InboxRankingTests.replyRowOpensPlan2ProposalScreen`;
-  - `QuestionViewModelTests.optionPostsIndexNotLabel` and `freeTextPostsFreeText` (via `StubProtocol`);
+  - `InboxRankingTests.replyRowOpensPlan2ProposalScreen` and `questionRowOpensPlan2ProposalScreen` (both map to `InboxRoute.proposal(id)`);
+  - `ProposalModelTests.freeTextPostsFreeTextAndRevision` (via `StubProtocol`, in Plan 2's file);
   - `SuggestionDetailTests.approveSendsOnlyChangedFields`.
 - [ ] **Step 2:** Run them (FAIL), implement, and run them (PASS).
-- [ ] **Step 3:** Commit: `feat(ios): Voor jou with question, suggestion and task screens`.
+- [ ] **Step 3:** Commit: `feat(ios): Voor jou with suggestion and task screens`.
 
 ### Task 8: Notifications on the phone
 
@@ -350,32 +352,39 @@ This plan was already rescoped once against the WRITTEN Plan 2 (2026-10-31). Thi
   - `apps/ios/VerderNotify/NotificationService.swift`
   - `apps/ios/VerderTests/QuestionCategoriesTests.swift`
   - `apps/ios/VerderTests/NotificationRouterTests.swift`
-- Modify (Plan 2 Task 7's files, extended): `apps/ios/Verder/Push/NotificationCategories.swift` (exposes its static set as `NotificationCategories.all` so the extension can union with it), `apps/ios/Verder/Push/DeepLink.swift` (cases `.inbox`, `.suggestion(UUID)`, `.task(UUID)`; also parses a URL for the widget), `apps/ios/Verder/App/AppDelegate.swift` (`application(_:didReceiveRemoteNotification:fetchCompletionHandler:)` calls `InboxStore.refresh()`; `userNotificationCenter(_:didReceive:)` hands to `NotificationRouter`), `apps/ios/project.yml` (new target `VerderNotify`, type `app-extension`, bundle `pro.vanderpoel.verder.notify`, App Group entitlement; URL scheme `verder` under `info.properties` `CFBundleURLTypes` if Plan 2 did not add it, for the widget's `widgetURL`)
+- Modify (Plan 2's files, extended):
+  - `apps/ios/Verder/Push/NotificationCategories.swift`: **(merged)** it already exposes `static func all() -> [UNNotificationCategory]` and `register()`; `register()` changes to register the union of `all()` and the current `q.*` set (see below). Compiled into the extension too.
+  - `apps/ios/Verder/Push/DeepLink.swift`: add cases `.suggestion(UUID)` and `.task(UUID)` (**(merged)** `.inbox` already exists) to `parse`, and their `tab` (`.voorJou`); `parse(_ link: String)` already takes a string, so the widget's URL goes through it as `DeepLink.parse(url.absoluteString)`.
+  - `apps/ios/VerderTests/DeepLinkTests.swift` and `apps/ios/VerderTests/NotificationCategoriesTests.swift` (Plan 2's; extend, do not duplicate).
+  - `apps/ios/Verder/App/AppDelegate.swift`: add `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`, which calls `InboxStore.refresh()` (attached the way `attach(_ registrar:)` attaches the registrar) and then the handler; `userNotificationCenter(_:didReceive:withCompletionHandler:)` hands the response to `NotificationRouter`. **THE PRODUCTION LESSON STANDS (`36eb24d`): both delegate methods stay MAIN-ACTOR isolated with their COMPLETION-HANDLER signatures** — never `nonisolated`, never the `async` variants — because the async bridge called UIKit's completion handler off the main thread and aborted the app on every tap. Where the work is async (an answer POST, a refresh), start `Task { @MainActor in … ; completionHandler() }` and call the handler from inside that task, after the work, on the main actor. A background answer action must keep the process alive until its POST finishes, which is exactly what calling the handler last does.
+  - `apps/ios/Verder/App/RootView.swift`: `.onOpenURL { links.deliver(DeepLink.parse($0.absoluteString)) }` for the widget (Task 23).
+  - `apps/ios/project.yml`: new target `VerderNotify`, type `app-extension`, bundle `pro.vanderpoel.verder.notify`, App Group entitlement, sources `VerderNotify` plus `Verder/Push/NotificationCategories.swift` and `Verder/Push/QuestionCategories.swift`, embedded in `Verder`. **(merged) NO `CFBundleURLTypes`.** Plan 2 deliberately registers no `verder://` scheme, so that no web page or other app can fire one (`DeepLink.swift`'s header comment). A widget's `widgetURL` is delivered to its own containing app through `.onOpenURL` without a registered scheme; Task 23 Step 3 measures that tap on the device, and if it does NOT arrive, stop and ask Martin before registering a scheme, because that gives up the property above.
 
 **Interfaces:**
-- The static categories are Plan 2's nine (`VERDER_MAIL` … `WEEKLY`), unchanged. Their actions are all `.foreground` ("Bekijken").
+- The static categories are Plan 2's nine (`VERDER_MAIL` … `WEEKLY`), unchanged. **(merged)** Only `PROPOSAL`, `REMINDER` and `FOLLOW_UP` carry an action, the one `OPEN` ("Bekijken", `[.foreground, .authenticationRequired]`); the other six carry none.
 - `QuestionCategories.make(proposalId: String, options: [String]) -> UNNotificationCategory` builds `q.<proposalId>`: one action per option, each `.authenticationRequired` and NOT `.foreground`.
 - `QuestionCategories.merged(existing: Set<UNNotificationCategory>, adding: UNNotificationCategory, keep: Int = 20) -> Set<UNNotificationCategory>`, pure. `setNotificationCategories` REPLACES the whole set, so the extension never calls it with just its own category: it reads `getNotificationCategories()`, passes the result through `merged`, and writes the union. `merged` always keeps every non-`q.` category, keeps at most the `keep` newest `q.*` (newest = the order they were added; the ids carry no date, so the order is kept in a small App Group list `push/q-order.json`), and drops the rest.
 - The app re-registers the union of Plan 2's static set and the current `q.*` set on every launch, so a lost static category heals at the next open.
 - `NotificationService` (the Notification Service Extension):
-  - For a push with a top-level `options` array and a `link` of `verder://proposal/<uuid>`, it registers `q.<uuid>` through `merged` and rewrites the content's `categoryIdentifier` to it.
+  - For a push with a top-level `options` array, a top-level integer `revision` and a `link` of `verder://proposal/<uuid>`, it registers `q.<uuid>` through `merged` and rewrites the content's `categoryIdentifier` to it. `revision` stays in `userInfo` for the router.
   - It never makes a network call.
   - **This is a fourth target beyond spec §7's three.** iOS fixes a category's action titles when the category is registered. A question's options are known only once its push arrives, and the service extension is the one piece of code that runs before the notification is shown.
 - `NotificationRouter.handle(response:)`:
-  - default tap → Plan 2's `DeepLink(userInfo:)` (`userInfo["link"]`), which selects the Voor jou tab and pushes the detail screen;
-  - a `q.*` action → `POST /api/mobile/v1/proposals/:id/answer { option: <index> }` (Plan 2's body). Nothing else is reachable from an action.
+  - default tap and Plan 2's `OPEN` action → `links.deliver(DeepLink(userInfo:))` exactly as `AppDelegate` does today (`userInfo["link"]`), which selects the Voor jou tab and pushes the detail screen;
+  - a `q.*` action → `POST /api/mobile/v1/proposals/:id/answer { revision, option: <index> }` (**(merged)** Plan 2's body; `revision` from `userInfo["revision"]`, and a push without one answers nothing and opens the proposal instead). A 409 (answered meanwhile, or a newer revision) or 400 changes nothing on the server; the router then delivers `.proposal(id)` so the next open shows the current state. Nothing else is reachable from an action.
 
 - [ ] **Step 1: Failing tests:**
-  - `onlyQuestionActionsWorkInBackground`: every action in `NotificationCategories.all` has `.foreground`;
+  - `onlyQuestionActionsWorkInBackground`: every action in `NotificationCategories.all()` has `.foreground`;
   - `questionCategoryActionsRequireAuthentication`, on a category built by `QuestionCategories.make`;
-  - `extensionKeepsStaticCategories`: `merged(existing: NotificationCategories.all, adding: q)` contains all nine static ids plus `q`;
+  - `extensionKeepsStaticCategories`: `merged(existing: Set(NotificationCategories.all()), adding: q)` contains all nine static ids plus `q`;
   - `questionCategoriesAreCappedAtTwenty`: 25 additions keep the 20 newest `q.*` and every static one;
   - `routerMapsReplyTapToDetailNotSend`;
-  - `routerSendsAnswerOnlyForQCategories` (and with Plan 2's `{ option }` body);
-  - `deepLinkParsesInboxSuggestionTask`.
+  - `routerSendsAnswerOnlyForQCategories` (with Plan 2's `{ revision, option }` body, and exactly those two keys);
+  - `routerWithoutRevisionOpensInsteadOfAnswering`;
+  - `deepLinkParsesSuggestionAndTask` (in Plan 2's `DeepLinkTests`; `.inbox` is covered there already).
 - [ ] **Step 2:** Run them (FAIL), implement, and run them (PASS).
 - [ ] **Step 3: Measure the extension on the device [main session].**
-  - Martin approves a test question push to his own phone. It is a push to his own device, but the standing rule covers test sends, so ask first and show him the exact title, body and options. It is sent through `notify()` with a `dedupKey` of `test-question-<date>` and a `link` to a proposal id that does not exist, so tapping an option answers 404 and runs nothing.
+  - Martin approves a test question push to his own phone. It is a push to his own device, but the standing rule covers test sends, so ask first and show him the exact title, body and options. It is sent through `notify()` with a `dedupKey` of `test-question-<date>`, `revision: 1` and a `link` to a proposal id that does not exist, so tapping an option answers 404 and runs nothing.
   - Expected: the lock-screen notification shows the option buttons, and the Bekijken action on a later ordinary push still works (the static set survived).
   - Record whether iOS 27.2 used the category registered inside the extension for that same notification. If it did not, ship the fallback: question notifications get only "Bekijken", and record the measured reason in the commit.
 - [ ] **Step 4:** Commit: `feat(ios): answerable question notifications, deep links, background refresh`.
@@ -421,8 +430,8 @@ Today `approveDocumentMeta` always writes `approved`, even when Martin edited th
 ### Task 11: Migration M-A, `auto-applied` and the verder actor (server)
 
 **Files:**
-- Create: `packages/db/drizzle/0039_auto_applied.sql` (number from Task 0), `packages/db/src/auto-applied.test.ts`, `packages/api/src/verification-actor.test.ts`
-- Modify: `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts:15` (enum) and `:98-106` (`documentStatusChanges` gains `actor`, `suggestionId`), `packages/api/src/verification.ts:99-191`, `packages/api/src/routers/suggestions.ts:50` (zod status enum), `apps/web/src/app/(app)/queue/page.tsx`
+- Create: `packages/db/drizzle/0040_auto_applied.sql` (journal `idx` 40, `when` `1793865600000`, both from Task 0), `packages/db/src/auto-applied.test.ts`, `packages/api/src/verification-actor.test.ts`
+- Modify: `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts:17` (enum) and `:100-108` (`documentStatusChanges` gains `actor`, `suggestionId`), `packages/api/src/verification.ts:99-191`, `packages/api/src/routers/suggestions.ts:50` (zod status enum), `apps/web/src/app/(app)/queue/page.tsx`
 
 **Interfaces:**
 - Migration, four statements, each separated by a breakpoint. The columns are new and empty, so the constraints are added plain (no `NOT VALID` + `VALIDATE` dance, which only pays on a populated column):
@@ -477,7 +486,7 @@ Today `approveDocumentMeta` always writes `approved`, even when Martin edited th
   - `apps/worker/src/eval/docmeta-score.ts`
   - `apps/worker/src/eval/docmeta-score.test.ts`
   - `apps/worker/src/ops/export-docmeta-samples.ts`
-- Modify: `apps/worker/src/prompts.ts:80-89` (`DOCMETA_PROMPT_VERSION = "docmeta-v2"`, the prompt asks for `{"title","docType","confident":true|false}`, as auto-name does in `ops/normalize-filenames.ts:83`, where `confident` is stated to mean "the SOORT is certain", because the soort is the only metadata auto-apply writes, Task 14), `apps/worker/src/ollama.ts:92-120` (`llmDocSchema` gains `confident: z.boolean().default(false)`, stored in `proposed.confident`; and `buildDocMetaPrompt` is given the document's EFFECTIVE title (`effectiveDocument(db, id).effectiveTitle`) instead of the raw `doc.title` at line 107, because auto-name has usually renamed it by then in the same job, `index.ts:268-282`), `apps/worker/package.json` (scripts `docmeta-eval`, `export-docmeta-samples`)
+- Modify: `apps/worker/src/prompts.ts:80-89` (`DOCMETA_PROMPT_VERSION = "docmeta-v2"`, the prompt asks for `{"title","docType","confident":true|false}`, as auto-name does in `ops/normalize-filenames.ts:83`, where `confident` is stated to mean "the SOORT is certain", because the soort is the only metadata auto-apply writes, Task 14), `apps/worker/src/ollama.ts:97-125` (`llmDocSchema` at line 97 gains `confident: z.boolean().default(false)`, stored in `proposed.confident`; and `buildDocMetaPrompt` is given the document's EFFECTIVE title (`effectiveDocument(db, id).effectiveTitle`) instead of the raw `doc.title` at line 110, because auto-name has usually renamed it by then in the same job, `index.ts:352-370`), `apps/worker/package.json` (scripts `docmeta-eval`, `export-docmeta-samples`)
 
 There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, task and retrieval evals only. Spec §6.6's "the existing docmeta eval" does not exist, so this task builds it.
 
@@ -531,7 +540,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 **Files:**
 - Create: `apps/worker/src/auto-file.ts`, `apps/worker/src/auto-file.test.ts`
-- Modify: `apps/worker/src/ollama.ts:94-120` (call `autoApplyDocMeta` after a successful pending insert), `apps/worker/src/auto-name.ts:96-109` (write `actor: "verder"`, `suggestionId: null`, and emit the verder payload shape), `packages/api/src/worker-health.ts` (`"auto-file": { kind: "on-demand" }`), `.env.example` (`DOCMETA_AUTO_APPLY=`)
+- Modify: `apps/worker/src/ollama.ts:97-125` (call `autoApplyDocMeta` after a successful pending insert), `apps/worker/src/auto-name.ts:96-109` (write `actor: "verder"`, `suggestionId: null`, and emit the verder payload shape), `packages/api/src/worker-health.ts` (`"auto-file": { kind: "on-demand" }`), `.env.example` (`DOCMETA_AUTO_APPLY=`)
 
 **Interfaces:**
 - `export async function autoApplyDocMeta(db: Db, suggestionId: string, env = process.env): Promise<{ applied: boolean; reason: string }>`. One transaction:
@@ -539,7 +548,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   2. Lock the suggestion `FOR UPDATE`. Require `kind = 'document-meta'`, `status = 'pending'` (never `needs-manual`), `prompt_version = 'docmeta-v2'` and `proposed.confident === true`.
   3. Take `pg_advisory_xact_lock(hashtextextended(documentId, 0))`.
   4. Read `effectiveDocument`. Require effective status `inbox`, not purged, and NO change row with `actor IS NULL` since ingest. If Martin has touched it, verder does not.
-  5. Insert a `document_status_changes` row `{status:"filed", title: current.effectiveTitle, docType: proposed.docType, partyId: current.effectivePartyId, actor:"verder", suggestionId}`, and append `document.updated` with `documentStatusChangePayloadByVerder`. **The title is the CURRENT effective title, never `proposed.title`.** Auto-name ran earlier in the same job (`apps/worker/src/index.ts:268-282`) and wrote a name that passed `looksLikeProse`, `validateName`/`retainsIdentifiers` and a collision check against every effective title; docmeta's free-form "short, descriptive" title passed none of those, and applying it would overwrite a guarded name with an unguarded one that can collide or drop an identifier (the Rabobank year incident recorded in `auto-name.ts`). The suggestion's proposed title stays visible in "Door verder gedaan" as information.
+  5. Insert a `document_status_changes` row `{status:"filed", title: current.effectiveTitle, docType: proposed.docType, partyId: current.effectivePartyId, actor:"verder", suggestionId}`, and append `document.updated` with `documentStatusChangePayloadByVerder`. **The title is the CURRENT effective title, never `proposed.title`.** Auto-name ran earlier in the same job (`apps/worker/src/index.ts:352-370`) and wrote a name that passed `looksLikeProse`, `validateName`/`retainsIdentifiers` and a collision check against every effective title; docmeta's free-form "short, descriptive" title passed none of those, and applying it would overwrite a guarded name with an unguarded one that can collide or drop an identifier (the Rabobank year incident recorded in `auto-name.ts`). The suggestion's proposed title stays visible in "Door verder gedaan" as information.
   6. Update the suggestion: `status = 'auto-applied'`, `verdictAt = now`, `finalPayload = { title: current.effectiveTitle, docType, before: { status, title, docType }, changeId }`.
   7. Record `auto-file` `ok` with `{ suggestionId, applied, reason }`.
 - **Not auto-applied, by design:**
@@ -590,7 +599,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   5. Write the undo into the suggestion's `finalPayload.undo = { at, changeId }` when there is one. The ledgered row is the honest record; this is the learning signal.
 - Mobile: `POST /api/mobile/v1/verder-actions/:changeId/undo`. The iOS section has one "Ongedaan maken" button per row, with no Face ID: undo reveals nothing and sends nothing.
 - `autofile-digest`: daily at 19:00 Amsterdam.
-  - When the last 24 h holds verder actions, it calls Plan 2's `notify(deps, { kind: "filing", level: "passive", title: "Door verder gedaan", body: "3 documenten opgeborgen", link: "verder://inbox", dedupKey: "autofile:<dayKey>" })`. Counts only; no titles on the lock screen. The `dedupKey` (`dayKey` from `packages/api/src/amsterdam.ts`) makes a pg-boss retry a no-op instead of a second push.
+  - When the last 24 h holds verder actions, it calls **(merged)** `deps.notify({ kind: "filing", level: "passive", title: "Door verder gedaan", body: "3 documenten opgeborgen", link: "verder://inbox", dedupKey: "autofile:<dayKey>" })`, with `deps.notify: NotifyFn` bound to `notifier(db)` in `index.ts` and `fakeNotify()` in the tests, as every Plan 2 caller does. Counts only; no titles on the lock screen. The `dedupKey` (`dayKey` from `packages/api/src/amsterdam.ts`) makes a pg-boss retry a no-op instead of a second push.
   - It always records `autofile-digest` `ok` with `{ count }`.
 
 - [ ] **Step 1: Failing tests:**
@@ -621,7 +630,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   1. Record the ledger `max(seq)`, count and head.
   2. Run `env -u NODE_ENV pnpm --filter web build` locally.
   3. Rsync (dry run, read every `deleting` line, then the real run).
-  4. **Migrate M-A from the HOST BEFORE the images.** Expected `drizzle.__drizzle_migrations` count **40** afterwards. The blast radius of getting this wrong is far wider than docmeta: drizzle's `select().from(documentStatusChanges)` names every schema column, so with the new images and no migration EVERY reader of that table fails on `column "actor" does not exist` — `effectiveDocument` and every caller of it (`/files`, `/files/[id]`, the queue, `documents.list`, search's document rendering), `resolveDocumentUpdatedHashes` and therefore `/verify` and `nightly-verify`, auto-name, the docmeta sweep — plus `invalid input value for enum suggestion_status` on every docmeta job and a dashboard 500 on the zod enum.
+  4. **Migrate M-A from the HOST BEFORE the images.** Expected `drizzle.__drizzle_migrations` count **41** afterwards (40 before, Task 0 Step 3). The blast radius of getting this wrong is far wider than docmeta: drizzle's `select().from(documentStatusChanges)` names every schema column, so with the new images and no migration EVERY reader of that table fails on `column "actor" does not exist` — `effectiveDocument` and every caller of it (`/files`, `/files/[id]`, the queue, `documents.list`, search's document rendering), `resolveDocumentUpdatedHashes` and therefore `/verify` and `nightly-verify`, auto-name, the docmeta sweep — plus `invalid input value for enum suggestion_status` on every docmeta job and a dashboard 500 on the zod enum.
   5. Rebuild web and worker with `DOCMETA_AUTO_APPLY` still unset.
   6. **Predicted ledger delta from this step: none.** Tolerated background only (from now on, an auto-name `document.updated` carries `actor = 'verder'`, which the grouping query shows). `nightly-verify` OK on the full pre-existing chain. This run is the proof spec §12.4 asks for.
 - [ ] **Step 3: Switch on [main session], only if Task 13 decided yes.**
@@ -862,13 +871,13 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 **Files:**
 - Create:
-  - `packages/db/drizzle/0040_doc_source_phone_voice.sql` (number from Task 0)
+  - `packages/db/drizzle/0041_doc_source_phone_voice.sql` (journal `idx` 41, `when` `1793952000000`, both from Task 0)
   - `packages/db/src/doc-source-voice.test.ts`
   - `packages/api/src/voice-summary.ts`
   - `packages/api/src/voice-summary.test.ts`
   - `apps/web/src/app/api/mobile/v1/entries/voice/route.ts` (+ test)
   - `apps/web/src/app/api/mobile/v1/parties/route.ts` (+ test)
-- Modify: `packages/db/drizzle/meta/_journal.json`, `packages/db/src/doc-sources.ts` (`DOC_SOURCES` gains `"phone-voice"`), the four Dutch label maps that spell every doc source today — `apps/web/src/components/files-tree.tsx:9` ("Spraak"), `apps/web/src/components/bundle-form.tsx:30` ("spraak"), `packages/api/src/bundle-rule.ts:36` ("spraak") and `apps/web/src/lib/entry-labels.ts:57` ("spraak") — found with `grep -rn '"phone-share"' apps/web/src packages/api/src` so none is missed, `packages/api/src/routers/suggestions.ts` (add `createVoice`), `apps/worker/src/index.ts:268-282` (`suggest.docmeta` stores extractor `none` and skips `suggestDocMeta` for `audio/*`, so a kept recording does not raise a docmeta suggestion in Voor jou)
+- Modify: `packages/db/drizzle/meta/_journal.json`, `packages/db/src/doc-sources.ts` (`DOC_SOURCES` gains `"phone-voice"`), **(merged)** `packages/db/src/doc-source-phone.test.ts` (it asserts the enum equals `["upload", …, "phone-share"]` EXACTLY and in order, so it fails the moment M-B lands unless `"phone-voice"` is appended there too; `doc-source-voice.test.ts` adds the new value's own test beside it), the four Dutch label maps that spell every doc source today — `apps/web/src/components/files-tree.tsx:9` ("Spraak"), `apps/web/src/components/bundle-form.tsx:31` ("spraak"), `packages/api/src/bundle-rule.ts:36` ("spraak") and `apps/web/src/lib/entry-labels.ts:65` ("spraak") — found with `grep -rn '"phone-share"' apps/web/src packages/api/src` so none is missed (that grep also finds `PHONE_SOURCES` in `apps/web/src/app/api/mobile/v1/documents/route.ts:7`, which stays as it is: a recording arrives through its own `entries/voice` route, never through the document upload route), `packages/api/src/routers/suggestions.ts` (add `createVoice`), `apps/worker/src/index.ts:352-370` (`suggest.docmeta` stores extractor `none` and skips `suggestDocMeta` for `audio/*`, so a kept recording does not raise a docmeta suggestion in Voor jou)
 
 **Interfaces:**
 - Migration, two statements separated by `--> statement-breakpoint`:
@@ -879,7 +888,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   CREATE UNIQUE INDEX "suggestions_voice_client_uq" ON "suggestions" ((proposed->>'clientId')) WHERE kind = 'log-entry' AND prompt_version = 'voice-v1';
   ```
 
-  The index is what makes `createVoice` idempotent under two CONCURRENT retries; a select-then-insert would let both insert. Ordering trap as 0036: migrate from the HOST before the images, or a kept recording fails on `invalid input value for enum doc_source`. Expected `drizzle.__drizzle_migrations` count **41** afterwards.
+  The index is what makes `createVoice` idempotent under two CONCURRENT retries; a select-then-insert would let both insert. Ordering trap as 0036: migrate from the HOST before the images, or a kept recording fails on `invalid input value for enum doc_source`. Expected `drizzle.__drizzle_migrations` count **42** afterwards.
 - `voiceSummary(transcript: string): string` returns the first sentence, cut at 120 characters on a word boundary.
 - `suggestions.createVoice({ clientId, occurredAt, partyId, channel = "call", transcript, audioDocumentId? })` inserts a suggestion:
   - `kind: "log-entry"`, `status: "pending"`, `model: "apple-speech-on-device"`, `promptVersion: "voice-v1"`;
@@ -938,7 +947,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 **Interfaces:**
 - `composeWeekly(input): WeeklySummary` is pure. `loadWeekly(db, week)` is in the worker, because "received" needs `ownMailboxAddresses()` and `senderAddress` (`apps/worker/src/mail/relevance.ts:117`, `gmail.ts:109`), which live only there. Gmail-era `from_addr` is a whole header, so it is never matched with SQL `lower()`.
 - `WeeklySummary = { week: "2026-W44"; from; to; sent: number; received: number; filedByMartin: number; filedByVerder: number; tasksDone: number; waiting: number; topWaiting: WaitingItem[] /* ≤3 */ }`. Its sources:
-  - `sent` = outbound `log_entries` in the week, plus Plan 2's proposals with `sent_at` in the week that have no log entry yet;
+  - `sent` = outbound `log_entries` in the week, plus Plan 2's proposals with `sent_at` in the week and `result_entry_id IS NULL` (no log entry yet; **(merged)** a sent proposal's entry is linked by `proposals.result_entry_id` and carries `source = 'proposal'`, so it is never counted twice), and never a `question` (`status = 'sent'` is how a question closes, and nothing left the house);
   - `received` = `raw_emails` in the week whose sender is not Martin's own;
   - `filed` = documents that TRANSITIONED into `filed` during the week: a `document_status_changes` row with `status = 'filed'` whose previous effective status (the row before it, or `documents.status` when it is the first) was not `filed`, counted once per document and split by that row's `actor`. Counting every `status = 'filed'` row would count a rename or retype of an already-filed document again, because every change row restates the status;
   - `tasksDone` = `task_status_changes` to `done`;
@@ -948,7 +957,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 - The job:
   1. Composes the summary.
   2. Records `weekly-summary` `ok` with `{ summary }` in `detail`. This is the stored copy `/weekly` reads, the same data-in-detail precedent as `rateLimitedUntil`, and no new table.
-  3. Calls Plan 2's `notify(deps, { kind: "weekly", level: "passive", title: "Je week", body: "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou", link: "verder://inbox", dedupKey: "weekly:<isoWeekKey>" })`. Counts only. The `dedupKey` makes a pg-boss retry a no-op instead of a second push.
+  3. Calls **(merged)** `deps.notify({ kind: "weekly", level: "passive", title: "Je week", body: "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou", link: "verder://inbox", dedupKey: "weekly:<isoWeekKey>" })` (`NotifyFn`, `notifier(db)` in `index.ts`, `fakeNotify()` in tests). Counts only. The `dedupKey` makes a pg-boss retry a no-op instead of a second push.
 - `GET /api/mobile/v1/weekly` returns the newest `weekly-summary` row's `detail.summary`, or 404 before the first Sunday.
 
 - [ ] **Step 1: Failing tests:**
@@ -970,7 +979,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 - [ ] **Step 1:** Record the ledger `max(seq)`, count and head. Run `env -u NODE_ENV pnpm -r test` and `env -u NODE_ENV pnpm --filter web build` locally.
 - [ ] **Step 2:** Back up `.env.prod` as `.env.prod.bak.2026-MM-DD-extras`. Add `LEEFGELD_WEEKLY_CENTS=10000` (only if Task 17's gate said build it) and `LEEFGELD_WEEK_START=<Task 17 Step 0's weekday>`. Add `LEEFGELD_IBAN` only if Task 18 Step 3 showed that the weekly-income rule picks no single account and Martin names the IBAN.
-- [ ] **Step 3:** Rsync (dry run, read every `deleting` line, then the real run). **Migrate M-B from the HOST before the images**; expected `drizzle.__drizzle_migrations` count **41**. Rebuild web and worker.
+- [ ] **Step 3:** Rsync (dry run, read every `deleting` line, then the real run). **Migrate M-B from the HOST before the images**; expected `drizzle.__drizzle_migrations` count **42**. Rebuild web and worker.
 - [ ] **Step 4: Predicted ledger delta from the deploy itself: none.** Tolerated background only, checked with the grouping query. `nightly-verify` OK. Then, from use: +1 `document.ingested` per shared file or kept recording (each with up to one auto-name and, if on, one auto-file `document.updated`, `actor = 'verder'`), and +1 `entry.created` per approved voice suggestion. Any other type is a stop.
 - [ ] **Step 5:** Install on the phone. Run the spec §9 checks that belong to these slices:
   - a push arrives on the locked phone in a Focus mode, and a time-sensitive one breaks through;
