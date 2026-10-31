@@ -69,12 +69,14 @@ fi
 
 model="claude-cli $(timeout -k 5 30 claude --version 2>/dev/null | head -1 | tr -cd '\40-\176' | cut -c1-100)"
 
-while IFS= read -r id; do
+# The ids come in on fd 3, NOT stdin: `docker compose exec -T` inside the loop
+# inherits stdin and would swallow the rest of the list, drafting only the first.
+while IFS= read -r id <&3; do
   if ! [[ "$id" =~ $UUID_RE ]]; then
     log "refusing a malformed id from proposals-pending"
     continue
   fi
-  if ! prompt=$(worker proposals-pending --prompt "$id"); then
+  if ! prompt=$(worker proposals-pending --prompt "$id" </dev/null); then
     # Superseded since the listing, or the exec failed: leave it for next run.
     log "$id no prompt (no longer drafting, or exec failed)"
     continue
@@ -97,6 +99,6 @@ while IFS= read -r id; do
   else
     log "$id proposals-store failed after ${took}s"
   fi
-done <<< "$ids"
+done 3<<< "$ids"
 
 exit 0
