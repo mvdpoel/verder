@@ -32,7 +32,8 @@
     "re-extract": "tsx src/ops/re-extract.ts",
     "fix-page-order": "tsx src/ops/fix-page-order.ts",
     "proposals-pending": "tsx src/ops/proposals-pending.ts",
-    "proposals-store": "tsx src/ops/proposals-store.ts"
+    "proposals-store": "tsx src/ops/proposals-store.ts",
+    "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",

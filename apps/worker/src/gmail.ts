@@ -2,7 +2,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
-import { PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";
@@ -278,9 +278,7 @@ export function retryAfterFrom(err: unknown): Date | null {
  * every path that calls the Gmail API on Martin's account. One account, one
  * user-rate limit — a 429 hit by ANY of them is a deadline for ALL of them.
  */
-//
-// `mail-agent` is spelled literally until Plan 2 Task 20 gives it a constant.
-export const GMAIL_RATE_LIMIT_WORKERS = ["gmail", PROPOSAL_SEND_WORKER_NAME, "mail-agent"] as const;
+export const GMAIL_RATE_LIMIT_WORKERS = ["gmail", PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME] as const;
 
 /**
  * The latest still-future retry instant any Gmail path recorded, or null.

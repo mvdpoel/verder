@@ -133,3 +133,15 @@ export const PROPOSAL_SEND_WORKER_NAME = "proposal-send";
  * reminding anyone of anything.
  */
 export const PROPOSAL_CLOCK_WORKER_NAME = "proposal-clock";
+
+/**
+ * Written by apps/worker/src/ops/mail-agent-watch.ts — one row per run of the
+ * host mail agent ops/mail-agent.sh (cron `7,22,37,52 * * * *`), a fail-closed
+ * empty watchlist and a rate-limited skip included — and read back by the
+ * `watcher` declaration in worker-health.ts AND by `rateLimitedUntil` in
+ * apps/worker/src/gmail.ts, which treats a `detail.retryAfter` on this name's
+ * newest row as an account-wide Gmail deadline. The mail agent calls Gmail on
+ * the same account as the poller, so a rename missed on the reader side would
+ * let a 429 it hit re-arm the lockout from every other path.
+ */
+export const MAIL_AGENT_WORKER_NAME = "mail-agent";

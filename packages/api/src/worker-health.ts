@@ -42,7 +42,7 @@
 import {
   DB_BACKUP_WORKER_NAME, DRAIN_WORKER_NAME, MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME,
   NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
-  PROPOSAL_SEND_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME,
 } from "./worker-names";
 
@@ -218,6 +218,10 @@ const DECLS: Record<string, WorkerDecl> = {
   // `boss.schedule("proposals.clock", "*/15 * * * *")`: one row per tick, so
   // silence means no reminder, no follow-up and no deadline alert will come.
   [PROPOSAL_CLOCK_WORKER_NAME]: { kind: "watcher", everyMs: 15 * MINUTE },
+  // The HOST mail agent (ops/mail-agent.sh, cron `7,22,37,52`) writes one row
+  // per run — the empty-watchlist refusal and the rate-limited skip included —
+  // so silence means the cron line or the host script died.
+  [MAIL_AGENT_WORKER_NAME]: { kind: "watcher", everyMs: 15 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },

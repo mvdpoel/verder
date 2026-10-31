@@ -76,11 +76,18 @@ export interface ProposalContext {
 }
 
 /** The mail agent's non-dossier message (Task 20), as stored in
- *  `proposals.trigger_external`. */
+ *  `proposals.trigger_external`. `attachments` and `thread` are what
+ *  `mail-agent-watch` adds: the attachments by NAME only (their bytes never
+ *  enter the vault, so they are nothing a draft may attach or cite), and the
+ *  earlier watchlist messages of the same Gmail thread from the same query. */
 export interface ExternalMail {
   gmailId: string; threadId: string; messageId: string | null;
   from: string; to: string; subject: string; date: string; body: string;
+  attachments?: ExternalAttachment[];
+  thread?: ExternalThreadMail[];
 }
+export interface ExternalAttachment { filename: string; mime: string; size: number }
+export interface ExternalThreadMail { gmailId: string; from: string; subject: string; date: string; body: string }
 
 export type ProposalTrigger =
   | { rawEmailId: string }
@@ -263,18 +270,29 @@ async function fromTask(deps: ContextDeps, taskId: string): Promise<Base> {
 async function fromExternal(deps: ContextDeps, m: ExternalMail): Promise<Base> {
   const sender = senderAddress(m.from);
   const own = ownMailboxAddresses();
+  // Named in the text, never as ContextItem attachments: those are vault
+  // documents a draft may attach, and these bytes are not in the vault.
+  const named = (m.attachments ?? []).map((a) => `${a.filename} (${a.mime}, ${Math.ceil(a.size / 1024)} kB)`);
+  const body = clip(m.body, TRIGGER_TEXT_CHARS) ?? "";
   const item: ContextItem = {
     type: "email", id: m.gmailId, label: `${m.date} · ${m.from} — ${m.subject}`,
-    text: clip(m.body, TRIGGER_TEXT_CHARS), attachments: [],
+    text: (named.length ? `${body}\n\n[Bijlagen, niet in het dossier: ${named.join("; ")}]` : body) || undefined,
+    attachments: [],
   };
+  const earlier: ContextItem[] = (m.thread ?? []).map((t) => ({
+    type: "email", id: t.gmailId, label: `${t.date} · ${t.from} — ${t.subject}`,
+    text: clip(t.body, THREAD_TEXT_CHARS), attachments: [],
+  }));
   const partyId = sender && !own.includes(sender) ? await resolveSenderPartyId(deps.db, sender) : undefined;
   const id = m.messageId ? normaliseMessageId(m.messageId) : null;
   return {
-    trigger: item, thread: [item], partyId: partyId ?? null,
+    trigger: item, thread: [...earlier, item], partyId: partyId ?? null,
     kbQuery: `${m.subject}\n${m.body.slice(0, KB_BODY_CHARS)}`,
     reply: { ...replyHeaders({ messageId: id, references: [] }), subject: replySubject(m.subject) },
     threadKey: `gmail:${m.threadId}`, gmailThreadId: m.threadId,
-    candidates: mailboxList(m.to),
+    // Earlier senders in the thread are candidates under the ordinary rule
+    // (operator list or a party), never admitted on the trigger's say-so.
+    candidates: [...mailboxList(m.to), ...(m.thread ?? []).map((t) => t.from)],
     // The watchlist already chose this correspondent (Task 20).
     admitted: sender ? [sender] : [], docIds: [], debtIds: [], taskIds: [],
   };

@@ -220,8 +220,9 @@ function httpStatus(err: unknown): number | null {
   return null;
 }
 
-/** The deadline a Gmail 429 sets, or null when this was not a 429. */
-function rateLimitDeadline(err: unknown, now: Date): Date | null {
+/** The deadline a Gmail 429 sets, or null when this was not a 429. Exported
+ *  for the mail agent (ops/mail-agent-watch.ts), which persists it the same way. */
+export function rateLimitDeadline(err: unknown, now: Date): Date | null {
   const when = retryAfterFrom(err);
   if (when) return when;
   return httpStatus(err) === 429 ? new Date(now.getTime() + DEFAULT_RATE_LIMIT_MS) : null;

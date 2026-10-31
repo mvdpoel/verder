@@ -452,3 +452,144 @@ exit "\${CLAUDE_RC:-0}"
     expect(t.drafterLog()).toContain(`${ID1} stored after`);
   });
 });
+
+describe("ops/mail-agent.sh", () => {
+  const SCRIPT = readFileSync(join(OPS, "mail-agent.sh"), "utf8");
+  const G1 = "18c0ffee00000001";
+  const G2 = "18c0ffee00000002";
+  const G0 = "18c0ffee00000000";
+
+  const AGENT_STUBS: Record<string, string> = {
+    timeout: `#!/bin/sh
+echo "timeout $*" >> "$STUB_LOG"
+while :; do case "$1" in -k) shift 2;; -*) shift;; ''|*[!0-9]*) break;; *) shift; break;; esac; done
+exec "$@"
+`,
+    docker: `#!/bin/sh
+echo "docker $*" >> "$STUB_LOG"
+case " $* " in
+  *" mail-agent-watch "*)
+    { echo "--- watch stdin"; cat; } >> "$STUB_STATE/watch"
+    [ -n "$WATCH_OUT" ] && printf '%s\\n' "$WATCH_OUT"
+    exit "\${WATCH_RC:-0}";;
+  *" proposals-store --external "*)
+    line=$(cat); echo "$line" >> "$STUB_STATE/store"
+    id=$(printf '%s' "$line" | sed -n 's/.*"gmailId":"\\([^"]*\\)".*/\\1/p')
+    echo "seen $id"; echo "proposals-store: external created p-$id"
+    exit 0;;
+esac
+exit 0
+`,
+  };
+
+  function agentTree(o: { watchlist?: string | null } = {}) {
+    const root = mkdtempSync(join(tmpdir(), "mail-agent-"));
+    trees.push(root);
+    for (const d of ["ops", "bin", "state", "home", "agent"]) mkdirSync(join(root, d), { recursive: true });
+    copyFileSync(join(OPS, "mail-agent.sh"), join(root, "ops/mail-agent.sh"));
+    for (const [name, body] of Object.entries(AGENT_STUBS)) {
+      writeFileSync(join(root, "bin", name), body);
+      chmodSync(join(root, "bin", name), 0o755);
+    }
+    const agent = join(root, "agent");
+    if (o.watchlist !== null) writeFileSync(join(agent, "watchlist.txt"), o.watchlist ?? "@bungas.example\n");
+    writeFileSync(join(root, "stub.log"), "");
+    const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
+    return {
+      root, agent,
+      log: () => read(join(root, "stub.log")),
+      watchIn: () => read(join(root, "state/watch")),
+      store: () => read(join(root, "state/store")),
+      seen: () => read(join(agent, "seen.txt")),
+      handled: () => read(join(agent, "handled.log")),
+      run(env: Record<string, string> = {}) {
+        const r = spawnSync("/bin/bash", [join(root, "ops/mail-agent.sh")], {
+          encoding: "utf8", timeout: 30_000,
+          env: {
+            PATH: `${join(root, "bin")}:/usr/bin:/bin`, HOME: join(root, "home"), MAIL_AGENT_DIR: agent,
+            STUB_LOG: join(root, "stub.log"), STUB_STATE: join(root, "state"), ...env,
+          },
+        });
+        return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+      },
+    };
+  }
+
+  const line = (id: string) => JSON.stringify({ gmailId: id, threadId: "t", subject: "Uw bestelling" });
+
+  it("every docker compose exec in mail-agent.sh is wrapped in timeout -k 5 60", () => {
+    const code = SCRIPT.split("\n").filter((l) => !l.trim().startsWith("#"));
+    const compose = code.map((l, i) => [l, code[i + 1] ?? ""] as const)
+      .filter(([l]) => l.includes("docker compose"));
+    expect(compose.length).toBeGreaterThan(0);
+    for (const [l, next] of compose) {
+      expect(l).toMatch(/timeout -k 5 60 docker compose/);
+      expect(`${l} ${next}`).toMatch(/exec -T worker/);
+    }
+    // And at run time, on the busy path and on the fail-closed one.
+    for (const t of [agentTree(), agentTree({ watchlist: null })]) {
+      t.run({ WATCH_OUT: `${line(G1)}\n${line(G2)}` });
+      const lines = t.log().trim().split("\n");
+      const dockerAt = lines.flatMap((l, i) => (l.startsWith("docker ") ? [i] : []));
+      expect(dockerAt.length).toBeGreaterThanOrEqual(1);
+      for (const i of dockerAt) expect(lines[i - 1]).toMatch(/^timeout -k 5 60 docker compose /);
+    }
+  });
+
+  it("pipes the watchlist and seen ids in, each line to proposals-store --external, ids to seen.txt", () => {
+    const t = agentTree({ watchlist: "# watch\n@bungas.example\n" });
+    writeFileSync(join(t.agent, "seen.txt"), `${G0}\n`);
+    const r = t.run({ WATCH_OUT: `${line(G1)}\n${line(G2)}` });
+    expect(r.status).toBe(0);
+    expect(t.watchIn()).toContain("@bungas.example");
+    expect(t.watchIn()).toContain(`seen:${G0}`);
+    expect(t.store().trim().split("\n")).toEqual([line(G1), line(G2)]);
+    expect(t.seen()).toBe(`${G0}\n${G1}\n${G2}\n`);
+    const handled = t.handled().trim().split("\n");
+    expect(handled).toHaveLength(2);
+    expect(handled[0]).toMatch(new RegExp(`^\\S+ ${G1} proposals-store: `));
+    expect(handled[0]).toContain(`proposals-store: external created p-${G1}`);
+  });
+
+  it("a missing watchlist still records the error row, through empty stdin, and exits 1", () => {
+    const t = agentTree({ watchlist: null });
+    const r = t.run({ WATCH_OUT: line(G1) });
+    expect(r.status).toBe(1);
+    expect(t.log()).toContain("mail-agent-watch");
+    expect(t.watchIn()).toBe("--- watch stdin\n");
+    expect(t.store()).toBe("");
+    expect(t.seen()).toBe("");
+  });
+
+  it("an empty watchlist file is the same as a missing one", () => {
+    const t = agentTree({ watchlist: "" });
+    expect(t.run().status).toBe(1);
+    expect(t.watchIn()).toBe("--- watch stdin\n");
+  });
+
+  it("nothing new: no store call, nothing appended", () => {
+    const t = agentTree();
+    expect(t.run({ WATCH_OUT: "" }).status).toBe(0);
+    expect(t.store()).toBe("");
+    expect(t.seen()).toBe("");
+    expect(t.handled()).toBe("");
+  });
+
+  it("refuses a line that is not a JSON object", () => {
+    const t = agentTree();
+    t.run({ WATCH_OUT: `rm -rf /\n${line(G1)}` });
+    expect(t.store().trim()).toBe(line(G1));
+  });
+
+  it("a failing watcher still hands on the lines it printed", () => {
+    const t = agentTree();
+    expect(t.run({ WATCH_OUT: line(G1), WATCH_RC: "1" }).status).toBe(0);
+    expect(t.seen()).toBe(`${G1}\n`);
+  });
+
+  it("keeps all state in the agent dir, nothing inside the repo tree", () => {
+    const t = agentTree();
+    t.run({ WATCH_OUT: line(G1) });
+    expect(readdirSync(t.root).sort()).toEqual(["agent", "bin", "home", "ops", "state", "stub.log"].sort());
+  });
+});
