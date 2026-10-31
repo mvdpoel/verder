@@ -1,15 +1,18 @@
 import SwiftUI
 
-/// Placeholder root on `void`, behind sign-in. Task 11 replaces the placeholder
-/// with the tab bar (Scan first).
+/// The tab bar behind sign-in: Scan opens first; Voor jou, Dossier and Meer.
 ///
-/// The app lock is judged here, once for the whole app. Task 11: the Scan tab
-/// goes in UN-gated (the camera opens before Face ID), every other tab gets
+/// The app lock is judged here, once for the whole app. The Scan tab goes in
+/// UN-gated (the camera opens before Face ID); every other tab gets
 /// `.lockGated(by: lock)` — see `AppLock` for the rule.
 struct RootView: View {
     let auth: AuthModel
     let lock: AppLock
+    let uploads: UploadCenter
     @Environment(\.scenePhase) private var scenePhase
+
+    enum TabID: Hashable { case scan, voorJou, dossier, meer }
+    @State private var tab: TabID = .scan
 
     var body: some View {
         #if DEBUG
@@ -26,8 +29,7 @@ struct RootView: View {
     private var signedInOrSignIn: some View {
         Group {
             if auth.isSignedIn {
-                // The account actions are the dossier's, not the camera's.
-                placeholder.lockGated(by: lock)
+                tabs
             } else {
                 SignInView(auth: auth)
             }
@@ -35,72 +37,50 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: lock.sceneDidEnterBackground()
-            case .active: lock.sceneDidBecomeActive()
+            case .active:
+                lock.sceneDidBecomeActive()
+                if auth.isSignedIn { Task { await uploads.start() } }
             default: break
             }
         }
         .onChange(of: auth.isSignedIn) { _, signedIn in
             if signedIn { lock.didSignIn() }
         }
+        // The one-time passkey offer lives in Meer; it only ever appears right
+        // after an interactive password sign-in, so Martin is looking.
+        .onChange(of: auth.passkeyOfferPending) { _, pending in
+            if pending { tab = .meer }
+        }
+        // Uploads only with a session: without one every send is a 401.
+        .task(id: auth.isSignedIn) {
+            if auth.isSignedIn { await uploads.start() }
+        }
+        // A NEW session (the stored one may have been rejected while
+        // `isSignedIn` stayed true): clear "log opnieuw in" and send. Here and
+        // not in ScanTab, because a first sign-in creates ScanTab with the
+        // new value already in place and its onChange would never fire.
+        .onChange(of: auth.sessionGeneration) { _, _ in
+            Task { await uploads.sessionRenewed() }
+        }
     }
 
-    /// Until Task 11's tabs: the mark, the one-time passkey offer after a
-    /// password sign-in, and the two account actions the passkey check on the
-    /// phone needs (add one even when the web already has one; sign out to
-    /// sign back in with it).
-    private var placeholder: some View {
-        ZStack {
-            Color.void.ignoresSafeArea()
-            VStack(spacing: 26) {
-                Spacer()
-                Text("verder")
-                    .font(.display(34, relativeTo: .largeTitle, weight: .ultraLight))
-                    .foregroundStyle(Color.inkBright)
-                Spacer()
-                if auth.passkeyOfferPending {
-                    passkeyOffer
-                }
-                if let message = auth.passkeyMessage {
-                    Text(message)
-                        .font(.display(14, relativeTo: .callout, weight: .light))
-                        .foregroundStyle(Color.ink)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                VStack(spacing: 12) {
-                    if !auth.passkeyOfferPending {
-                        AuthButton(title: "Passkey toevoegen", weight: .secondary, enabled: !auth.isBusy) {
-                            Task { await auth.addPasskey() }
-                        }
-                    }
-                    AuthButton(title: "Uitloggen", weight: .secondary, enabled: !auth.isBusy) {
-                        Task { await auth.signOut() }
-                    }
-                }
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            Tab("Scan", systemImage: "doc.viewfinder", value: TabID.scan) {
+                // NOT gated: plan Task 7 step 3.
+                ScanTab(center: uploads, auth: auth)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 26)
+            Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
+                ComingSoon(title: "Voor jou").lockGated(by: lock)
+            }
+            Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
+                ComingSoon(title: "Dossier").lockGated(by: lock)
+            }
+            Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
+                MoreTab(auth: auth, center: uploads).lockGated(by: lock)
+            }
         }
+        .tint(Color.signal)
         .preferredColorScheme(.dark)
-    }
-
-    private var passkeyOffer: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            Text("Passkey toevoegen?")
-                .font(.display(20, relativeTo: .title3, weight: .light))
-                .foregroundStyle(Color.inkBright)
-            Text("Dan log je voortaan in met Face ID, zonder wachtwoord.")
-                .font(.display(14, relativeTo: .callout, weight: .light))
-                .foregroundStyle(Color.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            AuthButton(title: "Passkey toevoegen", enabled: !auth.isBusy) {
-                Task { await auth.addPasskey() }
-            }
-            AuthButton(title: "Niet nu", weight: .secondary, enabled: !auth.isBusy) {
-                auth.dismissPasskeyOffer()
-            }
-        }
-        .padding(26)
-        .glassPanel()
     }
 }

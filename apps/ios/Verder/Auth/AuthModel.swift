@@ -23,6 +23,12 @@ final class AuthModel {
     private static let offerShownKey = "passkeyOfferShown"
 
     private(set) var isSignedIn: Bool
+    /// Bumped by every successful sign-in. `isSignedIn` cannot say "a NEW
+    /// session just arrived": when the server rejects a stored session (an
+    /// upload answered 401), the app still holds it, so Martin re-signs in
+    /// from the Scan tab while `isSignedIn` stays true. The upload queue
+    /// resumes on this changing.
+    private(set) var sessionGeneration = 0
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     /// After a password sign-in with no passkey on the account yet: offer one,
@@ -71,6 +77,7 @@ final class AuthModel {
             }
             try store.save(cookie)
             isSignedIn = true
+            sessionGeneration += 1
         } catch let error as APIError {
             errorMessage = Self.message(for: error)
             return
@@ -91,6 +98,7 @@ final class AuthModel {
         do {
             try await passkeys.signIn()
             isSignedIn = true
+            sessionGeneration += 1
         } catch PasskeyError.cancelled {
             // Martin closed the sheet; nothing to say.
         } catch let error as APIError {

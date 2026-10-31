@@ -32,6 +32,29 @@ struct AuthModelTests {
         #expect(model.errorMessage == nil)
     }
 
+    /// The upload queue resumes after a re-sign-in on THIS changing, because
+    /// `isSignedIn` was already true while the server rejected the session.
+    @Test func everySignInBumpsSessionGeneration() async {
+        let server = StubServer()
+        server.on { _ in .status(200, headers: ["Set-Cookie": Self.setCookie]) }
+        let store = InMemorySessionStore(SessionCookie(name: "__Secure-better-auth.session_token", value: "dead", expires: nil))
+        let model = AuthModel(client: server.client(store: store), store: store, defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        #expect(model.isSignedIn)
+        #expect(model.sessionGeneration == 0)
+        await model.signInWithPassword(email: "martin@vanderpoel.pro", password: "devpassdevpass")
+        #expect(model.sessionGeneration == 1)
+        #expect(store.load()?.value == "tok.sig")
+    }
+
+    @Test func failedSignInLeavesSessionGeneration() async {
+        let server = StubServer()
+        server.on { _ in .status(401) }
+        let store = InMemorySessionStore()
+        let model = AuthModel(client: server.client(store: store), store: store)
+        await model.signInWithPassword(email: "martin@vanderpoel.pro", password: "x")
+        #expect(model.sessionGeneration == 0)
+    }
+
     /// Review focus 5: the WAF's 10/min/IP answers 429. One request, one
     /// message, no retry loop that would keep the limit armed.
     @Test func rateLimitedShowsWaitAndDoesNotRetry() async {
