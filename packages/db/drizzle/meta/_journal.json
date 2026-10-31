@@ -260,6 +260,13 @@
       "when": 1793174400000,
       "tag": "0036_doc_source_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793606400000,
+      "tag": "0037_push_devices_notifications",
+      "breakpoints": true
     }
   ]
 }
