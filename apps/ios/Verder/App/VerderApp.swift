@@ -10,6 +10,10 @@ struct VerderApp: App {
     /// already reconnected to its delegate.
     @State private var uploads: UploadCenter
     @State private var push: PushRegistrar
+    /// Voor jou's data, the icon badge and the widget snapshot. One per
+    /// process, beside the registrar: the silent-push refresh (Task 8) and the
+    /// tab (Task 7) read the same store.
+    @State private var inbox: InboxStore
 
     init() {
         let store = KeychainSessionStore()
@@ -18,6 +22,7 @@ struct VerderApp: App {
         _auth = State(initialValue: auth)
         _uploads = State(initialValue: UploadCenter.live(client: client))
         _push = State(initialValue: PushRegistrar(client: client, auth: auth))
+        _inbox = State(initialValue: InboxStore(client: client, onUnauthorized: { auth.sessionRejected() }))
     }
 
     var body: some Scene {

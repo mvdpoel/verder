@@ -21,7 +21,7 @@ final class UploadCenter {
         static let saveFailed = "De scan kon niet worden bewaard. Probeer het opnieuw."
     }
 
-    static let appGroup = "group.pro.vanderpoel.verder"
+    static let appGroup = AppGroup.id
 
     private(set) var items: [UploadItem] = []
     private(set) var signInRequired = false
