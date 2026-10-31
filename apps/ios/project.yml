@@ -1,0 +1,73 @@
+name: Verder
+options:
+  bundleIdPrefix: pro.vanderpoel
+  deploymentTarget:
+    iOS: "27.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
+    DEVELOPMENT_TEAM: $(APPLE_TEAM_ID)
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_STRICT_CONCURRENCY: complete
+targets:
+  Verder:
+    type: application
+    platform: iOS
+    sources:
+      - path: Verder
+        excludes:
+          - Info.plist
+          - Verder.entitlements
+    info:
+      path: Verder/Info.plist
+      properties:
+        CFBundleDisplayName: verder
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
+        NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
+    entitlements:
+      path: Verder/Verder.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - webcredentials:verder.vanderpoel.pro?mode=developer
+        com.apple.security.application-groups:
+          - group.pro.vanderpoel.verder
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)pro.vanderpoel.verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder
+        PRODUCT_NAME: Verder
+  VerderTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [VerderTests]
+    dependencies:
+      - target: Verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Verder.app/Verder
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  Verder:
+    build:
+      targets:
+        Verder: all
+        VerderTests: [test]
+    test:
+      targets: [VerderTests]
