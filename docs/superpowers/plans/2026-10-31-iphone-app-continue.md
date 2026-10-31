@@ -40,8 +40,8 @@ Branch: `feat/iphone-app` (pushed to origin). Spec and plan commits are on `main
 3. **T12 end to end** on the real phone and homelab: cold launch < 2 s; Martin scans 5 real letters
    (one crumpled) to measure the cleanup; a duplicate re-send returns `duplicate: true`; record the
    numbers and add the iPhone app entry to CLAUDE.md. Report to Martin in Europe/Amsterdam time.
-4. Then write Plans 2 and 3 (spec slices 4–8). Martin still has to create the APNs .p8 key, and the
-   weekly leefgeld amount (spec §13) is still unanswered — ask him.
+4. Then write Plans 2 and 3 (spec slices 4–8). (Done 2026-10-31: APNs key NUYA9JS566 created,
+   .p8 in homelab `secrets/`; weekly leefgeld answered, € 100, spec §13.)
 
 ## Standing rules (verbatim from Martin)
 
