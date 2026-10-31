@@ -63,9 +63,19 @@ Branch: `feat/iphone-app` (pushed to origin). Spec and plan commits are on `main
 
 ## Moving from the old Mac
 
-`~/Workspace` is synced by Syncthing (MacbookPro ↔ macbook-m5), so the repo, `.git`, `.env`,
-`apps/web/.env.local`, the traineddata files and the untracked docs are already here. Do not run git
-in this repo on both Macs at once. Not synced, and still needed by hand:
+`~/Workspace` is synced by Syncthing (MacbookPro ↔ macbook-m5), so the working tree, `.env`,
+`apps/web/.env.local`, the traineddata files and the untracked docs are already here.
+`~/Workspace/.stignore` EXCLUDES `.git`, `node_modules`, `.next` and build output, so this Mac needs
+its own git repo and its own install. If `git status` fails here, attach git without touching the
+synced files:
+
+    git init -b feat/iphone-app && git remote add origin git@github.com:mvdpoel/verder.git
+    git fetch origin && git reset origin/feat/iphone-app && git branch -u origin/feat/iphone-app
+    git status   # expect only the untracked docs listed above, nothing modified
+    pnpm install
+
+Commits move between Macs by push/pull only. Edits made here show up as uncommitted changes in the
+old Mac's git, so work on one Mac at a time. Not synced, and still needed by hand:
 
 - Claude memory: `~/.claude/projects/-Users-martin-Workspace-mp-verder/memory/`.
 - The `~/.ssh` key for `ssh homelab` (or add a new key on the homelab).
