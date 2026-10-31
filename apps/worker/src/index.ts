@@ -19,6 +19,7 @@ import { storeDocumentText } from "./document-text";
 import { autoNameSafely } from "./auto-name";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
+import { notifyForMail } from "./mail/priority-notify";
 import { resolveAggregator } from "./receipts";
 import { notifier } from "./notify/notify";
 import { realEmbedPort } from "@verder/api/src/search/embed";
@@ -265,6 +266,12 @@ await boss.work("suggest.entry", async ([job]) => {
   // (and re-run) the entry suggestion above.
   try { await suggestTask({ db, llm }, rawEmailId); }
   catch (err) { await recordRun(db, "task-mine", "error", { rawEmailId, message: String(err) }); }
+  // Verder mail is always told (spec §6.4), after suggestEntry so the push
+  // carries its summary. Error-isolated the same way: notify() never throws,
+  // and this guard keeps a lookup failure from re-running the suggestion. A
+  // re-run of the job is deduplicated on `mail:<rawEmailId>`.
+  try { await notifyForMail({ db, notify }, rawEmailId); }
+  catch (err) { console.error(`notifyForMail ${rawEmailId}: ${String(err)}`); }
 });
 
 await boss.createQueue("suggest.docmeta");
