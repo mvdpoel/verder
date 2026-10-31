@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { canonicalJson } from "@verder/core";
-import { schema } from "@verder/db";
+import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";
@@ -45,27 +45,52 @@ function unchangedFromProposal(
     !(key in p) || canonicalJson(final[key] ?? null) === canonicalJson(p[key] ?? null));
 }
 
+type SuggestionRecord = typeof schema.suggestions.$inferSelect;
+
+/**
+ * The row as every reader sees it: the triggering email, the document by its
+ * EFFECTIVE state, and the document request. `list` and `get` both build it
+ * here, so the web queue and the phone's detail screen cannot drift apart.
+ */
+async function enrichSuggestion(db: Db, s: SuggestionRecord) {
+  return {
+    ...s,
+    // Pure and cheap: decided here so the card only calls the deep-retrieval
+    // procedure for suggestions that actually ask for a document.
+    documentRequest: documentRequestText(s.kind, s.proposed),
+    rawEmail: s.rawEmailId
+      ? (await db.select().from(schema.rawEmails)
+          .where(eq(schema.rawEmails.id, s.rawEmailId)))[0] ?? null
+      : null,
+    // effectiveDocument, never the raw row: a discard is APPENDED to
+    // document_status_changes and never written back, so documents.status
+    // keeps reading "inbox" forever.
+    document: s.documentId ? await effectiveDocument(db, s.documentId) : null,
+  };
+}
+
 export const suggestionsRouter = router({
+  /**
+   * One suggestion, enriched exactly as `list` enriches it (the phone's detail
+   * screen). Unlike `list` it does not hide a suggestion on a discarded or
+   * purged document: the caller asked for this id, and the document's
+   * effective status says what became of it.
+   */
+  get: protectedProcedure.input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [s] = await ctx.db.select().from(schema.suggestions)
+        .where(eq(schema.suggestions.id, input.id));
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Suggestion not found" });
+      return enrichSuggestion(ctx.db, s);
+    }),
+
   list: protectedProcedure.input(z.object({
     status: z.enum(["pending", "approved", "edited", "rejected", "needs-manual"]).default("pending"),
   })).query(async ({ ctx, input }) => {
     const rows = await ctx.db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.status, input.status))
       .orderBy(desc(schema.suggestions.createdAt));
-    const enriched = await Promise.all(rows.map(async (s) => ({
-      ...s,
-      // Pure and cheap: decided here so the card only calls the deep-retrieval
-      // procedure for suggestions that actually ask for a document.
-      documentRequest: documentRequestText(s.kind, s.proposed),
-      rawEmail: s.rawEmailId
-        ? (await ctx.db.select().from(schema.rawEmails)
-            .where(eq(schema.rawEmails.id, s.rawEmailId)))[0] ?? null
-        : null,
-      // effectiveDocument, never the raw row: a discard is APPENDED to
-      // document_status_changes and never written back, so documents.status
-      // keeps reading "inbox" forever.
-      document: s.documentId ? await effectiveDocument(ctx.db, s.documentId) : null,
-    })));
+    const enriched = await Promise.all(rows.map((s) => enrichSuggestion(ctx.db, s)));
     // Martin already judged this one junk; asking him to file it again is the
     // whole bug. A purged document is gone in a stronger sense still, and a
     // suggestion on it is one nothing can ever decide — left in, it holds the

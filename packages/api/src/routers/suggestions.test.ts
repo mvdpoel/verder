@@ -705,4 +705,21 @@ describe("suggestions router", () => {
     expect(payload.documentIds).toContain(doc.id);
     expect(sha256Hex(canonicalJson(payload))).toBe(ev.payloadHash);
   });
+  // --- get: one suggestion, for the phone (Plan 3 Task 3) --------------------
+
+  it("get returns the same enriched row list produces", async () => {
+    const s = await makeSuggestion();
+    const got = await caller().suggestions.get({ id: s.id });
+    const listed = (await caller().suggestions.list({ status: "pending" }))
+      .find((row) => row.id === s.id);
+    expect(got.id).toBe(s.id);
+    expect(got.rawEmail?.subject).toBe("Documents needed");
+    expect(got.document).toBeNull();
+    expect(got).toEqual(listed);
+  });
+
+  it("get answers NOT_FOUND for an unknown id", async () => {
+    await expect(caller().suggestions.get({ id: crypto.randomUUID() }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 });
