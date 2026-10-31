@@ -61,12 +61,11 @@ Branch: `feat/iphone-app` (pushed to origin). Spec and plan commits are on `main
   2026-10-28 13:54 CET. Waiting on Regio 3's reply.
 - The queue still holds the name suggestion "Betalingsachterstand CZ" for `scan0051.pdf`.
 
-## Moving from the old Mac (not in git — copy by hand)
+## Moving from the old Mac
 
-- `.env`, `apps/web/.env.local`, `apps/worker/{eng,nld}.traineddata` (Tesseract data).
-- Claude memory: `~/.claude/projects/-Users-martin-Workspace-mp-verder/memory/` (same path if the repo
-  lives at `~/Workspace/mp/verder`).
-- Untracked docs on the old Mac: `AGENTS.md`, `docs/mail-*`, `docs/superpowers/specs/2026-09-02-mail-*`,
-  `docs/superpowers/specs/PROMPT-mail-reanalysis.md`, `ops/cloudflare/`.
+`~/Workspace` is synced by Syncthing (MacbookPro ↔ macbook-m5), so the repo, `.git`, `.env`,
+`apps/web/.env.local`, the traineddata files and the untracked docs are already here. Do not run git
+in this repo on both Macs at once. Not synced, and still needed by hand:
+
+- Claude memory: `~/.claude/projects/-Users-martin-Workspace-mp-verder/memory/`.
 - The `~/.ssh` key for `ssh homelab` (or add a new key on the homelab).
-- Mail drafts in `~/Downloads/Regio 3 - */` (optional, all already sent).
