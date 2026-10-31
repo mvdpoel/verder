@@ -167,22 +167,18 @@ describe("letterSender", () => {
       .toEqual({ kind: "verder" });
   });
 
-  it("a creditor's exact name or email is creditor", () => {
-    expect(letterSender(sets, "Afzender: KAMER VAN\nKOOPHANDEL, Utrecht", creditors))
-      .toEqual({ kind: "creditor", partyId: "p-kvk" });
+  it("a creditor's email is creditor", () => {
     expect(letterSender(sets, "Reageer aan Incasso@Stam.nl a.u.b.", creditors))
       .toEqual({ kind: "creditor", partyId: "p-stam" });
-    // Part of a longer word is not the name.
-    expect(letterSender(sets, "Kamer van Koophandelsregister", creditors)).toBeNull();
   });
 
-  it("creditor name shorter than 6 is ignored", () => {
-    expect(letterSender(sets, "Factuur van Bol en Het CAK", [
-      { partyId: "p-bol", name: "Bol" },
-      { partyId: "p-x", name: " CAK  " },
-    ])).toBeNull();
-    // "Het CAK" is 7 characters and does count.
-    expect(letterSender(sets, "Factuur van Het CAK", creditors))
-      .toEqual({ kind: "creditor", partyId: "p-cak" });
+  // Measured on production 2026-10-31: "ingeschreven bij de Kamer van
+  // Koophandel" sits in every contract; the name rule gave 14 false KvK hits.
+  it("a creditor's NAME alone is never creditor", () => {
+    expect(letterSender(sets, "Afzender: KAMER VAN\nKOOPHANDEL, Utrecht", creditors)).toBeNull();
+    expect(letterSender(sets, "ingeschreven bij de Kamer van Koophandel onder nummer 54135591", creditors))
+      .toBeNull();
+    expect(letterSender(sets, "Factuur van Het CAK", creditors)).toBeNull();
+    expect(letterSender(sets, "Hoogachtend, Stam Gerechtsdeurwaarders", creditors)).toBeNull();
   });
 });

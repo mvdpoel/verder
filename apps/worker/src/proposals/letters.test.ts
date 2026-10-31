@@ -132,10 +132,12 @@ describe("proposalForLetter", () => {
   it("a creditor letter notifies active and guesses the creditor as party", async () => {
     await isolated(async (db) => {
       const name = `Incassobureau Testfixture ${uid()}`;
+      const email = `incasso-${uid()}@letters.example`;
       const [party] = await db.insert(schema.parties)
-        .values({ kind: "organization", name }).returning();
+        .values({ kind: "organization", name, email }).returning();
       await db.insert(schema.debts).values({ creditorName: name, creditorPartyId: party.id, claimedCents: 100 });
-      const text = `${name}\nBetreft: openstaande vordering\nGeachte heer,`;
+      // Recognised by its EMAIL: a creditor's name alone never counts (priority.ts).
+      const text = `${name}\n${email}\nBetreft: openstaande vordering\nGeachte heer,`;
       const d = await letter(db, { text });
       const r = recorder();
       await proposalForLetter(deps(db, r.fn), d.id, text);

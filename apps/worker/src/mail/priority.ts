@@ -121,10 +121,6 @@ function hasAddressToken(hay: string, addr: string): boolean {
 
 /** Collapse OCR line breaks and runs of spaces, so a name broken over two
  *  lines of a letterhead still reads as the name. */
-const squash = (s: string): string => s.replace(/\s+/g, " ").trim();
-
-/** Shorter names ("Bol", "CAK") are words a letter uses for other reasons. */
-const MIN_CREDITOR_NAME = 6;
 
 /**
  * WHO A SCANNED LETTER IS FROM — a GUESS, because the text came from OCR
@@ -135,15 +131,19 @@ const MIN_CREDITOR_NAME = 6;
  *     token — `@verdergroep.nl` in an address, `verdergroep.nl` in a URL or a
  *     letterhead — or a whole Verder address from the list. The bare word
  *     "verder" ("wij gaan verder") is ordinary Dutch and never counts.
- *   - otherwise `creditor` when it carries a creditor party's email, or its
- *     exact name (case-insensitive, at least MIN_CREDITOR_NAME characters, as
- *     a whole phrase).
+ *   - otherwise `creditor` when it carries a creditor party's EMAIL ADDRESS
+ *     as a whole token. NEVER the creditor's name: measured 2026-10-31 over
+ *     the 163 non-discarded production scans and uploads, the name rule gave
+ *     18 creditor hits of which at most 4 were real — "Kamer van Koophandel"
+ *     appears in every contract, oprichting and dissolution ("ingeschreven bij
+ *     de Kamer van Koophandel"), 14 times, none a letter FROM the KvK — while
+ *     the email rule gave exactly 1 hit (Stam), and it was real. A missed
+ *     creditor push costs less than a false one, because each hit becomes a
+ *     push AND a drafted reply to the wrong organisation.
  *   - otherwise `null`.
  *
  * Domains and addresses are folded with `asciiLower`, like every address in
- * this module. A NAME is matched with `toLowerCase`: names are not addresses
- * (`Het CAK`, `Woonhave`, Unicode is legitimate there), and a wrong creditor
- * hit costs only an `active` push.
+ * this module.
  */
 export type LetterSender = { kind: "verder" } | { kind: "creditor"; partyId: string };
 
@@ -161,13 +161,6 @@ export function letterSender(
   for (const c of creditorNames) {
     const [email] = sanitizeAddresses([c.email ?? ""], sets.own, "party").addrs;
     if (email && hasAddressToken(folded, email)) return { kind: "creditor", partyId: c.partyId };
-  }
-  const prose = squash(text).toLowerCase();
-  for (const c of creditorNames) {
-    const name = squash(c.name).toLowerCase();
-    if (name.length < MIN_CREDITOR_NAME) continue;
-    const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(name)}(?![\\p{L}\\p{N}])`, "u");
-    if (re.test(prose)) return { kind: "creditor", partyId: c.partyId };
   }
   return null;
 }
