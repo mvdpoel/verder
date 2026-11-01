@@ -3,7 +3,8 @@ import Observation
 
 /// Where a tapped notification leads, parsed from the push payload's `link`
 /// (`verder://proposal/<uuid>`, `verder://suggestion/<uuid>`,
-/// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`).
+/// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`,
+/// `verder://weekly`).
 ///
 /// The payload comes off the wire, so the parse is strict: exactly the scheme,
 /// a known host, no user, port, query or fragment, and exactly one UUID path
@@ -21,6 +22,10 @@ enum DeepLink: Equatable, Sendable {
     /// `verder://voice`: the voice quick-log (the home screen quick action,
     /// plan 3 Task 25). A sheet over whatever tab is showing, never a tab.
     case voice
+    /// `verder://weekly`: the Weekoverzicht (plan 3 Task 26), on Meer. The
+    /// Sunday push itself carries `verder://inbox`; `NotificationRouter`
+    /// sends a tap on its `WEEKLY` category here.
+    case weekly
     case none
 
     init(userInfo: [AnyHashable: Any]) {
@@ -42,6 +47,8 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .inbox : .none
         case "voice":
             return parts.path.isEmpty ? .voice : .none
+        case "weekly":
+            return parts.path.isEmpty ? .weekly : .none
         case "proposal", "suggestion", "task", "document":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
@@ -62,6 +69,7 @@ enum DeepLink: Equatable, Sendable {
         switch self {
         case .proposal, .suggestion, .task, .inbox: .voorJou
         case .document: .dossier
+        case .weekly: .meer
         case .voice, .none: nil
         }
     }

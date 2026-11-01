@@ -30,8 +30,11 @@ struct RootView: View {
     /// The Dossier stack, held here for the same reason: a document link
     /// that lands on the lock screen opens once the app is unlocked.
     @State private var dossierPath: [DossierRoute] = []
+    /// The Meer stack, held here for the same reason: a tap on the Sunday
+    /// push opens the Weekoverzicht once the app is unlocked.
+    @State private var meerPath: [MoreRoute] = []
     #if DEBUG
-    /// `-route geld|weekly|voice` (Verder/Fixtures), and whether the launch's
+    /// `-route geld|voice` (Verder/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
     @State private var fixtureScreen: FixtureLaunch.Screen?
     @State private var fixtureStartApplied = false
@@ -100,6 +103,7 @@ struct RootView: View {
             case .inbox: inboxPath = []
             case .document(let id): dossierPath = [.document(id: id.uuidString.lowercased(), title: nil)]
             case .voice: voice.open()
+            case .weekly: meerPath = [.weekly]
             case .none: break
             }
         }
@@ -171,8 +175,12 @@ struct RootView: View {
                     .lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
-                MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier,
-                        openVoice: { voice.open() }, forgetVoice: { voice.close() }).lockGated(by: lock)
+                MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier, path: $meerPath,
+                        openVoice: { voice.open() }, forgetVoice: { voice.close() },
+                        openVoorJou: {
+                            inboxPath = []
+                            tab = .voorJou
+                        }).lockGated(by: lock)
             }
         }
         .tint(Color.signal)

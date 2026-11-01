@@ -35,7 +35,7 @@ struct FixtureLaunch: Equatable, Sendable {
     }
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
-        case geld, weekly, voice
+        case geld, voice
         var id: String { rawValue }
     }
 
@@ -75,6 +75,8 @@ struct FixtureLaunch: Equatable, Sendable {
     /// screen exactly the way a real tap would.
     static func parseRoute(_ raw: String) throws(ParseError) -> Route {
         if let screen = Screen(rawValue: raw) { return .screen(screen) }
+        // The Weekoverzicht has a link of its own: a tap on the Sunday push.
+        if raw == "weekly" { return .link(.weekly) }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)

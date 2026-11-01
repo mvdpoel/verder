@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// A screen on the Meer stack that something outside Meer can open: the
+/// Weekoverzicht, from a tap on the Sunday push (`DeepLink.weekly`).
+enum MoreRoute: Hashable { case weekly }
+
 /// Meer: the account actions (passkey, sign out) that lived on the
 /// pre-tab placeholder, one developer action for the end-to-end check, and
 /// the promise of the rest. Lock-gated like every tab but Scan.
@@ -10,18 +14,29 @@ struct MoreTab: View {
     let money: MoneyStore
     /// Forgotten on sign-out: the phone keeps no dossier for nobody.
     let dossier: DossierModel
+    /// The Meer stack (RootView holds it, so a push can open the Weekoverzicht).
+    @Binding var path: [MoreRoute]
     /// Opens "Gesprek vastleggen" (RootView holds the sheet, which the home
     /// screen quick action opens too).
     let openVoice: () -> Void
     /// Signing out on purpose drops a voice log waiting from an earlier 401
     /// (`VoiceLogSession.close`); only a REJECTED session keeps it.
     let forgetVoice: () -> Void
+    /// The Weekoverzicht's one next step.
+    let openVoorJou: () -> Void
 
     @State private var confirmResend = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             page.toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: MoreRoute.self) { route in
+                    switch route {
+                    case .weekly:
+                        WeeklyView(client: auth.client, onUnauthorized: { auth.sessionRejected() },
+                                   openVoorJou: openVoorJou)
+                    }
+                }
         }
     }
 
@@ -37,6 +52,7 @@ struct MoreTab: View {
                     if auth.passkeyOfferPending { passkeyOffer }
 
                     geld
+                    weeklyRow
                     voiceRow
                     account
                     notifications
@@ -66,6 +82,26 @@ struct MoreTab: View {
         } label: {
             HStack {
                 Text("Geld")
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.inkBright)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .glassPanel()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Weekoverzicht (Task 26): the Sunday summary.
+    private var weeklyRow: some View {
+        NavigationLink(value: MoreRoute.weekly) {
+            HStack {
+                Text(WeeklyScreen.title)
                     .font(.display(17, relativeTo: .body, weight: .medium))
                     .foregroundStyle(Color.inkBright)
                 Spacer(minLength: 8)
@@ -222,29 +258,5 @@ struct MoreTab: View {
         }
         .padding(26)
         .glassPanel()
-    }
-}
-
-/// A screen whose slice has not landed yet (Weekoverzicht).
-struct ComingSoon: View {
-    let title: String
-
-    var body: some View {
-        ZStack {
-            Color.void.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 13) {
-                Text(title)
-                    .font(.display(26, relativeTo: .title, weight: .ultraLight))
-                    .foregroundStyle(Color.inkBright)
-                Text("komt binnenkort")
-                    .font(.mono(12, relativeTo: .caption))
-                    .foregroundStyle(Color.inkDim)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 26)
-        }
-        .preferredColorScheme(.dark)
     }
 }

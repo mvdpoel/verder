@@ -84,6 +84,12 @@ struct FixtureTests {
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
         _ = try Self.decode([PartyDTO].self, name, "parties")
         _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
+        // Every fixture but `empty` (404: no Sunday yet) holds a summary.
+        if let weekly = try Self.body(name, "weekly") {
+            _ = try APIClient.jsonDecoder.decode(WeeklyDTO.self, from: weekly)
+        } else {
+            #expect(name == "empty")
+        }
     }
 
     @Test func theFewCaseIsTheDataDocsFourInServerOrder() throws {

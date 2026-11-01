@@ -116,10 +116,11 @@ struct FixturePermission: NotificationPermission {
     func request() async -> Bool { true }
 }
 
-/// `-route geld|weekly|voice`: the screens with no deep link. Geld is the
-/// real screen on the fixture's money store (Task 19); voice is the real voice
-/// log (Task 25), already recorded and transcribed so the capture shows the
-/// editor; until Task 26 builds its screen, weekly is the ComingSoon placeholder.
+/// `-route geld|voice`: the screens with no deep link. Geld is the real screen
+/// on the fixture's money store (Task 19); voice is the real voice log (Task
+/// 25), already recorded and transcribed so the capture shows the editor.
+/// `-route weekly` is a LINK (`DeepLink.weekly`, the path a tap on the Sunday
+/// push takes) and opens the real Weekoverzicht on Meer.
 struct FixtureScreen: View {
     let screen: FixtureLaunch.Screen
     let money: MoneyStore
@@ -144,8 +145,6 @@ struct FixtureScreen: View {
                         await model.stopRecording()
                     }
                 }
-            case .weekly:
-                ComingSoon(title: title)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -159,14 +158,6 @@ struct FixtureScreen: View {
             .font(.display(14, relativeTo: .callout, weight: .regular))
             .foregroundStyle(Color.signal)
             .padding(16)
-    }
-
-    private var title: String {
-        switch screen {
-        case .geld: "Geld"
-        case .weekly: "Weekoverzicht"
-        case .voice: "Gesprek vastleggen"
-        }
     }
 }
 #endif

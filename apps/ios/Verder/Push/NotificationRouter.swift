@@ -9,6 +9,8 @@ import UserNotifications
 ///   `POST /api/mobile/v1/proposals/<id>/answer { revision, option }` — Plan
 ///   2's body, with the revision the push announced (Task 5). That is the ONE
 ///   thing an action can run, and it sends nothing outward.
+/// - A tap on the Sunday summary (`WEEKLY`) opens the Weekoverzicht, whatever
+///   its `link` says (the worker sends `verder://inbox`).
 /// - Anything else opens at most; nothing else is reachable.
 ///
 /// An answer that does not go through — no revision in the push, no session,
@@ -24,6 +26,9 @@ final class NotificationRouter {
         case notAnswered(DeepLink)
         case ignored
     }
+
+    /// `CATEGORY.weekly` in apps/worker/src/notify/notify.ts.
+    static let weeklyCategory = "WEEKLY"
 
     private let links: DeepLinkInbox
     private let client: @MainActor () -> APIClient?
@@ -51,7 +56,14 @@ final class NotificationRouter {
 
         guard let proposalId = QuestionCategories.proposalId(fromCategory: category),
               let option = QuestionCategories.optionIndex(fromAction: action)
-        else { return open(DeepLink(userInfo: userInfo)) }
+        else {
+            // A tap (or "Bekijken") on the Sunday summary opens the summary.
+            if category == Self.weeklyCategory,
+               action == UNNotificationDefaultActionIdentifier || action == NotificationCategories.openAction {
+                return open(.weekly)
+            }
+            return open(DeepLink(userInfo: userInfo))
+        }
 
         // The category names the question its buttons belong to; a link that
         // names another proposal is answered for neither.
