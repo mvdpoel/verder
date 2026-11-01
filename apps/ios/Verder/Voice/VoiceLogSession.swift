@@ -70,14 +70,18 @@ final class VoiceLogSession {
 
     /// The session ended (a 401, or signed out). Unsent work waits in memory
     /// for the next sign-in; an empty log is simply closed, so no empty sheet
-    /// pops up afterwards.
-    func sessionEnded() {
-        guard let model else { isPresented = false; return }
+    /// pops up afterwards. Returns the stop-and-transcribe of a recording
+    /// that was in progress, if there was one.
+    @discardableResult
+    func sessionEnded() -> Task<Void, Never>? {
+        guard let model else { isPresented = false; return nil }
         if model.holdsUnsentWork || model.phase == .recording {
-            sheetDisappeared()
+            let stopping = sheetDisappeared()
             isPresented = false
+            return stopping
         } else {
             close()
+            return nil
         }
     }
 

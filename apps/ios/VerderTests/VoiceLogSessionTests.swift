@@ -147,4 +147,63 @@ struct VoiceLogSessionTests {
         #expect(!v.isPresented)
         #expect(v.model == nil)
     }
+
+    // `sessionEnded()` / `sessionStarted()` ON THEIR OWN — with no
+    // `presentationChanged(false)` in between. Whether SwiftUI writes `false`
+    // into the sheet binding when sign-in replaces the tabs is not known, so
+    // these two calls must hold the behaviour without its help.
+
+    /// (a) An empty open log is closed by the session ending alone: no empty
+    /// sheet after the next sign-in.
+    @Test func sessionEndedAloneClosesAnEmptyLog() throws {
+        let v = session(server(voiceStatus: 200), dir: try scratchDir())
+        v.open()
+        #expect(v.isPresented)
+        v.sessionEnded()
+        #expect(v.model == nil)
+        #expect(!v.isPresented)
+        v.sessionStarted()
+        #expect(!v.isPresented)
+        #expect(v.model == nil)
+    }
+
+    /// (b) Unsent work survives the session ending alone and comes back on
+    /// the next sign-in.
+    @Test func sessionEndedAloneKeepsUnsentWork() async throws {
+        let dir = try scratchDir()
+        let v = session(server(voiceStatus: 401), dir: dir)
+        let m = try await unsentAfter401(v)
+        v.sessionEnded()
+        #expect(!v.isPresented)
+        #expect(v.model === m)
+        #expect(m.transcript == "Gebeld met Lindehof: akkoord.")
+        #expect(m.hasRecording)
+        #expect(try files(dir).count == 1)
+        v.sessionStarted()
+        #expect(v.isPresented)
+        #expect(v.model === m)
+    }
+
+    /// (c) A 401 arriving mid-recording: the recording is stopped and
+    /// transcribed, and kept for the next sign-in.
+    @Test func sessionEndedAloneWhileRecordingStopsAndKeeps() async throws {
+        let dir = try scratchDir()
+        let v = session(server(voiceStatus: 200), dir: dir)
+        v.open()
+        let m = try #require(v.model)
+        await m.prepare()
+        await m.startRecording()
+        #expect(m.phase == .recording)
+        let stopping = v.sessionEnded()
+        #expect(stopping != nil)
+        await stopping?.value
+        #expect(m.phase == .editing)
+        #expect(!v.isPresented)
+        #expect(v.model === m)
+        #expect(m.transcript == "Gebeld met Lindehof.")
+        #expect(m.hasRecording)
+        v.sessionStarted()
+        #expect(v.isPresented)
+        #expect(v.model === m)
+    }
 }
