@@ -79,6 +79,8 @@ struct PlatformOwnerAuthenticator: DeviceOwnerAuthenticator {
 /// THE HOOK FOR TASK 11 (and every later tab): gating is per AREA, not per app.
 /// - The Scan tab is `.capture` and is shown WITHOUT `.lockGated(by:)`; it never
 ///   reads `isLocked`, and must not start the Face ID prompt by itself.
+/// - Overzicht is `.glance`: shown WITHOUT `.lockGated(by:)`, it reads
+///   `revealsCaseContent` and renders counts only while locked.
 /// - Every other tab (Voor jou, Dossier, Meer) wraps its content in
 ///   `.lockGated(by: appLock)`, which covers it with `LockView` while
 ///   `isGated(.dossier)` and prompts when that tab is shown.
@@ -97,8 +99,16 @@ final class AppLock {
         static let unavailable = "Stel een toegangscode in op je iPhone; daarna kun je verder ontgrendelen."
     }
 
-    /// What a screen shows. `capture` is open while locked; everything else is not.
-    enum Area { case capture, dossier }
+    /// What a screen shows. `capture` and `glance` are open while locked;
+    /// everything else is not.
+    /// - `glance` is Overzicht (Martin, 2026-11-01: "ungated counts"): it opens
+    ///   without Face ID and shows NUMBERS ONLY — no title, no name, no note —
+    ///   until `revealsCaseContent`. Tapping into anything lands on a gated tab.
+    enum Area { case capture, glance, dossier }
+
+    /// Whether an open-while-locked screen may show case content (titles,
+    /// names, notes). Counts and amounts never need it.
+    var revealsCaseContent: Bool { !isLocked }
 
     private(set) var isLocked: Bool
     /// The outcome of the last unlock attempt, for the lock screen. Nil after a
@@ -123,7 +133,7 @@ final class AppLock {
 
     func isGated(_ area: Area) -> Bool {
         switch area {
-        case .capture: false
+        case .capture, .glance: false
         case .dossier: isLocked
         }
     }

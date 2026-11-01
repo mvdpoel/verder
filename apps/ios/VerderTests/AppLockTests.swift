@@ -161,6 +161,18 @@ struct AppLockTests {
         #expect(!lock.isGated(.dossier))
     }
 
+    /// Martin, 2026-11-01: Overzicht opens WITHOUT Face ID, showing counts only.
+    /// The glance is open while locked, exactly like capture.
+    @Test func glanceIsOpenWhileLocked() async {
+        let (lock, auth) = make(clock: Clock(t0))
+        #expect(lock.isLocked)
+        #expect(!lock.isGated(.glance))
+        #expect(!lock.revealsCaseContent)
+        #expect(auth.calls == 0)
+        await lock.unlock()
+        #expect(lock.revealsCaseContent)
+    }
+
     /// Two taps (or the auto-prompt racing a tap) ask once.
     @Test func concurrentUnlocksAskOnce() async {
         let (lock, auth) = make(clock: Clock(t0))

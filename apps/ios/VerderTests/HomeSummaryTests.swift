@@ -10,7 +10,15 @@ struct HomeSummaryTests {
 
     @Test func previewKeepsTheServersOrderAndStopsAtThree() {
         let inbox = InboxDTO(count: 5, items: (1...5).map(item), doneByVerder: [])
-        #expect(HomeSummary.preview(inbox).map(\.id) == ["t1", "t2", "t3"])
+        #expect(HomeSummary.preview(inbox, revealed: true).map(\.id) == ["t1", "t2", "t3"])
+    }
+
+    /// Locked, the glance shows the count and NO titles: the preview is empty,
+    /// so no title exists in the view tree for VoiceOver to read either.
+    @Test func lockedPreviewHoldsNoTitles() {
+        let inbox = InboxDTO(count: 5, items: (1...5).map(item), doneByVerder: [])
+        #expect(HomeSummary.preview(inbox, revealed: false).isEmpty)
+        #expect(HomeSummary.preview(inbox, revealed: true).count == 3)
     }
 
     @Test func waitingLineSaysNothingWaitsAtZero() {

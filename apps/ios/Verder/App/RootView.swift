@@ -4,10 +4,11 @@ import SwiftUI
 /// app should open on a dashboard, showing current state"); then Voor jou,
 /// Scan, Dossier and Meer.
 ///
-/// The app lock is judged here, once for the whole app. The Scan tab goes in
-/// UN-gated (the camera opens before Face ID); every other tab gets
-/// `.lockGated(by: lock)` — see `AppLock` for the rule. Opening on Overzicht
-/// therefore means a Face ID check on every open; scanning is one tap away.
+/// The app lock is judged here, once for the whole app. Scan and Overzicht go
+/// in UN-gated: the camera opens before Face ID, and Overzicht shows counts
+/// only until unlock (Martin, 2026-11-01). Every other tab gets
+/// `.lockGated(by: lock)` — see `AppLock` for the rule. So opening the app
+/// asks nothing; Face ID comes the moment Martin taps into case content.
 struct RootView: View {
     let auth: AuthModel
     let lock: AppLock
@@ -118,13 +119,13 @@ struct RootView: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
-                HomeTab(store: inbox, uploads: uploads,
+                // NOT gated: `.glance`, counts only while locked.
+                HomeTab(store: inbox, uploads: uploads, lock: lock,
                         openInbox: { route in
                             inboxPath = route.map { [$0] } ?? []
                             tab = .voorJou
                         },
                         openScan: { tab = .scan })
-                    .lockGated(by: lock)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,

@@ -27,9 +27,13 @@ enum HomeSummary {
         }
     }
 
-    /// The first items in the SERVER's order — never re-ranked here.
-    static func preview(_ inbox: InboxDTO) -> [WaitingItem] {
-        Array(inbox.items.prefix(previewCount))
+    static let lockedHeadline = "Ontgrendel om te zien waar het nu op wacht."
+    static let reveal = "Toon details"
+
+    /// The first items in the SERVER's order — never re-ranked here. Empty
+    /// while the app is locked: the glance shows counts, never titles.
+    static func preview(_ inbox: InboxDTO, revealed: Bool) -> [WaitingItem] {
+        revealed ? Array(inbox.items.prefix(previewCount)) : []
     }
 
     /// "14 jul. 2026", in Amsterdam — the case's calendar, not the phone's.
@@ -54,9 +58,15 @@ enum HomeSummary {
 /// The tab the app opens on: the current state of the case at a glance —
 /// where it waits, what waits on Martin, the tasks, and the scan queue.
 /// Read-only: every action lives one tap further, on the screen that owns it.
+///
+/// OPEN WHILE LOCKED (`AppLock.Area.glance`, Martin 2026-11-01): it shows
+/// counts and amounts only until `lock.revealsCaseContent`; the headline and
+/// the waiting preview are not even built while locked. Every tap lands on a
+/// gated tab, which asks for Face ID there.
 struct HomeTab: View {
     let store: InboxStore
     let uploads: UploadCenter
+    let lock: AppLock
     /// Opens Voor jou, optionally straight onto one item.
     let openInbox: (InboxRoute?) -> Void
     let openScan: () -> Void
@@ -93,7 +103,21 @@ struct HomeTab: View {
 
     @ViewBuilder private var headlineCard: some View {
         card(label: HomeSummary.headlineLabel) {
-            if let h = store.summary?.headline {
+            if !lock.revealsCaseContent {
+                VStack(alignment: .leading, spacing: 10) {
+                    muted(HomeSummary.lockedHeadline)
+                    Button {
+                        Task { await lock.unlock() }
+                    } label: {
+                        Label(HomeSummary.reveal, systemImage: "faceid")
+                            .font(.display(14, relativeTo: .callout, weight: .regular))
+                            .foregroundStyle(Color.signal)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(lock.isUnlocking)
+                }
+            } else if let h = store.summary?.headline {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(h.stopTitle)
                         .font(.display(18, relativeTo: .title3, weight: .regular))
@@ -135,7 +159,7 @@ struct HomeTab: View {
                                 .font(.display(15, relativeTo: .body, weight: .light))
                                 .foregroundStyle(Color.ink)
                         }
-                        ForEach(HomeSummary.preview(inbox)) { item in
+                        ForEach(HomeSummary.preview(inbox, revealed: lock.revealsCaseContent)) { item in
                             previewRow(item)
                         }
                     }
