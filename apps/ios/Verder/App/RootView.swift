@@ -1,10 +1,13 @@
 import SwiftUI
 
-/// The tab bar behind sign-in: Scan opens first; Voor jou, Dossier and Meer.
+/// The tab bar behind sign-in: Overzicht opens first (Martin, 2026-11-01: "the
+/// app should open on a dashboard, showing current state"); then Voor jou,
+/// Scan, Dossier and Meer.
 ///
 /// The app lock is judged here, once for the whole app. The Scan tab goes in
 /// UN-gated (the camera opens before Face ID); every other tab gets
-/// `.lockGated(by: lock)` — see `AppLock` for the rule.
+/// `.lockGated(by: lock)` — see `AppLock` for the rule. Opening on Overzicht
+/// therefore means a Face ID check on every open; scanning is one tap away.
 struct RootView: View {
     let auth: AuthModel
     let lock: AppLock
@@ -14,8 +17,8 @@ struct RootView: View {
     let inbox: InboxStore
     @Environment(\.scenePhase) private var scenePhase
 
-    enum TabID: Hashable { case scan, voorJou, dossier, meer }
-    @State private var tab: TabID = .scan
+    enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
+    @State private var tab: TabID = .home
     /// The Voor jou stack. Held HERE, not in the tab: a gated tab's content
     /// does not exist while locked, so a deep link that arrives on the lock
     /// screen must wait somewhere that survives it.
@@ -114,14 +117,23 @@ struct RootView: View {
 
     private var tabs: some View {
         TabView(selection: $tab) {
-            Tab("Scan", systemImage: "doc.viewfinder", value: TabID.scan) {
-                // NOT gated: plan Task 7 step 3.
-                ScanTab(center: uploads, auth: auth)
+            Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
+                HomeTab(store: inbox, uploads: uploads,
+                        openInbox: { route in
+                            inboxPath = route.map { [$0] } ?? []
+                            tab = .voorJou
+                        },
+                        openScan: { tab = .scan })
+                    .lockGated(by: lock)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
                            onUnauthorized: { auth.sessionRejected() })
                     .lockGated(by: lock)
+            }
+            Tab("Scan", systemImage: "doc.viewfinder", value: TabID.scan) {
+                // NOT gated: plan Task 7 step 3.
+                ScanTab(center: uploads, auth: auth)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
                 ComingSoon(title: "Dossier").lockGated(by: lock)
