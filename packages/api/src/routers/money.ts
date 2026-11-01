@@ -4,7 +4,9 @@ import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { effectiveStatuses } from "../registry-decide";
 import { monthlyCents } from "./registry";
-import { buildMoneySeries, monthKey, UNCATEGORIZED, type MoneyTx } from "../money-series";
+import {
+  buildMoneySeries, dayKey, monthKey, UNCATEGORIZED, type AccountSeries, type MoneyTx,
+} from "../money-series";
 
 /**
  * Derived-on-read: this router owns no state, writes nothing and appends no
@@ -60,11 +62,22 @@ function widenedMonthWindow(month: string): { from: Date; to: Date } {
   return { from: new Date(start - 2 * DAY_MS), to: new Date(end + 2 * DAY_MS) };
 }
 
+/**
+ * The one read both `series` and `glance` stand on: every transaction (the
+ * MoneyTx columns only) and every registry item, read ONCE, and the series
+ * built from them. Two procedures that read and built separately could draw
+ * two pictures of one account; this is what makes the phone's glance and
+ * /money the same figures by construction.
+ */
+async function loadMoneyInputs(db: Db): Promise<{ txs: MoneyTx[]; series: AccountSeries[] }> {
+  const txs: MoneyTx[] = await db.select(MONEY_TX_COLUMNS).from(schema.transactions);
+  const items = await loadItems(db);
+  return { txs, series: buildMoneySeries({ transactions: txs, items }) };
+}
+
 export const moneyRouter = router({
   series: protectedProcedure.query(async ({ ctx }) => {
-    const rows: MoneyTx[] = await ctx.db.select(MONEY_TX_COLUMNS).from(schema.transactions);
-    const items = await loadItems(ctx.db);
-    const series = buildMoneySeries({ transactions: rows, items });
+    const { series } = await loadMoneyInputs(ctx.db);
     // There is no table naming accounts, and inventing one would be an
     // assertion this sub-project is not allowed to make. Until a real label
     // exists an account is shown under its own IBAN; the map is here so the
@@ -76,6 +89,25 @@ export const moneyRouter = router({
       accountLabels[s.accountIban] = s.accountIban;
     }
     return { series, accountLabels };
+  }),
+
+  /**
+   * The phone's money glance (Plan 3 Task 18): the series exactly as `series`
+   * builds it, PLUS the raw rows `leefgeldWeek` needs, from the same single
+   * read. `newestBooking` is the newest READABLE booking as an Amsterdam day
+   * key, or null on an empty table: transactions arrive only from hand-imported
+   * statements, so "deze week" is only as fresh as the last import, and the
+   * screen says so. Parse-error rows are skipped because they carry a borrowed
+   * date (the import's earliest booking), never one the bank wrote.
+   */
+  glance: protectedProcedure.query(async ({ ctx }) => {
+    const { txs, series } = await loadMoneyInputs(ctx.db);
+    let newest: Date | null = null;
+    for (const t of txs) {
+      if (t.parseError) continue;
+      if (newest === null || t.bookedAt > newest) newest = t.bookedAt;
+    }
+    return { series, txs, newestBooking: newest === null ? null : dayKey(newest) };
   }),
 
   month: protectedProcedure

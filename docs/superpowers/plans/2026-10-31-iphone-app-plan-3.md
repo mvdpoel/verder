@@ -710,6 +710,8 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 ### Task 18: `GET /api/mobile/v1/money/summary`
 
+**Rescoped 2026-11-01:** re-read against today's code (slices 6–7 did not touch money; Task 17 landed as `23e5b72`). The task stands, with these recorded differences: (1) **the previous week is judged WHOLE** — the route calls `leefgeldWeek` with `today` = the last day of the previous week (`addDays(weekBounds(today, start).from, -1)`), not "the day seven days before": seven days back cuts last week at today's weekday and would report a finished week as `partial`. (2) `money.glance`'s `newestBooking` is an Amsterdam day key (`"YYYY-MM-DD"`) of the newest READABLE booking — parse-error rows carry a borrowed date (the import's earliest booking) and are skipped — and `null` on an empty table. (3) The three variables are read in the route (the web container already has `env_file: .env.prod`); `LEEFGELD_WEEKLY_CENTS` counts only as plain digits (`"100,00"`, `"1e4"`, `"-5"` read as no budget, never 0), `LEEFGELD_IBAN` is trimmed, and `LEEFGELD_WEEK_START` outside `1..7` is Monday. (4) `dashboardMoneySlice` is called on ONE account at a time (`[s]`), so it only cuts six months and never picks between accounts; accounts keep the series' own order (sorted by IBAN). (5) Extra tests beside the named ones: `configured IBAN and week start are read from the environment`, `an empty table answers geen data, never a figure`, `401 maps from a router UNAUTHORIZED`, and the router's empty-database test now also asserts `money.glance` → `{ series: [], txs: [], newestBooking: null }`.
+
 **Files:**
 - Create: `apps/web/src/app/api/mobile/v1/money/summary/route.ts` (+ test)
 - Modify: `packages/api/src/routers/money.ts` (add `glance`), `packages/api/src/routers/money.test.ts`, `.env.example` (`LEEFGELD_WEEKLY_CENTS=`, `LEEFGELD_IBAN=`, `LEEFGELD_WEEK_START=`), `docs/deploy.md` (all three)
@@ -719,9 +721,10 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 - `money.series` returns only `{ series, accountLabels }`, and `leefgeldWeek` needs the raw `txs`. So a new `money.glance` query reads the transactions and items ONCE (the same reads `series` does at `routers/money.ts:64-67`, extracted into one private `loadMoneyInputs(db)` both call), builds the series from them, and returns `{ series, txs, newestBooking }`. The route calls `money.glance`, then `leefgeldWeek` for today and for the day seven days before, both on that one read. The month cut reuses `dashboardMoneySlice` (`apps/web/src/lib/dashboard-money-slice.ts:45`) per account. The disclosure rows (`incidentalRows`, `internalRows`) travel with each month.
 - `newestBooking` is always present. Transactions arrive only from hand-imported ABN statements (`routers/registry-import.ts`), so "deze week" is only as fresh as the last import, and the screen says so.
 
-- [ ] **Step 1: Failing tests:** `money.glance series equals money.series` (router, dev DB); `401 first`; `accounts are listed separately`; `missing env gives no-budget`; `months keep their disclosure rows`.
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat(web): mobile money summary with the leefgeld week`.
+- [x] **Step 1: Failing tests:** `money.glance series equals money.series` (router, dev DB); `401 first`; `accounts are listed separately`; `missing env gives no-budget`; `months keep their disclosure rows`.
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat(web): mobile money summary with the leefgeld week`.
 - [ ] **Step 3: [main session]** Count prod data before relying on it: `select account_iban, count(*), max(booked_at) from transactions group by 1`. Record the result beside Task 17 Step 0's weekday measurement. If the count is 0, the glance ships showing `geen data` and that is correct.
+  - **Measured 2026-11-01 (main session, production, read-only):** 0 transactions in every account. The glance ships showing `geen data` (or `no-account`, since with no rows no account has a weekly income line and `LEEFGELD_IBAN` is unset), which is correct.
 
 ### Task 19: Money glance on the phone
 

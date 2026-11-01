@@ -256,6 +256,21 @@ unreadable, `notify()` records each APNs attempt as skipped (`no-apns-key`)
 and still sends web-push. The sandbox or production host is chosen per device
 row, never globally: a development-signed app only receives via the sandbox.
 
+The phone's money glance (`GET /api/mobile/v1/money/summary`) reads three
+more, in the **web** container (`env_file: .env.prod`, so a change needs only
+`up -d web`, no rebuild):
+
+| Variable | Value |
+| --- | --- |
+| `LEEFGELD_WEEKLY_CENTS` | the weekly leefgeld budget in integer cents — `10000` (€ 100, Martin's answer of 2026-10-31). Unset, empty or not plain digits: no budget, and the phone hides the leefgeld card |
+| `LEEFGELD_IBAN` | the leefgeldrekening's IBAN. Unset: the single account with a weekly income line; zero or several such accounts give no figure (`no-account`) |
+| `LEEFGELD_WEEK_START` | ISO weekday the week starts on (`1` Monday … `7` Sunday), the payout weekday once statements show one. Unset or out of range: `1`. Measured 2026-11-01: `transactions` holds 0 rows, so no payout weekday exists yet and it stays `1` |
+
+The figure is only ever drawn for days a bank statement provably covers;
+with no statements imported the phone shows `geen data`, which is correct.
+Transactions arrive only from hand-imported ABN statements, so "deze week"
+is as fresh as the last import and the answer carries `newestBooking`.
+
 A passkey is cryptographically bound to its `rpID`, so one registered against
 `localhost` in development will never work in production. Register the
 production passkey against the production hostname, and confirm it signs you

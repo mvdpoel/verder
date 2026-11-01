@@ -244,6 +244,26 @@ describe("money router", () => {
     expect(monthOf(await seriesFor(BEHEER), "2026-06").outCents).toBe(174_009 + 50_000);
   });
 
+  it("money.glance series equals money.series", async () => {
+    // The phone's glance and /money must never draw two different pictures of
+    // one account: glance reads the same inputs ONCE (loadMoneyInputs) and
+    // builds the series the same way. Scoped to this run's two accounts,
+    // because the dev database is shared and other suites insert rows too.
+    const mine = (s: { accountIban: string | null }) =>
+      s.accountIban === BEHEER || s.accountIban === LEEFGELD;
+    const [{ series }, glance] = await Promise.all([caller().money.series(), caller().money.glance()]);
+    expect(glance.series.filter(mine)).toEqual(series.filter(mine));
+    // The raw rows travel with it — leefgeldWeek needs them — and they are this
+    // run's rows exactly, not a subset.
+    const myTxs = glance.txs.filter((t) => t.accountIban === BEHEER || t.accountIban === LEEFGELD);
+    expect(myTxs).toHaveLength(9 + 6);
+    // The newest readable booking, as an Amsterdam day key: the shared table may
+    // hold newer rows than this run's, never older ones.
+    expect(glance.newestBooking).not.toBeNull();
+    expect(glance.newestBooking! >= "2026-08-24").toBe(true);
+    expect(glance.newestBooking).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it("shows no accounts at all when there are no transactions", async () => {
     // The empty state cannot be proved against the dev postgres: it is shared,
     // it always holds transactions, and a suite that deleted them to see an
@@ -264,6 +284,9 @@ describe("money router", () => {
     const { series, accountLabels } = await empty.money.series();
     expect(series).toEqual([]);
     expect(accountLabels).toEqual({});
+    // The glance on an empty table: no series, no rows, and no newest booking
+    // — null, never today's date dressed up as a statement.
+    expect(await empty.money.glance()).toEqual({ series: [], txs: [], newestBooking: null });
     // A drill into a month that has no rows must be empty too, not absent: the
     // page links to it from a URL a reader can keep.
     const detail = await empty.money.month({ accountIban: null, month: "2026-06" });
