@@ -4,8 +4,10 @@ import { createDb, schema, type Db } from "@verder/db";
 import { WEEKLY_SUMMARY_WORKER_NAME } from "@verder/api/src/worker-names";
 import type { WaitingItem } from "@verder/api/src/waiting";
 import type { WeeklySummary } from "@verder/api/src/weekly-summary";
+import { addDays, amsterdamAt } from "@verder/api/src/amsterdam";
 import {
-  composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weeklyBody, type WeeklyInput,
+  composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weeklyBody, WEEKLY_SUMMARY_HOUR,
+  type WeeklyInput,
 } from "./weekly-summary";
 import { notify, type NotifyFn } from "./notify/notify";
 import { fakeNotify } from "./test-support/fake-notify";
@@ -121,6 +123,16 @@ describe("composeWeekly (pure)", () => {
       outboundEntries: [{ occurredAt: claimed, recordedAt: recovered }] })).sent).toBe(1);
   });
 
+  it("a recovered send is counted once in a summer (CEST) week too", () => {
+    // Sunday 18 October 2026 is CEST: the run is 16:00 UTC, the claim 17:52 CEST = 15:52 UTC.
+    const w42 = summaryWeek(new Date("2026-10-18T16:00:00Z"));
+    const w43 = summaryWeek(new Date("2026-10-25T17:00:00Z"));
+    expect(w42.to.toISOString()).toBe("2026-10-18T16:00:00.000Z");
+    const entry = { occurredAt: new Date("2026-10-18T15:52:00Z"), recordedAt: new Date("2026-10-19T07:00:00Z") };
+    expect(composeWeekly(input({ window: w42, outboundEntries: [entry] })).sent).toBe(0);
+    expect(composeWeekly(input({ window: w43, outboundEntries: [entry] })).sent).toBe(1);
+  });
+
   it("own outbound mail is not received", () => {
     const at = new Date("2026-10-28T10:00:00Z");
     const s = composeWeekly(input({
@@ -232,16 +244,40 @@ async function isolated(fn: (db: Db) => Promise<void>): Promise<void> {
   }
 }
 
-/** Sunday 18:00 Amsterdam (17:00 UTC in winter) in a random week of the 1990s. */
+/**
+ * The instant the job fires — Sunday 18:00 AMSTERDAM — on the Sunday `weeks`
+ * after 1995-01-01 (a Sunday). Never a fixed UTC hour: 17:00 UTC is 18:00 only
+ * in a CET week and 19:00 in a CEST one, which made every "just before / just
+ * after the run" fixture land an hour late in summer, on the far side of the
+ * window close, and the tests that exist for that boundary pass vacuously.
+ */
+function sundayAt(weeks: number): Date {
+  return amsterdamAt(addDays("1995-01-01", 7 * weeks), WEEKLY_SUMMARY_HOUR);
+}
+/** A random Sunday 18:00 Amsterdam of the 1990s, winter or summer. */
 function sundayLongAgo(): Date {
-  // 1995-01-01 was a Sunday.
-  const weeks = Math.floor(Math.random() * 250);
-  return new Date(Date.UTC(1995, 0, 1 + 7 * weeks, 17));
+  return sundayAt(Math.floor(Math.random() * 250));
+}
+// Fixed weeks for the boundary tests, one on each UTC offset.
+const CET_SUNDAY = { label: "CET", weeks: 2 };   // 1995-01-15, 18:00 = 17:00 UTC
+const CEST_SUNDAY = { label: "CEST", weeks: 26 }; // 1995-07-02, 18:00 = 16:00 UTC
+/** Weekday and wall-clock time in Amsterdam: guards the fixtures themselves. */
+function dayKeyHour(d: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", weekday: "long",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d).replace(" at ", " ");
 }
 const uid = () => crypto.randomUUID();
 const noWaiting = async () => [] as WaitingItem[];
 
 describe("loadWeekly and the job (database)", () => {
+  it("every fixture Sunday is 18:00 Amsterdam, in winter and in summer", () => {
+    expect(dayKeyHour(sundayAt(CET_SUNDAY.weeks))).toBe("Sunday 18:00");
+    expect(sundayAt(CET_SUNDAY.weeks).toISOString()).toBe("1995-01-15T17:00:00.000Z");
+    expect(dayKeyHour(sundayAt(CEST_SUNDAY.weeks))).toBe("Sunday 18:00");
+    expect(sundayAt(CEST_SUNDAY.weeks).toISOString()).toBe("1995-07-02T16:00:00.000Z");
+    for (let weeks = 0; weeks < 250; weeks++) expect(dayKeyHour(sundayAt(weeks))).toBe("Sunday 18:00");
+  });
+
   it("loadWeekly reads every source for the week", async () => {
     await isolated(async (db) => {
       const now = sundayLongAgo();
@@ -307,10 +343,11 @@ describe("loadWeekly and the job (database)", () => {
     });
   });
 
-  it("a send recovered after the Sunday run is counted once, in the next week", async () => {
+  it.each([CET_SUNDAY, CEST_SUNDAY])("a send recovered after the Sunday run is counted once, in the next week ($label)", async ({ weeks }) => {
     await isolated(async (db) => {
-      // `now` is the run that closes the PREVIOUS week; the recovered entry belongs to `next`.
-      const run = sundayLongAgo();
+      // `run` is the job that closes the PREVIOUS week; the recovered entry belongs to `next`.
+      const run = sundayAt(weeks);
+      expect(dayKeyHour(run)).toBe("Sunday 18:00");
       const previous = summaryWeek(run);
       const next = summaryWeek(new Date(run.getTime() + 7 * 24 * 3600_000));
       const claimed = new Date(run.getTime() - 8 * 60_000); // Sunday 17:52
@@ -402,9 +439,10 @@ describe("loadWeekly and the job (database)", () => {
     });
   });
 
-  it("Sunday-evening activity is counted once, in the next run, whenever the run happens", async () => {
+  it.each([CET_SUNDAY, CEST_SUNDAY])("Sunday-evening activity is counted once, in the next run, whenever the run happens ($label)", async ({ weeks }) => {
     await isolated(async (db) => {
-      const sunday = sundayLongAgo(); // 18:00 Amsterdam, the instant the job fires
+      const sunday = sundayAt(weeks); // 18:00 Amsterdam, the instant the job fires
+      expect(dayKeyHour(sunday)).toBe("Sunday 18:00");
       const evening = new Date(sunday.getTime() + 3600_000); // 19:00, after the push
       const [user] = await db.insert(schema.users).values({
         email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
