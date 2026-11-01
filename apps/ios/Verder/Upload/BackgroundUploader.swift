@@ -2,70 +2,12 @@ import Foundation
 import Synchronization
 import UIKit
 
-/// `POST /api/mobile/v1/documents`'s answer (apps/web/src/app/api/mobile/v1/documents/route.ts).
-struct UploadResponse: Decodable, Equatable, Sendable {
-    let id: String
-    let duplicate: Bool
-}
-
-/// The phone upload request, shared by the queue's background uploads and
-/// the Meer tab's same-clientId resend, so the two can never disagree about
-/// the form.
-enum UploadRequest {
-    static let path = "/api/mobile/v1/documents"
-
-    /// The request (cookie, Origin, trust header, multipart Content-Type and an
-    /// explicit Content-Length — the route answers 411 without one) and its body.
-    static func build(_ item: UploadItem, pdf: Data, client: APIClient) -> (URLRequest, Data) {
-        let boundary = Multipart.makeBoundary()
-        let body = multipartBody(
-            boundary: boundary,
-            fields: [("clientId", item.clientId), ("source", item.source),
-                     ("capturedAt", item.capturedAt.formatted(.iso8601))],
-            file: (name: "file", fileName: item.fileName, mime: "application/pdf", data: pdf))
-        var req = client.request(path, method: "POST", body: nil, contentType: Multipart.contentType(boundary: boundary))
-        req.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
-        return (req, body)
-    }
-}
-
-/// What one upload's answer means for the queue.
-enum UploadOutcome {
-    /// Success only for a 2xx FROM THE URL THE SCAN WAS SENT TO, carrying the
-    /// endpoint's JSON.
-    ///
-    /// A background URLSession follows redirects by itself — Apple documents
-    /// that its delegate is never asked — so the `NoRedirects` refusal the
-    /// APIClient relies on does not hold there, and a 307 → /login → 200 would
-    /// arrive as a 200. That would mark a scan sent that never arrived. A
-    /// final URL other than the one sent to is therefore "not signed in",
-    /// exactly as a 3xx is in `APIError.from(status:)`. A 2xx without the JSON
-    /// is not proof of arrival either; it is retried, which the clientId makes
-    /// safe.
-    static func judge(sentTo: URL?, response: URLResponse?, body: Data,
-                      error: (any Error)?) -> Result<UploadResponse, APIError> {
-        if let error {
-            if let e = error as? URLError { return .failure(.transport("URLError \(e.code.rawValue)")) }
-            return .failure(.transport(String(describing: error)))
-        }
-        guard let http = response as? HTTPURLResponse else { return .failure(.transport("not an HTTP response")) }
-        if let sentTo, let final = http.url, final.host() != sentTo.host() || final.path() != sentTo.path() {
-            return .failure(.unauthorized)
-        }
-        if let error = APIError.from(status: http.statusCode) { return .failure(error) }
-        guard let answer = try? JSONDecoder().decode(UploadResponse.self, from: body) else {
-            return .failure(.server(http.statusCode))
-        }
-        return .success(answer)
-    }
-}
-
 /// Sends the queue with a background `URLSession`, so an upload carries on
 /// while the app is suspended and is handed back to the app (relaunched if
 /// need be, `sessionSendsLaunchEvents`) when it ends.
 ///
 /// - A background upload must come from a FILE, so each item's multipart body
-///   is written next to its PDF for the duration of the upload, then removed.
+///   is written next to its file for the duration of the upload, then removed.
 /// - The cookie is attached per request from the Keychain (`APIClient.request`);
 ///   the session itself stores and sends no cookies.
 /// - There is ONE background session per identifier per process, so the app
@@ -136,12 +78,12 @@ final class BackgroundUploader: NSObject, URLSessionDataDelegate, @unchecked Sen
         var started: [UUID] = []
         for item in items {
             do {
-                let pdf = try Data(contentsOf: queue.pdfURL(item.id))
-                let (req, body) = UploadRequest.build(item, pdf: pdf, client: client)
-                let file = queue.bodyURL(item.id)
-                try body.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                let file = try Data(contentsOf: queue.fileURL(item))
+                let (req, body) = UploadRequest.build(item, file: file, client: client)
+                let bodyFile = queue.bodyURL(item.id)
+                try body.write(to: bodyFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 state.withLock { _ = $0.expecting.insert(item.id) }
-                let task = session.uploadTask(with: req, fromFile: file)
+                let task = session.uploadTask(with: req, fromFile: bodyFile)
                 task.taskDescription = item.id.uuidString
                 task.resume()
                 started.append(item.id)
@@ -241,7 +183,7 @@ final class BackgroundUploader: NSObject, URLSessionDataDelegate, @unchecked Sen
 /// a retry safe — the case of a retry whose PDF was re-encoded in between.
 enum ResendProbe {
     static func resend(_ item: UploadItem, client: APIClient) async throws -> UploadResponse {
-        let (req, body) = UploadRequest.build(item, pdf: probePDF(item), client: client)
+        let (req, body) = UploadRequest.build(item, file: probePDF(item), mime: "application/pdf", client: client)
         var withBody = req
         withBody.httpBody = body
         let (data, response) = try await client.send(withBody)

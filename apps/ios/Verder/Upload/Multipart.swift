@@ -10,6 +10,14 @@ enum Multipart {
         "verder-\(UUID().uuidString)"
     }
 
+    /// A part's Content-Type is a header line: a media type that is not a
+    /// plain `type/subtype` token pair (a CR or LF would end the header and
+    /// write the rest of the part) is sent as `application/octet-stream`.
+    static func safeMediaType(_ mime: String) -> String {
+        let token = "[A-Za-z0-9!#$&^_.+-]+"
+        return mime.wholeMatch(of: try! Regex("\(token)/\(token)")) == nil ? "application/octet-stream" : mime
+    }
+
     static func contentType(boundary: String) -> String {
         "multipart/form-data; boundary=\(boundary)"
     }

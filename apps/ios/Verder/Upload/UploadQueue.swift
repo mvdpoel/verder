@@ -1,33 +1,6 @@
 import Foundation
 
-/// One capture waiting to reach verder, or that has.
-///
-/// `id` IS the upload's `clientId`: the server stores it as
-/// `sourceRef = "phone:<clientId>"` and answers a second upload with the same
-/// id as a duplicate, so a retry after a lost response can never ingest the
-/// letter twice (Review Focus 1). It is therefore minted once, at enqueue, and
-/// never changes — not on retry, not on a manual "opnieuw".
-struct UploadItem: Codable, Identifiable, Equatable, Sendable {
-    let id: UUID
-    let fileName: String
-    let capturedAt: Date
-    let source: String
-    var state: State
-    var attempts: Int
-    var nextAttemptAt: Date?
-    /// When the server confirmed it. Added beside the plan's fields for the
-    /// strip's "verstuurd vandaag" and for pruning.
-    var sentAt: Date?
-
-    enum State: String, Codable, Sendable {
-        case pending, sending, sent, failed
-    }
-
-    /// The form value: lower-case, as the server spells it in `sourceRef`.
-    var clientId: String { id.uuidString.lowercased() }
-}
-
-/// The durable upload queue: `queue.json` plus `<id>.pdf` in one directory
+/// The durable upload queue: `queue.json` plus `<id>.<ext>` in one directory
 /// (the App Group container on the phone). The files ARE the queue — the
 /// actor only serialises access — so a killed app or a rebooted phone loses
 /// nothing that was enqueued (Review Focus 3).
@@ -76,19 +49,40 @@ actor UploadQueue {
 
     func items() -> [UploadItem] { index.items }
 
+    /// Where an item's bytes live: `<id>.<resolvedExtension>`. An item from
+    /// before the share extension has no extension recorded and is a PDF.
+    nonisolated func fileURL(_ item: UploadItem) -> URL {
+        dir.appending(path: "\(item.id.uuidString).\(item.resolvedExtension)")
+    }
+
+    /// `fileURL` of an item stored without an extension: a scan's PDF.
     nonisolated func pdfURL(_ id: UUID) -> URL { dir.appending(path: "\(id.uuidString).pdf") }
 
     /// Where the uploader writes an item's multipart body for the duration of
     /// one upload (a background upload needs a file, not bytes in memory).
     nonisolated func bodyURL(_ id: UUID) -> URL { dir.appending(path: "\(id.uuidString).body") }
 
+    /// A scan: always a PDF, named by the Amsterdam clock.
     @discardableResult
     func enqueue(pdf: Data, capturedAt: Date, source: String) throws -> UploadItem {
-        let item = UploadItem(id: UUID(), fileName: ScanNaming.title(capturedAt: capturedAt), capturedAt: capturedAt,
-                              source: source, state: .pending, attempts: 0, nextAttemptAt: nil, sentAt: nil)
-        // The PDF first: an index entry pointing at no file is worse than a
+        try enqueue(file: pdf, fileName: ScanNaming.title(capturedAt: capturedAt), mime: "application/pdf",
+                    fileExtension: "pdf", capturedAt: capturedAt, source: source)
+    }
+
+    /// Any file. `id` is what lets a share's drop UUID become the clientId.
+    /// If an item with that `id` is already queued, it is returned and NOTHING
+    /// is written — not even the file, which may have been sent and deleted
+    /// already. That is what makes `importIncoming` safe to repeat.
+    @discardableResult
+    func enqueue(file: Data, id: UUID = UUID(), fileName: String, mime: String, fileExtension: String,
+                 capturedAt: Date, source: String) throws -> UploadItem {
+        if let existing = index.items.first(where: { $0.id == id }) { return existing }
+        let item = UploadItem(id: id, fileName: fileName, capturedAt: capturedAt, source: source,
+                              state: .pending, attempts: 0, nextAttemptAt: nil, sentAt: nil,
+                              mime: mime, fileExtension: UploadItem.safeExtension(fileExtension) ?? "bin")
+        // The file first: an index entry pointing at no file is worse than a
         // file no entry points at.
-        try pdf.write(to: pdfURL(item.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try file.write(to: fileURL(item), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         index.items.append(item)
         try persist()
         return item
@@ -96,14 +90,14 @@ actor UploadQueue {
 
     /// Every pending item that is due, flipped to `sending` in the same step,
     /// so two drains at once can never send one item twice. Nothing while a
-    /// sign-in is required. An item whose PDF is gone is marked `failed`
+    /// sign-in is required. An item whose file is gone is marked `failed`
     /// rather than dropped: a scan must never vanish without a word.
     func claimDue(now: Date) -> [UploadItem] {
         guard !index.signInRequired else { return [] }
         var claimed: [UploadItem] = []
         for i in index.items.indices where index.items[i].state == .pending
             && (index.items[i].nextAttemptAt ?? .distantPast) <= now {
-            if FileManager.default.fileExists(atPath: pdfURL(index.items[i].id).path()) {
+            if FileManager.default.fileExists(atPath: fileURL(index.items[i]).path()) {
                 index.items[i].state = .sending
                 claimed.append(index.items[i])
             } else {
@@ -120,7 +114,7 @@ actor UploadQueue {
         index.items[i].sentAt = now
         index.items[i].nextAttemptAt = nil
         try? persist()
-        try? FileManager.default.removeItem(at: pdfURL(id))
+        try? FileManager.default.removeItem(at: fileURL(index.items[i]))
     }
 
     func markFailure(_ id: UUID, error: APIError, now: Date = Date()) {

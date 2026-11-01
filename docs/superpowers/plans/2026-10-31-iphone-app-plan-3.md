@@ -859,7 +859,18 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 - **Cleanup of `incoming/`.** After `enqueue` has persisted the item, `importIncoming` deletes `<uuid>.json` FIRST (the drop is then invisible), then `<uuid>.bin` and `<uuid>.sent`. A crash between the two leaves a `.bin` with no `.json`, which is never imported; `importIncoming` deletes such orphans once they are older than 24 h, so a drop the extension is still writing is never touched.
 - **The spec's optional one-line note (§7.8) is DEFERRED, and recorded as such in spec §7.8.** `POST /api/mobile/v1/documents` has no note field and `documents` has no note column; a note would need a place to live that does not yet exist (a `document_status_changes` row is the wrong shape, a log entry is evidence). It comes back when one is designed.
 
-- [ ] **Step 1: Failing tests:**
+**Rescoped 2026-11-01:** re-read against the code after slices 6–7 and the pocket dossier; the task held, with these changes, all in the commit `feat(ios): share extension into the same upload queue`:
+- `UploadItem` moved to its own file (`Verder/Upload/UploadItem.swift`), and `UploadResponse`/`UploadRequest`/`UploadOutcome` to `Verder/Upload/UploadRequest.swift`, because the extension compiles them to build the SAME request; it never compiles `UploadQueue`. `UploadRequest.build(_:file:mime:client:)` replaces `build(_:pdf:client:)`; `mime` overrides `resolvedMime` only for the debug resend, which sends a fresh probe PDF.
+- `fileExtension` is never trusted as a path: `UploadItem.safeExtension` allows 1–10 lower-case ASCII letters/digits and refuses the queue's own (`body`, `json`, `sent`, `partial`) — a shared `x.body` would otherwise be stored exactly where the uploader writes its multipart body. Anything refused is stored as `bin`. A part's `Content-Type` that is not a plain `type/subtype` token pair goes out as `application/octet-stream` (`Multipart.safeMediaType`), since it is a header line.
+- **`.sent` is used, not just written.** The plan had `importIncoming` enqueue every drop and let the server answer `duplicate: true`; that re-uploads bytes the server already has. A drop with `<uuid>.sent` is enqueued and immediately recorded `sent` (the marker is written only after a 2xx carrying the endpoint's JSON from a client that never follows a redirect, i.e. what `markSent` already means). The clientId still covers the race where the extension's upload lands AFTER the app imported the drop.
+- The extension's attempt is BOUNDED (`ShareModel.sendBound`, 20 s; 30 s per request in `ShareSender`): the drop is safe on disk before the attempt starts, so a slow 4G upload is cancelled rather than holding the share sheet, and the app's queue sends it ("Bewaard. Het gaat mee zodra je verder opent."). Step 3.4 measures whether a 5 MB file beats that bound.
+- The screen's logic lives in `ShareModel` (compiled into the app too, so the suite tests it) and the image→PDF/pass-through rule in `SharePreparation`; `VerderShare/ShareViewController.swift` only loads the `NSItemProvider`s and draws. Photos are named `Foto's <yyyy-MM-dd HH.mm>.pdf` on the Amsterdam clock; no `PageCleaner` pass (a shared photo is not necessarily a page). Per-file limit 48 MB, under the server's 50 MB `MAX_UPLOAD_BYTES` with room for the multipart envelope.
+- A `.json` that cannot be read (or names another UUID) and a `.json` whose `.bin` is missing are swept by the same 24 h rule as an orphan `.bin`.
+- Import runs in `UploadCenter.start()`, which RootView already calls on launch and on every return to the foreground.
+- Extra tests beyond Step 1: `enqueueWithAQueuedIdReturnsTheExistingItem`, `aDropTheExtensionSentArrivesAsSent`, `extensionsAreSanitised`, `otherFilesPassThroughWithTheirOwnMime`, `extensionUploadMarksTheDropSentOn2xx`, `extensionUploadLeavesTheDropOnFailure`, and `ShareModelTests` (one drop per file, the bound, refusals, titles). The `oldQueueJsonStillDecodes` fixture is `VerderTests/Fixtures/queue-before-share.json`.
+- The extension bundles the two fonts itself (`UIAppFonts` in its own Info.plist): an extension does not see the app's registered fonts.
+
+- [x] **Step 1: Failing tests:**
   - `dropIsInvisibleUntilJsonWritten`;
   - `importIncomingKeepsTheDropUUIDAsClientId`;
   - `importIsIdempotent` (import twice gives one queue item);
@@ -867,7 +878,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   - `imagesBecomeOnePDF`;
   - `oldQueueJsonStillDecodes` (a `queue.json` fixture captured from the current build, with no `mime`/`fileExtension`, decodes with every item intact and resolves to PDF);
   - `sharedXlsxIsUploadedWithItsOwnMime` (the multipart part carries the item's mime and file name, not `application/pdf`).
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat(ios): share extension into the same upload queue`.
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat(ios): share extension into the same upload queue`.
 - [ ] **Step 3: [main session]** On the phone:
   1. Share a PDF from Mail and two photos from Photos.
   2. Expected: two documents in `/files` under bron "Gedeeld", and no duplicate after the app opens.

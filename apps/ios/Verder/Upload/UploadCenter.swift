@@ -48,7 +48,7 @@ final class UploadCenter {
     }
 
     /// The phone's queue: in the App Group container, so the share extension
-    /// (spec §7.8) enqueues into the same one.
+    /// (spec §7.8) can leave its drops in `uploads/incoming/` beside it.
     static func live(client: APIClient) -> UploadCenter {
         let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
             ?? URL.applicationSupportDirectory
@@ -66,8 +66,14 @@ final class UploadCenter {
     /// Once per process, recover BEFORE any drain: a drain racing `recover`
     /// could see its own fresh uploads reset to pending and sent twice. Every
     /// caller (launch, activation, both at once) awaits the same recovery.
+    ///
+    /// Runs on launch AND every time the app comes to the front, which is when
+    /// the share extension's drops are taken into the queue
+    /// (`UploadQueue.importIncoming`, idempotent): the extension never writes
+    /// queue.json itself.
     func start() async {
         await recovered()
+        await queue.importIncoming()
         await refresh()
         await drain()
     }

@@ -71,6 +71,7 @@ targets:
     dependencies:
       # Embedded in the app (the default for an app-extension dependency).
       - target: VerderNotify
+      - target: VerderShare
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder
@@ -117,6 +118,71 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.notify
         CURRENT_PROJECT_VERSION: "1"
         PRODUCT_NAME: VerderNotify
+  # The share extension (spec §7.8, plan 3 Task 22): PDFs, photos and files
+  # from any app become an IncomingDrop in the App Group, which the app imports
+  # into its upload queue. It never writes the queue itself.
+  VerderShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: VerderShare
+        excludes:
+          - Info.plist
+          - VerderShare.entitlements
+      - path: Verder/Shared/AppGroup.swift
+      - path: Verder/Upload/IncomingDrop.swift
+      - path: Verder/Upload/UploadItem.swift
+      - path: Verder/Upload/UploadRequest.swift
+      - path: Verder/Upload/Multipart.swift
+      - path: Verder/Upload/ShareSender.swift
+      - path: Verder/Upload/SharePreparation.swift
+      - path: Verder/Upload/ShareModel.swift
+      - path: Verder/Scan/PDFAssembler.swift
+      - path: Verder/Scan/PageCleaner.swift
+      - path: Verder/Scan/ScanNaming.swift
+      - path: Verder/Net/APIClient.swift
+      - path: Verder/Net/APIError.swift
+      - path: Verder/Auth/SessionStore.swift
+      - path: Verder/Theme/Tokens.swift
+      - path: Verder/Theme/Fonts.swift
+      - path: Verder/Resources/Fonts
+        buildPhase: resources
+    info:
+      path: VerderShare/Info.plist
+      properties:
+        CFBundleDisplayName: verder
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UIAppFonts:
+          - Saira-Variable.ttf
+          - IBMPlexMono-Regular.ttf
+          - IBMPlexMono-Medium.ttf
+          - IBMPlexMono-SemiBold.ttf
+        # KeychainSessionStore reads this from Bundle.main — which, in the
+        # extension, is THIS Info.plist, not the app's.
+        VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # PDFs arrive as files; photos as images; at most 10 of either.
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+    entitlements:
+      path: VerderShare/VerderShare.entitlements
+      properties:
+        # uploads/incoming/, beside the app's queue.
+        com.apple.security.application-groups:
+          - group.pro.vanderpoel.verder
+        # The app's session cookie, for the one foreground upload attempt.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)pro.vanderpoel.verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.share
+        CURRENT_PROJECT_VERSION: "1"
+        PRODUCT_NAME: VerderShare
   VerderTests:
     type: bundle.unit-test
     platform: iOS

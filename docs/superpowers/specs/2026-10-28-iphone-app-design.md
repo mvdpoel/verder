@@ -211,6 +211,8 @@ Small, medium and lock screen sizes: the "wacht op jou" count, the top item, and
 
 Accepts PDFs, images and files from any app (Mail, Photos, Files, WhatsApp's own share sheet). It enqueues into the same upload queue with source `phone-share`, with an optional one-line note.
 
+**The one-line note is DEFERRED (2026-11-01, plan 3 Task 22).** `POST /api/mobile/v1/documents` has no note field and `documents` has no note column; a `document_status_changes` row is the wrong shape and a log entry is evidence. It comes back when a place for it is designed. The extension never writes the app's `queue.json`: it leaves a drop in `<group>/uploads/incoming/` that the app imports, with the drop's UUID as the clientId.
+
 ### 7.9 Weekly summary
 
 A Sunday 18:00 Europe/Amsterdam push *(my call)*: what moved this week (sent, received, filed, tasks done), and what is waiting. It opens a summary screen. The server composes it (§6.8 `/weekly`).
