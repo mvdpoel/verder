@@ -87,15 +87,22 @@ struct FixturePermission: NotificationPermission {
     func request() async -> Bool { true }
 }
 
-/// `-route geld|weekly|voice`: the screens with no deep link. Until Tasks 19,
-/// 25 and 26 build them, each is the ComingSoon placeholder; those tasks
-/// replace the case here with their real screen on the fixture client.
+/// `-route geld|weekly|voice`: the screens with no deep link. Geld is the
+/// real screen on the fixture's money store (Task 19); until Tasks 25 and 26
+/// build theirs, weekly and voice are the ComingSoon placeholder.
 struct FixtureScreen: View {
     let screen: FixtureLaunch.Screen
+    let money: MoneyStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ComingSoon(title: title)
+        Group {
+            if screen == .geld {
+                NavigationStack { GeldScreen(store: money) }
+            } else {
+                ComingSoon(title: title)
+            }
+        }
             .overlay(alignment: .topTrailing) {
                 Button("Sluiten") { dismiss() }
                     .font(.display(14, relativeTo: .callout, weight: .regular))

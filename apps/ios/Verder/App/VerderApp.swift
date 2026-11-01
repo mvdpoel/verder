@@ -14,6 +14,8 @@ struct VerderApp: App {
     /// process, beside the registrar: the silent-push refresh (AppDelegate) and
     /// the tab read the same store.
     @State private var inbox: InboxStore
+    /// The money summary behind the Overzicht money card and Geld.
+    @State private var money: MoneyStore
 
     init() {
         #if DEBUG
@@ -37,6 +39,7 @@ struct VerderApp: App {
         let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
                                onUnauthorized: { auth.sessionRejected() })
         _inbox = State(initialValue: inbox)
+        _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() }))
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).
         AppDelegate.services = .init(client: s.client, inbox: inbox)
@@ -44,7 +47,8 @@ struct VerderApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox)
+            RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
+                     money: money)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

@@ -16,6 +16,7 @@ enum HomeSummary {
     static let waitingLabel = "WACHT OP JOU"
     static let tasksLabel = "TAKEN"
     static let scansLabel = "SCANS"
+    static let moneyLabel = "GELD"
     /// How many of the ranked items the card previews.
     static let previewCount = 3
 
@@ -62,16 +63,31 @@ enum HomeSummary {
 /// OPEN WHILE LOCKED (`AppLock.Area.glance`, Martin 2026-11-01): it shows
 /// counts and amounts only until `lock.revealsCaseContent`; the headline and
 /// the waiting preview are not even built while locked. Every tap lands on a
-/// gated tab, which asks for Face ID there.
+/// gated screen, which asks for Face ID there — the money card included: its
+/// amounts show while locked, the Geld screen behind it names counterparties
+/// and is gated.
 struct HomeTab: View {
     let store: InboxStore
+    let money: MoneyStore
     let uploads: UploadCenter
     let lock: AppLock
     /// Opens Voor jou, optionally straight onto one item.
     let openInbox: (InboxRoute?) -> Void
     let openScan: () -> Void
 
+    @State private var showGeld = false
+
     var body: some View {
+        NavigationStack {
+            page
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showGeld) {
+                    GeldScreen(store: money).lockGated(by: lock)
+                }
+        }
+    }
+
+    private var page: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             ScrollView {
@@ -86,6 +102,7 @@ struct HomeTab: View {
                     }
                     headlineCard
                     waitingCard
+                    moneyCard
                     tasksCard
                     scansCard
                 }
@@ -93,10 +110,18 @@ struct HomeTab: View {
                 .padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .refreshable { await store.refresh() }
+            .refreshable {
+                async let inbox: Void = store.refresh()
+                async let cash: Void = money.refresh()
+                _ = await (inbox, cash)
+            }
         }
         .preferredColorScheme(.dark)
-        .task { await store.refresh() }
+        .task {
+            async let inbox: Void = store.refresh()
+            async let cash: Void = money.refresh()
+            _ = await (inbox, cash)
+        }
     }
 
     // MARK: cards
@@ -190,6 +215,23 @@ struct HomeTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Amounts only, so it shows while locked (brief §3: "counts and money").
+    /// No amber: nothing about money waits on Martin.
+    @ViewBuilder private var moneyCard: some View {
+        if let glance = money.glance {
+            Button { showGeld = true } label: {
+                card(label: HomeSummary.moneyLabel, chevron: true) {
+                    MoneyGlanceSummary(glance: glance, revealed: lock.revealsCaseContent)
+                }
+            }
+            .buttonStyle(.plain)
+        } else if money.lastError == nil {
+            card(label: HomeSummary.moneyLabel) { loading }
+        }
+        // A failed money fetch hides the card rather than adding a second
+        // error line to Overzicht; Geld itself says why.
     }
 
     @ViewBuilder private var tasksCard: some View {

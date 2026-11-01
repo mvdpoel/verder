@@ -45,7 +45,7 @@ Door verder gedaan (3): "Opgeborgen als bankafschrift: Afschrift september" · "
 - Tasks: 6 open · 1 te laat · 2 wacht op een ander.
 - Scans today: "2 verstuurd · 1 in de wachtrij".
 
-## Money (fixtures `money-complete`, `money-partial`, `money-geen-data`)
+## Money (fixtures `money-complete`, `money-partial`, `money-geen-data`, `money-empty`, `money-no-account`, `money-unrecognised`, `money-no-budget`, `money-overspent`)
 
 Two accounts, never summed:
 - `NL00TEST0123456789` (beheerrekening) — months jun–nov, jun–sep complete, okt partial (hatched), nov `geen data`. Income line € 2.400,00/month from Atelier Sterrenwacht; one incidental € 85,00 "teruggave".
@@ -53,7 +53,11 @@ Two accounts, never summed:
 - Leefgeld week (`money-complete`): week from Mon 26 okt, budget € 100,00, spent € 62,40 (rows: "Supermarkt" € 41,20, "Bakker" € 6,70, "Apotheek" € 14,50), received € 100,00, left € 37,60.
 - `money-partial`: covered t/m do 29 okt.
 - `money-geen-data`: newest booking 18 okt → "geen data — laatste afschrift t/m 18 okt".
-- `money-empty`: zero transactions — production's real state on 2026-11-01.
+- `money-empty`: a configured leefgeldrekening (LEEFGELD_IBAN set) over zero transactions → "geen data — nog geen afschriften".
+- `money-no-account`: zero transactions AND LEEFGELD_IBAN unset — production's real state once P3-D3 sets the budget (2026-11-01: 0 transactions, no IBAN) → "Nog geen afschriften", never "niet herkend".
+- `money-unrecognised`: the shared accounts, but both are weekly-income candidates and no IBAN is configured → "Leefgeldrekening niet herkend" with "2 rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een."
+- `money-no-budget`: LEEFGELD_WEEKLY_CENTS unset → the leefgeld card is hidden; the account cards and the Overzicht per-account lines stay.
+- `money-overspent`: `money-complete`'s week plus "Fietsenmaker" € 50,00 on za 31 okt → spent € 112,40, "€ 12,40 meer uitgegeven dan het weekbedrag" (never amber). Its month bars are the shared ones and do not include that row.
 
 ## Dossier (fixture `dossier`)
 

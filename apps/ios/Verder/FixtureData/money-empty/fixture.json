@@ -1,3 +1,3 @@
 {
-  "description": "Zero transactions (production's real state on 2026-11-01)."
+  "description": "A configured leefgeldrekening (LEEFGELD_IBAN set) over zero transactions: geen data with no newest booking."
 }

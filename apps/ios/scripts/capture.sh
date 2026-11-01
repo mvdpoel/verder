@@ -4,7 +4,8 @@
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, money-complete, money-partial,
-#            money-geen-data, money-empty, dossier, weekly, voice)
+#            money-geen-data, money-empty, money-no-account, money-unrecognised,
+#            money-no-budget, money-overspent, dossier, weekly, voice)
 #   tab      overzicht | voorjou | scan | dossier | meer
 #   route    proposal:<id> | suggestion:<id> | task:<id> | geld | weekly | voice
 #   --locked keep the app lock closed (Overzicht's counts-only glance)

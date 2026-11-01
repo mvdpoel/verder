@@ -1,0 +1,12 @@
+{
+  "accounts": [],
+  "leefgeld": {
+    "state": "no-account",
+    "candidates": []
+  },
+  "previousWeek": {
+    "state": "no-account",
+    "candidates": []
+  },
+  "newestBooking": null
+}

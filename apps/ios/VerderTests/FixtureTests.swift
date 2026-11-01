@@ -13,8 +13,8 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "dossier", "empty", "money-complete", "money-empty", "money-geen-data", "money-partial",
-        "offline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
+        "dossier", "empty", "money-complete", "money-empty", "money-geen-data", "money-no-account", "money-no-budget",
+        "money-overspent", "money-partial", "money-unrecognised", "offline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
     static let question = "00000000-f1c5-4000-8000-000000000002"
@@ -167,7 +167,8 @@ struct FixtureTests {
     /// `MonthSeries` (money-series.ts) and `LeefgeldWeek` (leefgeld-week.ts).
     /// Every total is the sum of its disclosed rows, and there is NO total
     /// across accounts — the same laws as /money.
-    @Test(arguments: ["money-complete", "money-partial", "money-geen-data", "money-empty", "empty"])
+    @Test(arguments: ["money-complete", "money-partial", "money-geen-data", "money-empty", "money-no-account",
+                      "money-no-budget", "money-overspent", "money-unrecognised", "empty"])
     func moneyMatchesTheRouteContractAndReconciles(_ name: String) throws {
         let m = try Self.object(name, "money/summary")
         #expect(Set(m.keys) == ["accounts", "leefgeld", "previousWeek", "newestBooking"])
@@ -217,6 +218,13 @@ struct FixtureTests {
         let complete = try Self.object("money-complete", "money/summary")["leefgeld"]
         #expect(Self.ints(complete?["spentCents"]) == 6240 && Self.ints(complete?["leftCents"]) == 3760)
         #expect(Self.array(try Self.object("money-empty", "money/summary")["accounts"]).isEmpty)
+        // Production's state once P3-D3 sets the budget: no rows, no IBAN.
+        #expect(try state("money-no-account") == "no-account")
+        #expect(Self.array(try Self.object("money-no-account", "money/summary")["leefgeld"]?["candidates"]).isEmpty)
+        #expect(try Self.object("money-no-account", "money/summary")["newestBooking"] == .null)
+        #expect(Self.array(try Self.object("money-unrecognised", "money/summary")["leefgeld"]?["candidates"]).count == 2)
+        #expect(try state("money-no-budget") == "no-budget")
+        #expect(Self.ints(try Self.object("money-overspent", "money/summary")["leefgeld"]?["leftCents"]) == -1240)
     }
 
     /// `DossierDelta`/`DossierText` (routers/dossier-sync.ts), `SearchDTO`

@@ -728,6 +728,14 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 ### Task 19: Money glance on the phone
 
+**Rescoped 2026-11-01:** re-read against today's code (slices 6–7 and Task FX landed; the route is `23e5b72`'s successor and the money fixtures already existed). Recorded differences:
+(1) **The live state is `no-account`, and it must not read as a fault.** Production has 0 transactions and LEEFGELD_IBAN unset, so once P3-D3 sets the budget the route answers `no-account` with `candidates: []` and `newestBooking: null`. "Leefgeldrekening niet herkend" would then claim a recogniser failed when there is nothing to recognise yet. The copy is therefore split on the top-level `newestBooking`: null → **"Nog geen afschriften"** + "Zodra een bankafschrift is ingelezen, staat hier wat er deze week over is."; present → "Leefgeldrekening niet herkend" + "Geen rekening krijgt wekelijks geld binnen." or "<n> rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een.". Likewise `geen-data` with a null newest booking reads "geen data — nog geen afschriften". Every figure carries a freshness readout ("laatste afschrift t/m do 29 okt" / "nog geen afschriften ingelezen"), because "deze week" is only as fresh as the last import.
+(2) **Overspent** reads "€ 12,40 meer uitgegeven dan het weekbedrag" with the magnitude as the hero; no minus sign and no amber.
+(3) **Files:** besides the listed ones, `Verder/Money/MoneyModels.swift` (the DTOs; `complete`/`partial` decode to one `.figure` case with `partial: Bool`; an unknown state fails the decode) and `Verder/Money/MoneyGlance.swift` (`LeefgeldCard`, `MonthBar`, `AccountCard`, `MoneyGlance`, `MoneyStore` — all logic; the views in `MoneyGlanceView.swift` are thin for the later Figma alignment). `VerderApp`/`RootView` own one `MoneyStore`.
+(4) **Two entries, as asked:** a "Geld" row in Meer, AND a `GELD` card on Overzicht between "Wacht op jou" and "Taken" (brief §3 order). The card shows WHILE LOCKED — it holds amounts, never a counterparty or IBAN (the account line and the per-account `…6789` lines appear only once unlocked); tapping it pushes Geld behind `.lockGated(by:)`, because Geld names counterparties. With `no-budget` the card shows each account's newest covered month instead of the hidden leefgeld figure.
+(5) **Bars scale per account**, never against another account; `none` months render "geen data" with no amount (never € 0,00) and no bar; `partial` months are hatched AND say "deels". The disclosures (`eenmalig`, `eigen overboeking`) and parse-error counts sit under their month.
+(6) **Fixtures added:** `money-no-account` (production's real state), `money-unrecognised`, `money-no-budget`, `money-overspent`; `money-empty` is now described as what it is (a configured IBAN over an empty table), and the data doc corrected. `-route geld` now opens the real screen. Swift Charts and the disclosure sheet the brief mentions are left for the Figma pass.
+
 **Files:**
 - Create: `apps/ios/Verder/Money/MoneyGlanceView.swift`, `apps/ios/Verder/Money/MoneyFormat.swift`, `apps/ios/VerderTests/MoneyFormatTests.swift`, `apps/ios/VerderTests/LeefgeldCardTests.swift`
 - Modify: `apps/ios/Verder/App/MoreTab.swift` (the entry "Geld")
@@ -742,8 +750,8 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   - `no-budget`: the card is hidden.
 - Account cards, one per IBAN and never summed: a 6-month bar list with `complete` solid, `partial` hatched and `none` "geen data". Each month's incidental and internal rows sit under the bars.
 
-- [ ] **Step 1: Failing tests:** `euroFormatsDutch`; `partialWeekdayMatchesTheDate` (2026-10-29 renders `do`); `negativeLeftReadsOverspent`; `geenDataShowsNoAmount` (the rendered text contains no "€"); `noBudgetHidesCard`; `cardsAreNeverSummed` (the view model exposes no total across accounts).
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat(ios): money glance per account, with the leefgeld week`.
+- [x] **Step 1: Failing tests:** `euroFormatsDutch`; `partialWeekdayMatchesTheDate` (2026-10-29 renders `do`); `negativeLeftReadsOverspent`; `geenDataShowsNoAmount` (the rendered text contains no "€"); `noBudgetHidesCard`; `cardsAreNeverSummed` (the view model exposes no total across accounts).
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat(ios): money glance per account, with the leefgeld week`.
 
 ### Task 20: Pocket dossier sync (server)
 

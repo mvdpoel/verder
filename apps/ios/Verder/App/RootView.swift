@@ -16,6 +16,7 @@ struct RootView: View {
     let push: PushRegistrar
     let links: DeepLinkInbox
     let inbox: InboxStore
+    let money: MoneyStore
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
@@ -138,7 +139,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
                 // NOT gated: `.glance`, counts only while locked.
-                HomeTab(store: inbox, uploads: uploads, lock: lock,
+                HomeTab(store: inbox, money: money, uploads: uploads, lock: lock,
                         openInbox: { route in
                             inboxPath = route.map { [$0] } ?? []
                             tab = .voorJou
@@ -158,7 +159,7 @@ struct RootView: View {
                 ComingSoon(title: "Dossier").lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
-                MoreTab(auth: auth, center: uploads, push: push).lockGated(by: lock)
+                MoreTab(auth: auth, center: uploads, push: push, money: money).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
@@ -172,7 +173,7 @@ struct RootView: View {
             #endif
         }
         #if DEBUG
-        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0) }
+        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0, money: money) }
         #endif
     }
 

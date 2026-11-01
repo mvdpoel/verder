@@ -7,10 +7,17 @@ struct MoreTab: View {
     let auth: AuthModel
     let center: UploadCenter
     let push: PushRegistrar
+    let money: MoneyStore
 
     @State private var confirmResend = false
 
     var body: some View {
+        NavigationStack {
+            page.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var page: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             ScrollView {
@@ -21,6 +28,7 @@ struct MoreTab: View {
 
                     if auth.passkeyOfferPending { passkeyOffer }
 
+                    geld
                     account
                     notifications
                     developer
@@ -40,6 +48,28 @@ struct MoreTab: View {
         Text(text.uppercased())
             .font(.mono(11, relativeTo: .caption2, weight: .medium))
             .foregroundStyle(Color.inkLabel)
+    }
+
+    /// Geld: the leefgeld week and every account's months (Task 19).
+    private var geld: some View {
+        NavigationLink {
+            GeldScreen(store: money)
+        } label: {
+            HStack {
+                Text("Geld")
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.inkBright)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .glassPanel()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var account: some View {
