@@ -135,4 +135,20 @@ struct DossierModelTests {
         #expect(hits.count == 1)
         #expect(server.requests.first?.url?.query() == "q=huur")
     }
+
+    // MARK: - A document the phone could not take in
+
+    /// A broken download is not a failure Martin can retry away: no message,
+    /// the cursor moves on, and the count of what is missing is shown.
+    @Test func aBrokenDownloadIsCountedNotReportedAsRetryable() async throws {
+        let server = StubServer()
+        server.on(Self.syncRoutes(file: DossierStoreTests.pdf(Data("kapot".utf8))))
+        let model = DossierModel(store: DossierStore(dir: DossierStoreTests.tempDir()), client: server.client())
+        await model.refresh(isLocked: false, isActive: true)
+        #expect(model.message == nil)
+        #expect(model.notHeldCount == 1)
+        #expect(model.notHeldLine == DossierCopy.notHeldLine(1))
+        #expect(DossierCopy.notHeldLine(0) == nil)
+        #expect(DossierCopy.notHeldLine(3)?.hasPrefix("3 documenten staan") == true)
+    }
 }

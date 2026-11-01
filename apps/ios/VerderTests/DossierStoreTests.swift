@@ -111,8 +111,9 @@ struct DossierStoreTests {
         #expect(await DossierStore(dir: r.dir).documents().isEmpty)
     }
 
-    /// A download that throws leaves the cursor where it was, on disk too, so
-    /// the next sync asks for the same page again.
+    /// A download that fails for a reason that is not about the document
+    /// (here: offline) leaves the cursor where it was, on disk too, so the
+    /// next sync asks for the same page again.
     @Test func cursorSavedOnlyAfterApply() async throws {
         let r = rig()
         r.routes.deltas.withLock {
@@ -120,10 +121,10 @@ struct DossierStoreTests {
         }
         r.routes.files.withLock {
             $0[Self.a] = Self.pdf(Self.bytesA)
-            $0[Self.b] = .status(500)
+            $0[Self.b] = .failure(.networkConnectionLost)
         }
         let store = DossierStore(dir: r.dir)
-        await #expect(throws: APIError.server(500)) { try await store.sync(client: r.client) }
+        await #expect(throws: APIError.self) { try await store.sync(client: r.client) }
         #expect(await store.cursor == 0)
         #expect(await DossierStore(dir: r.dir).cursor == 0)
 
@@ -186,15 +187,112 @@ struct DossierStoreTests {
 
     /// The vault is content-addressed: bytes that do not hash to the delta's
     /// sha256 are a broken download, and storing them would make them
-    /// permanent (an unchanged sha is never fetched again).
+    /// permanent (an unchanged sha is never fetched again). The document is
+    /// NOT HELD — and the cursor still moves on.
     @Test func bytesThatDoNotMatchTheShaAreRefused() async throws {
         let r = rig()
         r.routes.deltas.withLock { $0[0] = Self.delta(cursor: 3, upserts: [Self.doc(Self.a, bytes: Self.bytesA)]) }
         r.routes.files.withLock { $0[Self.a] = Self.pdf(Data("%PDF-1.4 truncat".utf8)) }
         let store = DossierStore(dir: r.dir)
-        await #expect(throws: DossierStore.SyncError.hashMismatch(Self.a)) { try await store.sync(client: r.client) }
+        try await store.sync(client: r.client)
         #expect(await store.fileURL(Self.a) == nil)
-        #expect(await store.cursor == 0)
+        #expect(await store.documents().isEmpty)
+        #expect(await store.notHeld().map(\.id) == [Self.a])
+        #expect(await store.cursor == 3)
+    }
+
+    /// THE STALL: one document whose bytes never match (or whose file route
+    /// keeps answering 5xx) must not hold the cursor on its page, or every
+    /// later tombstone never arrives and a web purge never leaves the phone
+    /// (spec §9). Page 1 carries the bad document, page 2 a tombstone for one
+    /// the phone already holds.
+    @Test func aBadDocumentDoesNotStopLaterTombstones() async throws {
+        let r = rig()
+        r.routes.deltas.withLock {
+            $0[0] = Self.delta(cursor: 3, upserts: [Self.doc(Self.a, bytes: Self.bytesA)])
+            $0[3] = Self.delta(cursor: 5, more: true, upserts: [Self.doc(Self.b, bytes: Self.bytesB)])
+            $0[5] = Self.delta(cursor: 8, tombstones: [(Self.a, "purged")])
+            $0[8] = Self.delta(cursor: 8)
+        }
+        r.routes.files.withLock {
+            $0[Self.a] = Self.pdf(Self.bytesA)
+            $0[Self.b] = Self.pdf(Data("niet wat de sha zegt".utf8))
+        }
+        r.routes.texts.withLock { $0 = Self.texts([(Self.a, "Beschikking")]) }
+        let store = DossierStore(dir: r.dir)
+        try await store.sync(client: r.client)
+        let fileA = try #require(await store.fileURL(Self.a))
+
+        r.routes.deltas.withLock { $0[0] = nil }  // the phone is past it
+        try await store.sync(client: r.client)
+        #expect(await store.cursor == 8)
+        #expect(await store.documents().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: fileA.path()))
+        #expect(await store.text(Self.a) == nil)
+        #expect(await store.notHeld().map(\.id) == [Self.b])
+        // Tried once on its page, not again in the same sync.
+        #expect(fileRequests(r, Self.b) == 1)
+        // Persisted: a relaunch still knows what is missing.
+        #expect(await DossierStore(dir: r.dir).notHeld().map(\.id) == [Self.b])
+
+        // Fixed on the server: the next sync takes it in without a new delta.
+        r.routes.files.withLock { $0[Self.b] = Self.pdf(Self.bytesB) }
+        try await store.sync(client: r.client)
+        #expect(await store.documents().map(\.id) == [Self.b])
+        #expect(await store.notHeld().isEmpty)
+        #expect(await DossierStore(dir: r.dir).notHeld().isEmpty)
+    }
+
+    /// A file route that keeps answering 5xx for one id is the same stall.
+    @Test func aServerErrorForOneDocumentDoesNotHoldTheCursor() async throws {
+        let r = rig()
+        r.routes.deltas.withLock {
+            $0[0] = Self.delta(cursor: 7, upserts: [Self.doc(Self.a, bytes: Self.bytesA), Self.doc(Self.b, bytes: Self.bytesB)])
+            $0[7] = Self.delta(cursor: 7)
+        }
+        r.routes.files.withLock {
+            $0[Self.a] = Self.pdf(Self.bytesA)
+            $0[Self.b] = .status(500)
+        }
+        let store = DossierStore(dir: r.dir)
+        try await store.sync(client: r.client)
+        #expect(await store.cursor == 7)
+        #expect(await store.documents().map(\.id) == [Self.a])
+        #expect(await store.notHeld().map(\.id) == [Self.b])
+
+        // Still failing: retried once per sync, nothing else changes.
+        try await store.sync(client: r.client)
+        #expect(fileRequests(r, Self.b) == 2)
+        #expect(fileRequests(r, Self.a) == 1)
+        #expect(await store.notHeld().map(\.id) == [Self.b])
+    }
+
+    /// A tombstone for a document never held takes it off the retry list.
+    @Test func aTombstoneClearsANotHeldDocument() async throws {
+        let r = rig()
+        r.routes.deltas.withLock {
+            $0[0] = Self.delta(cursor: 3, upserts: [Self.doc(Self.b, bytes: Self.bytesB)])
+            $0[3] = Self.delta(cursor: 4, tombstones: [(Self.b, "discarded")])
+        }
+        r.routes.files.withLock { $0[Self.b] = .status(503) }
+        let store = DossierStore(dir: r.dir)
+        try await store.sync(client: r.client)
+        #expect(await store.notHeld().map(\.id) == [Self.b])
+        try await store.sync(client: r.client)
+        #expect(await store.notHeld().isEmpty)
+        #expect(fileRequests(r, Self.b) == 1)
+    }
+
+    /// A state written before `notHeld` existed is still the dossier.
+    @Test func aStateWithoutNotHeldStillLoads() async throws {
+        let dir = Self.tempDir()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let doc = Self.doc(Self.a, bytes: Self.bytesA)
+        let old = #"{"cursor":12,"records":{"\#(Self.a)":{"doc":\#(doc),"contentType":"application/pdf"}}}"#
+        try Data(old.utf8).write(to: DossierStore.stateURL(in: dir))
+        let store = DossierStore(dir: dir)
+        #expect(await store.cursor == 12)
+        #expect(await store.notHeld().isEmpty)
     }
 
     /// Purged between the delta and the download: the file route's 410 is the

@@ -93,6 +93,12 @@ struct DossierTab: View {
                     .foregroundStyle(Color.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let line = model.notHeldLine {
+                Text(line)
+                    .font(.display(15, relativeTo: .subheadline))
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

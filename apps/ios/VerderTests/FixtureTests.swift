@@ -336,6 +336,24 @@ struct FixtureTests {
         }
     }
 
+    /// The real case's dates are as identifying as its names (commit 0aba9f3
+    /// took the beschikking's date out; the aanmelding's survived it): the
+    /// aanmelding (16-04), the stukken to the rechtbank (24-04), the
+    /// beschikking (14-07) and the zaak number. Scanned in the JSON AND in the
+    /// generated PDFs, in ISO and Dutch spellings.
+    @Test func fixturesHoldNoRealCaseDate() throws {
+        let files = FileManager.default.enumerator(at: Self.root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { ["json", "pdf"].contains($0.pathExtension) } ?? []
+        #expect(files.contains { $0.pathExtension == "pdf" })
+        let denied = [/04-16/, /16-04/, /\b16 apr/, /04-24/, /24-04/, /\b24 apr/, /07-14/, /14-07/, /\b14 jul/, /2612548/]
+        for file in files {
+            let lower = String(decoding: try Data(contentsOf: file), as: UTF8.self).lowercased()
+            for pattern in denied {
+                #expect(!lower.contains(pattern), "\(file.path(percentEncoded: false)) carries a real case date")
+            }
+        }
+    }
+
     // MARK: - Through the real stores
 
     @Test func theRealInboxStoreReadsAFixture() async throws {

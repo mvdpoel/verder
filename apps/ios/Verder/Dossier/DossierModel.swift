@@ -29,6 +29,17 @@ enum DossierCopy {
     static let offline = "Geen verbinding — je ziet wat je telefoon al had."
     static let serverError = "verder is even niet bereikbaar. Je ziet wat je telefoon al had."
     static let badDownload = "Een document kwam niet goed binnen. Trek omlaag om het opnieuw te proberen."
+
+    /// The documents the server lists that the phone could not take in; nil
+    /// when there are none. verder retries them itself on every sync, so the
+    /// line asks Martin to do nothing.
+    static func notHeldLine(_ count: Int) -> String? {
+        switch count {
+        case ..<1: return nil
+        case 1: return "1 document staat nog niet op je telefoon. verder probeert het bij elke update opnieuw."
+        default: return "\(count) documenten staan nog niet op je telefoon. verder probeert het bij elke update opnieuw."
+        }
+    }
     static let retry = "Opnieuw proberen"
 
     /// The docmeta vocabulary in Dutch; a soort Martin typed himself stays as typed.
@@ -114,6 +125,9 @@ final class DossierModel {
     /// False until the disk copy has been read: the tab shows a skeleton.
     private(set) var loaded = false
     private(set) var syncedAt: Date?
+    /// Documents the server lists that the phone does not hold (see
+    /// `DossierStore.State.notHeld`).
+    private(set) var notHeldCount = 0
     private(set) var isSyncing = false
     /// The last sync had no network: actions that need the server say so.
     private(set) var offline = false
@@ -147,6 +161,7 @@ final class DossierModel {
     var results: [IndexedDoc] { DossierSearch.search(query, in: docs) }
     var isSearching: Bool { !DossierSearch.words(query).isEmpty }
     var freshness: String? { DossierCopy.freshness(syncedAt: syncedAt, offline: offline) }
+    var notHeldLine: String? { DossierCopy.notHeldLine(notHeldCount) }
 
     func doc(_ id: String) -> DossierDoc? { docs.first { $0.id == id }?.doc }
 
@@ -196,6 +211,7 @@ final class DossierModel {
         await store.wipe()
         docs = []
         syncedAt = nil
+        notHeldCount = 0
         tasks = nil
     }
 
@@ -230,6 +246,7 @@ final class DossierModel {
         guard await store.load() else { return }
         docs = await store.indexed()
         syncedAt = await store.lastSyncedAt
+        notHeldCount = await store.notHeld().count
         loaded = true
     }
 

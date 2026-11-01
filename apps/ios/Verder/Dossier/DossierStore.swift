@@ -23,6 +23,17 @@ import Foundation
 /// already applied and the old cursor, so the next sync asks for the same
 /// page and skips what it already holds.
 ///
+/// ONE BAD DOCUMENT NEVER STALLS THE CURSOR: a download that will not get
+/// better by asking for the same page again — bytes that do not hash to the
+/// delta's sha256 (a `file-hash-mismatch`, which /verify exists to report) or
+/// a 5xx from the file route — makes that document NOT HELD: its id goes in
+/// the persisted `notHeld` set, the rest of the page is applied and the
+/// cursor moves on. Otherwise every later document AND every later tombstone
+/// would never arrive, and a web purge would never leave the phone (spec §9).
+/// The set is retried after paging on every sync and its size is shown.
+/// Only failures that say nothing about the document (offline, 401, 429, a
+/// cancelled task) still stop the sync with the old cursor.
+///
 /// LOADED LAZILY, NEVER IN `init`: the app builds this store on every
 /// process launch, background launches included (the badge push, the
 /// background upload relaunch, an answer button), and while the phone is
@@ -49,8 +60,6 @@ actor DossierStore {
     static let defaultReader: Reader = { try Data(contentsOf: $0) }
 
     enum SyncError: Error, Equatable {
-        /// The downloaded bytes do not hash to the delta's sha256.
-        case hashMismatch(String)
         /// The state could not be written; nothing was lost on the server.
         case disk(String)
         /// The phone's copy could not be read yet (protected data is
@@ -69,8 +78,29 @@ actor DossierStore {
         var cursor: Int
         var records: [String: Record]
         var syncedAt: Date?
+        /// Named by a delta, not on the phone: its download failed in a way a
+        /// retry of the page would not fix. Retried on every sync; a
+        /// tombstone removes it.
+        var notHeld: [String: DossierDoc]
 
-        static let empty = State(cursor: 0, records: [:], syncedAt: nil)
+        static let empty = State(cursor: 0, records: [:], syncedAt: nil, notHeld: [:])
+
+        init(cursor: Int, records: [String: Record], syncedAt: Date?, notHeld: [String: DossierDoc] = [:]) {
+            self.cursor = cursor
+            self.records = records
+            self.syncedAt = syncedAt
+            self.notHeld = notHeld
+        }
+
+        /// A state written before `notHeld` existed still decodes: falling
+        /// back to `.empty` would throw the whole dossier away.
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            cursor = try c.decode(Int.self, forKey: .cursor)
+            records = try c.decode([String: Record].self, forKey: .records)
+            syncedAt = try c.decodeIfPresent(Date.self, forKey: .syncedAt)
+            notHeld = try c.decodeIfPresent([String: DossierDoc].self, forKey: .notHeld) ?? [:]
+        }
     }
 
     let dir: URL
@@ -174,6 +204,13 @@ actor DossierStore {
 
     func contentType(_ id: String) -> String? { load(); return state.records[id]?.contentType }
 
+    /// Documents the server lists that the phone could not take in (see
+    /// `State.notHeld`), sorted by id.
+    func notHeld() -> [DossierDoc] {
+        load()
+        return state.notHeld.values.sorted { $0.id < $1.id }
+    }
+
     /// Nil unless the bytes are on disk.
     func fileURL(_ id: String) -> URL? {
         load()
@@ -192,6 +229,7 @@ actor DossierStore {
         // Never sync, and above all never save, over a copy not yet read.
         guard load() else { throw SyncError.unavailable }
         syncing = true
+        triedThisSync = []
         defer { syncing = false }
         try prepareDirectories()
 
@@ -211,6 +249,7 @@ actor DossierStore {
             try save()
             if !delta.more { break }
         }
+        try await retryNotHeld(client: client)
         try await fetchMissingTexts(client: client)
     }
 
@@ -220,7 +259,12 @@ actor DossierStore {
         state = .empty
         texts = [:]
         isLoaded = true
+        triedThisSync = []
     }
+
+    /// Ids whose download was attempted in the running sync, so a document
+    /// that just failed on its page is not asked for twice in one go.
+    private var triedThisSync: Set<String> = []
 
     private func apply(_ delta: DossierDelta, client: APIClient) async throws {
         for t in delta.tombstones { forget(t.id) }
@@ -229,19 +273,51 @@ actor DossierStore {
             guard UUID(uuidString: doc.id) != nil else { continue }
             if let held = state.records[doc.id], held.doc.sha256 == doc.sha256, fileURL(doc.id) != nil {
                 state.records[doc.id]?.doc = doc
+                state.notHeld[doc.id] = nil
                 continue
             }
-            switch try await download(doc, client: client) {
-            case .stored(let contentType):
-                if state.records[doc.id]?.doc.sha256 != doc.sha256 { dropText(doc.id) }
-                state.records[doc.id] = Record(doc: doc, contentType: contentType)
-            case .gone:
-                forget(doc.id)
-            }
+            try await take(doc, client: client)
         }
     }
 
-    private enum Download { case stored(contentType: String?), gone }
+    /// Downloads one document and records what came of it.
+    private func take(_ doc: DossierDoc, client: APIClient) async throws {
+        triedThisSync.insert(doc.id)
+        switch try await download(doc, client: client) {
+        case .stored(let contentType):
+            if state.records[doc.id]?.doc.sha256 != doc.sha256 { dropText(doc.id) }
+            state.records[doc.id] = Record(doc: doc, contentType: contentType)
+            state.notHeld[doc.id] = nil
+        case .gone:
+            forget(doc.id)
+        case .notHeld:
+            // An older version already on the phone stays readable; the new
+            // one is asked for again on the next sync.
+            state.notHeld[doc.id] = doc
+        }
+    }
+
+    /// After paging: one more try for every document not held, except those
+    /// this sync already tried. Anything that is not about the document
+    /// itself (offline, 401) stops the retries; the cursor is already safe.
+    private func retryNotHeld(client: APIClient) async throws {
+        defer { triedThisSync = [] }
+        let due = state.notHeld.values.filter { !triedThisSync.contains($0.id) }.sorted { $0.id < $1.id }
+        guard !due.isEmpty else { return }
+        do {
+            for doc in due { try await take(doc, client: client) }
+        } catch APIError.unauthorized {
+            try? save()
+            throw APIError.unauthorized
+        } catch {
+            try? save()
+            if APIError.isCancellation(error) { throw error }
+            return
+        }
+        try save()
+    }
+
+    private enum Download { case stored(contentType: String?), gone, notHeld }
 
     private func download(_ doc: DossierDoc, client: APIClient) async throws -> Download {
         let req = client.request("/api/mobile/v1/documents/\(doc.id)/file", method: "GET", body: nil, contentType: nil)
@@ -254,8 +330,14 @@ actor DossierStore {
             // are missing from the vault (which /verify reports). Either way
             // the phone holds nothing for it; a later delta says what it is.
             return .gone
+        } catch APIError.server {
+            // About this document, not the network: asking for the page
+            // again would only fail in the same place.
+            return .notHeld
         }
-        guard Self.sha256Hex(data) == doc.sha256 else { throw SyncError.hashMismatch(doc.id) }
+        // Bytes that do not hash to the sha are a broken download or a
+        // tampered vault; storing them would make them permanent.
+        guard Self.sha256Hex(data) == doc.sha256 else { return .notHeld }
         try write(data, to: Self.fileURL(doc.id, in: dir))
         return .stored(contentType: http.value(forHTTPHeaderField: "Content-Type"))
     }
@@ -285,6 +367,7 @@ actor DossierStore {
 
     private func forget(_ id: String) {
         state.records[id] = nil
+        state.notHeld[id] = nil
         guard UUID(uuidString: id) != nil else { return }
         try? FileManager.default.removeItem(at: Self.fileURL(id, in: dir))
         dropText(id)
