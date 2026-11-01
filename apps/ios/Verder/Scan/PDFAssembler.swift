@@ -29,14 +29,29 @@ enum PDFAssembler {
     /// zero-page PDF that would pass for a document.
     static func assemble(pages: [UIImage], maxLongEdge: CGFloat = 2200,
                          jpegQuality: CGFloat = 0.6) -> (data: Data, pageCount: Int) {
-        guard !pages.isEmpty else { return (Data(), 0) }
+        assemble(pageCount: pages.count, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality) { pages[$0] }
+    }
+
+    /// `assemble`, asking for each page only when it is its turn and letting
+    /// it go before the next: the share extension builds a photo PDF this way
+    /// so it never holds more than one decoded photo (an extension is killed
+    /// around 120 MB). A page the closure cannot give is left out and not counted.
+    static func assemble(pageCount: Int, maxLongEdge: CGFloat = 2200, jpegQuality: CGFloat = 0.6,
+                         page: (Int) -> UIImage?) -> (data: Data, pageCount: Int) {
+        guard pageCount > 0 else { return (Data(), 0) }
         let out = NSMutableData()
         guard let consumer = CGDataConsumer(data: out as CFMutableData),
               let pdf = CGContext(consumer: consumer, mediaBox: nil, nil)
         else { return (Data(), 0) }
         var written = 0
-        for page in pages {
-            guard let jpeg = encodePage(page, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality),
+        for index in 0..<pageCount {
+            // The pool drains Core Image's and ImageIO's autoreleased
+            // intermediates per page, not once at the end.
+            let jpeg: Data? = autoreleasepool {
+                guard let image = page(index) else { return nil }
+                return encodePage(image, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality)
+            }
+            guard let jpeg,
                   let provider = CGDataProvider(data: jpeg as CFData),
                   let image = CGImage(jpegDataProviderSource: provider, decode: nil,
                                       shouldInterpolate: true, intent: .defaultIntent)

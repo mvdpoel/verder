@@ -91,16 +91,20 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Loading what was shared
 
-    /// An image becomes a page of the one photo PDF; a PDF or any other file
-    /// keeps its name and media type and is STAGED: measured, then copied,
-    /// never read into memory (`ShareStaging`).
+    /// An image is STAGED on disk and becomes a page of the one photo PDF
+    /// later, decoded already downscaled (`PhotoPage`); it is never held as a
+    /// full-size `UIImage`. A PDF or any other file keeps its name and media
+    /// type and is staged too: measured, then copied, never read into memory
+    /// (`ShareStaging`).
     static func load(_ provider: NSItemProvider, staging: URL) async -> SharedInput? {
         let types = provider.registeredContentTypes
         if !types.contains(where: { $0.conforms(to: .pdf) }),
-           let imageType = types.first(where: { $0.conforms(to: .image) }),
-           let data = await loadData(provider, imageType),
-           let image = UIImage(data: data) {
-            return .image(image)
+           let imageType = types.first(where: { $0.conforms(to: .image) }) {
+            let name = fileName(provider.suggestedName, type: imageType)
+            let mime = imageType.preferredMIMEType ?? "application/octet-stream"
+            if let input = await loadPhoto(provider, imageType, name: name, mime: mime, staging: staging) {
+                return input
+            }
         }
         let type = types.first { $0.conforms(to: .data) && !$0.conforms(to: .url) }
         if let type {
@@ -116,10 +120,8 @@ final class ShareViewController: UIViewController {
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             let type = UTType(filenameExtension: url.pathExtension) ?? .data
             let mime = type.preferredMIMEType ?? "application/octet-stream"
-            if type.conforms(to: .image), !type.conforms(to: .pdf),
-               let size = ShareStaging.byteCount(url), size <= ShareModel.maxFileBytes,
-               let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-                return .image(image)
+            if type.conforms(to: .image), !type.conforms(to: .pdf) {
+                return ShareStaging.stagePhoto(url, fileName: url.lastPathComponent, mime: mime, into: staging)
             }
             return ShareStaging.stage(url, fileName: url.lastPathComponent, mime: mime, into: staging)
         }
@@ -133,9 +135,29 @@ final class ShareViewController: UIViewController {
         return "\(base).\(ext)"
     }
 
-    private static func loadData(_ provider: NSItemProvider, _ type: UTType) async -> Data? {
-        await withCheckedContinuation { (c: CheckedContinuation<Data?, Never>) in
-            _ = provider.loadDataRepresentation(for: type) { data, _ in c.resume(returning: data) }
+    /// The photo as a FILE, staged inside the handler (the system deletes it
+    /// when the handler returns). Only when a provider offers no file is the
+    /// data representation taken, and then only under the file limit, written
+    /// to staging and let go at once.
+    private static func loadPhoto(_ provider: NSItemProvider, _ type: UTType, name: String, mime: String,
+                                  staging: URL) async -> SharedInput? {
+        let staged = await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
+            _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, _ in
+                c.resume(returning: url.map { ShareStaging.stagePhoto($0, fileName: name, mime: mime, into: staging) })
+            }
+        }
+        if let staged { return staged }
+        return await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
+            _ = provider.loadDataRepresentation(for: type) { data, _ in
+                guard let data else { return c.resume(returning: nil) }
+                guard data.count <= ShareModel.maxFileBytes else { return c.resume(returning: .tooLarge(fileName: name)) }
+                let ext = type.preferredFilenameExtension ?? "img"
+                let temp = staging.appending(path: "data-\(UUID().uuidString).\(ext)")
+                guard (try? data.write(to: temp)) != nil else { return c.resume(returning: nil) }
+                let input = ShareStaging.stagePhoto(temp, fileName: name, mime: mime, into: staging)
+                try? FileManager.default.removeItem(at: temp)
+                c.resume(returning: input)
+            }
         }
     }
 

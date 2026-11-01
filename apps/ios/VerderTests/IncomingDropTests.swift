@@ -166,10 +166,10 @@ struct IncomingDropTests {
 
     /// Photos become ONE PDF through PDFAssembler; a PDF passes through as it came.
     @Test func imagesBecomeOnePDF() throws {
-        let page = Fixture.letterPage
+        let page = Fixture.letterPageURL
         let pdf = Data("%PDF-1.4 mailed".utf8)
         let prepared = SharePreparation.prepare(
-            [.image(page), .file(data: pdf, fileName: "Beschikking.pdf", mime: "application/pdf"), .image(page)],
+            [.photo(url: page), .file(data: pdf, fileName: "Beschikking.pdf", mime: "application/pdf"), .photo(url: page)],
             capturedAt: t0).files
 
         #expect(prepared.count == 2)

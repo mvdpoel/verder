@@ -7,10 +7,13 @@ import UIKit
 /// The fixture: a 3024 x 4032 synthetic photographed page (uneven light,
 /// shadow, fold, sensor noise). How it is made: `apps/ios/scripts/make-letter-fixture.swift`.
 enum Fixture {
+    /// The fixture on disk, for paths that must never decode it at full size.
+    static let letterPageURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/letter-page.jpg")
+
     static let letterPage: UIImage = {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/letter-page.jpg")
+        let url = letterPageURL
         guard let image = UIImage(contentsOfFile: url.path) else {
             fatalError("missing fixture \(url.path)")
         }

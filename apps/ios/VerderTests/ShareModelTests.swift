@@ -132,7 +132,8 @@ struct ShareModelTests {
     /// the detail line counts pages IN the PDF, and the warning says one is missing.
     @Test func anImageThePDFCannotEncodeIsCountedOut() throws {
         let model = ShareModel(groupDir: nil) { ids, _ in ids }
-        model.loaded([.image(Fixture.letterPage), .image(UIImage()), .image(Fixture.letterPage)])
+        let broken = try notAnImage()
+        model.loaded([.photo(url: Fixture.letterPageURL), .photo(url: broken), .photo(url: Fixture.letterPageURL)])
 
         #expect(model.photoPages == 2)
         #expect(model.detail.hasPrefix("2 foto's als één PDF · "))
@@ -143,9 +144,10 @@ struct ShareModelTests {
 
     /// When no photo encodes, there is no zero-page PDF passing for a document
     /// and no "3 foto's" line over nothing.
-    @Test func noEncodablePhotoLeavesOnlyTheFiles() {
+    @Test func noEncodablePhotoLeavesOnlyTheFiles() throws {
         let model = ShareModel(groupDir: nil) { ids, _ in ids }
-        model.loaded([.image(UIImage()), .image(UIImage()), pdf])
+        let broken = try notAnImage()
+        model.loaded([.photo(url: broken), .photo(url: broken), pdf])
 
         #expect(model.prepared.map(\.fileName) == ["Brief.pdf"])
         #expect(model.photoPages == 0)
