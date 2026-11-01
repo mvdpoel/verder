@@ -219,6 +219,65 @@ struct WidgetEntryTests {
         #expect(entries[1].date == snap.updatedAt.addingTimeInterval(24 * 3600))
     }
 
+    // MARK: - Every face fits its family
+
+    /// The space INSIDE the 16 pt content margins on the smallest current
+    /// iPhone widget sizes (158 / 338×158 / 338×354): a face whose ideal height
+    /// exceeds these is clipped at the bottom by WidgetKit, and on the large
+    /// family what got clipped was "waar het nu op wacht".
+    static let budget: [(WidgetFamily, CGSize)] = [
+        (.systemSmall, CGSize(width: 126, height: 126)),
+        (.systemMedium, CGSize(width: 306, height: 126)),
+        (.systemLarge, CGSize(width: 306, height: 322)),
+    ]
+
+    /// `voorjou-many` with `voorjou-long`'s item 1: five rows, the longest
+    /// synthetic titles, a three-digit count, the oldest age shown.
+    static let longest: WidgetSnapshot = {
+        var rows = items
+        rows[0] = item("proposal", 1, "Antwoord aan Bewindkantoor Noordkust over de aanvullende stukken voor de aanvraag bijzondere bijstand en de vraag om een kopie van de beschikking van de rechtbank")
+        rows.append(item("suggestion", 5, "Brief van Gemeente Westerlaan over de huurtoeslag en de terugvordering over 2025 5"))
+        return snapshot(count: 498, items: rows, oldest: now.addingTimeInterval(-40 * 86_400))
+    }()
+
+    @MainActor
+    static func idealHeight(_ snap: WidgetSnapshot?, _ family: WidgetFamily, width: CGFloat) throws -> CGFloat {
+        let view = WidgetFamilyView(content: content(snap, family), family: family)
+            .frame(width: width)
+            .fixedSize(horizontal: false, vertical: true)
+            .environment(\.dynamicTypeSize, .large)
+            .environment(\.colorScheme, .dark)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 1
+        return try #require(renderer.uiImage).size.height
+    }
+
+    @MainActor
+    @Test func everyHomeScreenFaceFitsItsFamily() throws {
+        let cases: [(String, WidgetSnapshot?)] = [
+            ("longest", Self.longest), ("few", Self.snapshot()),
+            ("one", Self.snapshot(count: 1, items: [Self.items[3]])),
+            ("empty", Self.snapshot(count: 0, items: [], headline: nil, oldest: nil)),
+            ("stale", Self.snapshot(age: 2 * 86_400)), ("none", nil),
+        ]
+        for (family, size) in Self.budget {
+            for (name, snap) in cases {
+                let h = try Self.idealHeight(snap, family, width: size.width)
+                #expect(h <= size.height, "\(family) \(name): ideal \(h) pt > \(size.height) pt available")
+            }
+        }
+    }
+
+    /// The headline is the large face's footer: present, and inside the
+    /// budget even with five of the longest rows above it.
+    @MainActor
+    @Test func largeKeepsTheHeadlineWithFiveRows() throws {
+        let c = Self.content(Self.longest, .systemLarge)
+        #expect(c.rows.count == 5)
+        #expect(c.headline?.text == Self.headline)
+        #expect(try Self.idealHeight(Self.longest, .systemLarge, width: 306) <= 322)
+    }
+
     // MARK: - Redaction, rendered
 
     /// iOS redacts `.privacySensitive()` content whenever the phone is locked

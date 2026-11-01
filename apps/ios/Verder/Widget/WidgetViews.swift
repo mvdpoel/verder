@@ -81,28 +81,59 @@ private struct Masthead: View {
     }
 }
 
-/// One item: its kind (not sensitive) over its title (sensitive, redacted on a
-/// locked phone), linking to that exact item.
+/// One item: its kind (not sensitive) and its title (sensitive, redacted on a
+/// locked phone), linking to that exact item. ONE LINE OF TITLE in every
+/// family: a widget is a fixed box, and a wrapped title is what pushed the
+/// large face's headline off the bottom.
+///
+/// `.stacked` puts the kind above the title (medium, two rows); `.inline`
+/// sets it beside the title in a fixed column (large, five rows), so five
+/// rows cost five lines.
 private struct ItemRow: View {
+    enum Style { case stacked, inline }
+
     let line: WidgetContent.Line
+    var style: Style = .stacked
+
+    static let labelColumn: CGFloat = 80
 
     var body: some View {
         Link(destination: line.url) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let label = line.label {
-                    Text(label)
-                        .font(.mono(12, relativeTo: .caption))
-                        .foregroundStyle(Color.inkLabel)
+            Group {
+                switch style {
+                case .stacked:
+                    VStack(alignment: .leading, spacing: 2) {
+                        label
+                        title
+                    }
+                case .inline:
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        label.frame(width: Self.labelColumn, alignment: .leading)
+                        title
+                    }
                 }
-                Text(line.text)
-                    .font(.display(15, relativeTo: .subheadline))
-                    .foregroundStyle(Color.ink)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .privacySensitive(line.sensitive)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    @ViewBuilder private var label: some View {
+        if let label = line.label {
+            Text(label)
+                .font(.mono(12, relativeTo: .caption))
+                .foregroundStyle(Color.inkLabel)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var title: some View {
+        Text(line.text)
+            .font(.display(15, relativeTo: .subheadline))
+            .foregroundStyle(Color.ink)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .privacySensitive(line.sensitive)
     }
 }
 
@@ -110,28 +141,32 @@ private struct ItemRow: View {
 
 private struct WidgetSmall: View {
     let content: WidgetContent
+    var countSize: CGFloat = 48
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Masthead(content: content)
-            Spacer(minLength: 8)
-            CountBlock(content: content)
+            Spacer(minLength: 0)
+            CountBlock(content: content, size: countSize)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
+/// The count on the left, the top two items on the right, one line of title
+/// each — it has to fit 126 pt inside its margins on the smallest phone
+/// (`WidgetEntryTests.everyHomeScreenFaceFitsItsFamily`).
 private struct WidgetMedium: View {
     let content: WidgetContent
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            WidgetSmall(content: content)
-                .frame(maxWidth: 112)
+            WidgetSmall(content: content, countSize: 40)
+                .frame(maxWidth: content.rows.isEmpty ? .infinity : 112)
             if !content.rows.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(content.rows.enumerated()), id: \.offset) { _, line in
-                        ItemRow(line: line)
+                        ItemRow(line: line, style: .stacked)
                     }
                     Spacer(minLength: 0)
                 }
@@ -141,11 +176,15 @@ private struct WidgetMedium: View {
     }
 }
 
+/// Masthead, the count and its words on one baseline, five one-line rows,
+/// and the map headline as a FIXED FOOTER. If anything is ever too tall
+/// (a larger Dynamic Type size), the rows are clipped from the bottom — never
+/// "waar het nu op wacht", which used to be exactly what fell off.
 private struct WidgetLarge: View {
     let content: WidgetContent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Masthead(content: content)
                 Spacer()
@@ -153,18 +192,24 @@ private struct WidgetLarge: View {
                     Text(oldest)
                         .font(.mono(12, relativeTo: .caption))
                         .foregroundStyle(Color.inkLabel)
+                        .lineLimit(1)
                 }
             }
-            CountBlock(content: content, size: 40)
+            LargeCount(content: content)
             if !content.rows.isEmpty {
-                Rectangle().fill(Color.hairline).frame(height: 1).accessibilityHidden(true)
-                ForEach(Array(content.rows.enumerated()), id: \.offset) { _, line in
-                    ItemRow(line: line)
+                VStack(alignment: .leading, spacing: 8) {
+                    Rectangle().fill(Color.hairline).frame(height: 1).accessibilityHidden(true)
+                    ForEach(Array(content.rows.enumerated()), id: \.offset) { _, line in
+                        ItemRow(line: line, style: .inline)
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
+                .clipped()
+            } else {
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
             if let headline = content.headline {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(WidgetContent.headlineLabel)
                         .font(.mono(12, relativeTo: .caption))
                         .foregroundStyle(Color.inkLabel)
@@ -174,9 +219,44 @@ private struct WidgetLarge: View {
                         .lineLimit(1)
                         .privacySensitive(headline.sensitive)
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// The large face's count: the number and its words on one baseline, so the
+/// words still carry the meaning without amber, in one line instead of two.
+private struct LargeCount: View {
+    let content: WidgetContent
+    @Environment(\.widgetRenderingMode) private var mode
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let count = content.countText {
+                Text(count)
+                    .font(.display(40, relativeTo: .largeTitle, weight: .light))
+                    .foregroundStyle(content.countIsAmber(in: mode) ? Color.attn : Color.inkBright)
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .widgetAccentable()
+            } else {
+                Image(systemName: "arrow.clockwise")
+                    .font(.display(22, relativeTo: .title2))
+                    .foregroundStyle(Color.ink)
+                    .widgetAccentable()
+                    .accessibilityHidden(true)
+            }
+            Text(content.caption)
+                .font(.display(15, relativeTo: .subheadline))
+                .foregroundStyle(content.state == .stale ? Color.ink : Color.inkSoft)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
 
