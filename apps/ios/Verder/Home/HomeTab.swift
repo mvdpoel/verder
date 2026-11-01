@@ -56,7 +56,20 @@ enum HomeSummary {
         let items: [VerderAction]
         /// Nil when there is nothing to open.
         let opens: InboxRoute?
-        let amber = false
+    }
+
+    /// The cards Overzicht draws, so their tint is decided in ONE place the
+    /// view reads, never hard-coded per card.
+    enum Card: CaseIterable { case waiting, money, done, tasks, scans }
+
+    /// Whether a card's label is drawn amber. Amber means "waits on Martin",
+    /// so only the waiting card can be amber, and only when something waits —
+    /// never "Door verder gedaan", whatever the inbox holds.
+    static func cardAmber(_ card: Card, inbox: InboxDTO?) -> Bool {
+        switch card {
+        case .waiting: (inbox?.count ?? 0) > 0
+        case .money, .done, .tasks, .scans: false
+        }
     }
 
     static func doneCard(_ inbox: InboxDTO, revealed: Bool) -> DoneCard {
@@ -203,7 +216,8 @@ struct HomeTab: View {
     @ViewBuilder private var waitingCard: some View {
         if let inbox = store.inbox {
             Button { openInbox(nil) } label: {
-                card(label: HomeSummary.waitingLabel, amber: inbox.count > 0, chevron: true) {
+                card(label: HomeSummary.waitingLabel, amber: HomeSummary.cardAmber(.waiting, inbox: inbox),
+                     chevron: true) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             if inbox.count > 0 {
@@ -270,7 +284,9 @@ struct HomeTab: View {
     @ViewBuilder private var doneCard: some View {
         if let inbox = store.inbox {
             let done = HomeSummary.doneCard(inbox, revealed: lock.revealsCaseContent)
-            let content = card(label: HomeSummary.doneLabel, chevron: done.opens != nil) {
+            let content = card(label: HomeSummary.doneLabel,
+                               amber: HomeSummary.cardAmber(.done, inbox: inbox),
+                               chevron: done.opens != nil) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(done.line)
                         .font(.display(15, relativeTo: .subheadline, weight: .regular))

@@ -81,9 +81,24 @@ struct HomeSummaryTests {
     }
 
     /// What verder already did is never amber: it does not wait on Martin.
+    /// Checked against the waiting card on the SAME inbox, so a tint rule
+    /// that ignored the card (amber whenever something waits) fails here.
     @Test func doneCardIsNeverAmber() {
         let inbox = InboxDTO(count: 3, items: (1...3).map(item), doneByVerder: [action(1)])
-        #expect(!HomeSummary.doneCard(inbox, revealed: true).amber)
+        #expect(HomeSummary.cardAmber(.waiting, inbox: inbox))
+        #expect(!HomeSummary.cardAmber(.done, inbox: inbox))
+    }
+
+    /// Amber only for waiting on Martin: no other card, and not the waiting
+    /// card either when nothing waits or the inbox has not loaded.
+    @Test func onlyAWaitingCardWithSomethingWaitingIsAmber() {
+        let busy = InboxDTO(count: 2, items: (1...2).map(item), doneByVerder: [action(1)])
+        let empty = InboxDTO(count: 0, items: [], doneByVerder: [action(1)])
+        for c in HomeSummary.Card.allCases where c != .waiting {
+            #expect(!HomeSummary.cardAmber(c, inbox: busy), "\(c)")
+        }
+        #expect(!HomeSummary.cardAmber(.waiting, inbox: empty))
+        #expect(!HomeSummary.cardAmber(.waiting, inbox: nil))
     }
 
     @Test func doneRowSaysWhatVerderDid() {
