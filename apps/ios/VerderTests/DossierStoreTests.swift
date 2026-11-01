@@ -277,7 +277,7 @@ struct DossierStoreTests {
 
     @Test func documentsAreNewestFirstAndWipeForgetsEverything() async throws {
         let r = rig()
-        let older = Self.doc(Self.b, bytes: Self.bytesB).replacingOccurrences(of: "2026-10-30", with: "2026-07-14")
+        let older = Self.doc(Self.b, bytes: Self.bytesB).replacingOccurrences(of: "2026-10-30", with: "2026-06-03")
         r.routes.deltas.withLock { $0[0] = Self.delta(cursor: 3, upserts: [older, Self.doc(Self.a, bytes: Self.bytesA)]) }
         r.routes.files.withLock {
             $0[Self.a] = Self.pdf(Self.bytesA)

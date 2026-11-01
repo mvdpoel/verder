@@ -16,7 +16,7 @@ struct DossierSearchTests {
     static let corpus = [
         doc("1", "Brief Gemeente Westerlaan", text: "We nemen binnen acht weken een besluit."),
         doc("2", "Formulier bijzondere bijstand", text: "Aanvraagformulier bijzondere bijstand."),
-        doc("3", "Scan 2026-07-14", text: "De rechtbank wijst de Beschíkking toe."),
+        doc("3", "Scan 2026-06-03", text: "De rechtbank wijst de Beschíkking toe."),
         doc("4", "Bevestiging aanmelding", text: "Team Startdossier helpt ook met de aanvraag bijzondere bijstand."),
         doc("5", "ID-kaart"),
     ]

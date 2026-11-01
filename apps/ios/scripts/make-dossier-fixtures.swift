@@ -36,8 +36,8 @@ struct Doc {
 
 let docs: [Doc] = [
     Doc(id: "00000000-f1c5-4000-8000-200000000300", title: "Beschikking Rechtbank Westerlaan", docType: "letter",
-        status: "filed", receivedAt: "2026-07-14T09:00:00.000Z",
-        text: "Rechtbank Westerlaan. Beschikking van 14 juli 2026. De rechtbank stelt de goederen onder bewind en benoemt Bewindkantoor Noordkust tot bewindvoerder."),
+        status: "filed", receivedAt: "2026-06-03T09:00:00.000Z",
+        text: "Rechtbank Westerlaan. Beschikking van 3 juni 2026. De rechtbank stelt de goederen onder bewind en benoemt Bewindkantoor Noordkust tot bewindvoerder."),
     Doc(id: "00000000-f1c5-4000-8000-200000000105", title: "Loonstrook 2026-09", docType: "payslip",
         status: "filed", receivedAt: "2026-09-25T09:00:00.000Z",
         text: "Atelier Sterrenwacht. Loonstrook september 2026. Netto uit te betalen 2.400,00."),
