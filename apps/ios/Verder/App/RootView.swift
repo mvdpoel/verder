@@ -18,7 +18,7 @@ struct RootView: View {
     let inbox: InboxStore
     let money: MoneyStore
     let dossier: DossierModel
-    let voice: VoiceLogFactory
+    let voice: VoiceLogSession
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
@@ -30,9 +30,6 @@ struct RootView: View {
     /// The Dossier stack, held here for the same reason: a document link
     /// that lands on the lock screen opens once the app is unlocked.
     @State private var dossierPath: [DossierRoute] = []
-    /// "Gesprek vastleggen": a sheet over whichever tab is showing, opened
-    /// from Meer or the home screen quick action (`DeepLink.voice`).
-    @State private var voiceOpen = false
     #if DEBUG
     /// `-route geld|weekly|voice` (Verder/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
@@ -72,6 +69,9 @@ struct RootView: View {
         }
         .onChange(of: auth.isSignedIn) { _, signedIn in
             if signedIn { lock.didSignIn() }
+            // A 401 swaps the tabs (and the voice sheet) for sign-in; the
+            // unsent voice log waits and comes back after (`VoiceLogSession`).
+            if signedIn { voice.sessionStarted() } else { voice.sessionEnded() }
         }
         // Push permission is asked after a sign-in or an unlock — moments
         // Martin chose to look at verder — and never on a cold launch, which
@@ -99,7 +99,7 @@ struct RootView: View {
             case .task(let id): inboxPath = [.task(id.uuidString.lowercased())]
             case .inbox: inboxPath = []
             case .document(let id): dossierPath = [.document(id: id.uuidString.lowercased(), title: nil)]
-            case .voice: voiceOpen = true
+            case .voice: voice.open()
             case .none: break
             }
         }
@@ -172,15 +172,17 @@ struct RootView: View {
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
                 MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier,
-                        openVoice: { voiceOpen = true }).lockGated(by: lock)
+                        openVoice: { voice.open() }, forgetVoice: { voice.close() }).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
         .preferredColorScheme(.dark)
         // Lock-gated: it names parties. From the quick action on a cold
         // launch the lock asks Face ID by itself (`promptOnOpen`).
-        .sheet(isPresented: $voiceOpen) {
-            VoiceLogSheet(factory: voice).lockGated(by: lock)
+        // The model lives in `voice`, above this gate: a relock or a 401
+        // removes the sheet's content, never the text Martin was told stays.
+        .sheet(isPresented: Binding(get: { voice.isPresented }, set: { voice.presentationChanged($0) })) {
+            VoiceLogSheet(session: voice).lockGated(by: lock)
         }
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
@@ -191,7 +193,7 @@ struct RootView: View {
             #endif
         }
         #if DEBUG
-        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0, money: money, voice: voice) }
+        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0, money: money, voice: voice.factory) }
         #endif
     }
 

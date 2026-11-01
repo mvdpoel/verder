@@ -18,8 +18,9 @@ struct VerderApp: App {
     @State private var money: MoneyStore
     /// The pocket dossier behind the Dossier tab.
     @State private var dossier: DossierModel
-    /// A fresh voice log per opening (Meer, or the home screen quick action).
-    private let voice: VoiceLogFactory
+    /// The voice log (Meer, or the home screen quick action), owned here —
+    /// above the lock gate and sign-in — so a relock or a 401 keeps its text.
+    @State private var voice: VoiceLogSession
 
     init() {
         #if DEBUG
@@ -47,10 +48,10 @@ struct VerderApp: App {
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
                                                     onUnauthorized: { auth.sessionRejected() }))
         let client = s.client
-        voice = VoiceLogFactory {
+        _voice = State(initialValue: VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
                           dir: VoiceLogModel.liveDirectory, onUnauthorized: { auth.sessionRejected() })
-        }
+        }))
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).
         AppDelegate.services = .init(client: s.client, inbox: inbox)

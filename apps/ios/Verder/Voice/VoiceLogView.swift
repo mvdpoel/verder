@@ -1,43 +1,35 @@
 import SwiftUI
 import UIKit
 
-/// Makes a voice log's model: one per opening, so each log has its own
-/// clientId and its own (emptied) recordings folder.
+/// Makes a voice log's model: one per fresh log (`VoiceLogSession`), so each
+/// log has its own clientId and its own (emptied) recordings folder.
 @MainActor
 struct VoiceLogFactory {
     let make: @MainActor () -> VoiceLogModel
 }
 
 /// "Gesprek vastleggen" as a sheet (design brief §3: medium sheet with a
-/// grabber). The model is made ONCE, on appear: a model made in an
-/// initializer would be remade on every re-render, and making one empties
-/// the recordings folder.
+/// grabber). Holds NO state of its own: the model lives in `VoiceLogSession`,
+/// above the lock gate and the sign-in screen, so a relock or a 401 that
+/// tears this view down cannot take the text or the recording with it. Only
+/// an explicit close discards (`VoiceLogSession.close`).
 struct VoiceLogSheet: View {
-    let factory: VoiceLogFactory
-    @State private var model: VoiceLogModel?
-    @Environment(\.dismiss) private var dismiss
+    let session: VoiceLogSession
 
     var body: some View {
         Group {
-            if let model {
-                VoiceLogView(model: model, close: { close(model) })
+            if let model = session.model {
+                VoiceLogView(model: model, close: { session.close() })
                     .interactiveDismissDisabled(model.holdsUnsentWork)
                     .task { await model.prepare() }
             } else {
                 Color.void.ignoresSafeArea()
             }
         }
-        .onAppear { if model == nil { model = factory.make() } }
-        // Swiped away or closed: whatever was not sent is thrown away,
-        // recording included.
-        .onDisappear { model?.discard() }
+        // Gone without a close (lock screen, sign-in): keep, never discard.
+        .onDisappear { session.sheetDisappeared() }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func close(_ model: VoiceLogModel) {
-        model.discard()
-        dismiss()
     }
 }
 

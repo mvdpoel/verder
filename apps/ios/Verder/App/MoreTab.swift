@@ -13,6 +13,9 @@ struct MoreTab: View {
     /// Opens "Gesprek vastleggen" (RootView holds the sheet, which the home
     /// screen quick action opens too).
     let openVoice: () -> Void
+    /// Signing out on purpose drops a voice log waiting from an earlier 401
+    /// (`VoiceLogSession.close`); only a REJECTED session keeps it.
+    let forgetVoice: () -> Void
 
     @State private var confirmResend = false
 
@@ -114,6 +117,7 @@ struct MoreTab: View {
             }
             AuthButton(title: "Uitloggen", weight: .secondary, enabled: !auth.isBusy) {
                 Task {
+                    forgetVoice()
                     await auth.signOut()
                     await dossier.wipe()
                 }
