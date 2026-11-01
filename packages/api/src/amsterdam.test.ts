@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, monthIndex, monthKey, monthLabel, monthsBetween } from "./amsterdam";
+import {
+  addDays, dayKey, isoWeekKey, monthIndex, monthKey, monthLabel, monthsBetween, weekBounds,
+} from "./amsterdam";
 
 describe("amsterdam calendar", () => {
   it("reads an instant as an Amsterdam calendar day", () => {
@@ -28,5 +30,44 @@ describe("amsterdam calendar", () => {
     expect(monthIndex("2026-02") - monthIndex("2025-11")).toBe(3);
     // The gap a mistyped year opens, which is what the map has to refuse.
     expect(monthIndex("2026-05") - monthIndex("1926-05")).toBe(1200);
+  });
+});
+
+describe("amsterdam weeks", () => {
+  it("week of a Sunday is the Monday before", () => {
+    // 2026-11-01 is a Sunday.
+    expect(weekBounds("2026-11-01")).toEqual({ from: "2026-10-26", to: "2026-11-01" });
+    // A Monday is its own week's first day.
+    expect(weekBounds("2026-10-26")).toEqual({ from: "2026-10-26", to: "2026-11-01" });
+  });
+
+  it("week starting Thursday contains the Wednesday after", () => {
+    // Thursday 2026-10-29 starts the week; Wednesday 2026-11-04 is its last day.
+    expect(weekBounds("2026-11-04", 4)).toEqual({ from: "2026-10-29", to: "2026-11-04" });
+    expect(weekBounds("2026-10-29", 4)).toEqual({ from: "2026-10-29", to: "2026-11-04" });
+    expect(weekBounds("2026-11-05", 4)).toEqual({ from: "2026-11-05", to: "2026-11-11" });
+    // A Sunday start (ISO 7).
+    expect(weekBounds("2026-11-02", 7)).toEqual({ from: "2026-11-01", to: "2026-11-07" });
+  });
+
+  it("week across the DST change has seven days", () => {
+    // 2026-10-25 is the Sunday the clocks go back: a 25-hour day. Day keys are
+    // civil dates, so the week still spans exactly seven of them.
+    const w = weekBounds("2026-10-25");
+    expect(w).toEqual({ from: "2026-10-19", to: "2026-10-25" });
+    const days: string[] = [];
+    for (let d = w.from; d <= w.to; d = addDays(d, 1)) days.push(d);
+    expect(days).toHaveLength(7);
+    expect(addDays("2026-10-25", 1)).toBe("2026-10-26");
+    expect(addDays("2026-03-29", -1)).toBe("2026-03-28");
+  });
+
+  it("isoWeekKey at year end", () => {
+    expect(isoWeekKey("2026-12-31")).toBe("2026-W53");
+    expect(isoWeekKey("2027-01-03")).toBe("2026-W53");
+    expect(isoWeekKey("2027-01-04")).toBe("2027-W01");
+    // 2024-12-30 is a Monday whose Thursday falls in 2025.
+    expect(isoWeekKey("2024-12-30")).toBe("2025-W01");
+    expect(isoWeekKey("2026-10-26")).toBe("2026-W44");
   });
 });

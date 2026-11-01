@@ -201,7 +201,7 @@ Hold to record after a call. Transcribe on-device with iOS 26 `SpeechAnalyzer` i
 
 ### 7.6 Money glance
 
-Read-only. Per account (never merged, per the money law), the recent months as /money computes them, with the same hatched and `geen data` states and the same disclosures. **No "leefgeld left this week" number until Martin supplies the weekly leefgeld amount** (see Open questions). verder holds no budget figure, and inventing one breaks an anti-goal.
+Read-only. Per account (never merged, per the money law), the recent months as /money computes them, with the same hatched and `geen data` states and the same disclosures. **"Leefgeld over deze week"** is computed by `packages/api/src/leefgeld-week.ts` (pure) from the weekly amount Martin supplied (§13, `LEEFGELD_WEEKLY_CENTS`): one account only (`LEEFGELD_IBAN`, else the single known-IBAN account with a weekly income line, else no figure), a week of seven Amsterdam civil days starting on `LEEFGELD_WEEK_START` (default Monday), and only the days the bank statements provably cover (`coveredRanges`, the same merged ranges /money's months use). An uncovered week, or one whose statement starts after the week's first day, reads `geen data`; a week covered only part-way is hatched "t/m <dag>". Spent and deposits are returned as row lists and each total is summed from its list. Without a budget figure there is no number: inventing one breaks an anti-goal.
 
 ### 7.7 Widget
 

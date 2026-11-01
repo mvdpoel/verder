@@ -646,6 +646,8 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 ### Task 17: Amsterdam weeks and "leefgeld over deze week" (pure)
 
+**Rescoped 2026-11-01:** re-read against today's code (slices 6–7 landed; neither touched money). The task stands as written, with three small, recorded differences: (1) `leefgeldWeek`'s input gains an optional `weekStartsOn` (ISO weekday, default 1) — the interface as drawn had no way to carry `LEEFGELD_WEEK_START` into a function that reads no environment; Task 18's route passes it. (2) `amsterdam.ts` also exports `addDays` and `isoWeekday`, the civil-day arithmetic the week helpers are built on; `money-series.ts`'s private `nextDay` is left untouched. (3) `money-series.ts` now exports `disclosedRow` and `byBookedAtThenId` so the leefgeld rows have exactly /money's `DisclosedRow` shape and order. `spentRows` carry amounts AS BOOKED (negative), and `spentCents` is the negated sum of that list. `coveredRanges` was extracted unchanged and `money-series.real.test.ts` passed before and after. Spec §13's wording was checked against the build and still matches; §7.6 now points at `leefgeld-week.ts`.
+
 **Settled 2026-10-31, no gate:** Martin answered spec §13 with "€ 100 per week" and wants the figure built. (His "leave it for now" in the same message referred to moving the APNs key file into his password manager, not to the leefgeld.) Build Tasks 17–19 as written, with `LEEFGELD_WEEKLY_CENTS=10000` in P3-D3. Spec §13 keeps its ONE answer text; this task only checks that text against what was built.
 
 **Files:**
@@ -681,7 +683,8 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   ```
 
 - [ ] **Step 0: Measure the payout weekday [main session, homelab, read-only].** `select account_iban, extract(isodow from booked_at at time zone 'Europe/Amsterdam') as dow, count(*), min(amount_cents), max(amount_cents) from transactions where amount_cents > 0 group by 1, 2 order by 1, 2`. Record the result. If one account shows a clear weekly credit on one weekday, that weekday is `LEEFGELD_WEEK_START`; if the table is empty or shows no weekly pattern, keep Monday and record why. Never guess a weekday.
-- [ ] **Step 1: Failing tests:**
+  - **Measured 2026-11-01 (main session, production, read-only):** `transactions` holds **0 rows**, so no payout weekday is measurable. `LEEFGELD_WEEK_START` stays the default `1` (Monday). Reason: empty table, not an observed pattern. Re-measure after the first statement import.
+- [x] **Step 1: Failing tests:**
   - `amsterdam.test.ts`:
     - `week of a Sunday is the Monday before`;
     - `week starting Thursday contains the Wednesday after`;
@@ -699,11 +702,11 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
     - `overspend gives negative left`;
     - `parse-error rows never count`;
     - `accounts are never merged` (a debit on the beheerrekening does not touch the leefgeld figure).
-- [ ] **Step 2:** Run `env -u NODE_ENV pnpm --filter @verder/api test -- amsterdam leefgeld money-series`. Expected: the new tests FAIL, and `money-series.real.test.ts` PASSES before and after the `coveredRanges` extraction. If it fails, the extraction is wrong, never the test.
-- [ ] **Step 3:** Implement. Then update the spec (§13 already records the answer, added 2026-10-31 with this plan):
+- [x] **Step 2:** Run `env -u NODE_ENV pnpm --filter @verder/api test -- amsterdam leefgeld money-series`. Expected: the new tests FAIL, and `money-series.real.test.ts` PASSES before and after the `coveredRanges` extraction. If it fails, the extraction is wrong, never the test.
+- [x] **Step 3:** Implement. Then update the spec (§13 already records the answer, added 2026-10-31 with this plan):
   - §7.6: replace "No 'leefgeld left this week' number until Martin supplies the weekly leefgeld amount" with a pointer to `leefgeld-week.ts` and its rules.
   - §13: already updated (2026-10-31); check that its wording still matches what was built.
-- [ ] **Step 4:** Commit: `feat(api): leefgeld over deze week, from covered days only`.
+- [x] **Step 4:** Commit: `feat(api): leefgeld over deze week, from covered days only`.
 
 ### Task 18: `GET /api/mobile/v1/money/summary`
 

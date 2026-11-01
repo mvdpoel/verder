@@ -87,6 +87,27 @@ function monthDayBounds(month: string): { first: string; last: string } {
  * date-only midnight bookings, and a lie the moment one does not.
  */
 export function coverageForMonths(txs: MoneyTx[], months: string[]): Map<string, Coverage> {
+  const merged = coveredRanges(txs);
+  const out = new Map<string, Coverage>();
+  for (const month of months) {
+    const { first, last } = monthDayBounds(month);
+    const hasRows = txs.some((t) => monthKey(t.bookedAt) === month);
+    if (!hasRows) { out.set(month, "none"); continue; }
+    const complete = merged.some((r) => r.from <= first && r.to >= last);
+    out.set(month, complete ? "complete" : "partial");
+  }
+  return out;
+}
+
+/**
+ * The Amsterdam calendar-day ranges the statements provably cover: each
+ * statement file spans its first to its last readable booking, and ranges that
+ * overlap OR ABUT are merged. Sorted by `from`. Shared by `coverageForMonths`
+ * and the leefgeld week (`leefgeld-week.ts`), so a month and a week can never
+ * disagree about which days are covered. See `coverageForMonths` for why this
+ * is calendar days and never instants.
+ */
+export function coveredRanges(txs: MoneyTx[]): { from: string; to: string }[] {
   const ranges = new Map<string, { from: string; to: string }>();
   for (const t of txs) {
     if (t.parseError) continue; // an unreadable row's date is not evidence of coverage
@@ -110,16 +131,7 @@ export function coverageForMonths(txs: MoneyTx[], months: string[]): Map<string,
       } else acc.push({ ...r });
       return acc;
     }, []);
-
-  const out = new Map<string, Coverage>();
-  for (const month of months) {
-    const { first, last } = monthDayBounds(month);
-    const hasRows = txs.some((t) => monthKey(t.bookedAt) === month);
-    if (!hasRows) { out.set(month, "none"); continue; }
-    const complete = merged.some((r) => r.from <= first && r.to >= last);
-    out.set(month, complete ? "complete" : "partial");
-  }
-  return out;
+  return merged;
 }
 
 /** Debits per month, grouped by the category of the item they are linked to. */
@@ -455,13 +467,13 @@ function monthlyFromCadence(line: IncomeLine): number {
 }
 
 /** The disclosure needs the row's identity and nothing else; the rest stays server-side. */
-const disclosedRow = (t: MoneyTx): DisclosedRow => ({
+export const disclosedRow = (t: MoneyTx): DisclosedRow => ({
   id: t.id, bookedAt: t.bookedAt, amountCents: t.amountCents,
   counterpartyName: t.counterpartyName,
 });
 
 /** Oldest first, id breaking the tie: a list under a chart must not reshuffle between reads. */
-const byBookedAtThenId = (a: DisclosedRow, b: DisclosedRow) =>
+export const byBookedAtThenId = (a: DisclosedRow, b: DisclosedRow) =>
   a.bookedAt.getTime() - b.bookedAt.getTime() || a.id.localeCompare(b.id);
 
 /**

@@ -56,3 +56,47 @@ export function monthsBetween(oldest: string, newest: string): string[] {
   }
   return out;
 }
+
+/**
+ * A day key moved by `n` civil days. The key is already Amsterdam-local, so UTC
+ * is used only as a calendar: no instant is formed, and the 23- and 25-hour
+ * DST days cannot shift the answer (money-series.ts's `nextDay` discipline).
+ */
+export function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** ISO weekday of a day key: 1 = Monday … 7 = Sunday. */
+export function isoWeekday(day: string): number {
+  const [y, m, d] = day.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return dow === 0 ? 7 : dow;
+}
+
+/**
+ * The seven Amsterdam civil days containing `day`, starting on ISO weekday
+ * `startsOn` (1 = Monday, the default; 7 = Sunday). Computed on day keys only.
+ */
+export function weekBounds(day: string, startsOn = 1): { from: string; to: string } {
+  if (!Number.isInteger(startsOn) || startsOn < 1 || startsOn > 7) {
+    throw new RangeError(`weekBounds: startsOn must be an ISO weekday 1..7, got ${startsOn}`);
+  }
+  const back = (isoWeekday(day) - startsOn + 7) % 7;
+  const from = addDays(day, -back);
+  return { from, to: addDays(from, 6) };
+}
+
+/**
+ * "2026-W44": always the ISO week (Monday start), whatever week the leefgeld
+ * figure uses. The week belongs to the year its Thursday falls in, which is
+ * how 2026-12-31 is 2026-W53 and 2024-12-30 is 2025-W01.
+ */
+export function isoWeekKey(day: string): string {
+  const thursday = addDays(day, 4 - isoWeekday(day));
+  const [y, m, d] = thursday.split("-").map(Number);
+  const year = y;
+  const dayOfYear = (Date.UTC(y, m - 1, d) - Date.UTC(year, 0, 1)) / 86_400_000;
+  const week = Math.floor(dayOfYear / 7) + 1;
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
