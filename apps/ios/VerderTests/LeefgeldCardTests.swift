@@ -229,3 +229,68 @@ struct LeefgeldGlanceTextTests {
         #expect(card.glanceText.contains(card.headline))
     }
 }
+
+/// Review fix: what the Overzicht money card shows WHILE LOCKED is decided by
+/// `MoneyGlance.summary(revealed:)`, not inside the view — so dropping the
+/// lock check, or giving VoiceOver the account line, fails here.
+@MainActor
+struct MoneyGlanceSummaryTests {
+    private static func ibans(_ dto: MoneySummaryDTO) -> [String] {
+        var all = dto.accounts.compactMap(\.accountIban)
+        for week in [dto.leefgeld, dto.previousWeek] {
+            switch week {
+            case .figure(let f): all.append(f.accountIban)
+            case .geenData(let i, _, _, _): all.append(i)
+            case .noAccount(let c): all += c
+            case .noBudget: break
+            }
+        }
+        return all
+    }
+
+    @Test(arguments: ["money-no-budget", "money-complete", "money-geen-data",
+                      "money-partial", "money-overspent", "money-unrecognised"])
+    func lockedSummaryNamesNoAccount(_ name: String) throws {
+        let dto = try FixtureTests.decode(MoneySummaryDTO.self, name, "money/summary")
+        let ibans = Self.ibans(dto)
+        #expect(!ibans.isEmpty, "fixture should carry an account, or this test proves nothing")
+        let locked = MoneyGlance(dto).summary(revealed: false)
+        #expect(locked.lines.isEmpty)
+        let text = locked.allText.lowercased()
+        // "Leefgeldrekening niet herkend" names no account and stays; what
+        // must not appear is a NAMED account ("rekening …3210" / "rekening NL…").
+        #expect(!text.contains("rekening …"))
+        #expect(!text.contains("rekening nl"))
+        #expect(!text.contains("…"))
+        if case .noAccount = dto.leefgeld {} else { #expect(!text.contains("rekening")) }
+        for iban in ibans {
+            #expect(!text.contains(MoneyFormat.ibanTail(iban).lowercased()))
+            #expect(!text.contains(String(iban.suffix(4))))
+        }
+        if let a11y = locked.figureAccessibilityText {
+            #expect(a11y == locked.figure?.glanceText)
+            #expect(!a11y.contains(locked.figure?.accountLine ?? "\u{0}"))
+        }
+    }
+
+    @Test func revealedSummaryShowsTheAccountLines() throws {
+        let dto = try FixtureTests.decode(MoneySummaryDTO.self, "money-no-budget", "money/summary")
+        let glance = MoneyGlance(dto)
+        #expect(glance.leefgeld == nil)
+        #expect(!glance.overview.isEmpty, "fixture should carry an account month, or this test proves nothing")
+        let revealed = glance.summary(revealed: true)
+        #expect(revealed.lines == glance.overview)
+        let iban = try #require(dto.accounts.first?.accountIban)
+        #expect(revealed.allText.contains(MoneyFormat.ibanTail(iban)))
+        #expect(revealed.freshness == glance.freshness)
+    }
+
+    @Test func revealedFigureStillLeavesTheAccountToGeld() throws {
+        let dto = try FixtureTests.decode(MoneySummaryDTO.self, "money-complete", "money/summary")
+        let s = MoneyGlance(dto).summary(revealed: true)
+        let card = try #require(s.figure)
+        #expect(card.accountLine != nil)
+        #expect(s.figureAccessibilityText == card.glanceText)
+        #expect(!s.allText.contains("rekening"))
+    }
+}

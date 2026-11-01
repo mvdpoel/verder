@@ -212,6 +212,34 @@ struct MoneyGlance: Equatable, Sendable {
         }
     }
 
+    /// What the Overzicht money card renders, decided here so the lock rule
+    /// is tested rather than buried in a view (the `HomeSummary.preview(_:revealed:)`
+    /// pattern). The card shows WHILE LOCKED: amounts and the statement age,
+    /// never an account. Locked, the per-account lines (which carry the IBAN
+    /// tail) are dropped; the leefgeld figure never carries its account line
+    /// in either state — that belongs to Geld.
+    struct Summary: Equatable, Sendable {
+        let figure: LeefgeldCard?
+        /// What VoiceOver reads for the figure; never the account line.
+        let figureAccessibilityText: String?
+        let lines: [String]
+        let freshness: String
+
+        /// Every string and VoiceOver label the card can produce, whole.
+        var allText: String {
+            ([figure?.headline, figure?.hero, figure?.heroCaption].compactMap { $0 }
+             + (figure?.lines ?? []) + [figureAccessibilityText].compactMap { $0 }
+             + lines + [freshness]).joined(separator: "\n")
+        }
+    }
+
+    func summary(revealed: Bool) -> Summary {
+        Summary(figure: leefgeld,
+                figureAccessibilityText: leefgeld?.glanceText,
+                lines: leefgeld == nil && revealed ? overview : [],
+                freshness: freshness)
+    }
+
     /// Every string the glance can render, for tests that read it whole.
     var allText: String {
         ([leefgeld?.text, previousWeek, freshness].compactMap { $0 } + overview

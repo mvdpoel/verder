@@ -223,7 +223,7 @@ struct HomeTab: View {
         if let glance = money.glance {
             Button { showGeld = true } label: {
                 card(label: HomeSummary.moneyLabel, chevron: true) {
-                    MoneyGlanceSummary(glance: glance, revealed: lock.revealsCaseContent)
+                    MoneyGlanceSummary(summary: glance.summary(revealed: lock.revealsCaseContent))
                 }
             }
             .buttonStyle(.plain)

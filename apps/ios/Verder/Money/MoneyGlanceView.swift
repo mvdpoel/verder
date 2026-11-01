@@ -9,22 +9,21 @@ import SwiftUI
 // it waits on Martin.
 
 /// The Overzicht money card's content. Shown WHILE LOCKED — it holds amounts,
-/// never a title or a name — so it renders no counterparty and no IBAN; the
-/// account lines use the four-digit tail only once unlocked.
+/// never a title or a name — so it renders no counterparty and no IBAN. What
+/// it shows is `MoneyGlance.summary(revealed:)`, tested in MoneyGlanceSummaryTests.
 struct MoneyGlanceSummary: View {
-    let glance: MoneyGlance
-    let revealed: Bool
+    /// `MoneyGlance.summary(revealed:)` — the lock rule lives there, tested.
+    let summary: MoneyGlance.Summary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let card = glance.leefgeld {
-                LeefgeldFigure(card: card, heroSize: 34)
-            } else if revealed {
-                ForEach(glance.overview, id: \.self) { line in
-                    Text(line).font(.mono(12, relativeTo: .caption)).foregroundStyle(Color.ink)
-                }
+            if let card = summary.figure, let a11y = summary.figureAccessibilityText {
+                LeefgeldFigure(card: card, accessibilityText: a11y, heroSize: 34)
             }
-            Text(glance.freshness)
+            ForEach(summary.lines, id: \.self) { line in
+                Text(line).font(.mono(12, relativeTo: .caption)).foregroundStyle(Color.ink)
+            }
+            Text(summary.freshness)
                 .font(.mono(12, relativeTo: .caption))
                 .foregroundStyle(Color.inkLabel)
         }
@@ -35,6 +34,9 @@ struct MoneyGlanceSummary: View {
 /// only partly covered. Shared by the Overzicht card and the Geld screen.
 struct LeefgeldFigure: View {
     let card: LeefgeldCard
+    /// Supplied by the model (`MoneyGlance.Summary.figureAccessibilityText`
+    /// or `LeefgeldCard.glanceText`): never the account line.
+    let accessibilityText: String
     var heroSize: CGFloat = 40
 
     var body: some View {
@@ -66,7 +68,7 @@ struct LeefgeldFigure: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(card.glanceText)
+        .accessibilityLabel(accessibilityText)
     }
 
     private func heroText(_ hero: String) -> some View {
@@ -172,7 +174,7 @@ struct GeldScreen: View {
     private func leefgeldCard(_ card: LeefgeldCard, previous: String?) -> some View {
         panel {
             label(LeefgeldCard.label)
-            LeefgeldFigure(card: card)
+            LeefgeldFigure(card: card, accessibilityText: card.glanceText)
             if let account = card.accountLine { readout(account) }
             if !card.rows.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
