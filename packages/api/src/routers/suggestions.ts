@@ -10,7 +10,8 @@ import { effectiveDocument } from "./documents";
 import { debtFields, itemFields } from "./registry";
 import { taskFields } from "./tasks";
 import { documentRequestText } from "../search/document-request";
-import { entryForApproval } from "../entry-from-proposed";
+import { entryForApproval, VOICE_PROMPT_VERSION } from "../entry-from-proposed";
+import { voiceSummary } from "../voice-summary";
 import { docTypeKey } from "../doc-type";
 
 // The input shape lives beside the one mapping that builds it from a proposal
@@ -40,6 +41,11 @@ const notOpen = () =>
   new TRPCError({ code: "CONFLICT", message: "Suggestion not open for review" });
 
 type SuggestionRecord = typeof schema.suggestions.$inferSelect;
+
+/** Who wrote a voice note's text: Apple's on-device speech, never a server. */
+const VOICE_MODEL = "apple-speech-on-device";
+/** A dictated call, generously: about two hours of speech. */
+export const VOICE_TRANSCRIPT_MAX = 20_000;
 
 /**
  * The row as every reader sees it: the triggering email, the document by its
@@ -93,6 +99,65 @@ export const suggestionsRouter = router({
     // document at all are untouched.
     return enriched.filter((s) =>
       s.document?.effectiveStatus !== "discarded" && (s.document?.purge ?? null) === null);
+  }),
+
+  /**
+   * A call Martin dictated on the phone (Plan 3 Task 24), transcribed ON the
+   * phone. It becomes a PENDING log-entry suggestion and NEVER an entry: he
+   * approves it in Voor jou through `approveEntry`, like any other, and only
+   * then does anything reach the ledger (`source: "manual"`, entry-from-
+   * proposed.ts). Not evidence, so no ledger event here — a kept recording's
+   * own `document.ingested` is appended by registerUpload, before this call.
+   *
+   * IDEMPOTENT ON THE PHONE'S clientId, under concurrency too: the INSERT's
+   * ON CONFLICT names exactly the expression and predicate of the partial
+   * unique index `suggestions_voice_client_uq` (migration 0041), so two
+   * retries racing each other leave one row. A select-then-insert would let
+   * both insert. A retry returns the FIRST row, whatever it now carries.
+   */
+  createVoice: protectedProcedure.input(z.object({
+    clientId: z.string().uuid(),
+    occurredAt: z.coerce.date(),
+    partyId: z.string().uuid(),
+    channel: entryForApproval.shape.channel.default("call"),
+    transcript: z.string().trim().min(1).max(VOICE_TRANSCRIPT_MAX),
+    audioDocumentId: z.string().uuid().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const clientId = input.clientId.toLowerCase();
+    const [party] = await ctx.db.select({ id: schema.parties.id, name: schema.parties.name })
+      .from(schema.parties).where(eq(schema.parties.id, input.partyId));
+    if (!party) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown party" });
+    if (input.audioDocumentId) {
+      const [doc] = await ctx.db.select({ id: schema.documents.id }).from(schema.documents)
+        .where(eq(schema.documents.id, input.audioDocumentId));
+      if (!doc) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown audio document" });
+    }
+    const proposed = {
+      clientId, occurredAt: input.occurredAt.toISOString(), channel: input.channel,
+      direction: "inbound", summary: voiceSummary(input.transcript), details: input.transcript,
+      participantPartyIds: [party.id], participantNames: [party.name],
+      attachmentDocumentIds: input.audioDocumentId ? [input.audioDocumentId] : [],
+      actionItems: [],
+    };
+    // The predicate is spelled as LITERALS, never parameters: Postgres infers
+    // the arbiter index by proving the predicate, and cannot prove it from a
+    // bind parameter.
+    const inserted = await ctx.db.execute<{ id: string }>(sql`
+      INSERT INTO suggestions (kind, status, model, prompt_version, proposed)
+      VALUES ('log-entry', 'pending', ${VOICE_MODEL}, ${VOICE_PROMPT_VERSION},
+        ${JSON.stringify(proposed)}::jsonb)
+      ON CONFLICT ((proposed->>'clientId'))
+        WHERE kind = 'log-entry' AND prompt_version = 'voice-v1'
+      DO NOTHING
+      RETURNING id`);
+    if (inserted.rows.length > 0) return { id: inserted.rows[0].id, duplicate: false };
+    const [existing] = await ctx.db.select({ id: schema.suggestions.id })
+      .from(schema.suggestions).where(and(
+        eq(schema.suggestions.kind, "log-entry"),
+        eq(schema.suggestions.promptVersion, VOICE_PROMPT_VERSION),
+        sql`${schema.suggestions.proposed}->>'clientId' = ${clientId}`));
+    if (!existing) throw new Error("createVoice: conflict on clientId, but no row to return");
+    return { id: existing.id, duplicate: true };
   }),
 
   approveEntry: protectedProcedure.input(z.object({

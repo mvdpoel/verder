@@ -63,4 +63,5 @@ export const DOC_SOURCE_LABEL: Record<DocSource, string> = {
   loondossier: "Mijn LoonDossier",
   "phone-scan": "telefoon",
   "phone-share": "gedeeld",
+  "phone-voice": "spraak",
 };

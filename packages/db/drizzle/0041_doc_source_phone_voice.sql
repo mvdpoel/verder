@@ -1,0 +1,22 @@
+-- verder for iPhone, slice 8 (Plan 3 Task 24): the voice quick-log. Martin
+-- dictates a call on the phone; it is transcribed ON THE PHONE and arrives as a
+-- PENDING log-entry suggestion, never as an entry — he approves it in Voor jou.
+-- Two additions, both additive:
+--   1. `phone-voice`, the doc_source of a recording he chose to keep ("bewaar
+--      opname"). ADD VALUE never rewrites or invalidates an existing row, so
+--      the append-only evidence guarantee is untouched.
+--   2. A partial unique index on a voice suggestion's client UUID. It is what
+--      makes suggestions.createVoice idempotent under two CONCURRENT retries
+--      (INSERT … ON CONFLICT DO NOTHING against exactly this predicate): a
+--      select-then-insert would let both insert. It covers voice-v1 rows only,
+--      so no mined suggestion is constrained by it.
+--
+-- ORDERING TRAP (the same one 0020–0040 carry): migrate from the homelab HOST
+-- BEFORE rebuilding web+worker, or a kept recording fails on `invalid input
+-- value for enum doc_source` (after the audio bytes were written to the vault)
+-- and every voice note on `there is no unique or exclusion constraint matching
+-- the ON CONFLICT specification`. Nothing below USES the new enum value:
+-- drizzle applies pending migrations in one transaction, and Postgres refuses
+-- a value added by ALTER TYPE … ADD VALUE until it commits.
+ALTER TYPE "public"."doc_source" ADD VALUE 'phone-voice';--> statement-breakpoint
+CREATE UNIQUE INDEX "suggestions_voice_client_uq" ON "suggestions" ((proposed->>'clientId')) WHERE kind = 'log-entry' AND prompt_version = 'voice-v1';

@@ -29,6 +29,7 @@ const SOURCE_LABEL: Record<DocSource, string> = {
   loondossier: "Mijn LoonDossier",
   "phone-scan": "telefoon",
   "phone-share": "gedeeld",
+  "phone-voice": "spraak",
 };
 const SOURCE_OPTIONS: { value: DocSource; label: string }[] = DOC_SOURCES.map(
   (value) => ({ value, label: SOURCE_LABEL[value] }));

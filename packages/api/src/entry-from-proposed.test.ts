@@ -85,4 +85,14 @@ describe("entryFromProposed", () => {
     expect(entryFromProposed({ rawEmailId: null, promptVersion: "voice-v1", proposed }).source)
       .toBe("manual");
   });
+  it("a voice note carries the party Martin picked; a mined proposal never carries ids", () => {
+    const voice = { rawEmailId: null, promptVersion: "voice-v1",
+      proposed: { ...proposed, channel: "call", participantPartyIds: [PARTY] } };
+    expect(entryFromProposed(voice).participantPartyIds).toEqual([PARTY]);
+    // An edit still wins, an emptied list included.
+    expect(entryFromProposed(voice, { participantPartyIds: [] }).participantPartyIds).toEqual([]);
+    // The miner proposes names; ids in a mined payload are not trusted.
+    expect(entryFromProposed({ ...mailSuggestion,
+      proposed: { ...proposed, participantPartyIds: [PARTY] } }).participantPartyIds).toEqual([]);
+  });
 });

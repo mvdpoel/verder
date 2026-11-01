@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { asc } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { asc, eq, sql } from "drizzle-orm";
 import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
@@ -7,6 +8,35 @@ import { appendLedgerEvent } from "../ledger";
 export const partiesRouter = router({
   list: protectedProcedure.query(({ ctx }) =>
     ctx.db.select().from(schema.parties).orderBy(asc(schema.parties.name))),
+
+  /** One party; NOT_FOUND when the id names none. */
+  get: protectedProcedure.input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [p] = await ctx.db.select().from(schema.parties)
+        .where(eq(schema.parties.id, input.id));
+      if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+      return p;
+    }),
+
+  /**
+   * Every party, the one Martin was most recently in contact with first: by
+   * the newest `log_entries.occurred_at` among the entries it took part in
+   * (through entry_participants), then by name. A party with no entry at all
+   * comes last, by name. The phone's voice quick-log picks from this, because
+   * the call he is logging is nearly always with someone he spoke to lately.
+   */
+  recent: protectedProcedure.query(({ ctx }) => {
+    const last = sql`max(${schema.logEntries.occurredAt})`;
+    return ctx.db.select({
+      id: schema.parties.id, kind: schema.parties.kind, name: schema.parties.name,
+      organization: schema.parties.organization, email: schema.parties.email,
+      lastContactAt: last.mapWith(schema.logEntries.occurredAt),
+    }).from(schema.parties)
+      .leftJoin(schema.entryParticipants, eq(schema.entryParticipants.partyId, schema.parties.id))
+      .leftJoin(schema.logEntries, eq(schema.logEntries.id, schema.entryParticipants.entryId))
+      .groupBy(schema.parties.id)
+      .orderBy(sql`${last} DESC NULLS LAST`, asc(schema.parties.name), asc(schema.parties.id));
+  }),
   create: protectedProcedure.input(z.object({
     kind: z.enum(["person", "organization"]),
     name: z.string().min(1),

@@ -6,7 +6,7 @@ import { buildFilesHref, encodeBranch, type Branch, type ParsedFiles } from "@/l
 
 const NL_SOURCE: Record<DocSource, string> = {
   upload: "Geüpload", "nas-scan": "Gescand", "email-attachment": "Uit de mail",
-  loondossier: "Mijn LoonDossier", "phone-scan": "Telefoon", "phone-share": "Gedeeld",
+  loondossier: "Mijn LoonDossier", "phone-scan": "Telefoon", "phone-share": "Gedeeld", "phone-voice": "Spraak",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "Te sorteren", filed: "Opgeborgen", discarded: "Weggelegd",

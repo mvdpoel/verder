@@ -87,8 +87,11 @@ export function entryFromProposed(s: EntrySuggestion, edits: unknown = {}): Entr
     summary: e.summary ?? p.summary,
     details: typeof details === "string" && details !== "" ? details : undefined,
     source: entrySource(s),
-    // The miner proposes participant NAMES, never ids; resolving one is an edit.
-    participantPartyIds: e.participantPartyIds ?? [],
+    // The miner proposes participant NAMES, never ids; resolving one is an
+    // edit. A voice note is the one exception: its party is not a model's
+    // guess but the one Martin PICKED on the phone, so its ids are carried.
+    participantPartyIds: e.participantPartyIds
+      ?? (s.promptVersion === VOICE_PROMPT_VERSION ? p.participantPartyIds : undefined) ?? [],
     // Deduplicated: the card merges the proposed attachments with the ones
     // Martin picked from "do we already have this?", which can overlap.
     documentIds: Array.isArray(docIds) ? [...new Set(docIds)] : docIds,

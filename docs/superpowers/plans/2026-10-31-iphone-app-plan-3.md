@@ -910,7 +910,18 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 - `POST /api/mobile/v1/entries/voice` (multipart): fields `clientId`, `occurredAt`, `partyId`, `channel`, `transcript`, and an optional `audio` file. Audio goes through `readGuardedFile` → `storeFile` → `registerUpload({ source: "phone-voice", sourceRef: "phone:<clientId>" })`.
 - `GET /api/mobile/v1/parties?recent=1` lists parties ordered by their newest `log_entries.occurred_at` through `entry_participants`, then by name.
 
-- [ ] **Step 1: Failing tests:**
+**Rescoped 2026-11-01:** re-read against today's code (after slices 6–7 and Tasks 17–20). What moved, and what was added:
+- `VOICE_PROMPT_VERSION` and `entrySource` (voice → `manual`) already existed in `packages/api/src/entry-from-proposed.ts` from Task 4, so `createVoice` imports them rather than spelling `"voice-v1"` a second time (the ON CONFLICT predicate keeps the literal on purpose: Postgres cannot infer a partial arbiter index from a bind parameter).
+- **`entryFromProposed` dropped the picked party.** It set `participantPartyIds: e.participantPartyIds ?? []` ("the miner proposes NAMES, never ids"), so a voice note approved unedited would have entered the ledger with NO participant, defeating the party picker. It now falls back to `proposed.participantPartyIds` for a `voice-v1` suggestion ONLY; a mined payload's ids are still ignored. Test: `a voice note carries the party Martin picked; a mined proposal never carries ids`, plus the end-to-end `approval writes a manual entry with the picked party`.
+- `parties` had only `list`/`create`. Added `parties.recent` (newest `log_entries.occurred_at` via `entry_participants`, `NULLS LAST`, then name; test in `parties.test.ts`) and `parties.get` (NOT_FOUND), which the voice route calls BEFORE storing audio: a stored recording is a ledgered `document.ingested` and cannot be taken back, so an unknown party must be refused first. `GET /parties` without `recent` returns the same DTO sorted by name (`lastContactAt` is real in both modes, never invented).
+- `readGuardedFile` requires a file, and audio is optional here, so `apps/web/src/lib/vault-upload.ts` was split into `readGuardedForm` (the size guard) + `readFormFile`; `readGuardedFile` is now built from them and behaves exactly as before (its route tests pass unchanged). A non-`audio/*` file is a 400 before anything is stored.
+- The worker skip lives in a new `apps/worker/src/voice-recording.ts` (`isVoiceRecording`, `noTextExtraction`, test `voice-recording.test.ts`): an `audio/*` document stores extractor `none` WITHOUT starting an OCR port and then returns — no auto-name, no docmeta suggestion, no letter check. The handler is now at `apps/worker/src/index.ts:395-401`.
+- The suggestion's `proposed.clientId` is lower-cased, and the phone's `sourceRef` is `phone:<lowercased clientId>`, matching the document upload route.
+- Ledger assertions are scoped (events since a recorded seq that touch THIS suggestion, party or document, and no `log_entries` row with the transcript), never the global count: the dev DB is shared and other test files append in parallel.
+- The router tests sit in `packages/api/src/routers/suggestions-voice.test.ts`; the route tests beside each route.
+- Dev DB migrated to 0041 locally. Production is untouched: M-B goes in at P3-D3 (Task 27).
+
+- [x] **Step 1: Failing tests:**
   - `enum has phone-voice`;
   - `summary cuts at a word under 120`;
   - `voice creates a pending log-entry suggestion and no entry` (without audio; count `log_entries` and `ledger_events` before and after: unchanged);
@@ -919,7 +930,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   - `two concurrent createVoice calls with one clientId give one suggestion` (`Promise.all`);
   - `audio is stored as phone-voice`;
   - `401 first`.
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat: voice quick-log arrives as a log-entry suggestion`.
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat: voice quick-log arrives as a log-entry suggestion`.
 
 ### Task 25: Voice quick-log (iOS)
 

@@ -16,6 +16,7 @@ import { scanNasFolder } from "./nas";
 import { fetchLoondossier } from "./loondossier";
 import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 import { storeDocumentText } from "./document-text";
+import { isVoiceRecording, noTextExtraction } from "./voice-recording";
 import { autoNameSafely } from "./auto-name";
 import { mineRegistry } from "./registry-mine";
 import { suggestTask } from "./task-mine";
@@ -392,6 +393,13 @@ await boss.work("suggest.docmeta", async ([job]) => {
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
   const buf = await readFile(readFilePath(process.env.VAULT_DIR ?? "./vault-files", doc.sha256));
+  // A kept voice recording (phone-voice) has no text to read: store extractor
+  // `none` so the sweep never picks it up again, and stop — no auto-name, no
+  // docmeta suggestion, no letter check (voice-recording.ts).
+  if (isVoiceRecording(doc.mime)) {
+    await storeDocumentText({ db, extract: noTextExtraction }, doc, buf);
+    return;
+  }
   // Extract once, store it, and hand the same text to the docmeta prompt: the
   // text the model saw is the text the search index holds.
   const stored = await storeDocumentText({ db }, doc, buf);

@@ -28,6 +28,7 @@ describe("doc_source", () => {
   it("matches DOC_SOURCES exactly, in order", async () => {
     expect(await enumValues()).toEqual([
       "upload", "nas-scan", "email-attachment", "loondossier", "phone-scan", "phone-share",
+      "phone-voice",
     ]);
     expect([...DOC_SOURCES]).toEqual(await enumValues());
   });

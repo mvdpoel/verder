@@ -10,6 +10,7 @@
  */
 export const DOC_SOURCES = [
   "upload", "nas-scan", "email-attachment", "loondossier", "phone-scan", "phone-share",
+  "phone-voice",
 ] as const;
 
 export type DocSource = (typeof DOC_SOURCES)[number];

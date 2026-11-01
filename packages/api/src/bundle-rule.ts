@@ -34,6 +34,7 @@ export function parseBundleRule(raw: unknown):
 const NL_SOURCE: Record<DocSource, string> = {
   upload: "geüpload", "nas-scan": "gescand", "email-attachment": "uit de mail",
   loondossier: "Mijn LoonDossier", "phone-scan": "telefoon", "phone-share": "gedeeld",
+  "phone-voice": "spraak",
 };
 const NL_STATUS: Record<string, string> = {
   inbox: "te sorteren", filed: "opgeborgen", discarded: "weggelegd",

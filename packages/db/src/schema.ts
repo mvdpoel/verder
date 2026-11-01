@@ -239,7 +239,13 @@ export const suggestions = pgTable("suggestions", {
   resultEntryId: uuid("result_entry_id"),
   verdictAt: timestamp("verdict_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Migration 0041: one voice note per phone client UUID. What makes
+  // suggestions.createVoice idempotent under two CONCURRENT retries — its
+  // INSERT … ON CONFLICT names exactly this expression and predicate.
+  uniqueIndex("suggestions_voice_client_uq").on(sql`(${t.proposed}->>'clientId')`)
+    .where(sql`${t.kind} = 'log-entry' AND ${t.promptVersion} = 'voice-v1'`),
+]);
 
 // --- financial registry tables ---
 // Editable fact tables (financial_items, debts, transactions): a typo is a

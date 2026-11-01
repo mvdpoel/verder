@@ -47,4 +47,28 @@ describe("parties router", () => {
     expect(payload.parentPartyId).toBe(creditor.id);
     expect(sha256Hex(canonicalJson(payload))).toBe(ev.payloadHash);
   });
+  it("recent lists parties by their newest log entry, then by name", async () => {
+    const c = caller();
+    const tag = crypto.randomUUID();
+    const older = await c.parties.create({ kind: "organization", name: `Older Testfixture ${tag}` });
+    const newer = await c.parties.create({ kind: "organization", name: `Newer Testfixture ${tag}` });
+    const never = await c.parties.create({ kind: "organization", name: `A Never Testfixture ${tag}` });
+    const entry = (partyId: string, occurredAt: string) => c.entries.create({
+      occurredAt: new Date(occurredAt), channel: "call", direction: "inbound",
+      summary: `Testfixture ${tag}`, source: "manual", participantPartyIds: [partyId],
+      documentIds: [], actionItems: [] });
+    await entry(older.id, "2026-10-01T09:00:00.000Z");
+    await entry(older.id, "2026-09-01T09:00:00.000Z");
+    await entry(newer.id, "2026-10-20T09:00:00.000Z");
+    const list = await c.parties.recent();
+    const at = (id: string) => list.findIndex((p) => p.id === id);
+    expect(at(newer.id)).toBeGreaterThanOrEqual(0);
+    expect(at(newer.id)).toBeLessThan(at(older.id));
+    expect(at(older.id)).toBeLessThan(at(never.id));
+    const row = list[at(older.id)];
+    expect(row.lastContactAt?.toISOString()).toBe("2026-10-01T09:00:00.000Z");
+    expect(list[at(never.id)].lastContactAt).toBeNull();
+    // Every party appears once, however many entries it has.
+    expect(list.filter((p) => p.id === older.id)).toHaveLength(1);
+  });
 });
