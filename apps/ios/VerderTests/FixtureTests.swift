@@ -271,6 +271,43 @@ struct FixtureTests {
         #expect(try Self.server("voice").manifest.transcript?.hasPrefix("Gebeld met Woonstichting Lindehof.") == true)
     }
 
+    // MARK: - The pocket dossier
+
+    /// Every document in the delta has its bytes, and they hash to the delta's
+    /// sha256 — the check the phone makes on every download.
+    /// `scripts/make-dossier-fixtures.swift` writes all three files at once.
+    @Test func dossierFilesAreServedAndHashToTheirSha() throws {
+        let sync = try Self.decode(DossierDelta.self, "dossier", "documents/sync")
+        #expect(sync.upserts.count == 12)
+        for doc in sync.upserts {
+            guard case .file("application/pdf", let body) = try Self.server("dossier")
+                .reply(method: "GET", path: FixtureServer.apiPrefix + "documents/\(doc.id)/file") else {
+                Issue.record("\(doc.title): no file"); continue
+            }
+            #expect(DossierStore.sha256Hex(body) == doc.sha256, "\(doc.title)")
+            #expect(body.count == doc.sizeBytes, "\(doc.title)")
+        }
+        let texts = try Self.decode([DossierText].self, "dossier", "documents/texts")
+        #expect(Set(texts.map(\.id)) == Set(sync.upserts.filter(\.hasText).map(\.id)))
+        #expect(sync.upserts.filter { !$0.hasText }.map(\.title) == ["ID-kaart"])
+    }
+
+    /// The data doc's promise, through the real store and the real search:
+    /// twelve documents, and "bijstand" finds two.
+    @Test func theRealDossierStoreSyncsTheFixture() async throws {
+        let dir = URL.temporaryDirectory.appending(path: "dossier-fixture-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let store = DossierStore(dir: dir)
+        try await store.sync(client: FixtureEnvironment.client(fixture: "dossier"))
+        #expect(await store.documents().count == 12)
+        #expect(await store.cursor == 412)
+        let indexed = await store.indexed()
+        #expect(indexed.filter { $0.text != nil }.count == 11)
+        #expect(Set(DossierSearch.search("bijstand", in: indexed).map(\.doc.title)) ==
+                ["Formulier bijzondere bijstand", "Bevestiging aanmelding Noordkust"])
+        let open = DossierCopy.openTasks(try Self.decode([TaskDTO].self, "dossier", "tasks"))
+        #expect(open.count == 6)
+    }
+
     // MARK: - Synthetic only
 
     /// Simulator screenshots and Figma frames leave this machine: no real
@@ -377,9 +414,16 @@ struct FixtureTests {
         #expect(throws: FixtureLaunch.ParseError.missingValue("-tab")) { try FixtureLaunch.parse(["-fixtures", "x", "-tab", "-route"]) }
         #expect(throws: FixtureLaunch.ParseError.unknownTab("geld")) { try FixtureLaunch.parse(["-fixtures", "x", "-tab", "geld"]) }
         #expect(throws: FixtureLaunch.ParseError.unknownRoute("proposal:nope")) { try FixtureLaunch.parseRoute("proposal:nope") }
-        #expect(throws: FixtureLaunch.ParseError.unknownRoute("document:\(Self.reply)")) {
-            try FixtureLaunch.parseRoute("document:\(Self.reply)")
+        #expect(throws: FixtureLaunch.ParseError.unknownRoute("document:nope")) { try FixtureLaunch.parseRoute("document:nope") }
+        #expect(throws: FixtureLaunch.ParseError.unknownRoute("inbox:\(Self.reply)")) {
+            try FixtureLaunch.parseRoute("inbox:\(Self.reply)")
         }
+    }
+
+    /// The Dossier tab's viewer, opened the way a `verder://document/<id>` push would.
+    @Test func parsesADocumentRoute() throws {
+        let id = "00000000-f1c5-4000-8000-200000000311"
+        #expect(try FixtureLaunch.parseRoute("document:\(id)") == .link(.document(UUID(uuidString: id)!)))
     }
 
     /// The test process itself is never a fixture launch.

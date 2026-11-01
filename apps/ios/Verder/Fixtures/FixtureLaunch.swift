@@ -8,7 +8,7 @@ import Foundation
 ///     -fixtures <name>         answer every /api/mobile/v1 call from FixtureData/<name>
 ///     -fixtures-locked         keep the app lock closed: Overzicht's counts-only glance
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
-///     -route <proposal:<id>|suggestion:<id>|task:<id>|geld|weekly|voice>
+///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|voice>
 ///
 /// Without `-fixtures` none of the others does anything: a DEBUG build on the
 /// real server never jumps tabs because of a stale scheme argument.
@@ -76,7 +76,7 @@ struct FixtureLaunch: Equatable, Sendable {
     static func parseRoute(_ raw: String) throws(ParseError) -> Route {
         if let screen = Screen(rawValue: raw) { return .screen(screen) }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2, ["proposal", "suggestion", "task"].contains(parts[0]) else {
+        guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)
         }
         let link = DeepLink.parse("verder://\(parts[0])/\(parts[1])")

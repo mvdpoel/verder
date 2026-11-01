@@ -1,12 +1,57 @@
 [
   {
-    "id": "00000000-f1c5-4000-8000-200000000311",
-    "text": "Aanvraagformulier bijzondere bijstand Gemeente Westerlaan. Handtekening aanvrager.",
+    "id": "00000000-f1c5-4000-8000-200000000300",
+    "text": "Rechtbank Westerlaan. Beschikking van 14 juli 2026. De rechtbank stelt de goederen onder bewind en benoemt Bewindkantoor Noordkust tot bewindvoerder.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000105",
+    "text": "Atelier Sterrenwacht. Loonstrook september 2026. Netto uit te betalen 2.400,00.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000104",
+    "text": "Atelier Sterrenwacht. Loonstrook oktober 2026. Netto uit te betalen 2.400,00.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000303",
+    "text": "Zorgverzekeraar Duinzorg. Polisblad 2026. Basisverzekering met het verplichte eigen risico.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000304",
+    "text": "Woonstichting Lindehof. Huurovereenkomst zelfstandige woonruimte, ingangsdatum 1 maart 2025.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000106",
+    "text": "Incassobureau Kade & Partners. Sommatie namens Stroomnet Energie. Betaal binnen veertien dagen om verdere kosten te voorkomen.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000306",
+    "text": "Rekeningafschrift september 2026. Rekening NL00TEST0123456789, beheerrekening.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000307",
+    "text": "Gemeente Westerlaan. We hebben je brief ontvangen en nemen binnen acht weken een besluit.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000309",
+    "text": "Atelier Sterrenwacht. Jaaropgaaf 2025. Fiscaal loon over het hele jaar.",
     "truncated": false
   },
   {
     "id": "00000000-f1c5-4000-8000-200000000310",
     "text": "Bewindkantoor Noordkust bevestigt je aanmelding. Team Startdossier helpt ook met de aanvraag bijzondere bijstand.",
+    "truncated": false
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-200000000311",
+    "text": "Aanvraagformulier bijzondere bijstand Gemeente Westerlaan. Handtekening aanvrager.",
     "truncated": false
   }
 ]

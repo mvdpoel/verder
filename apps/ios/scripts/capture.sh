@@ -7,7 +7,7 @@
 #            money-geen-data, money-empty, money-no-account, money-unrecognised,
 #            money-no-budget, money-overspent, dossier, weekly, voice)
 #   tab      overzicht | voorjou | scan | dossier | meer
-#   route    proposal:<id> | suggestion:<id> | task:<id> | geld | weekly | voice
+#   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | voice
 #   --locked keep the app lock closed (Overzicht's counts-only glance)
 #
 # A DEBUG build (the fixtures are compiled out of Release), installed on the
@@ -44,7 +44,7 @@ UUID_RE="^$HEX{8}-$HEX{4}-$HEX{4}-$HEX{4}-$HEX{12}\$"
 case "$TARGET" in
   overzicht|voorjou|scan|dossier|meer) ARGS=(-tab "$TARGET") ;;
   geld|weekly|voice) ARGS=(-route "$TARGET") ;;
-  proposal:*|suggestion:*|task:*)
+  proposal:*|suggestion:*|task:*|document:*)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
       echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2
     fi
@@ -52,7 +52,7 @@ case "$TARGET" in
   *)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ]; then
       echo "capture.sh: unknown target '$TARGET'; tabs: overzicht voorjou scan dossier meer;" \
-        "routes: geld weekly voice proposal:<uuid> suggestion:<uuid> task:<uuid>" >&2; exit 2
+        "routes: geld weekly voice proposal:<uuid> suggestion:<uuid> task:<uuid> document:<uuid>" >&2; exit 2
     fi
     ARGS=(-route "$TARGET") ;;
 esac

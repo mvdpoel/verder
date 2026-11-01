@@ -109,10 +109,13 @@ each fixture folder holds only what differs, and a `fixture.json` describing it.
   22 okt, € 8,50 left. The leefgeldrekening is `configured` (LEEFGELD_IBAN).
   `money-empty` answers `geen-data` with no newest booking for both weeks and
   no accounts (a configured IBAN over an empty table).
-- **Dossier**: every document is a PDF of invented size; `sha256` is the
-  SHA-256 of `verder-fixture:<title>`; all but ID-kaart have text. The second
-  "bijstand" hit is "Bevestiging aanmelding Noordkust", whose text mentions it.
-  Sync cursor 412.
+- **Dossier**: every document is a real one-page PDF of under 1 KB, written
+  by `apps/ios/scripts/make-dossier-fixtures.swift` into
+  `_shared/documents/<id>/file.pdf`; `sha256` and `sizeBytes` in `sync.json`
+  are that file's own (the phone checks every download against its sha), and
+  the script writes `sync.json` and `texts.json` in the same run. All but
+  ID-kaart have text. The second "bijstand" hit is "Bevestiging aanmelding
+  Noordkust", whose text mentions it. Sync cursor 412.
 - **Voice**: the three recent parties are organisations; the POST answers a
   new suggestion with no kept recording.
 

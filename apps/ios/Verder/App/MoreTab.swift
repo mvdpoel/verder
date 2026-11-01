@@ -8,6 +8,8 @@ struct MoreTab: View {
     let center: UploadCenter
     let push: PushRegistrar
     let money: MoneyStore
+    /// Forgotten on sign-out: the phone keeps no dossier for nobody.
+    let dossier: DossierModel
 
     @State private var confirmResend = false
 
@@ -87,7 +89,10 @@ struct MoreTab: View {
                 }
             }
             AuthButton(title: "Uitloggen", weight: .secondary, enabled: !auth.isBusy) {
-                Task { await auth.signOut() }
+                Task {
+                    await auth.signOut()
+                    await dossier.wipe()
+                }
             }
         }
     }
@@ -192,7 +197,7 @@ struct MoreTab: View {
     }
 }
 
-/// Voor jou and Dossier until their slices land.
+/// A screen whose slice has not landed yet (Weekoverzicht, Gesprek vastleggen).
 struct ComingSoon: View {
     let title: String
 

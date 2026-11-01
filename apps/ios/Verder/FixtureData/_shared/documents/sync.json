@@ -9,8 +9,8 @@
       "status": "filed",
       "receivedAt": "2026-07-14T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 120000,
-      "sha256": "cab838bbc40735ac67e721560ca3ab4b054cb16950f7a4138bb56f10e6691705",
+      "sizeBytes": 906,
+      "sha256": "2213ac36b9363b85c2fce4298d2314688d1f4d49f2b21b7992de770b9da16726",
       "hasText": true
     },
     {
@@ -20,8 +20,8 @@
       "status": "filed",
       "receivedAt": "2026-09-25T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 127000,
-      "sha256": "512c31de27277ad80b9f93341ef458f34ca0297c7770878b4dad17f29b6cb960",
+      "sizeBytes": 814,
+      "sha256": "e1fb1582d94afb96997ee3b29bad8dfe761958aaa780be00364759145f219fa8",
       "hasText": true
     },
     {
@@ -31,8 +31,8 @@
       "status": "filed",
       "receivedAt": "2026-10-26T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 134000,
-      "sha256": "a8d0a0f4ee89f97cbaa996bce88035faa649b611edea43c428407ba8be992813",
+      "sizeBytes": 812,
+      "sha256": "377ef02b57f4f494f3e50f4ac18bf06c2b8361ed3b9cef0720c349622a0ff8bb",
       "hasText": true
     },
     {
@@ -42,8 +42,8 @@
       "status": "filed",
       "receivedAt": "2026-01-05T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 141000,
-      "sha256": "1e4906cfac746cd7d422142357e9e85021a261642ed5c594e67e64a5cf75b042",
+      "sizeBytes": 835,
+      "sha256": "ce950e8858f7d4343865584611050de3bf1ea10926662dcd143e51b6613c5140",
       "hasText": true
     },
     {
@@ -53,8 +53,8 @@
       "status": "filed",
       "receivedAt": "2025-03-01T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 148000,
-      "sha256": "af758b6c9a69d65bc10ca9c3e72239545a7e1bb81d9ace8a65fcd6fab602642f",
+      "sizeBytes": 838,
+      "sha256": "461495512e98d5028e1c2c2a45fe442f7972a15e1929cffa2546c39020deb9c4",
       "hasText": true
     },
     {
@@ -64,8 +64,8 @@
       "status": "filed",
       "receivedAt": "2026-10-14T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 155000,
-      "sha256": "bd24a35fcb2a8418e42ae5c6219695e4870863f63c9125bd70ef58fb6b0f719c",
+      "sizeBytes": 882,
+      "sha256": "b1bb58de9f9a26ba8dbb484e591a7a341c3b2d6b22baf1fe92663a1a9f69bbce",
       "hasText": true
     },
     {
@@ -75,8 +75,8 @@
       "status": "filed",
       "receivedAt": "2026-10-02T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 162000,
-      "sha256": "e2ea87430a46cf55bb98af4bb1e94186056f5d38d4e5669bc2d89cc4804caf26",
+      "sizeBytes": 814,
+      "sha256": "d5a44f5f8dbdea5784478dfe230e0f2defdaaf0058645d4e72b951bf6f5100af",
       "hasText": true
     },
     {
@@ -86,8 +86,8 @@
       "status": "inbox",
       "receivedAt": "2026-10-30T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 169000,
-      "sha256": "9bc1fe4c599d962ad2855d2f605bf6c4649f49656d5717fb3b6aef84b7e02056",
+      "sizeBytes": 846,
+      "sha256": "369c231650933400954ca5b8c1d3abde779776d559ca9ccd7f42909eab45bb38",
       "hasText": true
     },
     {
@@ -97,8 +97,8 @@
       "status": "filed",
       "receivedAt": "2026-04-16T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 176000,
-      "sha256": "5eccff20f65ebab23532dc0d77c0aa6af517efea554885584e5a2542ba4c0f84",
+      "sizeBytes": 684,
+      "sha256": "71d55f48049b5ea0ef697481ab1a989fed5ce0f61007a9c489a4976e0d428439",
       "hasText": false
     },
     {
@@ -108,8 +108,8 @@
       "status": "filed",
       "receivedAt": "2026-02-20T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 183000,
-      "sha256": "114a84c450ce1ef94752295e4f70c3b5de76eb7e13cb05a7319d28bab25892e0",
+      "sizeBytes": 803,
+      "sha256": "564562276bd9da8af9e43f5139e31f4d134d97c089ab7abbd6b43ed355e4b18e",
       "hasText": true
     },
     {
@@ -119,8 +119,8 @@
       "status": "filed",
       "receivedAt": "2026-04-16T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 190000,
-      "sha256": "02c79092e459ab43465cf6c1f6a3d658ecac2b55add61e684e2639d4f0b21b48",
+      "sizeBytes": 870,
+      "sha256": "d57071d55711693e3c3c448caa73e57a8fee8f6c5fe86e87544c1e55f95ba24c",
       "hasText": true
     },
     {
@@ -130,8 +130,8 @@
       "status": "inbox",
       "receivedAt": "2026-10-29T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 197000,
-      "sha256": "13f8195cdecbaf151f7852e36915bf18c61bbca1e27c337c89bf91777038de10",
+      "sizeBytes": 836,
+      "sha256": "d9d83b6ca9bea39843b02e61294c5a5b17c1dd1bc41a0272549a592881c06b48",
       "hasText": true
     }
   ],

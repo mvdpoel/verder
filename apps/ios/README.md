@@ -24,6 +24,8 @@ scripts/capture.sh voorjou-few overzicht out/overzicht.png
 scripts/capture.sh voorjou-few overzicht out/overzicht-locked.png --locked
 scripts/capture.sh voorjou-many voorjou out/voorjou-498.png
 scripts/capture.sh voorjou-few proposal:00000000-f1c5-4000-8000-000000000002 out/question.png
+scripts/capture.sh dossier dossier out/dossier.png
+scripts/capture.sh dossier document:00000000-f1c5-4000-8000-200000000311 out/viewer.png
 ```
 
 A Debug build launched with `-fixtures <name>` answers every `/api/mobile/v1` call
@@ -33,6 +35,10 @@ the fixtures and their data are listed in
 `docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`, the ONLY data a fixture
 may hold (screenshots leave this machine). None of it is in a Release build:
 `scripts/check-release-fixtures.sh` checks the built bundle.
+
+The `dossier` fixture's documents are real tiny PDFs. Regenerate them (with the
+`sync.json` and `texts.json` that name their hashes) only together, from the repo root:
+`swiftc -O apps/ios/scripts/make-dossier-fixtures.swift -o /tmp/mdf && /tmp/mdf apps/ios/Verder/FixtureData/_shared`.
 
 `capture.sh` refuses a target the app would not read (exit 2) and never writes the
 PNG if the app is not running before and after the shot (exit 1) — a dead app would

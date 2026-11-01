@@ -15,8 +15,8 @@ import SwiftUI
 /// - notifications read as allowed and nothing registers with APNs, so no
 ///   pre-prompt covers a screenshot and no fixture token reaches anything;
 /// - the widget snapshot and the icon badge are left alone, and the upload
-///   queue lives in a temporary folder, so the real App Group never holds
-///   synthetic data.
+///   queue and the pocket dossier live in temporary folders, so the real App
+///   Group and Application Support never hold synthetic data.
 @MainActor
 enum FixtureEnvironment {
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
@@ -59,9 +59,15 @@ enum FixtureEnvironment {
                                           configuration: sessionConfiguration(.ephemeral))
         let uploads = UploadCenter(queue: queue, uploader: uploader, client: client)
 
+        // A fresh, temporary dossier per launch: synthetic documents never
+        // land in the real Application Support folder, and every capture
+        // starts from an empty phone.
+        let dossierDir = URL.temporaryDirectory.appending(path: "verder-fixture-dossier", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: dossierDir)
+
         return AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(), registerRemote: {},
-                           snapshotDir: nil, setBadge: { _ in })
+                           snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir)
     }
 }
 

@@ -1,7 +1,7 @@
 import UIKit
 
 /// What `VerderApp` builds its stores on: the client, where the session lives,
-/// the lock, the upload queue, and the edges to the system (notification
+/// the lock, the upload queue, the pocket dossier's folder, and the edges to the system (notification
 /// permission, APNs registration, the widget snapshot, the icon badge).
 ///
 /// `live()` is the only one a Release build has. A DEBUG `-fixtures` launch
@@ -18,6 +18,9 @@ struct AppServices {
     let registerRemote: @MainActor () -> Void
     let snapshotDir: URL?
     let setBadge: @Sendable (Int) async -> Void
+    /// The pocket dossier's folder (`DossierStore`): Application Support,
+    /// never the App Group.
+    let dossierDir: URL
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()
@@ -32,6 +35,7 @@ struct AppServices {
                            permission: SystemNotificationPermission(),
                            registerRemote: { UIApplication.shared.registerForRemoteNotifications() },
                            snapshotDir: AppGroup.containerURL,
-                           setBadge: InboxStore.systemBadge)
+                           setBadge: InboxStore.systemBadge,
+                           dossierDir: URL.applicationSupportDirectory.appending(path: "dossier", directoryHint: .isDirectory))
     }
 }

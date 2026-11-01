@@ -19,10 +19,15 @@ import Foundation
 /// `_shared/proposals/<id>.json`, so a fixture holds only what differs from
 /// the base case. A POST reads `<path>.post.json` the same way and otherwise
 /// answers `{}` — the routes answer more than the phone reads (`Ignored`).
+/// A GET with no `.json` falls back to `<path>.pdf` / `<path>.jpg`, served as
+/// bytes: that is how `documents/<id>/file` answers (Plan 3 Task 21).
 /// The query string is ignored: one fixture is one state of the world.
 struct FixtureServer: Sendable {
     enum Reply: Equatable, Sendable {
         case json(status: Int, body: Data)
+        /// A document's bytes (`documents/<id>/file`), served from the
+        /// fixture's `file.pdf` / `file.jpg` with that type, like the route's.
+        case file(contentType: String, body: Data)
         /// No HTTP answer at all: the `offline` fixture.
         case transportFailure
     }
@@ -86,8 +91,11 @@ struct FixtureServer: Sendable {
         if let status = manifest.statuses?[path] { return Self.error(status, "fixture status") }
 
         if method.uppercased() == "GET" {
-            guard let data = file(path + ".json") else { return Self.error(404, "not found") }
-            return .json(status: 200, body: generated(path, data))
+            if let data = file(path + ".json") { return .json(status: 200, body: generated(path, data)) }
+            for (ext, type) in Self.binaryTypes {
+                if let data = file(path + "." + ext) { return .file(contentType: type, body: data) }
+            }
+            return Self.error(404, "not found")
         }
         return .json(status: 200, body: file(path + ".post.json") ?? Data("{}".utf8))
     }
@@ -104,6 +112,9 @@ struct FixtureServer: Sendable {
         guard manifest.generate == "voorjou-many", path == "inbox" else { return data }
         return (try? FixtureGenerator.manyInbox(from: data)) ?? data
     }
+
+    /// The non-JSON answers a fixture may hold, in lookup order.
+    static let binaryTypes: [(String, String)] = [("pdf", "application/pdf"), ("jpg", "image/jpeg")]
 
     static func error(_ status: Int, _ message: String) -> Reply {
         .json(status: status, body: Data(#"{"error":"\#(message)"}"#.utf8))

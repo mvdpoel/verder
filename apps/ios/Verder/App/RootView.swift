@@ -17,6 +17,7 @@ struct RootView: View {
     let links: DeepLinkInbox
     let inbox: InboxStore
     let money: MoneyStore
+    let dossier: DossierModel
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
@@ -25,6 +26,9 @@ struct RootView: View {
     /// does not exist while locked, so a deep link that arrives on the lock
     /// screen must wait somewhere that survives it.
     @State private var inboxPath: [InboxRoute] = []
+    /// The Dossier stack, held here for the same reason: a document link
+    /// that lands on the lock screen opens once the app is unlocked.
+    @State private var dossierPath: [DossierRoute] = []
     #if DEBUG
     /// `-route geld|weekly|voice` (Verder/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
@@ -90,7 +94,8 @@ struct RootView: View {
             case .suggestion(let id): inboxPath = [.suggestion(id.uuidString.lowercased())]
             case .task(let id): inboxPath = [.task(id.uuidString.lowercased())]
             case .inbox: inboxPath = []
-            case .document, .none: break
+            case .document(let id): dossierPath = [.document(id: id.uuidString.lowercased(), title: nil)]
+            case .none: break
             }
         }
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
@@ -156,10 +161,12 @@ struct RootView: View {
                 ScanTab(center: uploads, auth: auth)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
-                ComingSoon(title: "Dossier").lockGated(by: lock)
+                DossierTab(model: dossier, inbox: inbox, lock: lock, client: auth.client, path: $dossierPath,
+                           onUnauthorized: { auth.sessionRejected() })
+                    .lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
-                MoreTab(auth: auth, center: uploads, push: push, money: money).lockGated(by: lock)
+                MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
