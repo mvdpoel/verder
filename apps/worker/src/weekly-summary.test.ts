@@ -110,6 +110,19 @@ describe("composeWeekly (pure)", () => {
     });
   });
 
+  it("an entry a sent proposal wrote is judged on the proposal's sent_at, not on when it was recorded", () => {
+    // Sent in W44 with no entry yet (counted there); a finishSent retry wrote the entry in W45.
+    const sentAt = new Date("2026-10-28T10:00:00Z");
+    const late = new Date("2026-11-02T09:00:00Z");
+    // At W44's run the entry does not exist yet: the proposal alone counts.
+    expect(composeWeekly(input({ window: W44,
+      sentProposals: [{ kind: "reply", sentAt, resultEntryId: null }] })).sent).toBe(1);
+    // Next week the proposal row carries the entry; the entry must NOT count again.
+    expect(composeWeekly(input({ window: W45,
+      outboundEntries: [{ occurredAt: sentAt, recordedAt: late, proposalSentAt: sentAt }],
+      sentProposals: [{ kind: "reply", sentAt, resultEntryId: "e1" }] })).sent).toBe(0);
+  });
+
   it("sent counts entries plus proposals with no entry yet, never a question", () => {
     const at = new Date("2026-10-28T10:00:00Z");
     const s = composeWeekly(input({
@@ -281,6 +294,52 @@ describe("loadWeekly and the job (database)", () => {
       const s = composeWeekly(loaded);
       expect(s).toMatchObject({ week: week.key, sent: 1, received: 1, filedByMartin: 1,
         filedByVerder: 0, tasksDone: 1, waiting: 0 });
+    });
+  });
+
+  it("a correction recorded in a LATER week is not sent again: it is judged on its chain root", async () => {
+    await isolated(async (db) => {
+      const now = sundayLongAgo();
+      const week = summaryWeek(now);
+      const previous = summaryWeek(new Date(now.getTime() - 7 * 24 * 3600_000));
+      const lastWednesday = new Date(now.getTime() - 11 * 24 * 3600_000);
+      const monday = new Date(now.getTime() - 6 * 24 * 3600_000 + 15 * 3600_000);
+      const [user] = await db.insert(schema.users).values({
+        email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
+      const [original] = await db.insert(schema.logEntries).values({ occurredAt: lastWednesday,
+        recordedAt: lastWednesday, channel: "email", direction: "outbound",
+        summary: `Weekly Testfixture ${uid()}`, source: "manual", createdBy: user.id }).returning();
+      const [first] = await db.insert(schema.logEntries).values({ occurredAt: lastWednesday,
+        recordedAt: monday, channel: "email", direction: "outbound", summary: `Weekly Testfixture ${uid()}`,
+        source: "manual", createdBy: user.id, supersedesId: original.id }).returning();
+      // A correction of the correction, also this week: the root is still last Wednesday's.
+      await db.insert(schema.logEntries).values({ occurredAt: lastWednesday,
+        recordedAt: new Date(monday.getTime() + 3600_000), channel: "email", direction: "outbound",
+        summary: `Weekly Testfixture ${uid()}`, source: "manual", createdBy: user.id, supersedesId: first.id });
+      const deps = { waiting: noWaiting, ownAddresses: () => OWN };
+      expect(composeWeekly(await loadWeekly(db, week, deps)).sent).toBe(0);
+      expect(composeWeekly(await loadWeekly(db, previous, deps)).sent).toBe(1);
+    });
+  });
+
+  it("a proposal's entry written a week after the send is not sent again", async () => {
+    await isolated(async (db) => {
+      const now = sundayLongAgo();
+      const week = summaryWeek(now);
+      const previous = summaryWeek(new Date(now.getTime() - 7 * 24 * 3600_000));
+      const lastWednesday = new Date(now.getTime() - 11 * 24 * 3600_000);
+      const monday = new Date(now.getTime() - 6 * 24 * 3600_000 + 15 * 3600_000);
+      const [user] = await db.insert(schema.users).values({
+        email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
+      const [entry] = await db.insert(schema.logEntries).values({ occurredAt: lastWednesday,
+        recordedAt: monday, channel: "email", direction: "outbound", summary: `Weekly Testfixture ${uid()}`,
+        source: "proposal", sourceRef: `proposal:${uid()}`, createdBy: user.id }).returning();
+      await db.insert(schema.proposals).values({ kind: "reply", status: "sent", priority: "other",
+        triggerExternal: { subject: "Weekly Testfixture" }, context: {}, sentAt: lastWednesday,
+        resultEntryId: entry.id });
+      const deps = { waiting: noWaiting, ownAddresses: () => OWN };
+      expect(composeWeekly(await loadWeekly(db, week, deps)).sent).toBe(0);
+      expect(composeWeekly(await loadWeekly(db, previous, deps)).sent).toBe(1);
     });
   });
 
