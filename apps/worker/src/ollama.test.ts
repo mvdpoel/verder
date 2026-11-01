@@ -134,3 +134,69 @@ describe("no generic suggestion push", () => {
     await pool.end();
   });
 });
+
+describe("suggestDocMeta (docmeta-v2)", () => {
+  async function fixtureDoc(db: ReturnType<typeof createDb>["db"]) {
+    const buf = Buffer.from(`docmeta-v2-${crypto.randomUUID()}`);
+    const sourceRef = `ollama-test-${crypto.randomUUID()}`;
+    const [doc] = await db.insert(schema.documents).values({
+      sha256: sha256Hex(buf), sizeBytes: buf.length,
+      mime: "application/pdf", title: `scan${crypto.randomUUID()}.pdf`,
+      source: "upload", sourceRef, receivedAt: new Date() }).returning();
+    await settleDocumentTexts(db, sourceRef);
+    return { doc, buf };
+  }
+  const newest = async (db: ReturnType<typeof createDb>["db"], documentId: string) =>
+    (await db.select().from(schema.suggestions)
+      .where(eq(schema.suggestions.documentId, documentId))
+      .orderBy(desc(schema.suggestions.createdAt)).limit(1))[0];
+
+  it("stores the model's confidence under docmeta-v2", async () => {
+    const { db, pool } = createDb(URL);
+    const { doc, buf } = await fixtureDoc(db);
+    const llm: LlmPort = { chatJson: async () => ({ title: "Loonstrook juli", docType: "payslip", confident: true }) };
+    await suggestDocMeta({ db, llm, extractText: async () => "" }, doc.id, buf);
+    const s = await newest(db, doc.id);
+    expect(s.promptVersion).toBe("docmeta-v2");
+    expect(s.status).toBe("pending");
+    expect(s.proposed).toEqual({ title: "Loonstrook juli", docType: "payslip", confident: true });
+    await pool.end();
+  });
+
+  it("a model that does not say it is confident is not confident", async () => {
+    const { db, pool } = createDb(URL);
+    const { doc, buf } = await fixtureDoc(db);
+    const llm: LlmPort = { chatJson: async () => ({ title: "Brief", docType: "letter" }) };
+    await suggestDocMeta({ db, llm, extractText: async () => "" }, doc.id, buf);
+    expect((await newest(db, doc.id)).proposed).toMatchObject({ confident: false });
+    await pool.end();
+  });
+
+  it("the needs-manual fallback is never confident", async () => {
+    const { db, pool } = createDb(URL);
+    const { doc, buf } = await fixtureDoc(db);
+    const llm: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
+    await suggestDocMeta({ db, llm, extractText: async () => "" }, doc.id, buf);
+    const s = await newest(db, doc.id);
+    expect(s.status).toBe("needs-manual");
+    expect(s.proposed).toEqual({ title: doc.title, docType: null, confident: false });
+    await pool.end();
+  });
+
+  // Auto-name runs first in the same job and has usually renamed the document,
+  // so the raw documents.title is a name the document no longer has.
+  it("shows the model the effective title, not the raw one", async () => {
+    const { db, pool } = createDb(URL);
+    const { doc, buf } = await fixtureDoc(db);
+    const renamed = `Loonstrook.mp.2026-07.Testfixture${crypto.randomUUID()}.pdf`;
+    await db.insert(schema.documentStatusChanges).values({
+      documentId: doc.id, status: "inbox", title: renamed });
+    const prompts: string[] = [];
+    const llm: LlmPort = { chatJson: async (p) => { prompts.push(p);
+      return { title: "t", docType: null, confident: false }; } };
+    await suggestDocMeta({ db, llm, extractText: async () => "" }, doc.id, buf);
+    expect(prompts[0]).toContain(renamed);
+    expect(prompts[0]).not.toContain(doc.title);
+    await pool.end();
+  });
+});

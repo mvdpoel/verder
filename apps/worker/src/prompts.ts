@@ -77,12 +77,27 @@ export function buildReceiptPrompt(receipt: { subject: string; bodyText: string 
   ].join("\n");
 }
 
-export const DOCMETA_PROMPT_VERSION = "docmeta-v1";
+export const DOCMETA_PROMPT_VERSION = "docmeta-v2";
+/**
+ * docmeta-v2 adds `confident`, as auto-name's prompt has it
+ * (ops/normalize-filenames.ts). It is stated to mean that the SOORT is certain,
+ * because the soort is the only metadata auto-apply ever writes (plan 3,
+ * Task 14): the title stays auto-name's, so a confidence about the title would
+ * vouch for something nothing applies. A model that omits it is read as NOT
+ * confident (`llmDocSchema` in ollama.ts), never the other way round.
+ *
+ * `filename` is the document's EFFECTIVE title: auto-name runs earlier in the
+ * same job and has usually renamed it by then.
+ */
 export function buildDocMetaPrompt(filename: string, text: string): string {
   return [
     "A scanned document for a Dutch debt-administration dossier. From the filename and extracted text,",
     `reply with strict JSON: { "title": string (short, descriptive, keep language), "docType": one of`,
-    `"contract","payslip","invoice","letter","bank-statement","id-document","other" }.`,
+    `"contract","payslip","invoice","letter","bank-statement","id-document","other",`,
+    `"confident": true|false }.`,
+    `"confident" is about the docType ONLY: true when the text leaves no doubt which docType this is,`,
+    "false when it could be another one, when the text is too short or unreadable to tell, or when you",
+    "are guessing from the filename alone. When in doubt, false.",
     `Filename: ${filename}`,
     "Extracted text:", text.slice(0, 4000),
   ].join("\n");

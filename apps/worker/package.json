@@ -12,6 +12,7 @@
     "registry-eval": "tsx src/eval/run-registry-eval.ts",
     "task-eval": "tsx src/eval/run-task-eval.ts",
     "retrieval-eval": "tsx src/eval/run-retrieval-eval.ts",
+    "docmeta-eval": "tsx src/eval/run-docmeta-eval.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
@@ -33,7 +34,8 @@
     "fix-page-order": "tsx src/ops/fix-page-order.ts",
     "proposals-pending": "tsx src/ops/proposals-pending.ts",
     "proposals-store": "tsx src/ops/proposals-store.ts",
-    "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts"
+    "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts",
+    "export-docmeta-samples": "tsx src/ops/export-docmeta-samples.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",

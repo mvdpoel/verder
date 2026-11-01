@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
+import { effectiveDocument } from "@verder/api/src/routers/documents";
 import { recordRun } from "./heartbeat";
 import { proposalForOwnSentMail } from "./proposals/own-sent";
 import { buildDocMetaPrompt, buildEntryPrompt, DOCMETA_PROMPT_VERSION, PROMPT_VERSION } from "./prompts";
@@ -94,7 +95,17 @@ export async function suggestEntry(
   }
 }
 
-const llmDocSchema = z.object({ title: z.string().min(1), docType: z.string().nullable().default(null) });
+/**
+ * What docmeta-v2 answers. `confident` defaults to FALSE: a model that leaves it
+ * out has not claimed certainty, and auto-apply (Task 14) only ever acts on an
+ * explicit `true`. Exported so the docmeta eval parses exactly what production
+ * parses.
+ */
+export const llmDocSchema = z.object({
+  title: z.string().min(1),
+  docType: z.string().nullable().default(null),
+  confident: z.boolean().default(false),
+});
 
 export async function suggestDocMeta(
   deps: { db: Db; llm: LlmPort; extractText: (mime: string, buf: Buffer) => Promise<string> },
@@ -104,10 +115,15 @@ export async function suggestDocMeta(
     .where(eq(schema.documents.id, documentId));
   if (!doc) return;
   const model = process.env.OLLAMA_MODEL ?? "qwen3.5:9b";
+  // The EFFECTIVE title, not documents.title: auto-name runs earlier in the
+  // same job (index.ts, suggest.docmeta) and appends its rename as a change
+  // row, so the raw column holds a name like scan0042.pdf that the document
+  // no longer has — and that /queue no longer shows next to the suggestion.
+  const { effectiveTitle } = await effectiveDocument(deps.db, documentId);
   try {
     const text = await deps.extractText(doc.mime, fileBuf);
     const parsed = llmDocSchema.parse(
-      await deps.llm.chatJson(buildDocMetaPrompt(doc.title, text)));
+      await deps.llm.chatJson(buildDocMetaPrompt(effectiveTitle, text)));
     await deps.db.insert(schema.suggestions).values({
       kind: "document-meta", documentId, model, promptVersion: DOCMETA_PROMPT_VERSION,
       proposed: parsed });
@@ -115,7 +131,11 @@ export async function suggestDocMeta(
   } catch (err) {
     await deps.db.insert(schema.suggestions).values({
       kind: "document-meta", documentId, model, promptVersion: DOCMETA_PROMPT_VERSION,
-      status: "needs-manual", proposed: { title: doc.title, docType: null } });
+      // The RAW title on purpose: export-docmeta-samples.ts recognises a
+      // needs-manual-origin row by `proposed.title = documents.title` with a
+      // null docType, and an approved one must never be scored as a model
+      // answer. Never confident: there was no answer to be confident about.
+      status: "needs-manual", proposed: { title: doc.title, docType: null, confident: false } });
     await recordRun(deps.db, "ollama", "error", { documentId, message: String(err) });
   }
 }
