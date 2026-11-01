@@ -54,8 +54,11 @@ final class ShareModel {
     nonisolated static let maxItems = 10
 
     /// Under the server's 50 MB (`MAX_UPLOAD_BYTES`), leaving room for the
-    /// multipart envelope; also well inside an extension's memory budget.
-    static let maxFileBytes = 48 * 1024 * 1024
+    /// multipart envelope. NOT a memory figure: an extension is killed around
+    /// 120 MB, so a shared file is measured before it is read
+    /// (`ShareStaging`), copied rather than buffered into its drop, and only a
+    /// drop under `ShareSender.foregroundLimit` is sent from the extension.
+    nonisolated static let maxFileBytes = 48 * 1024 * 1024
 
     private(set) var phase: Phase = .loading
     private(set) var prepared: [PreparedShare] = []
@@ -101,10 +104,10 @@ final class ShareModel {
         prepared = result.files
         photoPages = result.photoPages
         leftOut = result.leftOut
-        if prepared.isEmpty {
-            phase = .refused(inputs.isEmpty ? Copy.nothing : Copy.unreadable)
-        } else if prepared.contains(where: { $0.data.count > Self.maxFileBytes }) {
+        if result.tooLarge > 0 || prepared.contains(where: { $0.byteCount > Self.maxFileBytes }) {
             phase = .refused(Copy.tooLarge)
+        } else if prepared.isEmpty {
+            phase = .refused(inputs.isEmpty ? Copy.nothing : Copy.unreadable)
         } else {
             phase = .ready
         }
@@ -123,12 +126,24 @@ final class ShareModel {
         if photoPages == 0, prepared.count == 1 {
             parts.append(((prepared[0].fileName as NSString).pathExtension.uppercased()).ifEmpty("Bestand"))
         }
-        let bytes = prepared.reduce(0) { $0 + $1.data.count }
+        let bytes = prepared.reduce(0) { $0 + $1.byteCount }
         parts.append(bytes.formatted(.byteCount(style: .file).locale(Locale(identifier: "nl_NL"))))
         return parts.joined(separator: " · ")
     }
 
     var canSend: Bool { phase == .ready }
+
+    /// Annuleren is offered only while it is TRUE: before Versturen, or after
+    /// a refusal that left nothing behind. From `.saving` on, the drops are
+    /// written and the app WILL send them (each one a permanent
+    /// `document.ingested`), so a cancel there would cancel nothing; the
+    /// screen waits, then offers only Sluiten.
+    var canCancel: Bool {
+        switch phase {
+        case .loading, .ready, .refused: true
+        case .saving, .done: false
+        }
+    }
 
     /// What did not go, shown beside every phase after loading (before
     /// Versturen AND under "Staat in je dossier."), so a partial share never
@@ -150,12 +165,20 @@ final class ShareModel {
         var ids: [UUID] = []
         do {
             for file in prepared {
-                ids.append(try IncomingDrop.write(file: file.data, fileName: file.fileName, mime: file.mime,
-                                                  capturedAt: now(), to: groupDir))
+                switch file.content {
+                case .data(let data):
+                    ids.append(try IncomingDrop.write(file: data, fileName: file.fileName, mime: file.mime,
+                                                      capturedAt: now(), to: groupDir))
+                case .file(let url):
+                    ids.append(try IncomingDrop.write(fileAt: url, fileName: file.fileName, mime: file.mime,
+                                                      capturedAt: now(), to: groupDir))
+                }
             }
         } catch {
-            // Whatever was written stays a valid drop and is queued by the app;
-            // Martin is told the share as a whole did not go through.
+            // Nothing has been sent yet, so the drops already written are
+            // taken back: "Dit kon niet worden bewaard" must mean that NOTHING
+            // of this share will reach the dossier, and Annuleren stays true.
+            for id in ids { IncomingDrop.remove(id, groupDir: groupDir) }
             phase = .refused(Copy.saveFailed)
             return
         }

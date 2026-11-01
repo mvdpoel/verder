@@ -53,14 +53,20 @@ final class ShareViewController: UIViewController {
         // Every item is accounted for: too many refuses the share, and one
         // that cannot be read stays an input the screen reports.
         guard model.handedOver(count: providers.count) else { return }
+        guard let staging = ShareStaging.makeDirectory() else {
+            model.loaded(Array(repeating: .unreadable, count: providers.count))
+            return
+        }
+        stagingDir = staging
         Task {
-            var inputs: [SharedInput] = []
-            for provider in providers {
-                inputs.append(await Self.load(provider) ?? .unreadable)
+            let inputs = await SharePreparation.collect(count: providers.count) { index in
+                await Self.load(providers[index], staging: staging)
             }
             model.loaded(inputs)
         }
     }
+
+    private var stagingDir: URL?
 
     private func send() {
         Task {
@@ -74,6 +80,8 @@ final class ShareViewController: UIViewController {
     }
 
     private func finish(cancelled: Bool) {
+        // The drops hold their own copies; the staged files are only ours.
+        if let stagingDir { try? FileManager.default.removeItem(at: stagingDir) }
         if cancelled {
             extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
         } else {
@@ -84,8 +92,9 @@ final class ShareViewController: UIViewController {
     // MARK: - Loading what was shared
 
     /// An image becomes a page of the one photo PDF; a PDF or any other file
-    /// keeps its bytes, name and media type.
-    static func load(_ provider: NSItemProvider) async -> SharedInput? {
+    /// keeps its name and media type and is STAGED: measured, then copied,
+    /// never read into memory (`ShareStaging`).
+    static func load(_ provider: NSItemProvider, staging: URL) async -> SharedInput? {
         let types = provider.registeredContentTypes
         if !types.contains(where: { $0.conforms(to: .pdf) }),
            let imageType = types.first(where: { $0.conforms(to: .image) }),
@@ -94,21 +103,25 @@ final class ShareViewController: UIViewController {
             return .image(image)
         }
         let type = types.first { $0.conforms(to: .data) && !$0.conforms(to: .url) }
-        if let type, let data = await loadFile(provider, type) {
-            return .file(data: data, fileName: fileName(provider.suggestedName, type: type),
-                         mime: type.preferredMIMEType ?? "application/octet-stream")
+        if let type {
+            let name = fileName(provider.suggestedName, type: type)
+            let mime = type.preferredMIMEType ?? "application/octet-stream"
+            if let input = await loadFile(provider, type, name: name, mime: mime, staging: staging) {
+                return input
+            }
         }
         // Some apps share only a file URL.
         if types.contains(where: { $0.conforms(to: .fileURL) }), let url = await loadFileURL(provider) {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else { return nil }
             let type = UTType(filenameExtension: url.pathExtension) ?? .data
-            if type.conforms(to: .image), !type.conforms(to: .pdf), let image = UIImage(data: data) {
+            let mime = type.preferredMIMEType ?? "application/octet-stream"
+            if type.conforms(to: .image), !type.conforms(to: .pdf),
+               let size = ShareStaging.byteCount(url), size <= ShareModel.maxFileBytes,
+               let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
                 return .image(image)
             }
-            return .file(data: data, fileName: url.lastPathComponent,
-                         mime: type.preferredMIMEType ?? "application/octet-stream")
+            return ShareStaging.stage(url, fileName: url.lastPathComponent, mime: mime, into: staging)
         }
         return nil
     }
@@ -126,11 +139,13 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    /// The file is deleted when the handler returns, so it is read inside it.
-    private static func loadFile(_ provider: NSItemProvider, _ type: UTType) async -> Data? {
-        await withCheckedContinuation { (c: CheckedContinuation<Data?, Never>) in
+    /// The file is deleted when the handler returns, so it is staged inside
+    /// it: measured first, copied, never read.
+    private static func loadFile(_ provider: NSItemProvider, _ type: UTType, name: String, mime: String,
+                                 staging: URL) async -> SharedInput? {
+        await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, _ in
-                c.resume(returning: url.flatMap { try? Data(contentsOf: $0) })
+                c.resume(returning: url.map { ShareStaging.stage($0, fileName: name, mime: mime, into: staging) })
             }
         }
     }
@@ -158,10 +173,14 @@ struct ShareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Button(ShareModel.Copy.cancel, action: cancel)
-                    .font(.mono(13, relativeTo: .footnote))
-                    .foregroundStyle(Color.inkMute)
-                    .frame(minHeight: 44)
+                // Only while cancelling is true (`ShareModel.canCancel`); the
+                // done state offers Sluiten alone.
+                if model.canCancel {
+                    Button(ShareModel.Copy.cancel, action: cancel)
+                        .font(.mono(13, relativeTo: .footnote))
+                        .foregroundStyle(Color.inkMute)
+                        .frame(minHeight: 44)
+                }
                 Spacer()
                 Text(ShareModel.Copy.heading)
                     .font(.display(17, relativeTo: .headline, weight: .medium))
@@ -238,7 +257,11 @@ private struct Thumbnail: View {
     }
 
     private var image: UIImage? {
-        guard file.mime == "application/pdf", let page = PDFDocument(data: file.data)?.page(at: 0) else { return nil }
-        return page.thumbnail(of: CGSize(width: 96, height: 128), for: .mediaBox)
+        guard file.mime == "application/pdf" else { return nil }
+        let document: PDFDocument? = switch file.content {
+        case .data(let data): PDFDocument(data: data)
+        case .file(let url): PDFDocument(url: url)
+        }
+        return document?.page(at: 0)?.thumbnail(of: CGSize(width: 96, height: 128), for: .mediaBox)
     }
 }

@@ -152,4 +152,90 @@ struct ShareModelTests {
         #expect(!model.detail.contains("foto"))
         #expect(model.warning == "2 van 3 konden niet worden meegenomen.")
     }
+
+    // MARK: - Annuleren only while it is true
+
+    @Test func cancelIsOfferedBeforeVersturenAndAfterARefusal() {
+        let model = ShareModel(groupDir: nil) { ids, _ in ids }
+        #expect(model.canCancel)                  // loading
+        model.loaded([pdf])
+        #expect(model.canCancel)                  // ready
+        let refused = ShareModel(groupDir: nil) { ids, _ in ids }
+        refused.loaded([])
+        #expect(refused.canCancel)
+    }
+
+    /// From `.saving` on, the drops are written and the app will send them:
+    /// a cancel would cancel nothing, so it is not offered, during the
+    /// attempt or under "Staat in je dossier.".
+    @Test func cancelIsNotOfferedOnceTheDropsAreWritten() async throws {
+        let group = try scratchDir()
+        let model = ShareModel(groupDir: group, sendBound: .seconds(5)) { ids, _ in
+            try? await Task.sleep(for: .milliseconds(300))
+            return ids
+        }
+        model.loaded([pdf, .unreadable])
+        let commit = Task { await model.commit() }
+        while model.phase != .saving { await Task.yield() }
+        #expect(!model.canCancel)
+        await commit.value
+
+        #expect(model.phase == .done(delivered: true))
+        #expect(!model.closesByItself)            // partial: the screen stays
+        #expect(!model.canCancel)
+    }
+
+    /// A save that fails part-way takes back what it had written, so the
+    /// refusal ("Dit kon niet worden bewaard") is true and nothing of this
+    /// share reaches the dossier later.
+    @Test func aSaveFailureTakesBackWhatWasWritten() async throws {
+        let group = try scratchDir()
+        let missing = try scratchDir().appending(path: "gone.pdf")
+        let model = ShareModel(groupDir: group) { ids, _ in ids }
+        model.loaded([pdf, .staged(url: missing, fileName: "gone.pdf", mime: "application/pdf", bytes: 10)])
+        #expect(model.phase == .ready)
+
+        await model.commit()
+
+        #expect(model.phase == .refused(ShareModel.Copy.saveFailed))
+        #expect(files(group).isEmpty)
+        #expect(model.canCancel)
+    }
+
+    // MARK: - Large files
+
+    /// A file refused on its size alone refuses the share, even when it is
+    /// the only item (it is not "unreadable": it was never read).
+    @Test func aFileRefusedOnItsSizeRefusesTheShare() throws {
+        let group = try scratchDir()
+        let model = ShareModel(groupDir: group) { ids, _ in ids }
+        model.loaded([.tooLarge(fileName: "video.mov")])
+        #expect(model.phase == .refused(ShareModel.Copy.tooLarge))
+
+        let mixed = ShareModel(groupDir: group) { ids, _ in ids }
+        mixed.loaded([pdf, .tooLarge(fileName: "video.mov")])
+        #expect(mixed.phase == .refused(ShareModel.Copy.tooLarge))
+        #expect(files(group).isEmpty)
+    }
+
+    /// A staged file is written into its drop from disk and reported by its
+    /// measured size.
+    @Test func aStagedFileIsSharedFromDisk() async throws {
+        let group = try scratchDir()
+        let source = try scratchDir().appending(path: "Brief.pdf")
+        let bytes = Data("%PDF-1.4 staged".utf8)
+        try bytes.write(to: source)
+        let model = ShareModel(groupDir: group) { ids, _ in ids }
+        model.loaded([.staged(url: source, fileName: "Brief.pdf", mime: "application/pdf", bytes: bytes.count)])
+        #expect(model.phase == .ready)
+        #expect(model.prepared.first?.data == nil)
+        #expect(model.prepared.first?.byteCount == bytes.count)
+
+        await model.commit()
+
+        #expect(model.phase == .done(delivered: true))
+        let bin = try #require(files(group).first { $0.hasSuffix(".bin") })
+        #expect(try Data(contentsOf: IncomingDrop.directory(groupDir: group).appending(path: bin)) == bytes)
+    }
 }
+

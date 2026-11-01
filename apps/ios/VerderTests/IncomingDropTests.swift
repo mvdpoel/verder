@@ -175,7 +175,8 @@ struct IncomingDropTests {
         #expect(prepared.count == 2)
         let photos = try #require(prepared.first { $0.mime == "application/pdf" && $0.data != pdf })
         #expect(photos.fileName == "Foto's 2027-01-15 09.00.pdf")
-        let doc = try #require(PDFDocument(data: photos.data))
+        let photoData = try #require(photos.data)
+        let doc = try #require(PDFDocument(data: photoData))
         #expect(doc.pageCount == 2)
         let passed = try #require(prepared.first { $0.fileName == "Beschikking.pdf" })
         #expect(passed.data == pdf)
@@ -265,5 +266,105 @@ struct IncomingDropTests {
 
         #expect(await ShareSender.send([id], groupDir: group, client: server.client()).isEmpty)
         #expect(files(incoming(group)) == ["\(id.uuidString).bin", "\(id.uuidString).json"])
+    }
+
+    /// A drop over the extension's foreground limit is never read or sent by
+    /// the extension: the app's queue streams it from a file instead.
+    @Test func extensionLeavesALargeDropToTheApp() async throws {
+        let server = StubServer()
+        server.on { _ in .status(200, body: Data(#"{"id":"doc-1","duplicate":false}"#.utf8)) }
+        let group = try scratchDir()
+        let small = try IncomingDrop.write(file: Data("%PDF".utf8), fileName: "Klein.pdf",
+                                           mime: "application/pdf", capturedAt: t0, to: group)
+        let large = try IncomingDrop.write(file: Data(count: 64), fileName: "Groot.pdf",
+                                           mime: "application/pdf", capturedAt: t0, to: group)
+
+        let sent = await ShareSender.send([small, large], groupDir: group, client: server.client(),
+                                          foregroundLimit: 32)
+
+        #expect(sent == [small])
+        #expect(server.requests.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: incoming(group).appending(path: "\(large.uuidString).sent").path()))
+        #expect(ShareSender.foregroundLimit < ShareModel.maxFileBytes)
+    }
+
+    /// A staged file goes into its drop by COPY, never through memory, and
+    /// arrives byte for byte.
+    @Test func aFileDropIsCopiedByteForByte() async throws {
+        let (group, queue) = try group()
+        let source = try scratchDir().appending(path: "Afschrift.xlsx")
+        let bytes = Data("PK staged sheet".utf8)
+        try bytes.write(to: source)
+
+        let id = try IncomingDrop.write(fileAt: source, fileName: "Afschrift.xlsx", mime: xlsxMime,
+                                        capturedAt: t0, to: group)
+
+        #expect(try Data(contentsOf: incoming(group).appending(path: "\(id.uuidString).bin")) == bytes)
+        #expect(FileManager.default.fileExists(atPath: source.path()))
+        let item = try #require(await queue.importIncoming().first)
+        #expect(item.id == id)
+        #expect(item.resolvedExtension == "xlsx")
+    }
+
+    // MARK: - Staging: measured before it is read
+
+    /// A file over the limit is refused on its metadata: nothing is copied
+    /// (and nothing read), so a 200 MB video cannot kill the extension first.
+    @Test func anOversizedFileIsRefusedWithoutBeingCopied() throws {
+        let source = try scratchDir().appending(path: "video.mov")
+        FileManager.default.createFile(atPath: source.path(), contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        try handle.truncate(atOffset: 200 * 1024 * 1024)   // sparse: no 200 MB written
+        try handle.close()
+        let staging = try scratchDir()
+
+        let input = ShareStaging.stage(source, fileName: "video.mov", mime: "video/quicktime", into: staging)
+
+        guard case .tooLarge(let name) = input else { Issue.record("expected tooLarge, got \(input)"); return }
+        #expect(name == "video.mov")
+        #expect(files(staging).isEmpty)
+    }
+
+    @Test func aFileUnderTheLimitIsStagedAsACopy() throws {
+        let source = try scratchDir().appending(path: "Brief.pdf")
+        try Data("%PDF-1.4 brief".utf8).write(to: source)
+        let staging = try scratchDir()
+
+        let input = ShareStaging.stage(source, fileName: "Brief.pdf", mime: "application/pdf", into: staging)
+
+        guard case .staged(let url, let name, let mime, let bytes) = input else {
+            Issue.record("expected staged, got \(input)"); return
+        }
+        #expect(url.deletingLastPathComponent().standardizedFileURL == staging.standardizedFileURL)
+        #expect((name, mime, bytes) == ("Brief.pdf", "application/pdf", 14))
+        #expect(try Data(contentsOf: url) == Data("%PDF-1.4 brief".utf8))
+    }
+
+    @Test func aMissingFileStagesAsUnreadable() throws {
+        let staging = try scratchDir()
+        let input = ShareStaging.stage(staging.appending(path: "gone.pdf"), fileName: "gone.pdf",
+                                       mime: "application/pdf", into: staging)
+        guard case .unreadable = input else { Issue.record("expected unreadable, got \(input)"); return }
+    }
+
+    // MARK: - Collecting what the share sheet handed over
+
+    /// Every item handed over is an input, in order: a load that fails is
+    /// `.unreadable` in its place, never skipped and never cut at ten.
+    @Test func collectKeepsAFailedLoadAsUnreadable() async {
+        let inputs = await SharePreparation.collect(count: 3) { index in
+            index == 1 ? nil : .file(data: Data("%PDF".utf8), fileName: "\(index).pdf", mime: "application/pdf")
+        }
+        #expect(inputs.count == 3)
+        guard case .unreadable = inputs[1] else { Issue.record("expected unreadable at 1"); return }
+        guard case .file(_, let first, _) = inputs[0], case .file(_, let last, _) = inputs[2] else {
+            Issue.record("expected files around it"); return
+        }
+        #expect((first, last) == ("0.pdf", "2.pdf"))
+    }
+
+    @Test func collectLoadsEveryItemPastTen() async {
+        let loaded = await SharePreparation.collect(count: 12) { _ in .unreadable }
+        #expect(loaded.count == 12)
     }
 }

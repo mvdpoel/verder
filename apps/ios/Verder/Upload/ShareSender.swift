@@ -12,12 +12,23 @@ enum ShareSender {
     /// Per request. The extension bounds the whole attempt separately.
     static let timeout: TimeInterval = 30
 
+    /// The largest drop the extension sends itself. The request is built in
+    /// memory (the bytes, then the multipart body beside them), and an
+    /// extension is killed around 120 MB; a larger drop is left to the app's
+    /// queue, which streams its body from a file in a background session.
+    /// It is also what a 4G upload can plausibly finish inside the bound.
+    static let foregroundLimit = 8 * 1024 * 1024
+
     /// Sends each drop in turn and returns the ids that were marked sent.
-    static func send(_ ids: [UUID], groupDir: URL, client: APIClient) async -> [UUID] {
+    /// A drop over `foregroundLimit` is not attempted (and not read).
+    static func send(_ ids: [UUID], groupDir: URL, client: APIClient,
+                     foregroundLimit: Int = foregroundLimit) async -> [UUID] {
         let dir = IncomingDrop.directory(groupDir: groupDir)
         var sent: [UUID] = []
         for id in ids {
             guard !Task.isCancelled,
+                  let size = ShareStaging.byteCount(IncomingDrop.binURL(id, in: dir)),
+                  size <= foregroundLimit,
                   let drop = IncomingDrop.read(IncomingDrop.jsonURL(id, in: dir)),
                   let bytes = try? Data(contentsOf: IncomingDrop.binURL(id, in: dir))
             else { continue }

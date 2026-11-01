@@ -51,6 +51,37 @@ struct IncomingDrop: Codable, Equatable, Sendable {
         return drop.id
     }
 
+    /// Writes a drop whose bytes are a file on disk, copied without being read
+    /// into memory (a shared file of tens of MB must not cost tens of MB of
+    /// the extension's budget). Same order: bytes first, description last.
+    @discardableResult
+    static func write(fileAt source: URL, fileName: String, mime: String, capturedAt: Date,
+                      to groupDir: URL) throws -> UUID {
+        let dir = directory(groupDir: groupDir)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let drop = IncomingDrop(id: UUID(), fileName: fileName, mime: mime,
+                                fileExtension: fileExtension(fileName: fileName, mime: mime),
+                                capturedAt: capturedAt)
+        let bin = binURL(drop.id, in: dir)
+        try FileManager.default.copyItem(at: source, to: bin)
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: bin.path())
+        try encoder.encode(drop).write(to: jsonURL(drop.id, in: dir),
+                                       options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        return drop.id
+    }
+
+    /// Takes a drop back before the app has seen it: description FIRST, so a
+    /// crash in between leaves an invisible orphan `.bin` (swept after 24 h),
+    /// never a drop without its bytes being imported.
+    static func remove(_ id: UUID, groupDir: URL) {
+        let dir = directory(groupDir: groupDir)
+        let fm = FileManager.default
+        try? fm.removeItem(at: jsonURL(id, in: dir))
+        try? fm.removeItem(at: binURL(id, in: dir))
+        try? fm.removeItem(at: sentURL(id, in: dir))
+    }
+
     /// The extension's own upload got through.
     static func markSent(_ id: UUID, groupDir: URL) throws {
         try Data().write(to: sentURL(id, in: directory(groupDir: groupDir)),
