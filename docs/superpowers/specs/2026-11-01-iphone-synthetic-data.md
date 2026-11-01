@@ -122,3 +122,7 @@ each fixture folder holds only what differs, and a `fixture.json` describing it.
 ## States every screen gets
 
 loading (skeleton) · empty · one item · many (498) · long Dutch titles · error (server) · offline · unauthorized (sessie verlopen) · locked (Overzicht only: counts, no titles) · largest accessibility text size (AX5) · smallest iPhone (iPhone SE 3rd gen / 375×667 pt) · iPhone 17 Pro (402×874 pt) as the reference frame.
+
+## Account (`me`, all fixtures)
+
+Meer → Account reads `GET /api/mobile/v1/me`: `{"email": "jij@thuis.example", "name": null, "passkeys": 1}`. The person stays unnamed.

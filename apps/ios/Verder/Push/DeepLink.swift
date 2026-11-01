@@ -4,7 +4,12 @@ import Observation
 /// Where a tapped notification leads, parsed from the push payload's `link`
 /// (`verder://proposal/<uuid>`, `verder://suggestion/<uuid>`,
 /// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`,
-/// `verder://weekly`).
+/// `verder://weekly`, `verder://voice`, `verder://done-by-verder`,
+/// `verder://dossier`, `verder://overzicht`, `verder://money`).
+///
+/// EVERY CASE BUT `.none` HAS A `destination` — a tab, a stack or the voice
+/// sheet — and `LinkDestinationTests` checks that every link the worker and
+/// the web can send parses to one, so no tap ever lands nowhere.
 ///
 /// The payload comes off the wire, so the parse is strict: exactly the scheme,
 /// a known host, no user, port, query or fragment, and exactly one UUID path
@@ -26,6 +31,16 @@ enum DeepLink: Equatable, Sendable {
     /// Sunday push itself carries `verder://inbox`; `NotificationRouter`
     /// sends a tap on its `WEEKLY` category here.
     case weekly
+    /// `verder://done-by-verder`: "Door verder gedaan" on Voor jou — what
+    /// verder filed or renamed by itself (Overzicht's card, the daily digest).
+    case doneByVerder
+    /// `verder://dossier`: the Dossier tab at its root (a link-less filing
+    /// push: a merged duplex scan, a new loonstrook).
+    case dossier
+    /// `verder://overzicht`: the Overzicht tab (a link-less system push).
+    case overzicht
+    /// `verder://money`: Geld, on Meer.
+    case money
     case none
 
     init(userInfo: [AnyHashable: Any]) {
@@ -49,6 +64,14 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .voice : .none
         case "weekly":
             return parts.path.isEmpty ? .weekly : .none
+        case "done-by-verder":
+            return parts.path.isEmpty ? .doneByVerder : .none
+        case "dossier":
+            return parts.path.isEmpty ? .dossier : .none
+        case "overzicht":
+            return parts.path.isEmpty ? .overzicht : .none
+        case "money":
+            return parts.path.isEmpty ? .money : .none
         case "proposal", "suggestion", "task", "document":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
@@ -62,17 +85,50 @@ enum DeepLink: Equatable, Sendable {
         }
     }
 
-    /// The tab a link opens. A proposal, suggestion or task opens Voor jou with
-    /// that item on top (RootView pushes it); both tabs are lock-gated, so whatever the link
-    /// points at is shown only after unlock.
-    var tab: RootView.TabID? {
+    /// The tab a link opens: the destination's, so the two cannot disagree.
+    /// Voor jou, Dossier and Meer are lock-gated, so whatever the link points
+    /// at is shown only after unlock.
+    var tab: RootView.TabID? { destination?.tab }
+
+    /// Where the link lands; nil only for `.none`. A proposal, suggestion or
+    /// task opens Voor jou with that item on top; a document opens the viewer
+    /// on Dossier; the Weekoverzicht and Geld open on Meer.
+    var destination: LinkDestination? {
         switch self {
-        case .proposal, .suggestion, .task, .inbox: .voorJou
-        case .document: .dossier
-        case .weekly: .meer
-        case .voice, .none: nil
+        case .proposal(let id): LinkDestination(tab: .voorJou, stack: .inbox([.proposal(id.lowerString)]))
+        case .suggestion(let id): LinkDestination(tab: .voorJou, stack: .inbox([.suggestion(id.lowerString)]))
+        case .task(let id): LinkDestination(tab: .voorJou, stack: .inbox([.task(id.lowerString)]))
+        case .inbox: LinkDestination(tab: .voorJou, stack: .inbox([]))
+        case .doneByVerder: LinkDestination(tab: .voorJou, stack: .inbox([.doneByVerder]))
+        case .document(let id): LinkDestination(tab: .dossier, stack: .dossier([.document(id: id.lowerString, title: nil)]))
+        case .dossier: LinkDestination(tab: .dossier, stack: .dossier([]))
+        case .overzicht: LinkDestination(tab: .home, stack: nil)
+        case .weekly: LinkDestination(tab: .meer, stack: .meer([.weekly]))
+        case .money: LinkDestination(tab: .meer, stack: .meer([.money]))
+        case .voice: LinkDestination(tab: nil, stack: nil, opensVoice: true)
+        case .none: nil
         }
     }
+}
+
+/// Where a `DeepLink` lands, decided outside RootView so a test can see it:
+/// the tab, the stack that tab shows (replacing whatever was there), and
+/// whether the voice sheet opens over the current tab.
+struct LinkDestination: Equatable, Sendable {
+    enum Stack: Equatable, Sendable {
+        case inbox([InboxRoute])
+        case dossier([DossierRoute])
+        case meer([MoreRoute])
+    }
+
+    let tab: RootView.TabID?
+    let stack: Stack?
+    var opensVoice = false
+}
+
+private extension UUID {
+    /// Ids travel to the server lowercased, as the routes print them.
+    var lowerString: String { uuidString.lowercased() }
 }
 
 /// The hand-off from the notification delegate to the screens. A tap on a

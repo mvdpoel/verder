@@ -1,0 +1,182 @@
+import Testing
+import Foundation
+import UserNotifications
+@testable import Verder
+
+/// Every way into the app lands somewhere real (plan 3 Task GAP): every link
+/// the worker or the web can send, every notification category, every widget
+/// URL and every fixture route parses to a `DeepLink` with a DESTINATION — a
+/// tab, a stack, or the voice sheet. A link that parses but goes nowhere is a
+/// tap that silently does nothing, which is the failure this file exists for.
+@MainActor
+struct LinkDestinationTests {
+    nonisolated static let id = UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!
+    nonisolated static let lower = "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+
+    static let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // VerderTests/
+        .deletingLastPathComponent()   // apps/ios/
+        .deletingLastPathComponent()   // apps/
+        .deletingLastPathComponent()   // repo root
+
+    /// Every `verder://…` literal in the non-test TypeScript under `dir`, with
+    /// each `${…}` interpolation replaced by a UUID (the only thing the
+    /// worker ever interpolates into a link is a row id).
+    static func serverLinks(under dir: String) throws -> [(file: String, link: String)] {
+        let root = repo.appending(path: dir)
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? [])
+            .filter { $0.pathExtension == "ts" && !$0.lastPathComponent.hasSuffix(".test.ts") }
+        var out: [(String, String)] = []
+        let literal = try Regex(#"verder://[A-Za-z0-9_\-/${}.]*"#)
+        let interpolation = try Regex(#"\$\{[^}]*\}"#)
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            for line in text.components(separatedBy: .newlines) {
+                // Doc comments describe links; only code sends them.
+                let code = line.trimmingCharacters(in: .whitespaces)
+                if code.hasPrefix("//") || code.hasPrefix("*") || code.hasPrefix("/*") { continue }
+                for m in line.matches(of: literal) {
+                    let raw = String(line[m.range])
+                    out.append((file.lastPathComponent, raw.replacing(interpolation, with: lower)))
+                }
+            }
+        }
+        return out
+    }
+
+    @Test func everyLinkTheWorkerSendsLandsSomewhere() throws {
+        let links = try Self.serverLinks(under: "apps/worker/src")
+        // The worker sends at least proposal and inbox links (notify callers).
+        #expect(links.count >= 8, "found \(links.count) links; did the worker move?")
+        #expect(Set(links.map(\.link)).isSuperset(of: ["verder://inbox", "verder://proposal/\(Self.lower)"]))
+        for (file, link) in links {
+            let parsed = DeepLink.parse(link)
+            #expect(parsed != .none, "\(file): \(link) parses to nothing")
+            #expect(parsed.destination != nil, "\(file): \(link) goes nowhere")
+        }
+    }
+
+    /// The web serves links too: the dossier search hits (`mobile-dto.ts`).
+    @Test func everyLinkTheWebServesLandsSomewhere() throws {
+        let links = try Self.serverLinks(under: "apps/web/src/lib")
+        #expect(links.count >= 2)
+        for (file, link) in links {
+            #expect(DeepLink.parse(link).destination != nil, "\(file): \(link)")
+        }
+    }
+
+    @Test func eachLinkOpensItsScreen() {
+        #expect(DeepLink.proposal(Self.id).destination == .init(tab: .voorJou, stack: .inbox([.proposal(Self.lower)])))
+        #expect(DeepLink.suggestion(Self.id).destination == .init(tab: .voorJou, stack: .inbox([.suggestion(Self.lower)])))
+        #expect(DeepLink.task(Self.id).destination == .init(tab: .voorJou, stack: .inbox([.task(Self.lower)])))
+        #expect(DeepLink.inbox.destination == .init(tab: .voorJou, stack: .inbox([])))
+        #expect(DeepLink.doneByVerder.destination == .init(tab: .voorJou, stack: .inbox([.doneByVerder])))
+        #expect(DeepLink.document(Self.id).destination
+                == .init(tab: .dossier, stack: .dossier([.document(id: Self.lower, title: nil)])))
+        #expect(DeepLink.dossier.destination == .init(tab: .dossier, stack: .dossier([])))
+        #expect(DeepLink.overzicht.destination == .init(tab: .home, stack: nil))
+        #expect(DeepLink.weekly.destination == .init(tab: .meer, stack: .meer([.weekly])))
+        #expect(DeepLink.money.destination == .init(tab: .meer, stack: .meer([.money])))
+        #expect(DeepLink.voice.destination == .init(tab: nil, stack: nil, opensVoice: true))
+        #expect(DeepLink.none.destination == nil)
+    }
+
+    @Test func theNewLinksParseStrictly() {
+        #expect(DeepLink.parse("verder://overzicht") == .overzicht)
+        #expect(DeepLink.parse("verder://dossier") == .dossier)
+        #expect(DeepLink.parse("verder://done-by-verder") == .doneByVerder)
+        #expect(DeepLink.parse("verder://money") == .money)
+        for junk in ["verder://overzicht/x", "verder://dossier?x=1", "verder://done-by-verder/1", "verder://money#a"] {
+            #expect(DeepLink.parse(junk) == DeepLink.none, "\(junk)")
+        }
+    }
+
+    /// The tab is the destination's tab — one mapping, not two.
+    @Test func theTabIsTheDestinationsTab() {
+        let all: [DeepLink] = [.proposal(Self.id), .suggestion(Self.id), .task(Self.id), .document(Self.id),
+                               .inbox, .doneByVerder, .dossier, .overzicht, .weekly, .money, .voice, .none]
+        for link in all { #expect(link.tab == link.destination?.tab, "\(link)") }
+    }
+
+    // MARK: - Notifications
+
+    /// A push the worker sends WITHOUT a link (a merged duplex scan, a new
+    /// loonstrook, the watchdog's "hersteld") still opens somewhere: its
+    /// category decides.
+    @Test func everyCategoryHasAPlaceToLandWithoutALink() {
+        for category in NotificationCategories.ids {
+            let target = NotificationRouter.target(action: UNNotificationDefaultActionIdentifier,
+                                                   category: category, link: .none)
+            #expect(target.destination != nil, "\(category)")
+        }
+        #expect(NotificationRouter.fallback(category: "FILING") == .dossier)
+        #expect(NotificationRouter.fallback(category: "SYSTEM") == .overzicht)
+        #expect(NotificationRouter.fallback(category: "WEEKLY") == .weekly)
+        #expect(NotificationRouter.fallback(category: "VERDER_MAIL") == .inbox)
+        #expect(NotificationRouter.fallback(category: "NOT_A_CATEGORY") == DeepLink.none)
+    }
+
+    /// The daily "Door verder gedaan" digest is a FILING push with
+    /// `verder://inbox`: a tap opens that section, not the top of Voor jou.
+    @Test func theDigestOpensDoorVerderGedaan() async {
+        let links = DeepLinkInbox()
+        let outcome = await NotificationRouter(links: links, client: { nil })
+            .handle(action: UNNotificationDefaultActionIdentifier, category: "FILING",
+                    userInfo: ["link": "verder://inbox"])
+        #expect(outcome == .opened(.doneByVerder))
+        #expect(links.pending == .doneByVerder)
+    }
+
+    @Test func aLinklessFilingPushOpensTheDossier() async {
+        let links = DeepLinkInbox()
+        let outcome = await NotificationRouter(links: links, client: { nil })
+            .handle(action: UNNotificationDefaultActionIdentifier, category: "FILING", userInfo: [:])
+        #expect(outcome == .opened(.dossier))
+    }
+
+    /// A link the push DOES carry still wins over the category.
+    @Test func anExplicitLinkWinsOverTheCategory() {
+        let link = DeepLink.proposal(Self.id)
+        for category in NotificationCategories.ids where category != NotificationRouter.weeklyCategory {
+            #expect(NotificationRouter.target(action: UNNotificationDefaultActionIdentifier,
+                                              category: category, link: link) == link, "\(category)")
+        }
+    }
+
+    /// Dismissing never opens anything, fallback or not.
+    @Test func dismissStillOpensNothing() async {
+        let links = DeepLinkInbox()
+        let outcome = await NotificationRouter(links: links, client: { nil })
+            .handle(action: UNNotificationDismissActionIdentifier, category: "SYSTEM", userInfo: [:])
+        #expect(outcome == .ignored)
+        #expect(links.pending == DeepLink.none)
+    }
+
+    // MARK: - Widgets, quick actions, fixtures
+
+    @Test func everyWidgetURLLandsSomewhere() {
+        #expect(DeepLink.parse(WidgetContent.inboxURL.absoluteString).destination != nil)
+        for kind in ["proposal", "question", "suggestion", "task", "stop", "something-new"] {
+            let url = WidgetContent.url(for: .init(kind: kind, id: Self.lower, title: "x"))
+            #expect(DeepLink.parse(url.absoluteString).destination != nil, "\(kind)")
+        }
+        let broken = WidgetContent.url(for: .init(kind: "task", id: "not-a-uuid", title: "x"))
+        #expect(DeepLink.parse(broken.absoluteString).destination != nil)
+    }
+
+    @Test func theQuickActionLandsSomewhere() {
+        #expect(QuickAction.link(forType: QuickAction.voiceType).destination?.opensVoice == true)
+    }
+
+    @Test func everyFixtureRouteIsALinkThatLands() throws {
+        for raw in ["geld", "weekly", "proposal:\(Self.lower)", "suggestion:\(Self.lower)",
+                    "task:\(Self.lower)", "document:\(Self.lower)"] {
+            guard case .link(let link) = try FixtureLaunch.parseRoute(raw) else {
+                Issue.record("\(raw) is not a link"); continue
+            }
+            #expect(link.destination != nil, "\(raw)")
+        }
+        #expect(try FixtureLaunch.parseRoute("geld") == .link(.money))
+    }
+}

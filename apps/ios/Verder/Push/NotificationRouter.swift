@@ -9,8 +9,9 @@ import UserNotifications
 ///   `POST /api/mobile/v1/proposals/<id>/answer { revision, option }` — Plan
 ///   2's body, with the revision the push announced (Task 5). That is the ONE
 ///   thing an action can run, and it sends nothing outward.
-/// - A tap on the Sunday summary (`WEEKLY`) opens the Weekoverzicht, whatever
-///   its `link` says (the worker sends `verder://inbox`).
+/// - A tap on the Sunday summary (`WEEKLY`) opens the Weekoverzicht, a tap on
+///   the "Door verder gedaan" digest opens that section, and a push with no
+///   link opens its category's place (`target`).
 /// - Anything else opens at most; nothing else is reachable.
 ///
 /// An answer that does not go through — no revision in the push, no session,
@@ -57,12 +58,7 @@ final class NotificationRouter {
         guard let proposalId = QuestionCategories.proposalId(fromCategory: category),
               let option = QuestionCategories.optionIndex(fromAction: action)
         else {
-            // A tap (or "Bekijken") on the Sunday summary opens the summary.
-            if category == Self.weeklyCategory,
-               action == UNNotificationDefaultActionIdentifier || action == NotificationCategories.openAction {
-                return open(.weekly)
-            }
-            return open(DeepLink(userInfo: userInfo))
+            return open(Self.target(action: action, category: category, link: DeepLink(userInfo: userInfo)))
         }
 
         // The category names the question its buttons belong to; a link that
@@ -85,6 +81,39 @@ final class NotificationRouter {
         await onAnswered()
         return .answered(proposalId: proposalId, option: option)
     }
+
+    /// What a tap OPENS. The push's own link, except where its category
+    /// knows better:
+    /// - the Sunday summary (`WEEKLY`) opens the Weekoverzicht, whatever its
+    ///   link says (the worker sends `verder://inbox`);
+    /// - the daily "Door verder gedaan" digest is the one `FILING` push that
+    ///   carries `verder://inbox`, and opens that section;
+    /// - a push with NO usable link (a merged duplex scan, a new loonstrook,
+    ///   the watchdog's "hersteld") opens its category's place
+    ///   (`fallback`), never nothing.
+    /// Only a tap or "Bekijken" gets the category's help; any other action
+    /// opens its link at most.
+    static func target(action: String, category: String, link: DeepLink) -> DeepLink {
+        guard action == UNNotificationDefaultActionIdentifier || action == NotificationCategories.openAction
+        else { return link }
+        if category == weeklyCategory { return .weekly }
+        if category == filingCategory, link == .inbox { return .doneByVerder }
+        return link == .none ? fallback(category: category) : link
+    }
+
+    /// Where a category's push lands when it carries no link.
+    static func fallback(category: String) -> DeepLink {
+        switch category {
+        case "VERDER_MAIL", "CREDITOR_MAIL", "PROPOSAL", "REMINDER", "FOLLOW_UP", "TASK_DUE": .inbox
+        case filingCategory: .dossier
+        case "SYSTEM": .overzicht
+        case weeklyCategory: .weekly
+        default: .none
+        }
+    }
+
+    /// `CATEGORY.filing` in apps/worker/src/notify/notify.ts.
+    static let filingCategory = "FILING"
 
     private func open(_ link: DeepLink) -> Outcome {
         guard link != .none else { return .ignored }

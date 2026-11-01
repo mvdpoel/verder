@@ -83,6 +83,7 @@ struct FixtureTests {
         _ = try Self.decode(Ignored.self, name, "push/register", method: "POST")
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
         _ = try Self.decode([PartyDTO].self, name, "parties")
+        _ = try Self.decode(AccountDTO.self, name, "me")
         _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
         // Every fixture but `empty` (404: no Sunday yet) holds a summary.
         if let weekly = try Self.body(name, "weekly") {

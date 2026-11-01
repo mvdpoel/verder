@@ -4,6 +4,9 @@ import Observation
 /// The words "Door verder gedaan" uses for one action. The web spells the same
 /// sentences in apps/web/src/lib/verder-action-copy.ts; keep the two in step.
 enum DoneByVerderCopy {
+    static let title = "Door verder gedaan"
+    static let explanation = "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
+    static let none = "Verder deed niets zelf."
     static let undone = "Ongedaan gemaakt."
     static let changedSince = "Al aangepast of vernietigd — de lijst is bijgewerkt."
     static let refused = "Dit kan hier niet ongedaan worden gemaakt."
@@ -122,19 +125,70 @@ struct DoneByVerderSection: View {
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(actions) { row($0) }
+                ForEach(actions) { DoneByVerderRow(action: $0, model: model) }
             }
             .padding(.top, 10)
         } label: {
-            Text("DOOR VERDER GEDAAN · \(actions.count)")
+            Text("\(DoneByVerderCopy.title.uppercased()) · \(actions.count)")
                 .font(.mono(11, relativeTo: .caption2, weight: .medium))
                 .foregroundStyle(Color.inkLabel)
         }
         .tint(Color.inkDim)
         .padding(.top, 10)
     }
+}
 
-    private func row(_ a: VerderAction) -> some View {
+/// The same list, open, on a screen of its own (`InboxRoute.doneByVerder`):
+/// where Overzicht's card and the daily digest push lead. Read from the one
+/// `InboxStore`, so it is the list the section shows.
+struct DoneByVerderScreen: View {
+    let store: InboxStore
+    let model: DoneByVerderModel
+
+    var body: some View {
+        ZStack {
+            Color.void.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(DoneByVerderCopy.title)
+                        .font(.display(28, relativeTo: .title, weight: .regular))
+                        .foregroundStyle(Color.inkBright)
+                    Text(DoneByVerderCopy.explanation)
+                        .font(.display(15, relativeTo: .subheadline, weight: .regular))
+                        .foregroundStyle(Color.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let actions = store.inbox?.doneByVerder {
+                        if actions.isEmpty {
+                            Text(DoneByVerderCopy.none)
+                                .font(.display(15, relativeTo: .subheadline, weight: .regular))
+                                .foregroundStyle(Color.inkMute)
+                        }
+                        ForEach(actions) { DoneByVerderRow(action: $0, model: model) }
+                    } else if store.lastError == nil {
+                        ProgressView().tint(Color.signal)
+                    } else if let error = store.lastError {
+                        Text(VoorJouTab.message(error))
+                            .font(.display(15, relativeTo: .subheadline, weight: .regular))
+                            .foregroundStyle(Color.ink)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .refreshable { await store.refresh() }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// One thing verder did, with its one-tap undo when the server allows it.
+struct DoneByVerderRow: View {
+    let action: VerderAction
+    let model: DoneByVerderModel
+
+    var body: some View {
+        let a = action
         VStack(alignment: .leading, spacing: 6) {
             Text("\(DoneByVerderCopy.headline(a)) · \(ProposalFormat.dateTime(a.at))")
                 .font(.mono(11, relativeTo: .caption2))

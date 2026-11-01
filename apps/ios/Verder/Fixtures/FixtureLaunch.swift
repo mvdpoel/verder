@@ -30,12 +30,13 @@ struct FixtureLaunch: Equatable, Sendable {
     enum Route: Equatable, Sendable {
         /// Delivered through `DeepLinkInbox`, the path a notification tap takes.
         case link(DeepLink)
-        /// A screen with no deep link (yet): shown by `FixtureScreen`.
+        /// A screen a link cannot show in its capture state: the voice log
+        /// already recorded and transcribed (`FixtureScreen`).
         case screen(Screen)
     }
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
-        case geld, voice
+        case voice
         var id: String { rawValue }
     }
 
@@ -75,8 +76,10 @@ struct FixtureLaunch: Equatable, Sendable {
     /// screen exactly the way a real tap would.
     static func parseRoute(_ raw: String) throws(ParseError) -> Route {
         if let screen = Screen(rawValue: raw) { return .screen(screen) }
-        // The Weekoverzicht has a link of its own: a tap on the Sunday push.
+        // The Weekoverzicht and Geld have links of their own (a tap on the
+        // Sunday push; `verder://money`), so a capture takes the tap's path.
         if raw == "weekly" { return .link(.weekly) }
+        if raw == "geld" { return .link(.money) }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)

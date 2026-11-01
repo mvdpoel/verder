@@ -254,10 +254,12 @@ struct WeeklyDTOTests {
         }
         #expect(await router.handle(action: UNNotificationDismissActionIdentifier, category: "WEEKLY",
                                     userInfo: ["link": "verder://inbox"]) == .ignored)
-        // Another category with the same link still opens Voor jou.
+        // Another category with the same link still opens Voor jou. (FILING's
+        // `verder://inbox` is the "Door verder gedaan" digest and opens that
+        // section: `LinkDestinationTests.theDigestOpensDoorVerderGedaan`.)
         let links = DeepLinkInbox()
         _ = await NotificationRouter(links: links, client: { nil })
-            .handle(action: UNNotificationDefaultActionIdentifier, category: "FILING", userInfo: ["link": "verder://inbox"])
+            .handle(action: UNNotificationDefaultActionIdentifier, category: "VERDER_MAIL", userInfo: ["link": "verder://inbox"])
         #expect(links.pending == .inbox)
     }
 

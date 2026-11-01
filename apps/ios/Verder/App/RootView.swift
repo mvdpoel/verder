@@ -34,7 +34,7 @@ struct RootView: View {
     /// push opens the Weekoverzicht once the app is unlocked.
     @State private var meerPath: [MoreRoute] = []
     #if DEBUG
-    /// `-route geld|voice` (Verder/Fixtures), and whether the launch's
+    /// `-route voice` (Verder/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
     @State private var fixtureScreen: FixtureLaunch.Screen?
     @State private var fixtureStartApplied = false
@@ -94,18 +94,16 @@ struct RootView: View {
         // A tapped notification. The target tabs are lock-gated, so what the
         // link points at shows only after unlock.
         .onChange(of: links.pending, initial: true) { _, _ in
-            let link = links.take()
-            if let target = link.tab { tab = target }
-            switch link {
-            case .proposal(let id): inboxPath = [.proposal(id.uuidString.lowercased())]
-            case .suggestion(let id): inboxPath = [.suggestion(id.uuidString.lowercased())]
-            case .task(let id): inboxPath = [.task(id.uuidString.lowercased())]
-            case .inbox: inboxPath = []
-            case .document(let id): dossierPath = [.document(id: id.uuidString.lowercased(), title: nil)]
-            case .voice: voice.open()
-            case .weekly: meerPath = [.weekly]
-            case .none: break
+            // Where it lands is `DeepLink.destination` (tested); this only applies it.
+            guard let to = links.take().destination else { return }
+            if let target = to.tab { tab = target }
+            switch to.stack {
+            case .inbox(let path)?: inboxPath = path
+            case .dossier(let path)?: dossierPath = path
+            case .meer(let path)?: meerPath = path
+            case nil: break
             }
+            if to.opensVoice { voice.open() }
         }
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.

@@ -44,6 +44,36 @@ enum HomeSummary {
                                         timeZone: TimeZone(identifier: "Europe/Amsterdam")!))
     }
 
+    // MARK: Door verder gedaan
+
+    static let doneLabel = "DOOR VERDER GEDAAN"
+
+    /// Overzicht's "Door verder gedaan" card: the count always (a count is
+    /// glance material), the top items only when unlocked, and where a tap
+    /// leads. NEVER AMBER: what verder already did does not wait on Martin.
+    struct DoneCard: Equatable {
+        let line: String
+        let items: [VerderAction]
+        /// Nil when there is nothing to open.
+        let opens: InboxRoute?
+        let amber = false
+    }
+
+    static func doneCard(_ inbox: InboxDTO, revealed: Bool) -> DoneCard {
+        let n = inbox.doneByVerder.count
+        let line = switch n {
+        case 0: DoneByVerderCopy.none
+        case 1: "1 ding door verder zelf gedaan"
+        default: "\(n) dingen door verder zelf gedaan"
+        }
+        return DoneCard(line: line,
+                        items: revealed ? Array(inbox.doneByVerder.prefix(previewCount)) : [],
+                        opens: n > 0 ? .doneByVerder : nil)
+    }
+
+    /// "Opgeborgen door verder" / "Hernoemd door verder".
+    static func doneRowLine(_ a: VerderAction) -> String { DoneByVerderCopy.headline(a) }
+
     struct TaskLine: Equatable { let text: String; let amber: Bool }
 
     static func taskLines(_ t: DashboardSummaryDTO.Tasks) -> [TaskLine] {
@@ -103,6 +133,7 @@ struct HomeTab: View {
                     headlineCard
                     waitingCard
                     moneyCard
+                    doneCard
                     tasksCard
                     scansCard
                 }
@@ -232,6 +263,38 @@ struct HomeTab: View {
         }
         // A failed money fetch hides the card rather than adding a second
         // error line to Overzicht; Geld itself says why.
+    }
+
+    /// What verder did by itself; opens the section on Voor jou. Ink, never
+    /// amber. Titles only once unlocked (`HomeSummary.doneCard`).
+    @ViewBuilder private var doneCard: some View {
+        if let inbox = store.inbox {
+            let done = HomeSummary.doneCard(inbox, revealed: lock.revealsCaseContent)
+            let content = card(label: HomeSummary.doneLabel, chevron: done.opens != nil) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(done.line)
+                        .font(.display(15, relativeTo: .subheadline, weight: .regular))
+                        .foregroundStyle(Color.ink)
+                    ForEach(done.items) { a in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(a.documentTitle ?? "Document")
+                                .font(.display(15, relativeTo: .subheadline, weight: .regular))
+                                .foregroundStyle(Color.inkBright)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Text(HomeSummary.doneRowLine(a))
+                                .font(.mono(11, relativeTo: .caption2))
+                                .foregroundStyle(Color.inkDim)
+                        }
+                    }
+                }
+            }
+            if let route = done.opens {
+                Button { openInbox(route) } label: { content }.buttonStyle(.plain)
+            } else {
+                content
+            }
+        }
     }
 
     @ViewBuilder private var tasksCard: some View {

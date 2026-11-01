@@ -7,6 +7,9 @@ enum InboxRoute: Hashable, Sendable {
     case proposal(String)
     case suggestion(String)
     case task(String)
+    /// "Door verder gedaan" on a screen of its own, open: where Overzicht's
+    /// card and the daily digest lead.
+    case doneByVerder
 
     /// Nil for the map's current stop and for a kind this build does not know:
     /// those are shown, not opened.
@@ -108,6 +111,8 @@ struct VoorJouTab: View {
                     SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized)
                 case .task(let id):
                     TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
+                case .doneByVerder:
+                    DoneByVerderScreen(store: store, model: done)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
