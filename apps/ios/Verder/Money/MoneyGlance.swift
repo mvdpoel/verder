@@ -51,6 +51,10 @@ struct LeefgeldCard: Equatable, Sendable {
     let rows: [DisclosureLine]
 
     var text: String { ([headline] + lines + [accountLine].compactMap { $0 }).joined(separator: "\n") }
+    /// What VoiceOver reads for the figure. The figure renders on the
+    /// Overzicht card WHILE LOCKED, so it carries no account line — the
+    /// account reaches VoiceOver on Geld through its own readout.
+    var glanceText: String { ([headline] + lines).joined(separator: "\n") }
 
     static func make(_ week: LeefgeldWeek, newestBooking: String?) -> LeefgeldCard? {
         switch week {

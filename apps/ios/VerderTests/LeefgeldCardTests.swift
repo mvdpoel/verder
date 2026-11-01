@@ -206,3 +206,26 @@ struct LeefgeldCardTests {
         #expect(seen.rejected == 1)
     }
 }
+
+/// Review fix: the Overzicht money card renders WHILE LOCKED, and VoiceOver
+/// reads the figure's accessibility text. That text must never identify an
+/// account — the account line belongs to Geld, behind the lock.
+@MainActor
+struct LeefgeldGlanceTextTests {
+    @Test(arguments: ["money-complete", "money-geen-data"])
+    func glanceTextNamesNoAccount(_ name: String) throws {
+        let dto = try FixtureTests.decode(MoneySummaryDTO.self, name, "money/summary")
+        let card = try #require(MoneyGlance(dto).leefgeld)
+        let iban: String
+        switch dto.leefgeld {
+        case .figure(let f): iban = f.accountIban
+        case .geenData(let i, _, _, _): iban = i
+        default: Issue.record("\(name) has no account"); return
+        }
+        #expect(card.accountLine != nil, "fixture should carry an account line, or this test proves nothing")
+        #expect(!card.glanceText.contains("rekening"))
+        #expect(!card.glanceText.contains(MoneyFormat.ibanTail(iban)))
+        #expect(!card.glanceText.contains(String(iban.suffix(4))))
+        #expect(card.glanceText.contains(card.headline))
+    }
+}

@@ -66,7 +66,7 @@ struct LeefgeldFigure: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(card.text)
+        .accessibilityLabel(card.glanceText)
     }
 
     private func heroText(_ hero: String) -> some View {
