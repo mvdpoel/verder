@@ -149,13 +149,22 @@ final class DossierModel {
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
+    @ObservationIgnored private let epoch: SessionEpoch
 
     init(store: DossierStore, client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
-         isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable }) {
+         isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
+         epoch: SessionEpoch = SessionEpoch()) {
         self.store = store
+        self.epoch = epoch
         self.client = client
         self.onUnauthorized = onUnauthorized
         self.isProtectedDataAvailable = isProtectedDataAvailable
+        epoch.whenEnded { [weak self] in
+            guard let self else { return }
+            self.forgetInMemory()
+            let store = self.store
+            Task { await store.wipe() }
+        }
     }
 
     var results: [IndexedDoc] { DossierSearch.search(query, in: docs) }
@@ -188,6 +197,7 @@ final class DossierModel {
     /// while that same query is still in the field: typing on resets the
     /// search (the `query` didSet), and a reply for an older query is dropped.
     func searchServer() async {
+        let started = epoch.current
         let sent = query
         let q = sent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !offline else { return }
@@ -201,23 +211,41 @@ final class DossierModel {
                 if server == .loading(sent) { server = .idle }
                 return
             }
+            guard epoch.isCurrent(started) else { return }
             next = .failed(handle(error))
         }
-        guard server == .loading(sent), query == sent else { return }
+        guard epoch.isCurrent(started), server == .loading(sent), query == sent else { return }
         server = next
     }
 
+    /// Forgets the phone's copy and everything the tab shows about it. The
+    /// session's end (`SessionEpoch`) does this by itself; Meer's sign-out
+    /// also awaits it, so the files are gone before the sheet closes.
     func wipe() async {
+        forgetInMemory()
         await store.wipe()
+    }
+
+    /// The query and the server's hits go too: "huur" over a list of hits is
+    /// case content as much as the documents are.
+    private func forgetInMemory() {
         docs = []
         syncedAt = nil
         notHeldCount = 0
         tasks = nil
+        query = ""
+        server = .idle
+        message = nil
+        offline = false
     }
 
+    /// Every write after an await is checked against the epoch it started
+    /// in: a sync that outlives its session leaves the wiped tab wiped.
     private func sync() async {
+        let started = epoch.current
         do {
             try await store.sync(client: client)
+            guard epoch.isCurrent(started) else { return }
             offline = false
             message = nil
         } catch DossierStore.SyncError.unavailable {
@@ -227,15 +255,21 @@ final class DossierModel {
             // left (SwiftUI cancelled its `.task`), or the phone locked and
             // the `.complete` files refused the write. What was applied is
             // kept; the next foreground refresh after unlock carries on.
+        } catch DossierStore.SyncError.wiped {
+            // Wiped while this sync waited: nothing to report.
         } catch {
+            guard epoch.isCurrent(started) else { return }
             message = handle(error)
         }
+        guard epoch.isCurrent(started) else { return }
         await reload()
     }
 
     private func fetchTasks() async {
+        let started = epoch.current
         do {
             let all: [TaskDTO] = try await client.getJSON("/api/mobile/v1/tasks")
+            guard epoch.isCurrent(started) else { return }
             tasks = DossierCopy.openTasks(all)
         } catch {
             // The sync reports the failure; a task list that cannot load just stays as it was.
@@ -243,10 +277,15 @@ final class DossierModel {
     }
 
     private func reload() async {
+        let started = epoch.current
         guard await store.load() else { return }
-        docs = await store.indexed()
-        syncedAt = await store.lastSyncedAt
-        notHeldCount = await store.notHeld().count
+        let docs = await store.indexed()
+        let syncedAt = await store.lastSyncedAt
+        let notHeldCount = await store.notHeld().count
+        guard epoch.isCurrent(started) else { return }
+        self.docs = docs
+        self.syncedAt = syncedAt
+        self.notHeldCount = notHeldCount
         loaded = true
     }
 

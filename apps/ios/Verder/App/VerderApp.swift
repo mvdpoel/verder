@@ -41,12 +41,17 @@ struct VerderApp: App {
         _uploads = State(initialValue: s.uploads)
         _push = State(initialValue: PushRegistrar(client: s.client, auth: auth, permission: s.permission,
                                                   defaults: s.defaults, registerRemote: s.registerRemote))
+        // Every store holding case content shares auth's ONE sign-out epoch
+        // (`SessionEpoch`): signing out, or a 401 anywhere, clears all three,
+        // and a refresh still in flight writes nothing back.
         let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
-                               onUnauthorized: { auth.sessionRejected() })
+                               onUnauthorized: { auth.sessionRejected() }, epoch: auth.epoch)
         _inbox = State(initialValue: inbox)
-        _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() }))
+        _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
+                                                epoch: auth.epoch))
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
-                                                    onUnauthorized: { auth.sessionRejected() }))
+                                                    onUnauthorized: { auth.sessionRejected() },
+                                                    epoch: auth.epoch))
         let client = s.client
         _voice = State(initialValue: VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,

@@ -43,6 +43,9 @@ final class AuthModel {
     @ObservationIgnored let store: any SessionStore
     @ObservationIgnored let passkeys: PasskeyAuth
     @ObservationIgnored let defaults: UserDefaults
+    /// Moved by every way out (`forgetLocally`); every store holding case
+    /// content checks it after each await (`SessionEpoch`).
+    @ObservationIgnored let epoch: SessionEpoch
     /// The App Group dir holding the widget's snapshot (the top five titles
     /// and the map headline). Erased on sign-out and on a rejected session.
     @ObservationIgnored private let widgetSnapshotDir: URL?
@@ -50,8 +53,10 @@ final class AuthModel {
 
     init(client: APIClient, store: any SessionStore, passkeys: PasskeyAuth? = nil, defaults: UserDefaults = .standard,
          widgetSnapshotDir: URL? = nil,
-         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
+         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() },
+         epoch: SessionEpoch = SessionEpoch()) {
         self.client = client
+        self.epoch = epoch
         self.store = store
         self.passkeys = passkeys ?? PasskeyAuth(client: client, store: store, authenticator: PlatformPasskeyAuthenticator())
         self.defaults = defaults
@@ -184,11 +189,17 @@ final class AuthModel {
     /// the home-screen widget draws titles and the headline from it, and a
     /// phone signed out (or revoked after it was lost) must stop showing the
     /// case — the same reason the pocket dossier is wiped.
+    ///
+    /// Ending the epoch is what makes that stick: every store forgets its
+    /// case content in its `whenEnded` (inbox, summary and badge 0; money;
+    /// the dossier with its query and server hits), and a refresh still
+    /// waiting on the network finds the epoch moved and writes nothing back.
     private func forgetLocally() {
         store.clear()
         isSignedIn = false
         passkeyOfferPending = false
         passkeyMessage = nil
+        epoch.end()
         if let widgetSnapshotDir {
             WidgetSnapshot.erase(in: widgetSnapshotDir)
             reloadWidgets()

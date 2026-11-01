@@ -260,13 +260,25 @@ final class MoneyStore {
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
 
-    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {}) {
+    @ObservationIgnored private let epoch: SessionEpoch
+
+    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {}, epoch: SessionEpoch = SessionEpoch()) {
         self.client = client
         self.onUnauthorized = onUnauthorized
+        self.epoch = epoch
+        epoch.whenEnded { [weak self] in
+            self?.glance = nil
+            self?.lastError = nil
+        }
     }
 
+    /// An answer that arrives after the session ended (`SessionEpoch`) is
+    /// dropped, its 401 included: it belongs to a session already gone.
     func refresh() async {
-        switch await Self.fetch(client) {
+        let started = epoch.current
+        let result = await Self.fetch(client)
+        guard epoch.isCurrent(started) else { return }
+        switch result {
         case .success(let dto):
             glance = MoneyGlance(dto)
             lastError = nil

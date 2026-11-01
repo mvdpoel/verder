@@ -32,6 +32,7 @@ final class InboxStore {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let writer: WidgetSnapshot.Writer
     @ObservationIgnored private let reloadWidgets: @MainActor () -> Void
+    @ObservationIgnored private let epoch: SessionEpoch
 
     init(client: APIClient,
          snapshotDir: URL? = AppGroup.containerURL,
@@ -39,14 +40,17 @@ final class InboxStore {
          onUnauthorized: @escaping @MainActor () -> Void = {},
          now: @escaping @Sendable () -> Date = Date.init,
          writer: @escaping WidgetSnapshot.Writer = { try $0.write(to: $1, options: $2) },
-         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
+         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() },
+         epoch: SessionEpoch = SessionEpoch()) {
         self.client = client
+        self.epoch = epoch
         self.snapshotDir = snapshotDir
         self.setBadge = setBadge
         self.onUnauthorized = onUnauthorized
         self.now = now
         self.writer = writer
         self.reloadWidgets = reloadWidgets
+        epoch.whenEnded { [weak self] in self?.sessionEnded() }
     }
 
     static let systemBadge: @Sendable (Int) async -> Void = { count in
@@ -57,10 +61,17 @@ final class InboxStore {
     /// without it nothing is written. The summary is decoration (the widget's
     /// headline), so when only it fails the count still goes through with the
     /// last known headline.
+    ///
+    /// A refresh that outlives its session (Martin signed out, or a 401
+    /// elsewhere, while it waited) writes NOTHING: no list, no snapshot, no
+    /// badge — and its own 401 is about a session already gone, so it does
+    /// not end the next one either.
     func refresh() async {
+        let started = epoch.current
         async let inboxResult: Result<InboxDTO, APIError> = Self.fetch(client, Self.inboxPath)
         async let summaryResult: Result<DashboardSummaryDTO, APIError> = Self.fetch(client, Self.summaryPath)
         let (i, s) = await (inboxResult, summaryResult)
+        guard epoch.isCurrent(started) else { return }
 
         if case .success(let fresh) = s { summary = fresh }
         let dto: InboxDTO
@@ -95,6 +106,18 @@ final class InboxStore {
             WidgetSnapshot.reportProtectionIfAsked(in: snapshotDir)
         }
         await setBadge(dto.count)
+        // The session ended while the badge was being set: the ender's 0 may
+        // have landed first, so say 0 again, last.
+        if !epoch.isCurrent(started) { await setBadge(0) }
+    }
+
+    /// The session ended (`SessionEpoch`): nothing of the case stays in
+    /// memory, in the widget, or on the icon.
+    private func sessionEnded() {
+        lastError = nil
+        forgetCaseContent()
+        let setBadge = setBadge
+        Task { await setBadge(0) }
     }
 
     /// A rejected session leaves nothing of the case behind: not in memory for

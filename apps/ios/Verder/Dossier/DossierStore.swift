@@ -65,6 +65,9 @@ actor DossierStore {
         /// The phone's copy could not be read yet (protected data is
         /// unavailable while locked). Nothing was synced or written.
         case unavailable
+        /// `wipe()` ran while this sync waited on the network (the actor is
+        /// reentrant): it stopped and wrote nothing after the wipe.
+        case wiped
     }
 
     /// What the phone holds for one document. `contentType` is the file
@@ -111,6 +114,12 @@ actor DossierStore {
     /// False until the disk copy has been read successfully (or found absent).
     private var isLoaded = false
     private var syncing = false
+    /// Bumped by every `wipe()`. The actor is reentrant: a wipe runs while a
+    /// sync waits on the network, so a sync captures this before its first
+    /// await and checks it after every await (`ensureLive`), and every write
+    /// checks it too — otherwise it resumes and writes the old session's page
+    /// into the wiped store (the app-wide rule is `SessionEpoch`).
+    private var wipes = 0
 
     /// `writer` first: a single trailing closure in the tests is the writer.
     init(dir: URL, writer: @escaping Writer = DossierStore.defaultWriter,
@@ -228,45 +237,56 @@ actor DossierStore {
         guard !syncing else { return }
         // Never sync, and above all never save, over a copy not yet read.
         guard load() else { throw SyncError.unavailable }
+        let gen = wipes
         syncing = true
         triedThisSync = []
-        defer { syncing = false }
+        // A wipe already reset both for whatever runs next.
+        defer { if gen == wipes { syncing = false } }
         try prepareDirectories()
 
         while true {
             let delta: DossierDelta = try await client.getJSON(
                 "\(Self.syncPath)?cursor=\(state.cursor)&limit=\(Self.pageSize)")
+            try ensureLive(gen)
             do {
-                try await apply(delta, client: client)
+                try await apply(delta, client: client, gen: gen)
             } catch {
                 // Keep what was applied — every step is idempotent — but NOT
-                // the cursor: the page is asked for again.
-                try? save()
+                // the cursor: the page is asked for again. (After a wipe
+                // `save` refuses: there is nothing to keep.)
+                try? save(gen)
                 throw error
             }
             state.cursor = delta.cursor
             state.syncedAt = Date()
-            try save()
+            try save(gen)
             if !delta.more { break }
         }
-        try await retryNotHeld(client: client)
-        try await fetchMissingTexts(client: client)
+        try await retryNotHeld(client: client, gen: gen)
+        try await fetchMissingTexts(client: client, gen: gen)
     }
 
-    /// Forgets everything (sign-out). The server is untouched.
+    /// Forgets everything (sign-out). The server is untouched. A sync
+    /// waiting on the network meanwhile stops with `.wiped` when it resumes.
     func wipe() {
+        wipes += 1
         try? FileManager.default.removeItem(at: dir)
         state = .empty
         texts = [:]
         isLoaded = true
         triedThisSync = []
+        syncing = false
+    }
+
+    private func ensureLive(_ gen: Int) throws {
+        if gen != wipes { throw SyncError.wiped }
     }
 
     /// Ids whose download was attempted in the running sync, so a document
     /// that just failed on its page is not asked for twice in one go.
     private var triedThisSync: Set<String> = []
 
-    private func apply(_ delta: DossierDelta, client: APIClient) async throws {
+    private func apply(_ delta: DossierDelta, client: APIClient, gen: Int) async throws {
         for t in delta.tombstones { forget(t.id) }
         for doc in delta.upserts {
             // The id becomes a file name: anything but a UUID never reaches the disk.
@@ -276,14 +296,16 @@ actor DossierStore {
                 state.notHeld[doc.id] = nil
                 continue
             }
-            try await take(doc, client: client)
+            try await take(doc, client: client, gen: gen)
         }
     }
 
     /// Downloads one document and records what came of it.
-    private func take(_ doc: DossierDoc, client: APIClient) async throws {
+    private func take(_ doc: DossierDoc, client: APIClient, gen: Int) async throws {
         triedThisSync.insert(doc.id)
-        switch try await download(doc, client: client) {
+        let outcome = try await download(doc, client: client, gen: gen)
+        try ensureLive(gen)
+        switch outcome {
         case .stored(let contentType):
             if state.records[doc.id]?.doc.sha256 != doc.sha256 { dropText(doc.id) }
             state.records[doc.id] = Record(doc: doc, contentType: contentType)
@@ -300,26 +322,28 @@ actor DossierStore {
     /// After paging: one more try for every document not held, except those
     /// this sync already tried. Anything that is not about the document
     /// itself (offline, 401) stops the retries; the cursor is already safe.
-    private func retryNotHeld(client: APIClient) async throws {
-        defer { triedThisSync = [] }
+    private func retryNotHeld(client: APIClient, gen: Int) async throws {
+        defer { if gen == wipes { triedThisSync = [] } }
         let due = state.notHeld.values.filter { !triedThisSync.contains($0.id) }.sorted { $0.id < $1.id }
         guard !due.isEmpty else { return }
         do {
-            for doc in due { try await take(doc, client: client) }
+            for doc in due { try await take(doc, client: client, gen: gen) }
+        } catch SyncError.wiped {
+            throw SyncError.wiped
         } catch APIError.unauthorized {
-            try? save()
+            try? save(gen)
             throw APIError.unauthorized
         } catch {
-            try? save()
+            try? save(gen)
             if APIError.isCancellation(error) { throw error }
             return
         }
-        try save()
+        try save(gen)
     }
 
     private enum Download { case stored(contentType: String?), gone, notHeld }
 
-    private func download(_ doc: DossierDoc, client: APIClient) async throws -> Download {
+    private func download(_ doc: DossierDoc, client: APIClient, gen: Int) async throws -> Download {
         let req = client.request("/api/mobile/v1/documents/\(doc.id)/file", method: "GET", body: nil, contentType: nil)
         let data: Data
         let http: HTTPURLResponse
@@ -338,11 +362,11 @@ actor DossierStore {
         // Bytes that do not hash to the sha are a broken download or a
         // tampered vault; storing them would make them permanent.
         guard Self.sha256Hex(data) == doc.sha256 else { return .notHeld }
-        try write(data, to: Self.fileURL(doc.id, in: dir))
+        try write(data, to: Self.fileURL(doc.id, in: dir), gen: gen)
         return .stored(contentType: http.value(forHTTPHeaderField: "Content-Type"))
     }
 
-    private func fetchMissingTexts(client: APIClient) async throws {
+    private func fetchMissingTexts(client: APIClient, gen: Int) async throws {
         let missing = state.records.keys.filter { texts[$0] == nil }.sorted()
         var start = 0
         while start < missing.count {
@@ -352,14 +376,17 @@ actor DossierStore {
             do {
                 rows = try await client.getJSON("\(Self.textsPath)?ids=\(batch.joined(separator: ","))")
             } catch APIError.unauthorized {
+                try ensureLive(gen)
                 throw APIError.unauthorized
             } catch {
+                try ensureLive(gen)
                 // The documents are in; their text is asked for again next time.
                 return
             }
+            try ensureLive(gen)
             let asked = Set(batch)
             for row in rows where asked.contains(row.id) && state.records[row.id] != nil {
-                try write(Data(row.text.utf8), to: Self.textURL(row.id, in: dir))
+                try write(Data(row.text.utf8), to: Self.textURL(row.id, in: dir), gen: gen)
                 texts[row.id] = row.text
             }
         }
@@ -397,13 +424,16 @@ actor DossierStore {
         }
     }
 
-    private func save() throws {
+    private func save(_ gen: Int) throws {
+        try ensureLive(gen)
         let data: Data
         do { data = try APIClient.jsonEncoder.encode(state) } catch { throw SyncError.disk(String(describing: error)) }
-        try write(data, to: Self.stateURL(in: dir))
+        try write(data, to: Self.stateURL(in: dir), gen: gen)
     }
 
-    private func write(_ data: Data, to url: URL) throws {
+    /// Refuses after a wipe: nothing of the old session reaches the disk.
+    private func write(_ data: Data, to url: URL, gen: Int) throws {
+        try ensureLive(gen)
         do { try writer(data, url, Self.writeOptions) } catch { throw SyncError.disk(String(describing: error)) }
     }
 }
