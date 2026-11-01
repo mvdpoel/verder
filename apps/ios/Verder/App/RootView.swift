@@ -51,6 +51,7 @@ struct RootView: View {
             case .active:
                 lock.sceneDidBecomeActive()
                 if auth.isSignedIn { Task { await uploads.start() } }
+                promptOnOpen()
             default: break
             }
         }
@@ -116,6 +117,17 @@ struct RootView: View {
         }
     }
 
+    /// Martin, 2026-11-01: "only do Face ID on open and reopen of app, not for
+    /// every screen switch". So the app asks ONCE, by itself, the moment it
+    /// opens or comes back past the grace period (`LockPolicy`), whichever tab
+    /// is showing; after that every tab is open until the next lock. Overzicht
+    /// shows its counts behind the sheet meanwhile. The one exception stays the
+    /// camera: on Scan nothing prompts, so the shutter is never covered.
+    private func promptOnOpen() {
+        guard auth.isSignedIn, lock.isLocked, tab != .scan else { return }
+        Task { await lock.autoPromptIfNeeded() }
+    }
+
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
@@ -145,5 +157,8 @@ struct RootView: View {
         }
         .tint(Color.signal)
         .preferredColorScheme(.dark)
+        // A cold launch is already `.active` when the tabs appear, so the
+        // scene-phase change above never fires for it.
+        .onAppear { promptOnOpen() }
     }
 }
