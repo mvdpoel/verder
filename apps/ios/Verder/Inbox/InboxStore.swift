@@ -77,6 +77,7 @@ final class InboxStore {
             // A snapshot that cannot be written leaves the old one; the widget
             // ages it out after 24 h ("Open verder om bij te werken").
             try? WidgetSnapshot.write(snapshot, to: snapshotDir, writer: writer)
+            WidgetSnapshot.reportProtectionIfAsked(in: snapshotDir)
         }
         await setBadge(dto.count)
     }

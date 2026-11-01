@@ -45,6 +45,21 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         try writer(data, file, writeOptions)
     }
 
+    /// The DEVICE check of the protection class (Plan 3 Task 9 Step 3). iOS 27
+    /// refuses `devicectl device copy from` for anything in an App Group outside
+    /// `Library/` ("outside the directories the container access policy
+    /// allows"), so the file cannot be inspected from the Mac; the app reads the
+    /// attribute back itself. Prints ONLY when launched with
+    /// `VERDER_REPORT_SNAPSHOT_PROTECTION=1` (`devicectl device process launch
+    /// --console --environment-variables …`), so normal use never logs. It
+    /// prints the protection class, never the snapshot's contents.
+    static func reportProtectionIfAsked(in dir: URL) {
+        guard ProcessInfo.processInfo.environment["VERDER_REPORT_SNAPSHOT_PROTECTION"] == "1" else { return }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL(in: dir).path)
+        let value = (attrs?[.protectionKey] as? FileProtectionType)?.rawValue ?? "unreadable"
+        print("verder: widget/snapshot.json protection = \(value)")
+    }
+
     /// Nil when nothing was written yet or the file does not decode — the
     /// widget then says "Open verder om bij te werken", never a guessed count.
     static func read(from dir: URL) -> WidgetSnapshot? {
