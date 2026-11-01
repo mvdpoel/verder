@@ -1,0 +1,9 @@
+{
+  "taskId": "00000000-f1c5-4000-8000-000000000004",
+  "status": "in-progress",
+  "validNext": [
+    "in-progress",
+    "done",
+    "dropped"
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "description": "Every request answers 401: the session expired.",
+  "behavior": "unauthorized"
+}

@@ -1,0 +1,387 @@
+import Testing
+import Foundation
+@testable import Verder
+
+/// The DEBUG fixtures (`-fixtures <name>`): every fixture decodes into the
+/// app's REAL DTOs, the money in them reconciles the way /money's does, the
+/// data is the synthetic case and nothing else, and the launch arguments parse
+/// strictly. Release isolation is `FixtureIsolationTests`.
+@MainActor
+struct FixtureTests {
+    static let root = FixtureServer.bundledRoot!
+
+    /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
+    /// that asked for them.
+    nonisolated static let expectedNames = [
+        "dossier", "empty", "money-complete", "money-empty", "money-geen-data", "money-partial",
+        "offline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
+    ]
+    static let reply = "00000000-f1c5-4000-8000-000000000001"
+    static let question = "00000000-f1c5-4000-8000-000000000002"
+    static let suggestion = "00000000-f1c5-4000-8000-000000000003"
+    static let task = "00000000-f1c5-4000-8000-000000000004"
+
+    static func server(_ name: String) throws -> FixtureServer {
+        try #require(FixtureServer(name: name, root: root), "no fixture \(name)")
+    }
+
+    /// The body of a 200, or nil for any other answer.
+    static func body(_ name: String, _ path: String, method: String = "GET") throws -> Data? {
+        guard case .json(200, let body) = try server(name).reply(method: method, path: FixtureServer.apiPrefix + path)
+        else { return nil }
+        return body
+    }
+
+    static func decode<T: Decodable>(_ type: T.Type, _ name: String, _ path: String, method: String = "GET") throws -> T {
+        let data = try #require(try body(name, path, method: method), "\(name): \(method) \(path) did not answer 200")
+        return try APIClient.jsonDecoder.decode(T.self, from: data)
+    }
+
+    nonisolated static var fileFixtures: [String] {
+        expectedNames.filter { !["offline", "unauthorized"].contains($0) }
+    }
+
+    // MARK: - The set
+
+    @Test func everyFixtureTheDataDocNamesIsBundled() {
+        #expect(FixtureServer.names(in: Self.root) == Self.expectedNames)
+    }
+
+    @Test func sharedIsNotAFixtureAndPathsCannotEscape() throws {
+        #expect(FixtureServer(name: "_shared", root: Self.root) == nil)
+        #expect(FixtureServer(name: "../FixtureData", root: Self.root) == nil)
+        let s = try Self.server("voorjou-few")
+        #expect(s.reply(method: "GET", path: "/api/mobile/v1/../voorjou-few/fixture") == FixtureServer.error(404, "not found"))
+        #expect(s.reply(method: "GET", path: "/api/auth/get-session") == FixtureServer.error(404, "not a fixture route"))
+        #expect(s.reply(method: "GET", path: "/api/mobile/v1/no-such-route") == FixtureServer.error(404, "not found"))
+    }
+
+    // MARK: - Decoding into the real DTOs
+
+    @Test(arguments: fileFixtures)
+    func everyFixtureDecodesIntoTheAppDTOs(_ name: String) throws {
+        let inbox = try Self.decode(InboxDTO.self, name, "inbox")
+        #expect(inbox.count == inbox.items.count)
+        _ = try Self.decode(DashboardSummaryDTO.self, name, "dashboard/summary")
+        _ = try Self.decode([TaskDTO].self, name, "tasks")
+        _ = try Self.decode(ProposalList.self, name, "proposals")
+        // Every row of the case that opens a screen has that screen's data.
+        for item in inbox.items where item.id.hasPrefix("00000000-f1c5-4000-8000-") {
+            switch item.kind {
+            case .proposal, .question:
+                let d = try Self.decode(ProposalDetail.self, name, "proposals/\(item.id)")
+                #expect(d.id == item.id)
+            case .suggestion:
+                let d = try Self.decode(SuggestionDTO.self, name, "suggestions/\(item.id)")
+                #expect(d.id == item.id)
+            case .task:
+                let tasks = try Self.decode([TaskDTO].self, name, "tasks")
+                #expect(tasks.contains { $0.id == item.id })
+            default: break
+            }
+        }
+        _ = try Self.decode(Ignored.self, name, "push/register", method: "POST")
+        _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
+    }
+
+    @Test func theFewCaseIsTheDataDocsFourInServerOrder() throws {
+        let inbox = try Self.decode(InboxDTO.self, "voorjou-few", "inbox")
+        #expect(inbox.items.map(\.id) == [Self.reply, Self.question, Self.suggestion, Self.task])
+        #expect(inbox.items.map(\.kind) == [.proposal, .question, .suggestion, .task])
+        #expect(inbox.items[0].verder)
+        #expect(inbox.doneByVerder.count == 3)
+        let summary = try Self.decode(DashboardSummaryDTO.self, "voorjou-few", "dashboard/summary")
+        #expect(summary.headline?.stopTitle == "Stukken aanleveren bij Team Startdossier")
+        #expect(summary.tasks == .init(openCount: 6, overdueCount: 1, waitingOnOthersCount: 2))
+        let tasks = try Self.decode([TaskDTO].self, "voorjou-few", "tasks")
+        #expect(tasks.filter { $0.status == "open" }.count == 6)
+        #expect(tasks.filter { $0.status == "waiting" }.count == 2)
+        let q = try Self.decode(ProposalDetail.self, "voorjou-few", "proposals/\(Self.question)")
+        #expect(q.options.map(\.label) == ["Ja, koppel hem", "Nee", "Weet ik niet"])
+        let status = try Self.decode(TaskStatusResponse.self, "voorjou-few", "tasks/\(Self.task)/status", method: "POST")
+        #expect(status.taskId == Self.task)
+    }
+
+    @Test func manyIsTheProductionCountWithTheFourOnTop() throws {
+        let many = try Self.decode(InboxDTO.self, "voorjou-many", "inbox")
+        let few = try Self.decode(InboxDTO.self, "voorjou-few", "inbox")
+        #expect(many.count == 498)
+        #expect(many.items.count == 498)
+        #expect(Array(many.items.prefix(4)) == few.items)
+        #expect(Set(many.items.map(\.id)).count == 498)
+        #expect(many.items[4].title.hasPrefix("Brief van "))
+        let summary = try Self.decode(DashboardSummaryDTO.self, "voorjou-many", "dashboard/summary")
+        #expect(summary.waitingCount == 498)
+    }
+
+    @Test func longCarriesTheLongDutchTitle() throws {
+        let inbox = try Self.decode(InboxDTO.self, "voorjou-long", "inbox")
+        #expect(inbox.items[0].title.count > 120)
+        #expect(inbox.items[0].title.hasPrefix("Antwoord aan Bewindkantoor Noordkust over de aanvullende stukken"))
+    }
+
+    @Test func emptyHasNothingAndNoWeeklySummaryYet() throws {
+        let inbox = try Self.decode(InboxDTO.self, "empty", "inbox")
+        #expect(inbox.count == 0 && inbox.items.isEmpty && inbox.doneByVerder.isEmpty)
+        #expect(try Self.server("empty").reply(method: "GET", path: "/api/mobile/v1/weekly")
+                == FixtureServer.error(404, "fixture status"))
+    }
+
+    @Test func offlineFailsEveryRequestAndUnauthorizedAnswers401() throws {
+        for path in ["inbox", "dashboard/summary", "proposals/\(Self.reply)"] {
+            #expect(try Self.server("offline").reply(method: "GET", path: FixtureServer.apiPrefix + path) == .transportFailure)
+            guard case .json(401, _) = try Self.server("unauthorized").reply(method: "GET", path: FixtureServer.apiPrefix + path)
+            else { Issue.record("unauthorized did not answer 401 for \(path)"); continue }
+        }
+    }
+
+    // MARK: - Routes with no iOS DTO yet: the server's contract, key for key
+
+    /// The JSON object at `path`, or a recorded failure.
+    static func object(_ name: String, _ path: String) throws -> [String: JSONValue] {
+        let value = try decode(JSONValue.self, name, path)
+        guard case .object(let o) = value else { throw FixtureError.notAnObject(path) }
+        return o
+    }
+
+    static func keys(_ v: JSONValue?) -> Set<String> {
+        if case .object(let o)? = v { return Set(o.keys) }
+        return []
+    }
+
+    static func ints(_ v: JSONValue?) -> Int? {
+        if case .number(let n)? = v, n == n.rounded() { return Int(n) }
+        return nil
+    }
+
+    static func array(_ v: JSONValue?) -> [JSONValue] {
+        if case .array(let a)? = v { return a }
+        return []
+    }
+
+    static let disclosedRowKeys: Set<String> = ["id", "bookedAt", "amountCents", "counterpartyName"]
+    static let monthKeys: Set<String> = ["month", "coverage", "inCents", "outCents", "outByCategory", "incidentalCents",
+                                         "internalCents", "parseErrorRows", "internalRows", "incidentalRows"]
+
+    /// `MoneySummaryDTO` (apps/web/src/app/api/mobile/v1/money/summary/route.ts),
+    /// `MonthSeries` (money-series.ts) and `LeefgeldWeek` (leefgeld-week.ts).
+    /// Every total is the sum of its disclosed rows, and there is NO total
+    /// across accounts — the same laws as /money.
+    @Test(arguments: ["money-complete", "money-partial", "money-geen-data", "money-empty", "empty"])
+    func moneyMatchesTheRouteContractAndReconciles(_ name: String) throws {
+        let m = try Self.object(name, "money/summary")
+        #expect(Set(m.keys) == ["accounts", "leefgeld", "previousWeek", "newestBooking"])
+        for account in Self.array(m["accounts"]) {
+            #expect(Self.keys(account) == ["accountIban", "months"])
+            #expect(account["accountIban"]?.string?.hasPrefix("NL00TEST") == true)
+            for month in Self.array(account["months"]) {
+                #expect(Self.keys(month) == Self.monthKeys)
+                #expect(["complete", "partial", "none"].contains(month["coverage"]?.string ?? ""))
+                let cats = Self.array(month["outByCategory"]).compactMap { Self.ints($0["cents"]) }
+                #expect(cats.reduce(0, +) == Self.ints(month["outCents"]))
+                for (total, rows) in [("incidentalCents", "incidentalRows"), ("internalCents", "internalRows")] {
+                    let list = Self.array(month[rows])
+                    #expect(list.allSatisfy { Self.keys($0) == Self.disclosedRowKeys })
+                    #expect(list.compactMap { Self.ints($0["amountCents"]) }.reduce(0, +) == Self.ints(month[total]))
+                }
+            }
+        }
+        for weekKey in ["leefgeld", "previousWeek"] {
+            let w = try #require(m[weekKey])
+            switch w["state"]?.string {
+            case "complete", "partial":
+                #expect(Self.keys(w) == ["state", "accountIban", "accountReason", "week", "coveredThrough", "budgetCents",
+                                         "spentCents", "leftCents", "spentRows", "depositCents", "depositRows"])
+                let spent = Self.array(w["spentRows"]).compactMap { Self.ints($0["amountCents"]) }
+                #expect(spent.allSatisfy { $0 < 0 }, "spentRows are amounts as booked (negative)")
+                #expect(-spent.reduce(0, +) == Self.ints(w["spentCents"]))
+                #expect(Self.ints(w["leftCents"]) == (Self.ints(w["budgetCents"]) ?? 0) - (Self.ints(w["spentCents"]) ?? 0))
+                let deposits = Self.array(w["depositRows"]).compactMap { Self.ints($0["amountCents"]) }
+                #expect(deposits.reduce(0, +) == Self.ints(w["depositCents"]))
+            case "geen-data":
+                #expect(Self.keys(w) == ["state", "accountIban", "accountReason", "week", "newestBooking"])
+            case "no-account": #expect(Self.keys(w) == ["state", "candidates"])
+            case "no-budget": #expect(Self.keys(w) == ["state"])
+            default: Issue.record("\(name) \(weekKey): unknown state")
+            }
+        }
+    }
+
+    @Test func moneyStatesAreTheOnesTheDataDocNames() throws {
+        func state(_ name: String) throws -> String? { try Self.object(name, "money/summary")["leefgeld"]?["state"]?.string }
+        #expect(try state("money-complete") == "complete")
+        #expect(try state("money-partial") == "partial")
+        #expect(try Self.object("money-partial", "money/summary")["leefgeld"]?["coveredThrough"]?.string == "2026-10-29")
+        #expect(try state("money-geen-data") == "geen-data")
+        #expect(try Self.object("money-geen-data", "money/summary")["newestBooking"]?.string == "2026-10-18")
+        let complete = try Self.object("money-complete", "money/summary")["leefgeld"]
+        #expect(Self.ints(complete?["spentCents"]) == 6240 && Self.ints(complete?["leftCents"]) == 3760)
+        #expect(Self.array(try Self.object("money-empty", "money/summary")["accounts"]).isEmpty)
+    }
+
+    /// `DossierDelta`/`DossierText` (routers/dossier-sync.ts), `SearchDTO`
+    /// (mobile-dto.ts), `WeeklySummary` (weekly-summary.ts), the parties route
+    /// and the voice route's answer.
+    @Test func dossierWeeklyAndVoiceMatchTheRouteContracts() throws {
+        let sync = try Self.object("dossier", "documents/sync")
+        #expect(Set(sync.keys) == ["cursor", "more", "upserts", "tombstones"])
+        let docs = Self.array(sync["upserts"])
+        #expect(docs.count == 12)
+        #expect(docs.allSatisfy {
+            Self.keys($0) == ["id", "title", "docType", "status", "receivedAt", "mime", "sizeBytes", "sha256", "hasText"]
+        })
+        #expect(docs.allSatisfy { ["inbox", "filed"].contains($0["status"]?.string ?? "") })
+        let texts = try Self.decode(JSONValue.self, "dossier", "documents/texts")
+        #expect(Self.array(texts).allSatisfy { Self.keys($0) == ["id", "text", "truncated"] })
+
+        let search = try Self.object("dossier", "search")
+        #expect(Set(search.keys) == ["hits", "nextCursor"])
+        let hits = Self.array(search["hits"])
+        #expect(hits.count == 2)
+        for hit in hits {
+            #expect(Self.keys(hit) == ["entityType", "entityId", "title", "snippet", "occurredAt", "status", "link"])
+            // `link` is a route the app's own strict parser accepts.
+            #expect(DeepLink.parse(hit["link"]?.string ?? "") != .none)
+        }
+
+        let weekly = try Self.object("weekly", "weekly")
+        #expect(Set(weekly.keys) == ["week", "from", "to", "sent", "received", "filedByMartin", "filedByVerder",
+                                     "tasksDone", "waiting", "topWaiting"])
+        #expect(weekly["week"]?.string == "2026-W44")
+        let top = try JSONDecoder.verder.decode([WaitingItem].self,
+                                                from: JSONEncoder().encode(weekly["topWaiting"] ?? .null))
+        #expect(top.map(\.id) == [Self.reply, Self.question, Self.suggestion])
+
+        let parties = try Self.decode(JSONValue.self, "voice", "parties")
+        #expect(Self.array(parties).map { $0["name"]?.string } ==
+                ["Woonstichting Lindehof", "Bewindkantoor Noordkust", "Incassobureau Kade & Partners"])
+        #expect(Self.array(parties).allSatisfy {
+            Self.keys($0) == ["id", "kind", "name", "organization", "lastContactAt"]
+        })
+        let voice = try Self.decode(JSONValue.self, "voice", "entries/voice", method: "POST")
+        #expect(Self.keys(voice) == ["suggestionId", "audioDocumentId", "duplicate"])
+        #expect(try Self.server("voice").manifest.transcript?.hasPrefix("Gebeld met Woonstichting Lindehof.") == true)
+    }
+
+    // MARK: - Synthetic only
+
+    /// Simulator screenshots and Figma frames leave this machine: no real
+    /// name, organisation, address or IBAN may be in a fixture.
+    @Test func fixturesHoldOnlyTheSyntheticCase() throws {
+        let files = FileManager.default.enumerator(at: Self.root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "json" } ?? []
+        #expect(files.count > 20)
+        let denied = ["vanderpoel", "martin", "verdergroep", "verder bewind", "verderbewind", "woonhave", "truefullstaq",
+                      "regio 3", "stam", "het cak", "plm", "kamer van koophandel", "abn", "loondossier", "saurens",
+                      "almere", "nltz", "gmail"]
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            let lower = text.lowercased()
+            // Whole words: the contract's own key `filedByMartin` is not a name.
+            for word in denied {
+                let pattern = try Regex("\\b" + NSRegularExpression.escapedPattern(for: word) + "\\b")
+                #expect(!lower.contains(pattern), "\(file.lastPathComponent) mentions \(word)")
+            }
+            for match in text.matches(of: /[A-Z]{2}\d{2}[A-Z]{4}\d{6,}/) {
+                #expect(text[match.range].hasPrefix("NL00TEST"), "\(file.lastPathComponent): IBAN outside the test range")
+            }
+            for match in text.matches(of: /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+)/) {
+                #expect(match.output.1.hasSuffix(".example"), "\(file.lastPathComponent): a real mail domain")
+            }
+        }
+    }
+
+    // MARK: - Through the real stores
+
+    @Test func theRealInboxStoreReadsAFixture() async throws {
+        let store = InboxStore(client: FixtureEnvironment.client(fixture: "voorjou-few"), snapshotDir: nil, setBadge: { _ in })
+        await store.refresh()
+        #expect(store.lastError == nil)
+        #expect(store.inbox?.count == 4)
+        #expect(store.summary?.tasks.overdueCount == 1)
+    }
+
+    @Test func offlineIsATransportErrorInTheStore() async {
+        let store = InboxStore(client: FixtureEnvironment.client(fixture: "offline"), snapshotDir: nil, setBadge: { _ in })
+        await store.refresh()
+        guard case .transport? = store.lastError else { Issue.record("expected transport, got \(String(describing: store.lastError))"); return }
+        #expect(store.inbox == nil)
+    }
+
+    @Test func unauthorizedSignsOutThroughTheStore() async {
+        final class Seen { var rejected = 0 }
+        let seen = Seen()
+        let store = InboxStore(client: FixtureEnvironment.client(fixture: "unauthorized"), snapshotDir: nil,
+                               setBadge: { _ in }, onUnauthorized: { seen.rejected += 1 })
+        await store.refresh()
+        #expect(store.lastError == .unauthorized)
+        #expect(seen.rejected == 1)
+    }
+
+    @Test func theProposalScreenModelLoadsTheFixtureReply() async throws {
+        let model = ProposalModel(client: FixtureEnvironment.client(fixture: "voorjou-few"), gate: ApprovalGate())
+        await model.load(id: Self.reply)
+        #expect(model.detail?.payload?.reply?.attachmentDocumentIds.count == 1)
+    }
+
+    @Test func fixtureServicesPresentASignedInUnlockedApp() {
+        let unlocked = FixtureEnvironment.services(for: FixtureLaunch(fixture: "voorjou-few", locked: false, tab: nil, route: nil))
+        #expect(unlocked.store.load()?.isLive() == true)
+        #expect(!unlocked.lock.isLocked)
+        #expect(unlocked.lock.revealsCaseContent)
+        #expect(unlocked.snapshotDir == nil)
+        let locked = FixtureEnvironment.services(for: FixtureLaunch(fixture: "voorjou-few", locked: true, tab: nil, route: nil))
+        #expect(locked.lock.isLocked)
+        #expect(!locked.lock.revealsCaseContent)
+    }
+
+    @Test func lockedFixtureDeclinesTheAutomaticPromptOnlyOnce() async {
+        let lock = AppLock(authenticator: FixtureOwner(declinesFirst: true))
+        await lock.autoPromptIfNeeded()
+        #expect(lock.isLocked)
+        #expect(lock.message == nil)
+        await lock.unlock()
+        #expect(!lock.isLocked)
+    }
+
+    // MARK: - Launch arguments
+
+    @Test func withoutFixturesNothingElseApplies() throws {
+        #expect(try FixtureLaunch.parse(["Verder", "-tab", "meer", "-route", "geld"]) == nil)
+    }
+
+    @Test func parsesFixtureTabRouteAndLock() throws {
+        let l = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-partial", "-tab", "voorjou",
+                                                      "-route", "proposal:\(Self.reply)", "-fixtures-locked"]))
+        #expect(l.fixture == "money-partial")
+        #expect(l.locked)
+        #expect(l.tab == .voorjou)
+        #expect(l.tab?.tabID == .voorJou)
+        #expect(l.route == .link(.proposal(UUID(uuidString: Self.reply)!)))
+        #expect(try FixtureLaunch.parseRoute("suggestion:\(Self.suggestion)") == .link(.suggestion(UUID(uuidString: Self.suggestion)!)))
+        #expect(try FixtureLaunch.parseRoute("task:\(Self.task)") == .link(.task(UUID(uuidString: Self.task)!)))
+        for s in FixtureLaunch.Screen.allCases { #expect(try FixtureLaunch.parseRoute(s.rawValue) == .screen(s)) }
+        #expect(FixtureLaunch.Tab.allCases.map(\.rawValue) == ["overzicht", "voorjou", "scan", "dossier", "meer"])
+    }
+
+    @Test func refusesWhatItCannotRead() {
+        #expect(throws: FixtureLaunch.ParseError.missingValue("-fixtures")) { try FixtureLaunch.parse(["-fixtures"]) }
+        #expect(throws: FixtureLaunch.ParseError.missingValue("-tab")) { try FixtureLaunch.parse(["-fixtures", "x", "-tab", "-route"]) }
+        #expect(throws: FixtureLaunch.ParseError.unknownTab("geld")) { try FixtureLaunch.parse(["-fixtures", "x", "-tab", "geld"]) }
+        #expect(throws: FixtureLaunch.ParseError.unknownRoute("proposal:nope")) { try FixtureLaunch.parseRoute("proposal:nope") }
+        #expect(throws: FixtureLaunch.ParseError.unknownRoute("document:\(Self.reply)")) {
+            try FixtureLaunch.parseRoute("document:\(Self.reply)")
+        }
+    }
+
+    /// The test process itself is never a fixture launch.
+    @Test func theTestHostIsNotAFixtureLaunch() {
+        #expect(FixtureLaunch.current == nil)
+    }
+}
+
+enum FixtureError: Error { case notAnObject(String) }
+
+private extension JSONDecoder {
+    static var verder: JSONDecoder { APIClient.jsonDecoder }
+}

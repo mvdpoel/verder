@@ -4,7 +4,7 @@ import SwiftUI
 struct VerderApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var auth: AuthModel
-    @State private var lock = AppLock()
+    @State private var lock: AppLock
     /// Made at launch, not lazily: a relaunch for background-upload events
     /// must find the background session (one per identifier per process)
     /// already reconnected to its delegate.
@@ -16,17 +16,30 @@ struct VerderApp: App {
     @State private var inbox: InboxStore
 
     init() {
-        let store = KeychainSessionStore()
-        let client = APIClient(session: APIClient.makeSession(), store: store)
-        let auth = AuthModel(client: client, store: store)
+        #if DEBUG
+        // `-fixtures <name>`: the same stores on the synthetic dataset, no
+        // server (Verder/Fixtures). Compiled out of Release.
+        if let launch = FixtureLaunch.current {
+            self.init(services: FixtureEnvironment.services(for: launch))
+            return
+        }
+        #endif
+        self.init(services: .live())
+    }
+
+    private init(services s: AppServices) {
+        let auth = AuthModel(client: s.client, store: s.store, defaults: s.defaults)
         _auth = State(initialValue: auth)
-        _uploads = State(initialValue: UploadCenter.live(client: client))
-        _push = State(initialValue: PushRegistrar(client: client, auth: auth))
-        let inbox = InboxStore(client: client, onUnauthorized: { auth.sessionRejected() })
+        _lock = State(initialValue: s.lock)
+        _uploads = State(initialValue: s.uploads)
+        _push = State(initialValue: PushRegistrar(client: s.client, auth: auth, permission: s.permission,
+                                                  defaults: s.defaults, registerRemote: s.registerRemote))
+        let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
+                               onUnauthorized: { auth.sessionRejected() })
         _inbox = State(initialValue: inbox)
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).
-        AppDelegate.services = .init(client: client, inbox: inbox)
+        AppDelegate.services = .init(client: s.client, inbox: inbox)
     }
 
     var body: some Scene {

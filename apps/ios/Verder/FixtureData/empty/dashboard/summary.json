@@ -1,0 +1,9 @@
+{
+  "headline": null,
+  "waitingCount": 0,
+  "tasks": {
+    "openCount": 0,
+    "overdueCount": 0,
+    "waitingOnOthersCount": 0
+  }
+}

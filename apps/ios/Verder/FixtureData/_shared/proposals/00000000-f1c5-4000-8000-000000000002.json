@@ -1,0 +1,56 @@
+{
+  "id": "00000000-f1c5-4000-8000-000000000002",
+  "kind": "question",
+  "status": "pending",
+  "priority": "other",
+  "ask": "Hoort deze brief bij de vordering van Kade & Partners?",
+  "partyName": "Incassobureau Kade & Partners",
+  "triggerAt": "2026-11-01T09:50:00.000Z",
+  "createdAt": "2026-11-01T10:15:00.000Z",
+  "trigger": {
+    "type": "document",
+    "id": "00000000-f1c5-4000-8000-200000000106",
+    "from": "Incassobureau Kade & Partners",
+    "subject": "Sommatie Kade & Partners 14 okt",
+    "date": "2026-10-14T09:00:00.000Z",
+    "excerpt": null
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": null,
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [],
+  "payload": {
+    "entrySummary": null,
+    "reply": null,
+    "question": {
+      "prompt": "Hoort deze brief bij de vordering van Kade & Partners?"
+    }
+  },
+  "revision": 1,
+  "attachments": [],
+  "attachable": [],
+  "options": [
+    {
+      "index": 0,
+      "action": "link-debt",
+      "label": "Ja, koppel hem",
+      "target": "Koppelt de brief aan de vordering van Stroomnet Energie (Kade & Partners)."
+    },
+    {
+      "index": 1,
+      "action": "none",
+      "label": "Nee",
+      "target": "Er verandert niets."
+    },
+    {
+      "index": 2,
+      "action": "none",
+      "label": "Weet ik niet",
+      "target": "De vraag blijft staan; er verandert niets."
+    }
+  ],
+  "error": null
+}

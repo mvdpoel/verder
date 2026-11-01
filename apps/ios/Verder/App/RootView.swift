@@ -24,6 +24,12 @@ struct RootView: View {
     /// does not exist while locked, so a deep link that arrives on the lock
     /// screen must wait somewhere that survives it.
     @State private var inboxPath: [InboxRoute] = []
+    #if DEBUG
+    /// `-route geld|weekly|voice` (Verder/Fixtures), and whether the launch's
+    /// `-tab`/`-route` has been applied — once, not on every re-appearance.
+    @State private var fixtureScreen: FixtureLaunch.Screen?
+    @State private var fixtureStartApplied = false
+    #endif
 
     var body: some View {
         #if DEBUG
@@ -159,6 +165,29 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
-        .onAppear { promptOnOpen() }
+        .onAppear {
+            promptOnOpen()
+            #if DEBUG
+            applyFixtureStart()
+            #endif
+        }
+        #if DEBUG
+        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0) }
+        #endif
     }
+
+    #if DEBUG
+    /// `-tab` selects a tab; `-route proposal:<id>` (and suggestion, task) goes
+    /// through `links`, exactly the path a tapped notification takes.
+    private func applyFixtureStart() {
+        guard !fixtureStartApplied, let launch = FixtureLaunch.current else { return }
+        fixtureStartApplied = true
+        if let start = launch.tab { tab = start.tabID }
+        switch launch.route {
+        case .link(let link)?: links.deliver(link)
+        case .screen(let screen)?: fixtureScreen = screen
+        case nil: break
+        }
+    }
+    #endif
 }

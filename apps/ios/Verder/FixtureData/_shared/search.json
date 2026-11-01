@@ -1,0 +1,23 @@
+{
+  "hits": [
+    {
+      "entityType": "document",
+      "entityId": "00000000-f1c5-4000-8000-200000000311",
+      "title": "Formulier bijzondere bijstand",
+      "snippet": "Aanvraagformulier «bijzondere» «bijstand» Gemeente Westerlaan.",
+      "occurredAt": "2026-10-29T09:00:00.000Z",
+      "status": "inbox",
+      "link": "verder://document/00000000-f1c5-4000-8000-200000000311"
+    },
+    {
+      "entityType": "document",
+      "entityId": "00000000-f1c5-4000-8000-200000000310",
+      "title": "Bevestiging aanmelding Noordkust",
+      "snippet": "Team Startdossier helpt ook met de aanvraag «bijzondere» «bijstand».",
+      "occurredAt": "2026-04-16T09:00:00.000Z",
+      "status": "filed",
+      "link": "verder://document/00000000-f1c5-4000-8000-200000000310"
+    }
+  ],
+  "nextCursor": null
+}

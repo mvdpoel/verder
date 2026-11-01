@@ -1,0 +1,24 @@
+{
+  "accounts": [],
+  "leefgeld": {
+    "state": "geen-data",
+    "accountIban": "NL00TEST9876543210",
+    "accountReason": "configured",
+    "week": {
+      "from": "2026-10-26",
+      "to": "2026-11-01"
+    },
+    "newestBooking": null
+  },
+  "previousWeek": {
+    "state": "geen-data",
+    "accountIban": "NL00TEST9876543210",
+    "accountReason": "configured",
+    "week": {
+      "from": "2026-10-19",
+      "to": "2026-10-25"
+    },
+    "newestBooking": null
+  },
+  "newestBooking": null
+}

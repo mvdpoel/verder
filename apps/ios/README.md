@@ -17,6 +17,23 @@ env -u NODE_ENV xcodebuild test -scheme Verder \
 The tests read `apps/web/src/app/globals.css` from disk (token drift guard), so run
 them from a full checkout.
 
+## Screenshots on synthetic data (DEBUG only)
+
+```sh
+scripts/capture.sh voorjou-few overzicht out/overzicht.png
+scripts/capture.sh voorjou-few overzicht out/overzicht-locked.png --locked
+scripts/capture.sh voorjou-many voorjou out/voorjou-498.png
+scripts/capture.sh voorjou-few proposal:00000000-f1c5-4000-8000-000000000002 out/question.png
+```
+
+A Debug build launched with `-fixtures <name>` answers every `/api/mobile/v1` call
+from `Verder/FixtureData/<name>` (falling back to `_shared/`) through the real stores,
+signed in and unlocked, with no server. Also `-tab`, `-route` and `-fixtures-locked`;
+the fixtures and their data are listed in
+`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`, the ONLY data a fixture
+may hold (screenshots leave this machine). None of it is in a Release build:
+`scripts/check-release-fixtures.sh` checks the built bundle.
+
 ## Install on Martin's iPhone
 
 ```sh

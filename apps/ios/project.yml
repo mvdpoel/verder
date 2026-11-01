@@ -24,6 +24,13 @@ targets:
         excludes:
           - Info.plist
           - Verder.entitlements
+          - FixtureData
+      # The synthetic dataset behind the DEBUG `-fixtures <name>` launch
+      # argument (Verder/Fixtures). A folder reference, so its tree arrives in
+      # the bundle as-is; excluded from Release below, with the Swift that reads it.
+      - path: Verder/FixtureData
+        type: folder
+        buildPhase: resources
     info:
       path: Verder/Info.plist
       properties:
@@ -70,6 +77,12 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: "1"
         PRODUCT_NAME: Verder
+      configs:
+        # Fixtures never ship: the files are `#if DEBUG` AND left out of the
+        # Release build entirely (FixtureIsolationTests pins both, and
+        # scripts/check-release-fixtures.sh checks the built bundle).
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "FixtureData Fixture*.swift"
   # The notification service extension: turns a question push's options into
   # answer buttons (a per-question `q.<id>` category) before it is shown. A
   # fourth target beyond spec §7's three — see VerderNotify/NotificationService.swift.

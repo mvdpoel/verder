@@ -1,0 +1,23 @@
+[
+  {
+    "id": "00000000-f1c5-4000-8000-600000000001",
+    "kind": "organization",
+    "name": "Woonstichting Lindehof",
+    "organization": null,
+    "lastContactAt": "2026-10-31T13:40:00.000Z"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000002",
+    "kind": "organization",
+    "name": "Bewindkantoor Noordkust",
+    "organization": null,
+    "lastContactAt": "2026-10-28T09:00:00.000Z"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000003",
+    "kind": "organization",
+    "name": "Incassobureau Kade & Partners",
+    "organization": null,
+    "lastContactAt": "2026-10-14T09:00:00.000Z"
+  }
+]

@@ -2,7 +2,7 @@
 
 One fictional case, used in THREE places that must agree: the Figma file
 "verder iPhone", the DEBUG `-fixtures <name>` launch argument in the app
-(`apps/ios/Verder/Fixtures/`), and the simulator screenshots compared against
+(`apps/ios/Verder/Fixtures/` reading the JSON in `apps/ios/Verder/FixtureData/`), and the simulator screenshots compared against
 the Figma frames. Figma is an outside service, and simulator screenshots are
 published as an artifact: NOTHING here may be a real name, amount,
 organisation, IBAN, case number or letter. Every organisation below is
@@ -67,6 +67,50 @@ Week 2026-W44: 3 verstuurd · 7 binnen · 5 opgeborgen (3 door jou, 2 door verde
 ## Voice quick-log (fixture `voice`)
 
 Transcript: "Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van vijftig euro per maand, de eerste betaling is op één december." Party picker recent: Woonstichting Lindehof, Bewindkantoor Noordkust, Kade & Partners.
+
+## Fields the fixtures needed beyond the above (added 2026-11-01, Task FX)
+
+The JSON in `apps/ios/Verder/FixtureData/` holds everything above, plus these
+invented details the screens' contracts require. `_shared/` is the base case;
+each fixture folder holds only what differs, and a `fixture.json` describing it.
+
+- **Ids** are synthetic UUIDs `00000000-f1c5-4000-8000-…`: the four Voor jou
+  items end in `…0001` (reply), `…0002` (question), `…0003` (suggestion),
+  `…0004` (task), so `-route proposal:00000000-f1c5-4000-8000-000000000001`
+  opens item 1. Generated `voorjou-many` rows use `…-9000-<n>`.
+- **Times**: the case's "today" is Sun 1 nov 2026; dates are whole Amsterdam
+  days, dues at 17:00 Amsterdam (so "due 3 nov" reads 3-11, never 4-11).
+- **Item 1** comes from "Ilse <ilse@noordkust.example>", subject "Loonstrook
+  oktober"; the draft goes to `ilse@noordkust.example`, subject "Re: Loonstrook
+  oktober". **Item 2** is triggered by the document "Sommatie Kade & Partners
+  14 okt"; "Ja, koppel hem" links it to Stroomnet Energie's claim. **Item 3**
+  proposes the summary above with details "Afgesproken: vijftig euro per maand,
+  eerste betaling op 1 december."
+- **Door verder gedaan**: the rename is NOT undoable ("naam staat ook op de
+  NAS"); the two filings are.
+- **Tasks (8)**: open — Formulier bijzondere bijstand ondertekenen (3 nov),
+  Loonstroken en polissen sturen naar Team Startdossier (30 okt, the one te
+  laat), Polis Duinzorg 2026 opzoeken (6 nov), Huurcontract Lindehof scannen,
+  Jaaropgaaf 2025 aanvragen bij Atelier Sterrenwacht (10 nov), Betalingsregeling
+  Lindehof bevestigen; waiting — Reactie Kade & Partners op de sommatie, Besluit
+  bijzondere bijstand (Gemeente Westerlaan).
+- **Money**: the incidental € 85,00 "teruggave" is from Zorgverzekeraar
+  Duinzorg on 19 aug. Beheerrekening costs are invented round figures split
+  over huur / zorg / energie / leefgeld / overig; the leefgeldrekening's
+  income is € 100,00 × the Thursdays of each month. Leefgeld rows: Supermarkt
+  di 27 okt, Bakker wo 28 okt, Apotheek vr 30 okt; deposit € 100,00 from
+  Bewindkantoor Noordkust on do 29 okt (so `money-partial`, covered t/m do
+  29 okt, has spent € 47,90 and € 52,10 left). The previous week (19–25 okt):
+  Supermarkt € 52,30, Drogist € 14,20, Markt € 25,00, deposit € 100,00 on
+  22 okt, € 8,50 left. The leefgeldrekening is `configured` (LEEFGELD_IBAN).
+  `money-empty` answers `geen-data` with no newest booking for both weeks and
+  no accounts (a configured IBAN over an empty table).
+- **Dossier**: every document is a PDF of invented size; `sha256` is the
+  SHA-256 of `verder-fixture:<title>`; all but ID-kaart have text. The second
+  "bijstand" hit is "Bevestiging aanmelding Noordkust", whose text mentions it.
+  Sync cursor 412.
+- **Voice**: the three recent parties are organisations; the POST answers a
+  new suggestion with no kept recording.
 
 ## States every screen gets
 

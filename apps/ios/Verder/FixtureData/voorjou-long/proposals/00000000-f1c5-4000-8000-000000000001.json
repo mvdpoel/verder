@@ -1,0 +1,68 @@
+{
+  "id": "00000000-f1c5-4000-8000-000000000001",
+  "kind": "reply",
+  "status": "pending",
+  "priority": "verder",
+  "ask": "Antwoord aan Bewindkantoor Noordkust over de aanvullende stukken voor de aanvraag bijzondere bijstand en de vraag om een kopie van de beschikking van de rechtbank",
+  "partyName": "Bewindkantoor Noordkust",
+  "triggerAt": "2026-11-02T08:12:00.000Z",
+  "createdAt": "2026-11-02T08:30:00.000Z",
+  "trigger": {
+    "type": "email",
+    "id": "00000000-f1c5-4000-8000-400000000201",
+    "from": "Ilse <ilse@noordkust.example>",
+    "subject": "Loonstrook oktober",
+    "date": "2026-11-02T08:12:00.000Z",
+    "excerpt": "Wil je de loonstrook van oktober sturen? Dan kunnen we het leefgeld voor november vaststellen."
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": "Loonstrook oktober gestuurd aan Bewindkantoor Noordkust",
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "label": "Loonstrook 2026-10",
+      "why": "De gevraagde loonstrook."
+    }
+  ],
+  "payload": {
+    "entrySummary": "Loonstrook oktober gestuurd aan Bewindkantoor Noordkust",
+    "reply": {
+      "to": [
+        "ilse@noordkust.example"
+      ],
+      "cc": [],
+      "subject": "Re: Loonstrook oktober",
+      "body": "Beste Ilse,\n\nIn de bijlage vindt u mijn loonstrook van oktober.\n\nMet vriendelijke groet,\n",
+      "attachmentDocumentIds": [
+        "00000000-f1c5-4000-8000-200000000104"
+      ]
+    },
+    "question": null
+  },
+  "revision": 1,
+  "attachments": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf",
+      "sizeBytes": 184320,
+      "unavailable": false
+    }
+  ],
+  "attachable": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook.2026-09.pdf"
+    }
+  ],
+  "options": [],
+  "error": null
+}

@@ -1,0 +1,139 @@
+{
+  "cursor": 412,
+  "more": false,
+  "upserts": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000300",
+      "title": "Beschikking Rechtbank Westerlaan",
+      "docType": "letter",
+      "status": "filed",
+      "receivedAt": "2026-07-14T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 120000,
+      "sha256": "cab838bbc40735ac67e721560ca3ab4b054cb16950f7a4138bb56f10e6691705",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook 2026-09",
+      "docType": "payslip",
+      "status": "filed",
+      "receivedAt": "2026-09-25T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 127000,
+      "sha256": "512c31de27277ad80b9f93341ef458f34ca0297c7770878b4dad17f29b6cb960",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook 2026-10",
+      "docType": "payslip",
+      "status": "filed",
+      "receivedAt": "2026-10-26T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 134000,
+      "sha256": "a8d0a0f4ee89f97cbaa996bce88035faa649b611edea43c428407ba8be992813",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000303",
+      "title": "Polis Duinzorg 2026",
+      "docType": "contract",
+      "status": "filed",
+      "receivedAt": "2026-01-05T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 141000,
+      "sha256": "1e4906cfac746cd7d422142357e9e85021a261642ed5c594e67e64a5cf75b042",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000304",
+      "title": "Huurcontract Lindehof",
+      "docType": "contract",
+      "status": "filed",
+      "receivedAt": "2025-03-01T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 148000,
+      "sha256": "af758b6c9a69d65bc10ca9c3e72239545a7e1bb81d9ace8a65fcd6fab602642f",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000106",
+      "title": "Sommatie Kade & Partners 14 okt",
+      "docType": "letter",
+      "status": "filed",
+      "receivedAt": "2026-10-14T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 155000,
+      "sha256": "bd24a35fcb2a8418e42ae5c6219695e4870863f63c9125bd70ef58fb6b0f719c",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000306",
+      "title": "Afschrift september",
+      "docType": "bank-statement",
+      "status": "filed",
+      "receivedAt": "2026-10-02T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 162000,
+      "sha256": "e2ea87430a46cf55bb98af4bb1e94186056f5d38d4e5669bc2d89cc4804caf26",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000307",
+      "title": "Brief Gemeente Westerlaan 30 okt",
+      "docType": "letter",
+      "status": "inbox",
+      "receivedAt": "2026-10-30T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 169000,
+      "sha256": "9bc1fe4c599d962ad2855d2f605bf6c4649f49656d5717fb3b6aef84b7e02056",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000308",
+      "title": "ID-kaart",
+      "docType": "id-document",
+      "status": "filed",
+      "receivedAt": "2026-04-16T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 176000,
+      "sha256": "5eccff20f65ebab23532dc0d77c0aa6af517efea554885584e5a2542ba4c0f84",
+      "hasText": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000309",
+      "title": "Jaaropgaaf 2025",
+      "docType": null,
+      "status": "filed",
+      "receivedAt": "2026-02-20T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 183000,
+      "sha256": "114a84c450ce1ef94752295e4f70c3b5de76eb7e13cb05a7319d28bab25892e0",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000310",
+      "title": "Bevestiging aanmelding Noordkust",
+      "docType": null,
+      "status": "filed",
+      "receivedAt": "2026-04-16T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 190000,
+      "sha256": "02c79092e459ab43465cf6c1f6a3d658ecac2b55add61e684e2639d4f0b21b48",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000311",
+      "title": "Formulier bijzondere bijstand",
+      "docType": null,
+      "status": "inbox",
+      "receivedAt": "2026-10-29T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 197000,
+      "sha256": "13f8195cdecbaf151f7852e36915bf18c61bbca1e27c337c89bf91777038de10",
+      "hasText": true
+    }
+  ],
+  "tombstones": []
+}

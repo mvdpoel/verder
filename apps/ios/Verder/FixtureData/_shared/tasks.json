@@ -1,0 +1,112 @@
+[
+  {
+    "id": "00000000-f1c5-4000-8000-000000000004",
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Ondertekenen en terugsturen naar Gemeente Westerlaan.",
+    "dueAt": "2026-11-03T16:00:00.000Z",
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000011",
+    "title": "Loonstroken en polissen sturen naar Team Startdossier",
+    "details": null,
+    "dueAt": "2026-10-30T16:00:00.000Z",
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000012",
+    "title": "Polis Duinzorg 2026 opzoeken",
+    "details": null,
+    "dueAt": "2026-11-06T16:00:00.000Z",
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000013",
+    "title": "Huurcontract Lindehof scannen",
+    "details": null,
+    "dueAt": null,
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000014",
+    "title": "Jaaropgaaf 2025 aanvragen bij Atelier Sterrenwacht",
+    "details": null,
+    "dueAt": "2026-11-10T16:00:00.000Z",
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000015",
+    "title": "Betalingsregeling Lindehof bevestigen",
+    "details": null,
+    "dueAt": null,
+    "status": "open",
+    "assigneeName": null,
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000016",
+    "title": "Reactie Kade & Partners op de sommatie",
+    "details": null,
+    "dueAt": null,
+    "status": "waiting",
+    "assigneeName": "Incassobureau Kade & Partners",
+    "validNext": [
+      "in-progress",
+      "done",
+      "dropped"
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-300000000017",
+    "title": "Besluit bijzondere bijstand",
+    "details": null,
+    "dueAt": null,
+    "status": "waiting",
+    "assigneeName": "Gemeente Westerlaan",
+    "validNext": [
+      "in-progress",
+      "done",
+      "dropped"
+    ]
+  }
+]

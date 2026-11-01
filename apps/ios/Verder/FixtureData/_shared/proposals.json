@@ -1,0 +1,24 @@
+{
+  "proposals": [
+    {
+      "id": "00000000-f1c5-4000-8000-000000000001",
+      "kind": "reply",
+      "status": "pending",
+      "priority": "verder",
+      "ask": "Ilse vraagt om je loonstrook van oktober",
+      "partyName": "Bewindkantoor Noordkust",
+      "triggerAt": "2026-11-02T08:12:00.000Z",
+      "createdAt": "2026-11-02T08:30:00.000Z"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-000000000002",
+      "kind": "question",
+      "status": "pending",
+      "priority": "other",
+      "ask": "Hoort deze brief bij de vordering van Kade & Partners?",
+      "partyName": "Incassobureau Kade & Partners",
+      "triggerAt": "2026-11-01T09:50:00.000Z",
+      "createdAt": "2026-11-01T10:15:00.000Z"
+    }
+  ]
+}

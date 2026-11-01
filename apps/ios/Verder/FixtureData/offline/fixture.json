@@ -1,0 +1,4 @@
+{
+  "description": "Every request fails with a transport error (no connection).",
+  "behavior": "offline"
+}
