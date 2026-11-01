@@ -10,6 +10,9 @@ struct MoreTab: View {
     let money: MoneyStore
     /// Forgotten on sign-out: the phone keeps no dossier for nobody.
     let dossier: DossierModel
+    /// Opens "Gesprek vastleggen" (RootView holds the sheet, which the home
+    /// screen quick action opens too).
+    let openVoice: () -> Void
 
     @State private var confirmResend = false
 
@@ -31,6 +34,7 @@ struct MoreTab: View {
                     if auth.passkeyOfferPending { passkeyOffer }
 
                     geld
+                    voiceRow
                     account
                     notifications
                     developer
@@ -64,6 +68,26 @@ struct MoreTab: View {
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .glassPanel()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Gesprek vastleggen (Task 25).
+    private var voiceRow: some View {
+        Button(action: openVoice) {
+            HStack {
+                Text("Gesprek vastleggen")
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.inkBright)
+                Spacer(minLength: 8)
+                Image(systemName: "mic")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.inkFaint)
             }
             .padding(16)
@@ -197,7 +221,7 @@ struct MoreTab: View {
     }
 }
 
-/// A screen whose slice has not landed yet (Weekoverzicht, Gesprek vastleggen).
+/// A screen whose slice has not landed yet (Weekoverzicht).
 struct ComingSoon: View {
     let title: String
 

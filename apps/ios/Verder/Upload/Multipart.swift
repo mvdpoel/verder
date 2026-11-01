@@ -34,8 +34,10 @@ enum Multipart {
     }
 }
 
+/// `file` is optional for the voice log, which sends a recording only when
+/// Martin kept it (plan 3 Task 25); every other caller always passes one.
 func multipartBody(boundary: String, fields: [(String, String)],
-                   file: (name: String, fileName: String, mime: String, data: Data)) -> Data {
+                   file: (name: String, fileName: String, mime: String, data: Data)?) -> Data {
     var body = Data()
     func line(_ s: String) { body.append(Data((s + "\r\n").utf8)) }
     for (name, value) in fields {
@@ -43,6 +45,10 @@ func multipartBody(boundary: String, fields: [(String, String)],
         line("Content-Disposition: form-data; name=\"\(Multipart.quoted(name))\"")
         line("")
         line(value)
+    }
+    guard let file else {
+        line("--\(boundary)--")
+        return body
     }
     line("--\(boundary)")
     line("Content-Disposition: form-data; name=\"\(Multipart.quoted(file.name))\"; filename=\"\(Multipart.quoted(file.fileName))\"")

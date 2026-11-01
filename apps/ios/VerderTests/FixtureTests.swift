@@ -82,6 +82,8 @@ struct FixtureTests {
         }
         _ = try Self.decode(Ignored.self, name, "push/register", method: "POST")
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
+        _ = try Self.decode([PartyDTO].self, name, "parties")
+        _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
     }
 
     @Test func theFewCaseIsTheDataDocsFourInServerOrder() throws {

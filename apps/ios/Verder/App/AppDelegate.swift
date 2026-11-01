@@ -21,6 +21,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     }
     static var services: Services?
 
+    /// The delegate SwiftUI made, for `SceneDelegate` (quick actions):
+    /// `UIApplication.shared.delegate` is SwiftUI's own wrapper, not this.
+    static weak var current: AppDelegate?
+
     let links = DeepLinkInbox()
     private lazy var router = NotificationRouter(
         links: links,
@@ -41,9 +45,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Self.current = self
         NotificationCategories.register()
         UNUserNotificationCenter.current().delegate = self
         return true
+    }
+
+    /// The home screen quick actions arrive at the SCENE, so every scene gets
+    /// `SceneDelegate`; SwiftUI still owns the window.
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let config = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        config.delegateClass = SceneDelegate.self
+        return config
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

@@ -24,6 +24,10 @@
 	<string>verder gebruikt de camera om brieven te scannen.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>verder vraagt Face ID zodat alleen jij je dossier opent.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>verder neemt je stem op om een gesprek vast te leggen.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>verder zet je opname op je telefoon om in tekst.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Saira-Variable.ttf</string>
@@ -36,6 +40,17 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>mic</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Gesprek vastleggen</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>pro.vanderpoel.verder.voice</string>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

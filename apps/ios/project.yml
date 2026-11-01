@@ -50,6 +50,14 @@ targets:
           - IBMPlexMono-SemiBold.ttf
         NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
         NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
+        # The voice quick-log (plan 3 Task 25): recorded and transcribed on the phone.
+        NSMicrophoneUsageDescription: "verder neemt je stem op om een gesprek vast te leggen."
+        NSSpeechRecognitionUsageDescription: "verder zet je opname op je telefoon om in tekst."
+        # Long-press the icon. Handled by App/QuickAction.swift.
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: pro.vanderpoel.verder.voice
+            UIApplicationShortcutItemTitle: "Gesprek vastleggen"
+            UIApplicationShortcutItemIconSymbolName: mic
         UIBackgroundModes: [remote-notification]
         # The keychain-access-groups entitlement below, resolved by the same
         # build setting, so KeychainSessionStore names the group it is entitled to.

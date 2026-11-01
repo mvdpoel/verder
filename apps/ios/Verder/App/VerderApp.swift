@@ -18,6 +18,8 @@ struct VerderApp: App {
     @State private var money: MoneyStore
     /// The pocket dossier behind the Dossier tab.
     @State private var dossier: DossierModel
+    /// A fresh voice log per opening (Meer, or the home screen quick action).
+    private let voice: VoiceLogFactory
 
     init() {
         #if DEBUG
@@ -44,6 +46,11 @@ struct VerderApp: App {
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() }))
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
                                                     onUnauthorized: { auth.sessionRejected() }))
+        let client = s.client
+        voice = VoiceLogFactory {
+            VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
+                          dir: VoiceLogModel.liveDirectory, onUnauthorized: { auth.sessionRejected() })
+        }
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).
         AppDelegate.services = .init(client: s.client, inbox: inbox)
@@ -52,7 +59,7 @@ struct VerderApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier)
+                     money: money, dossier: dossier, voice: voice)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

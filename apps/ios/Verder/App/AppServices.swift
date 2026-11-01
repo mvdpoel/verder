@@ -21,6 +21,9 @@ struct AppServices {
     /// The pocket dossier's folder (`DossierStore`): Application Support,
     /// never the App Group.
     let dossierDir: URL
+    /// The voice log's microphone and on-device transcription (Task 25).
+    let makeRecorder: @MainActor () -> any VoiceRecording
+    let transcriber: any Transcribing
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()
@@ -36,6 +39,8 @@ struct AppServices {
                            registerRemote: { UIApplication.shared.registerForRemoteNotifications() },
                            snapshotDir: AppGroup.containerURL,
                            setBadge: InboxStore.systemBadge,
-                           dossierDir: URL.applicationSupportDirectory.appending(path: "dossier", directoryHint: .isDirectory))
+                           dossierDir: URL.applicationSupportDirectory.appending(path: "dossier", directoryHint: .isDirectory),
+                           makeRecorder: { AudioRecorder() },
+                           transcriber: OnDeviceTranscriber())
     }
 }

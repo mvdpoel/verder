@@ -18,6 +18,9 @@ enum DeepLink: Equatable, Sendable {
     case task(UUID)
     case document(UUID)
     case inbox
+    /// `verder://voice`: the voice quick-log (the home screen quick action,
+    /// plan 3 Task 25). A sheet over whatever tab is showing, never a tab.
+    case voice
     case none
 
     init(userInfo: [AnyHashable: Any]) {
@@ -37,6 +40,8 @@ enum DeepLink: Equatable, Sendable {
         switch host {
         case "inbox":
             return parts.path.isEmpty ? .inbox : .none
+        case "voice":
+            return parts.path.isEmpty ? .voice : .none
         case "proposal", "suggestion", "task", "document":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
@@ -57,7 +62,7 @@ enum DeepLink: Equatable, Sendable {
         switch self {
         case .proposal, .suggestion, .task, .inbox: .voorJou
         case .document: .dossier
-        case .none: nil
+        case .voice, .none: nil
         }
     }
 }

@@ -36,7 +36,7 @@ enum FixtureEnvironment {
     }
 
     static func services(for launch: FixtureLaunch) -> AppServices {
-        guard let root = FixtureServer.bundledRoot, FixtureServer(name: launch.fixture, root: root) != nil else {
+        guard let root = FixtureServer.bundledRoot, let server = FixtureServer(name: launch.fixture, root: root) else {
             let known = FixtureServer.bundledRoot.map(FixtureServer.names(in:)) ?? []
             fatalError("fixtures: no fixture named \(launch.fixture); known: \(known.joined(separator: ", "))")
         }
@@ -67,7 +67,12 @@ enum FixtureEnvironment {
 
         return AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(), registerRemote: {},
-                           snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir)
+                           snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
+                           // No microphone and no speech model: a "recording"
+                           // is synthetic bytes, and its transcript is the
+                           // voice fixture's (synthetic-data doc).
+                           makeRecorder: { FixtureRecorder() },
+                           transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback))
     }
 }
 
@@ -88,33 +93,72 @@ final class FixtureOwner: DeviceOwnerAuthenticator {
     }
 }
 
+/// The voice log's microphone in a fixture run: synthetic bytes, never the
+/// microphone, so a capture needs no permission and records nothing real.
+final class FixtureRecorder: VoiceRecording {
+    func requestPermission() async -> Bool { true }
+    func start(to url: URL) throws { try Data("fixture-recording".utf8).write(to: url) }
+    func stop() -> TimeInterval { 4 }
+    func cancel() {}
+}
+
+/// Speech "recognised" from the voice fixture's manifest transcript.
+struct FixtureTranscriber: Transcribing {
+    static let fallback = "Gebeld met Woonstichting Lindehof."
+    let text: String
+    func availability() async -> SpeechAvailability { .ready }
+    func install() async throws(TranscriptionError) {}
+    func transcribe(_ audio: URL) async throws(TranscriptionError) -> String { text }
+}
+
 struct FixturePermission: NotificationPermission {
     func status() async -> PushPermission { .allowed }
     func request() async -> Bool { true }
 }
 
 /// `-route geld|weekly|voice`: the screens with no deep link. Geld is the
-/// real screen on the fixture's money store (Task 19); until Tasks 25 and 26
-/// build theirs, weekly and voice are the ComingSoon placeholder.
+/// real screen on the fixture's money store (Task 19); voice is the real voice
+/// log (Task 25), already recorded and transcribed so the capture shows the
+/// editor; until Task 26 builds its screen, weekly is the ComingSoon placeholder.
 struct FixtureScreen: View {
     let screen: FixtureLaunch.Screen
     let money: MoneyStore
+    let voice: VoiceLogFactory
+    @State private var voiceModel: VoiceLogModel?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Group {
-            if screen == .geld {
+            switch screen {
+            case .geld:
                 NavigationStack { GeldScreen(store: money) }
-            } else {
+            case .voice:
+                if let voiceModel {
+                    VoiceLogView(model: voiceModel, close: { dismiss() })
+                } else {
+                    Color.void.ignoresSafeArea().task {
+                        let model = voice.make()
+                        voiceModel = model
+                        await model.prepare()
+                        await model.startRecording()
+                        await model.stopRecording()
+                    }
+                }
+            case .weekly:
                 ComingSoon(title: title)
             }
         }
-            .overlay(alignment: .topTrailing) {
-                Button("Sluiten") { dismiss() }
-                    .font(.display(14, relativeTo: .callout, weight: .regular))
-                    .foregroundStyle(Color.signal)
-                    .padding(16)
-            }
+        .overlay(alignment: .topTrailing) {
+            // The voice log has its own "Sluiten".
+            if screen != .voice { closeButton }
+        }
+    }
+
+    private var closeButton: some View {
+        Button("Sluiten") { dismiss() }
+            .font(.display(14, relativeTo: .callout, weight: .regular))
+            .foregroundStyle(Color.signal)
+            .padding(16)
     }
 
     private var title: String {

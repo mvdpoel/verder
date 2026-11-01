@@ -18,6 +18,7 @@ struct RootView: View {
     let inbox: InboxStore
     let money: MoneyStore
     let dossier: DossierModel
+    let voice: VoiceLogFactory
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
@@ -29,6 +30,9 @@ struct RootView: View {
     /// The Dossier stack, held here for the same reason: a document link
     /// that lands on the lock screen opens once the app is unlocked.
     @State private var dossierPath: [DossierRoute] = []
+    /// "Gesprek vastleggen": a sheet over whichever tab is showing, opened
+    /// from Meer or the home screen quick action (`DeepLink.voice`).
+    @State private var voiceOpen = false
     #if DEBUG
     /// `-route geld|weekly|voice` (Verder/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
@@ -95,6 +99,7 @@ struct RootView: View {
             case .task(let id): inboxPath = [.task(id.uuidString.lowercased())]
             case .inbox: inboxPath = []
             case .document(let id): dossierPath = [.document(id: id.uuidString.lowercased(), title: nil)]
+            case .voice: voiceOpen = true
             case .none: break
             }
         }
@@ -166,11 +171,17 @@ struct RootView: View {
                     .lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
-                MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier).lockGated(by: lock)
+                MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier,
+                        openVoice: { voiceOpen = true }).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
         .preferredColorScheme(.dark)
+        // Lock-gated: it names parties. From the quick action on a cold
+        // launch the lock asks Face ID by itself (`promptOnOpen`).
+        .sheet(isPresented: $voiceOpen) {
+            VoiceLogSheet(factory: voice).lockGated(by: lock)
+        }
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
         .onAppear {
@@ -180,7 +191,7 @@ struct RootView: View {
             #endif
         }
         #if DEBUG
-        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0, money: money) }
+        .fullScreenCover(item: $fixtureScreen) { FixtureScreen(screen: $0, money: money, voice: voice) }
         #endif
     }
 
