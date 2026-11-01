@@ -20,11 +20,11 @@ struct VoiceLogModelTests {
     let t0 = Date(timeIntervalSince1970: 1_793_540_000) // 2026-11-01T…Z
 
     /// A server that answers the parties list and the voice POST.
-    func server(voiceStatus: Int = 200) -> StubServer {
+    func server(voiceStatus: Int = 200, parties: PartyRows? = nil) -> StubServer {
         let s = StubServer()
         s.on { req in
             switch (req.httpMethod, req.url?.path()) {
-            case ("GET", "/api/mobile/v1/parties"): .status(200, body: Self.parties)
+            case ("GET", "/api/mobile/v1/parties"): .status(200, body: parties?.data.withLock { $0 } ?? Self.parties)
             case ("POST", "/api/mobile/v1/entries/voice"):
                 voiceStatus == 200 ? .status(200, body: Self.answer) : .status(voiceStatus)
             default: .status(404)
@@ -35,11 +35,13 @@ struct VoiceLogModelTests {
 
     func model(_ s: StubServer, transcriber: FakeTranscriber = FakeTranscriber(text: "Gebeld met Lindehof."),
                recorder: FakeRecorder = FakeRecorder(), dir: URL? = nil,
+               protect: @escaping @MainActor (URL) throws -> Void = VoiceLogModel.protectRecording,
                onUnauthorized: @escaping @MainActor () -> Void = {}) throws -> VoiceLogModel {
         var clock = t0
         let dir = try dir ?? scratchDir()
         return VoiceLogModel(client: s.client(), recorder: recorder, transcriber: transcriber, dir: dir,
-                             now: { defer { clock += 5 }; return clock }, onUnauthorized: onUnauthorized)
+                             now: { defer { clock += 5 }; return clock }, protect: protect,
+                             onUnauthorized: onUnauthorized)
     }
 
     func posted(_ s: StubServer) throws -> String {
@@ -289,9 +291,174 @@ struct VoiceLogModelTests {
         #expect(p[1].lastContactAt == nil)
     }
 
+    // MARK: - The gaps closed 2026-11-01
+
+    /// "Gesprek was om …": recording start by default, editable, and never in
+    /// the future — the date the suggestion carries is the one Martin set.
+    @Test func whenTheCallWasIsEditableAndNeverInTheFuture() async throws {
+        let s = server()
+        let m = try model(s)
+        await m.prepare()
+        await record(m)
+        #expect(m.occurredAt == t0)                       // when recording started
+
+        let earlier = t0 - 2 * 3600                       // the call was two hours ago
+        m.setOccurredAt(earlier)
+        #expect(m.occurredAt == earlier)
+        await m.send()
+        #expect(try posted(s).contains(field("occurredAt", "2026-11-01T11:33:20Z")))
+
+        let m2 = try model(server())
+        await m2.prepare()
+        await record(m2)
+        m2.setOccurredAt(t0 + 86_400)                     // tomorrow: refused, clamped to now
+        let clamped = try #require(m2.occurredAt)
+        #expect(clamped < t0 + 3600)
+        #expect(m2.latestOccurredAt >= clamped)
+        #expect(VoiceLogModel.Copy.occurredAt == "Gesprek was om")
+    }
+
+    /// After "niets verstaan": a real "Opnieuw opnemen" that goes back to the
+    /// recorder with the SAME clientId (nothing was ever sent under it), one
+    /// recording on the phone, and a hand-set time that survives the new take.
+    @Test func recordAgainAfterNothingHeardKeepsTheClientId() async throws {
+        let s = server()
+        let dir = try scratchDir()
+        let t = FakeTranscriber(failure: .nothingHeard)
+        let m = try model(s, transcriber: t, dir: dir)
+        await m.prepare()
+        await record(m)
+        #expect(m.notice == VoiceLogModel.Copy.nothingHeard)
+        #expect(m.canRecordAgain)
+        let id = m.clientId
+
+        m.recordAgain()
+        #expect(m.phase == .idle)
+        #expect(m.notice == nil)
+        #expect(m.clientId == id)
+        #expect(!m.hasRecording)
+        #expect(m.canRecord)
+
+        t.result.withLock { $0 = .success("Tweede poging, wel verstaan.") }
+        await record(m)
+        #expect(m.phase == .editing)
+        #expect(m.transcript == "Tweede poging, wel verstaan.")
+        #expect(m.clientId == id)
+        #expect(try audioFiles(dir).count == 1)
+        #expect(m.occurredAt == t0 + 5)                   // the new take's start, not set by hand
+        await m.send()
+        #expect(try posted(s).contains(field("clientId", id.uuidString.lowercased())))
+    }
+
+    @Test func aHandSetTimeSurvivesARecordAgain() async throws {
+        let m = try model(server(), transcriber: FakeTranscriber(failure: .nothingHeard))
+        await m.prepare()
+        await record(m)
+        let earlier = t0 - 600
+        m.setOccurredAt(earlier)
+        m.recordAgain()
+        await record(m)
+        #expect(m.occurredAt == earlier)
+    }
+
+    /// Once a send was ATTEMPTED the server may hold this clientId (a lost
+    /// response), so a different take under it would be answered "duplicate"
+    /// and dropped: no re-record then. Nor over text Martin has.
+    @Test func noRecordAgainAfterASendAttemptOrOverText() async throws {
+        let m = try model(server(voiceStatus: 503))
+        await m.prepare()
+        await record(m)
+        #expect(!m.canRecordAgain)                        // there is text
+        await m.send()
+        m.transcript = ""
+        #expect(!m.canRecordAgain)                        // a send was attempted
+        let id = m.clientId
+        m.recordAgain()
+        #expect(m.phase == .editing)
+        #expect(m.clientId == id)
+    }
+
+    /// An empty dossier is not "loading": it says why nothing can be sent and
+    /// offers a retry, which picks up a party added in the meantime.
+    @Test func noPartiesSaysWhyAndRetries() async throws {
+        let rows = PartyRows(Data("[]".utf8))
+        let s = server(parties: rows)
+        let m = try model(s)
+        #expect(m.partiesState == .loading)
+        #expect(m.partiesLine == "Partijen laden…")
+        await m.prepare()
+        #expect(m.partiesState == .empty)
+        #expect(m.partiesLine == VoiceLogModel.Copy.noParties)
+        #expect(m.partiesLine?.hasPrefix("Nog geen partijen in je dossier") == true)
+        #expect(m.canRetryParties)
+        m.typeInstead()
+        m.transcript = "Gebeld."
+        #expect(!m.canSend)
+
+        rows.data.withLock { $0 = Self.parties }
+        await m.retryParties()
+        #expect(m.partiesState == .loaded)
+        #expect(m.partiesLine == nil)
+        #expect(!m.canRetryParties)
+        #expect(m.partyId == Self.lindehof)
+        #expect(m.canSend)
+    }
+
+    @Test func partiesThatFailToLoadOfferARetry() async throws {
+        let s = StubServer()
+        s.on { _ in .status(503) }
+        let m = try model(s)
+        await m.prepare()
+        #expect(m.partiesState == .failed)
+        #expect(m.partiesLine == VoiceLogModel.Copy.partiesFailed)
+        #expect(m.canRetryParties)
+    }
+
+    /// The recording is NSFileProtectionComplete: its folder before the
+    /// recorder writes a byte (new files inherit the folder's class), and the
+    /// file itself once it exists. The simulator does not enforce protection,
+    /// so what is asserted is what was asked for (see WidgetSnapshotTests).
+    @Test func theRecordingIsCompleteProtection() async throws {
+        let dir = try scratchDir()
+        var protected: [URL] = []
+        let m = try model(server(), dir: dir, protect: { protected.append($0) })
+        await m.prepare()
+        await m.startRecording()
+        let file = dir.appending(path: "\(m.clientId.uuidString.lowercased()).m4a")
+        #expect(protected.map(\.lastPathComponent) == [dir.lastPathComponent, file.lastPathComponent])
+        #expect(VoiceLogModel.recordingAttributes[.protectionKey] as? FileProtectionType == .complete)
+    }
+
+    /// "Nederlands nog niet geïnstalleerd" is not a dead end: "Opnieuw
+    /// proberen" asks for the install again, and recording comes back.
+    @Test func missingDutchAssetsCanBeRequestedAgain() async throws {
+        let t = FakeTranscriber(availability: .needsDownload, installFails: true)
+        let m = try model(server(), transcriber: t)
+        await m.prepare()
+        #expect(m.speech == .unavailable(VoiceLogModel.Copy.assetsMissing))
+        #expect(m.canRetrySpeech)
+
+        t.installFails.withLock { $0 = false }
+        await m.retrySpeech()
+        #expect(t.installs.withLock { $0 } == 2)
+        #expect(m.speech == .ready)
+        #expect(!m.canRetrySpeech)
+        #expect(m.canRecord)
+
+        let unsupported = try model(server(), transcriber: FakeTranscriber(availability: .unsupported))
+        await unsupported.prepare()
+        #expect(!unsupported.canRetrySpeech)              // nothing to download
+    }
+
     func audioFiles(_ dir: URL) throws -> [String] {
         try FileManager.default.contentsOfDirectory(atPath: dir.path(percentEncoded: false))
     }
+}
+
+/// What `GET /parties` answers, changeable between calls.
+final class PartyRows: Sendable {
+    let data: Mutex<Data>
+    init(_ data: Data) { self.data = Mutex(data) }
 }
 
 /// Writes fake bytes where the real recorder would write the m4a.
@@ -320,25 +487,27 @@ final class FakeRecorder: VoiceRecording {
 
 final class FakeTranscriber: Transcribing {
     let availabilityValue: SpeechAvailability
-    let installFails: Bool
-    let result: Result<String, TranscriptionError>
+    /// Settable mid-test: the network comes back, the second install works.
+    let installFails: Mutex<Bool>
+    /// Settable mid-test: the second take is heard.
+    let result: Mutex<Result<String, TranscriptionError>>
     let installs = Mutex(0)
 
     init(text: String = "Gebeld met Lindehof.", availability: SpeechAvailability = .ready,
          installFails: Bool = false, failure: TranscriptionError? = nil) {
         availabilityValue = availability
-        self.installFails = installFails
-        result = failure.map { .failure($0) } ?? .success(text)
+        self.installFails = Mutex(installFails)
+        result = Mutex(failure.map { .failure($0) } ?? .success(text))
     }
 
     func availability() async -> SpeechAvailability { availabilityValue }
 
     func install() async throws(TranscriptionError) {
         installs.withLock { $0 += 1 }
-        if installFails { throw .assetsUnavailable }
+        if installFails.withLock({ $0 }) { throw .assetsUnavailable }
     }
 
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String {
-        try result.get()
+        try result.withLock { $0 }.get()
     }
 }

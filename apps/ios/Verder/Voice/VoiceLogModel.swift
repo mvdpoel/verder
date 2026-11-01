@@ -16,7 +16,17 @@ import Observation
 ///
 /// ONE clientId per voice log, reused on every retry: the server makes the
 /// suggestion (and a kept recording) idempotent on it, so a lost response
-/// never stores the call twice.
+/// never stores the call twice. "Opnieuw opnemen" KEEPS it too, and is only
+/// offered BEFORE any send was attempted: until then the server has never seen
+/// the id, so the new take is simply this same voice log. After an attempt the
+/// server may already hold the id (the response can be lost after it stored
+/// the suggestion) — a different take under it would be answered `duplicate`
+/// and silently dropped, and a fresh id could store the call twice — so then
+/// the text is edited instead and no re-record is offered.
+///
+/// THE RECORDING is NSFileProtectionComplete (unreadable while the phone is
+/// locked): its folder gets the class before the recorder writes a byte, so
+/// the file inherits it, and the file is set again once it exists.
 @MainActor
 @Observable
 final class VoiceLogModel {
@@ -38,6 +48,17 @@ final class VoiceLogModel {
         case unavailable(String)
     }
 
+    /// The party picker's state. "Loading" is only ever the state before the
+    /// first answer: an empty dossier and a failed load each say so, with a
+    /// retry, so the sheet never shows "Partijen laden…" forever.
+    enum PartiesState: Equatable {
+        case loading
+        case loaded
+        /// The server answered with no parties at all.
+        case empty
+        case failed
+    }
+
     enum Copy {
         static let unsupported = "Nederlandse spraakherkenning is niet beschikbaar op deze iPhone. Typ zelf wat er besproken is."
         static let assetsMissing = "Het Nederlandse spraakmodel is nog niet op je telefoon. Probeer het opnieuw met internet, of typ zelf wat er besproken is."
@@ -47,6 +68,13 @@ final class VoiceLogModel {
         static let micDenied = "verder mag de microfoon niet gebruiken. Zet het aan in Instellingen."
         static let recordFailed = "Opnemen lukte niet. Probeer het nog eens."
         static let partiesFailed = "De partijen konden niet worden geladen."
+        static let partiesLoading = "Partijen laden…"
+        /// A voice log is always ABOUT someone (the suggestion's participant),
+        /// so with no parties there is nothing to send it with; it says so.
+        static let noParties = "Nog geen partijen in je dossier. Een gesprek leg je vast bij een partij, dus versturen kan pas als er een is. Voeg die toe in verder en probeer het opnieuw."
+        static let retry = "Opnieuw proberen"
+        static let recordAgain = "Opnieuw opnemen"
+        static let occurredAt = "Gesprek was om"
         static let offline = "Geen verbinding. Je tekst blijft staan; probeer het zo opnieuw."
         static let serverFailed = "verder kon het nu niet aannemen. Je tekst blijft staan; probeer het zo opnieuw."
         static let signedOut = "Je sessie is verlopen. Log opnieuw in; je tekst blijft staan."
@@ -63,13 +91,18 @@ final class VoiceLogModel {
     private(set) var speech: Speech = .checking
     var transcript = ""
     private(set) var parties: [PartyDTO] = []
-    private(set) var partiesFailed = false
+    private(set) var partiesState: PartiesState = .loading
     var partyId: String?
     var channel: VoiceChannel = .call
     var keepRecording = false
     /// When the call is recorded as having happened: the moment recording
-    /// started (or typing began).
+    /// started (or typing began), unless Martin set it ("Gesprek was om …").
     private(set) var occurredAt: Date?
+    /// Martin set the time himself: a new take does not move it.
+    private(set) var occurredAtSetByHand = false
+    /// A send was tried under this clientId (whatever came back): from then on
+    /// the server may hold it, so no re-record (see the type's doc).
+    private(set) var sendAttempted = false
     private(set) var notice: String?
     private(set) var micDenied = false
     private(set) var clientId = UUID()
@@ -80,6 +113,7 @@ final class VoiceLogModel {
     @ObservationIgnored private let dir: URL
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
+    @ObservationIgnored private let protect: @MainActor (URL) throws -> Void
     @ObservationIgnored private var recordingURL: URL?
     /// The finger lifted while the start was still waiting on permission.
     @ObservationIgnored private var startPending = false
@@ -87,14 +121,25 @@ final class VoiceLogModel {
 
     init(client: APIClient, recorder: any VoiceRecording, transcriber: any Transcribing, dir: URL,
          now: @escaping @MainActor () -> Date = { Date() },
+         protect: @escaping @MainActor (URL) throws -> Void = VoiceLogModel.protectRecording,
          onUnauthorized: @escaping @MainActor () -> Void = {}) {
         self.client = client
         self.recorder = recorder
         self.transcriber = transcriber
         self.dir = dir
         self.now = now
+        self.protect = protect
         self.onUnauthorized = onUnauthorized
         Self.clear(dir)
+    }
+
+    /// NSFileProtectionComplete: a recording of a call about Martin's case is
+    /// unreadable while the phone is locked.
+    static let recordingAttributes: [FileAttributeKey: Any] = [.protectionKey: FileProtectionType.complete]
+
+    /// Sets the recording's class on the folder or the file at `url`.
+    static func protectRecording(_ url: URL) throws {
+        try FileManager.default.setAttributes(recordingAttributes, ofItemAtPath: url.path(percentEncoded: false))
     }
 
     /// The live folder: temporary, and emptied every time a voice log opens.
@@ -115,6 +160,33 @@ final class VoiceLogModel {
             && trimmedTranscript.count <= VoiceDraft.transcriptMax
     }
 
+    /// "Opnieuw opnemen": after a take that gave no text (niets verstaan, or
+    /// the transcription failed), never over text Martin has, never once a
+    /// send was attempted, and only while Dutch speech is ready.
+    var canRecordAgain: Bool {
+        phase == .editing && speech == .ready && trimmedTranscript.isEmpty && !sendAttempted
+    }
+
+    /// The latest time "Gesprek was om" may say: now. A call is never in the
+    /// future.
+    var latestOccurredAt: Date { now() }
+
+    /// The parties line under "Met wie", or nil when the picker shows.
+    var partiesLine: String? {
+        switch partiesState {
+        case .loading: Copy.partiesLoading
+        case .loaded: nil
+        case .empty: Copy.noParties
+        case .failed: Copy.partiesFailed
+        }
+    }
+
+    var canRetryParties: Bool { partiesState == .empty || partiesState == .failed }
+
+    /// The Dutch model could not be installed: worth asking again (a missing
+    /// language is not, nothing can be downloaded for it).
+    var canRetrySpeech: Bool { speech == .unavailable(Copy.assetsMissing) }
+
     var selectedParty: PartyDTO? { parties.first { $0.id == partyId } }
 
     // MARK: - Opening
@@ -130,13 +202,27 @@ final class VoiceLogModel {
         do {
             let rows: [PartyDTO] = try await client.getJSON("/api/mobile/v1/parties?recent=1")
             parties = rows
-            partiesFailed = false
+            partiesState = rows.isEmpty ? .empty : .loaded
             if partyId == nil || !rows.contains(where: { $0.id == partyId }) { partyId = rows.first?.id }
         } catch {
             if APIError.isCancellation(error) { return }
-            partiesFailed = true
+            partiesState = parties.isEmpty ? .failed : .loaded
             if (error as? APIError) == .unauthorized { onUnauthorized() }
         }
+    }
+
+    /// "Opnieuw proberen" under an empty or failed party list.
+    func retryParties() async {
+        guard canRetryParties else { return }
+        partiesState = .loading
+        await loadParties()
+    }
+
+    /// "Opnieuw proberen" under "het Nederlandse spraakmodel is nog niet op je
+    /// telefoon": checks again and, when still missing, requests the install.
+    func retrySpeech() async {
+        guard canRetrySpeech else { return }
+        await prepareSpeech()
     }
 
     func prepareSpeech() async {
@@ -176,17 +262,26 @@ final class VoiceLogModel {
         micDenied = false
         // Lifted while the permission alert was up: that was not a recording.
         guard !releasedEarly, phase == .idle else { return }
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appending(path: "\(clientId.uuidString.lowercased()).m4a")
+        var started = false
         do {
+            // The class first, on the folder (an existing folder keeps its old
+            // class through createDirectory, hence the explicit set), so the
+            // file is born Complete; then on the file itself.
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                                    attributes: Self.recordingAttributes)
+            try protect(dir)
             try recorder.start(to: url)
+            started = true
+            try protect(url)
         } catch {
+            if started { recorder.cancel() }
             try? FileManager.default.removeItem(at: url)
             notice = Copy.recordFailed
             return
         }
         recordingURL = url
-        occurredAt = now()
+        if !occurredAtSetByHand { occurredAt = now() }
         phase = .recording
     }
 
@@ -199,7 +294,7 @@ final class VoiceLogModel {
         let duration = recorder.stop()
         guard duration >= Self.minimumDuration, let url = recordingURL else {
             deleteRecording()
-            occurredAt = nil
+            if !occurredAtSetByHand { occurredAt = nil }
             phase = .idle
             notice = Copy.holdLonger
             return
@@ -211,13 +306,31 @@ final class VoiceLogModel {
         } catch {
             notice = switch error {
             case .languageUnsupported: Copy.unsupported
-            case .assetsUnavailable: Copy.assetsMissing
+            case .assetsUnavailable: nil // said once, with its retry, in the speech line
             case .nothingHeard: Copy.nothingHeard
             case .failed: Copy.transcribeFailed
             }
             if error == .languageUnsupported { speech = .unavailable(Copy.unsupported) }
+            if error == .assetsUnavailable { speech = .unavailable(Copy.assetsMissing) }
         }
         phase = .editing
+    }
+
+    /// "Opnieuw opnemen": back to the recorder, the take that gave no text
+    /// deleted. The clientId stays (see the type's doc for why that is safe
+    /// only before a send attempt); a time Martin set by hand stays too.
+    func recordAgain() {
+        guard canRecordAgain else { return }
+        deleteRecording()
+        keepRecording = false
+        notice = nil
+        phase = .idle
+    }
+
+    /// "Gesprek was om …": Martin's own time for the call, never later than now.
+    func setOccurredAt(_ date: Date) {
+        occurredAt = min(date, now())
+        occurredAtSetByHand = true
     }
 
     /// No speech (or no wish to talk): type the note instead.
@@ -231,7 +344,8 @@ final class VoiceLogModel {
     // MARK: - Sending
 
     func send() async {
-        guard canSend, let partyId, let occurredAt else { return }
+        guard canSend, let partyId, let chosen = occurredAt else { return }
+        let occurredAt = min(chosen, now())
         var audio: Data?
         if keepRecording {
             guard let url = recordingURL, let data = try? Data(contentsOf: url) else {
@@ -248,6 +362,7 @@ final class VoiceLogModel {
                                transcript: trimmedTranscript, audio: audio)
         phase = .sending
         notice = nil
+        sendAttempted = true
         do {
             let (data, _) = try await client.send(draft.request(client))
             let answer: VoiceEntryAnswer = try APIClient.decode(data)
@@ -279,6 +394,8 @@ final class VoiceLogModel {
         keepRecording = false
         channel = .call
         occurredAt = nil
+        occurredAtSetByHand = false
+        sendAttempted = false
         notice = nil
         clientId = UUID()
         partyId = parties.first?.id
@@ -329,15 +446,6 @@ extension VoiceLogModel {
         case .sent(let duplicate):
             duplicate ? "Dit gesprek was al verstuurd. Je vindt het in Voor jou."
                 : "Verstuurd als voorstel. Keur het goed in Voor jou."
-        }
-    }
-
-    /// "zo 1 nov · 14:33", Amsterdam's clock.
-    var occurredLabel: String? {
-        occurredAt.map {
-            $0.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened,
-                                          locale: Locale(identifier: "nl_NL"),
-                                          timeZone: TimeZone(identifier: "Europe/Amsterdam")!))
         }
     }
 }

@@ -62,6 +62,11 @@ struct VoiceLogView: View {
                             .font(.mono(12, relativeTo: .caption))
                             .foregroundStyle(model.speech == .ready ? Color.inkDim : Color.ink)
                             .fixedSize(horizontal: false, vertical: true)
+                        if model.canRetrySpeech {
+                            AuthButton(title: VoiceLogModel.Copy.retry, weight: .secondary) {
+                                Task { await model.retrySpeech() }
+                            }
+                        }
                     }
                     content
                     if let notice = model.notice {
@@ -159,10 +164,10 @@ struct VoiceLogView: View {
                 }
             }
 
-            if let when = model.occurredLabel {
-                Text(when)
-                    .font(.mono(12, relativeTo: .caption))
-                    .foregroundStyle(Color.inkLabel)
+            if model.occurredAt != nil { occurredPicker }
+
+            if model.canRecordAgain {
+                AuthButton(title: VoiceLogModel.Copy.recordAgain, weight: .secondary) { model.recordAgain() }
             }
 
             if model.hasRecording {
@@ -190,13 +195,30 @@ struct VoiceLogView: View {
         }
     }
 
+    /// "Gesprek was om …": compact, Amsterdam's clock, never in the future.
+    private var occurredPicker: some View {
+        DatePicker(selection: Binding(get: { model.occurredAt ?? model.latestOccurredAt },
+                                      set: { model.setOccurredAt($0) }),
+                   in: ...model.latestOccurredAt,
+                   displayedComponents: [.date, .hourAndMinute]) {
+            Text(VoiceLogModel.Copy.occurredAt)
+                .font(.mono(12, relativeTo: .caption, weight: .medium))
+                .foregroundStyle(Color.inkLabel)
+        }
+        .datePickerStyle(.compact)
+        .environment(\.locale, Locale(identifier: "nl_NL"))
+        .environment(\.timeZone, ProposalFormat.amsterdam)
+        .tint(Color.signal)
+    }
+
     @ViewBuilder private var partyPicker: some View {
-        if model.parties.isEmpty {
-            Text(model.partiesFailed ? VoiceLogModel.Copy.partiesFailed : "Partijen laden…")
+        if let line = model.partiesLine {
+            Text(line)
                 .font(.display(14, relativeTo: .callout, weight: .light))
                 .foregroundStyle(Color.ink)
-            if model.partiesFailed {
-                AuthButton(title: "Opnieuw laden", weight: .secondary) { Task { await model.loadParties() } }
+                .fixedSize(horizontal: false, vertical: true)
+            if model.canRetryParties {
+                AuthButton(title: VoiceLogModel.Copy.retry, weight: .secondary) { Task { await model.retryParties() } }
             }
         } else {
             Menu {
