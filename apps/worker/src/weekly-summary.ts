@@ -8,7 +8,9 @@
  * summary for the screen the tap opens, which is behind Face ID.
  *
  * ONE PUSH PER WEEK, EVER: the dedupKey `weekly:<ISO week>` makes a pg-boss
- * retry, or a second run by hand, a duplicate `notify()` refuses.
+ * retry, or a second run by hand, a duplicate `notify()` refuses. The week is
+ * `summaryWeek(now)` — the newest week whose Sunday 18:00 has passed — so a
+ * hand-run on Monday after a failed Sunday recovers THAT week, not the new one.
  *
  * The summary is stored as `worker_runs.detail.summary` BEFORE the push, and
  * that row is what GET /api/mobile/v1/weekly serves — no new table, the same
@@ -35,6 +37,32 @@ export interface Week { from: string; to: string; key: string }
 /** The ISO week (Monday to Sunday, Amsterdam) that contains `now`. */
 export function weekOf(now: Date): Week {
   const { from, to } = weekBounds(dayKey(now), 1);
+  return { from, to, key: isoWeekKey(from) };
+}
+
+const HOUR_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Amsterdam", hour: "2-digit", hourCycle: "h23",
+});
+
+/** The Sunday-summary hour, Amsterdam: the schedule's `0 18 * * 0`. */
+export const WEEKLY_SUMMARY_HOUR = 18;
+
+/**
+ * The week a run at `now` SUMMARISES: the newest ISO week whose Sunday 18:00
+ * Amsterdam has passed. That is `weekOf(now)` only from Sunday 18:00 to
+ * midnight; on Monday to Sunday afternoon it is the PREVIOUS week.
+ *
+ * Never `weekOf(now)` outright: a hand-run on Monday after a failed Sunday,
+ * or a pg-boss job that starts after midnight, would otherwise summarise the
+ * new, nearly empty week AND take its `weekly:<key>` dedupKey — so the failed
+ * week is never recovered and the real push six days later is refused as a
+ * duplicate.
+ */
+export function summaryWeek(now: Date): Week {
+  const current = weekOf(now);
+  const hour = Number(HOUR_FMT.format(now));
+  if (dayKey(now) === current.to && hour >= WEEKLY_SUMMARY_HOUR) return current;
+  const { from, to } = weekBounds(addDays(current.from, -7), 1);
   return { from, to, key: isoWeekKey(from) };
 }
 
@@ -203,7 +231,7 @@ export async function runWeeklySummary(
   deps: WeeklySummaryDeps, opts: { dry?: boolean } = {},
 ): Promise<WeeklySummaryResult> {
   const now = (deps.now ?? (() => new Date()))();
-  const week = weekOf(now);
+  const week = summaryWeek(now);
   const summary = composeWeekly(await loadWeekly(deps.db, week, deps));
   const body = weeklyBody(summary);
   if (opts.dry) return { summary, body, sent: false };

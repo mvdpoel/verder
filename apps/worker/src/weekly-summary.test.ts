@@ -5,7 +5,7 @@ import { WEEKLY_SUMMARY_WORKER_NAME } from "@verder/api/src/worker-names";
 import type { WaitingItem } from "@verder/api/src/waiting";
 import type { WeeklySummary } from "@verder/api/src/weekly-summary";
 import {
-  composeWeekly, loadWeekly, runWeeklySummary, weekOf, weeklyBody, type WeeklyInput,
+  composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weekOf, weeklyBody, type WeeklyInput,
 } from "./weekly-summary";
 import { notify, type NotifyFn } from "./notify/notify";
 import { fakeNotify } from "./test-support/fake-notify";
@@ -42,6 +42,26 @@ describe("composeWeekly (pure)", () => {
       ],
     }));
     expect(s).toMatchObject({ week: "2026-W44", from: W44.from, to: W44.to, sent: 2 });
+  });
+
+  it("a run summarises the newest week whose Sunday 18:00 has passed", () => {
+    const W43 = { from: "2026-10-19", to: "2026-10-25", key: "2026-W43" };
+    // Sunday 18:00 Amsterdam (CET) exactly, and later that evening: this week.
+    expect(summaryWeek(new Date("2026-11-01T17:00:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    expect(summaryWeek(new Date("2026-11-01T22:59:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    // Sunday 17:59: the week has not been summarised yet — last week.
+    expect(summaryWeek(new Date("2026-11-01T16:59:00Z"))).toEqual(W43);
+    // Monday 00:30 Amsterdam (a pg-boss job that started late): the week that just ENDED.
+    expect(summaryWeek(new Date("2026-11-01T23:30:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    // Wednesday, a hand-run: still the week that ended last Sunday.
+    expect(summaryWeek(new Date("2026-11-04T12:00:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    // Summer time: Sunday 18:00 CEST is 16:00 UTC, so 16:30 UTC is past it…
+    expect(summaryWeek(new Date("2026-10-18T16:30:00Z")).key).toBe("2026-W42");
+    // …and 15:30 UTC (17:30 CEST) is not.
+    expect(summaryWeek(new Date("2026-10-18T15:30:00Z")).key).toBe("2026-W41");
+    // Across a year boundary: Monday 2027-01-04 recovers 2026-W53.
+    expect(summaryWeek(new Date("2027-01-04T09:00:00Z")))
+      .toEqual({ from: "2026-12-28", to: "2027-01-03", key: "2026-W53" });
   });
 
   it("sent counts entries plus proposals with no entry yet, never a question", () => {
@@ -250,6 +270,37 @@ describe("loadWeekly and the job (database)", () => {
         .where(eq(schema.notifications.dedupKey, `weekly:${weekOf(now).key}`));
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ kind: "weekly", level: "passive", title: "Je week" });
+    });
+  });
+
+  it("a hand-run on Monday recovers the PREVIOUS week, and the next Sunday still sends", async () => {
+    await isolated(async (db) => {
+      const sunday = sundayLongAgo();
+      const monday = new Date(sunday.getTime() + 15 * 3600_000); // Monday ~09:00
+      const nextSunday = new Date(sunday.getTime() + 7 * 24 * 3600_000);
+      const ended = weekOf(sunday);
+      // A fixture on the Wednesday of the week that ended: the recovery must count it.
+      const wednesday = new Date(sunday.getTime() - 4 * 24 * 3600_000);
+      const [user] = await db.insert(schema.users).values({
+        email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
+      await db.insert(schema.logEntries).values({ occurredAt: wednesday, channel: "email",
+        direction: "outbound", summary: `Weekly Testfixture ${uid()}`, source: "manual", createdBy: user.id });
+      const real: NotifyFn = (n) => notify({ db, apns: async () => null, webPush: () => null,
+        waitingCount: async () => 0 }, n);
+
+      // The Sunday 18:00 job failed; Martin runs it by hand on Monday.
+      const recovered = await runWeeklySummary({ db, notify: real, now: () => monday, waiting: noWaiting });
+      expect(recovered.summary).toMatchObject({ week: ended.key, from: ended.from, to: ended.to, sent: 1 });
+      expect(recovered.sent).toBe(true);
+      const recoveredRows = await db.select().from(schema.notifications)
+        .where(eq(schema.notifications.dedupKey, `weekly:${ended.key}`));
+      expect(recoveredRows).toHaveLength(1);
+
+      // Six days later the real job for the NEW week is not a duplicate.
+      const next = await runWeeklySummary({ db, notify: real, now: () => nextSunday, waiting: noWaiting });
+      expect(next.summary.week).toBe(weekOf(nextSunday).key);
+      expect(next.summary.week).not.toBe(ended.key);
+      expect(next.sent).toBe(true);
     });
   });
 

@@ -5,6 +5,13 @@
 //
 // The scheduled job is `weekly.summary` in src/index.ts; this is the same
 // runWeeklySummary, so `--dry` prints exactly the body Sunday would send.
+//
+// The week is the newest one whose Sunday 18:00 Amsterdam has passed: run on
+// Monday after a failed Sunday, it recovers THAT week (and takes its dedupKey),
+// never the new one. Run before Sunday 18:00 it re-targets last week, whose
+// push already went out, so the push is a refused duplicate — but a non-dry run
+// still records a newest `ok` row with that week's counts. `waiting` and
+// `topWaiting` are a snapshot taken when it runs, not on Sunday.
 import { createDb } from "@verder/db";
 import { closeNotify, notifier } from "../notify/notify";
 import { runWeeklySummary } from "../weekly-summary";
