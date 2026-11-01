@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { canonicalJson } from "@verder/core";
 import { schema, type Db } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
@@ -11,6 +11,7 @@ import { debtFields, itemFields } from "./registry";
 import { taskFields } from "./tasks";
 import { documentRequestText } from "../search/document-request";
 import { entryForApproval } from "../entry-from-proposed";
+import { docTypeKey } from "../doc-type";
 
 // The input shape lives beside the one mapping that builds it from a proposal
 // (entry-from-proposed.ts), which the web card and the phone route share.
@@ -150,11 +151,25 @@ export const suggestionsRouter = router({
       if (!s || (s.status !== "pending" && s.status !== "needs-manual")) throw notOpen();
       if (!s.documentId)
         throw new TRPCError({ code: "BAD_REQUEST", message: "Suggestion has no document" });
+      // The same per-document lock documents.update takes, so this approve and
+      // a discard (or a purge, or another writer of change rows) landing
+      // together cannot both read the old state and both append.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${s.documentId}::text, 0))`);
       // Carry the effective sender forward (Task 3 fix): this row only ever
       // corrects title/docType, and effectiveDocument reads partyId from the
       // LATEST change row same as title/docType — writing this row without it
       // would silently revert a sender Martin (or ingest) had already set.
       const current = await effectiveDocument(tx, s.documentId);
+      // A discarded document was judged junk; approving the card would append
+      // status "filed" and quietly un-discard it. A purged one is destroyed:
+      // a purge writes no change row, so without this a filed row would land
+      // on a tombstone. Both are CONFLICT — the suggestion is stale, not the
+      // request malformed — and both leave the suggestion as it was.
+      if (current.purge !== null)
+        throw new TRPCError({ code: "CONFLICT", message: "vernietigd" });
+      if (current.effectiveStatus === "discarded")
+        throw new TRPCError({ code: "CONFLICT", message: "weggegooid" });
       await tx.insert(schema.documentStatusChanges).values({
         documentId: s.documentId, status: "filed", title: input.title,
         docType: input.docType, partyId: current.effectivePartyId });
@@ -162,8 +177,19 @@ export const suggestionsRouter = router({
         eventType: "document.updated", entityType: "document", entityId: s.documentId,
         payload: { id: s.documentId, status: "filed", title: input.title,
           docType: input.docType ?? null, partyId: current.effectivePartyId } });
+      // The verdict must tell the truth (golden rule): the auto-apply
+      // threshold is measured against this history, and an approve that
+      // always wrote "approved" made every retyped title count as the model
+      // being right. The title compares exactly; the soort through docTypeKey,
+      // because the soort key folds case and whitespace and "loonstrook " is
+      // the same branch as "Loonstrook".
+      const proposed = (s.proposed ?? {}) as { title?: unknown; docType?: unknown };
+      const unchanged = proposed.title === input.title &&
+        docTypeKey(typeof proposed.docType === "string" ? proposed.docType : null) ===
+          docTypeKey(input.docType);
       await tx.update(schema.suggestions).set({
-        status: "approved", finalPayload: { title: input.title, docType: input.docType ?? null },
+        status: unchanged ? "approved" : "edited",
+        finalPayload: { title: input.title, docType: input.docType ?? null },
         verdictAt: new Date(),
       }).where(eq(schema.suggestions.id, input.id));
     })),
