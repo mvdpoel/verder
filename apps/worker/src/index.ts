@@ -23,13 +23,14 @@ import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { proposalForLetter } from "./proposals/letters";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { BADGE_SYNC_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { AUTOFILE_DIGEST_WORKER_NAME, BADGE_SYNC_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
 import { followUpCreator, runClocks } from "./proposals/clocks";
 import { realSendPort } from "./gmail-send";
 import { resolveAggregator } from "./receipts";
 import { notifier, pushToDevices } from "./notify/notify";
 import { syncBadge } from "./badge-sync";
+import { runAutofileDigest } from "./autofile-digest";
 import { realEmbedPort } from "@verder/api/src/search/embed";
 import { drainOnce } from "./search-drain";
 
@@ -366,6 +367,22 @@ await boss.work("badge.sync", async () => {
         .catch((e) => console.error(`badge-sync: ${String(err)} / ${String(e)}`));
     }
   });
+});
+
+// "Door verder gedaan", once a day (autofile-digest.ts, spec §6.6): at 19:00
+// AMSTERDAM — pg-boss's `tz`, because the worker clock is UTC and a UTC 19:00
+// would drift an hour with daylight saving — one passive push with the count
+// of what verder did on its own in the last 24 h. Quiet days send nothing and
+// still record, so worker-health's nightly bound can tell quiet from dead.
+await boss.createQueue("autofile.digest");
+await boss.schedule("autofile.digest", "0 19 * * *", undefined, { tz: "Europe/Amsterdam" });
+await boss.work("autofile.digest", async () => {
+  try {
+    await runAutofileDigest({ db, notify });
+  } catch (err) {
+    await recordRun(db, AUTOFILE_DIGEST_WORKER_NAME, "error", { message: String(err) })
+      .catch((e) => console.error(`autofile-digest: ${String(err)} / ${String(e)}`));
+  }
 });
 
 await boss.createQueue("suggest.docmeta");

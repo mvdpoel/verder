@@ -19,7 +19,7 @@ struct InboxRankingTests {
        "at":"2026-10-20T08:00:00.000Z","dueAt":"2026-10-31T23:00:00.000Z","verder":false},
       {"kind":"stop","id":"st1","title":"Stukken aanleveren","subtitle":null,"priority":3,
        "at":"2026-08-28T00:00:00.000Z","dueAt":null,"verder":false}
-    ],"doneByVerder":[{"changeId":"c1"},{"changeId":"c2"}]}
+    ],"doneByVerder":[\(DoneByVerderFixture.autoFile),\(DoneByVerderFixture.autoName)]}
     """.utf8)
 
     func decode() throws -> InboxDTO {

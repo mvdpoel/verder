@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn<() => Promise<string | null>>(),
   serverCaller: vi.fn(),
   list: vi.fn(),
+  done: vi.fn(),
 }));
 
 vi.mock("@/lib/trpc-server", () => ({
@@ -24,8 +25,10 @@ const item = (id: string) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getSessionUserId.mockResolvedValue("user-1");
-  mocks.serverCaller.mockResolvedValue({ inbox: { list: mocks.list } });
+  mocks.serverCaller.mockResolvedValue({
+    inbox: { list: mocks.list }, verderActions: { list: mocks.done } });
   mocks.list.mockResolvedValue([item("a"), item("b")]);
+  mocks.done.mockResolvedValue([]);
 });
 
 describe("GET /api/mobile/v1/inbox", () => {
@@ -36,6 +39,7 @@ describe("GET /api/mobile/v1/inbox", () => {
     expect(await res.json()).toEqual({ error: "unauthorized" });
     expect(mocks.serverCaller).not.toHaveBeenCalled();
     expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.done).not.toHaveBeenCalled();
   });
 
   it("inbox count equals items length", async () => {
@@ -45,6 +49,21 @@ describe("GET /api/mobile/v1/inbox", () => {
     expect(body.count).toBe(2);
     expect(body.items).toHaveLength(2);
     expect(body.doneByVerder).toEqual([]);
+  });
+
+  it("doneByVerder carries the last week of verder's actions and never counts", async () => {
+    const action = {
+      changeId: "c1", documentId: "d1", documentTitle: "Loonstrook juli.pdf",
+      at: "2026-10-31T17:00:00.000Z", kind: "auto-file",
+      before: { status: "inbox", title: "Loonstrook juli.pdf", docType: null },
+      after: { status: "filed", title: "Loonstrook juli.pdf", docType: "Loonstrook" },
+      proposedTitle: "Loonstrook juli", undone: false, undoable: true, notUndoableReason: null,
+    };
+    mocks.done.mockResolvedValue([action]);
+    const body = await (await GET(req(), ctx)).json();
+    expect(mocks.done).toHaveBeenCalledWith({ sinceDays: 7 });
+    expect(body.doneByVerder).toEqual([action]);
+    expect(body.count).toBe(2);
   });
 
   it("is never cached", async () => {

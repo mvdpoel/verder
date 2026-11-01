@@ -44,6 +44,7 @@ import {
   NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
   PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTO_FILE_WORKER_NAME,
+  AUTOFILE_DIGEST_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -270,6 +271,12 @@ const DECLS: Record<string, WorkerDecl> = {
   // Postgres dump + vault mirror, the first step of ops/nightly.sh. An error
   // row (NAS not mounted, truncated dump) ages into `down` past the nightly bound.
   [DB_BACKUP_WORKER_NAME]: { kind: "nightly" },
+  // `boss.schedule("autofile.digest", "0 19 * * *", …, { tz: "Europe/Amsterdam" })`:
+  // a pg-boss job, not the host crontab, but once a day all the same, so its
+  // silence reads exactly like the jobs above — fine for ~24 h, news past
+  // NIGHTLY_MAX_AGE_MS. `watcher` would multiply a 24 h cadence by three and
+  // sit calm through two missed evenings. One row per run, a quiet day too.
+  [AUTOFILE_DIGEST_WORKER_NAME]: { kind: "nightly" },
 
   // ---- monthly, from the HOST crontab on the 1st -------------------------
   /*

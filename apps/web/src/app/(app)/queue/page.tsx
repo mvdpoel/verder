@@ -1,5 +1,6 @@
 import { serverCaller } from "@/lib/trpc-server";
 import { SuggestionCard } from "@/components/suggestion-card";
+import { DoneByVerder } from "@/components/done-by-verder";
 import { Empty, PageTitle } from "@/components/ui";
 
 /**
@@ -16,10 +17,11 @@ export default async function QueuePage() {
   // Open verdicts only. An `auto-applied` suggestion (migration 0040) is
   // already decided — verder filed it — so it never appears as a card here;
   // it is listed under "Door verder gedaan", where it can be undone.
-  const [pending, manual, waitingCount] = await Promise.all([
+  const [pending, manual, waitingCount, doneByVerder] = await Promise.all([
     caller.suggestions.list({ status: "pending" }),
     caller.suggestions.list({ status: "needs-manual" }),
     caller.inbox.count(),
+    caller.verderActions.list({ sinceDays: 7 }),
   ]);
   const all = [...pending, ...manual];
   // This page lists suggestions only, so the whole-set count (tasks, proposals
@@ -46,6 +48,9 @@ export default async function QueuePage() {
       ) : (
         <Empty title="Niets te beoordelen. Alles is afgehandeld — even ademhalen. ☕" />
       )}
+      {/* Below the cards and closed: what verder already did is there to
+          check, never waiting on Martin, so it never competes with them. */}
+      <DoneByVerder actions={doneByVerder} />
     </div>
   );
 }

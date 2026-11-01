@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cadenceMs, declFor, workerState } from "./worker-health";
 import {
   MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME,
-  PROPOSAL_SEND_WORKER_NAME, BADGE_SYNC_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTOFILE_DIGEST_WORKER_NAME,
 } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -232,6 +232,15 @@ describe("declFor — the workers that exist today", () => {
     expect(declFor("registry-mine")).toEqual({ kind: "watcher", everyMs: 2 * MIN });
     expect(declFor("heartbeat")).toEqual({ kind: "watcher", everyMs: 5 * MIN });
     expect(declFor("loondossier")).toEqual({ kind: "watcher", everyMs: 24 * 60 * MIN });
+  });
+
+  it("the 19:00 autofile digest is judged as a once-a-day job", () => {
+    // Daily, so the nightly bound (26 h) is the one that catches a missed
+    // evening; a watcher would tolerate three days of silence.
+    expect(AUTOFILE_DIGEST_WORKER_NAME).toBe("autofile-digest");
+    expect(declFor(AUTOFILE_DIGEST_WORKER_NAME)).toEqual({ kind: "nightly" });
+    expect(state(AUTOFILE_DIGEST_WORKER_NAME, "ok", new Date(NOW - 24 * HOUR))).toBe("ok");
+    expect(state(AUTOFILE_DIGEST_WORKER_NAME, "ok", new Date(NOW - 27 * HOUR))).toBe("down");
   });
 
   it("notify is on-demand", () => {

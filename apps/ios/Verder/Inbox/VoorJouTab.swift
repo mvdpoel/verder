@@ -75,7 +75,20 @@ struct VoorJouTab: View {
     @Binding var path: [InboxRoute]
     let onUnauthorized: @MainActor () -> Void
 
-    @State private var showDone = false
+    @State private var done: DoneByVerderModel
+
+    init(store: InboxStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
+         onUnauthorized: @escaping @MainActor () -> Void) {
+        self.store = store
+        self.client = client
+        self.gate = gate
+        self._path = path
+        self.onUnauthorized = onUnauthorized
+        // An undo moves a document back into the inbox, and a refusal means
+        // the row is stale: either way the one store refreshes.
+        self._done = State(initialValue: DoneByVerderModel(
+            client: client, onChanged: { await store.refresh() }, onUnauthorized: onUnauthorized))
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -135,8 +148,9 @@ struct VoorJouTab: View {
                     rowView(row)
                 }
             }
-            let done = VoorJouList.doneRows(inbox)
-            if !done.isEmpty { doneSection(done) }
+            if !inbox.doneByVerder.isEmpty {
+                DoneByVerderSection(actions: inbox.doneByVerder, model: done)
+            }
         } else if store.lastError == nil {
             ProgressView().tint(Color.signal)
         }
@@ -172,31 +186,6 @@ struct VoorJouTab: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassPanel()
         .contentShape(Rectangle())
-    }
-
-    /// Collapsed by default: what verder already did is there to check, not
-    /// to act on. Filled by Plan 3 Task 15 (undo per item).
-    private func doneSection(_ done: [VoorJouList.DoneRow]) -> some View {
-        DisclosureGroup(isExpanded: $showDone) {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(done) { row in
-                    HStack(spacing: 12) {
-                        dot(amber: row.amber)
-                        Text("Gedaan door verder")
-                            .font(.display(14, relativeTo: .callout, weight: .light))
-                            .foregroundStyle(Color.ink)
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-            .padding(.top, 10)
-        } label: {
-            Text("DOOR VERDER GEDAAN · \(done.count)")
-                .font(.mono(11, relativeTo: .caption2, weight: .medium))
-                .foregroundStyle(Color.inkLabel)
-        }
-        .tint(Color.inkDim)
-        .padding(.top, 10)
     }
 
     private func dot(amber: Bool) -> some View {

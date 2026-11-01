@@ -162,3 +162,11 @@ export const BADGE_SYNC_WORKER_NAME = "badge-sync";
  * off auto-apply writes NO row, so silence is also what "off" looks like.
  */
 export const AUTO_FILE_WORKER_NAME = "auto-file";
+
+/**
+ * Written by apps/worker/src/autofile-digest.ts — one row per daily
+ * `autofile.digest` run (19:00 Amsterdam), a quiet day included, carrying
+ * `detail.count` — and read back by the `nightly` declaration in
+ * worker-health.ts, so a digest that stopped running goes amber.
+ */
+export const AUTOFILE_DIGEST_WORKER_NAME = "autofile-digest";

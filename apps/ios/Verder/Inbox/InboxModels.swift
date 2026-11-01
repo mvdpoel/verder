@@ -114,11 +114,32 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     let verder: Bool
 }
 
-/// One thing verder did on its own, offered for undo. The server publishes
-/// none yet (`VerderActionDTO = never` until Task 15), so only its key is
-/// read; Task 15 gives it the rest of its fields.
+/// One thing verder did on its own (spec §6.6), as `verderActions.list` builds
+/// it (packages/api/src/routers/verder-actions.ts): the document's state
+/// before and after, and whether — and why not — it can be undone. The phone
+/// never decides undoability itself; it shows the server's reason.
 struct VerderAction: Codable, Identifiable, Equatable, Sendable {
+    struct DocState: Codable, Equatable, Sendable {
+        let status: String
+        let title: String?
+        let docType: String?
+    }
+
     let changeId: String
+    let documentId: String
+    let documentTitle: String?
+    let at: Date
+    /// "auto-file" or "auto-name"; kept a string so a new kind never fails the inbox.
+    let kind: String
+    let before: DocState
+    let after: DocState
+    /// The title docmeta proposed — information only, auto-file never applies it.
+    let proposedTitle: String?
+    let undone: Bool
+    let undoable: Bool
+    /// "al aangepast", "vernietigd" or "naam staat ook op de NAS"; nil when undoable.
+    let notUndoableReason: String?
+
     var id: String { changeId }
 }
 

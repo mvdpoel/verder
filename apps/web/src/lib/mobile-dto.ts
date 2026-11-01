@@ -1,4 +1,5 @@
 import type { WaitingItem } from "@verder/api/src/waiting";
+import type { VerderActionDTO } from "@verder/api/src/routers/verder-actions";
 
 /**
  * The phone's wire shapes for the read routes under /api/mobile/v1.
@@ -19,20 +20,25 @@ const isoOrNull = (d: Date | string | null | undefined): string | null =>
 // --- inbox -------------------------------------------------------------------
 
 /**
- * One thing verder did on its own, offered for undo. Task 15 gives it its
- * fields; until then `doneByVerder` is always empty.
+ * One thing verder did on its own, offered for undo: `verderActions.list`'s
+ * row, which is already hand-shaped (dates as ISO strings, the effective
+ * title, the reason an undo is refused) and is published as it stands.
  */
-export type VerderActionDTO = never;
+export type { VerderActionDTO };
 
 export interface InboxDTO {
   count: number;
   items: WaitingItem[];
+  /**
+   * "Door verder gedaan". NOT part of `count`: what verder already did is
+   * there to check, not waiting on Martin, so it never reaches the badge.
+   */
   doneByVerder: VerderActionDTO[];
 }
 
 /** `count` is the list's own length, so the badge and the list cannot disagree. */
-export function toInboxDTO(items: WaitingItem[]): InboxDTO {
-  return { count: items.length, items, doneByVerder: [] };
+export function toInboxDTO(items: WaitingItem[], doneByVerder: VerderActionDTO[] = []): InboxDTO {
+  return { count: items.length, items, doneByVerder };
 }
 
 // --- suggestion --------------------------------------------------------------
