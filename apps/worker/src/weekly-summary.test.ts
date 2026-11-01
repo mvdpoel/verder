@@ -5,18 +5,28 @@ import { WEEKLY_SUMMARY_WORKER_NAME } from "@verder/api/src/worker-names";
 import type { WaitingItem } from "@verder/api/src/waiting";
 import type { WeeklySummary } from "@verder/api/src/weekly-summary";
 import {
-  composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weekOf, weeklyBody, type WeeklyInput,
+  composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weeklyBody, type WeeklyInput,
 } from "./weekly-summary";
 import { notify, type NotifyFn } from "./notify/notify";
 import { fakeNotify } from "./test-support/fake-notify";
 
 const OWN = ["martin@vanderpoel.pro"];
-// ISO week 2026-W44: Monday 26 October … Sunday 1 November (CET from 25-10).
-const W44 = { from: "2026-10-26", to: "2026-11-01" };
+// The window that closes ISO week 2026-W44: from Sunday 25 October 18:00 to
+// Sunday 1 November 18:00 Amsterdam (CET from 25-10 03:00, so both are 17:00 UTC).
+const W44 = {
+  key: "2026-W44",
+  from: new Date("2026-10-25T17:00:00.000Z"),
+  to: new Date("2026-11-01T17:00:00.000Z"),
+};
+const W45 = {
+  key: "2026-W45",
+  from: new Date("2026-11-01T17:00:00.000Z"),
+  to: new Date("2026-11-08T17:00:00.000Z"),
+};
 
 function input(over: Partial<WeeklyInput> = {}): WeeklyInput {
   return {
-    week: W44, ownAddresses: OWN, outboundEntries: [], sentProposals: [], emails: [],
+    window: W44, ownAddresses: OWN, outboundEntries: [], sentProposals: [], emails: [],
     statusChanges: [], documentStatus: {}, tasksDone: [], waiting: [], ...over,
   };
 }
@@ -27,47 +37,83 @@ const item = (n: number): WaitingItem => ({
 });
 
 describe("composeWeekly (pure)", () => {
-  it("week boundaries are Amsterdam Monday to Sunday", () => {
-    // Sunday 18:00 Amsterdam = 17:00 UTC in winter time.
-    expect(weekOf(new Date("2026-11-01T17:00:00Z"))).toEqual({ ...W44, key: "2026-W44" });
-    // Monday 00:30 Amsterdam is still Sunday 23:30 UTC — it belongs to the NEW week.
-    expect(weekOf(new Date("2026-10-25T23:30:00Z"))).toEqual({ ...W44, key: "2026-W44" });
-
+  it("windows abut on Sunday 18:00 Amsterdam, the instant the job runs", () => {
     const s = composeWeekly(input({
       outboundEntries: [
-        { occurredAt: new Date("2026-10-25T22:30:00Z") }, // Sun 23:30 Amsterdam (CET) → previous week
-        { occurredAt: new Date("2026-10-25T23:30:00Z") }, // Mon 00:30 Amsterdam → in
-        { occurredAt: new Date("2026-11-01T22:59:00Z") }, // Sun 23:59 Amsterdam → in
-        { occurredAt: new Date("2026-11-01T23:00:00Z") }, // Mon 00:00 Amsterdam → next week
+        { occurredAt: new Date("2026-10-25T16:59:00Z"), recordedAt: new Date("2026-10-25T16:59:00Z") }, // Sun 17:59 → W43
+        { occurredAt: new Date("2026-10-25T17:00:00Z"), recordedAt: new Date("2026-10-25T17:00:00Z") }, // Sun 18:00 → in
+        { occurredAt: new Date("2026-11-01T16:59:00Z"), recordedAt: new Date("2026-11-01T16:59:00Z") }, // Sun 17:59 → in
+        { occurredAt: new Date("2026-11-01T17:00:00Z"), recordedAt: new Date("2026-11-01T17:00:00Z") }, // Sun 18:00 → W45
       ],
     }));
-    expect(s).toMatchObject({ week: "2026-W44", from: W44.from, to: W44.to, sent: 2 });
+    expect(s).toMatchObject({
+      week: "2026-W44", from: "2026-10-25T17:00:00.000Z", to: "2026-11-01T17:00:00.000Z", sent: 2,
+    });
+  });
+
+  it("activity on Sunday evening after the job is counted exactly once, in the next summary", () => {
+    // Sunday 1 November 19:00 Amsterdam — an hour after W44's push went out.
+    const evening = new Date("2026-11-01T18:00:00Z");
+    const docs = { a: "inbox" };
+    const sources: Partial<WeeklyInput> = {
+      documentStatus: docs,
+      outboundEntries: [{ occurredAt: evening, recordedAt: evening }],
+      sentProposals: [{ kind: "reply", sentAt: evening, resultEntryId: null }],
+      emails: [{ fromAddr: "demi@verdergroep.nl", sentAt: evening, fetchedAt: evening }],
+      statusChanges: [{ id: "1", documentId: "a", status: "filed", actor: null, createdAt: evening }],
+      tasksDone: [{ taskId: "x", createdAt: evening }],
+    };
+    const counts = (w: typeof W44) => {
+      const s = composeWeekly(input({ ...sources, window: w }));
+      return [s.sent, s.received, s.filedByMartin, s.tasksDone];
+    };
+    expect(counts(W44)).toEqual([0, 0, 0, 0]);
+    expect(counts(W45)).toEqual([2, 1, 1, 1]);
+  });
+
+  it("mail dated before the run but ingested after it is counted in the next summary", () => {
+    const at = (iso: string) => new Date(iso);
+    const emails = [
+      // Dated Sun 17:50, picked up by the */15 Gmail poll at 18:05: W44 had already gone out.
+      { fromAddr: "demi@verdergroep.nl", sentAt: at("2026-11-01T16:50:00Z"), fetchedAt: at("2026-11-01T17:05:00Z") },
+      // A backfill of old mail (fetched weeks later) is judged on its own date, never dumped into one week.
+      { fromAddr: "demi@verdergroep.nl", sentAt: at("2026-09-01T10:00:00Z"), fetchedAt: at("2026-11-03T10:00:00Z") },
+    ];
+    expect(composeWeekly(input({ emails, window: W44 })).received).toBe(0);
+    expect(composeWeekly(input({ emails, window: W45 })).received).toBe(1);
+    // The same rule for an outbound entry recorded after the run it happened before.
+    const late = [{ occurredAt: at("2026-11-01T16:00:00Z"), recordedAt: at("2026-11-01T20:00:00Z") }];
+    expect(composeWeekly(input({ outboundEntries: late, window: W44 })).sent).toBe(0);
+    expect(composeWeekly(input({ outboundEntries: late, window: W45 })).sent).toBe(1);
   });
 
   it("a run summarises the newest week whose Sunday 18:00 has passed", () => {
-    const W43 = { from: "2026-10-19", to: "2026-10-25", key: "2026-W43" };
+    const W43 = { key: "2026-W43", from: new Date("2026-10-18T16:00:00.000Z"), to: W44.from };
     // Sunday 18:00 Amsterdam (CET) exactly, and later that evening: this week.
-    expect(summaryWeek(new Date("2026-11-01T17:00:00Z"))).toEqual({ ...W44, key: "2026-W44" });
-    expect(summaryWeek(new Date("2026-11-01T22:59:00Z"))).toEqual({ ...W44, key: "2026-W44" });
-    // Sunday 17:59: the week has not been summarised yet — last week.
+    expect(summaryWeek(new Date("2026-11-01T17:00:00Z"))).toEqual(W44);
+    expect(summaryWeek(new Date("2026-11-01T22:59:00Z"))).toEqual(W44);
+    // Sunday 17:59: the week has not been summarised yet — last week (whose
+    // window opened on a CEST Sunday, 16:00 UTC, and closed on a CET one).
     expect(summaryWeek(new Date("2026-11-01T16:59:00Z"))).toEqual(W43);
-    // Monday 00:30 Amsterdam (a pg-boss job that started late): the week that just ENDED.
-    expect(summaryWeek(new Date("2026-11-01T23:30:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    // Monday 00:30 Amsterdam (a pg-boss job that started late): the week that just ENDED,
+    // with the SAME window a punctual run would have used.
+    expect(summaryWeek(new Date("2026-11-01T23:30:00Z"))).toEqual(W44);
     // Wednesday, a hand-run: still the week that ended last Sunday.
-    expect(summaryWeek(new Date("2026-11-04T12:00:00Z"))).toEqual({ ...W44, key: "2026-W44" });
+    expect(summaryWeek(new Date("2026-11-04T12:00:00Z"))).toEqual(W44);
     // Summer time: Sunday 18:00 CEST is 16:00 UTC, so 16:30 UTC is past it…
     expect(summaryWeek(new Date("2026-10-18T16:30:00Z")).key).toBe("2026-W42");
     // …and 15:30 UTC (17:30 CEST) is not.
     expect(summaryWeek(new Date("2026-10-18T15:30:00Z")).key).toBe("2026-W41");
     // Across a year boundary: Monday 2027-01-04 recovers 2026-W53.
-    expect(summaryWeek(new Date("2027-01-04T09:00:00Z")))
-      .toEqual({ from: "2026-12-28", to: "2027-01-03", key: "2026-W53" });
+    expect(summaryWeek(new Date("2027-01-04T09:00:00Z"))).toEqual({
+      key: "2026-W53", from: new Date("2026-12-27T17:00:00.000Z"), to: new Date("2027-01-03T17:00:00.000Z"),
+    });
   });
 
   it("sent counts entries plus proposals with no entry yet, never a question", () => {
     const at = new Date("2026-10-28T10:00:00Z");
     const s = composeWeekly(input({
-      outboundEntries: [{ occurredAt: at }],
+      outboundEntries: [{ occurredAt: at, recordedAt: at }],
       sentProposals: [
         { kind: "reply", sentAt: at, resultEntryId: null }, // no entry yet → counted
         { kind: "follow-up", sentAt: at, resultEntryId: "e1" }, // its entry is counted already
@@ -81,9 +127,10 @@ describe("composeWeekly (pure)", () => {
     const at = new Date("2026-10-28T10:00:00Z");
     const s = composeWeekly(input({
       emails: [
-        { fromAddr: "martin@vanderpoel.pro", sentAt: at }, // JMAP: a parsed address
-        { fromAddr: "incasso@stam.nl", sentAt: at },
-        { fromAddr: "demi@verdergroep.nl", sentAt: new Date("2026-10-20T10:00:00Z") }, // previous week
+        { fromAddr: "martin@vanderpoel.pro", sentAt: at, fetchedAt: at }, // JMAP: a parsed address
+        { fromAddr: "incasso@stam.nl", sentAt: at, fetchedAt: at },
+        { fromAddr: "demi@verdergroep.nl", sentAt: new Date("2026-10-20T10:00:00Z"),
+          fetchedAt: new Date("2026-10-20T10:00:00Z") }, // previous week
       ],
     }));
     expect(s.received).toBe(1);
@@ -93,11 +140,11 @@ describe("composeWeekly (pure)", () => {
     const at = new Date("2026-10-28T10:00:00Z");
     const s = composeWeekly(input({
       emails: [
-        { fromAddr: "Martin van der Poel <martin@vanderpoel.pro>", sentAt: at }, // own
-        { fromAddr: "Martin <MARTIN@VanderPoel.pro>", sentAt: at }, // own, ASCII-folded
+        { fromAddr: "Martin van der Poel <martin@vanderpoel.pro>", sentAt: at, fetchedAt: at }, // own
+        { fromAddr: "Martin <MARTIN@VanderPoel.pro>", sentAt: at, fetchedAt: at }, // own, ASCII-folded
         // Contains Martin's address as TEXT but was sent by someone else.
-        { fromAddr: '"martin@vanderpoel.pro" <attacker@evil.tld>', sentAt: at },
-        { fromAddr: "Demi Willemse <demi@verdergroep.nl>", sentAt: at },
+        { fromAddr: '"martin@vanderpoel.pro" <attacker@evil.tld>', sentAt: at, fetchedAt: at },
+        { fromAddr: "Demi Willemse <demi@verdergroep.nl>", sentAt: at, fetchedAt: at },
       ],
     }));
     expect(s.received).toBe(2);
@@ -155,7 +202,7 @@ describe("composeWeekly (pure)", () => {
 
   it("body holds counts only", () => {
     const s: WeeklySummary = {
-      week: "2026-W44", from: W44.from, to: W44.to, sent: 3, received: 7,
+      week: "2026-W44", from: W44.from.toISOString(), to: W44.to.toISOString(), sent: 3, received: 7,
       filedByMartin: 2, filedByVerder: 3, tasksDone: 2, waiting: 4,
       topWaiting: [item(1), item(2), item(3)],
     };
@@ -200,7 +247,7 @@ describe("loadWeekly and the job (database)", () => {
   it("loadWeekly reads every source for the week", async () => {
     await isolated(async (db) => {
       const now = sundayLongAgo();
-      const week = weekOf(now);
+      const week = summaryWeek(now);
       const midweek = new Date(now.getTime() - 3 * 24 * 3600_000);
       const [user] = await db.insert(schema.users).values({
         email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
@@ -242,7 +289,7 @@ describe("loadWeekly and the job (database)", () => {
       const now = sundayLongAgo();
       const fake = fakeNotify();
       const out = await runWeeklySummary({ db, notify: fake.notify, now: () => now, waiting: noWaiting });
-      const key = weekOf(now).key;
+      const key = summaryWeek(now).key;
       expect(fake.sent).toEqual([{
         kind: "weekly", level: "passive", title: "Je week", body: weeklyBody(out.summary),
         link: "verder://inbox", dedupKey: `weekly:${key}`,
@@ -267,7 +314,7 @@ describe("loadWeekly and the job (database)", () => {
       expect(first.sent).toBe(true);
       expect(retry.sent).toBe(false);
       const rows = await db.select().from(schema.notifications)
-        .where(eq(schema.notifications.dedupKey, `weekly:${weekOf(now).key}`));
+        .where(eq(schema.notifications.dedupKey, `weekly:${summaryWeek(now).key}`));
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ kind: "weekly", level: "passive", title: "Je week" });
     });
@@ -278,7 +325,7 @@ describe("loadWeekly and the job (database)", () => {
       const sunday = sundayLongAgo();
       const monday = new Date(sunday.getTime() + 15 * 3600_000); // Monday ~09:00
       const nextSunday = new Date(sunday.getTime() + 7 * 24 * 3600_000);
-      const ended = weekOf(sunday);
+      const ended = summaryWeek(sunday);
       // A fixture on the Wednesday of the week that ended: the recovery must count it.
       const wednesday = new Date(sunday.getTime() - 4 * 24 * 3600_000);
       const [user] = await db.insert(schema.users).values({
@@ -290,7 +337,8 @@ describe("loadWeekly and the job (database)", () => {
 
       // The Sunday 18:00 job failed; Martin runs it by hand on Monday.
       const recovered = await runWeeklySummary({ db, notify: real, now: () => monday, waiting: noWaiting });
-      expect(recovered.summary).toMatchObject({ week: ended.key, from: ended.from, to: ended.to, sent: 1 });
+      expect(recovered.summary).toMatchObject({ week: ended.key,
+        from: ended.from.toISOString(), to: ended.to.toISOString(), sent: 1 });
       expect(recovered.sent).toBe(true);
       const recoveredRows = await db.select().from(schema.notifications)
         .where(eq(schema.notifications.dedupKey, `weekly:${ended.key}`));
@@ -298,9 +346,51 @@ describe("loadWeekly and the job (database)", () => {
 
       // Six days later the real job for the NEW week is not a duplicate.
       const next = await runWeeklySummary({ db, notify: real, now: () => nextSunday, waiting: noWaiting });
-      expect(next.summary.week).toBe(weekOf(nextSunday).key);
+      expect(next.summary.week).toBe(summaryWeek(nextSunday).key);
       expect(next.summary.week).not.toBe(ended.key);
       expect(next.sent).toBe(true);
+    });
+  });
+
+  it("Sunday-evening activity is counted once, in the next run, whenever the run happens", async () => {
+    await isolated(async (db) => {
+      const sunday = sundayLongAgo(); // 18:00 Amsterdam, the instant the job fires
+      const evening = new Date(sunday.getTime() + 3600_000); // 19:00, after the push
+      const [user] = await db.insert(schema.users).values({
+        email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
+      await db.insert(schema.logEntries).values({ occurredAt: evening, recordedAt: evening,
+        channel: "email", direction: "outbound", summary: `Weekly Testfixture ${uid()}`,
+        source: "manual", createdBy: user.id });
+      // Dated 17:55 but only picked up by the */15 Gmail poll at 18:10.
+      await db.insert(schema.rawEmails).values({ gmailMessageId: `weekly-${uid()}`,
+        gmailThreadId: `t-${uid()}`, fromAddr: `Stam <incasso-${uid()}@stam.nl>`, toAddr: "x@example.test",
+        subject: "Weekly Testfixture", sentAt: new Date(sunday.getTime() - 5 * 60_000),
+        fetchedAt: new Date(sunday.getTime() + 10 * 60_000), rawRfc822Sha256: uid(), bodyText: "" });
+      const [doc] = await db.insert(schema.documents).values({
+        sha256: (uid() + uid()).replaceAll("-", ""), sizeBytes: 1, mime: "application/pdf",
+        title: `Weekly Testfixture ${uid()}.pdf`, source: "upload", receivedAt: evening }).returning();
+      await db.insert(schema.documentTexts).values({ documentId: doc.id, sha256: doc.sha256,
+        extractor: "none", text: "", charCount: 0 });
+      await db.insert(schema.documentStatusChanges).values({ documentId: doc.id, status: "filed",
+        title: doc.title, createdAt: evening });
+      const [task] = await db.insert(schema.tasks).values({ title: `Weekly Testfixture ${uid()}`,
+        createdBy: user.id }).returning();
+      await db.insert(schema.taskStatusChanges).values({ taskId: task.id, status: "done",
+        createdBy: user.id, createdAt: evening });
+
+      const deps = { db, notify: fakeNotify().notify, waiting: noWaiting, ownAddresses: () => OWN };
+      const counts = async (at: Date) => {
+        const { summary: s } = await runWeeklySummary({ ...deps, now: () => at }, { dry: true });
+        return { week: s.week, sent: s.sent, received: s.received, filed: s.filedByMartin, tasks: s.tasksDone };
+      };
+      const ended = summaryWeek(sunday).key;
+      const zero = { week: ended, sent: 0, received: 0, filed: 0, tasks: 0 };
+      // The punctual run and a Monday recovery run of the same week agree: nothing of the evening.
+      expect(await counts(sunday)).toEqual(zero);
+      expect(await counts(new Date(sunday.getTime() + 15 * 3600_000))).toEqual(zero);
+      // The next Sunday counts every one of them, once.
+      const next = new Date(sunday.getTime() + 7 * 24 * 3600_000);
+      expect(await counts(next)).toEqual({ week: summaryWeek(next).key, sent: 1, received: 1, filed: 1, tasks: 1 });
     });
   });
 

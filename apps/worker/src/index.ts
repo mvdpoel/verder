@@ -390,8 +390,9 @@ await boss.work("autofile.digest", async () => {
 // The Sunday summary (weekly-summary.ts, spec §7.9): Sunday 18:00 AMSTERDAM —
 // pg-boss's `tz`, for the same daylight-saving reason as the digest above — one
 // passive push with counts only, and the stored copy GET /api/mobile/v1/weekly
-// serves. The dedupKey `weekly:<ISO week>` makes a retry a no-op; the week is
-// the newest one whose Sunday 18:00 has passed, so a late start still sums it.
+// serves. The dedupKey `weekly:<ISO week>` makes a retry a no-op; the window
+// is Sunday 18:00 to Sunday 18:00, closing on the newest one that has passed,
+// so a late start sums exactly what a punctual one would have.
 await boss.createQueue("weekly.summary");
 await boss.schedule("weekly.summary", "0 18 * * 0", undefined, { tz: "Europe/Amsterdam" });
 await boss.work("weekly.summary", async () => {

@@ -6,7 +6,8 @@
 // The scheduled job is `weekly.summary` in src/index.ts; this is the same
 // runWeeklySummary, so `--dry` prints exactly the body Sunday would send.
 //
-// The week is the newest one whose Sunday 18:00 Amsterdam has passed: run on
+// The window is Sunday 18:00 to Sunday 18:00 Amsterdam, closing on the newest
+// Sunday 18:00 that has passed (so a late run counts what a punctual one would): run on
 // Monday after a failed Sunday, it recovers THAT week (and takes its dedupKey),
 // never the new one. Run before Sunday 18:00 it re-targets last week, whose
 // push already went out, so the push is a refused duplicate — but a non-dry run

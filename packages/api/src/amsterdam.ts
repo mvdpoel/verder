@@ -100,3 +100,27 @@ export function isoWeekKey(day: string): string {
   const week = Math.floor(dayOfYear / 7) + 1;
   return `${year}-W${String(week).padStart(2, "0")}`;
 }
+
+const HOUR_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Amsterdam", hour: "2-digit", hourCycle: "h23",
+});
+
+/**
+ * The INSTANT of `hour`:00 on the Amsterdam day `day` — the one place in this
+ * module that turns a civil time into an instant. Amsterdam is UTC+1 or UTC+2,
+ * so the candidate whose Amsterdam reading is that same day and hour wins; on
+ * the fall-back day an hour that occurs twice (02:00) takes the earlier one.
+ * Never called with an hour that does not exist (02:00 on the spring-forward
+ * day): that throws rather than invent an instant.
+ */
+export function amsterdamAt(day: string, hour: number): Date {
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new RangeError(`amsterdamAt: hour must be 0..23, got ${hour}`);
+  }
+  const [y, m, d] = day.split("-").map(Number);
+  for (const offset of [2, 1]) {
+    const at = new Date(Date.UTC(y, m - 1, d, hour - offset));
+    if (dayKey(at) === day && Number(HOUR_FMT.format(at)) === hour) return at;
+  }
+  throw new RangeError(`amsterdamAt: ${day} ${hour}:00 does not exist in Amsterdam`);
+}

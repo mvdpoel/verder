@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addDays, dayKey, isoWeekKey, monthIndex, monthKey, monthLabel, monthsBetween, weekBounds,
+  addDays, amsterdamAt, dayKey, isoWeekKey, monthIndex, monthKey, monthLabel, monthsBetween, weekBounds,
 } from "./amsterdam";
 
 describe("amsterdam calendar", () => {
@@ -69,5 +69,17 @@ describe("amsterdam weeks", () => {
     // 2024-12-30 is a Monday whose Thursday falls in 2025.
     expect(isoWeekKey("2024-12-30")).toBe("2025-W01");
     expect(isoWeekKey("2026-10-26")).toBe("2026-W44");
+  });
+
+  it("amsterdamAt is the instant of a whole hour on an Amsterdam day, either side of DST", () => {
+    // Winter time (CET, +1): Sunday 18:00 is 17:00 UTC.
+    expect(amsterdamAt("2026-11-01", 18).toISOString()).toBe("2026-11-01T17:00:00.000Z");
+    // Summer time (CEST, +2): 16:00 UTC.
+    expect(amsterdamAt("2026-10-18", 18).toISOString()).toBe("2026-10-18T16:00:00.000Z");
+    // The DST days themselves: 25-10 falls back at 03:00, 29-03 springs forward at 02:00.
+    expect(amsterdamAt("2026-10-25", 18).toISOString()).toBe("2026-10-25T17:00:00.000Z");
+    expect(amsterdamAt("2026-03-29", 18).toISOString()).toBe("2026-03-29T16:00:00.000Z");
+    expect(amsterdamAt("2026-11-01", 0).toISOString()).toBe("2026-10-31T23:00:00.000Z");
+    expect(() => amsterdamAt("2026-11-01", 24)).toThrow(RangeError);
   });
 });
