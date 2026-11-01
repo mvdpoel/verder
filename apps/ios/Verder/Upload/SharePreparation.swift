@@ -208,8 +208,15 @@ enum PhotoPage {
     /// extension's limit with the PDF beside it.
     static let maxFullDecodePixels = 16_000_000
 
+    /// Told every URL `page(at:)` is asked for, within a task that set it; nil
+    /// everywhere else. The suite's only way to see that `SharePreparation`'s
+    /// DEFAULT loader is this one: a full-size decode would produce the same
+    /// PDF (PDFAssembler caps the long edge too) while costing ~96 MB.
+    @TaskLocal static var observer: (@Sendable (URL) -> Void)?
+
     /// The page, or nil when the file is not an image ImageIO can read.
     static func page(at url: URL, maxPixelSize: Int = maxPixelSize) -> UIImage? {
+        observer?(url)
         let noCache = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(url as CFURL, noCache) else { return nil }
         let options: [CFString: Any] = [

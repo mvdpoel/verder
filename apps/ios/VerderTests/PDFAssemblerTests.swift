@@ -12,6 +12,12 @@ enum Fixture {
         .deletingLastPathComponent()
         .appendingPathComponent("Fixtures/letter-page.jpg")
 
+    /// A 3200 x 2400 JPEG stored SIDEWAYS with EXIF Orientation 6; upright it
+    /// is portrait with a dark band at the top. `scripts/make-rotated-photo-fixture.swift`.
+    static let rotatedPhotoURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/rotated-photo.jpg")
+
     static let letterPage: UIImage = {
         let url = letterPageURL
         guard let image = UIImage(contentsOfFile: url.path) else {

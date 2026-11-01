@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import PDFKit
 import UIKit
+import Synchronization
 import UniformTypeIdentifiers
 @testable import Verder
 
@@ -67,6 +68,49 @@ struct PhotoPageTests {
         let doc = try #require(PDFDocument(data: data))
         #expect(doc.pageCount == 1)
         #expect(SharePreparation.photoPageLoader(Fixture.letterPageURL)?.cgImage.map { max($0.width, $0.height) } == 2200)
+    }
+
+    /// `prepare`'s DEFAULT loader is `PhotoPage`, the downscaling one. The
+    /// page size cannot tell (PDFAssembler caps the long edge at 2200 either
+    /// way, so a full-size decode would make the same PDF while costing ~96 MB),
+    /// so the suite watches `PhotoPage.page` being called for the photo.
+    @Test func prepareMakesPhotoPagesThroughTheDownscalingLoaderByDefault() throws {
+        let seen = Mutex<[URL]>([])
+        let url = Fixture.rotatedPhotoURL
+        let result = PhotoPage.$observer.withValue({ decoded in seen.withLock { $0.append(decoded) } }) {
+            SharePreparation.prepare([.photo(url: url)], capturedAt: Date(timeIntervalSince1970: 1_800_000_000))
+        }
+        #expect(result.photoPages == 1)
+        #expect(seen.withLock { $0 } == [url])
+    }
+
+    // MARK: - Orientation
+
+    /// An iPhone held upright stores its photo SIDEWAYS with EXIF Orientation
+    /// 6. The page in the PDF must be upright: portrait, the fixture's dark
+    /// band at the top, its grey block on the left (not mirrored). Fixture:
+    /// `scripts/make-rotated-photo-fixture.swift`.
+    @Test func aSidewaysStoredPhotoBecomesAnUprightPage() throws {
+        let raw = try #require(CGImageSourceCreateWithURL(Fixture.rotatedPhotoURL as CFURL, nil))
+        let props = try #require(CGImageSourceCopyPropertiesAtIndex(raw, 0, nil) as? [CFString: Any])
+        #expect(props[kCGImagePropertyOrientation] as? Int == 6)
+        #expect((props[kCGImagePropertyPixelWidth] as? Int ?? 0) > (props[kCGImagePropertyPixelHeight] as? Int ?? 0))
+
+        let result = SharePreparation.prepare([.photo(url: Fixture.rotatedPhotoURL)],
+                                              capturedAt: Date(timeIntervalSince1970: 1_800_000_000))
+        let data = try #require(result.files.first?.data)
+        let page = try #require(PDFDocument(data: data)?.page(at: 0))
+        let box = page.bounds(for: .mediaBox)
+        #expect(box.height > box.width)                         // portrait
+        #expect(abs(box.height / box.width - 4.0 / 3.0) < 0.01) // 2400 x 3200 upright
+
+        let gray = try RenderedPage(page, width: 300)
+        #expect(gray.mean(top: 0.00, bottom: 0.08, left: 0.0, right: 1.0) < 60)   // band at the top
+        #expect(gray.mean(top: 0.92, bottom: 1.00, left: 0.0, right: 1.0) > 200)  // paper at the bottom
+        #expect(gray.mean(top: 0.00, bottom: 1.00, left: 0.0, right: 0.05) > 150) // no band down a side
+        let block = gray.mean(top: 0.18, bottom: 0.32, left: 0.02, right: 0.28)
+        #expect(block > 80 && block < 160)                                        // grey block on the left
+        #expect(gray.mean(top: 0.18, bottom: 0.32, left: 0.72, right: 0.98) > 200) // not mirrored
     }
 
     @Test func assembleStreamsPagesFromAClosure() {
@@ -143,3 +187,41 @@ struct PhotoPageTests {
         return data as Data
     }
 }
+
+/// A PDF page drawn into an 8-bit gray bitmap, read with row 0 at the TOP
+/// of the page (a bitmap context's memory runs top-down).
+private struct RenderedPage {
+    let width: Int
+    let height: Int
+    let pixels: [UInt8]
+
+    init(_ page: PDFPage, width: Int) throws {
+        let box = page.bounds(for: .mediaBox)
+        let height = Int((CGFloat(width) * box.height / box.width).rounded())
+        let ctx = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                         bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                         bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        ctx.setFillColor(gray: 1, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        ctx.scaleBy(x: CGFloat(width) / box.width, y: CGFloat(height) / box.height)
+        ctx.translateBy(x: -box.minX, y: -box.minY)
+        ctx.drawPDFPage(try #require(page.pageRef))
+        let base = try #require(ctx.data).bindMemory(to: UInt8.self, capacity: width * height)
+        self.width = width
+        self.height = height
+        pixels = Array(UnsafeBufferPointer(start: base, count: width * height))
+    }
+
+    /// Mean gray (0 black ... 255 white) over a region given as fractions of
+    /// the page, measured from the top-left.
+    func mean(top: Double, bottom: Double, left: Double, right: Double) -> Double {
+        let r0 = Int(top * Double(height)), r1 = max(r0 + 1, Int(bottom * Double(height)))
+        let c0 = Int(left * Double(width)), c1 = max(c0 + 1, Int(right * Double(width)))
+        var sum = 0
+        for row in r0..<min(r1, height) {
+            for col in c0..<min(c1, width) { sum += Int(pixels[row * width + col]) }
+        }
+        return Double(sum) / Double((min(r1, height) - r0) * (min(c1, width) - c0))
+    }
+}
+
