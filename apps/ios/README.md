@@ -34,6 +34,12 @@ the fixtures and their data are listed in
 may hold (screenshots leave this machine). None of it is in a Release build:
 `scripts/check-release-fixtures.sh` checks the built bundle.
 
+`capture.sh` refuses a target the app would not read (exit 2) and never writes the
+PNG if the app is not running before and after the shot (exit 1) — a dead app would
+otherwise leave the home screen to be saved as an app screen. Its tests:
+`scripts/test-capture.sh` (arguments only) or `scripts/test-capture.sh --live`
+(launches the last Debug build).
+
 ## Install on Martin's iPhone
 
 ```sh

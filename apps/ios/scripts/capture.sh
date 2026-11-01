@@ -15,6 +15,14 @@
 #
 # Env: DEVICE (simulator name, default "iPhone 17"), SKIP_BUILD=1 to reuse the
 # last build, SETTLE (seconds to wait before the shot, default 3).
+# CAPTURE_CHECK_ONLY=1 validates the arguments and exits (no simulator).
+# CAPTURE_UNCHECKED_TARGET=1 skips the target grammar check — ONLY for
+# scripts/test-capture.sh, which needs a bad route to reach the app to prove
+# the liveness check below catches it.
+#
+# Never writes <out.png> unless the app was still running before AND after the
+# shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
+# and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
 usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
@@ -28,11 +36,27 @@ BUNDLE=pro.vanderpoel.verder
 [ -d "Verder/FixtureData/$FIXTURE" ] && [ "$FIXTURE" != "_shared" ] || {
   echo "capture.sh: no fixture '$FIXTURE'; known: $(ls Verder/FixtureData | grep -v '^_' | tr '\n' ' ')" >&2; exit 2; }
 
+# The app's own grammar (FixtureLaunch.Tab, .Screen, DeepLink.parse's UUID ids),
+# so a typo stops here rather than in a crashed app.
+HEX='[0-9A-Fa-f]'
+UUID_RE="^$HEX{8}-$HEX{4}-$HEX{4}-$HEX{4}-$HEX{12}\$"
 case "$TARGET" in
   overzicht|voorjou|scan|dossier|meer) ARGS=(-tab "$TARGET") ;;
-  *) ARGS=(-route "$TARGET") ;;
+  geld|weekly|voice) ARGS=(-route "$TARGET") ;;
+  proposal:*|suggestion:*|task:*)
+    if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
+      echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2
+    fi
+    ARGS=(-route "$TARGET") ;;
+  *)
+    if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ]; then
+      echo "capture.sh: unknown target '$TARGET'; tabs: overzicht voorjou scan dossier meer;" \
+        "routes: geld weekly voice proposal:<uuid> suggestion:<uuid> task:<uuid>" >&2; exit 2
+    fi
+    ARGS=(-route "$TARGET") ;;
 esac
 [ -z "$LOCKED" ] || ARGS+=(-fixtures-locked)
+[ "${CAPTURE_CHECK_ONLY:-0}" != 1 ] || { echo "capture.sh: arguments OK"; exit 0; }
 
 UDID="$(xcrun simctl list devices available | grep -E "^ +$DEVICE \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
 [ -n "$UDID" ] || { echo "capture.sh: no available simulator named '$DEVICE'" >&2; exit 1; }
@@ -53,8 +77,23 @@ xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMo
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
-xcrun simctl launch "$UDID" "$BUNDLE" -fixtures "$FIXTURE" "${ARGS[@]}" >/dev/null
+# `simctl launch` prints "<bundle>: <pid>"; a simulator app is a host process.
+LAUNCHED="$(xcrun simctl launch "$UDID" "$BUNDLE" -fixtures "$FIXTURE" "${ARGS[@]}")"
+PID="${LAUNCHED##*: }"
+[[ "$PID" =~ ^[0-9]+$ ]] || { echo "capture.sh: could not read the app's pid from '$LAUNCHED'" >&2; exit 1; }
+alive() { kill -0 "$PID" 2>/dev/null; }
+died() {
+  echo "capture.sh: the app exited $1 (pid $PID) — not writing $OUT." >&2
+  echo "  A launch argument it cannot read is a fatalError; see the simulator log:" >&2
+  echo "  xcrun simctl spawn $UDID log show --last 2m --predicate 'process == \"Verder\"'" >&2
+  exit 1
+}
 sleep "${SETTLE:-3}"
+alive || died "before the screenshot"
 mkdir -p "$(dirname "$OUT")"
-xcrun simctl io "$UDID" screenshot --type=png "$OUT" >/dev/null 2>&1
+TMP="$OUT.partial.png"
+trap 'rm -f "$TMP"' EXIT
+xcrun simctl io "$UDID" screenshot --type=png "$TMP" >/dev/null 2>&1
+alive || died "during the screenshot"
+mv -f "$TMP" "$OUT"
 echo "$OUT"
