@@ -42,7 +42,7 @@
 
 ## Project laws
 - Evidence tables are append-only (enforced by Postgres grants); every evidence mutation appends a `ledger_events` row in the same transaction. Never weaken this.
-- AI output is suggestion-only; nothing enters the ledger without Martin's approval. Model suggestion + verdict + edit diff are always recorded (golden rule: self-improvement).
+- AI output is suggestion-only; nothing enters the ledger without Martin's approval — with ONE amendment Martin made on 2026-10-28: verder may FILE a document on its own (apply a document-meta suggestion's soort and set status filed; never its title, which stays auto-name's) when the measured gate in `apps/worker/src/auto-file.ts` passes. Every such change is a `document_status_changes` row with `actor = 'verder'`, ledgered in its own payload shape, listed under "Door verder gedaan" and undoable in one tap. Auto-name rows carry the same actor and are listed there too, but are reversed with `normalize-names --undo` because the name also lives on the NAS share. Sending ALWAYS needs Martin's approval of the final text. Debts, amounts, registry decisions, log entries, task status, discard and purge never happen on verder's own. Model suggestion + verdict + edit diff are always recorded (golden rule: self-improvement).
 - Tone: supportive/encouraging toward Martin; short, professional, official register for anyone else.
 - Language: **talk to Martin in English** — chat, commit messages, specs, plans, code comments. The APP is Dutch and stays Dutch (every label, every notice, every export a human reads); that is a product decision about its readers, not about how we work together. Only two things in the UI are English, both deliberate: the rail label and page title `Files`.
 
