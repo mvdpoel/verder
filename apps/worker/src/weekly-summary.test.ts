@@ -26,7 +26,7 @@ const W45 = {
 
 function input(over: Partial<WeeklyInput> = {}): WeeklyInput {
   return {
-    window: W44, ownAddresses: OWN, outboundEntries: [], sentProposals: [], emails: [],
+    window: W44, ownAddresses: OWN, outboundEntries: [], emails: [],
     statusChanges: [], documentStatus: {}, tasksDone: [], waiting: [], ...over,
   };
 }
@@ -58,7 +58,6 @@ describe("composeWeekly (pure)", () => {
     const sources: Partial<WeeklyInput> = {
       documentStatus: docs,
       outboundEntries: [{ occurredAt: evening, recordedAt: evening }],
-      sentProposals: [{ kind: "reply", sentAt: evening, resultEntryId: null }],
       emails: [{ fromAddr: "demi@verdergroep.nl", sentAt: evening, fetchedAt: evening }],
       statusChanges: [{ id: "1", documentId: "a", status: "filed", actor: null, createdAt: evening }],
       tasksDone: [{ taskId: "x", createdAt: evening }],
@@ -68,7 +67,7 @@ describe("composeWeekly (pure)", () => {
       return [s.sent, s.received, s.filedByMartin, s.tasksDone];
     };
     expect(counts(W44)).toEqual([0, 0, 0, 0]);
-    expect(counts(W45)).toEqual([2, 1, 1, 1]);
+    expect(counts(W45)).toEqual([1, 1, 1, 1]);
   });
 
   it("mail dated before the run but ingested after it is counted in the next summary", () => {
@@ -110,30 +109,16 @@ describe("composeWeekly (pure)", () => {
     });
   });
 
-  it("an entry a sent proposal wrote is judged on the proposal's sent_at, not on when it was recorded", () => {
-    // Sent in W44 with no entry yet (counted there); a finishSent retry wrote the entry in W45.
-    const sentAt = new Date("2026-10-28T10:00:00Z");
-    const late = new Date("2026-11-02T09:00:00Z");
-    // At W44's run the entry does not exist yet: the proposal alone counts.
-    expect(composeWeekly(input({ window: W44,
-      sentProposals: [{ kind: "reply", sentAt, resultEntryId: null }] })).sent).toBe(1);
-    // Next week the proposal row carries the entry; the entry must NOT count again.
+  it("a recovered send is counted once, in the week its entry appeared", () => {
+    // Claimed Sunday 1 November 17:52 Amsterdam; Gmail accepted it, finishSent did not
+    // run until Monday. Recovery back-dates the entry's occurred_at to the claim.
+    const claimed = new Date("2026-11-01T16:52:00Z");
+    const recovered = new Date("2026-11-02T09:00:00Z");
+    // W44 as composed AT its run: the proposal was still `sending`, no entry existed.
+    expect(composeWeekly(input({ window: W44 })).sent).toBe(0);
+    // W45: the entry appeared after W44 went out, so it is W45's.
     expect(composeWeekly(input({ window: W45,
-      outboundEntries: [{ occurredAt: sentAt, recordedAt: late, proposalSentAt: sentAt }],
-      sentProposals: [{ kind: "reply", sentAt, resultEntryId: "e1" }] })).sent).toBe(0);
-  });
-
-  it("sent counts entries plus proposals with no entry yet, never a question", () => {
-    const at = new Date("2026-10-28T10:00:00Z");
-    const s = composeWeekly(input({
-      outboundEntries: [{ occurredAt: at, recordedAt: at }],
-      sentProposals: [
-        { kind: "reply", sentAt: at, resultEntryId: null }, // no entry yet → counted
-        { kind: "follow-up", sentAt: at, resultEntryId: "e1" }, // its entry is counted already
-        { kind: "question", sentAt: at, resultEntryId: null }, // nothing left the house
-      ],
-    }));
-    expect(s.sent).toBe(2);
+      outboundEntries: [{ occurredAt: claimed, recordedAt: recovered }] })).sent).toBe(1);
   });
 
   it("own outbound mail is not received", () => {
@@ -322,24 +307,30 @@ describe("loadWeekly and the job (database)", () => {
     });
   });
 
-  it("a proposal's entry written a week after the send is not sent again", async () => {
+  it("a send recovered after the Sunday run is counted once, in the next week", async () => {
     await isolated(async (db) => {
-      const now = sundayLongAgo();
-      const week = summaryWeek(now);
-      const previous = summaryWeek(new Date(now.getTime() - 7 * 24 * 3600_000));
-      const lastWednesday = new Date(now.getTime() - 11 * 24 * 3600_000);
-      const monday = new Date(now.getTime() - 6 * 24 * 3600_000 + 15 * 3600_000);
+      // `now` is the run that closes the PREVIOUS week; the recovered entry belongs to `next`.
+      const run = sundayLongAgo();
+      const previous = summaryWeek(run);
+      const next = summaryWeek(new Date(run.getTime() + 7 * 24 * 3600_000));
+      const claimed = new Date(run.getTime() - 8 * 60_000); // Sunday 17:52
+      const recovered = new Date(run.getTime() + 15 * 3600_000); // Monday 09:00
+      const deps = { waiting: noWaiting, ownAddresses: () => OWN };
       const [user] = await db.insert(schema.users).values({
         email: `weekly-${uid()}@example.test`, name: "Weekly Testfixture" }).returning();
-      const [entry] = await db.insert(schema.logEntries).values({ occurredAt: lastWednesday,
-        recordedAt: monday, channel: "email", direction: "outbound", summary: `Weekly Testfixture ${uid()}`,
-        source: "proposal", sourceRef: `proposal:${uid()}`, createdBy: user.id }).returning();
-      await db.insert(schema.proposals).values({ kind: "reply", status: "sent", priority: "other",
-        triggerExternal: { subject: "Weekly Testfixture" }, context: {}, sentAt: lastWednesday,
-        resultEntryId: entry.id });
-      const deps = { waiting: noWaiting, ownAddresses: () => OWN };
-      expect(composeWeekly(await loadWeekly(db, week, deps)).sent).toBe(0);
-      expect(composeWeekly(await loadWeekly(db, previous, deps)).sent).toBe(1);
+      const [proposal] = await db.insert(schema.proposals).values({ kind: "reply", status: "sending",
+        priority: "other", triggerExternal: { subject: "Weekly Testfixture" }, context: {},
+        messageId: `<weekly-${uid()}@example.test>`, sendingAt: claimed }).returning();
+      // The Sunday 18:00 run: the proposal is still `sending`, sent_at NULL, no entry.
+      expect(composeWeekly(await loadWeekly(db, previous, deps)).sent).toBe(0);
+      // Recovery (finishSent with the claim time): sent_at back-dated, entry written now.
+      const [entry] = await db.insert(schema.logEntries).values({ occurredAt: claimed,
+        recordedAt: recovered, channel: "email", direction: "outbound",
+        summary: `Weekly Testfixture ${uid()}`, source: "proposal", sourceRef: `proposal:${proposal.id}`,
+        createdBy: user.id }).returning();
+      await db.update(schema.proposals).set({ status: "sent", sentAt: claimed, resultEntryId: entry.id })
+        .where(eq(schema.proposals.id, proposal.id));
+      expect(composeWeekly(await loadWeekly(db, next, deps)).sent).toBe(1);
     });
   });
 

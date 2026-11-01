@@ -98,13 +98,14 @@ export interface WeeklyInput {
   /**
    * Outbound log entries that no other entry supersedes, each carrying the
    * dates of its chain ROOT (the entry it ultimately corrects) — a correction
-   * is the same message, so it arrives when its original did. `proposalSentAt`
-   * is the `sent_at` of a proposal whose `result_entry_id` is that root: the
-   * message left the house then, whenever the entry got written.
+   * is the same message, so it arrives when its original did.
+   *
+   * There is no separate proposal source: a sent proposal ALWAYS has its entry.
+   * `finishSent` is the only writer of `proposals.sent_at` and sets it, the
+   * outbound entry and `result_entry_id` in ONE transaction, so "sent with no
+   * entry yet" never exists, and the entry alone counts the message.
    */
-  outboundEntries: { occurredAt: Date; recordedAt: Date; proposalSentAt?: Date | null }[];
-  /** Proposals with a `sent_at`. */
-  sentProposals: { kind: string; sentAt: Date; resultEntryId: string | null }[];
+  outboundEntries: { occurredAt: Date; recordedAt: Date }[];
   /** `raw_emails`: `fromAddr` is a whole RFC 5322 header for Gmail-era rows. */
   emails: { fromAddr: string; sentAt: Date; fetchedAt: Date }[];
   /** EVERY change row of each document that has a `filed` row near the window. */
@@ -123,19 +124,16 @@ export function composeWeekly(input: WeeklyInput): WeeklySummary {
   const { key, from, to } = input.window;
   const inWeek = (d: Date) => d.getTime() >= from.getTime() && d.getTime() < to.getTime();
 
-  // A sent proposal's entry is linked by result_entry_id and is already among
-  // the outbound entries, so only one with no entry yet adds to the count. A
-  // question closes as `sent` and nothing left the house.
-  //
   // ONE MESSAGE, ONE WEEK. An entry is judged on its chain root (a correction
   // recorded next Monday would otherwise count the message a second time, in
-  // a second Sunday push) and a proposal's entry on the proposal's sent_at
-  // (a finishSent retry that writes the entry a week later would otherwise
-  // count it again after the proposal alone was counted the week it went).
-  const sent = input.outboundEntries.filter((e) =>
-    inWeek(e.proposalSentAt ?? arrivedAt(e.occurredAt, e.recordedAt))).length
-    + input.sentProposals.filter((p) =>
-      p.kind !== "question" && p.resultEntryId === null && inWeek(p.sentAt)).length;
+  // a second Sunday push), and on arrivedAt like any other entry — a proposal's
+  // entry included. NEVER on the proposal's sent_at: send recovery back-dates
+  // sent_at to the CLAIM time and writes the entry when it finishes, possibly
+  // after a Sunday 18:00 run that saw the proposal still `sending` and counted
+  // nothing; judged on sent_at, that message falls in a week already pushed
+  // and is counted in NO summary. A question closes as `sent` with no sent_at
+  // and no entry: nothing left the house.
+  const sent = input.outboundEntries.filter((e) => inWeek(arrivedAt(e.occurredAt, e.recordedAt))).length;
 
   // PARSED, never substring-matched: a Gmail-era header that merely contains
   // Martin's address as text was sent by someone else. A header senderAddress
@@ -206,8 +204,7 @@ export async function loadWeekly(db: Db, window: SummaryWindow, deps: WeeklyLoad
   // SEQUENTIAL on purpose: once a week, five small reads, and a transaction
   // (every test) queues parallel queries on one client, which pg 8 deprecates.
   // Each head (an outbound entry nothing supersedes) is walked back to its
-  // chain ROOT over supersedes_id, and judged on the root's dates — or, when
-  // the root is a sent proposal's result entry, on that proposal's sent_at.
+  // chain ROOT over supersedes_id, and judged on the root's dates.
   // The SQL bound applies to whatever the judgement reads, never the head's own
   // recorded_at, so a correction of an old message is not even loaded.
   const entries = await db.execute(sql`
@@ -222,17 +219,10 @@ export async function loadWeekly(db: Db, window: SummaryWindow, deps: WeeklyLoad
       ), roots AS (
         SELECT head_id, id AS root_id FROM chain WHERE supersedes_id IS NULL
       )
-      SELECT r.occurred_at, r.recorded_at,
-        (SELECT max(pr.sent_at) FROM proposals pr
-          WHERE pr.result_entry_id = r.id AND pr.sent_at IS NOT NULL) AS proposal_sent_at
+      SELECT r.occurred_at, r.recorded_at
       FROM roots x JOIN log_entries r ON r.id = x.root_id
       WHERE (r.occurred_at >= ${lo} AND r.occurred_at < ${hi})
-         OR (r.recorded_at >= ${lo} AND r.recorded_at < ${hi})
-         OR EXISTS (SELECT 1 FROM proposals pr WHERE pr.result_entry_id = r.id
-           AND pr.sent_at >= ${lo} AND pr.sent_at < ${hi})`);
-  const proposals = await db.execute(sql`
-      SELECT kind, sent_at, result_entry_id FROM proposals
-      WHERE sent_at >= ${lo} AND sent_at < ${hi}`);
+         OR (r.recorded_at >= ${lo} AND r.recorded_at < ${hi})`);
   const emails = await db.execute(sql`
       SELECT from_addr, sent_at, fetched_at FROM raw_emails
       WHERE (sent_at >= ${lo} AND sent_at < ${hi}) OR (fetched_at >= ${lo} AND fetched_at < ${hi})`);
@@ -255,12 +245,8 @@ export async function loadWeekly(db: Db, window: SummaryWindow, deps: WeeklyLoad
   return {
     window,
     ownAddresses: (deps.ownAddresses ?? ownMailboxAddresses)(),
-    outboundEntries: rows<{ occurred_at: string | Date; recorded_at: string | Date;
-      proposal_sent_at: string | Date | null }>(entries)
-      .map((r) => ({ occurredAt: date(r.occurred_at), recordedAt: date(r.recorded_at),
-        proposalSentAt: r.proposal_sent_at === null ? null : date(r.proposal_sent_at) })),
-    sentProposals: rows<{ kind: string; sent_at: string | Date; result_entry_id: string | null }>(proposals)
-      .map((r) => ({ kind: r.kind, sentAt: date(r.sent_at), resultEntryId: r.result_entry_id })),
+    outboundEntries: rows<{ occurred_at: string | Date; recorded_at: string | Date }>(entries)
+      .map((r) => ({ occurredAt: date(r.occurred_at), recordedAt: date(r.recorded_at) })),
     emails: rows<{ from_addr: string; sent_at: string | Date; fetched_at: string | Date }>(emails)
       .map((r) => ({ fromAddr: r.from_addr, sentAt: date(r.sent_at), fetchedAt: date(r.fetched_at) })),
     statusChanges: changeRows.map((c) => ({ id: c.id, documentId: c.document_id, status: c.status,
