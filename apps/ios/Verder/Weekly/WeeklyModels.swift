@@ -94,17 +94,31 @@ enum WeeklyFormat {
 /// THE SCREEN COMPARES WITH NOTHING. The brief's "compared with Martin's own
 /// past weeks" needs past weeks, and `/weekly` serves one: a "meer dan vorige
 /// week" here would be a number the server never counted. The counts are the
-/// push's counts, the only amber is what waited on Martin, and the screen ends
-/// with ONE next step, to Voor jou.
+/// push's counts, and the screen ends with ONE next step, to Voor jou.
+///
+/// AMBER IS LIVE OR NOT AT ALL. Everything the stored summary says — the
+/// counts AND Sunday's waiting snapshot — is history: the screen opens any day
+/// of the week, and an item that waited on Sunday may have been decided since.
+/// Painting it amber would contradict Voor jou, the badge and the dashboard,
+/// which share ONE live definition (`loadWaiting`). The only amber here is the
+/// next step's, and it is the LIVE count (`InboxStore`), never Sunday's.
 struct WeeklyScreen: Equatable, Sendable {
+    /// How a line is drawn; the view switches on it and decides no colour itself.
+    enum Tone: Equatable, Sendable {
+        /// The ink scale: information, including what waited on Sunday.
+        case history
+        /// Amber: waits on Martin NOW, by the live count.
+        case waitsOnMartin
+    }
+
     struct Count: Equatable, Sendable, Identifiable {
         var id: String { words }
         let value: Int
         let words: String
         /// A second line, e.g. who filed: "3 door jou · 2 door verder zelf".
         let detail: String?
-        /// Always false: what moved is information, not something waiting.
-        var amber: Bool { false }
+        /// What moved is information, not something waiting.
+        var tone: Tone { .history }
         var text: String { "\(value) \(words)" }
     }
 
@@ -117,24 +131,37 @@ struct WeeklyScreen: Equatable, Sendable {
 
     struct Waiting: Equatable, Sendable {
         let headline: String
-        let amber: Bool
+        /// Sunday's snapshot: history, never amber.
+        var tone: Tone { .history }
         let items: [Item]
     }
 
     struct NextStep: Equatable, Sendable {
         let title: String
         let detail: String
+        let tone: Tone
     }
 
     static let title = "Weekoverzicht"
-    /// The one next step, on every state of the screen.
-    static let toVoorJou = NextStep(title: "Naar Voor jou", detail: "Kijk wat er nu op je wacht.")
     var title: String { Self.title }
+
+    /// The one next step, on every state of the screen: to Voor jou, saying
+    /// how many wait on Martin NOW (the brief's "2 wachten nog op je → Voor
+    /// jou"). `liveWaiting` is `InboxStore`'s count; nil while Voor jou has not
+    /// loaded, and then no number is shown and nothing is amber.
+    static func nextStep(liveWaiting: Int?) -> NextStep {
+        let title = "Naar Voor jou"
+        switch liveWaiting {
+        case nil: return NextStep(title: title, detail: "Kijk wat er nu op je wacht.", tone: .history)
+        case 0?: return NextStep(title: title, detail: "Niets wacht nu op je.", tone: .history)
+        case 1?: return NextStep(title: title, detail: "1 wacht nog op je", tone: .waitsOnMartin)
+        case let n?: return NextStep(title: title, detail: "\(n) wachten nog op je", tone: .waitsOnMartin)
+        }
+    }
 
     let windowLine: String
     let counts: [Count]
     let waiting: Waiting
-    let nextStep: NextStep
 
     init(_ d: WeeklyDTO) {
         windowLine = "\(WeeklyFormat.weekLabel(d.week)) · \(WeeklyFormat.window(from: d.from, to: d.to))"
@@ -151,17 +178,16 @@ struct WeeklyScreen: Equatable, Sendable {
         case 1: "Op zondag wachtte er 1 op je"
         default: "Op zondag wachtten er \(d.waiting) op je"
         }
-        waiting = Waiting(headline: headline, amber: d.waiting > 0,
+        waiting = Waiting(headline: headline,
                           items: d.topWaiting.prefix(3).map {
                               Item(id: $0.id, kind: KindLabel.dutch($0.kind.rawValue), title: $0.title)
                           })
-        nextStep = Self.toVoorJou
     }
 
-    /// Every word the screen shows, for the tests and VoiceOver.
+    /// Every word the summary shows (the next step is live and apart), for the
+    /// tests and VoiceOver.
     var allText: String {
         ([title, windowLine] + counts.flatMap { [$0.text, $0.detail].compactMap { $0 } }
-         + [waiting.headline] + waiting.items.map { "\($0.kind) \($0.title)" }
-         + [nextStep.title, nextStep.detail]).joined(separator: "\n")
+         + [waiting.headline] + waiting.items.map { "\($0.kind) \($0.title)" }).joined(separator: "\n")
     }
 }

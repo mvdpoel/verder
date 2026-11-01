@@ -22,6 +22,8 @@ struct MoreTab: View {
     /// Signing out on purpose drops a voice log waiting from an earlier 401
     /// (`VoiceLogSession.close`); only a REJECTED session keeps it.
     let forgetVoice: () -> Void
+    /// What waits on Martin now (`InboxStore`), for the Weekoverzicht's next step.
+    let liveWaiting: Int?
     /// The Weekoverzicht's one next step.
     let openVoorJou: () -> Void
 
@@ -34,7 +36,7 @@ struct MoreTab: View {
                     switch route {
                     case .weekly:
                         WeeklyView(client: auth.client, onUnauthorized: { auth.sessionRejected() },
-                                   openVoorJou: openVoorJou)
+                                   liveWaiting: liveWaiting, openVoorJou: openVoorJou)
                     }
                 }
         }

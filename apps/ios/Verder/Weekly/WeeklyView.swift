@@ -7,11 +7,16 @@ import SwiftUI
 /// be aligned to the Figma frames without touching what it says.
 struct WeeklyView: View {
     @State private var store: WeeklyStore
+    /// What waits on Martin NOW (`InboxStore`'s count, nil until it loaded):
+    /// the next step's line and the screen's only amber.
+    let liveWaiting: Int?
     /// Leaves for Voor jou: the live list behind Sunday's snapshot.
     let openVoorJou: () -> Void
 
-    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void, openVoorJou: @escaping () -> Void) {
+    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void, liveWaiting: Int?,
+         openVoorJou: @escaping () -> Void) {
         _store = State(initialValue: WeeklyStore(client: client, onUnauthorized: onUnauthorized))
+        self.liveWaiting = liveWaiting
         self.openVoorJou = openVoorJou
     }
 
@@ -52,7 +57,7 @@ struct WeeklyView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 secondary(WeeklyStore.Copy.notYetDetail)
             }
-            nextStep(WeeklyScreen.toVoorJou)
+            nextStep(WeeklyScreen.nextStep(liveWaiting: liveWaiting))
         case .failed(let error):
             panel {
                 Text(VoorJouTab.message(error))
@@ -68,7 +73,7 @@ struct WeeklyView: View {
             readout(s.windowLine)
             counts(s.counts)
             waiting(s.waiting)
-            nextStep(s.nextStep)
+            nextStep(WeeklyScreen.nextStep(liveWaiting: liveWaiting))
         }
     }
 
@@ -80,11 +85,11 @@ struct WeeklyView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(c.value)")
                             .font(.display(34, relativeTo: .largeTitle))
-                            .foregroundStyle(Color.inkBright)
+                            .foregroundStyle(c.tone.strong)
                             .monospacedDigit()
                         Text(c.words)
                             .font(.display(15, relativeTo: .subheadline))
-                            .foregroundStyle(Color.ink)
+                            .foregroundStyle(c.tone.words)
                         if let detail = c.detail { readout(detail) }
                     }
                     .accessibilityElement(children: .combine)
@@ -97,19 +102,17 @@ struct WeeklyView: View {
     private func waiting(_ w: WeeklyScreen.Waiting) -> some View {
         panel {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if w.amber {
-                    Circle().fill(Color.attn).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] }
-                }
+                if w.tone == .waitsOnMartin { attnDot }
                 Text(w.headline)
                     .font(.display(17, relativeTo: .headline, weight: .medium))
-                    .foregroundStyle(w.amber ? Color.attn : Color.inkBright)
+                    .foregroundStyle(w.tone.strong)
             }
             ForEach(w.items) { item in
                 VStack(alignment: .leading, spacing: 2) {
                     readout(item.kind)
                     Text(item.title)
                         .font(.display(15, relativeTo: .subheadline))
-                        .foregroundStyle(Color.ink)
+                        .foregroundStyle(w.tone.words)
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
@@ -125,7 +128,13 @@ struct WeeklyView: View {
                     Text(step.title)
                         .font(.display(17, relativeTo: .body, weight: .medium))
                         .foregroundStyle(Color.inkBright)
-                    secondary(step.detail)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if step.tone == .waitsOnMartin { attnDot }
+                        Text(step.detail)
+                            .font(.display(15, relativeTo: .subheadline))
+                            .foregroundStyle(step.tone == .waitsOnMartin ? Color.attn : Color.inkMute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
@@ -138,6 +147,10 @@ struct WeeklyView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var attnDot: some View {
+        Circle().fill(Color.attn).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] }
     }
 
     private func secondary(_ text: String) -> some View {
@@ -159,4 +172,12 @@ struct WeeklyView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassPanel()
     }
+}
+
+/// The model decides the tone; this is the only place it becomes a colour.
+private extension WeeklyScreen.Tone {
+    /// A figure or headline.
+    var strong: Color { self == .waitsOnMartin ? .attn : .inkBright }
+    /// The words under it.
+    var words: Color { self == .waitsOnMartin ? .attn : .ink }
 }

@@ -177,6 +177,7 @@ struct RootView: View {
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
                 MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier, path: $meerPath,
                         openVoice: { voice.open() }, forgetVoice: { voice.close() },
+                        liveWaiting: inbox.inbox?.count,
                         openVoorJou: {
                             inboxPath = []
                             tab = .voorJou

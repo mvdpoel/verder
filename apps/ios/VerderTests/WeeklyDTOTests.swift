@@ -112,29 +112,37 @@ struct WeeklyDTOTests {
         #expect(nothing.counts[2].detail == nil)
     }
 
-    /// `/weekly` holds ONE week. Any "meer dan vorige week" would be invented.
+    /// `/weekly` holds ONE week. Any "meer dan vorige week" would be invented —
+    /// on the summary AND on the next step, in every live state.
     @Test func comparedWithNothingInvented() throws {
         let s = WeeklyScreen(try Self.dto())
-        let words = s.allText.lowercased()
+        let steps = [nil, 0, 1, 4].map { WeeklyScreen.nextStep(liveWaiting: $0) }
+        let words = ([s.allText] + steps.flatMap { [$0.title, $0.detail] }).joined(separator: "\n").lowercased()
         for invented in ["vorige week", "meer dan", "minder dan", "gemiddeld", "dan je", "record", "%"] {
             #expect(!words.contains(invented), "\(invented)")
         }
-        #expect(!s.counts.contains { $0.amber }, "a count of what moved is never amber")
     }
 
-    /// `waiting` is Sunday's snapshot, and the screen says so; it is the one
-    /// amber thing, and only while something waited.
-    @Test func waitingIsSundaysSnapshotAndTheOnlyAmber() throws {
+    /// Everything the stored summary says is HISTORY: the counts AND Sunday's
+    /// waiting snapshot are drawn in the ink scale, never amber. The view
+    /// colours by `tone`, so tinting a count `attn` means changing the model,
+    /// and this test.
+    @Test func theSummaryIsHistoryAndNeverAmber() throws {
+        let s = WeeklyScreen(try Self.dto(waiting: 4, top: 3))
+        #expect(s.counts.allSatisfy { $0.tone == .history })
+        #expect(s.waiting.tone == .history, "Sunday's snapshot may have been decided long since")
+    }
+
+    /// `waiting` is Sunday's snapshot, and the screen says so.
+    @Test func waitingIsSundaysSnapshot() throws {
         let s = WeeklyScreen(try Self.dto(waiting: 4, top: 3))
         #expect(s.waiting.headline == "Op zondag wachtten er 4 op je")
-        #expect(s.waiting.amber)
         #expect(s.waiting.items.count == 3)
         #expect(s.waiting.items[0].kind == "suggestie")
         let one = WeeklyScreen(try Self.dto(waiting: 1, top: 1))
         #expect(one.waiting.headline == "Op zondag wachtte er 1 op je")
         let none = WeeklyScreen(try Self.dto(waiting: 0, top: 0))
         #expect(none.waiting.headline == "Op zondag wachtte er niets op je")
-        #expect(!none.waiting.amber)
         #expect(none.waiting.items.isEmpty)
     }
 
@@ -143,14 +151,26 @@ struct WeeklyDTOTests {
         #expect(WeeklyScreen(try Self.dto(waiting: 9, top: 5)).waiting.items.count == 3)
     }
 
-    /// The screen ends with exactly one next step, and it goes to Voor jou —
-    /// the live list, since the counts above are Sunday's.
-    @Test func endsWithOneNextStepToVoorJou() throws {
-        let s = WeeklyScreen(try Self.dto(waiting: 4))
-        #expect(s.nextStep.title == "Naar Voor jou")
-        #expect(s.nextStep.detail == "Kijk wat er nu op je wacht.")
-        let none = WeeklyScreen(try Self.dto(waiting: 0, top: 0))
-        #expect(none.nextStep.title == "Naar Voor jou")
+    /// The screen ends with exactly one next step, to Voor jou. Its amber is
+    /// the LIVE count (`loadWaiting`, the same number as the badge), never
+    /// Sunday's: on Wednesday with nothing waiting it is not amber, whatever
+    /// Sunday said.
+    @Test func endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount() {
+        let four = WeeklyScreen.nextStep(liveWaiting: 4)
+        #expect(four.title == "Naar Voor jou")
+        #expect(four.detail == "4 wachten nog op je")
+        #expect(four.tone == .waitsOnMartin)
+        let one = WeeklyScreen.nextStep(liveWaiting: 1)
+        #expect(one.detail == "1 wacht nog op je")
+        #expect(one.tone == .waitsOnMartin)
+        let none = WeeklyScreen.nextStep(liveWaiting: 0)
+        #expect(none.title == "Naar Voor jou")
+        #expect(none.detail == "Niets wacht nu op je.")
+        #expect(none.tone == .history)
+        // Voor jou not loaded yet: no number is invented, and nothing is amber.
+        let unknown = WeeklyScreen.nextStep(liveWaiting: nil)
+        #expect(unknown.detail == "Kijk wat er nu op je wacht.")
+        #expect(unknown.tone == .history)
     }
 
     @Test func theHeaderNamesTheWeekAndItsWindow() throws {
