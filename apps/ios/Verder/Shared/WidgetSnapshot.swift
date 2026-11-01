@@ -11,8 +11,9 @@ import Foundation
 /// `.complete` like the pocket dossier. The widget renders while the phone is
 /// locked (lock screen, StandBy), and a `.complete` file is unreadable then, so
 /// the widget would show nothing exactly where it is looked at most. What it
-/// holds is small: a count, one title and the map headline — and the widget
-/// marks both titles privacy-sensitive so iOS redacts them while locked.
+/// holds is small: a count, the top five titles and the map headline — and
+/// the widget marks every title privacy-sensitive so iOS redacts them while
+/// locked, and shows none on the lock screen.
 struct WidgetSnapshot: Codable, Equatable, Sendable {
     let count: Int
     let topTitle: String?
@@ -21,6 +22,50 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The map's current stop ("waar het nu op wacht"), or nil when none is open.
     let headline: String?
     let updatedAt: Date
+    /// The server's top items (at most `maxItems`), in server order: the
+    /// medium and large widgets' rows, each deep-linking to its own item.
+    let items: [Item]
+    /// The oldest `at` over ALL waiting items, not just the kept ones: the
+    /// lock-screen rectangle's "oudste 3 dagen". Nil when nothing waits.
+    let oldestAt: Date?
+
+    /// One row. A title, so it is shown only where `.privacySensitive()`
+    /// redacts it on a locked phone, and never on the lock screen.
+    struct Item: Codable, Equatable, Sendable {
+        /// `WaitingItem.kind` as the server spells it.
+        let kind: String
+        let id: String
+        let title: String
+    }
+
+    /// The large widget's five rows.
+    static let maxItems = 5
+
+    init(count: Int, topTitle: String?, topKind: String?, headline: String?, updatedAt: Date,
+         items: [Item] = [], oldestAt: Date? = nil) {
+        self.count = count
+        self.topTitle = topTitle
+        self.topKind = topKind
+        self.headline = headline
+        self.updatedAt = updatedAt
+        self.items = items
+        self.oldestAt = oldestAt
+    }
+
+    /// `items` and `oldestAt` arrived with the widget (Plan 3 Task 23). A
+    /// snapshot an older build left in the App Group has neither, and must
+    /// still read — as count-only — rather than turn the widget into "Open
+    /// verder om bij te werken" until the app next refreshes.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count = try c.decode(Int.self, forKey: .count)
+        topTitle = try c.decodeIfPresent(String.self, forKey: .topTitle)
+        topKind = try c.decodeIfPresent(String.self, forKey: .topKind)
+        headline = try c.decodeIfPresent(String.self, forKey: .headline)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
+        oldestAt = try c.decodeIfPresent(Date.self, forKey: .oldestAt)
+    }
 
     static let writeOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 

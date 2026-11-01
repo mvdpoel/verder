@@ -72,6 +72,7 @@ targets:
       # Embedded in the app (the default for an app-extension dependency).
       - target: VerderNotify
       - target: VerderShare
+      - target: VerderWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder
@@ -183,6 +184,51 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.share
         CURRENT_PROJECT_VERSION: "1"
         PRODUCT_NAME: VerderShare
+  # The home- and lock-screen widget (plan 3 Task 23): reads the App Group
+  # snapshot (widget/snapshot.json) and nothing else — no network, no session.
+  # Its model and faces live in Verder/Widget, compiled into the app too, so
+  # the unit tests (hosted in the app) render them.
+  VerderWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: VerderWidget
+        excludes:
+          - Info.plist
+          - VerderWidget.entitlements
+      - path: Verder/Widget
+      - path: Verder/Shared/WidgetSnapshot.swift
+      - path: Verder/Shared/AppGroup.swift
+      - path: Verder/Shared/KindLabel.swift
+      - path: Verder/Theme/Tokens.swift
+      - path: Verder/Theme/Fonts.swift
+      - path: Verder/Resources/Fonts
+        buildPhase: resources
+    info:
+      path: VerderWidget/Info.plist
+      properties:
+        CFBundleDisplayName: verder
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # An extension's Bundle.main is its own: it registers the fonts itself.
+        UIAppFonts:
+          - Saira-Variable.ttf
+          - IBMPlexMono-Regular.ttf
+          - IBMPlexMono-Medium.ttf
+          - IBMPlexMono-SemiBold.ttf
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: VerderWidget/VerderWidget.entitlements
+      properties:
+        # widget/snapshot.json, written by the app.
+        com.apple.security.application-groups:
+          - group.pro.vanderpoel.verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.widget
+        CURRENT_PROJECT_VERSION: "1"
+        PRODUCT_NAME: VerderWidget
   VerderTests:
     type: bundle.unit-test
     platform: iOS

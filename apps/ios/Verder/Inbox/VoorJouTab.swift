@@ -51,14 +51,7 @@ enum VoorJouList {
     }
 
     static func kindLabel(_ kind: WaitingKind) -> String {
-        switch kind {
-        case .proposal: "voorstel"
-        case .question: "vraag"
-        case .suggestion: "suggestie"
-        case .task: "taak"
-        case .stop: "op de kaart"
-        case .other: "overig"
-        }
+        KindLabel.dutch(kind.rawValue)
     }
 }
 

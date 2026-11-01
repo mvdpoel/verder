@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UserNotifications
+import WidgetKit
 
 /// Voor jou's data: everything waiting on Martin, as the server ranks it.
 ///
@@ -30,19 +31,22 @@ final class InboxStore {
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let writer: WidgetSnapshot.Writer
+    @ObservationIgnored private let reloadWidgets: @MainActor () -> Void
 
     init(client: APIClient,
          snapshotDir: URL? = AppGroup.containerURL,
          setBadge: @escaping @Sendable (Int) async -> Void = InboxStore.systemBadge,
          onUnauthorized: @escaping @MainActor () -> Void = {},
          now: @escaping @Sendable () -> Date = Date.init,
-         writer: @escaping WidgetSnapshot.Writer = { try $0.write(to: $1, options: $2) }) {
+         writer: @escaping WidgetSnapshot.Writer = { try $0.write(to: $1, options: $2) },
+         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
         self.client = client
         self.snapshotDir = snapshotDir
         self.setBadge = setBadge
         self.onUnauthorized = onUnauthorized
         self.now = now
         self.writer = writer
+        self.reloadWidgets = reloadWidgets
     }
 
     static let systemBadge: @Sendable (Int) async -> Void = { count in
@@ -72,11 +76,19 @@ final class InboxStore {
 
         if let snapshotDir {
             let top = dto.items.first
-            let snapshot = WidgetSnapshot(count: dto.count, topTitle: top?.title, topKind: top?.kind.rawValue,
-                                          headline: summary?.headline?.stopTitle, updatedAt: now())
+            let snapshot = WidgetSnapshot(
+                count: dto.count, topTitle: top?.title, topKind: top?.kind.rawValue,
+                headline: summary?.headline?.stopTitle, updatedAt: now(),
+                items: dto.items.prefix(WidgetSnapshot.maxItems).map {
+                    WidgetSnapshot.Item(kind: $0.kind.rawValue, id: $0.id, title: $0.title)
+                },
+                oldestAt: dto.items.map(\.at).min())
             // A snapshot that cannot be written leaves the old one; the widget
             // ages it out after 24 h ("Open verder om bij te werken").
-            try? WidgetSnapshot.write(snapshot, to: snapshotDir, writer: writer)
+            if (try? WidgetSnapshot.write(snapshot, to: snapshotDir, writer: writer)) != nil {
+                // The widget reads only this file; tell WidgetKit it changed.
+                reloadWidgets()
+            }
             WidgetSnapshot.reportProtectionIfAsked(in: snapshotDir)
         }
         await setBadge(dto.count)

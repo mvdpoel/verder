@@ -38,7 +38,7 @@ struct InboxStoreTests {
         var values: [Int] { m.withLock { $0 } }
     }
 
-    final class Flags { var unauthorized = 0 }
+    final class Flags { var unauthorized = 0; var widgetReloads = 0 }
 
     struct Rig {
         let server: StubServer
@@ -59,7 +59,8 @@ struct InboxStoreTests {
         let store = InboxStore(client: server.client(), snapshotDir: dir,
                                setBadge: { n in badges.m.withLock { $0.append(n) } },
                                onUnauthorized: { flags.unauthorized += 1 },
-                               now: { Self.now })
+                               now: { Self.now },
+                               reloadWidgets: { flags.widgetReloads += 1 })
         return Rig(server: server, dir: dir, badges: badges, flags: flags, store: store)
     }
 
@@ -83,6 +84,41 @@ struct InboxStoreTests {
         #expect(snap.topKind == "proposal")
         #expect(snap.headline == "Stukken aanleveren")
         #expect(snap.updatedAt == Self.now)
+    }
+
+    /// The widget's rows (Task 23): the server's top five in server order,
+    /// each with its id for the deep link, and the oldest `at` over ALL items.
+    @Test func refreshWritesTheItemsAndTheOldestForTheWidget() async throws {
+        let r = rig(Self.serving())
+        await r.store.refresh()
+        let snap = try #require(WidgetSnapshot.read(from: r.dir))
+        #expect(snap.items.map(\.id) == ["6f9619ff-8b86-d011-b42d-00c04fc964ff", "s1", "t1"])
+        #expect(snap.items.map(\.kind) == ["proposal", "suggestion", "task"])
+        #expect(snap.items.first?.title == "Loonstrook oktober aanleveren")
+        #expect(snap.oldestAt == ISO8601DateFormatter().date(from: "2026-10-20T08:00:00Z"))
+    }
+
+    @Test func refreshKeepsAtMostFiveItems() async throws {
+        let rows = (0..<7).map { n in
+            #"{"kind":"task","id":"t\#(n)","title":"Taak \#(n)","subtitle":null,"priority":3,"at":"2026-10-2\#(6 - n)T08:00:00Z","dueAt":null,"verder":false}"#
+        }
+        let body = Data(#"{"count":7,"items":[\#(rows.joined(separator: ","))],"doneByVerder":[]}"#.utf8)
+        let r = rig(Self.serving(inbox: .status(200, body: body)))
+        await r.store.refresh()
+        let snap = try #require(WidgetSnapshot.read(from: r.dir))
+        #expect(snap.items.map(\.id) == ["t0", "t1", "t2", "t3", "t4"])
+        #expect(snap.count == 7)
+        // The oldest over all seven, not over the five kept.
+        #expect(snap.oldestAt == ISO8601DateFormatter().date(from: "2026-10-20T08:00:00Z"))
+    }
+
+    @Test func aWrittenSnapshotReloadsTheWidgetAndAFailedRefreshDoesNot() async {
+        let r = rig(Self.serving())
+        await r.store.refresh()
+        #expect(r.flags.widgetReloads == 1)
+        StubProtocol.register(host: r.server.host, Self.serving(inbox: .status(503)))
+        await r.store.refresh()
+        #expect(r.flags.widgetReloads == 1)
     }
 
     @Test func refreshSetsTheBadgeToTheCount() async {
