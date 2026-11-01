@@ -74,7 +74,7 @@ struct APIClient: Sendable {
             // that hands in some other URLSession still never follows a redirect.
             (data, response) = try await session.data(for: req, delegate: NoRedirects())
         } catch let error as URLError {
-            throw APIError.transport("URLError \(error.code.rawValue)")
+            throw APIError.transport(APIError.transportDescription(error))
         } catch {
             throw APIError.transport(String(describing: error))
         }

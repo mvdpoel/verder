@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// Where a Dossier row leads.
 enum DossierRoute: Hashable, Sendable {
@@ -122,17 +123,25 @@ final class DossierModel {
     private(set) var tasks: [TaskDTO]?
     private(set) var server: ServerSearch = .idle
     var query = "" {
-        didSet { if case .done(let q, _) = server, q != query { server = .idle } }
+        didSet {
+            switch server {
+            case .loading(let q) where q != query, .done(let q, _) where q != query: server = .idle
+            default: break
+            }
+        }
     }
 
     @ObservationIgnored let store: DossierStore
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
+    @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
 
-    init(store: DossierStore, client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {}) {
+    init(store: DossierStore, client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
+         isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable }) {
         self.store = store
         self.client = client
         self.onUnauthorized = onUnauthorized
+        self.isProtectedDataAvailable = isProtectedDataAvailable
     }
 
     var results: [IndexedDoc] { DossierSearch.search(query, in: docs) }
@@ -160,16 +169,27 @@ final class DossierModel {
         _ = await (synced, fetched)
     }
 
+    /// Asks the server for the query as typed now. The answer is shown only
+    /// while that same query is still in the field: typing on resets the
+    /// search (the `query` didSet), and a reply for an older query is dropped.
     func searchServer() async {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sent = query
+        let q = sent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !offline else { return }
-        server = .loading(q)
+        server = .loading(sent)
+        let next: ServerSearch
         do {
             let results: SearchResults = try await client.getJSON(DossierCopy.searchPath(String(q.prefix(500))))
-            server = .done(query: query, hits: results.hits)
+            next = .done(query: sent, hits: results.hits)
         } catch {
-            server = .failed(handle(error))
+            guard !Self.isInterruption(error) else {
+                if server == .loading(sent) { server = .idle }
+                return
+            }
+            next = .failed(handle(error))
         }
+        guard server == .loading(sent), query == sent else { return }
+        server = next
     }
 
     func wipe() async {
@@ -186,6 +206,11 @@ final class DossierModel {
             message = nil
         } catch DossierStore.SyncError.unavailable {
             // Not a failure: the copy is still locked away; tried again on unlock.
+        } catch where Self.isInterruption(error) || !isProtectedDataAvailable() {
+            // Not a failure either, and above all not "offline": the tab was
+            // left (SwiftUI cancelled its `.task`), or the phone locked and
+            // the `.complete` files refused the write. What was applied is
+            // kept; the next foreground refresh after unlock carries on.
         } catch {
             message = handle(error)
         }
@@ -206,6 +231,11 @@ final class DossierModel {
         docs = await store.indexed()
         syncedAt = await store.lastSyncedAt
         loaded = true
+    }
+
+    /// The caller stopped waiting — never a fact about the network or disk.
+    private static func isInterruption(_ error: any Error) -> Bool {
+        Task.isCancelled || APIError.isCancellation(error)
     }
 
     private func handle(_ error: any Error) -> String {

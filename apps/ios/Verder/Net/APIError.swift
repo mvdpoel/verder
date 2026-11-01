@@ -18,6 +18,19 @@ enum APIError: Error, Equatable, Sendable {
     /// No HTTP answer at all: offline, DNS, TLS, timeout.
     case transport(String)
 
+    /// The `.transport` that `APIClient.send` throws for `URLError.cancelled`:
+    /// the CALLER gave up (SwiftUI cancelled a view's `.task`), so it says
+    /// nothing about the network and must never read as "offline".
+    static let cancelled = APIError.transport(transportDescription(URLError(.cancelled)))
+
+    /// The one spelling of a URLError inside `.transport`.
+    static func transportDescription(_ error: URLError) -> String { "URLError \(error.code.rawValue)" }
+
+    /// True for any way a call can end because its caller stopped waiting.
+    static func isCancellation(_ error: any Error) -> Bool {
+        error is CancellationError || (error as? APIError) == .cancelled || (error as? URLError)?.code == .cancelled
+    }
+
     /// nil for 2xx.
     static func from(status: Int) -> APIError? {
         switch status {
