@@ -169,3 +169,49 @@ export function toDashboardSummaryDTO(src: DashboardSummarySource): DashboardSum
     },
   };
 }
+
+// --- search ------------------------------------------------------------------
+
+/** What `search.query` returns, as far as the phone reads it. */
+export interface SearchSource {
+  hits: {
+    entityType: string; entityId: string; title: string; snippet: string;
+    occurredAt: string | null; status: string | null;
+  }[];
+  nextCursor: string | null;
+}
+
+export interface SearchHitDTO {
+  entityType: string;
+  entityId: string;
+  title: string;
+  /** Plain text; a keyword match is marked «like this». */
+  snippet: string;
+  occurredAt: string | null;
+  status: string | null;
+  /** A phone route the app's `DeepLink` parses, or null: no screen for that kind. */
+  link: string | null;
+}
+
+export interface SearchDTO { hits: SearchHitDTO[]; nextCursor: string | null }
+
+/**
+ * The phone opens exactly the kinds `DeepLink` knows (apps/ios/Verder/Push/
+ * DeepLink.swift). The web `href` is never passed on: it names a web page
+ * the app cannot open, and a client that followed it would land on /login.
+ */
+const APP_ROUTE: Partial<Record<string, (id: string) => string>> = {
+  document: (id) => `verder://document/${id}`,
+  task: (id) => `verder://task/${id}`,
+};
+
+export function toSearchDTO(src: SearchSource): SearchDTO {
+  return {
+    hits: src.hits.map((h) => ({
+      entityType: h.entityType, entityId: h.entityId, title: h.title, snippet: h.snippet,
+      occurredAt: h.occurredAt, status: h.status,
+      link: APP_ROUTE[h.entityType]?.(h.entityId) ?? null,
+    })),
+    nextCursor: src.nextCursor,
+  };
+}

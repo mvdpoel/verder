@@ -16,6 +16,7 @@ import { bundlesRouter } from "./routers/bundles";
 import { proposalsRouter } from "./routers/proposals";
 import { inboxRouter } from "./routers/inbox";
 import { verderActionsRouter } from "./routers/verder-actions";
+import { dossierSyncRouter } from "./routers/dossier-sync";
 
 export const appRouter = router({
   parties: partiesRouter,
@@ -36,6 +37,7 @@ export const appRouter = router({
   proposals: proposalsRouter,
   inbox: inboxRouter,
   verderActions: verderActionsRouter,
+  dossierSync: dossierSyncRouter,
 });
 export type AppRouter = typeof appRouter;
 export { createContext, type Context } from "./trpc";

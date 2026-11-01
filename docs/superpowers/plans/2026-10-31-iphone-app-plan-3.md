@@ -747,6 +747,8 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 
 ### Task 20: Pocket dossier sync (server)
 
+**Rescoped 2026-11-01:** re-read against today's code (slices 6–7 added `waiting.ts`, `verder-actions` and `mobile-route.ts`; none of them touched documents' sync). The task stands, with these recorded differences: (1) the three routes use Plan 3's `mobileGet` (`apps/web/src/lib/mobile-route.ts`: auth first, `no-store`, `trpcErrorResponse`), so the file route answers JSON 401 like every other phone route; (2) `texts` is a second procedure on the same router, `dossierSync.texts({ ids })` (1..20 uuids, deduped), because the route needs a procedure to call and `verder_app` already holds SELECT on `document_texts`; it returns only rows with non-empty text whose document is neither discarded (`notDiscardedSql`) nor purged (`notPurgedSql`), in the order asked; (3) `hasText` means a `document_texts` row with `char_length(text) > 0` — an extractor-`none` row is written for every unreadable document and is NOT text; (4) a document both discarded and purged is tombstoned `purged` (the stronger fact); (5) `mime` in `DossierDoc` is the stored mime as-is, and the file route serves the bytes with `safeMime(effectiveMime(...))`, so the phone renders by the response's `Content-Type`; (6) `safeMime` and the RFC 5987 filename encoder moved out of `apps/web/src/app/api/files/[sha256]/route.ts` into `apps/web/src/lib/safe-mime.ts`, so the web and phone file routes share one spelling (a route file may export only route fields); (7) the file route answers 404 for a malformed id before any router call, and 404 (not 500) when the vault file is missing; (8) the sync route reads `?cursor=` (default 0) and `?limit=` (default 50) as digits only — `-1`, `1.5`, `abc`, `0` and `51` are 400 before the router. Extra tests beside the named ones: `a document without extracted text says so`, `a rename travels as an upsert with the effective title`, `a purged and discarded document is tombstoned as purged`, `an empty delta keeps the cursor`, `refuses a page over 50 and a negative cursor`, `texts returns readable text and never a discarded or purged document's`, `texts refuses more than 20 ids`, and route tests for 400s, 404 on discarded/unknown/malformed ids, and an unsafe stored mime. The `purged id resolves through the same predicate as /files` test inserts a `document_purges` row WITHOUT its `document.purged` event: the delta then tombstones it and `documents.browse`'s `purged` branch lists it, so the phone follows the row (the display definition) and not the event (/verify's). **The server half of Task 21's "Zoek op de server" ships with this task** (`GET /api/mobile/v1/search`, see the note under Task 21).
+
 **Files:**
 - Create: `packages/api/src/routers/dossier-sync.ts`, `packages/api/src/routers/dossier-sync.test.ts`, and route/test pairs:
   - `apps/web/src/app/api/mobile/v1/documents/sync/route.ts`
@@ -764,7 +766,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
 - `GET /documents/:id/file`: auth, `effectiveDocument`, 410 `{error:"purged"}` for a purged document and 404 for a discarded one, then the bytes with `safeMime`, the effective-title `Content-Disposition` and `nosniff`, as `apps/web/src/app/api/files/[sha256]/route.ts` does. It sits under `/api/mobile/` so a missing cookie gets JSON 401 and not a 307.
 - `GET /documents/texts?ids=a,b` (at most 20) returns `{ id, text, truncated }[]`. Extraction happens after ingest and appends no ledger event, so a document synced before its text existed asks again for it here; the phone keeps a set of ids still lacking text.
 
-- [ ] **Step 1: Failing tests** (dev DB):
+- [x] **Step 1: Failing tests** (dev DB):
   - `new document arrives as an upsert`;
   - `purged id comes back as a tombstone`;
   - `discarded id comes back as a tombstone`;
@@ -773,10 +775,13 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   - `cursor never skips`: two documents, page size 1, and both arrive in order;
   - `each id appears once per page with its newest seq`;
   - route tests `file 410 for purged`, `401 first` on all three.
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat: pocket dossier delta sync on the ledger seq`.
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Run `env -u NODE_ENV pnpm --filter web build`. Commit: `feat: pocket dossier delta sync on the ledger seq`.
 - [ ] **Step 3: [main session]** Measure in prod: `select <effective status>, count(*) from documents group by 1`, using `effectiveDocStatusSql` and `notPurgedSql`. Record the counts and the total bytes of non-discarded, non-purged documents. If `filed` alone is under half of them, keep `inbox` too, which is the default above, and record why.
+  - **Measured 2026-11-01 (main session, production, read-only):** effective status counts over documents that are not purged: **inbox 213 (136 MB)**, **filed 10 (2.7 MB)**, discarded 18 (+1 purged). The phone caches inbox + filed = 223 documents, about 139 MB. `filed` alone is 10 of 223 (under 5%), far under half, so `inbox` is cached too, as the default above: most of the dossier has never been filed, and a pocket dossier of filed documents only would hold almost nothing.
 
 ### Task 21: Pocket dossier on the phone
+
+**Rescoped 2026-11-01 (server half only):** `GET /api/mobile/v1/search?q=&cursor=` was built with Task 20 (`apps/web/src/app/api/mobile/v1/search/route.ts` + test). It uses `mobileGet` (401 before any router call), trims `q` and refuses an empty or >500-character one with 400, and calls `search.query({ q, mode: "fast", limit: 20, cursor })` — never `deep`. Hits go through `toSearchDTO` in `apps/web/src/lib/mobile-dto.ts`: `{ entityType, entityId, title, snippet, occurredAt, status, link }` plus `nextCursor`, where `link` is `verder://document/<id>` or `verder://task/<id>` (the kinds `DeepLink.swift` parses) and `null` for every other kind; the web `href` is never passed on. The snippet is plain text with keyword matches marked `«…»` (ts_headline's StartSel/StopSel). The iOS steps below are unchanged.
 
 **Files:**
 - Create:

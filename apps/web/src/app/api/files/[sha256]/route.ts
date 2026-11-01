@@ -5,22 +5,7 @@ import { readFilePath } from "@verder/api/src/storage";
 import { effectiveMime } from "@verder/parsers";
 import { serverCaller } from "@/lib/trpc-server";
 import { servesInline } from "@/components/preview-kind";
-
-/** RFC 9110 token/token, the only shape a Content-Type may have here. */
-const SAFE_MIME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+\/[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
-
-/**
- * The stored mime is sender-supplied text that nothing validates at ingest.
- * A bare CR or LF in it makes the Headers constructor throw — inside the try,
- * where only TRPCError is handled — so that document could never be viewed or
- * downloaded again. Header INJECTION is impossible either way (the constructor
- * refuses), but bricking a document is not acceptable either. Parameters are
- * dropped: the base type is all any preview decision uses.
- */
-function safeMime(mime: string): string {
-  const base = mime.split(";", 1)[0].trim();
-  return SAFE_MIME.test(base) ? base : "application/octet-stream";
-}
+import { rfc5987, safeMime } from "@/lib/safe-mime";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ sha256: string }> }) {
   const { sha256 } = await params;
@@ -40,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ sha256:
     // able to inject a header or break out of the quoted filename. The
     // EFFECTIVE title, because Content-Disposition beats the <a download>
     // attribute — using the evidence row's title would undo every rename.
-    const filename = encodeURIComponent(doc.effectiveTitle).replace(/['()*]/g, escape);
+    const filename = rfc5987(doc.effectiveTitle);
     // Only what this app renders itself is served inline. The mime came from
     // the sender; an SVG or an HTML attachment rendered on our origin runs
     // script with the session. nosniff stops the browser guessing past that.
