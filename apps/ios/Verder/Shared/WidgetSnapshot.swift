@@ -105,6 +105,16 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         print("verder: widget/snapshot.json protection = \(value)")
     }
 
+    /// Removes the snapshot: its titles, their ids and the map headline. Sign-out
+    /// and a rejected session call this (through `AuthModel` and
+    /// `InboxStore`), because the pocket dossier is wiped then and the
+    /// widget's copy of the same content may not outlive it. A missing file
+    /// already reads as "Open verder om bij te werken", so nothing new is
+    /// written in its place. Already gone is success.
+    static func erase(in dir: URL) {
+        try? FileManager.default.removeItem(at: fileURL(in: dir))
+    }
+
     /// Nil when nothing was written yet or the file does not decode — the
     /// widget then says "Open verder om bij te werken", never a guessed count.
     static func read(from dir: URL) -> WidgetSnapshot? {

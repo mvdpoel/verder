@@ -314,6 +314,55 @@ struct AuthModelPasskeyTests {
         #expect(server.requests.first?.url?.path() == "/api/auth/sign-out")
     }
 
+    /// Signing out takes the widget's copy of the case with it: the snapshot
+    /// holds the top five titles and the map headline, and the home-screen
+    /// widget would keep drawing them for up to a day.
+    @Test func signOutErasesTheWidgetSnapshot() async throws {
+        let server = StubServer()
+        server.on { _ in .status(200, body: Data(#"{"success":true}"#.utf8)) }
+        let store = InMemorySessionStore(SessionCookie(name: "better-auth.session_token", value: "tok", expires: nil))
+        let client = server.client(store: store)
+        let dir = WidgetSnapshotTests.tempDir()
+        try WidgetSnapshot.write(Self.caseSnapshot, to: dir)
+        let reloads = Counter()
+        let model = AuthModel(client: client, store: store,
+                              passkeys: PasskeyAuth(client: client, store: store, authenticator: PasskeyAuthTests.FakeAuthenticator()),
+                              defaults: Self.defaults(),
+                              widgetSnapshotDir: dir, reloadWidgets: { reloads.n += 1 })
+
+        await model.signOut()
+
+        #expect(!FileManager.default.fileExists(atPath: WidgetSnapshot.fileURL(in: dir).path))
+        #expect(reloads.n == 1)
+    }
+
+    /// Every 401 in the app lands in `sessionRejected`; it erases the snapshot too.
+    @Test func sessionRejectedErasesTheWidgetSnapshot() throws {
+        let store = InMemorySessionStore(SessionCookie(name: "better-auth.session_token", value: "tok", expires: nil))
+        let client = StubServer().client(store: store)
+        let dir = WidgetSnapshotTests.tempDir()
+        try WidgetSnapshot.write(Self.caseSnapshot, to: dir)
+        let reloads = Counter()
+        let model = AuthModel(client: client, store: store,
+                              passkeys: PasskeyAuth(client: client, store: store, authenticator: PasskeyAuthTests.FakeAuthenticator()),
+                              defaults: Self.defaults(),
+                              widgetSnapshotDir: dir, reloadWidgets: { reloads.n += 1 })
+
+        model.sessionRejected()
+
+        #expect(WidgetSnapshot.read(from: dir) == nil)
+        #expect(!FileManager.default.fileExists(atPath: WidgetSnapshot.fileURL(in: dir).path))
+        #expect(reloads.n == 1)
+    }
+
+    final class Counter { var n = 0 }
+
+    static let caseSnapshot = WidgetSnapshot(
+        count: 2, topTitle: "Formulier bijzondere bijstand ondertekenen", topKind: "task",
+        headline: "Stukken aanleveren bij Team Startdossier", updatedAt: Date(timeIntervalSince1970: 1_793_530_800),
+        items: [WidgetSnapshot.Item(kind: "task", id: "00000000-f1c5-4000-8000-000000000004",
+                                    title: "Formulier bijzondere bijstand ondertekenen")])
+
     /// Offline at sign-out still signs out locally: the phone must never be
     /// stuck holding a session Martin asked it to drop.
     @Test func signOutOfflineStillForgets() async {

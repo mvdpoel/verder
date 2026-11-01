@@ -46,7 +46,7 @@ struct WidgetEntryTests {
             #expect(c.rows.isEmpty, "\(family)")
             #expect(c.headline == nil, "\(family)")
             for title in Self.items.map(\.title) + [Self.headline] {
-                for text in c.allText {
+                for text in c.drawnText {
                     #expect(!text.contains(title), "\(family) shows \(title)")
                 }
             }
@@ -112,14 +112,71 @@ struct WidgetEntryTests {
 
     /// Tinted and clear home screens render `.accented`, the lock screen
     /// `.vibrant`: amber is gone there, so it may never be the only carrier.
-    @Test func amberOnlyInFullColorAndAlwaysWithWords() {
+    @Test func amberOnlyInFullColor() {
         let c = Self.content(Self.snapshot(), .systemSmall)
         #expect(c.countIsAmber(in: .fullColor))
         #expect(!c.countIsAmber(in: .accented))
         #expect(!c.countIsAmber(in: .vibrant))
-        for family in Self.homeScreen + Self.lockScreen {
+    }
+
+    static let allFamilies = homeScreen + lockScreen
+
+    /// PER FAMILY, on what that family itself draws: the words saying the
+    /// count waits on Martin. `drawnText` holds only the strings the family's
+    /// view paints — never another family's (the inline line is not drawn on
+    /// the small face, so it may not vouch for it).
+    @Test func everyFamilyDrawsWhoItWaitsOnInWords() {
+        for family in Self.allFamilies {
             let w = Self.content(Self.snapshot(), family)
-            #expect(w.allText.contains { $0.contains("op jou") || $0.contains("voor jou") }, "\(family) relies on colour alone")
+            #expect(w.drawnText.contains(w.words), "\(family) does not draw its words")
+            #expect(w.words.contains("op jou") || w.words.contains("voor jou"), "\(family) relies on colour alone")
+            if family != .accessoryInline {
+                #expect(!w.drawnText.contains(w.inlineText), "\(family) is credited with the inline line it never draws")
+            }
+        }
+        let empty = Self.snapshot(count: 0, items: [], headline: nil, oldest: nil)
+        for family in Self.allFamilies {
+            let w = Self.content(empty, family)
+            #expect(w.words.contains("niets") || w.words.contains("Niets") || w.words.contains("voor jou"), "\(family)")
+        }
+        for family in Self.allFamilies {
+            let w = Self.content(nil, family)
+            #expect(w.words.contains("open") || w.words.contains("Open"), "\(family) stale")
+        }
+    }
+
+    /// The view really paints `words`: change only the words and the pixels
+    /// must change, in every family and every state. Deleting the caption from
+    /// one face, or hard-coding its words, fails here.
+    @MainActor
+    @Test func everyFamilyPaintsItsWords() throws {
+        func png(_ c: WidgetContent, _ family: WidgetFamily) throws -> Data {
+            let size: CGSize = switch family {
+            case .systemSmall: CGSize(width: 158, height: 158)
+            case .systemMedium: CGSize(width: 338, height: 158)
+            case .systemLarge: CGSize(width: 338, height: 354)
+            case .accessoryCircular: CGSize(width: 72, height: 72)
+            case .accessoryRectangular: CGSize(width: 172, height: 76)
+            default: CGSize(width: 240, height: 24)
+            }
+            let view = WidgetFamilyView(content: c, family: family)
+                .frame(width: size.width, height: size.height)
+                .background(Color.void)
+                .environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            return try #require(renderer.uiImage?.pngData())
+        }
+        let states: [(String, WidgetSnapshot?)] = [
+            ("waiting", Self.snapshot()), ("empty", Self.snapshot(count: 0, items: [], headline: nil, oldest: nil)),
+            ("stale", nil),
+        ]
+        for family in Self.allFamilies {
+            for (name, snap) in states {
+                let c = Self.content(snap, family)
+                let other = c.withWords("xx")
+                #expect(try png(c, family) != png(other, family), "\(family) \(name) does not paint its words")
+            }
         }
     }
 

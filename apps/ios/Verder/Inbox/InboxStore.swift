@@ -68,7 +68,10 @@ final class InboxStore {
         case .success(let value): dto = value
         case .failure(let error):
             lastError = error
-            if error == .unauthorized { onUnauthorized() }
+            if error == .unauthorized {
+                forgetCaseContent()
+                onUnauthorized()
+            }
             return
         }
         inbox = dto
@@ -92,6 +95,18 @@ final class InboxStore {
             WidgetSnapshot.reportProtectionIfAsked(in: snapshotDir)
         }
         await setBadge(dto.count)
+    }
+
+    /// A rejected session leaves nothing of the case behind: not in memory for
+    /// the next screen, and not in the widget's snapshot, which the home
+    /// screen would otherwise keep drawing for up to a day.
+    private func forgetCaseContent() {
+        inbox = nil
+        summary = nil
+        if let snapshotDir {
+            WidgetSnapshot.erase(in: snapshotDir)
+            reloadWidgets()
+        }
     }
 
     nonisolated private static func fetch<T: Decodable & Sendable>(_ client: APIClient, _ path: String) async -> Result<T, APIError> {

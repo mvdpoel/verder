@@ -15,7 +15,7 @@ struct WidgetFamilyView: View {
         switch family {
         case .accessoryCircular: WidgetCircular(content: content)
         case .accessoryRectangular: WidgetRectangular(content: content)
-        case .accessoryInline: Text(content.inlineText)
+        case .accessoryInline: Text(content.words)
         case .systemMedium: WidgetMedium(content: content)
         case .systemLarge, .systemExtraLarge: WidgetLarge(content: content)
         default: WidgetSmall(content: content)
@@ -50,7 +50,7 @@ private struct CountBlock: View {
                     .widgetAccentable()
                     .accessibilityHidden(true)
             }
-            Text(content.caption)
+            Text(content.words)
                 .font(.display(15, relativeTo: .subheadline))
                 .foregroundStyle(content.state == .stale ? Color.ink : Color.inkSoft)
                 .lineLimit(2)
@@ -249,7 +249,7 @@ private struct LargeCount: View {
                     .widgetAccentable()
                     .accessibilityHidden(true)
             }
-            Text(content.caption)
+            Text(content.words)
                 .font(.display(15, relativeTo: .subheadline))
                 .foregroundStyle(content.state == .stale ? Color.ink : Color.inkSoft)
                 .lineLimit(1)
@@ -275,14 +275,18 @@ private struct WidgetCircular: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .widgetAccentable()
-                    Text("voor jou")
+                    Text(content.words)
                         .font(.mono(11, relativeTo: .caption2))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 } else {
                     Image(systemName: "arrow.clockwise")
                         .font(.display(17, relativeTo: .body))
                         .widgetAccentable()
-                    Text("open")
+                    Text(content.words)
                         .font(.mono(11, relativeTo: .caption2))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
             .padding(4)
@@ -303,7 +307,7 @@ private struct WidgetRectangular: View {
                         .font(.display(22, relativeTo: .title2, weight: .medium))
                         .lineLimit(1)
                         .widgetAccentable()
-                    Text(content.caption)
+                    Text(content.words)
                         .font(.display(15, relativeTo: .subheadline))
                         .lineLimit(1)
                 }
@@ -314,7 +318,7 @@ private struct WidgetRectangular: View {
                 Text("verder")
                     .font(.display(15, relativeTo: .headline, weight: .medium))
                     .widgetAccentable()
-                Text(content.caption)
+                Text(content.words)
                     .font(.display(15, relativeTo: .subheadline))
                     .lineLimit(2)
             }

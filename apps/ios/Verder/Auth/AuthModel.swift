@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 /// Whether the app holds a session, and how it gets one.
 @MainActor
@@ -42,12 +43,20 @@ final class AuthModel {
     @ObservationIgnored let store: any SessionStore
     @ObservationIgnored let passkeys: PasskeyAuth
     @ObservationIgnored let defaults: UserDefaults
+    /// The App Group dir holding the widget's snapshot (the top five titles
+    /// and the map headline). Erased on sign-out and on a rejected session.
+    @ObservationIgnored private let widgetSnapshotDir: URL?
+    @ObservationIgnored private let reloadWidgets: @MainActor () -> Void
 
-    init(client: APIClient, store: any SessionStore, passkeys: PasskeyAuth? = nil, defaults: UserDefaults = .standard) {
+    init(client: APIClient, store: any SessionStore, passkeys: PasskeyAuth? = nil, defaults: UserDefaults = .standard,
+         widgetSnapshotDir: URL? = nil,
+         reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
         self.client = client
         self.store = store
         self.passkeys = passkeys ?? PasskeyAuth(client: client, store: store, authenticator: PlatformPasskeyAuthenticator())
         self.defaults = defaults
+        self.widgetSnapshotDir = widgetSnapshotDir
+        self.reloadWidgets = reloadWidgets
         self.isSignedIn = store.load()?.isLive() ?? false
     }
 
@@ -161,20 +170,29 @@ final class AuthModel {
     func signOut() async {
         let req = client.request("/api/auth/sign-out", method: "POST", body: Data("{}".utf8), contentType: "application/json")
         _ = try? await client.send(req)
-        store.clear()
-        isSignedIn = false
-        passkeyOfferPending = false
-        passkeyMessage = nil
+        forgetLocally()
     }
 
     /// The server answered 401 to a call that needs the session (the push
     /// registration): forget it here and show sign-in. No sign-out request —
     /// the server already holds no such session.
     func sessionRejected() {
+        forgetLocally()
+    }
+
+    /// Both ways out end here. The widget's snapshot goes with the session:
+    /// the home-screen widget draws titles and the headline from it, and a
+    /// phone signed out (or revoked after it was lost) must stop showing the
+    /// case — the same reason the pocket dossier is wiped.
+    private func forgetLocally() {
         store.clear()
         isSignedIn = false
         passkeyOfferPending = false
         passkeyMessage = nil
+        if let widgetSnapshotDir {
+            WidgetSnapshot.erase(in: widgetSnapshotDir)
+            reloadWidgets()
+        }
     }
 
     /// The offer is made at most once per install, and only when the account

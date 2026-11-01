@@ -71,10 +71,18 @@ struct WidgetContent: Equatable {
     static let headlineLabel = "waar het nu op wacht"
 
     let state: State
+    /// The family this content was made for: `drawnText` answers for it alone.
+    let family: WidgetFamily
     /// Nil when stale: a day-old count is a guess, and the widget does not guess.
     let countText: String?
     /// "wacht op jou" / "wachten op jou", "Niets wacht op je." or the stale text.
     let caption: String
+    /// The words THIS family paints beside its count, and the only carrier of
+    /// the meaning once tinted, clear or lock-screen rendering drops amber:
+    /// the caption on the home screen and the rectangle, "voor jou" / "open"
+    /// in the circle, the whole line inline. The views read this and nothing
+    /// else for their words (`WidgetEntryTests.everyFamilyPaintsItsWords`).
+    let words: String
     /// The count and its words are the glance, never redacted.
     let countSensitive = false
     let rows: [Line]
@@ -86,12 +94,29 @@ struct WidgetContent: Equatable {
     /// The widget's own tap (`widgetURL`); rows carry their own.
     let url: URL
 
-    /// Every string the family would draw, for the "never a title on the lock
-    /// screen" and "never colour alone" checks.
-    var allText: [String] {
-        [countText, caption, oldestText, inlineText].compactMap { $0 }
+    /// Every string THIS family draws — never another family's — for the
+    /// "never a title on the lock screen" and "never colour alone" checks.
+    var drawnText: [String] {
+        if family == .accessoryInline { return [words] }
+        return [countText, words, oldestText].compactMap { $0 }
             + rows.flatMap { [$0.label, $0.text].compactMap { $0 } }
-            + [headline?.text].compactMap { $0 }
+            + [headline.map { _ in Self.headlineLabel }, headline?.text].compactMap { $0 }
+    }
+
+    /// The same content with other words: the test's lever for proving that a
+    /// face paints `words` rather than a string of its own.
+    func withWords(_ words: String) -> WidgetContent {
+        WidgetContent(state: state, family: family, countText: countText, caption: caption, words: words,
+                      rows: rows, headline: headline, oldestText: oldestText, inlineText: inlineText, url: url)
+    }
+
+    /// The words a family paints with its count, per state.
+    static func words(state: State, caption: String, inline: String, family: WidgetFamily) -> String {
+        switch family {
+        case .accessoryInline: inline
+        case .accessoryCircular: state == .stale ? "open" : "voor jou"
+        default: caption
+        }
     }
 
     /// Amber only in full colour, and only while something waits on a fresh
@@ -118,14 +143,18 @@ struct WidgetContent: Equatable {
     }
 
     static func make(snapshot: WidgetSnapshot?, family: WidgetFamily, now: Date) -> WidgetContent {
+        func content(_ state: State, count: String?, caption: String, rows: [Line] = [], headline: Line? = nil,
+                     oldest: String? = nil, inline: String) -> WidgetContent {
+            WidgetContent(state: state, family: family, countText: count, caption: caption,
+                          words: words(state: state, caption: caption, inline: inline, family: family),
+                          rows: rows, headline: headline, oldestText: oldest, inlineText: inline, url: inboxURL)
+        }
         guard let snapshot, now.timeIntervalSince(snapshot.updatedAt) < staleAfter else {
-            return WidgetContent(state: .stale, countText: nil, caption: staleText, rows: [], headline: nil,
-                                 oldestText: nil, inlineText: "verder · open om bij te werken", url: inboxURL)
+            return content(.stale, count: nil, caption: staleText, inline: "verder · open om bij te werken")
         }
         let count = max(snapshot.count, 0)
         guard count > 0 else {
-            return WidgetContent(state: .empty, countText: "0", caption: emptyText, rows: [], headline: nil,
-                                 oldestText: nil, inlineText: "verder · niets voor jou", url: inboxURL)
+            return content(.empty, count: "0", caption: emptyText, inline: "verder · niets voor jou")
         }
         let rows = snapshot.items.prefix(rowLimit(family)).map {
             Line(text: $0.title, label: KindLabel.dutch($0.kind), sensitive: true, url: url(for: $0))
@@ -133,15 +162,11 @@ struct WidgetContent: Equatable {
         let headline = showsHeadline(family) ? snapshot.headline.map {
             Line(text: $0, label: nil, sensitive: true, url: inboxURL)
         } : nil
-        return WidgetContent(
-            state: .waiting,
-            countText: String(count),
-            caption: count == 1 ? "wacht op jou" : "wachten op jou",
-            rows: Array(rows),
-            headline: headline,
-            oldestText: showsOldest(family) ? snapshot.oldestAt.map { oldest(since: $0, now: now) } : nil,
-            inlineText: "verder · \(count) voor jou",
-            url: inboxURL)
+        return content(.waiting, count: String(count),
+                       caption: count == 1 ? "wacht op jou" : "wachten op jou",
+                       rows: Array(rows), headline: headline,
+                       oldest: showsOldest(family) ? snapshot.oldestAt.map { oldest(since: $0, now: now) } : nil,
+                       inline: "verder · \(count) voor jou")
     }
 
     /// The exact item. `DeepLink.parse` accepts only a UUID, so anything else

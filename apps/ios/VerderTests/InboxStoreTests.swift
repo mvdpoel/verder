@@ -186,6 +186,26 @@ struct InboxStoreTests {
         #expect(WidgetSnapshot.read(from: r.dir) == nil)
     }
 
+    /// A revoked session (a lost phone, revoked in /settings/security) must not
+    /// leave the widget drawing the case: the 401 erases the snapshot — its
+    /// titles, ids and headline — and reloads the widget, which then reads
+    /// "Open verder om bij te werken". The pocket dossier is wiped for the same
+    /// reason; the widget's copy of the same content may not outlive it.
+    @Test func unauthorizedErasesTheWidgetSnapshotAndReloads() async throws {
+        let r = rig(Self.serving())
+        await r.store.refresh()
+        _ = try #require(WidgetSnapshot.read(from: r.dir))
+        #expect(r.flags.widgetReloads == 1)
+
+        StubProtocol.register(host: r.server.host, Self.serving(inbox: .status(401)))
+        await r.store.refresh()
+        #expect(!FileManager.default.fileExists(atPath: WidgetSnapshot.fileURL(in: r.dir).path))
+        #expect(r.flags.widgetReloads == 2)
+        // Nor does the store keep the content in memory for the next screen.
+        #expect(r.store.inbox == nil)
+        #expect(r.store.summary == nil)
+    }
+
     /// The headline is decoration; the count is the point. A summary that
     /// fails still lets the count through, with the last known headline.
     @Test func aFailedSummaryStillUpdatesTheCountAndKeepsTheHeadline() async throws {
