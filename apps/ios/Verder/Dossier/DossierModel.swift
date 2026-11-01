@@ -141,11 +141,12 @@ final class DossierModel {
 
     func doc(_ id: String) -> DossierDoc? { docs.first { $0.id == id }?.doc }
 
-    /// The disk copy, before any network.
+    /// The disk copy, before any network. While the phone's copy cannot be
+    /// read yet (a launch while locked), `loaded` stays false — the skeleton,
+    /// never "no documents" — and the next call tries again.
     func loadCached() async {
         guard !loaded else { return }
         await reload()
-        loaded = true
     }
 
     /// Syncs the dossier and fetches the open tasks — only when
@@ -183,6 +184,8 @@ final class DossierModel {
             try await store.sync(client: client)
             offline = false
             message = nil
+        } catch DossierStore.SyncError.unavailable {
+            // Not a failure: the copy is still locked away; tried again on unlock.
         } catch {
             message = handle(error)
         }
@@ -199,8 +202,10 @@ final class DossierModel {
     }
 
     private func reload() async {
+        guard await store.load() else { return }
         docs = await store.indexed()
         syncedAt = await store.lastSyncedAt
+        loaded = true
     }
 
     private func handle(_ error: any Error) -> String {

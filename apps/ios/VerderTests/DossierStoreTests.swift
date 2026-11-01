@@ -294,4 +294,87 @@ struct DossierStoreTests {
         #expect(await store.cursor == 0)
         #expect(await DossierStore(dir: r.dir).documents().isEmpty)
     }
+
+    // MARK: - A launch while the phone is locked
+
+    /// What a `.complete` file answers while the phone is locked: a read
+    /// error that is NOT "no such file".
+    static let lockedError = NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileReadNoPermission.rawValue)
+
+    /// A reader that fails like protected data until `unlocked` is set.
+    final class LockableReader: Sendable {
+        let unlocked = Mutex(false)
+        let attempts = Mutex(0)
+        var read: DossierStore.Reader {
+            { url in
+                self.attempts.withLock { $0 += 1 }
+                guard self.unlocked.withLock({ $0 }) else { throw DossierStoreTests.lockedError }
+                return try Data(contentsOf: url)
+            }
+        }
+    }
+
+    /// The store is built on every process launch, background ones too. A
+    /// read that fails while locked must not become an empty dossier: once
+    /// readable, the records and texts are all there, the cursor is kept, and
+    /// nothing is downloaded again.
+    @Test func aReadThatFailsWhileLockedIsRetriedAndLosesNothing() async throws {
+        let r = rig()
+        r.routes.deltas.withLock {
+            $0[0] = Self.delta(cursor: 5, upserts: [Self.doc(Self.a, bytes: Self.bytesA)])
+            $0[5] = Self.delta(cursor: 5)
+        }
+        r.routes.files.withLock { $0[Self.a] = Self.pdf(Self.bytesA) }
+        r.routes.texts.withLock { $0 = Self.texts([(Self.a, "Beschikking")]) }
+        try await DossierStore(dir: r.dir).sync(client: r.client)
+        let goodState = try Data(contentsOf: DossierStore.stateURL(in: r.dir))
+
+        let lock = LockableReader()
+        let store = DossierStore(dir: r.dir, reader: lock.read)
+        #expect(lock.attempts.withLock { $0 } == 0)  // nothing read in init
+        #expect(await store.load() == false)
+        #expect(await store.documents().isEmpty)
+        // A sync while unreadable neither asks the server nor writes the state.
+        let before = r.server.requests.count
+        await #expect(throws: DossierStore.SyncError.unavailable) { try await store.sync(client: r.client) }
+        #expect(r.server.requests.count == before)
+        #expect(try Data(contentsOf: DossierStore.stateURL(in: r.dir)) == goodState)
+
+        lock.unlocked.withLock { $0 = true }
+        #expect(await store.load() == true)
+        #expect(await store.documents().map(\.id) == [Self.a])
+        #expect(await store.text(Self.a) == "Beschikking")
+        #expect(await store.cursor == 5)
+
+        try await store.sync(client: r.client)
+        #expect(fileRequests(r, Self.a) == 1)
+        let syncs = r.server.requests.filter { $0.url?.path() == "/api/mobile/v1/documents/sync" }
+            .compactMap { $0.url?.query() }
+        #expect(syncs == ["cursor=0&limit=50", "cursor=5&limit=50"])
+    }
+
+    /// A text file that cannot be read is the same lock, not "no text".
+    @Test func anUnreadableTextFileKeepsTheStoreUnloaded() async throws {
+        let r = rig()
+        r.routes.deltas.withLock { $0[0] = Self.delta(cursor: 5, upserts: [Self.doc(Self.a, bytes: Self.bytesA)]) }
+        r.routes.files.withLock { $0[Self.a] = Self.pdf(Self.bytesA) }
+        r.routes.texts.withLock { $0 = Self.texts([(Self.a, "Beschikking")]) }
+        try await DossierStore(dir: r.dir).sync(client: r.client)
+
+        let unlocked = Mutex(false)
+        let store = DossierStore(dir: r.dir, reader: { url in
+            if url.pathExtension == "txt", !unlocked.withLock({ $0 }) { throw Self.lockedError }
+            return try Data(contentsOf: url)
+        })
+        #expect(await store.load() == false)
+        unlocked.withLock { $0 = true }
+        #expect(await store.text(Self.a) == "Beschikking")
+    }
+
+    /// A first run has no state file at all: that IS an empty dossier.
+    @Test func aMissingStateFileIsAFirstRun() async throws {
+        let store = DossierStore(dir: Self.tempDir())
+        #expect(await store.load() == true)
+        #expect(await store.cursor == 0)
+    }
 }

@@ -23,10 +23,21 @@ import Foundation
 /// already applied and the old cursor, so the next sync asks for the same
 /// page and skips what it already holds.
 ///
+/// LOADED LAZILY, NEVER IN `init`: the app builds this store on every
+/// process launch, background launches included (the badge push, the
+/// background upload relaunch, an answer button), and while the phone is
+/// locked a `.complete` file cannot be read. A read that FAILS is therefore
+/// not an empty dossier: the store stays unloaded and tries again on the next
+/// use (the tab's `.task`, a foreground refresh, or
+/// `protectedDataDidBecomeAvailable`). Only a MISSING state file is a real
+/// first run. Nothing is saved before a successful load, so a locked launch
+/// can never write a cursor-0 state over a good one.
+///
 /// Purge is never offered on the phone. A purge on the web arrives here as a
 /// tombstone, and the file route's 410 is read as the same fact.
 actor DossierStore {
     typealias Writer = @Sendable (Data, URL, Data.WritingOptions) throws -> Void
+    typealias Reader = @Sendable (URL) throws -> Data
 
     static let syncPath = "/api/mobile/v1/documents/sync"
     static let textsPath = "/api/mobile/v1/documents/texts"
@@ -35,12 +46,16 @@ actor DossierStore {
     static let textsBatch = 20
     static let writeOptions: Data.WritingOptions = [.atomic, .completeFileProtection]
     static let defaultWriter: Writer = { try $0.write(to: $1, options: $2) }
+    static let defaultReader: Reader = { try Data(contentsOf: $0) }
 
     enum SyncError: Error, Equatable {
         /// The downloaded bytes do not hash to the delta's sha256.
         case hashMismatch(String)
         /// The state could not be written; nothing was lost on the server.
         case disk(String)
+        /// The phone's copy could not be read yet (protected data is
+        /// unavailable while locked). Nothing was synced or written.
+        case unavailable
     }
 
     /// What the phone holds for one document. `contentType` is the file
@@ -59,24 +74,68 @@ actor DossierStore {
     }
 
     let dir: URL
+    private let reader: Reader
     private let writer: Writer
-    private var state: State
-    private var texts: [String: String]
+    private var state: State = .empty
+    private var texts: [String: String] = [:]
+    /// False until the disk copy has been read successfully (or found absent).
+    private var isLoaded = false
     private var syncing = false
 
-    init(dir: URL, writer: @escaping Writer = DossierStore.defaultWriter) {
+    /// `writer` first: a single trailing closure in the tests is the writer.
+    init(dir: URL, writer: @escaping Writer = DossierStore.defaultWriter,
+         reader: @escaping Reader = DossierStore.defaultReader) {
         self.dir = dir
+        self.reader = reader
         self.writer = writer
-        let loaded = (try? Data(contentsOf: Self.stateURL(in: dir)))
-            .flatMap { try? APIClient.jsonDecoder.decode(State.self, from: $0) } ?? .empty
-        state = loaded
+    }
+
+    /// Reads the disk copy once. True when the store is loaded (now or
+    /// before); false when a read failed for any reason other than the file
+    /// being absent — then nothing is assumed and the next call tries again.
+    @discardableResult
+    func load() -> Bool {
+        if isLoaded { return true }
+        let loaded: State
+        do {
+            let data = try reader(Self.stateURL(in: dir))
+            // A file that reads but does not decode is not a locked file: it
+            // is corrupt, and starting over is the only way forward.
+            loaded = (try? APIClient.jsonDecoder.decode(State.self, from: data)) ?? .empty
+        } catch where Self.isMissing(error) {
+            loaded = .empty
+        } catch {
+            return false
+        }
         var texts: [String: String] = [:]
         for id in loaded.records.keys {
-            if let data = try? Data(contentsOf: Self.textURL(id, in: dir)) {
-                texts[id] = String(decoding: data, as: UTF8.self)
+            do {
+                texts[id] = String(decoding: try reader(Self.textURL(id, in: dir)), as: UTF8.self)
+            } catch where Self.isMissing(error) {
+                continue  // no text yet: asked for on the next sync
+            } catch {
+                return false
             }
         }
+        state = loaded
         self.texts = texts
+        isLoaded = true
+        return true
+    }
+
+    /// Absent, as opposed to unreadable.
+    static func isMissing(_ error: any Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain,
+           ns.code == CocoaError.fileReadNoSuchFile.rawValue || ns.code == CocoaError.fileNoSuchFile.rawValue {
+            return true
+        }
+        if ns.domain == NSPOSIXErrorDomain, ns.code == Int(ENOENT) { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError,
+           underlying.domain == NSPOSIXErrorDomain, underlying.code == Int(ENOENT) {
+            return true
+        }
+        return false
     }
 
     // MARK: - Paths
@@ -95,12 +154,14 @@ actor DossierStore {
 
     // MARK: - Reading
 
-    var cursor: Int { state.cursor }
-    var lastSyncedAt: Date? { state.syncedAt }
+    var cursor: Int { load(); return state.cursor }
+    var lastSyncedAt: Date? { load(); return state.syncedAt }
 
-    /// Newest first: the order the tab lists them in.
+    /// Newest first: the order the tab lists them in. Empty while the disk
+    /// copy cannot be read yet (`load()` says which).
     func documents() -> [DossierDoc] {
-        state.records.values.map(\.doc).sorted { a, b in
+        load()
+        return state.records.values.map(\.doc).sorted { a, b in
             a.receivedAt != b.receivedAt ? a.receivedAt > b.receivedAt : a.id < b.id
         }
     }
@@ -109,12 +170,13 @@ actor DossierStore {
         documents().map { IndexedDoc(doc: $0, text: texts[$0.id]) }
     }
 
-    func text(_ id: String) -> String? { texts[id] }
+    func text(_ id: String) -> String? { load(); return texts[id] }
 
-    func contentType(_ id: String) -> String? { state.records[id]?.contentType }
+    func contentType(_ id: String) -> String? { load(); return state.records[id]?.contentType }
 
     /// Nil unless the bytes are on disk.
     func fileURL(_ id: String) -> URL? {
+        load()
         guard state.records[id] != nil else { return nil }
         let url = Self.fileURL(id, in: dir)
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
@@ -127,6 +189,8 @@ actor DossierStore {
     /// returns at once: the running one already covers it.
     func sync(client: APIClient) async throws {
         guard !syncing else { return }
+        // Never sync, and above all never save, over a copy not yet read.
+        guard load() else { throw SyncError.unavailable }
         syncing = true
         defer { syncing = false }
         try prepareDirectories()
@@ -155,6 +219,7 @@ actor DossierStore {
         try? FileManager.default.removeItem(at: dir)
         state = .empty
         texts = [:]
+        isLoaded = true
     }
 
     private func apply(_ delta: DossierDelta, client: APIClient) async throws {

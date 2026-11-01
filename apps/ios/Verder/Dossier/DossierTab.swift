@@ -61,6 +61,13 @@ struct DossierTab: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
         }
+        // A launch while locked could not read the phone's copy; read it now.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            Task {
+                await model.loadCached()
+                await refresh()
+            }
+        }
     }
 
     private func refresh() async {
