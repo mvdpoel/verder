@@ -259,7 +259,11 @@ final class DossierModel {
             // Wiped while this sync waited: nothing to report.
         } catch {
             guard epoch.isCurrent(started) else { return }
-            message = handle(error)
+            // `handle` can end the epoch itself (a 401 rejects the session,
+            // whose ender wipes the tab): look again before writing.
+            let text = handle(error)
+            guard epoch.isCurrent(started) else { return }
+            message = text
         }
         guard epoch.isCurrent(started) else { return }
         await reload()

@@ -129,6 +129,14 @@ struct SessionEpochTests {
 
     // MARK: - Dossier
 
+    /// Waits for the ender's store wipe without performing one.
+    static func waitUntilWiped(_ store: DossierStore, state: String) async {
+        for _ in 0..<500 {
+            if await store.documents().isEmpty, !FileManager.default.fileExists(atPath: state) { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     /// The actor is reentrant: a `wipe()` runs while `sync` waits on the
     /// network, and without its own wipe count the sync resumes and writes
     /// the page into the wiped store.
@@ -157,14 +165,17 @@ struct SessionEpochTests {
         #expect(!server.requests.contains { $0.url?.path().hasSuffix("/file") == true })
     }
 
+    /// The task list is held until the session has ended (the stub serves
+    /// one request at a time, so only one can be held), and nothing wipes the
+    /// tab after the refresh returns — the ender's store wipe is only waited
+    /// for. So the model's own guards are what keep its writes out: without
+    /// the `fetchTasks` guard `tasks` comes back as `[]`.
     @Test func endingTheSessionDuringADossierRefreshLeavesTheTabEmpty() async throws {
-        let gate = Gate()
+        let tasksGate = Gate()
         let server = StubServer()
         let routes = DossierModelTests.syncRoutes(file: DossierStoreTests.pdf(DossierStoreTests.bytesA))
         server.on { req in
-            let path = req.url?.path() ?? ""
-            if path == DossierStore.syncPath { gate.wait() }
-            if path == "/api/mobile/v1/tasks" { return .status(200, body: Data("[]".utf8)) }
+            if req.url?.path() == "/api/mobile/v1/tasks" { tasksGate.wait(); return .status(200, body: Data("[]".utf8)) }
             return routes(req)
         }
         let epoch = SessionEpoch()
@@ -172,11 +183,14 @@ struct SessionEpochTests {
         let model = DossierModel(store: DossierStore(dir: dir), client: server.client(), epoch: epoch)
         model.query = "huur"
         let refresh = Task { await model.refresh(isLocked: false, isActive: true) }
-        await DossierModelTests.waitUntil { gate.arrived.withLock { $0 } }
+        await DossierModelTests.waitUntil { tasksGate.arrived.withLock { $0 } }
+        #expect(tasksGate.arrived.withLock { $0 })
         epoch.end()
-        gate.open()
+        tasksGate.open()
         await refresh.value
-        await model.wipe()  // what Meer's sign-out awaits; the ender already started it
+        // The ender's own `Task { await store.wipe() }`, not one of the test's.
+        let state = DossierStore.stateURL(in: dir).path(percentEncoded: false)
+        await Self.waitUntilWiped(model.store, state: state)
 
         #expect(model.docs.isEmpty)
         #expect(model.query == "")
@@ -186,7 +200,28 @@ struct SessionEpochTests {
         #expect(model.tasks == nil)
         #expect(model.syncedAt == nil)
         #expect(await model.store.documents().isEmpty)
-        #expect(!FileManager.default.fileExists(atPath: DossierStore.stateURL(in: dir).path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: state))
+    }
+
+    /// The 401 path: `handle` ends the epoch itself (`auth.sessionRejected()`
+    /// in production), whose ender clears `message` — and the sync must not
+    /// then write "Log opnieuw in." into the tab it just wiped.
+    @Test func aRejectedSessionDuringADossierSyncLeavesTheWipedTabWithoutAMessage() async throws {
+        let server = StubServer()
+        server.on { _ in .status(401) }
+        let epoch = SessionEpoch()
+        let dir = DossierStoreTests.tempDir()
+        let model = DossierModel(store: DossierStore(dir: dir), client: server.client(),
+                                 onUnauthorized: { epoch.end() }, epoch: epoch)
+        let first = epoch.current
+        await model.refresh(isLocked: false, isActive: true)
+        #expect(!epoch.isCurrent(first))
+        await Self.waitUntilWiped(model.store, state: DossierStore.stateURL(in: dir).path(percentEncoded: false))
+
+        #expect(model.message == nil)
+        #expect(model.offline == false)
+        #expect(model.docs.isEmpty)
+        #expect(await model.store.documents().isEmpty)
     }
 
     @Test func endingTheSessionClearsAnOfflineDossierAndItsServerHits() async throws {
