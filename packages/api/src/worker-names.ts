@@ -170,3 +170,12 @@ export const AUTO_FILE_WORKER_NAME = "auto-file";
  * worker-health.ts, so a digest that stopped running goes amber.
  */
 export const AUTOFILE_DIGEST_WORKER_NAME = "autofile-digest";
+
+/**
+ * Written by apps/worker/src/weekly-summary.ts — one row per Sunday
+ * `weekly.summary` run (18:00 Amsterdam), carrying `detail.summary` — and read
+ * back by `dashboard.weekly` (the stored copy GET /api/mobile/v1/weekly serves)
+ * and by the `watcher` declaration in worker-health.ts. A rename missed on the
+ * reader side would answer 404 forever, which reads as "no Sunday yet".
+ */
+export const WEEKLY_SUMMARY_WORKER_NAME = "weekly-summary";

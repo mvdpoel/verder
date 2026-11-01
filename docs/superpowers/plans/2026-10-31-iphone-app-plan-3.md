@@ -982,7 +982,7 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   3. Calls **(merged)** `deps.notify({ kind: "weekly", level: "passive", title: "Je week", body: "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou", link: "verder://inbox", dedupKey: "weekly:<isoWeekKey>" })` (`NotifyFn`, `notifier(db)` in `index.ts`, `fakeNotify()` in tests). Counts only. The `dedupKey` makes a pg-boss retry a no-op instead of a second push.
 - `GET /api/mobile/v1/weekly` returns the newest `weekly-summary` row's `detail.summary`, or 404 before the first Sunday.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `week boundaries are Amsterdam Monday to Sunday`;
   - `own outbound mail is not received`;
   - `a Gmail-era whole From header is parsed, not substring-matched`;
@@ -991,7 +991,51 @@ There is no docmeta eval today: `apps/worker/src/eval/` has entry, registry, tas
   - `a retried job sends one push` (same `dedupKey`);
   - `body holds counts only`;
   - route `401 first`, `404 before any summary`.
-- [ ] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat: Sunday summary at 18:00 Amsterdam`.
+- [x] **Step 2:** Run (FAIL), implement, and run (PASS). Commit: `feat: Sunday summary at 18:00 Amsterdam`.
+
+**Rescoped 2026-11-01:** split into a server/worker half (done, this commit) and an iOS half (`WeeklyView.swift`, `WeeklyDTOTests.swift`, left for the iOS phase, which builds against the contract below). Where today's code moved or the plan was silent:
+- **The type lives in `packages/api/src/weekly-summary.ts`**, not in the worker: the worker writes it and `dashboard.weekly` reads it, and a JSON contract spelled twice drifts. It also holds `isWeeklySummary`, which the router uses so a malformed stored row answers 404, never junk. `composeWeekly`, `weeklyBody`, `weekOf` and `loadWeekly(db, week, deps?)` are in `apps/worker/src/weekly-summary.ts` as planned; `loadWeekly` takes injectable `waiting`/`ownAddresses` so DB tests do not depend on the dev database's live waiting list.
+- **The route reads through a new tRPC procedure, `dashboard.weekly`** (newest `ok` `weekly-summary` row, `detail.summary`), because every phone route goes through `mobileGet` + `serverCaller()` and no router read that row before. A failed (`error`) run is skipped, so a bad Sunday never hides last week's summary behind a 404.
+- **The hand-run is `apps/worker/src/ops/weekly-summary.ts`** (`pnpm --filter worker weekly-summary [--dry]`), not a `main` inside `weekly-summary.ts`, which `index.ts` imports. `--dry` composes and prints `{dry, summary, body, sent}` and writes no row and sends nothing; any other argument exits 2.
+- **`sent` excludes superseded log entries** (`NOT EXISTS … supersedes_id = e.id`): a corrected entry is one message, not two. Proposals count only when `kind <> 'question'`, `sent_at` is in the week and `result_entry_id IS NULL`.
+- **`received` is judged on `raw_emails.sent_at`** (the message date, not `fetched_at`, so a backfill does not dump years into one week). A From header `senderAddress` refuses (null) is not provably Martin's and counts as received.
+- **`filed` is attributed to the actor of the document's FIRST transition into `filed` in the week**; a filed → inbox → filed bounce inside one week counts once. Change rows are ordered by `created_at`, then `id`.
+- **`tasksDone` counts distinct tasks** with a `done` change in the week.
+- **Body wording** (counts only, singular forms): `3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou`; `1 taak klaar`, `1 wacht op jou`, and `niets wacht op jou` at zero. `opgeborgen` = `filedByMartin + filedByVerder`. A quiet week still sends (the summary is the point; the row is how worker-health tells quiet from dead).
+- **The job swallows its own error into an `error` row** (the `autofile.digest` pattern), so pg-boss never retries it; a re-run is by hand, and `dedupKey: "weekly:<ISO week>"` makes that a no-op push. Extra tests beyond Step 1's list: `sent counts entries plus proposals with no entry yet, never a question`, `tasks done counts each task once`, `waiting is the whole list, topWaiting its first three`, `loadWeekly reads every source for the week`, `the job records the summary and sends one passive weekly push`, `a dry run sends nothing and records nothing`, route `answers the newest stored summary as is`, api `isWeeklySummary`, and worker-health `the Sunday summary is a weekly watcher that tolerates two missed Sundays` (20 days `ok`, 22 days `down`).
+
+**The `/weekly` JSON contract (for the iOS half).** `GET /api/mobile/v1/weekly`, session cookie as every phone route, `cache-control: no-store`.
+- `401` `{"error":"unauthorized"}` without a session (checked before any router call).
+- `404` `{"error":"no weekly summary yet"}` before the first Sunday — render "nog geen weekoverzicht", not an error.
+- `200` — the stored summary, exactly as the push that announced it counted it:
+
+  ```json
+  {
+    "week": "2026-W44",
+    "from": "2026-10-26",
+    "to": "2026-11-01",
+    "sent": 3,
+    "received": 7,
+    "filedByMartin": 2,
+    "filedByVerder": 3,
+    "tasksDone": 2,
+    "waiting": 4,
+    "topWaiting": [
+      {
+        "kind": "task",
+        "id": "6f1c…-uuid",
+        "title": "Loonstrook september sturen",
+        "subtitle": null,
+        "priority": 3,
+        "at": "2026-10-30T10:00:00.000Z",
+        "dueAt": null,
+        "verder": false
+      }
+    ]
+  }
+  ```
+
+  `week` is the ISO week key (`^\d{4}-W\d{2}$`); `from`/`to` are Amsterdam day keys (Monday, Sunday); the six counts are non-negative integers; `topWaiting` holds at most 3 items and is exactly the `/inbox` item shape (`WaitingItem`: `kind` ∈ `proposal|question|suggestion|task|stop`, `priority` ∈ 1|2|3, `at` ISO-8601, `dueAt` ISO-8601 or null). `waiting` and `topWaiting` are a SNAPSHOT from Sunday 18:00, not live — the screen should say so ("op zondag") and link to Voor jou for the live list. The push itself is `kind: "weekly"` (category `WEEKLY`), `level: "passive"`, title `Je week`, link `verder://inbox`; the iOS side may route a `WEEKLY` tap to the summary screen instead.
 - [ ] **Step 3: [main session]** Run `pnpm --filter worker weekly-summary --dry` in the container. It sends nothing and prints the summary. Show Martin the exact body text. **The first scheduled Sunday push is his OK'd text.** After the first Sunday, check that `worker_runs` holds a `weekly-summary` row dated Sunday 17:00 UTC (18:00 CET) and that the push arrived. A job is not scheduled until `worker_runs` says it ran.
 
 ### Task 27: Deploy P3-D3 and the record [main session]

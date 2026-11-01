@@ -24,7 +24,7 @@ import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { proposalForLetter } from "./proposals/letters";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { AUTOFILE_DIGEST_WORKER_NAME, BADGE_SYNC_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { AUTOFILE_DIGEST_WORKER_NAME, BADGE_SYNC_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
 import { followUpCreator, runClocks } from "./proposals/clocks";
 import { realSendPort } from "./gmail-send";
@@ -32,6 +32,7 @@ import { resolveAggregator } from "./receipts";
 import { notifier, pushToDevices } from "./notify/notify";
 import { syncBadge } from "./badge-sync";
 import { runAutofileDigest } from "./autofile-digest";
+import { runWeeklySummary } from "./weekly-summary";
 import { realEmbedPort } from "@verder/api/src/search/embed";
 import { drainOnce } from "./search-drain";
 
@@ -383,6 +384,21 @@ await boss.work("autofile.digest", async () => {
   } catch (err) {
     await recordRun(db, AUTOFILE_DIGEST_WORKER_NAME, "error", { message: String(err) })
       .catch((e) => console.error(`autofile-digest: ${String(err)} / ${String(e)}`));
+  }
+});
+
+// The Sunday summary (weekly-summary.ts, spec §7.9): Sunday 18:00 AMSTERDAM —
+// pg-boss's `tz`, for the same daylight-saving reason as the digest above — one
+// passive push with counts only, and the stored copy GET /api/mobile/v1/weekly
+// serves. The dedupKey `weekly:<ISO week>` makes a retry a no-op.
+await boss.createQueue("weekly.summary");
+await boss.schedule("weekly.summary", "0 18 * * 0", undefined, { tz: "Europe/Amsterdam" });
+await boss.work("weekly.summary", async () => {
+  try {
+    await runWeeklySummary({ db, notify });
+  } catch (err) {
+    await recordRun(db, WEEKLY_SUMMARY_WORKER_NAME, "error", { message: String(err) })
+      .catch((e) => console.error(`weekly-summary: ${String(err)} / ${String(e)}`));
   }
 });
 

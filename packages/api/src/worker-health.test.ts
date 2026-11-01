@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cadenceMs, declFor, workerState } from "./worker-health";
 import {
   MAIL_BACKUP_WORKER_NAME, MAIL_DRILL_WORKER_NAME, NOTIFY_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME,
-  PROPOSAL_SEND_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTOFILE_DIGEST_WORKER_NAME,
+  PROPOSAL_SEND_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTOFILE_DIGEST_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME,
 } from "./worker-names";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -257,6 +257,13 @@ describe("declFor — the workers that exist today", () => {
     // superseded, or creating one failed: silence is health.
     expect(PROPOSAL_CREATE_WORKER_NAME).toBe("proposal-create");
     expect(declFor(PROPOSAL_CREATE_WORKER_NAME)).toEqual({ kind: "on-demand" });
+  });
+
+  it("the Sunday summary is a weekly watcher that tolerates two missed Sundays", () => {
+    expect(WEEKLY_SUMMARY_WORKER_NAME).toBe("weekly-summary");
+    expect(declFor(WEEKLY_SUMMARY_WORKER_NAME)).toEqual({ kind: "watcher", everyMs: 7 * 24 * HOUR });
+    expect(state(WEEKLY_SUMMARY_WORKER_NAME, "ok", new Date(NOW - 20 * 24 * HOUR))).toBe("ok");
+    expect(state(WEEKLY_SUMMARY_WORKER_NAME, "ok", new Date(NOW - 22 * 24 * HOUR))).toBe("down");
   });
 
   it("badge-sync is a 5-minute watcher", () => {

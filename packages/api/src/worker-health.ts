@@ -44,7 +44,7 @@ import {
   NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
   PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTO_FILE_WORKER_NAME,
-  AUTOFILE_DIGEST_WORKER_NAME,
+  AUTOFILE_DIGEST_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -226,6 +226,14 @@ const DECLS: Record<string, WorkerDecl> = {
   // `boss.schedule("badge.sync", "*/5 * * * *")`: one row per tick, an
   // unchanged count included, so silence means the icon's number is going stale.
   [BADGE_SYNC_WORKER_NAME]: { kind: "watcher", everyMs: 5 * MINUTE },
+  // `boss.schedule("weekly.summary", "0 18 * * 0", …, { tz: "Europe/Amsterdam" })`:
+  // one row per Sunday. A watcher at a WEEK, so cadence×3 tolerates TWO missed
+  // Sundays and goes `down` on the third, 21 days after the last run. That is
+  // deliberate: the summary is a passive convenience, one missed Sunday is a
+  // slow week rather than a fault worth amber, and `monthly`'s 35 days would be
+  // looser still. A hard failure is still `down` for 26 h through the ordinary
+  // error rule (ERROR_ACTIONABLE_MS).
+  [WEEKLY_SUMMARY_WORKER_NAME]: { kind: "watcher", everyMs: 7 * 24 * 60 * MINUTE },
 
   // ---- nightly, from the HOST crontab at 03:30, not from pg-boss ---------
   "nightly-verify": { kind: "nightly" },

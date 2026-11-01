@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../trpc";
 import { effectiveDocStatusSql } from "../effective-status";
 import { declFor, workerState } from "../worker-health";
+import { WEEKLY_SUMMARY_WORKER_NAME } from "../worker-names";
+import { isWeeklySummary, type WeeklySummary } from "../weekly-summary";
 
 export const dashboardRouter = router({
   stats: protectedProcedure.query(async ({ ctx }) => {
@@ -64,5 +66,20 @@ export const dashboardRouter = router({
           return { worker: w.worker, status: w.status, ranAt, kind: w.decl.kind,
             state: workerState(w.decl, w.status, ranAt, now) };
         }) };
+  }),
+  /**
+   * The newest Sunday summary (Plan 3 Task 26), or null before the first one.
+   * It is the STORED copy the worker wrote into `worker_runs.detail.summary`
+   * when it sent the push, so the screen a tap opens shows the numbers the push
+   * named — never a recount that disagrees with it. Only an `ok` row carries
+   * one; a failed run is skipped rather than answering 404 over last week.
+   */
+  weekly: protectedProcedure.query(async ({ ctx }): Promise<WeeklySummary | null> => {
+    const rows = (await ctx.db.execute(sql`
+      SELECT detail FROM worker_runs
+      WHERE worker = ${WEEKLY_SUMMARY_WORKER_NAME} AND status = 'ok'
+      ORDER BY ran_at DESC LIMIT 1`)).rows as { detail: unknown }[];
+    const summary = (rows[0]?.detail as { summary?: unknown } | null | undefined)?.summary;
+    return isWeeklySummary(summary) ? summary : null;
   }),
 });

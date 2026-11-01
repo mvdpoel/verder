@@ -35,7 +35,8 @@
     "proposals-pending": "tsx src/ops/proposals-pending.ts",
     "proposals-store": "tsx src/ops/proposals-store.ts",
     "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts",
-    "export-docmeta-samples": "tsx src/ops/export-docmeta-samples.ts"
+    "export-docmeta-samples": "tsx src/ops/export-docmeta-samples.ts",
+    "weekly-summary": "tsx src/ops/weekly-summary.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",
