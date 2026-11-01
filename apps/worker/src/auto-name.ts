@@ -24,6 +24,7 @@ import { schema, type Db } from "@verder/db";
 import { appendLedgerEvent } from "@verder/api/src/ledger";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
 import { effectiveTitleSql } from "@verder/api/src/effective-status";
+import { documentStatusChangePayloadByVerder } from "@verder/api/src/verification";
 import { buildNamePrompt, validateName } from "./ops/normalize-filenames";
 import { looksLikeProse } from "./text-quality";
 import { recordRun } from "./heartbeat";
@@ -98,14 +99,19 @@ export async function autoNameDocument(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${documentId}::text, 0))`);
     const fresh = await effectiveDocument(tx, documentId);
     if (fresh.effectiveTitle === to) return;
-    await tx.insert(schema.documentStatusChanges).values({
+    // verder's own change (migration 0040): actor 'verder', no suggestion,
+    // ledgered in the verder payload shape, so the ledger itself says this
+    // name was not Martin's and "Door verder gedaan" can list it — and so a
+    // rename never counts as Martin having touched the document, which would
+    // block auto-file on every document auto-name ever named.
+    const [row] = await tx.insert(schema.documentStatusChanges).values({
       documentId, status: fresh.effectiveStatus, title: to,
       docType: fresh.effectiveDocType ?? undefined,
-      partyId: fresh.effectivePartyId ?? undefined });
+      partyId: fresh.effectivePartyId ?? undefined,
+      actor: "verder", suggestionId: null }).returning();
     await appendLedgerEvent(tx, {
       eventType: "document.updated", entityType: "document", entityId: documentId,
-      payload: { id: documentId, status: fresh.effectiveStatus, title: to,
-        docType: fresh.effectiveDocType ?? null, partyId: fresh.effectivePartyId ?? null } });
+      payload: documentStatusChangePayloadByVerder(row) });
   });
   log(`  ${from}  ->  ${to}`);
   return { renamed: true, from, to };

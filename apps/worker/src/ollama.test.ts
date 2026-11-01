@@ -183,6 +183,36 @@ describe("suggestDocMeta (docmeta-v2)", () => {
     await pool.end();
   });
 
+  it("files a confident answer when DOCMETA_AUTO_APPLY is on, and only then", async () => {
+    const { db, pool } = createDb(URL);
+    const llm: LlmPort = { chatJson: async () => ({ title: "Loonstrook juli", docType: "Loonstrook", confident: true }) };
+    const off = await fixtureDoc(db);
+    await suggestDocMeta({ db, llm, extractText: async () => "", env: {} }, off.doc.id, off.buf);
+    expect((await newest(db, off.doc.id)).status).toBe("pending");
+    const on = await fixtureDoc(db);
+    await suggestDocMeta({ db, llm, extractText: async () => "",
+      env: { DOCMETA_AUTO_APPLY: "on" } }, on.doc.id, on.buf);
+    const s = await newest(db, on.doc.id);
+    expect(s.status).toBe("auto-applied");
+    const [row] = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, on.doc.id));
+    expect(row).toMatchObject({ status: "filed", title: on.doc.title, docType: "Loonstrook",
+      actor: "verder", suggestionId: s.id });
+    await pool.end();
+  });
+
+  it("never auto-files the needs-manual fallback", async () => {
+    const { db, pool } = createDb(URL);
+    const { doc, buf } = await fixtureDoc(db);
+    const llm: LlmPort = { chatJson: async () => { throw new Error("ollama down"); } };
+    await suggestDocMeta({ db, llm, extractText: async () => "",
+      env: { DOCMETA_AUTO_APPLY: "on" } }, doc.id, buf);
+    expect((await newest(db, doc.id)).status).toBe("needs-manual");
+    expect(await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id))).toHaveLength(0);
+    await pool.end();
+  });
+
   // Auto-name runs first in the same job and has usually renamed the document,
   // so the raw documents.title is a name the document no longer has.
   it("shows the model the effective title, not the raw one", async () => {

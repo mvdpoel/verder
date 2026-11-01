@@ -154,3 +154,11 @@ export const MAIL_AGENT_WORKER_NAME = "mail-agent";
  * dead badge job goes amber instead of leaving a stale number on the icon.
  */
 export const BADGE_SYNC_WORKER_NAME = "badge-sync";
+
+/**
+ * Written by apps/worker/src/auto-file.ts — one row per auto-apply attempt that
+ * got past the DOCMETA_AUTO_APPLY switch, applied or refused, with the reason —
+ * and read back by the `on-demand` declaration in worker-health.ts. A switched
+ * off auto-apply writes NO row, so silence is also what "off" looks like.
+ */
+export const AUTO_FILE_WORKER_NAME = "auto-file";

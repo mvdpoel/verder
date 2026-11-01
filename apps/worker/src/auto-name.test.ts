@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { canonicalJson, sha256Hex } from "@verder/core";
 import { createDb, schema } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { documentStatusChangePayloadByVerder } from "@verder/api/src/verification";
 import { autoNameDocument } from "./auto-name";
 
 const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
@@ -114,6 +116,30 @@ describe("autoNameDocument, already named", () => {
     const second = await autoNameDocument(deps, doc.id, PROSE);
     expect(second).toEqual({ renamed: false, reason: "already-named" });
     expect(called).toBe(callsAfterFirst);
+    await pool.end();
+  });
+});
+
+describe("autoNameDocument, the verder actor", () => {
+  it("auto-name now writes actor verder", async () => {
+    const { db, pool } = createDb(URL);
+    const doc = await makeDoc(db, `scan${Date.now()}.pdf`);
+    const to = `Beschikking.Rechtbank.T${Date.now()}`;
+    const out = await autoNameDocument({
+      db, scanDir: mkdtempSync(join(tmpdir(), "an7-")),
+      journalPath: join(mkdtempSync(join(tmpdir(), "anj7-")), "j.jsonl"),
+      nameLlm: async () => ({ filename: to, confident: true }),
+    }, doc.id, PROSE);
+    expect(out.renamed).toBe(true);
+    const [row] = await db.select().from(schema.documentStatusChanges)
+      .where(eq(schema.documentStatusChanges.documentId, doc.id));
+    expect(row).toMatchObject({ actor: "verder", suggestionId: null, title: `${to}.pdf` });
+    // The event carries the verder payload shape, so /verify matches the row
+    // through the actor = 'verder' candidate and nothing else.
+    const [ev] = await db.select().from(schema.ledgerEvents)
+      .where(and(eq(schema.ledgerEvents.entityId, doc.id),
+        eq(schema.ledgerEvents.eventType, "document.updated")));
+    expect(ev.payloadHash).toBe(sha256Hex(canonicalJson(documentStatusChangePayloadByVerder(row))));
     await pool.end();
   });
 });

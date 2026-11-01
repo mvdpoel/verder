@@ -2,6 +2,8 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { AUTO_FILE_WORKER_NAME } from "@verder/api/src/worker-names";
+import { autoApplyDocMeta } from "./auto-file";
 import { recordRun } from "./heartbeat";
 import { proposalForOwnSentMail } from "./proposals/own-sent";
 import { buildDocMetaPrompt, buildEntryPrompt, DOCMETA_PROMPT_VERSION, PROMPT_VERSION } from "./prompts";
@@ -108,7 +110,9 @@ export const llmDocSchema = z.object({
 });
 
 export async function suggestDocMeta(
-  deps: { db: Db; llm: LlmPort; extractText: (mime: string, buf: Buffer) => Promise<string> },
+  deps: { db: Db; llm: LlmPort; extractText: (mime: string, buf: Buffer) => Promise<string>;
+    /** Read for DOCMETA_AUTO_APPLY only; tests inject it, production passes nothing. */
+    env?: NodeJS.ProcessEnv },
   documentId: string, fileBuf: Buffer,
 ): Promise<void> {
   const [doc] = await deps.db.select().from(schema.documents)
@@ -120,13 +124,15 @@ export async function suggestDocMeta(
   // row, so the raw column holds a name like scan0042.pdf that the document
   // no longer has — and that /queue no longer shows next to the suggestion.
   const { effectiveTitle } = await effectiveDocument(deps.db, documentId);
+  let pendingId: string | null = null;
   try {
     const text = await deps.extractText(doc.mime, fileBuf);
     const parsed = llmDocSchema.parse(
       await deps.llm.chatJson(buildDocMetaPrompt(effectiveTitle, text)));
-    await deps.db.insert(schema.suggestions).values({
+    const [s] = await deps.db.insert(schema.suggestions).values({
       kind: "document-meta", documentId, model, promptVersion: DOCMETA_PROMPT_VERSION,
-      proposed: parsed });
+      proposed: parsed }).returning({ id: schema.suggestions.id });
+    pendingId = s.id;
     await recordRun(deps.db, "ollama", "ok", { documentId });
   } catch (err) {
     await deps.db.insert(schema.suggestions).values({
@@ -137,5 +143,16 @@ export async function suggestDocMeta(
       // answer. Never confident: there was no answer to be confident about.
       status: "needs-manual", proposed: { title: doc.title, docType: null, confident: false } });
     await recordRun(deps.db, "ollama", "error", { documentId, message: String(err) });
+  }
+  // OUTSIDE the try above, on purpose: a failure to auto-file must never be
+  // mistaken for a failed model call and insert a second, needs-manual
+  // suggestion beside the pending one. Best effort, like auto-name: the
+  // suggestion simply stays pending in Voor jou, and the run row says why.
+  if (pendingId) {
+    try { await autoApplyDocMeta(deps.db, pendingId, deps.env ?? process.env); }
+    catch (err) {
+      await recordRun(deps.db, AUTO_FILE_WORKER_NAME, "error",
+        { suggestionId: pendingId, message: String(err) });
+    }
   }
 }
