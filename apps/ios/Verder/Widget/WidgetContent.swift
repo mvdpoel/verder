@@ -126,6 +126,11 @@ struct WidgetContent: Equatable {
         state == .waiting && mode == .fullColor
     }
 
+    /// Every family the widget offers (`VerderWidget.supportedFamilies`), in
+    /// the order the in-app guide lists them.
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge,
+                                           .accessoryCircular, .accessoryRectangular, .accessoryInline]
+
     static func rowLimit(_ family: WidgetFamily) -> Int {
         switch family {
         case .systemMedium: 2

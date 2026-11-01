@@ -30,6 +30,21 @@ final class AccountModel {
     var email: String? { account?.email }
     var passkeys: Int? { account?.passkeys }
 
+    /// What Meer → Account draws. A cached account wins over a failed
+    /// refresh; with nothing cached a failure is `unavailable` with its cause,
+    /// never a "wordt opgehaald…" that waits forever.
+    enum Display: Equatable {
+        case loading
+        case shown(AccountDTO)
+        case unavailable(String)
+    }
+
+    var display: Display {
+        if let account { return .shown(account) }
+        if case .failed(let error) = state { return .unavailable(VoorJouTab.message(error)) }
+        return .loading
+    }
+
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
 
@@ -39,6 +54,8 @@ final class AccountModel {
     }
 
     func refresh() async {
+        // A retry with nothing shown reads as loading again, not as the old error.
+        if account == nil { state = .loading }
         switch await Self.fetch(client) {
         case .success(let dto):
             account = dto

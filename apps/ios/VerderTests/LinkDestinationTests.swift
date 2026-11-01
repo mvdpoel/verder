@@ -26,23 +26,45 @@ struct LinkDestinationTests {
         let root = repo.appending(path: dir)
         let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL } ?? [])
-            .filter { $0.pathExtension == "ts" && !$0.lastPathComponent.hasSuffix(".test.ts") }
+            .filter { ["ts", "tsx"].contains($0.pathExtension) && !$0.lastPathComponent.contains(".test.") }
         var out: [(String, String)] = []
-        let literal = try Regex(#"verder://[A-Za-z0-9_\-/${}.]*"#)
-        let interpolation = try Regex(#"\$\{[^}]*\}"#)
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8)
             for line in text.components(separatedBy: .newlines) {
-                // Doc comments describe links; only code sends them.
-                let code = line.trimmingCharacters(in: .whitespaces)
-                if code.hasPrefix("//") || code.hasPrefix("*") || code.hasPrefix("/*") { continue }
-                for m in line.matches(of: literal) {
-                    let raw = String(line[m.range])
-                    out.append((file.lastPathComponent, raw.replacing(interpolation, with: lower)))
-                }
+                for link in try literals(in: line) { out.append((file.lastPathComponent, link)) }
             }
         }
         return out
+    }
+
+    /// The `verder://…` literals on one line of code, interpolations replaced
+    /// by a UUID. A `?query` or `#fragment` is KEPT: `DeepLink.parse` refuses
+    /// both, so cutting them off would let a link that lands nowhere pass.
+    static func literals(in line: String) throws -> [String] {
+        // Doc comments describe links; only code sends them.
+        let code = line.trimmingCharacters(in: .whitespaces)
+        if code.hasPrefix("//") || code.hasPrefix("*") || code.hasPrefix("/*") { return [] }
+        let literal = try Regex(#"verder://[A-Za-z0-9_\-/${}.?#=&%+~:]*"#)
+        let interpolation = try Regex(#"\$\{[^}]*\}"#)
+        return line.matches(of: literal).map { String(line[$0.range]).replacing(interpolation, with: lower) }
+    }
+
+    @Test func aLinkLiteralKeepsItsQueryAndFragment() throws {
+        #expect(try Self.literals(in: #"  link: `verder://inbox?tab=x#top`,"#) == ["verder://inbox?tab=x#top"])
+        #expect(try Self.literals(in: #"  link: `verder://task/${t.id}#a`"#) == ["verder://task/\(Self.lower)#a"])
+        #expect(try Self.literals(in: #"  // e.g. verder://inbox?x"#) == [])
+        // …and what it keeps is exactly what the coverage tests then refuse.
+        #expect(DeepLink.parse("verder://inbox?tab=x#top") == .none)
+    }
+
+    /// The mobile routes and the shared API package can send links too; none
+    /// may be a tap that goes nowhere.
+    @Test func everyLinkTheMobileRoutesAndTheAPIServeLandsSomewhere() throws {
+        let links = try Self.serverLinks(under: "apps/web/src/app/api/mobile")
+            + Self.serverLinks(under: "packages/api/src")
+        for (file, link) in links {
+            #expect(DeepLink.parse(link).destination != nil, "\(file): \(link)")
+        }
     }
 
     @Test func everyLinkTheWorkerSendsLandsSomewhere() throws {

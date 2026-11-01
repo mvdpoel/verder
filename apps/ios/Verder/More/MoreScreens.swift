@@ -53,11 +53,24 @@ struct AccountScreen: View {
     var body: some View {
         MorePage(title: MoreMenu.title(.account)) {
             Panel(label: AccountCopy.emailLabel) {
-                MoreText.body(account.email ?? AccountCopy.unknownEmail, color: .inkBright)
-                if let error = account.lastErrorText { MoreText.readout(error) }
+                switch account.display {
+                case .loading:
+                    MoreText.body(AccountCopy.unknownEmail, color: .inkBright)
+                case .shown(let dto):
+                    MoreText.body(dto.email, color: .inkBright)
+                case .unavailable(let why):
+                    MoreText.body(why, color: .inkBright)
+                    AuthButton(title: AccountCopy.retry, weight: .secondary, enabled: true) {
+                        Task { await account.refresh() }
+                    }
+                }
             }
             Panel(label: AccountCopy.passkeyLabel) {
-                MoreText.body(AccountCopy.passkeyLine(account.passkeys))
+                if case .unavailable = account.display {
+                    MoreText.body(AccountCopy.passkeyUnknown)
+                } else {
+                    MoreText.body(AccountCopy.passkeyLine(account.passkeys))
+                }
                 if let message = auth.passkeyMessage { MoreText.body(message) }
                 if AccountCopy.offersPasskey(account.passkeys) {
                     AuthButton(title: "Passkey toevoegen", weight: .secondary, enabled: !auth.isBusy) {
@@ -95,14 +108,6 @@ struct AccountScreen: View {
             Text(AccountCopy.signOutMessage)
         }
         .task { await account.refresh() }
-    }
-}
-
-extension AccountModel {
-    /// Why the account could not be read, when nothing was shown before.
-    var lastErrorText: String? {
-        guard account == nil, case .failed(let error) = state else { return nil }
-        return VoorJouTab.message(error)
     }
 }
 

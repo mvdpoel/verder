@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import WidgetKit
 @testable import Verder
 
 /// Meer is a settings screen (plan 3 Task GAP): Account, Meldingen, Geld,
@@ -56,7 +57,14 @@ struct MoreMenuTests {
         #expect(AccountCopy.passkeyLine(3) == "3 passkeys op je account.")
         #expect(AccountCopy.offersPasskey(nil) == false, "an unknown count offers nothing")
         #expect(AccountCopy.offersPasskey(0))
-        #expect(!AccountCopy.offersPasskey(1))
+    }
+
+    /// A passkey on the Mac does not sign this iPhone in: the button stays
+    /// reachable when the account already holds one or more, so a second
+    /// device can add its own.
+    @Test func aSecondDeviceCanStillAddAPasskey() {
+        #expect(AccountCopy.offersPasskey(1))
+        #expect(AccountCopy.offersPasskey(3))
     }
 
     @Test func devicesLiveOnTheWeb() {
@@ -82,6 +90,16 @@ struct MoreMenuTests {
         }
     }
 
+    /// Breaking through a focus is NOT measured (CLAUDE.md, iPhone push): the
+    /// worker sends Verder's mail time-sensitive, and iOS decides per focus
+    /// whether that comes through. The copy says exactly that, no more.
+    @Test func verderMailClaimsNoFocusBreakthrough() throws {
+        let kind = try #require(NotificationsCopy.kinds.first { $0.category == "VERDER_MAIL" })
+        #expect(kind.explanation.contains("tijdgevoelig"))
+        #expect(kind.explanation.contains("per focus"))
+        #expect(!kind.explanation.contains("Komt ook door"))
+    }
+
     @Test func permissionStatesSayWhatToDo() {
         #expect(NotificationsCopy.permissionLine(.allowed) == "Meldingen staan aan.")
         #expect(NotificationsCopy.permissionLine(.denied).contains("Instellingen"))
@@ -99,10 +117,24 @@ struct MoreMenuTests {
     @Test func theWidgetGuideNamesEveryPlaceAWidgetGoes() {
         #expect(WidgetGuide.homeSteps.count >= 3)
         #expect(WidgetGuide.lockSteps.count >= 2)
-        #expect(WidgetGuide.sizes.map(\.name) == ["Klein", "Middel", "Groot", "Toegangsscherm"])
+        #expect(WidgetGuide.sizes.map(\.name) == ["Klein", "Middel", "Groot", "Rond", "Rechthoek", "Regel"])
         // The lock screen shows counts only: the guide says so rather than
         // letting Martin find out by putting one there.
         #expect(WidgetGuide.privacy.contains("nooit"))
+    }
+
+    /// One line per family the widget supports, and each line true for its
+    /// family: only the families that draw the age of the oldest say so
+    /// (on the lock screen, only the rectangle).
+    @Test func theWidgetGuideIsTruePerFamily() {
+        #expect(WidgetGuide.sizes.map(\.family) == WidgetContent.families)
+        for size in WidgetGuide.sizes {
+            #expect(size.shows.contains("oudste") == WidgetContent.showsOldest(size.family), "\(size.name)")
+        }
+        let lock = WidgetGuide.sizes.filter {
+            [.accessoryCircular, .accessoryRectangular, .accessoryInline].contains($0.family)
+        }
+        #expect(lock.filter { $0.shows.contains("oudste") }.map(\.family) == [.accessoryRectangular])
     }
 
     @Test func aboutReadsTheBundleAndTheServer() {
@@ -168,6 +200,36 @@ struct AccountModelTests {
         await model.refresh()
         await model.refresh()
         #expect(model.email == "martin@example.test")
+    }
+
+    /// Nothing cached and /me fails: the screen says why and offers a retry,
+    /// never a forever "wordt opgehaald…". The retry reads again.
+    @Test func aFailureWithNothingCachedSaysSoAndRetries() async {
+        let server = StubServer()
+        let calls = WeeklyDTOTests.Calls()
+        server.on { _ in calls.count() == 0 ? .failure(.notConnectedToInternet) : .status(200, body: Self.me) }
+        let model = AccountModel(client: server.client())
+        #expect(model.display == .loading)
+        await model.refresh()
+        guard case .unavailable(let why) = model.display else {
+            Issue.record("still \(model.display)"); return
+        }
+        #expect(!why.isEmpty)
+        #expect(!why.contains("opgehaald"))
+        #expect(AccountCopy.retry == "Opnieuw proberen")
+        await model.refresh()
+        #expect(model.display == .shown(AccountDTO(email: "martin@example.test", name: "Martin", passkeys: 1)))
+    }
+
+    /// A failed refresh over a cached account keeps showing it.
+    @Test func aFailureOverACachedAccountKeepsIt() async {
+        let server = StubServer()
+        let calls = WeeklyDTOTests.Calls()
+        server.on { _ in calls.count() == 0 ? .status(200, body: Self.me) : .failure(.notConnectedToInternet) }
+        let model = AccountModel(client: server.client())
+        await model.refresh()
+        await model.refresh()
+        #expect(model.display == .shown(AccountDTO(email: "martin@example.test", name: "Martin", passkeys: 1)))
     }
 
     @Test func theFixtureAnswersTheAccount() throws {

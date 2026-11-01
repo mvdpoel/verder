@@ -49,9 +49,8 @@ struct VerderWidget: Widget {
             VerderEntryView(entry: entry)
         }
         .configurationDisplayName("Voor jou")
-        .description("Hoeveel er op je wacht. Op het toegangsscherm alleen het aantal.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
-                            .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .description("Hoeveel er op je wacht. Op het toegangsscherm nooit titels.")
+        .supportedFamilies(WidgetContent.families)
     }
 }
 

@@ -57,23 +57,28 @@ struct WeeklyView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 secondary(WeeklyStore.Copy.notYetDetail)
             }
-            nextStep(WeeklyScreen.nextStep(liveWaiting: liveWaiting))
         case .failed(let error):
             panel {
                 Text(VoorJouTab.message(error))
                     .font(.display(15, relativeTo: .subheadline))
                     .foregroundStyle(Color.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Opnieuw proberen") { Task { await store.refresh() } }
-                    .font(.display(15, relativeTo: .subheadline, weight: .medium))
-                    .foregroundStyle(Color.signal)
-                    .frame(minHeight: 44)
             }
         case .loaded(let s):
             readout(s.windowLine)
             counts(s.counts)
             waiting(s.waiting)
-            nextStep(WeeklyScreen.nextStep(liveWaiting: liveWaiting))
+        }
+        ForEach(WeeklyScreen.steps(for: store.state, liveWaiting: liveWaiting), id: \.self) { step in
+            switch step {
+            case .retry:
+                Button(WeeklyScreen.retry) { Task { await store.refresh() } }
+                    .font(.display(15, relativeTo: .subheadline, weight: .medium))
+                    .foregroundStyle(Color.signal)
+                    .frame(minHeight: 44)
+            case .voorJou(let next):
+                nextStep(next)
+            }
         }
     }
 

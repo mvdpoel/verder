@@ -6,7 +6,8 @@ import Observation
 enum DoneByVerderCopy {
     static let title = "Door verder gedaan"
     static let explanation = "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
-    static let none = "Verder deed niets zelf."
+    /// Lowercase: verder is the app; capital Verder is the bewindvoerder.
+    static let none = "verder deed niets zelf."
     static let undone = "Ongedaan gemaakt."
     static let changedSince = "Al aangepast of vernietigd — de lijst is bijgewerkt."
     static let refused = "Dit kan hier niet ongedaan worden gemaakt."

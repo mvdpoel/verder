@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 
 /// A screen on the Meer stack. Held as RootView's path (lock-gated tab), so a
 /// link that lands on the lock screen opens once the app is unlocked: the
@@ -105,6 +106,8 @@ enum AccountCopy {
     static let signOutConfirm = "Uitloggen"
     static let cancel = "Annuleren"
     static let unknownEmail = "Account wordt opgehaald…"
+    static let retry = "Opnieuw proberen"
+    static let passkeyUnknown = "Niet bekend zolang het account niet is opgehaald."
 
     /// The server's count (`/me`), never a guess: nil is "not known yet".
     static func passkeyLine(_ count: Int?) -> String {
@@ -116,9 +119,12 @@ enum AccountCopy {
         }
     }
 
-    /// "Passkey toevoegen" only when the account provably has none; an
-    /// unknown count offers nothing (an offer is never worth an error).
-    static func offersPasskey(_ count: Int?) -> Bool { count == 0 }
+    /// "Passkey toevoegen" whenever the count is known, also when the account
+    /// already holds passkeys: one on the Mac does not sign THIS iPhone in,
+    /// so a second device must be able to add its own (a passkey that synced
+    /// here already is refused by iOS and said so, `AuthModel`). An unknown
+    /// count offers nothing (an offer is never worth an error).
+    static func offersPasskey(_ count: Int?) -> Bool { count != nil }
 
     /// /settings/security on the server the app talks to.
     static func devicesURL(base: URL) -> URL {
@@ -161,10 +167,12 @@ enum NotificationsCopy {
 
     /// One per category, in `NotificationCategories.ids` order. The levels
     /// stated are the ones the worker sets (apps/worker/src): Verder's mail
-    /// is time-sensitive, filing and the Sunday summary are passive.
+    /// is time-sensitive, filing and the Sunday summary are passive. Whether
+    /// a time-sensitive push breaks through a focus is iOS's call per focus
+    /// and was never measured, so the copy promises no breakthrough.
     static let kinds: [Kind] = [
         Kind(category: "VERDER_MAIL", name: "Mail van Verder",
-             explanation: "Elke mail of brief van je bewindvoerder. Komt ook door een focus heen."),
+             explanation: "Elke mail of brief van je bewindvoerder. Gaat als tijdgevoelig; per focus bepaalt iOS of hij doorkomt."),
         Kind(category: "CREDITOR_MAIL", name: "Mail van een schuldeiser",
              explanation: "Een schuldeiser of deurwaarder heeft je geschreven."),
         Kind(category: "PROPOSAL", name: "Voorstel",
@@ -186,7 +194,11 @@ enum NotificationsCopy {
 
 /// Meer → Widgets toevoegen: an in-app guide (the brief's "Structured").
 enum WidgetGuide {
+    /// One per family the widget supports (`WidgetContent.families`), each
+    /// saying what THAT family draws — the age of the oldest only where
+    /// `WidgetContent.showsOldest` is true.
     struct Size: Equatable, Sendable {
+        let family: WidgetFamily
         let name: String
         let shows: String
     }
@@ -209,13 +221,17 @@ enum WidgetGuide {
     ]
 
     static let sizes = [
-        Size(name: "Klein", shows: "Hoeveel er op je wacht."),
-        Size(name: "Middel", shows: "Hoeveel er wacht, en de bovenste twee."),
-        Size(name: "Groot", shows: "De bovenste vijf, en waar het nu op wacht."),
-        Size(name: "Toegangsscherm", shows: "Hoeveel er wacht, en hoe oud het oudste is."),
+        Size(family: .systemSmall, name: "Klein", shows: "Hoeveel er op je wacht."),
+        Size(family: .systemMedium, name: "Middel", shows: "Hoeveel er wacht, en de bovenste twee."),
+        Size(family: .systemLarge, name: "Groot",
+             shows: "De bovenste vijf, hoe oud het oudste is, en waar het nu op wacht."),
+        Size(family: .accessoryCircular, name: "Rond", shows: "Op je toegangsscherm: hoeveel er op je wacht."),
+        Size(family: .accessoryRectangular, name: "Rechthoek",
+             shows: "Op je toegangsscherm: hoeveel er wacht, en hoe oud het oudste is."),
+        Size(family: .accessoryInline, name: "Regel", shows: "Boven de klok, één regel: verder · 3 voor jou."),
     ]
 
-    static let privacy = "Op je toegangsscherm toont verder alleen aantallen, nooit titels."
+    static let privacy = "Op je toegangsscherm toont verder nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is."
 }
 
 /// Meer → Over verder: version, build and the server this build talks to.

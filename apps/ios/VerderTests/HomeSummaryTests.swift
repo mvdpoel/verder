@@ -75,7 +75,8 @@ struct HomeSummaryTests {
 
     @Test func nothingDoneOpensNothing() {
         let card = HomeSummary.doneCard(InboxDTO(count: 0, items: [], doneByVerder: []), revealed: true)
-        #expect(card.line == "Verder deed niets zelf.")
+        // lowercase: verder is the app; capital Verder is the bewindvoerder.
+        #expect(card.line == "verder deed niets zelf.")
         #expect(card.items.isEmpty)
         #expect(card.opens == nil)
     }

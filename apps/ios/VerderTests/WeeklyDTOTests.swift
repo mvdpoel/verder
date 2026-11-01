@@ -146,6 +146,18 @@ struct WeeklyDTOTests {
         #expect(none.waiting.items.isEmpty)
     }
 
+    /// A failed read is not a dead end: it offers "Opnieuw proberen" AND the
+    /// same next step as every other state, to Voor jou. Loading offers
+    /// nothing yet; the other states end in the one next step.
+    @Test func everyStateEndsInANextStepAFailureInTwo() throws {
+        let live = WeeklyScreen.nextStep(liveWaiting: 2)
+        #expect(WeeklyScreen.steps(for: .failed(.transport("x")), liveWaiting: 2) == [.retry, .voorJou(live)])
+        #expect(WeeklyScreen.steps(for: .notYet, liveWaiting: 2) == [.voorJou(live)])
+        #expect(WeeklyScreen.steps(for: .loaded(WeeklyScreen(try Self.dto())), liveWaiting: 2) == [.voorJou(live)])
+        #expect(WeeklyScreen.steps(for: .loading, liveWaiting: 2) == [])
+        #expect(WeeklyScreen.retry == "Opnieuw proberen")
+    }
+
     /// The server sends at most three; a longer list is cut, never all shown.
     @Test func topWaitingIsAtMostThree() throws {
         #expect(WeeklyScreen(try Self.dto(waiting: 9, top: 5)).waiting.items.count == 3)

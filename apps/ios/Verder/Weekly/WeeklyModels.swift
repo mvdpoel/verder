@@ -104,7 +104,7 @@ enum WeeklyFormat {
 /// next step's, and it is the LIVE count (`InboxStore`), never Sunday's.
 struct WeeklyScreen: Equatable, Sendable {
     /// How a line is drawn; the view switches on it and decides no colour itself.
-    enum Tone: Equatable, Sendable {
+    enum Tone: Hashable, Sendable {
         /// The ink scale: information, including what waited on Sunday.
         case history
         /// Amber: waits on Martin NOW, by the live count.
@@ -136,7 +136,7 @@ struct WeeklyScreen: Equatable, Sendable {
         let items: [Item]
     }
 
-    struct NextStep: Equatable, Sendable {
+    struct NextStep: Hashable, Sendable {
         let title: String
         let detail: String
         let tone: Tone
@@ -144,6 +144,25 @@ struct WeeklyScreen: Equatable, Sendable {
 
     static let title = "Weekoverzicht"
     var title: String { Self.title }
+
+    static let retry = "Opnieuw proberen"
+
+    /// What the screen ends with, per state. Never a dead end: a failed read
+    /// offers a retry AND the next step to Voor jou (which reads its own
+    /// data, so it may well work while this one did not). Loading offers
+    /// nothing yet.
+    enum Step: Hashable, Sendable {
+        case retry
+        case voorJou(NextStep)
+    }
+
+    static func steps(for state: WeeklyStore.State, liveWaiting: Int?) -> [Step] {
+        switch state {
+        case .loading: []
+        case .failed: [.retry, .voorJou(nextStep(liveWaiting: liveWaiting))]
+        case .notYet, .loaded: [.voorJou(nextStep(liveWaiting: liveWaiting))]
+        }
+    }
 
     /// The one next step, on every state of the screen: to Voor jou, saying
     /// how many wait on Martin NOW (the brief's "2 wachten nog op je → Voor
