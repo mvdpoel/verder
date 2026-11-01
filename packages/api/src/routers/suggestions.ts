@@ -79,7 +79,7 @@ export const suggestionsRouter = router({
     }),
 
   list: protectedProcedure.input(z.object({
-    status: z.enum(["pending", "approved", "edited", "rejected", "needs-manual"]).default("pending"),
+    status: z.enum(["pending", "approved", "edited", "rejected", "needs-manual", "auto-applied"]).default("pending"),
   })).query(async ({ ctx, input }) => {
     const rows = await ctx.db.select().from(schema.suggestions)
       .where(eq(schema.suggestions.status, input.status))

@@ -14,7 +14,9 @@ export const partyKindEnum = pgEnum("party_kind", ["person", "organization"]);
 export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-provided"]);
 export const actionStatusEnum = pgEnum("action_status", ["open", "done", "cancelled"]);
 export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta", "registry-item", "debt", "task"]);
-export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual"]);
+// `auto-applied` (0040): verder applied the suggestion itself under the
+// measured gate (spec §6.6) — neither Martin's approval nor his edit.
+export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual", "auto-applied"]);
 
 // --- financial registry (sub-project 2) ---
 export const itemCategoryEnum = pgEnum("item_category", ["energy", "insurance", "telecom", "streaming", "software", "housing", "other"]);
@@ -105,7 +107,17 @@ export const documentStatusChanges = pgTable("document_status_changes", {
   docType: text("doc_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   partyId: uuid("party_id").references(() => parties.id),
-});
+  // Migration 0040. NULL = Martin (or a pre-0040 machine row, never
+  // backfilled); 'verder' = verder acted on its own and the row's event hashes
+  // in documentStatusChangePayloadByVerder's shape. suggestionId names the
+  // suggestion it applied (NULL for auto-name) and requires actor
+  // (dsc_suggestion_needs_actor_ck), because a Martin row's hash never reads it.
+  actor: text("actor").$type<"verder">(),
+  suggestionId: uuid("suggestion_id").references((): AnyPgColumn => suggestions.id),
+}, (t) => [
+  check("dsc_actor_ck", sql`${t.actor} IS NULL OR ${t.actor} = 'verder'`),
+  check("dsc_suggestion_needs_actor_ck", sql`${t.actor} IS NOT NULL OR ${t.suggestionId} IS NULL`),
+]);
 
 /**
  * A destroyed document's obituary. EVIDENCE: SELECT, INSERT only.

@@ -13,6 +13,9 @@ import { Empty, PageTitle } from "@/components/ui";
  */
 export default async function QueuePage() {
   const caller = await serverCaller();
+  // Open verdicts only. An `auto-applied` suggestion (migration 0040) is
+  // already decided — verder filed it — so it never appears as a card here;
+  // it is listed under "Door verder gedaan", where it can be undone.
   const [pending, manual, waitingCount] = await Promise.all([
     caller.suggestions.list({ status: "pending" }),
     caller.suggestions.list({ status: "needs-manual" }),

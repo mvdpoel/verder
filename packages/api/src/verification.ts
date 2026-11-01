@@ -117,6 +117,51 @@ export function documentStatusChangePayloadWithParty(c: {
 }
 
 /**
+ * The THIRD shape (migration 0040): a change verder made on its own — an
+ * auto-file applying a document-meta suggestion, or an auto-name rename. The
+ * wide shape plus `actor: "verder"` and `suggestionId`, both always present as
+ * keys (`suggestionId` is null for an auto-name row, which applies no
+ * suggestion). This is how "verder did this" is recorded in the ledger itself
+ * (spec §12.4): an ADDITIVE shape for NEW rows only. Rows with `actor IS NULL`
+ * keep hashing in the narrow or wide shape exactly as before — see the
+ * dispatch in `resolveDocumentUpdatedHashes`.
+ */
+export function documentStatusChangePayloadByVerder(c: {
+  documentId: string; status: string; title: string | null; docType: string | null;
+  partyId: string | null; suggestionId: string | null;
+}) {
+  return { ...documentStatusChangePayloadWithParty(c), actor: "verder" as const,
+    suggestionId: c.suggestionId };
+}
+
+/**
+ * Every payload hash a live document_status_changes row may legitimately match,
+ * chosen by its `actor` — never "try every shape". Each shape is offered ONLY
+ * to the rows that could have been written in it:
+ *
+ * - `actor = 'verder'`: ONLY the verder shape. The narrow and wide shapes never
+ *   read `actor`, so offering them here would let an UPDATE that CLEARED actor
+ *   on a verder row still match; it reads instead as a mismatch, because the
+ *   verder-shape hash cannot be reproduced without the key.
+ * - `actor IS NULL`: exactly the pre-0040 candidates — the wide shape always,
+ *   the narrow one only while `party_id IS NULL` (see the docblock below).
+ *   Never the verder shape, or an UPDATE that SET actor on Martin's row would
+ *   still match its old hash. `suggestion_id` is not read by either shape,
+ *   which is why `dsc_suggestion_needs_actor_ck` forbids it on these rows.
+ *
+ * Any other actor value matches nothing (dsc_actor_ck forbids it anyway).
+ */
+function documentStatusChangeCandidates(c: typeof schema.documentStatusChanges.$inferSelect): string[] {
+  if (c.actor === "verder")
+    return [sha256Hex(canonicalJson(documentStatusChangePayloadByVerder(c)))];
+  if (c.actor !== null) return [];
+  const wide = sha256Hex(canonicalJson(documentStatusChangePayloadWithParty(c)));
+  return c.partyId === null
+    ? [sha256Hex(canonicalJson(documentStatusChangePayload(c))), wide]
+    : [wide];
+}
+
+/**
  * Resolves every document.updated event back to the document_status_changes row
  * that produced it, so tampering with a stored status change surfaces as a
  * payload_hash_mismatch instead of being echoed back green.
@@ -156,16 +201,21 @@ export function documentStatusChangePayloadWithParty(c: {
  *
  * A match on either candidate consumes BOTH, so the row still vouches for
  * exactly one event.
+ *
+ * Since migration 0040 the candidates are chosen by the row's `actor` first —
+ * see `documentStatusChangeCandidates` above: a verder row offers only the
+ * verder shape, and a row with `actor IS NULL` offers exactly the narrow/wide
+ * pair described here. The consumption rule is unchanged.
  */
 export async function resolveDocumentUpdatedHashes(
   db: Db,
   rows: { seq: number; eventType: string; entityId: string; payloadHash: string }[],
 ): Promise<Map<number, string>> {
   const resolved = new Map<number, string>();
-  // documentId -> per-row [narrow, wide] hash pairs not yet claimed.
-  // narrow is null when the row's live party_id is non-null — see the
-  // function docblock for why that must exclude it from matching.
-  const unconsumed = new Map<string, [string | null, string][]>();
+  // documentId -> per-row candidate hash lists not yet claimed. Which shapes
+  // a row offers depends on its live actor and party_id — see
+  // documentStatusChangeCandidates for why each guard must exclude the rest.
+  const unconsumed = new Map<string, string[][]>();
   for (const e of rows) {
     if (e.eventType !== "document.updated") continue;
     let candidates = unconsumed.get(e.entityId);
@@ -173,14 +223,10 @@ export async function resolveDocumentUpdatedHashes(
       const changes = await db.select().from(schema.documentStatusChanges)
         .where(eq(schema.documentStatusChanges.documentId, e.entityId))
         .orderBy(asc(schema.documentStatusChanges.createdAt));
-      candidates = changes.map((c) => [
-        c.partyId === null ? sha256Hex(canonicalJson(documentStatusChangePayload(c))) : null,
-        sha256Hex(canonicalJson(documentStatusChangePayloadWithParty(c))),
-      ]);
+      candidates = changes.map(documentStatusChangeCandidates);
       unconsumed.set(e.entityId, candidates);
     }
-    const i = candidates.findIndex(([narrow, wide]) =>
-      (narrow !== null && narrow === e.payloadHash) || wide === e.payloadHash);
+    const i = candidates.findIndex((hashes) => hashes.includes(e.payloadHash));
     // No live row hashes to this event's payload: the status change was edited
     // or removed after the fact. Leave it unresolved so the dispatch flags it.
     if (i === -1) continue;

@@ -1,0 +1,44 @@
+-- verder for iPhone, slice 7 (spec §6.6, §12.4): verder may FILE a document on
+-- its own, and must say so. Two additions:
+--   1. `auto-applied`, a suggestion verdict that is neither Martin's approval
+--      nor his edit — the honest record of a suggestion verder applied itself.
+--   2. `actor` and `suggestion_id` on document_status_changes, so a change
+--      verder made is told apart from one Martin made, and points at the
+--      suggestion it came from (NULL for an auto-name row, which has none).
+--
+-- Additive. Nothing is dropped, no grant changes: document_status_changes keeps
+-- SELECT, INSERT for both app roles and still has NO UPDATE and NO DELETE.
+--
+-- WHY THE COLUMNS ARE NULLABLE AND NEVER BACKFILLED: every existing row is
+-- Martin's, or a pre-actor machine row (auto-name before this migration), and
+-- its document.updated event carries a payload hash computed WITHOUT these
+-- keys. `actor IS NULL` is what tells resolveDocumentUpdatedHashes (in
+-- packages/api/src/verification.ts) to recompute such a row in the old narrow
+-- or wide shape; a backfill writing 'verder' into an old auto-name row would
+-- switch it to the verder shape and turn its event into a payload_hash_mismatch.
+-- Old rows must hash exactly as before (spec §12.4) — the proof is
+-- nightly-verify passing on the full pre-existing chain after deploy.
+--
+-- ORDERING TRAP (the same one 0020–0039 carry, with the widest blast radius
+-- yet): migrate from the homelab HOST BEFORE rebuilding web+worker. drizzle's
+-- select().from(documentStatusChanges) names every schema column, so a new
+-- image against an unmigrated database fails EVERY reader of this table on
+-- `column "actor" does not exist` — effectiveDocument and all its callers,
+-- /verify and nightly-verify included. Nothing below USES the new enum value,
+-- and nothing may: drizzle applies pending migrations in one transaction, and
+-- Postgres refuses a value added by ALTER TYPE … ADD VALUE until it commits.
+ALTER TYPE "public"."suggestion_status" ADD VALUE 'auto-applied';
+--> statement-breakpoint
+ALTER TABLE "document_status_changes" ADD COLUMN "actor" text, ADD COLUMN "suggestion_id" uuid REFERENCES "suggestions"("id");
+--> statement-breakpoint
+-- One machine actor, named. A free-text actor would be a second, unhashed way
+-- to describe who acted.
+ALTER TABLE "document_status_changes" ADD CONSTRAINT "dsc_actor_ck" CHECK ("actor" IS NULL OR "actor" = 'verder');
+--> statement-breakpoint
+-- suggestion_id is NOT part of the hash of an `actor IS NULL` row (Martin's
+-- rows hash in the narrow or wide shape, neither of which reads it). Without
+-- this CHECK an admin UPDATE setting suggestion_id on a Martin row would pass
+-- /verify and could make an ordinary rename look like verder's work in
+-- "Door verder gedaan". The columns are new and empty, so the constraints are
+-- added plain; NOT VALID + VALIDATE only pays on a populated column.
+ALTER TABLE "document_status_changes" ADD CONSTRAINT "dsc_suggestion_needs_actor_ck" CHECK ("actor" IS NOT NULL OR "suggestion_id" IS NULL);
