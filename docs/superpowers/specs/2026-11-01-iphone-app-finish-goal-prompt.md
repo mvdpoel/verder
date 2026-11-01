@@ -1,6 +1,7 @@
 ultracode
 
-Goal: finish "verder for iPhone": every screen real, complete, and of a
+Goal: finish "verder for iPhone": every screen designed in Figma over at
+least three iterations, then actually built and deployed, complete, and of a
 quality that stands next to the best apps on the phone. Martin's words: "make
 it complete, make it utterly premium top app". You work autonomously until
 the definition of done below holds. Stop only for the things listed under
@@ -51,66 +52,138 @@ After slice 8, close the remaining gaps:
 - Overzicht carries the money glance and "Door verder gedaan".
 - Every deep link and widget URL lands somewhere real.
 
-## Part B — make it premium
+## Part B — design every screen in Figma, three iterations, then build it
 
-Treat this as its own phase with its own evidence, not as polish sprinkled on
-during Part A.
+Martin's words: "design all screens via figma, re-iterate to make it look
+more premium, and improved UX, 3 iterations too. Look online for references
+at award winning apps with best UI and best UX." Part B runs alongside Part A:
+design a screen in Figma before its SwiftUI is final, and bring existing
+screens in line with their final Figma frames.
 
-1. **Fixture mode first.**
-   - Add a DEBUG-only launch argument (`-fixtures <name>`). It feeds canned
-     DTOs through the real stores, so every screen renders in every state
-     without a server: loading, empty, a single item, 498 items, long Dutch
-     titles, error, offline, unauthorized, and an upload queue that is
-     stuck.
-   - Fixtures are synthetic. Never real case data.
+1. **Research first, online.**
+   - Study current Apple Design Award winners and finalists (Delight and
+     Interaction, Visuals and Graphics, Innovation), App Store "App of the
+     Year" picks, and apps widely cited for their iOS craft, e.g.:
+     - Things 3
+     - Flighty
+     - Halide
+     - (Not Boring) Weather
+     - Mercury Weather
+     - Copilot Money
+     - Structured
+     - Gentler Streak
+     - Bear
+     - Fantastical
+     - Crouton
 
-2. **Screen inventory.**
-   - List every screen, sheet, alert, notification, widget family and
-     extension surface, with every state above.
-   - Capture each one in the simulator (`xcrun simctl io booted screenshot`)
-     in four conditions: iPhone 17, the smallest supported size, Dynamic
-     Type at the largest accessibility size, and Reduce Motion on.
-   - The app is dark only. Keep it that way.
+     Verify each pick online rather than trusting this list.
+   - Read Apple's Human Interface Guidelines for the iOS 26/27 visual
+     language (Liquid Glass, tab bars, sheets, widgets, Live Activities).
+   - Write a short reference board as the first page of the Figma file:
+     - per reference: what exactly it does well (hierarchy, density,
+       motion, empty states, onboarding, data glanceability) and which
+       verder screen it informs;
+     - the source URL and the screenshot or description it came from.
+   - Distil it into a written design brief, committed to
+     docs/superpowers/specs/: principles, the UX flows to improve, and what
+     "premium" means for verder in measurable terms.
 
-3. **Review loop.**
-   - Give the screenshots to independent design reviewers, each with a
+2. **Figma setup.**
+   - Use the Figma MCP tools, loading the figma skills they require
+     (figma-use, figma-generate-library, figma-generate-design).
+   - Run `whoami`, then create one file "verder iPhone". Ask Martin which
+     team or project it belongs in if that is ambiguous.
+   - Build a component library from the Holodek tokens, ported one-to-one
+     from apps/web/src/app/globals.css:
+     - colour, type and spacing variables
+     - card, row, button, badge, empty state, skeleton, sheet and tab bar
+     - the amber "waits on Martin" treatment, which is used ONLY for that
+   - Dark only.
+   - **Synthetic data only:** never put real case data in Figma. That means
+     no real names, amounts, organisations or letters. Figma is an outside
+     service.
+
+3. **Screen inventory.**
+   - Design a frame for every screen and surface:
+     - sign-in and lock
+     - Overzicht
+     - Voor jou: the list and every detail (proposal, suggestion, task,
+       question), plus Door verder gedaan
+     - Scan and the upload queue
+     - Dossier
+     - money glance
+     - Meer and its settings
+     - voice quick-log
+     - weekly summary
+     - every notification type, including the long-press actions
+     - every widget family and the lock-screen widgets
+     - the share extension
+     - permission pre-prompts
+   - Give each screen its key states: loading, empty, a single item, many
+     items (498), long Dutch titles, error, offline, unauthorized.
+   - Also cover the largest accessibility text size and the smallest
+     iPhone.
+
+4. **Three iterations at least, per screen.**
+   - Pages `Iteration 1`, `Iteration 2`, `Iteration 3` (more if needed), so
+     every version stays visible side by side. Never overwrite one.
+   - After each iteration, capture the frames with `get_screenshot` and
+     give them to independent design reviewers. Each reviewer has a
      different lens:
-     - hierarchy and typography
+     - visual hierarchy and typography
      - spacing and rhythm
-     - motion and feedback
-     - copy (Dutch; supportive towards Martin; official register for anyone
-       else)
+     - UX flow: taps to goal, dead ends, what Martin must think about
+     - Dutch copy: supportive towards Martin; official register for anyone
+       else
      - accessibility
-     - "what makes this look cheap or unfinished"
-   - Reviewers try to find faults. They don't approve.
-   - Fix everything at Important or above, re-capture, and review again.
-     Stop after two consecutive rounds turn up nothing above minor.
+     - "compared with the reference board, what makes this look cheap or
+       unfinished"
+   - Reviewers try to find faults; they do not approve.
+   - Each next iteration must answer every finding at Important or above.
+     Under each frame, write a change note explaining what changed and
+     why.
+   - A screen is final only when it has at least three iterations AND its
+     last review round found nothing above minor.
+   - Show Martin the final iteration of the key screens (Overzicht, Voor jou
+     list and detail, Scan, Dossier). His feedback starts another iteration.
 
-4. **The bar.** Apple Design Award quality, inside the Holodek system:
-   - Tokens are ported one-to-one from apps/web/src/app/globals.css. Amber
-     is ONLY for what waits on Martin.
-   - One card component and one row component, used everywhere.
-   - Skeleton placeholders instead of bare spinners.
-   - Purposeful empty states.
-   - Every error says what to do next. No screen is a dead end.
-   - Tap targets of at least 44 pt. Real VoiceOver labels and order.
-     Dynamic Type works all the way to the largest accessibility size
-     without truncating meaning.
-   - `.sensoryFeedback` on approve, reject, answer, sent and scanned.
-   - Spring transitions that respect Reduce Motion. Swipe actions and
-     context menus wherever iOS users expect them.
-   - SF Symbols used consistently. The widget looks right in every family
-     and on the lock screen.
-   - Cold launch stays under 2 s on the phone. Measure it again after
-     Part B; it was 202 ms.
+5. **The bar every final frame meets.**
+   - **Consistency**
+     - One card component and one row component.
+     - SF Symbols are used consistently.
+   - **States and errors**
+     - Skeletons instead of bare spinners.
+     - Purposeful empty states.
+     - Every error names the next step, and no screen is a dead end.
+   - **Interaction**
+     - Swipe actions and context menus where iOS users expect them.
+     - Haptics are specified on approve, reject, answer, sent and scanned.
+     - Motion is specified (spring, matched geometry) with a Reduce Motion
+       fallback.
+   - **Accessibility**
+     - Tap targets of at least 44 pt.
+     - Real VoiceOver order.
+     - Dynamic Type works to the largest accessibility size without losing
+       meaning.
+   - **Widgets:** right in every family and on the lock screen.
 
-5. **On the phone.** Install with `apps/ios/scripts/install.sh` (the phone
-   must be unlocked). Show Martin the key screens and ask him to judge them.
-   On-device screenshots contain real case data, so they never leave the
-   Mac and are never published.
+6. **Build it to the frames.**
+   - Implement each final frame in SwiftUI.
+   - Add a DEBUG-only `-fixtures <name>` launch argument that feeds the
+     same synthetic data as Figma through the real stores, so every state
+     renders without a server.
+   - For each screen and state, capture the simulator
+     (`xcrun simctl io booted screenshot`) and put it next to its Figma
+     frame. Fix every difference at Important or above, and re-capture.
+   - Cold launch stays under 2 s on the phone. Measure it again; it was
+     202 ms.
+   - Install on the phone with `apps/ios/scripts/install.sh` (the phone
+     must be unlocked) and let Martin judge the key screens there.
+     On-device screenshots contain real case data, so they never leave the
+     Mac.
 
-6. **Scope.** Polish freely. A new feature that isn't in the spec may be
-   built only if:
+7. **Scope.** Polish and UX improvements are yours to make. A new feature
+   that isn't in the spec may be built only if:
    - it needs no server law change;
    - it sends nothing;
    - it is reversible.
@@ -171,6 +244,8 @@ during Part A.
 - judging the screens on the device
 - approving any send or test push
 - anything billable
+- which Figma team or project to use, if that is ambiguous
+- judging the final Figma frames of the key screens
 
 ## Standing authority
 
@@ -183,14 +258,23 @@ Merging to main: open a PR at the end and ask.
 
 ## Done means
 
-- [ ] Plan 3 Tasks 17–27 are done, and P3-D3 is deployed and verified.
+- [ ] The online reference board and the design brief exist (the board in
+      Figma, the brief committed).
+- [ ] EVERY screen and surface in the Figma file has at least three
+      iterations, with review notes, and its final frame passed a review
+      round with nothing above minor.
+- [ ] Every final frame is ACTUALLY IMPLEMENTED in SwiftUI.
+- [ ] The simulator screenshot of every final frame matches its Figma frame,
+      on fixtures, side by side.
+- [ ] Plan 3 Tasks 17–27 are done, and P3-D3 is DEPLOYED and verified on
+      the homelab: nightly-verify OK, ledger delta as predicted.
+- [ ] The finished app is installed on Martin's phone, and he has judged the
+      key screens there.
 - [ ] Every tab and surface is real. No placeholder or "binnenkort" text is
       left.
-- [ ] The fixture screenshot set for every screen and state passes two
-      clean review rounds. Publish it as a private artifact for Martin,
-      fixtures only, before/after where it changed.
-- [ ] Martin has seen the key screens on his phone.
 - [ ] All iOS, api, worker and web tests are green.
+- [ ] The Figma file link plus a private artifact for Martin: per screen,
+      iteration 1 → 3 → the built app, fixtures only.
 - [ ] CLAUDE.md is updated with every trap found and every number measured.
 - [ ] The final report to Martin covers what was built, what was measured,
       what is still waiting on real events, and the list of any features
