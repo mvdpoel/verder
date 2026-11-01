@@ -24,6 +24,21 @@ struct PDFAssemblerTests {
         #expect(cg.width * cg.height >= 12_000_000)
     }
 
+    /// A page that cannot be encoded is left out and the count says so.
+    @Test func assembleCountsOnlyThePagesWritten() {
+        let out = PDFAssembler.assemble(pages: [Fixture.letterPage, UIImage()])
+        #expect(out.pageCount == 1)
+        #expect(PDFDocument(data: out.data)?.pageCount == 1)
+    }
+
+    /// No page written: empty data, never a zero-page PDF.
+    @Test func noEncodablePageGivesNoPDF() {
+        let out = PDFAssembler.assemble(pages: [UIImage()])
+        #expect(out.pageCount == 0)
+        #expect(out.data.isEmpty)
+        #expect(PDFAssembler.makePDF(pages: [UIImage()]).isEmpty)
+    }
+
     @Test func threePagePDFHasThreePages() {
         let page = Fixture.letterPage
         let data = PDFAssembler.makePDF(pages: [page, page, page])

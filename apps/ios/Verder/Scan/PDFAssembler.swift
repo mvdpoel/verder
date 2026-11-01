@@ -20,11 +20,21 @@ enum PDFAssembler {
     static let pageWidthPoints: CGFloat = 595
 
     static func makePDF(pages: [UIImage], maxLongEdge: CGFloat = 2200, jpegQuality: CGFloat = 0.6) -> Data {
-        guard !pages.isEmpty else { return Data() }
+        assemble(pages: pages, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality).data
+    }
+
+    /// `makePDF`, also saying how many pages actually went in. A page that
+    /// cannot be encoded is left out, so a caller that promises "N pages" must
+    /// count THIS, never its inputs. No page at all gives empty data, never a
+    /// zero-page PDF that would pass for a document.
+    static func assemble(pages: [UIImage], maxLongEdge: CGFloat = 2200,
+                         jpegQuality: CGFloat = 0.6) -> (data: Data, pageCount: Int) {
+        guard !pages.isEmpty else { return (Data(), 0) }
         let out = NSMutableData()
         guard let consumer = CGDataConsumer(data: out as CFMutableData),
               let pdf = CGContext(consumer: consumer, mediaBox: nil, nil)
-        else { return Data() }
+        else { return (Data(), 0) }
+        var written = 0
         for page in pages {
             guard let jpeg = encodePage(page, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality),
                   let provider = CGDataProvider(data: jpeg as CFData),
@@ -37,9 +47,10 @@ enum PDFAssembler {
             pdf.beginPDFPage(info as CFDictionary)
             pdf.draw(image, in: box)
             pdf.endPDFPage()
+            written += 1
         }
         pdf.closePDF()
-        return out as Data
+        return written == 0 ? (Data(), 0) : (out as Data, written)
     }
 
     /// Downscale + orientation + colour decision + JPEG, in one Core Image pass.

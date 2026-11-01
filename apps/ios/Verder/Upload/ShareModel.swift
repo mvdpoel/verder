@@ -36,7 +36,22 @@ final class ShareModel {
         static let tooLarge = "Dit is te groot voor verder (max. 48 MB per bestand)."
         static let saveFailed = "Dit kon niet worden bewaard. Probeer het opnieuw."
         static let noGroup = "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
+        static let unreadable = "verder kon hier niets uit lezen. Er is niets verstuurd."
+        static let close = "Sluiten"
+        /// `Dat zijn er 12. verder neemt er maximaal 10 tegelijk mee; deel ze in delen.`
+        static func tooMany(_ count: Int) -> String {
+            "Dat zijn er \(count). verder neemt er maximaal \(ShareModel.maxItems) tegelijk mee; deel ze in delen."
+        }
+        /// `1 van 3 kon niet worden meegenomen.`, `2 van 12 konden …`
+        static func leftOut(_ missing: Int, of total: Int) -> String {
+            "\(missing) van \(total) \(missing == 1 ? "kon" : "konden") niet worden meegenomen."
+        }
     }
+
+    /// The most items one share takes. The activation rule counts files and
+    /// images under separate keys, so a mixed share can hand over more; above
+    /// this the share is refused with a message, never cut short in silence.
+    nonisolated static let maxItems = 10
 
     /// Under the server's 50 MB (`MAX_UPLOAD_BYTES`), leaving room for the
     /// multipart envelope; also well inside an extension's memory budget.
@@ -44,8 +59,11 @@ final class ShareModel {
 
     private(set) var phase: Phase = .loading
     private(set) var prepared: [PreparedShare] = []
-    /// How many photos went into the one PDF, for the detail line.
-    private(set) var photoCount = 0
+    /// How many pages are IN the one photo PDF, for the detail line.
+    private(set) var photoPages = 0
+    /// Items handed over, and how many of them are not in `prepared`.
+    private(set) var handedOver = 0
+    private(set) var leftOut = 0
 
     typealias Sender = @Sendable ([UUID], URL) async -> [UUID]
 
@@ -62,12 +80,29 @@ final class ShareModel {
         self.sender = sender
     }
 
-    /// The share sheet's items, loaded.
+    /// How many items the share sheet handed over, before any is loaded.
+    /// False (and refused) above `maxItems`, so nothing is loaded for a share
+    /// that will not go.
+    @discardableResult
+    func handedOver(count: Int) -> Bool {
+        handedOver = count
+        guard count <= Self.maxItems else {
+            phase = .refused(Copy.tooMany(count))
+            return false
+        }
+        return true
+    }
+
+    /// The share sheet's items, loaded: one input per item handed over, an
+    /// item that could not be read included as `.unreadable`.
     func loaded(_ inputs: [SharedInput]) {
-        photoCount = inputs.count { if case .image = $0 { true } else { false } }
-        prepared = SharePreparation.prepare(inputs, capturedAt: now())
+        guard handedOver(count: inputs.count) else { return }
+        let result = SharePreparation.prepare(inputs, capturedAt: now())
+        prepared = result.files
+        photoPages = result.photoPages
+        leftOut = result.leftOut
         if prepared.isEmpty {
-            phase = .refused(Copy.nothing)
+            phase = .refused(inputs.isEmpty ? Copy.nothing : Copy.unreadable)
         } else if prepared.contains(where: { $0.data.count > Self.maxFileBytes }) {
             phase = .refused(Copy.tooLarge)
         } else {
@@ -82,10 +117,10 @@ final class ShareModel {
     /// `2 foto's als één PDF · 1,2 MB`, `PDF · 340 kB`.
     var detail: String {
         var parts: [String] = []
-        if photoCount > 0 { parts.append(photoCount == 1 ? "1 foto als PDF" : "\(photoCount) foto's als één PDF") }
-        let others = prepared.count - (photoCount > 0 ? 1 : 0)
-        if others > 0, photoCount > 0 { parts.append(others == 1 ? "1 bestand" : "\(others) bestanden") }
-        if photoCount == 0, prepared.count == 1 {
+        if photoPages > 0 { parts.append(photoPages == 1 ? "1 foto als PDF" : "\(photoPages) foto's als één PDF") }
+        let others = prepared.count - (photoPages > 0 ? 1 : 0)
+        if others > 0, photoPages > 0 { parts.append(others == 1 ? "1 bestand" : "\(others) bestanden") }
+        if photoPages == 0, prepared.count == 1 {
             parts.append(((prepared[0].fileName as NSString).pathExtension.uppercased()).ifEmpty("Bestand"))
         }
         let bytes = prepared.reduce(0) { $0 + $1.data.count }
@@ -94,6 +129,18 @@ final class ShareModel {
     }
 
     var canSend: Bool { phase == .ready }
+
+    /// What did not go, shown beside every phase after loading (before
+    /// Versturen AND under "Staat in je dossier."), so a partial share never
+    /// reads as a whole one.
+    var warning: String? {
+        guard leftOut > 0, !prepared.isEmpty else { return nil }
+        return Copy.leftOut(leftOut, of: handedOver)
+    }
+
+    /// The screen closes itself after Versturen only when there is nothing
+    /// to read; with a warning, Martin closes it.
+    var closesByItself: Bool { warning == nil }
 
     /// Versturen.
     func commit() async {

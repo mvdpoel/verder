@@ -34,7 +34,8 @@ final class ShareViewController: UIViewController {
         let host = UIHostingController(rootView: ShareView(
             model: model,
             cancel: { [weak self] in self?.finish(cancelled: true) },
-            send: { [weak self] in self?.send() }))
+            send: { [weak self] in self?.send() },
+            close: { [weak self] in self?.finish(cancelled: false) }))
         host.view.backgroundColor = .clear
         addChild(host)
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -49,10 +50,13 @@ final class ShareViewController: UIViewController {
 
         let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? [])
             .flatMap { $0.attachments ?? [] }
+        // Every item is accounted for: too many refuses the share, and one
+        // that cannot be read stays an input the screen reports.
+        guard model.handedOver(count: providers.count) else { return }
         Task {
             var inputs: [SharedInput] = []
-            for provider in providers.prefix(10) {
-                if let input = await Self.load(provider) { inputs.append(input) }
+            for provider in providers {
+                inputs.append(await Self.load(provider) ?? .unreadable)
             }
             model.loaded(inputs)
         }
@@ -61,7 +65,7 @@ final class ShareViewController: UIViewController {
     private func send() {
         Task {
             await model.commit()
-            if case .done = model.phase {
+            if case .done = model.phase, model.closesByItself {
                 // Long enough to read one line; the work is already safe on disk.
                 try? await Task.sleep(for: .seconds(1.2))
                 finish(cancelled: false)
@@ -145,6 +149,11 @@ struct ShareView: View {
     let model: ShareModel
     let cancel: () -> Void
     let send: () -> Void
+    let close: () -> Void
+
+    private var isDone: Bool {
+        if case .done = model.phase { true } else { false }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -158,11 +167,18 @@ struct ShareView: View {
                     .font(.display(17, relativeTo: .headline, weight: .medium))
                     .foregroundStyle(Color.inkBright)
                 Spacer()
-                Button(ShareModel.Copy.send, action: send)
-                    .font(.mono(13, relativeTo: .footnote, weight: .medium))
-                    .foregroundStyle(model.canSend ? Color.signal : Color.inkLabel)
-                    .disabled(!model.canSend)
-                    .frame(minHeight: 44)
+                if isDone {
+                    Button(ShareModel.Copy.close, action: close)
+                        .font(.mono(13, relativeTo: .footnote, weight: .medium))
+                        .foregroundStyle(Color.signal)
+                        .frame(minHeight: 44)
+                } else {
+                    Button(ShareModel.Copy.send, action: send)
+                        .font(.mono(13, relativeTo: .footnote, weight: .medium))
+                        .foregroundStyle(model.canSend ? Color.signal : Color.inkLabel)
+                        .disabled(!model.canSend)
+                        .frame(minHeight: 44)
+                }
             }
 
             if !model.prepared.isEmpty {
@@ -182,6 +198,12 @@ struct ShareView: View {
                 }
                 .padding(16)
                 .glassPanel()
+            }
+
+            if let warning = model.warning {
+                Text(warning)
+                    .font(.display(15, relativeTo: .subheadline))
+                    .foregroundStyle(Color.ink)
             }
 
             if let message = model.message {

@@ -170,7 +170,7 @@ struct IncomingDropTests {
         let pdf = Data("%PDF-1.4 mailed".utf8)
         let prepared = SharePreparation.prepare(
             [.image(page), .file(data: pdf, fileName: "Beschikking.pdf", mime: "application/pdf"), .image(page)],
-            capturedAt: t0)
+            capturedAt: t0).files
 
         #expect(prepared.count == 2)
         let photos = try #require(prepared.first { $0.mime == "application/pdf" && $0.data != pdf })
@@ -183,7 +183,7 @@ struct IncomingDropTests {
 
     @Test func otherFilesPassThroughWithTheirOwnMime() {
         let prepared = SharePreparation.prepare(
-            [.file(data: Data("PK".utf8), fileName: "Afschrift.xlsx", mime: xlsxMime)], capturedAt: t0)
+            [.file(data: Data("PK".utf8), fileName: "Afschrift.xlsx", mime: xlsxMime)], capturedAt: t0).files
         #expect(prepared == [PreparedShare(data: Data("PK".utf8), fileName: "Afschrift.xlsx", mime: xlsxMime)])
     }
 
