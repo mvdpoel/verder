@@ -1,0 +1,7 @@
+{
+  "description": "The case map answers 503 from the first request, at 14:05: nothing kept, 'De tijdlijn kon niet laden'.",
+  "statuses": {
+    "case-map": 503
+  },
+  "today": "2026-11-01T13:05:00Z"
+}

@@ -84,7 +84,7 @@
       "isRoot": false,
       "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
       "note": null,
-      "lane": 1,
+      "lane": 2,
       "firstRow": 3,
       "lastRow": 4,
       "mergesBack": false,
@@ -124,10 +124,23 @@
           "id": "00000000-f1c5-4000-8000-300000000011",
           "title": "Loonstroken en polissen sturen naar Team Startdossier",
           "status": "open",
-          "dueAt": null,
+          "dueAt": "2026-10-30T16:00:00.000Z",
           "link": "verder://task/00000000-f1c5-4000-8000-300000000011"
         },
-        "documents": [],
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000104",
+            "title": "Loonstrook 2026-10",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+          },
+          {
+            "id": "00000000-f1c5-4000-8000-200000000303",
+            "title": "Polis Duinzorg 2026",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000303"
+          }
+        ],
         "email": null
       }
     },
@@ -192,7 +205,7 @@
       "kind": "other",
       "happenedAt": "2026-10-01T09:00:00.000Z",
       "row": 3,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "2026-10",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -212,7 +225,7 @@
       "kind": "other",
       "happenedAt": "2026-09-08T09:00:00.000Z",
       "row": 4,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "2026-09",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -316,7 +329,14 @@
       "evidence": {
         "entry": null,
         "task": null,
-        "documents": [],
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000300",
+            "title": "Beschikking Rechtbank Westerlaan",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+          }
+        ],
         "email": null
       }
     },
@@ -387,7 +407,7 @@
       "trackId": "00000000-f1c5-4000-8000-400000000005",
       "fromLane": 0,
       "fromRow": 4,
-      "toLane": 1,
+      "toLane": 2,
       "toRow": 4
     },
     {
@@ -408,7 +428,7 @@
     }
   ],
   "rowCount": 11,
-  "laneCount": 2,
+  "laneCount": 3,
   "currentStopId": "00000000-f1c5-4000-8000-500000000006",
   "problems": [],
   "hiddenDebtTrackCount": 1,

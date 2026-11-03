@@ -177,11 +177,17 @@ struct RootView: View {
                             tab = .voorJou
                         },
                         openScan: { tab = .scan },
-                        // Only reachable unlocked (the headline is hidden
-                        // while locked); Dossier is lock-gated regardless.
-                        openTimeline: {
-                            dossierPath = [.timeline]
+                        // The Tijdlijn is pushed on Overzicht's own stack,
+                        // lock-gated there; what sits behind a stop opens
+                        // on Dossier, where documents and tasks live.
+                        timeline: timeline,
+                        openDossier: { route in
+                            dossierPath = [route]
                             tab = .dossier
+                        },
+                        openVoorJou: {
+                            inboxPath = []
+                            tab = .voorJou
                         })
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
@@ -201,7 +207,11 @@ struct RootView: View {
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
                 DossierTab(model: dossier, inbox: inbox, timeline: timeline, lock: lock, client: auth.client,
                            path: $dossierPath,
-                           onUnauthorized: { auth.sessionRejected() })
+                           onUnauthorized: { auth.sessionRejected() },
+                           openVoorJou: {
+                               inboxPath = []
+                               tab = .voorJou
+                           })
                     .lockGated(by: lock)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {

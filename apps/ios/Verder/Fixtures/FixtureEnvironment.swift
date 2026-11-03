@@ -118,6 +118,10 @@ enum FixtureEnvironment {
         try? FileManager.default.removeItem(at: dossierDir)
         let timelineDir = URL.temporaryDirectory.appending(path: "verder-fixture-timeline", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: timelineDir)
+        if let at = server.manifest.timelineCachedAt, let data = server.body("case-map"),
+           let map = try? APIClient.jsonDecoder.decode(CaseMapDTO.self, from: data) {
+            try? TimelineCache(dir: timelineDir).save(.init(savedAt: at, map: map), hidingDebts: false)
+        }
         let weeklyDir = URL.temporaryDirectory.appending(path: "verder-fixture-weekly", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: weeklyDir)
 

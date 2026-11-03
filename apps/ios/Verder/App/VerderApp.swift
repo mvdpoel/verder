@@ -71,7 +71,7 @@ struct VerderApp: App {
                                                     epoch: auth.epoch))
         _timeline = State(initialValue: TimelineStore(client: s.client, cache: TimelineCache(dir: s.timelineDir),
                                                       onUnauthorized: { auth.sessionRejected() },
-                                                      epoch: auth.epoch))
+                                                      epoch: auth.epoch, now: s.now))
         _weekly = State(initialValue: WeeklyStore(client: s.client, cache: WeeklyCache(dir: s.weeklyDir),
                                                   onUnauthorized: { auth.sessionRejected() },
                                                   epoch: auth.epoch, now: s.now))

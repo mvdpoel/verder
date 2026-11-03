@@ -89,12 +89,20 @@ final class TimelineStore {
     private(set) var lastError: APIError?
     private(set) var isLoading = false
     private(set) var hideDebts = false
+    /// When the last request failed (the header's "niet geladen · 14:05").
+    private(set) var failedAt: Date?
+    /// Counts failures after a retry, so the screen plays `.error` on the second.
+    private(set) var failedRetries = 0
+    /// The full map as this phone last saw it, while the filter is on: how many
+    /// open stops the filter took off is said, never hidden.
+    private(set) var unfiltered: CaseMapDTO?
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let cache: TimelineCache
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let epoch: SessionEpoch
-    @ObservationIgnored private let now: @Sendable () -> Date
+    /// The case's clock (`AppServices.now`): what "te laat" and "van 09:20" read.
+    @ObservationIgnored let now: @Sendable () -> Date
 
     init(client: APIClient, cache: TimelineCache, onUnauthorized: @escaping @MainActor () -> Void = {},
          epoch: SessionEpoch = SessionEpoch(), now: @escaping @Sendable () -> Date = { Date() }) {
@@ -106,16 +114,56 @@ final class TimelineStore {
         epoch.whenEnded { [weak self] in self?.forget() }
     }
 
+    /// A failed screen stays up while its retry runs: the button shows the
+    /// progress, the page does not fall back to a skeleton.
     var screen: Screen {
         if let map { return map.stops.isEmpty ? .empty : .map(map) }
         if offline { return .offlineNothingCached }
-        if let lastError, !isLoading { return .failed(lastError) }
+        if let lastError { return .failed(lastError) }
         return .loading
+    }
+
+    /// What the header says under the title — decided here, drawn as is.
+    enum HeaderLine: Equatable {
+        /// "4 sporen · 14 haltes · nieuwste 30 okt" (one fact per part).
+        case stats([String])
+        /// "1 spoor verborgen" and, when known, "daarin wacht 1 op jou".
+        case hidden(String, String?)
+        /// "offline · tijdlijn van 09:20".
+        case offline(String)
+        /// "niet geladen · 14:05".
+        case failed(String)
+        case none
+    }
+
+    var headerLine: HeaderLine {
+        let now = now()
+        if let map {
+            if offline { return .offline(TimelineCopy.kept("offline", savedAt: savedAt, now: now)) }
+            if lastError != nil { return .failed(TimelineCopy.kept("niet bijgewerkt", savedAt: savedAt, now: now)) }
+            if map.debtEpisodesHidden {
+                let open = TimelineCopy.hiddenOpen(full: unfiltered, shown: map) ?? 0
+                return .hidden(TimelineCopy.hiddenCount(map.hiddenDebtTrackCount),
+                               open > 0 ? TimelineCopy.hiddenOpenLine(open) : nil)
+            }
+            return .stats(TimelineCopy.stats(map))
+        }
+        if lastError != nil { return .failed(TimelineCopy.notLoaded(at: failedAt, now: now)) }
+        if offline { return .offline("offline") }
+        return .none
     }
 
     /// "offline · bijgewerkt 14:02" — the age of what is shown.
     var freshness: String? {
         map == nil ? nil : DossierCopy.freshness(syncedAt: savedAt, offline: offline, now: now())
+    }
+
+    /// The hidden open stops, when the full map is known: "Toon alle sporen"
+    /// scrolls to the first of them.
+    var hiddenOpenStopIds: [String] {
+        guard let map, map.debtEpisodesHidden, let full = unfiltered else { return [] }
+        let shown = Set(map.stops.map(\.id))
+        return full.stops.filter { $0.state == "open" && !shown.contains($0.id) }.sorted { $0.row < $1.row }.map(\.id)
     }
 
     /// The phone's copy first, then the server.
@@ -126,6 +174,8 @@ final class TimelineStore {
 
     func setHideDebts(_ hide: Bool) async {
         guard hide != hideDebts else { return }
+        // The full map, kept while the filter is on (memory, or the phone's copy).
+        if hide { unfiltered = (map?.debtEpisodesHidden == false ? map : nil) ?? cache.load(hidingDebts: false)?.map }
         hideDebts = hide
         map = nil
         savedAt = nil
@@ -137,6 +187,7 @@ final class TimelineStore {
     func refresh() async {
         let started = epoch.current
         let hide = hideDebts
+        let retrying = lastError != nil
         isLoading = true
         let result = await Self.fetch(client, path: Self.path(hidingDebts: hide))
         guard epoch.isCurrent(started) else { return }
@@ -150,16 +201,20 @@ final class TimelineStore {
             savedAt = at
             offline = false
             lastError = nil
+            failedAt = nil
+            if !dto.debtEpisodesHidden { unfiltered = nil }
             try? cache.save(.init(savedAt: at, map: dto), hidingDebts: hide)
         case .failure(let error):
             if APIError.isCancellation(error) { return }
             if error == .unauthorized { onUnauthorized(); return }
+            failedAt = now()
             if case .transport = error {
                 offline = true
                 lastError = nil
             } else {
                 offline = false
                 lastError = error
+                if retrying { failedRetries += 1 }
             }
         }
     }
@@ -176,6 +231,8 @@ final class TimelineStore {
         offline = false
         lastError = nil
         isLoading = false
+        failedAt = nil
+        unfiltered = nil
         cache.wipe()
     }
 

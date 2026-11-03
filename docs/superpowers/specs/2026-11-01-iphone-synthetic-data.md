@@ -193,3 +193,8 @@ Sporen:
 - "Huurachterstand Lindehof" · ended (clean) · stops: "Betalingsregeling afgesproken" (done, 8 sep), "Regeling loopt" (done, 1 okt)
 
 Filter: "Schuldeisers verbergen" hides the Kade & Partners spoor AND its trigger on the hoofdlijn (structurally, via the spoor's branch pointer — never by title).
+
+Lanes (2026-11-03, the "tijdlijn · it6" frames): Aanvraag bewindvoering and Opstart en stukken on lane 1, Kade & Partners and Huurachterstand Lindehof on lane 2 (3 lanes), so Opstart en stukken — running, with no open stop — is drawn dashed up to NU. The NU stop's evidence: the task "Loonstroken en polissen sturen naar Team Startdossier" (due 30 okt), "Loonstrook 2026-10" and "Polis Duinzorg 2026"; "Verzoek naar de rechtbank" carries "Beschikking Rechtbank Westerlaan".
+- `timeline-vier`: the same case with each spoor on its own lane (Opstart 1, Kade 2, Huurachterstand 3): the "vier sporen (maattest)" frame.
+- `timeline-offline`: the case map gets no answer (`offlinePaths`); the phone kept it from 09:20 (`timelineCachedAt`). The dossier syncs, but Polis Duinzorg 2026 answers 503, so the NU sheet says it opens with a connection.
+- `timeline-fout`: the case map answers 503 from the first request, at 14:05 (`today`): "De tijdlijn kon niet laden".

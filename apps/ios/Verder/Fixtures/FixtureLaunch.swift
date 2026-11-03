@@ -20,6 +20,10 @@ import Foundation
 ///     -fixtures-push <denied|notDetermined>  the notification permission (default: allowed)
 ///     -fixtures-more <signout|savefail>  a Meer screen in a state only a gesture reaches: the
 ///                              Uitloggen sheet up (Account), or a Meldingen switch whose save failed
+///     -fixtures-timeline <state[,state…]>  the Tijdlijn in a state only a gesture reaches:
+///                              verborgen (Schuldeisers verbergen on) · sheet (the NU sheet up) ·
+///                              scroll:<stop id> (that stop at the top) · stop:<stop id> (its sheet up) ·
+///                              end (the legend) · overzicht (pushed from Overzicht's headline card)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
 ///             |meer:<account|notifications|widgets|about|developer>>
@@ -94,6 +98,27 @@ struct FixtureLaunch: Equatable, Sendable {
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end, middle }
 
+    /// The Tijdlijn's gesture-only states (`-fixtures-timeline`).
+    enum TimelineState: Equatable, Sendable {
+        case verborgen, sheet, end, overzicht, dicht
+        case scroll(String)
+        case stop(String)
+
+        static func parse(_ raw: String) -> TimelineState? {
+            switch raw {
+            case "verborgen": return .verborgen
+            case "sheet": return .sheet
+            case "end": return .end
+            case "overzicht": return .overzicht
+            case "dicht": return .dicht
+            default:
+                if raw.hasPrefix("scroll:") { return .scroll(String(raw.dropFirst("scroll:".count))) }
+                if raw.hasPrefix("stop:") { return .stop(String(raw.dropFirst("stop:".count))) }
+                return nil
+            }
+        }
+    }
+
     enum ParseError: Error, Equatable {
         case unknownScroll(String)
         case missingValue(String)
@@ -116,6 +141,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var faceID: FaceIDState? = nil
     var push: PushPermission? = nil
     var more: MoreState? = nil
+    var timeline: [TimelineState] = []
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -175,7 +201,14 @@ struct FixtureLaunch: Equatable, Sendable {
                              more: try value(after: "-fixtures-more").map { (raw: String) throws(ParseError) -> MoreState in
                                  guard let s = MoreState(rawValue: raw) else { throw .unknownValue("-fixtures-more", raw) }
                                  return s
-                             })
+                             },
+                             timeline: try (value(after: "-fixtures-timeline") ?? "").split(separator: ",")
+                                 .map { (raw: Substring) throws(ParseError) -> TimelineState in
+                                     guard let s = TimelineState.parse(String(raw)) else {
+                                         throw .unknownValue("-fixtures-timeline", String(raw))
+                                     }
+                                     return s
+                                 })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

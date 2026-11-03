@@ -88,9 +88,16 @@ struct FixtureServer: Sendable {
         /// (`FixtureEnvironment.today`): the Weekoverzicht's states need a
         /// clock past that Sunday's 18:00, when week 44 has been composed.
         let today: Date?
+        /// Paths that get no HTTP answer at all while the rest answer (the
+        /// Tijdlijn offline over a dossier that syncs).
+        let offlinePaths: [String]?
+        /// Seeds the phone's copy of the case map, saved at this moment, before
+        /// launch: the kept map an offline Tijdlijn shows with its age.
+        let timelineCachedAt: Date?
 
         private enum Key: String, CodingKey {
             case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter, today
+            case offlinePaths, timelineCachedAt
         }
 
         init(from decoder: Decoder) throws {
@@ -111,6 +118,14 @@ struct FixtureServer: Sendable {
             today = try c.decodeIfPresent(String.self, forKey: .today).map { (raw: String) throws -> Date in
                 guard let d = ISO8601DateFormatter().date(from: raw) else {
                     throw DecodingError.dataCorruptedError(forKey: .today, in: c, debugDescription: "today is ISO 8601")
+                }
+                return d
+            }
+            offlinePaths = try c.decodeIfPresent([String].self, forKey: .offlinePaths)
+            timelineCachedAt = try c.decodeIfPresent(String.self, forKey: .timelineCachedAt).map { (raw: String) throws -> Date in
+                guard let d = ISO8601DateFormatter().date(from: raw) else {
+                    throw DecodingError.dataCorruptedError(forKey: .timelineCachedAt, in: c,
+                                                           debugDescription: "timelineCachedAt is ISO 8601")
                 }
                 return d
             }
@@ -167,6 +182,7 @@ struct FixtureServer: Sendable {
         guard !path.isEmpty, segments.allSatisfy({ !$0.isEmpty && $0 != ".." && $0 != "." }) else {
             return Self.error(404, "not found")
         }
+        if manifest.offlinePaths?.contains(path) == true { return .transportFailure }
         // `"POST push/preferences": 503` fails one method only (a save that
         // fails over a read that works).
         if let status = manifest.statuses?["\(method.uppercased()) \(path)"] ?? manifest.statuses?[path] {
@@ -187,6 +203,10 @@ struct FixtureServer: Sendable {
         }
         return .json(status: 200, body: file(path + ".post.json") ?? Data("{}".utf8))
     }
+
+    /// The fixture's own answer to a GET of `path` (no failure applied): what
+    /// `timelineCachedAt` seeds the phone's copy from.
+    func body(_ path: String) -> Data? { file(path + ".json") }
 
     /// `<name>/<rel>`, else `_shared/<rel>`.
     private func file(_ rel: String) -> Data? {

@@ -26,10 +26,15 @@ struct HomeTab: View {
     /// Opens Voor jou, optionally straight onto one item.
     let openInbox: (InboxRoute?) -> Void
     let openScan: () -> Void
-    /// Opens the Tijdlijn on Dossier. Offered only once case content shows.
-    var openTimeline: () -> Void = {}
+    /// The case map: the headline card pushes the Tijdlijn on THIS tab's
+    /// stack (Figma "Tijdlijn / vanaf Overzicht"), with the NU sheet raised.
+    var timeline: TimelineStore? = nil
+    /// A document or task behind a stop: shown on Dossier, where they live.
+    var openDossier: (DossierRoute) -> Void = { _ in }
+    var openVoorJou: () -> Void = {}
 
     @State private var showGeld = false
+    @State private var showTimeline = false
     /// The account Geld lands on when it opens (the card that was tapped).
     @State private var geldFocus: String?
     @State private var compactHeight = false
@@ -54,10 +59,22 @@ struct HomeTab: View {
                 .navigationDestination(isPresented: $showGeld) {
                     GeldScreen(store: money, focusAccount: geldFocus).lockGated(by: lock)
                 }
+                .navigationDestination(isPresented: $showTimeline) {
+                    if let timeline {
+                        TimelineScreen(store: timeline, open: openDossier, openVoorJou: openVoorJou,
+                                       raiseCurrent: true)
+                            .lockGated(by: lock)
+                    }
+                }
                 #if DEBUG
                 .task {
                     // `-fixtures-geld`: Geld pushed from here, as a card tap does.
                     if FixtureLaunch.current?.geld != nil { showGeld = true }
+                    // `-fixtures-timeline overzicht`: the headline card's tap.
+                    if FixtureLaunch.current?.timeline.contains(.overzicht) == true {
+                        try? await Task.sleep(for: .seconds(0.8))
+                        showTimeline = true
+                    }
                 }
                 #endif
         }
@@ -442,31 +459,28 @@ struct HomeTab: View {
 
     // MARK: The map headline
 
-    /// Unlocked only (a stop title is case content). A tap opens the Tijdlijn.
+    /// A tap opens the Tijdlijn on this tab with the NU sheet up. Locked, the
+    /// card says only THAT a next step exists (the stop's title is case
+    /// content); its tap asks Face ID first.
     @ViewBuilder private var headlineCard: some View {
-        if lock.revealsCaseContent, let h = store.summary?.headline {
-            Button { openTimeline() } label: {
-                card {
-                    cardHeader(HomeSummary.headlineLabel, amber: false, chevron: true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(hy(h.stopTitle))
-                            .font(HomeType.bodyStrong)
-                            .foregroundStyle(Color.inkBright)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                        meta(HomeSummary.headlineMeta(h))
-                        if let note = h.note, !note.isEmpty {
-                            Text(hy(note))
-                                .font(HomeType.body)
-                                .foregroundStyle(Color.ink)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+        if let h = store.summary?.headline {
+            if lock.revealsCaseContent {
+                Button { showTimeline = timeline != nil } label: {
+                    TimelineHeadlineCard(title: hy(h.stopTitle), note: h.note.map(hy),
+                                         meta: [h.trackTitle, TimelineHeadlineCard.opens].compactMap { $0 })
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint(HomeSummary.headlineHint)
+            } else {
+                Button {
+                    Task {
+                        await lock.unlock()
+                        if lock.isLocked { failedUnlocks += 1 } else { showTimeline = timeline != nil }
+                    }
+                } label: { TimelineHeadlineCard.locked() }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(HomeSummary.headlineHint)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(HomeSummary.headlineHint)
         }
     }
 

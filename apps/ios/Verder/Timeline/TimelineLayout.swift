@@ -3,29 +3,122 @@ import Foundation
 
 /// The words of the Tijdlijn, decided outside the view.
 enum TimelineCopy {
-    static let title = "De zaak"
+    static let eyebrow = "De zaak"
+    static let title = "Tijdlijn"
     static let rowTitle = "Tijdlijn"
     static let rowLine = "De zaak, het nieuwste bovenaan"
-    static let intro = "Het nieuwste staat bovenaan. De hoofdlijn is hoe de bewindvoering zelf is gelopen; "
-        + "een zijspoor begint zodra er iets binnenkomt en komt terug op de hoofdlijn of eindigt op zichzelf."
-    static let headlineLabel = "WAAR HET NU OP WACHT"
+    static let headlineLabel = "Waar het nu op wacht"
+    /// The pinned strip at the accessibility sizes: only the eyebrow is drawn.
+    static let stripShort = "Wacht op jou"
     static let noHeadline = "Er staat op dit moment geen halte open."
-    static let mapLabel = "DE KAART"
-    static let problemsLabel = "WAT DE KAART NIET KON TEKENEN"
+    static let filterLabel = "Filter"
+    static let allTracks = "Alle sporen"
     static let hideDebts = "Schuldeisers verbergen"
-    static let empty = "Er staat nog niets op de kaart. Zodra er een halte is, staat hij hier."
+    /// Short on purpose: a menu item truncates after three lines, and the
+    /// header line already says what waits in what is hidden.
+    static let filterFooter = "Verbergt vorderingen en de brieven waarmee ze begonnen."
+    static let showAll = "Toon alle sporen"
+    static let emptyTitle = "Nog geen sporen op je tijdlijn"
+    static let emptyBody = "Hier zie je straks je zaak van nu naar vroeger: wat er gebeurde en wat er op je wacht. "
+        + "Sporen en haltes maak je op de website."
+    static let emptyVoorJou = "Wat nu op je wacht, staat in Voor jou."
+    static let openVoorJou = "Open Voor jou"
     static let offlineNothing = "Geen verbinding — de tijdlijn staat nog niet op je telefoon."
+    static let failedTitle = "De tijdlijn kon niet laden"
+    static let failedBody = "De server reageert even niet. Probeer het zo opnieuw. "
+        + "Wat al op je telefoon staat, kun je in je dossier en Voor jou gewoon bekijken."
     static let retry = "Opnieuw proberen"
     static let quietMonth = "geen haltes"
-    static let legend = "Gevuld = gebeurd · amber = wacht op jou · omcirkeld = vertrek- of aankomstpunt van een "
-        + "zijspoor · dubbele streep = spoor afgerond · enkele streep = spoor geëindigd. "
-        + "Binnen een maand staan de haltes op volgorde, niet op schaal."
+    static let unknownBand = "Onbekend"
+    static let noUndated = "geen haltes zonder datum"
+    static let notToScale = "Niet op schaal · binnen een maand staan haltes op gelijke afstand"
     static let outOfOrder = "De datum van deze halte ligt vóór de halte ervoor. De kaart tekent de volgorde zoals hij is "
         + "ingevoerd — meestal betekent dit dat deze halte op een ander spoor thuishoort."
-    static let nothingBehind = "Nog niets achter deze halte. Zodra er een mail, een taak of een document aan hangt, staat het hier."
+    static let flagged = "datum vóór de vorige halte"
+    static let problemsLabel = "Wat de kaart niet kon tekenen"
     static let close = "Sluiten"
+    static let showTrack = "Toon spoor op de tijdlijn"
+    static let editOnWeb = "Haltes en sporen pas je aan op de website."
+    static let noteLabel = "Notitie"
+    static let noNote = "Geen notitie."
+    static let trackLabel = "Spoor"
+    static let behindLabel = "Wat erachter hangt"
+    static let nothingBehind = "Niets gekoppeld."
+    static let linkOnWeb = "Koppelen doe je op de website"
+    static let view = "Bekijken"
+    static let openTask = "Open taak"
+    static let openDocument = "Open document"
 
-    static func hiddenCount(_ n: Int) -> String { n == 1 ? "1 spoor verborgen" : "\(n) sporen verborgen" }
+    /// The legend under the map, one mark per line.
+    enum LegendMark: CaseIterable { case done, current, open, junction, running, end }
+
+    static func legend(_ mark: LegendMark) -> String {
+        switch mark {
+        case .done: "gebeurd"
+        case .current: "waar het nu op wacht"
+        case .open: "open · loopt nog"
+        case .junction: "splitst af of komt samen"
+        case .running: "spoor loopt nog"
+        case .end: "begin of einde van een lijn"
+        }
+    }
+
+    static func count(_ n: Int, _ one: String, _ many: String) -> String { "\(n) \(n == 1 ? one : many)" }
+
+    /// "4 sporen · 14 haltes · nieuwste 30 okt", as parts: one line at the
+    /// ordinary sizes, one fact per line at the accessibility sizes.
+    static func stats(_ map: CaseMapDTO) -> [String] {
+        let sporen = map.tracks.filter { !$0.isRoot }.count
+        var parts = [count(sporen, "spoor", "sporen"), count(map.stops.count, "halte", "haltes")]
+        if let newest = map.stops.compactMap(\.happenedAt).max() {
+            parts.append("nieuwste \(MoneyFormat.day(newest))")
+        }
+        return parts
+    }
+
+    static func hiddenCount(_ n: Int) -> String { count(n, "spoor verborgen", "sporen verborgen") }
+
+    /// The open stops the filter took off the map: in the full map and not in
+    /// the shown one. Nil when the full map was never seen on this phone.
+    static func hiddenOpen(full: CaseMapDTO?, shown: CaseMapDTO) -> Int? {
+        guard let full else { return nil }
+        let shownIds = Set(shown.stops.map(\.id))
+        return full.stops.filter { $0.state == "open" && !shownIds.contains($0.id) }.count
+    }
+
+    static func hiddenOpenLine(_ n: Int) -> String { "daarin wacht \(n) op jou" }
+
+    /// "offline · tijdlijn van 09:20" — the age of a kept map, in Amsterdam
+    /// time, with the day when it was not today.
+    static func kept(_ prefix: String, savedAt: Date?, now: Date) -> String {
+        guard let savedAt else { return prefix }
+        return "\(prefix) · tijdlijn van \(clock(savedAt, now: now))"
+    }
+
+    /// "14:05", or "31 okt 22:14" when not today.
+    static func clock(_ at: Date, now: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let c = cal.dateComponents([.hour, .minute], from: at)
+        let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+        return cal.isDate(at, inSameDayAs: now) ? time : "\(MoneyFormat.day(at)) \(time)"
+    }
+
+    /// "niet geladen · 14:05".
+    static func notLoaded(at: Date?, now: Date) -> String {
+        at.map { "niet geladen · \(clock($0, now: now))" } ?? "niet geladen"
+    }
+
+    /// The VoiceOver hint on Opnieuw proberen: what the last attempt answered.
+    static func retryHint(_ error: APIError) -> String {
+        switch error {
+        case .server(let code): "Laatste poging gaf serverfout \(code)."
+        case .rejected(let code): "Laatste poging werd geweigerd (\(code))."
+        case .rateLimited: "Laatste poging: te veel verzoeken."
+        case .transport: "Laatste poging kreeg geen verbinding."
+        case .unauthorized: "Log opnieuw in."
+        }
+    }
 
     /// The spoor's status in words. `ended` is geëindigd — handled and closed,
     /// a clean outcome — and is never worded as a failure.
@@ -37,16 +130,92 @@ enum TimelineCopy {
         }
     }
 
-    /// How a spoor finishes, for the stop sheet.
-    static func terminus(_ track: CaseMapDTO.Track) -> String {
-        if track.isRoot { return "hoofdlijn" }
-        if track.terminus == "merge" { return "komt terug op de hoofdlijn" }
-        return "eindigt op zichzelf"
+    /// The outcome badge of a spoor in the stop sheet. An OPEN spoor reads as
+    /// running — never as one that "ends on its own" — and an ended one as
+    /// afgehandeld, a clean outcome.
+    static func outcome(_ track: CaseMapDTO.Track) -> String {
+        switch track.terminus {
+        case "merge": "terug op de hoofdlijn"
+        case "ended": "afgehandeld"
+        case "done": "afgerond"
+        default: "loopt nog"
+        }
     }
 
-    static func stopState(_ state: String) -> String { state == "open" ? "wacht op jou" : "gebeurd" }
+    /// The sentence under the outcome badge. Nothing here is invented: the
+    /// merge stop and its date are the map's own; an open spoor only runs.
+    static func outcomeSentence(_ track: CaseMapDTO.Track, mergedAt: CaseMapDTO.Stop?) -> String {
+        switch track.terminus {
+        case "merge":
+            if let stop = mergedAt {
+                let when = stop.happenedAt.map { " op \(MoneyFormat.day($0))" } ?? ""
+                return "Dit spoor kwam\(when) terug op de hoofdlijn, bij \u{201E}\(stop.title)\u{201D}."
+            }
+            return "Dit spoor kwam terug op de hoofdlijn."
+        case "ended": return "Dit spoor is afgehandeld en hoefde niet terug naar de hoofdlijn. Goed gedaan."
+        case "done": return "Dit spoor is afgerond. Goed gedaan."
+        default: return "Dit spoor loopt nog."
+        }
+    }
 
-    @MainActor static func taskStatus(_ status: String) -> String { TaskModel.label(status) }
+    /// For a stop on the hoofdlijn: the sporen still running beside it.
+    static func runningSentence(_ titles: [String]) -> String? {
+        switch titles.count {
+        case 0: return nil
+        case 1: return "Het spoor \(titles[0]) loopt nog."
+        default:
+            return "De sporen \(titles.dropLast().joined(separator: ", ")) en \(titles.last!) lopen nog."
+        }
+    }
+
+    /// "12 mei – 3 jun · 2 haltes".
+    static func span(from: Date?, to: Date?, stops: Int) -> String {
+        let days = [from, to].compactMap { $0.map(MoneyFormat.day) }
+        var parts: [String] = []
+        if days.count == 2, days[0] != days[1] { parts.append("\(days[0]) – \(days[1])") }
+        else if let d = days.first { parts.append(d) }
+        parts.append(count(stops, "halte", "haltes"))
+        return parts.joined(separator: " · ")
+    }
+
+    /// The stop's state badge: amber ONLY for the current stop (what the map
+    /// answers with), the signal for any other open stop, steel for done.
+    static func stateBadge(isCurrent: Bool, state: String) -> String {
+        isCurrent ? "wacht op jou" : state == "open" ? "loopt nog" : "gebeurd"
+    }
+
+    /// "nu · zonder datum", "26 mei".
+    static func when(_ stop: CaseMapDTO.Stop) -> String {
+        if let at = stop.happenedAt { return MoneyFormat.day(at) }
+        return stop.bandKey == "nu" ? "nu · zonder datum" : "zonder datum"
+    }
+
+    /// "Voor jou · taak · te laat sinds 30 okt".
+    @MainActor static func taskLine(_ task: CaseMapDTO.Evidence.TaskLink, now: Date) -> String {
+        var parts: [String] = []
+        let waiting = ["open", "in-progress", "waiting"].contains(task.status)
+        if waiting { parts.append("voor jou") }
+        parts.append("taak")
+        if let due = task.dueAt {
+            parts.append(due < now && waiting ? "te laat sinds \(MoneyFormat.day(due))" : "uiterlijk \(MoneyFormat.day(due))")
+        } else if !waiting {
+            parts.append(TaskModel.label(task.status))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// "document · loonstrook · opent in dossier" — or, offline, whether the
+    /// phone holds it.
+    static func documentLine(docType: String?, held: Bool, offline: Bool) -> String {
+        var parts = ["document"]
+        if let t = DossierCopy.docTypeLabel(docType), !offline { parts.append(t) }
+        parts.append(offline ? (held ? "op je telefoon" : "opent met verbinding") : "opent in dossier")
+        return parts.joined(separator: " · ")
+    }
+
+    static func notOnPhone(_ title: String) -> String {
+        "\(title) staat niet op je telefoon. Hij opent zodra je weer verbinding hebt."
+    }
 }
 
 /// What the Tijdlijn draws, as plain decisions — the phone's `track-marks.ts`.
@@ -66,27 +235,42 @@ enum TimelineCopy {
 /// stop, the curve goes DOWN into the spoor's lane instead and the rail runs
 /// up to meet it; when it sits INSIDE the spoor's span, the rail stays whole
 /// and the curve leaves beside it. A merge comes down the spoor's lane and
-/// curves into the parent's dot at the merge stop.
+/// curves into the parent's dot at the merge stop. A spoor with no recorded
+/// branch stop BEGINS with a cap under its oldest stop instead.
 ///
 /// A rail is stretched to its connector ONLY through rows its lane holds for
 /// nobody else: `buildTrackMap` packs lanes on stop spans alone, so another
 /// spoor may sit in the same lane between a spoor and its trigger. Then the
 /// connector is ROUTED instead — a curve at each end and a DETOUR half a lane
 /// to the left through the rows between — so two sporen never share a line.
+///
+/// A spoor that still RUNS but has no open stop (its last step is done and the
+/// matter is not closed) is drawn on up towards now as a DASHED rail, through
+/// rows its lane holds for nobody else; where the lane is taken it gets a
+/// short dashed stub above its newest stop. That is how an open spoor reads as
+/// running without the map inventing where it goes.
+///
+/// At the accessibility sizes (`singleLane`) the lanes collapse onto ONE rail:
+/// a 40-point title cannot sit beside four lanes, so every stop is a dot on
+/// the same line and the readouts say in words what the lanes would draw.
 struct TimelineLayout: Equatable {
     /// The sizes `RailGutter` draws at, in points. They are FIXED — a dot that
     /// shrank with the lane count would stop being readable — so the lane pitch
     /// is derived from them instead, and never the other way round.
     enum Marks {
-        static let dotRadius: CGFloat = 5
-        /// The open stop's outline, outside the dot's radius.
-        static let dotStroke: CGFloat = 2
-        /// The current stop's halo and a junction's ring (never both on one dot).
-        static let ringRadius: CGFloat = 7
+        static let dotRadius: CGFloat = 4.5
+        /// An open stop's outline (a hollow signal ring of the dot's radius).
+        static let dotStroke: CGFloat = 1.5
+        /// The current stop: a hollow amber ring.
+        static let currentRadius: CGFloat = 6
+        static let currentStroke: CGFloat = 2
+        /// A junction's ring around its dot.
+        static let ringRadius: CGFloat = 6.5
         static let ringStroke: CGFloat = 1
-        /// Half the width of the afgerond (double) and geëindigd (single) bars.
-        static let doneCapHalfWidth: CGFloat = 6
-        static let endedCapHalfWidth: CGFloat = 5
+        /// Half the width of the bar that begins or ends a line.
+        static let capHalfWidth: CGFloat = 6
+        /// How far a cap sits above (end) or below (begin) its dot.
+        static let capOffset: CGFloat = 12
         /// Half the root rail's 3 pt stroke — the widest line in the gutter.
         static let railHalfWidth: CGFloat = 1.5
         /// Half a detour's (and a side rail's) 2 pt stroke.
@@ -94,7 +278,7 @@ struct TimelineLayout: Equatable {
 
         /// How far the largest mark reaches from its lane's centre.
         static let reach = max(dotRadius + dotStroke / 2, ringRadius + ringStroke / 2,
-                               doneCapHalfWidth, endedCapHalfWidth)
+                               currentRadius + currentStroke / 2, capHalfWidth)
     }
 
     /// Lane x positions in the gutter left of the labels, at ONE pitch for any
@@ -105,14 +289,23 @@ struct TimelineLayout: Equatable {
         /// The smallest pitch at which a detour, half a lane from either rail,
         /// stays clear of the largest mark on both lanes beside it.
         static let minSpacing = 2 * (Marks.reach + Marks.detourHalfWidth)
-        static let baseSpacing: CGFloat = max(18, minSpacing)
-        static let inset: CGFloat = 12
+        static let baseSpacing: CGFloat = max(16, minSpacing)
+        /// Lane 0 sits this far into the gutter (24 pt from the screen edge).
+        static let inset: CGFloat = 8
+        /// From the last lane to the label column.
+        static let labelGap: CGFloat = 24
+        /// The gutter of up to four lanes: the label column starts at 96 pt on
+        /// every phone (Figma: lanes at 24/40/56/72), so the titles of a map
+        /// with one spoor line up with those of a map with four.
+        static let standardWidth: CGFloat = 80
 
         let count: Int
         let spacing: CGFloat
+        let minWidth: CGFloat
 
-        init(count: Int) {
+        init(count: Int, minWidth: CGFloat = Self.standardWidth) {
             self.count = count
+            self.minWidth = minWidth
             spacing = Self.baseSpacing
         }
 
@@ -122,16 +315,19 @@ struct TimelineLayout: Equatable {
         /// serves, so it never lies on any lane's rail.
         func detourX(_ lane: Int) -> CGFloat { x(lane) - spacing / 2 }
 
-        var width: CGFloat { 2 * Self.inset + CGFloat(max(count, 1) - 1) * spacing }
+        var width: CGFloat { max(minWidth, Self.inset + CGFloat(max(count, 1) - 1) * spacing + Self.labelGap) }
     }
 
-    /// A lane's slice of rail in one row: above the dot, below it, or both.
+    /// A lane's slice of rail in one row: above the dot, below it, or both —
+    /// solid, or dashed where a running spoor is drawn on towards now.
     struct Rail: Equatable, Hashable, Sendable {
         let lane: Int
         let trackId: String
         let isRoot: Bool
         let top: Bool
         let bottom: Bool
+        var dashedTop = false
+        var dashedBottom = false
     }
 
     enum CurveEdge: Equatable, Sendable {
@@ -139,8 +335,6 @@ struct TimelineLayout: Equatable {
         case top
         /// Comes from the bottom of the row into the dot (a merge, the spoor below).
         case bottom
-        /// Level with the dot: a spoor with no recorded branch stop, drawn at its oldest stop.
-        case level
     }
 
     struct Curve: Equatable, Sendable {
@@ -163,25 +357,37 @@ struct TimelineLayout: Equatable {
         let trackId: String
     }
 
-    /// The cap at a spoor's newest stop: afgerond and geëindigd are different
-    /// facts, and BOTH are clean outcomes.
+    /// The bar that begins or ends a line. Afgerond and geëindigd are both
+    /// clean outcomes, told apart in the readout's words, never by a colour.
     struct Cap: Equatable, Sendable {
-        enum Kind: Equatable, Sendable { case done, ended }
+        enum End: Equatable, Sendable {
+            /// Above the newest stop of a spoor that is finished.
+            case top
+            /// Below the oldest stop of a line that starts there.
+            case bottom
+        }
         let lane: Int
-        let kind: Kind
+        let end: End
     }
 
     enum Mark: Equatable, Sendable {
         /// The one stop the map answers with: what is waiting on Martin now.
         case current
-        /// Another open stop — also work waiting on Martin.
-        case waiting
+        /// Another open stop: a hollow signal ring, as the web draws it.
+        case open
         /// It happened.
         case done
 
-        /// Amber is for open stops only: by the case-history rule every open
-        /// stop is work waiting on Martin.
-        var isAmber: Bool { self != .done }
+        /// Amber is for the current stop only — the web's rule: there is one
+        /// of it, and it is the answer to the question the page is opened with.
+        var isAmber: Bool { self == .current }
+    }
+
+    /// One readout line under a title.
+    struct Readout: Equatable, Sendable {
+        enum Tone: Equatable, Sendable { case label, signal }
+        let text: String
+        var tone: Tone = .label
     }
 
     struct BandRow: Equatable, Identifiable {
@@ -191,19 +397,36 @@ struct TimelineLayout: Equatable {
         let rails: [Rail]
         var detours: [Detour] = []
         var id: String { "band:" + key }
+        /// The NU band with stops in it: the hero carries its eyebrow, so the
+        /// band draws only its rule.
+        var labelHidden = false
     }
 
     struct StopRow: Equatable, Identifiable {
         let stop: CaseMapDTO.Stop
         let track: CaseMapDTO.Track?
         let mark: Mark
-        /// "hoofdlijn · 14 okt 2026" or "Opstart en stukken · loopt nu · wacht op jou".
-        let meta: String
+        /// The lane the dot is drawn on (0 for every stop at `singleLane`).
+        let lane: Int
+        /// The mono lines under the title at the ordinary sizes.
+        let readouts: [Readout]
+        /// The same facts as sentences, one paragraph each, naming every spoor
+        /// that branches or merges here — what the collapsed lanes cannot draw.
+        let sentences: [String]
         let rails: [Rail]
         let curves: [Curve]
         let caps: [Cap]
         var detours: [Detour] = []
         var id: String { stop.id }
+
+        /// What VoiceOver reads: the title, the sentences and the outcome words.
+        var spoken: String {
+            var parts = [stop.title]
+            if mark == .current { parts.append(TimelineCopy.headlineLabel.lowercased()) }
+            parts += sentences
+            if stop.datesOutOfOrder { parts.append("let op: deze datum ligt vóór de vorige halte") }
+            return parts.joined(separator: ", ")
+        }
     }
 
     enum Item: Equatable, Identifiable {
@@ -223,6 +446,10 @@ struct TimelineLayout: Equatable {
 
     let items: [Item]
     let lanes: Lanes
+    let singleLane: Bool
+    /// The undated band is not on the map: the page closes with "geen haltes
+    /// zonder datum", so its absence is said rather than implied.
+    let hasUndatedBand: Bool
 
     var isEmpty: Bool { !items.contains { if case .stop = $0 { true } else { false } } }
 
@@ -236,6 +463,12 @@ struct TimelineLayout: Equatable {
         let isRoot: Bool
         var top: Int
         var bottom: Int
+        /// Rows above this one (and its own top half) are drawn dashed: the
+        /// spoor's newest stop, when it is drawn on towards now.
+        var dashedBelow: Int? = nil
+        /// Only the top half of this row is dashed: the stub of a running spoor
+        /// whose lane is taken above it.
+        var stub: Int? = nil
     }
 
     /// A routed connector between two curve rows, `top < bottom`; it passes
@@ -252,8 +485,10 @@ struct TimelineLayout: Equatable {
         let trackId: String
     }
 
-    init(_ map: CaseMapDTO) {
-        lanes = Lanes(count: map.laneCount)
+    init(_ map: CaseMapDTO, singleLane: Bool = false) {
+        self.singleLane = singleLane
+        hasUndatedBand = map.bands.contains { $0.key == "onbekend" }
+        lanes = singleLane ? Lanes(count: 1, minWidth: 0) : Lanes(count: map.laneCount)
         let trackById = Dictionary(map.tracks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let tracksWithStops = Set(map.stops.map(\.trackId))
         let drawn = map.tracks.filter { tracksWithStops.contains($0.id) }
@@ -266,6 +501,7 @@ struct TimelineLayout: Equatable {
         var extents = drawn.map { Extent(trackId: $0.id, lane: $0.lane, isRoot: $0.isRoot,
                                          top: $0.firstRow, bottom: $0.lastRow) }
         var curvesAt: [Int: [Curve]] = [:]
+        var capsAt: [Int: [Cap]] = [:]
         var detourSpans: [DetourSpan] = []
         // Where a connector replaces the spoor's own slice of rail.
         var cutTop: Set<Slice> = [], cutBottom: Set<Slice> = []
@@ -285,69 +521,109 @@ struct TimelineLayout: Equatable {
         }
         func curve(_ row: Int, _ c: Curve) { curvesAt[row, default: []].append(c) }
 
-        for (i, t) in drawn.enumerated() {
-            let span = (top: t.firstRow, bottom: t.lastRow)
-            for edge in map.edges where edge.trackId == t.id {
-                let lane = t.lane
-                switch edge.kind {
-                case "branch":
-                    if edge.fromRow > span.bottom {
-                        // The trigger is OLDER than the spoor: the line rises from it.
-                        if laneIsFree(lane, from: extents[i].bottom, to: edge.fromRow, except: t.id) {
-                            extents[i].bottom = edge.fromRow
-                            cutTop.insert(Slice(row: edge.fromRow, trackId: t.id))
-                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
-                                                      edgeLane: lane, edge: .top))
-                        } else {
-                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+        if singleLane {
+            // One rail from the newest stop to the oldest; the words carry the rest.
+            if let lo = map.stops.map(\.row).min(), let hi = map.stops.map(\.row).max() {
+                let rootId = map.tracks.first(where: \.isRoot)?.id ?? "root"
+                extents = [Extent(trackId: rootId, lane: 0, isRoot: true, top: lo, bottom: hi)]
+            } else {
+                extents = []
+            }
+        } else {
+            for (i, t) in drawn.enumerated() {
+                let span = (top: t.firstRow, bottom: t.lastRow)
+                var anchored = t.isRoot
+                for edge in map.edges where edge.trackId == t.id {
+                    let lane = t.lane
+                    switch edge.kind {
+                    case "branch":
+                        if edge.fromRow > span.bottom {
+                            anchored = true
+                            // The trigger is OLDER than the spoor: the line rises from it.
+                            if laneIsFree(lane, from: extents[i].bottom, to: edge.fromRow, except: t.id) {
+                                extents[i].bottom = edge.fromRow
+                                cutTop.insert(Slice(row: edge.fromRow, trackId: t.id))
+                                curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                          edgeLane: lane, edge: .top))
+                            } else {
+                                curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                          edgeLane: lane, edge: .top, via: true))
+                                curve(span.bottom, Curve(kind: .branch, trackId: t.id, centerLane: lane,
+                                                         edgeLane: lane, edge: .bottom, via: true))
+                                detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: span.bottom,
+                                                              bottom: edge.fromRow))
+                            }
+                        } else if edge.fromRow == edge.toRow && edge.fromLane != edge.toLane {
+                            // No recorded branch stop: the spoor begins with a cap.
+                        } else if edge.fromRow < span.top {
+                            anchored = true
+                            // The trigger is NEWER than all of the spoor (logged after its
+                            // first step). `buildTrackMap` still rings the junction, so the
+                            // line leaves the ring DOWNWARD and reaches the spoor's newest stop.
+                            if laneIsFree(lane, from: extents[i].top, to: edge.fromRow, except: t.id) {
+                                extents[i].top = min(extents[i].top, edge.fromRow)
+                                cutBottom.insert(Slice(row: edge.fromRow, trackId: t.id))
+                                curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                          edgeLane: lane, edge: .bottom))
+                            } else {
+                                curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                          edgeLane: lane, edge: .bottom, via: true))
+                                curve(span.top, Curve(kind: .branch, trackId: t.id, centerLane: lane,
                                                       edgeLane: lane, edge: .top, via: true))
-                            curve(span.bottom, Curve(kind: .branch, trackId: t.id, centerLane: lane,
-                                                     edgeLane: lane, edge: .bottom, via: true))
-                            detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: span.bottom,
-                                                          bottom: edge.fromRow))
-                        }
-                    } else if edge.fromRow == edge.toRow && edge.fromLane != edge.toLane {
-                        curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
-                                                  edgeLane: lane, edge: .level))
-                    } else if edge.fromRow < span.top {
-                        // The trigger is NEWER than all of the spoor (logged after its
-                        // first step). `buildTrackMap` still rings the junction, so the
-                        // line leaves the ring DOWNWARD and reaches the spoor's newest stop.
-                        if laneIsFree(lane, from: extents[i].top, to: edge.fromRow, except: t.id) {
-                            extents[i].top = min(extents[i].top, edge.fromRow)
-                            cutBottom.insert(Slice(row: edge.fromRow, trackId: t.id))
+                                detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.fromRow,
+                                                              bottom: span.top))
+                            }
+                        } else if edge.fromRow > span.top && edge.fromRow < span.bottom && edge.fromLane != lane {
+                            anchored = true
+                            // The trigger sits INSIDE the spoor's span: the spoor really
+                            // passes this row, so its rail stays whole and the line
+                            // leaves the ring beside it, down into the spoor's lane.
                             curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
                                                       edgeLane: lane, edge: .bottom))
-                        } else {
-                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
-                                                      edgeLane: lane, edge: .bottom, via: true))
-                            curve(span.top, Curve(kind: .branch, trackId: t.id, centerLane: lane,
-                                                  edgeLane: lane, edge: .top, via: true))
-                            detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.fromRow,
-                                                          bottom: span.top))
                         }
-                    } else if edge.fromRow > span.top && edge.fromRow < span.bottom && edge.fromLane != lane {
-                        // The trigger sits INSIDE the spoor's span: the spoor really
-                        // passes this row, so its rail stays whole and the line
-                        // leaves the ring beside it, down into the spoor's lane.
-                        curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
-                                                  edgeLane: lane, edge: .bottom))
+                    case "merge":
+                        guard edge.toRow < span.top else { break }
+                        if laneIsFree(lane, from: extents[i].top, to: edge.toRow, except: t.id) {
+                            extents[i].top = min(extents[i].top, edge.toRow)
+                            cutBottom.insert(Slice(row: edge.toRow, trackId: t.id))
+                            curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
+                                                    edgeLane: lane, edge: .bottom))
+                        } else {
+                            curve(span.top, Curve(kind: .merge, trackId: t.id, centerLane: lane,
+                                                  edgeLane: lane, edge: .top, via: true))
+                            curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
+                                                    edgeLane: lane, edge: .bottom, via: true))
+                            detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.toRow, bottom: span.top))
+                        }
+                    default: break
                     }
-                case "merge":
-                    guard edge.toRow < span.top else { break }
-                    if laneIsFree(lane, from: extents[i].top, to: edge.toRow, except: t.id) {
-                        extents[i].top = min(extents[i].top, edge.toRow)
-                        cutBottom.insert(Slice(row: edge.toRow, trackId: t.id))
-                        curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
-                                                edgeLane: lane, edge: .bottom))
-                    } else {
-                        curve(span.top, Curve(kind: .merge, trackId: t.id, centerLane: lane,
-                                              edgeLane: lane, edge: .top, via: true))
-                        curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
-                                                edgeLane: lane, edge: .bottom, via: true))
-                        detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.toRow, bottom: span.top))
-                    }
-                default: break
+                }
+                // Where a line starts without a connector: the hoofdlijn's oldest
+                // stop, and a spoor with no recorded branch stop.
+                if !anchored || t.isRoot { capsAt[span.bottom, default: []].append(Cap(lane: t.lane, end: .bottom)) }
+                if !t.isRoot, t.terminus == "done" || t.terminus == "ended" {
+                    capsAt[span.top, default: []].append(Cap(lane: t.lane, end: .top))
+                }
+            }
+
+            // A running spoor with no open stop is drawn on towards now, dashed,
+            // through every row above it that its lane holds for nobody else.
+            let openTracks = Set(map.stops.filter { $0.state == "open" }.map(\.trackId))
+            func free(_ lane: Int, _ row: Int, except id: String) -> Bool {
+                !extents.contains { $0.trackId != id && $0.lane == lane && $0.top <= row && row <= $0.bottom }
+                    && !detourSpans.contains { $0.lane == lane && $0.top < row && row < $0.bottom }
+                    && !(curvesAt[row] ?? []).contains { $0.trackId != id && ($0.edgeLane == lane || $0.centerLane == lane) }
+            }
+            for (i, t) in drawn.enumerated() where !t.isRoot && t.terminus == "open" && !openTracks.contains(t.id) {
+                let newest = extents[i].top
+                guard newest == t.firstRow, newest > 0 else { continue }
+                var target = newest
+                while target > 0 && free(t.lane, target - 1, except: t.id) { target -= 1 }
+                if target < newest {
+                    extents[i].top = target
+                    extents[i].dashedBelow = newest
+                } else {
+                    extents[i].stub = newest
                 }
             }
         }
@@ -357,17 +633,25 @@ struct TimelineLayout: Equatable {
 
         func rails(atRow r: Int) -> [Rail] {
             sorted(extents.compactMap { e -> Rail? in
-                let top = r > e.top && r <= e.bottom && !cutTop.contains(Slice(row: r, trackId: e.trackId))
+                let stubbed = e.stub == r
+                let top = (r > e.top && r <= e.bottom && !cutTop.contains(Slice(row: r, trackId: e.trackId))) || stubbed
                 let bottom = r >= e.top && r < e.bottom && !cutBottom.contains(Slice(row: r, trackId: e.trackId))
                 guard top || bottom else { return nil }
-                return Rail(lane: e.lane, trackId: e.trackId, isRoot: e.isRoot, top: top, bottom: bottom)
+                let dashedTop = stubbed || e.dashedBelow.map { r <= $0 } ?? false
+                let dashedBottom = e.dashedBelow.map { r < $0 } ?? false
+                return Rail(lane: e.lane, trackId: e.trackId, isRoot: e.isRoot, top: top, bottom: bottom,
+                            dashedTop: top && dashedTop, dashedBottom: bottom && dashedBottom)
             })
         }
 
         /// The rails crossing the boundary just above row `r`.
         func rails(above r: Int) -> [Rail] {
             sorted(extents.filter { $0.top < r && r <= $0.bottom }
-                .map { Rail(lane: $0.lane, trackId: $0.trackId, isRoot: $0.isRoot, top: true, bottom: true) })
+                .map { e in
+                    let dashed = e.dashedBelow.map { r <= $0 } ?? false
+                    return Rail(lane: e.lane, trackId: e.trackId, isRoot: e.isRoot, top: true, bottom: true,
+                                dashedTop: dashed, dashedBottom: dashed)
+                })
         }
 
         func detours(atRow r: Int) -> [Detour] {
@@ -378,40 +662,156 @@ struct TimelineLayout: Equatable {
             sorted(detourSpans.filter { $0.top < r && r <= $0.bottom }.map { Detour(lane: $0.lane, trackId: $0.trackId) })
         }
 
+        let words = Words(map)
         let byRow = map.stops.sorted { $0.row < $1.row }
         var items: [Item] = []
         for band in map.bands {
-            items.append(.band(BandRow(key: band.key, label: band.label, empty: band.empty,
-                                       rails: rails(above: band.fromRow), detours: detours(above: band.fromRow))))
-            for s in byRow where s.row >= band.fromRow && s.row < band.toRow {
+            let inBand = byRow.filter { $0.row >= band.fromRow && $0.row < band.toRow }
+            items.append(.band(BandRow(key: band.key, label: words.bandLabel(band), empty: band.empty,
+                                       rails: rails(above: band.fromRow), detours: detours(above: band.fromRow),
+                                       labelHidden: band.key == "nu" && !inBand.isEmpty)))
+            for s in inBand {
                 let track = trackById[s.trackId]
-                let spoor = (track?.isRoot ?? true) ? "hoofdlijn" : (track?.title ?? "hoofdlijn")
-                let mark: Mark = s.id == map.currentStopId ? .current : s.state == "open" ? .waiting : .done
-                var caps: [Cap] = []
-                if let track, !track.isRoot, s.row == track.firstRow {
-                    switch track.terminus {
-                    case "done": caps.append(Cap(lane: track.lane, kind: .done))
-                    case "ended": caps.append(Cap(lane: track.lane, kind: .ended))
-                    default: break
-                    }
-                }
-                items.append(.stop(StopRow(stop: s, track: track, mark: mark, meta: Self.meta(s, spoor: spoor),
-                                           rails: rails(atRow: s.row), curves: curvesAt[s.row] ?? [], caps: caps,
-                                           detours: detours(atRow: s.row))))
+                let mark: Mark = s.id == map.currentStopId ? .current : s.state == "open" ? .open : .done
+                items.append(.stop(StopRow(stop: s, track: track, mark: mark, lane: singleLane ? 0 : s.lane,
+                                           readouts: words.readouts(s, track: track, mark: mark),
+                                           sentences: words.sentences(s, track: track, mark: mark),
+                                           rails: rails(atRow: s.row), curves: curvesAt[s.row] ?? [],
+                                           caps: capsAt[s.row] ?? [], detours: detours(atRow: s.row))))
             }
         }
         self.items = items
     }
 
-    /// Spoor, then when, then — for an open stop — who it waits on.
-    static func meta(_ s: CaseMapDTO.Stop, spoor: String) -> String {
-        let when: String = if let at = s.happenedAt {
-            DossierCopy.day(at)
-        } else if s.bandKey == "nu" {
-            "loopt nu"
-        } else {
-            "zonder datum"
+    /// The readouts and sentences of every row, from the map alone.
+    struct Words {
+        let map: CaseMapDTO
+        let trackById: [String: CaseMapDTO.Track]
+        /// The year of the newest dated stop: a date in it goes without its year.
+        let year: Int?
+        /// Sporen still running with no open stop — drawn dashed towards now.
+        let running: [CaseMapDTO.Track]
+
+        static var amsterdam: Calendar {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+            return cal
         }
-        return ([spoor, when] + (s.state == "open" ? ["wacht op jou"] : [])).joined(separator: " · ")
+
+        init(_ map: CaseMapDTO) {
+            self.map = map
+            trackById = Dictionary(map.tracks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            year = map.stops.compactMap(\.happenedAt).max().map { Self.amsterdam.component(.year, from: $0) }
+            let open = Set(map.stops.filter { $0.state == "open" }.map(\.trackId))
+            let withStops = Set(map.stops.map(\.trackId))
+            running = map.tracks.filter { !$0.isRoot && $0.terminus == "open" && !open.contains($0.id)
+                && withStops.contains($0.id) }
+        }
+
+        func day(_ d: Date) -> String {
+            let y = Self.amsterdam.component(.year, from: d)
+            return y == year ? MoneyFormat.day(d) : "\(MoneyFormat.day(d)) \(y)"
+        }
+
+        /// "Oktober" in the newest year, "Oktober 2025" before it.
+        func bandLabel(_ band: CaseMapDTO.Band) -> String {
+            switch band.key {
+            case "nu": return "Nu"
+            case "onbekend": return TimelineCopy.unknownBand
+            default:
+                let p = band.key.split(separator: "-").compactMap { Int($0) }
+                guard p.count == 2, (1...12).contains(p[1]) else { return band.label }
+                let name = MoneyFormat.monthsLong[p[1] - 1].capitalized
+                return p[0] == year ? name : "\(name) \(p[0])"
+            }
+        }
+
+        func stop(atRow row: Int, lane: Int) -> CaseMapDTO.Stop? {
+            map.stops.first { $0.row == row && $0.lane == lane }
+        }
+
+        func isNewest(_ s: CaseMapDTO.Stop, of t: CaseMapDTO.Track) -> Bool { s.row == t.firstRow }
+        func isOldest(_ s: CaseMapDTO.Stop, of t: CaseMapDTO.Track) -> Bool { s.row == t.lastRow }
+
+        func mergeStop(_ t: CaseMapDTO.Track) -> CaseMapDTO.Stop? {
+            guard let e = map.edges.first(where: { $0.trackId == t.id && $0.kind == "merge" }) else { return nil }
+            return stop(atRow: e.toRow, lane: e.toLane)
+        }
+
+        /// A spoor's own branch stop on its parent, when the map recorded one.
+        func branchStop(_ t: CaseMapDTO.Track) -> CaseMapDTO.Stop? {
+            guard let e = map.edges.first(where: { $0.trackId == t.id && $0.kind == "branch" }),
+                  !(e.fromRow == e.toRow && e.fromLane != e.toLane) else { return nil }
+            return stop(atRow: e.fromRow, lane: e.fromLane)
+        }
+
+        func when(_ s: CaseMapDTO.Stop) -> String? {
+            if let at = s.happenedAt { return day(at) }
+            return s.bandKey == "nu" ? nil : "zonder datum"
+        }
+
+        func readouts(_ s: CaseMapDTO.Stop, track t: CaseMapDTO.Track?, mark: Mark) -> [Readout] {
+            let spoor = (t?.isRoot ?? true) ? nil : t?.title
+            switch mark {
+            case .current:
+                if let spoor { return [Readout(text: "spoor \(spoor)")] }
+                return running.map { Readout(text: "spoor \($0.title) loopt nog") }
+            case .open:
+                return [Readout(text: (["loopt nog", when(s)].compactMap { $0 }).joined(separator: " · "), tone: .signal)]
+                    + (spoor.map { [Readout(text: $0)] } ?? [])
+            case .done:
+                var prefix: String?
+                var tail: Readout?
+                if let t, !t.isRoot, isNewest(s, of: t) {
+                    switch t.terminus {
+                    case "ended": prefix = "afgehandeld"
+                    case "done": prefix = "afgerond"
+                    case "merge":
+                        let back = mergeStop(t)?.happenedAt.map { "terug op \(day($0))" } ?? "terug op de hoofdlijn"
+                        tail = Readout(text: "laatste halte · \(back)")
+                    default: break
+                    }
+                }
+                let line = [prefix, when(s), spoor].compactMap { $0 }.joined(separator: " · ")
+                return (line.isEmpty ? [] : [Readout(text: line)]) + (tail.map { [$0] } ?? [])
+            }
+        }
+
+        /// One paragraph per fact, sentence case, every spoor named.
+        func sentences(_ s: CaseMapDTO.Stop, track t: CaseMapDTO.Track?, mark: Mark) -> [String] {
+            var out: [String] = []
+            let side = (t?.isRoot ?? true) ? nil : t
+            if let at = s.happenedAt { out.append(day(at)) }
+            else { out.append(s.bandKey == "nu" ? "Nu · zonder datum" : "Zonder datum") }
+            if mark == .open { out.append("Loopt nog.") }
+            if let side { out.append("Spoor \(side.title)") }
+            if mark == .current, side == nil {
+                out += running.map { "Spoor \($0.title) loopt nog." }
+            }
+            if let t, t.isRoot, isOldest(s, of: t) { out.append("De hoofdlijn begint hier.") }
+            if let side, isOldest(s, of: side), branchStop(side) == nil { out.append("Hier begint dit spoor.") }
+            for e in map.edges where e.kind == "merge" && e.toRow == s.row && e.toLane == s.lane {
+                if let other = trackById[e.trackId] { out.append("Spoor \(other.title) komt hier terug.") }
+            }
+            for e in map.edges where e.kind == "branch" && e.fromRow == s.row && e.fromLane == s.lane
+                && e.trackId != s.trackId && !(e.fromRow == e.toRow && e.fromLane != e.toLane) {
+                if let other = trackById[e.trackId] { out.append("Spoor \(other.title) splitst hier af.") }
+            }
+            if let side, isNewest(s, of: side), mark == .done {
+                switch side.terminus {
+                case "ended": out.append("Afgehandeld.")
+                case "done": out.append("Afgerond.")
+                case "merge":
+                    if let at = mergeStop(side)?.happenedAt {
+                        out.append("Laatste halte. Terug op de hoofdlijn op \(day(at)).")
+                    } else {
+                        out.append("Laatste halte. Terug op de hoofdlijn.")
+                    }
+                default: break
+                }
+            }
+            if s.datesOutOfOrder { out.append("Let op: \(TimelineCopy.flagged).") }
+            return out
+        }
     }
 }

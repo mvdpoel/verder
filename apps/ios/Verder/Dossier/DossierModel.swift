@@ -10,6 +10,8 @@ enum DossierRoute: Hashable, Sendable {
     case task(String)
     /// The Tijdlijn: the case as a metro map (`TimelineScreen`).
     case timeline
+    /// The Tijdlijn with the NU sheet raised: the headline card's tap.
+    case timelineNow
 }
 
 /// The words and choices of the Dossier tab, decided outside the view.

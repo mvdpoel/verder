@@ -15,7 +15,8 @@ struct FixtureTests {
     nonisolated static let expectedNames = [
         "calm", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
-        "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
+        "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
+        "timeline-vier", "unauthorized", "voice", "voorjou-few",
         "voorjou-long", "voorjou-many", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
         "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
@@ -41,13 +42,24 @@ struct FixtureTests {
     }
 
     nonisolated static var fileFixtures: [String] {
-        expectedNames.filter { !["offline", "unauthorized", "loading", "server-error", "weekly-loading"].contains($0) }
+        expectedNames.filter { !["offline", "unauthorized", "loading", "server-error", "weekly-loading",
+                                "timeline-fout", "timeline-offline"].contains($0) }
     }
 
     // MARK: - The set
 
     @Test func everyFixtureTheDataDocNamesIsBundled() {
         #expect(FixtureServer.names(in: Self.root) == Self.expectedNames)
+    }
+
+    /// `offlinePaths`: one route gets no answer at all while the rest answer.
+    @Test func anOfflinePathFailsAloneAndTheCacheSeedIsReadable() throws {
+        let s = try Self.server("timeline-offline")
+        #expect(s.reply(method: "GET", path: FixtureServer.apiPrefix + "case-map") == .transportFailure)
+        #expect(s.reply(method: "GET", path: FixtureServer.apiPrefix + "inbox").isError == false)
+        #expect(s.manifest.timelineCachedAt != nil)
+        let data = try #require(s.body("case-map"))
+        #expect(try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: data).stops.count == 14)
     }
 
     /// `"POST push/preferences": 503`: the save fails, the read still answers.

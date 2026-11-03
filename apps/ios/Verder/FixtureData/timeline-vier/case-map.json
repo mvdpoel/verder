@@ -1,0 +1,528 @@
+{
+  "bands": [
+    {
+      "key": "nu",
+      "label": "Nu",
+      "fromRow": 0,
+      "toRow": 2,
+      "empty": false
+    },
+    {
+      "key": "2026-10",
+      "label": "oktober 2026",
+      "fromRow": 2,
+      "toRow": 7,
+      "empty": false
+    },
+    {
+      "key": "2026-09",
+      "label": "september 2026",
+      "fromRow": 7,
+      "toRow": 8,
+      "empty": false
+    },
+    {
+      "key": "2026-08",
+      "label": "augustus 2026",
+      "fromRow": 8,
+      "toRow": 8,
+      "empty": true
+    },
+    {
+      "key": "2026-07",
+      "label": "juli 2026",
+      "fromRow": 8,
+      "toRow": 8,
+      "empty": true
+    },
+    {
+      "key": "2026-06",
+      "label": "juni 2026",
+      "fromRow": 8,
+      "toRow": 11,
+      "empty": false
+    },
+    {
+      "key": "2026-05",
+      "label": "mei 2026",
+      "fromRow": 11,
+      "toRow": 14,
+      "empty": false
+    }
+  ],
+  "tracks": [
+    {
+      "id": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Bewindvoering",
+      "status": "open",
+      "isRoot": true,
+      "parentTrackId": null,
+      "note": null,
+      "lane": 0,
+      "firstRow": 0,
+      "lastRow": 13,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000002",
+      "title": "Aanvraag bewindvoering",
+      "status": "done",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 1,
+      "firstRow": 11,
+      "lastRow": 12,
+      "mergesBack": true,
+      "terminus": "merge"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000005",
+      "title": "Huurachterstand Lindehof",
+      "status": "ended",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 3,
+      "firstRow": 6,
+      "lastRow": 7,
+      "mergesBack": false,
+      "terminus": "ended"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000003",
+      "title": "Opstart en stukken",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 1,
+      "firstRow": 8,
+      "lastRow": 9,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000004",
+      "title": "Vordering Kade & Partners",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 2,
+      "firstRow": 1,
+      "lastRow": 3,
+      "mergesBack": false,
+      "terminus": "open"
+    }
+  ],
+  "stops": [
+    {
+      "id": "00000000-f1c5-4000-8000-500000000006",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Stukken aanleveren bij Team Startdossier",
+      "note": "Loonstroken en polissen nog sturen.",
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 0,
+      "lane": 0,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": {
+          "id": "00000000-f1c5-4000-8000-300000000011",
+          "title": "Loonstroken en polissen sturen naar Team Startdossier",
+          "status": "open",
+          "dueAt": "2026-10-30T16:00:00.000Z",
+          "link": "verder://task/00000000-f1c5-4000-8000-300000000011"
+        },
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000104",
+            "title": "Loonstrook 2026-10",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+          },
+          {
+            "id": "00000000-f1c5-4000-8000-200000000303",
+            "title": "Polis Duinzorg 2026",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000303"
+          }
+        ],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000032",
+      "trackId": "00000000-f1c5-4000-8000-400000000004",
+      "title": "Kade & Partners \u2014 melden bij Noordkust",
+      "note": "Nog doorgeven aan Ilse.",
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 1,
+      "lane": 2,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000005",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Brief Gemeente Westerlaan over bijzondere bijstand",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-30T09:00:00.000Z",
+      "row": 2,
+      "lane": 0,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000307",
+            "title": "Brief Gemeente Westerlaan 30 okt",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000307"
+          }
+        ],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000031",
+      "trackId": "00000000-f1c5-4000-8000-400000000004",
+      "title": "Kade & Partners \u2014 verwerkt als vordering",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-15T09:00:00.000Z",
+      "row": 3,
+      "lane": 2,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000004",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Sommatie Kade & Partners namens Stroomnet Energie",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-14T09:00:00.000Z",
+      "row": 4,
+      "lane": 0,
+      "bandKey": "2026-10",
+      "isJunction": true,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000106",
+            "title": "Sommatie Kade & Partners 14 okt",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000106"
+          }
+        ],
+        "email": {
+          "subject": "Sommatie namens Stroomnet Energie",
+          "fromAddr": "incasso@kade.example",
+          "sentAt": "2026-10-14T09:00:00.000Z"
+        }
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000003",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Rekening overgenomen door Bewindkantoor Noordkust",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-02T09:00:00.000Z",
+      "row": 5,
+      "lane": 0,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": {
+          "summary": "Noordkust beheert nu de rekening",
+          "occurredAt": "2026-10-02T09:00:00.000Z",
+          "channel": "email",
+          "direction": "inbound"
+        },
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000042",
+      "trackId": "00000000-f1c5-4000-8000-400000000005",
+      "title": "Regeling loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-01T09:00:00.000Z",
+      "row": 6,
+      "lane": 3,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000041",
+      "trackId": "00000000-f1c5-4000-8000-400000000005",
+      "title": "Betalingsregeling afgesproken",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-08T09:00:00.000Z",
+      "row": 7,
+      "lane": 3,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": {
+          "summary": "Telefoongesprek met Lindehof over een regeling",
+          "occurredAt": "2026-09-08T09:00:00.000Z",
+          "channel": "call",
+          "direction": "outbound"
+        },
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000022",
+      "trackId": "00000000-f1c5-4000-8000-400000000003",
+      "title": "Loonstroken gestuurd",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-06-20T09:00:00.000Z",
+      "row": 8,
+      "lane": 1,
+      "bandKey": "2026-06",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": {
+          "summary": "Loonstroken gemaild aan Team Startdossier",
+          "occurredAt": "2026-06-20T09:00:00.000Z",
+          "channel": "email",
+          "direction": "outbound"
+        },
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000021",
+      "trackId": "00000000-f1c5-4000-8000-400000000003",
+      "title": "Team Startdossier vraagt stukken",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-06-05T09:00:00.000Z",
+      "row": 9,
+      "lane": 1,
+      "bandKey": "2026-06",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000002",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Beschikking: onder bewind gesteld",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-06-03T09:00:00.000Z",
+      "row": 10,
+      "lane": 0,
+      "bandKey": "2026-06",
+      "isJunction": true,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000300",
+            "title": "Beschikking Rechtbank Westerlaan",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+          }
+        ],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000012",
+      "trackId": "00000000-f1c5-4000-8000-400000000002",
+      "title": "Verzoek naar de rechtbank",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-05-26T09:00:00.000Z",
+      "row": 11,
+      "lane": 1,
+      "bandKey": "2026-05",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000300",
+            "title": "Beschikking Rechtbank Westerlaan",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+          }
+        ],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000011",
+      "trackId": "00000000-f1c5-4000-8000-400000000002",
+      "title": "Intake",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-05-19T09:00:00.000Z",
+      "row": 12,
+      "lane": 1,
+      "bandKey": "2026-05",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": {
+          "summary": "Intakegesprek met Ilse",
+          "occurredAt": "2026-05-19T09:00:00.000Z",
+          "channel": "meeting",
+          "direction": "inbound"
+        },
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000001",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Aanmelding bij Bewindkantoor Noordkust",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-05-12T09:00:00.000Z",
+      "row": 13,
+      "lane": 0,
+      "bandKey": "2026-05",
+      "isJunction": true,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000310",
+            "title": "Bevestiging aanmelding Noordkust",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000310"
+          }
+        ],
+        "email": null
+      }
+    }
+  ],
+  "edges": [
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000002",
+      "fromLane": 0,
+      "fromRow": 13,
+      "toLane": 1,
+      "toRow": 12
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000005",
+      "fromLane": 0,
+      "fromRow": 7,
+      "toLane": 3,
+      "toRow": 7
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000003",
+      "fromLane": 0,
+      "fromRow": 10,
+      "toLane": 1,
+      "toRow": 9
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000004",
+      "fromLane": 0,
+      "fromRow": 4,
+      "toLane": 2,
+      "toRow": 3
+    },
+    {
+      "kind": "merge",
+      "trackId": "00000000-f1c5-4000-8000-400000000002",
+      "fromLane": 1,
+      "fromRow": 11,
+      "toLane": 0,
+      "toRow": 10
+    }
+  ],
+  "rowCount": 14,
+  "laneCount": 4,
+  "currentStopId": "00000000-f1c5-4000-8000-500000000006",
+  "problems": [],
+  "hiddenDebtTrackCount": 0,
+  "debtEpisodesHidden": false
+}

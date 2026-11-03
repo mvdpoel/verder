@@ -1,0 +1,10 @@
+{
+  "description": "No connection to the case map; the phone kept it from 09:20 (timelineCachedAt). The dossier syncs, but Polis Duinzorg 2026 never downloads (503), so the NU sheet says it opens with a connection.",
+  "offlinePaths": [
+    "case-map"
+  ],
+  "timelineCachedAt": "2026-11-01T08:20:00Z",
+  "statuses": {
+    "documents/00000000-f1c5-4000-8000-200000000303/file": 503
+  }
+}

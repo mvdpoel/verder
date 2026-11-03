@@ -17,7 +17,10 @@ struct DossierTab: View {
     let client: APIClient
     @Binding var path: [DossierRoute]
     let onUnauthorized: @MainActor () -> Void
+    /// The Tijdlijn's empty state: "Open Voor jou".
+    var openVoorJou: () -> Void = {}
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -51,8 +54,10 @@ struct DossierTab: View {
                                    store: model.store, client: client, onUnauthorized: onUnauthorized)
                 case .task(let id):
                     TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
-                case .timeline:
-                    TimelineScreen(store: timeline, open: { path.append($0) })
+                case .timeline, .timelineNow:
+                    TimelineScreen(store: timeline, open: { path.append($0) }, openVoorJou: openVoorJou,
+                                   raiseCurrent: route == .timelineNow,
+                                   heldDocument: { model.doc($0) })
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -62,6 +67,8 @@ struct DossierTab: View {
             await model.loadCached()
             if inbox.summary == nil { await inbox.refresh() }
             await refresh()
+            // The Tijdlijn row names the map's own counts.
+            if timeline.map == nil { await timeline.load() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
@@ -137,27 +144,22 @@ struct DossierTab: View {
     // MARK: - No query
 
     @ViewBuilder private var headlineCard: some View {
-        DossierCard(label: DossierCopy.headlineLabel) {
-            if let h = inbox.summary?.headline {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(h.stopTitle)
-                        .font(.display(17, relativeTo: .headline, weight: .medium))
-                        .foregroundStyle(Color.inkBright)
-                        .fixedSize(horizontal: false, vertical: true)
-                    let line = [h.trackTitle, h.happenedAt.map(HomeSummary.day)].compactMap { $0 }
-                    if !line.isEmpty {
-                        Text(line.joined(separator: " · "))
-                            .font(.mono(12, relativeTo: .caption))
-                            .foregroundStyle(Color.inkLabel)
-                    }
-                    if let note = h.note, !note.isEmpty {
-                        Text(note)
-                            .font(.display(15, relativeTo: .subheadline))
-                            .foregroundStyle(Color.ink)
-                            .lineLimit(4)
-                    }
-                }
-            } else if inbox.summary != nil {
+        if let h = inbox.summary?.headline {
+            // The way into the Tijdlijn at what waits: the NU sheet comes up.
+            Button { path.append(.timelineNow) } label: {
+                TimelineHeadlineCard(title: h.stopTitle, note: h.note,
+                                     meta: [h.trackTitle, TimelineHeadlineCard.opens].compactMap { $0 })
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(HomeSummary.headlineHint)
+        } else {
+            DossierCard(label: DossierCopy.headlineLabel) { headlineFallback }
+        }
+    }
+
+    @ViewBuilder private var headlineFallback: some View {
+        Group {
+            if inbox.summary != nil {
                 muted(DossierCopy.noHeadline)
             } else if model.offline {
                 muted(DossierCopy.offline)
@@ -171,17 +173,17 @@ struct DossierTab: View {
     private var timelineRow: some View {
         Button { path.append(.timeline) } label: {
             HStack(spacing: 12) {
-                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                    .foregroundStyle(Color.signal)
-                    .frame(width: 24)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(TimelineCopy.rowTitle)
                         .font(.display(17, relativeTo: .body, weight: .medium))
                         .foregroundStyle(Color.inkBright)
-                    Text(TimelineCopy.rowLine)
+                    // The map's own count once it is on the phone.
+                    let line = timeline.map.map { TimelineCopy.stats($0).joined(separator: " · ") } ?? TimelineCopy.rowLine
+                    Text(typeSize.isAccessibilitySize ? HomeSummary.sentence(line) : line.uppercased())
                         .font(.mono(12, relativeTo: .caption))
+                        .tracking(typeSize.isAccessibilitySize ? 0 : 1)
                         .foregroundStyle(Color.inkLabel)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

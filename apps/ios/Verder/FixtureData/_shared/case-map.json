@@ -84,7 +84,7 @@
       "isRoot": false,
       "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
       "note": null,
-      "lane": 1,
+      "lane": 2,
       "firstRow": 6,
       "lastRow": 7,
       "mergesBack": false,
@@ -110,7 +110,7 @@
       "isRoot": false,
       "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
       "note": null,
-      "lane": 1,
+      "lane": 2,
       "firstRow": 1,
       "lastRow": 3,
       "mergesBack": false,
@@ -137,23 +137,36 @@
           "id": "00000000-f1c5-4000-8000-300000000011",
           "title": "Loonstroken en polissen sturen naar Team Startdossier",
           "status": "open",
-          "dueAt": null,
+          "dueAt": "2026-10-30T16:00:00.000Z",
           "link": "verder://task/00000000-f1c5-4000-8000-300000000011"
         },
-        "documents": [],
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000104",
+            "title": "Loonstrook 2026-10",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+          },
+          {
+            "id": "00000000-f1c5-4000-8000-200000000303",
+            "title": "Polis Duinzorg 2026",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000303"
+          }
+        ],
         "email": null
       }
     },
     {
       "id": "00000000-f1c5-4000-8000-500000000032",
       "trackId": "00000000-f1c5-4000-8000-400000000004",
-      "title": "Kade & Partners — melden bij Noordkust",
+      "title": "Kade & Partners \u2014 melden bij Noordkust",
       "note": "Nog doorgeven aan Ilse.",
       "state": "open",
       "kind": "other",
       "happenedAt": null,
       "row": 1,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "nu",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -194,13 +207,13 @@
     {
       "id": "00000000-f1c5-4000-8000-500000000031",
       "trackId": "00000000-f1c5-4000-8000-400000000004",
-      "title": "Kade & Partners — verwerkt als vordering",
+      "title": "Kade & Partners \u2014 verwerkt als vordering",
       "note": null,
       "state": "done",
       "kind": "other",
       "happenedAt": "2026-10-15T09:00:00.000Z",
       "row": 3,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "2026-10",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -276,7 +289,7 @@
       "kind": "other",
       "happenedAt": "2026-10-01T09:00:00.000Z",
       "row": 6,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "2026-10",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -296,7 +309,7 @@
       "kind": "other",
       "happenedAt": "2026-09-08T09:00:00.000Z",
       "row": 7,
-      "lane": 1,
+      "lane": 2,
       "bandKey": "2026-09",
       "isJunction": false,
       "datesOutOfOrder": false,
@@ -400,7 +413,14 @@
       "evidence": {
         "entry": null,
         "task": null,
-        "documents": [],
+        "documents": [
+          {
+            "id": "00000000-f1c5-4000-8000-200000000300",
+            "title": "Beschikking Rechtbank Westerlaan",
+            "mime": "application/pdf",
+            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+          }
+        ],
         "email": null
       }
     },
@@ -471,7 +491,7 @@
       "trackId": "00000000-f1c5-4000-8000-400000000005",
       "fromLane": 0,
       "fromRow": 7,
-      "toLane": 1,
+      "toLane": 2,
       "toRow": 7
     },
     {
@@ -487,7 +507,7 @@
       "trackId": "00000000-f1c5-4000-8000-400000000004",
       "fromLane": 0,
       "fromRow": 4,
-      "toLane": 1,
+      "toLane": 2,
       "toRow": 3
     },
     {
@@ -500,7 +520,7 @@
     }
   ],
   "rowCount": 14,
-  "laneCount": 2,
+  "laneCount": 3,
   "currentStopId": "00000000-f1c5-4000-8000-500000000006",
   "problems": [],
   "hiddenDebtTrackCount": 0,

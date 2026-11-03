@@ -176,4 +176,32 @@ struct TimelineStoreTests {
         await emptyStore.load()
         #expect(emptyStore.screen == .empty)
     }
+
+    @Test func theHeaderSaysCountsThenWhatTheFilterHid() async throws {
+        let full = try Self.fixtureBody()
+        let hiddenBody = try Self.fixtureBody(true)
+        let server = StubServer()
+        server.on { req in .status(200, body: req.url?.query?.contains("verborgen") == true ? hiddenBody : full) }
+        let store = TimelineStore(client: server.client(), cache: Self.cache(Self.tempDir()))
+        await store.load()
+        #expect(store.headerLine == .stats(["4 sporen", "14 haltes", "nieuwste 30 okt"]))
+        await store.setHideDebts(true)
+        #expect(store.headerLine == .hidden("1 spoor verborgen", "daarin wacht 1 op jou"))
+        #expect(store.hiddenOpenStopIds == ["00000000-f1c5-4000-8000-500000000032"])
+    }
+
+    @Test func aFailedLoadSaysWhenAndKeepsItsScreenWhileRetrying() async throws {
+        let server = StubServer()
+        server.on { _ in .status(503, body: Data("{}".utf8)) }
+        let at = Date(timeIntervalSince1970: 1_793_538_300) // 1 nov 2026 14:05 CET
+        let store = TimelineStore(client: server.client(), cache: Self.cache(Self.tempDir()), now: { at })
+        await store.load()
+        #expect(store.headerLine == .failed("niet geladen · 14:05"))
+        #expect(store.screen == .failed(.server(503)))
+        #expect(store.failedRetries == 0)
+        await store.refresh()
+        // A second failure is what plays .error.
+        #expect(store.failedRetries == 1)
+        #expect(TimelineCopy.retryHint(.server(503)) == "Laatste poging gaf serverfout 503.")
+    }
 }

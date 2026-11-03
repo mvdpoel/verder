@@ -96,7 +96,8 @@ struct TimelineLayoutTests {
             #expect(layout.spacing == TimelineLayout.Lanes.baseSpacing)
             #expect(layout.x(0) == TimelineLayout.Lanes.inset)
             #expect(layout.x(count - 1) == TimelineLayout.Lanes.inset + CGFloat(count - 1) * TimelineLayout.Lanes.baseSpacing)
-            #expect(layout.width == 2 * TimelineLayout.Lanes.inset + CGFloat(count - 1) * TimelineLayout.Lanes.baseSpacing)
+            #expect(layout.width == max(TimelineLayout.Lanes.standardWidth, TimelineLayout.Lanes.inset
+                + CGFloat(count - 1) * TimelineLayout.Lanes.baseSpacing + TimelineLayout.Lanes.labelGap))
         }
     }
 
@@ -130,6 +131,18 @@ struct TimelineLayoutTests {
         // A 375 pt SE less the page's 16 pt gutters: the titles keep a real column.
         let m = Self.map(bands: [], tracks: [], stops: [], lanes: 8)
         #expect(TimelineLayout(m).labelWidth(total: 375 - 32) >= 180)
+    }
+
+    /// Figma: lanes at 24/40/56/72 from the screen edge, titles at 96 — the
+    /// same column for a map with one spoor as for a map with four.
+    @Test func upToFourLanesTheLabelsStartAtOneColumn() {
+        for count in 1...4 {
+            let lanes = TimelineLayout.Lanes(count: count)
+            #expect(lanes.width == 80)
+            #expect(16 + lanes.x(count - 1) == 24 + CGFloat(count - 1) * 16)
+        }
+        // At the accessibility sizes one rail, and the titles start at 48.
+        #expect(TimelineLayout.Lanes(count: 1, minWidth: 0).width == 32)
     }
 
     @Test func zeroLanesStillHasAGutter() {
@@ -175,7 +188,7 @@ struct TimelineLayoutTests {
         #expect(bands[2].rails.allSatisfy { $0.top && $0.bottom })
     }
 
-    @Test func aBranchWithNoAnchorIsDrawnLevel() {
+    @Test func aBranchWithNoAnchorBeginsWithACap() {
         let m = Self.map(
             bands: [Self.band("2026-10", "oktober 2026", 0, 2)],
             tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 0...1, root: true),
@@ -184,7 +197,9 @@ struct TimelineLayoutTests {
                     Self.stop("b", track: "huur", row: 1, lane: 1, band: "2026-10")],
             edges: [.init(kind: "branch", trackId: "huur", fromLane: 0, fromRow: 1, toLane: 1, toRow: 1)])
         let b = Self.stopRows(TimelineLayout(m)).first { $0.stop.id == "b" }!
-        #expect(b.curves == [.init(kind: .branch, trackId: "huur", centerLane: 0, edgeLane: 1, edge: .level)])
+        #expect(b.curves.isEmpty)
+        #expect(b.caps.contains(.init(lane: 1, end: .bottom)))
+        #expect(b.sentences.contains("Hier begint dit spoor."))
     }
 
     /// A trigger on the trunk logged AFTER the first stop of its own spoor (a
@@ -336,20 +351,22 @@ struct TimelineLayoutTests {
 
     // MARK: - Marks, caps and words
 
-    @Test func amberOnlyOnOpenStopsSteelForDone() {
+    @Test func amberOnlyOnTheCurrentStopOtherOpenStopsRunInSignal() {
         let layout = TimelineLayout(Self.mergingCase)
         let marks = Dictionary(uniqueKeysWithValues: Self.stopRows(layout).map { ($0.stop.id, $0.mark) })
         #expect(marks["s0"] == .current)
         #expect(marks["s1"] == .done)
-        #expect(TimelineLayout.Mark.current.isAmber && TimelineLayout.Mark.waiting.isAmber)
-        #expect(!TimelineLayout.Mark.done.isAmber)
-        // A second open stop waits on Martin too: amber, but not the headline.
+        #expect(TimelineLayout.Mark.current.isAmber)
+        #expect(!TimelineLayout.Mark.open.isAmber && !TimelineLayout.Mark.done.isAmber)
+        // A second open stop: a hollow signal ring, as /timeline draws it — never amber.
         let m = Self.map(bands: [Self.band("nu", "Nu", 0, 2)],
                          tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 0...1, root: true)],
                          stops: [Self.stop("a", track: "root", row: 0, lane: 0, band: "nu", state: "open", at: nil),
                                  Self.stop("b", track: "root", row: 1, lane: 0, band: "nu", state: "open", at: nil)],
                          current: "a")
-        #expect(Self.stopRows(TimelineLayout(m)).map(\.mark) == [.current, .waiting])
+        let rows = Self.stopRows(TimelineLayout(m))
+        #expect(rows.map(\.mark) == [.current, .open])
+        #expect(rows[1].readouts.first == .init(text: "loopt nog", tone: .signal))
     }
 
     @Test func anEndedSpoorIsACleanCapNeverAFailure() {
@@ -361,22 +378,55 @@ struct TimelineLayoutTests {
             stops: [Self.stop("a", track: "huur", row: 0, lane: 1, band: "2026-10"),
                     Self.stop("b", track: "klaar", row: 1, lane: 2, band: "2026-10")])
         let rows = Self.stopRows(TimelineLayout(m))
-        #expect(rows[0].caps == [.init(lane: 1, kind: .ended)])
-        #expect(rows[1].caps == [.init(lane: 2, kind: .done)])
+        #expect(rows[0].caps.contains(.init(lane: 1, end: .top)))
+        #expect(rows[1].caps.contains(.init(lane: 2, end: .top)))
+        #expect(rows[0].readouts.first?.text.hasPrefix("afgehandeld") == true)
+        #expect(rows[1].readouts.first?.text.hasPrefix("afgerond") == true)
         #expect(TimelineCopy.trackStatus("ended") == "geëindigd")
         #expect(TimelineCopy.trackStatus("done") == "afgerond")
         for word in ["mislukt", "fout", "gefaald"] {
             #expect(!TimelineCopy.trackStatus("ended").contains(word))
+            #expect(!TimelineCopy.outcome(m.tracks[1]).contains(word))
+            #expect(!TimelineCopy.outcomeSentence(m.tracks[1], mergedAt: nil).contains(word))
         }
     }
 
-    @Test func theMetaLineNamesSpoorWhenAndWhoItWaitsOn() {
+    @Test func theReadoutsNameTheDateTheSpoorAndHowItEnded() {
         let layout = TimelineLayout(Self.mergingCase)
         let rows = Dictionary(uniqueKeysWithValues: Self.stopRows(layout).map { ($0.stop.id, $0) })
-        #expect(rows["s0"]?.meta == "hoofdlijn · loopt nu · wacht op jou")
-        #expect(rows["s1"]?.meta == "Aanvraag · 14 okt 2026")
-        let undated = Self.stop("u", track: "root", row: 0, lane: 0, band: "onbekend", at: nil)
-        #expect(TimelineLayout.meta(undated, spoor: "hoofdlijn") == "hoofdlijn · zonder datum")
+        // The newest stop of a merging spoor says when it came back.
+        #expect(rows["s1"]?.readouts.map(\.text) == ["14 okt · Aanvraag", "laatste halte · terug op de hoofdlijn"])
+        #expect(rows["s2"]?.readouts.map(\.text) == ["14 okt · Aanvraag"])
+        #expect(rows["s3"]?.readouts.map(\.text) == ["2 aug"])
+        // At the accessibility sizes, sentences naming every junction.
+        #expect(rows["s3"]?.sentences == ["2 aug", "De hoofdlijn begint hier.", "Spoor Aanvraag splitst hier af."])
+        #expect(rows["s0"]?.sentences.contains("Spoor Aanvraag komt hier terug.") == true)
+    }
+
+    /// A spoor that still runs with no open stop is drawn on towards now,
+    /// dashed — and stubbed where its lane is taken above it.
+    @Test func aRunningSpoorIsDrawnDashedTowardsNow() throws {
+        let data = try #require(try FixtureTests.body("timeline", "case-map"))
+        let map = try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: data)
+        let opstart = try #require(map.tracks.first { $0.title == "Opstart en stukken" })
+        let layout = TimelineLayout(map)
+        let rows = Self.stopRows(layout)
+        let top = rows[0].rails.first { $0.trackId == opstart.id }
+        #expect(top?.bottom == true && top?.dashedBottom == true)
+        let newest = rows.first { $0.stop.row == opstart.firstRow }!.rails.first { $0.trackId == opstart.id }
+        #expect(newest?.dashedTop == true && newest?.dashedBottom == false)
+        // The hero says so in words.
+        #expect(rows[0].readouts.map(\.text) == ["spoor Opstart en stukken loopt nog"])
+        // A spoor with an open stop is not extended.
+        let kade = try #require(map.tracks.first { $0.title == "Vordering Kade & Partners" })
+        #expect(!rows[0].rails.contains { $0.trackId == kade.id })
+    }
+
+    @Test func anOpenSpoorNeverReadsAsEndingOnItsOwn() {
+        let t = Self.track("x", "Vordering", lane: 1, rows: 0...0)
+        #expect(TimelineCopy.outcome(t) == "loopt nog")
+        #expect(TimelineCopy.outcomeSentence(t, mergedAt: nil) == "Dit spoor loopt nog.")
+        #expect(!TimelineCopy.outcomeSentence(t, mergedAt: nil).contains("eindigt"))
     }
 
     @Test func titlesAreNeverTruncatedAndTheLabelColumnTakesTheRest() {
