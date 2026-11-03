@@ -81,6 +81,10 @@ enum CallEvent: Equatable, Sendable {
 @MainActor
 protocol CallObserving: AnyObject {
     func observe(_ handler: @escaping @MainActor (CallEvent) -> Void)
+    /// The calls CallKit knows about right now, id → `hasEnded`. Read when the
+    /// app comes back, because a suspended app can miss the `.ended` event
+    /// (`CallSession.reconcile`).
+    func currentCalls() -> [UUID: Bool]
 }
 
 /// `CXCallObserver`, delivering on the main queue.
@@ -93,6 +97,10 @@ final class LiveCallObserver: NSObject, CallObserving, CXCallObserverDelegate {
         self.handler = handler
         // nil = the main queue, so the callback below runs on the main actor.
         observer.setDelegate(self, queue: nil)
+    }
+
+    func currentCalls() -> [UUID: Bool] {
+        Dictionary(observer.calls.map { ($0.uuid, $0.hasEnded) }, uniquingKeysWith: { $0 || $1 })
     }
 
     nonisolated func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {

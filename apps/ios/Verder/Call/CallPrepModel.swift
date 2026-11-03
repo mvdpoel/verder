@@ -32,18 +32,25 @@ final class CallPrepModel {
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let cache: CallCache
+    /// The sign-in this sheet belongs to. A reply that lands after a sign-out
+    /// (or a 401 anywhere) is dropped unread: `CallSession.forget()` has
+    /// already wiped `Application Support/calls`, and saving it would write
+    /// the party's name, number and points back after the wipe.
+    @ObservationIgnored private let epoch: SessionEpoch
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     /// Called after every tick, so the session can update the Live Activity.
     @ObservationIgnored var onChecklistChanged: @MainActor () -> Void = {}
 
     init(partyId: String, name: String?, client: APIClient, cache: CallCache,
+         epoch: SessionEpoch = SessionEpoch(),
          now: @escaping @MainActor () -> Date = { Date() },
          onUnauthorized: @escaping @MainActor () -> Void = {}) {
         self.partyId = partyId
         self.partyName = name
         self.client = client
         self.cache = cache
+        self.epoch = epoch
         self.now = now
         self.onUnauthorized = onUnauthorized
         checklist = CallChecklist(TalkingPointsDTO(party: .init(id: partyId, name: name ?? ""), tell: [], ask: [], summary: nil))
@@ -78,10 +85,12 @@ final class CallPrepModel {
     func load() async {
         if dto == nil, let entry = cache.load(partyId) { show(entry.points, at: entry.savedAt) }
         guard let path = Self.path(partyId) else { notFound = true; return }
+        let started = epoch.current
         isLoading = true
         defer { isLoading = false }
         do {
             let fresh: TalkingPointsDTO = try await client.getJSON(path)
+            guard epoch.isCurrent(started) else { return }
             let at = now()
             show(fresh, at: at)
             offline = false
@@ -89,7 +98,7 @@ final class CallPrepModel {
             notFound = false
             try? cache.save(.init(savedAt: at, points: fresh), for: partyId)
         } catch {
-            if APIError.isCancellation(error) { return }
+            guard epoch.isCurrent(started), !APIError.isCancellation(error) else { return }
             let api = error as? APIError ?? .transport(String(describing: error))
             switch api {
             case .unauthorized: onUnauthorized()

@@ -79,6 +79,9 @@ struct RootView: View {
             case .background: lock.sceneDidEnterBackground()
             case .active:
                 lock.sceneDidBecomeActive()
+                // Back from the Phone app: a call whose end iOS never
+                // delivered to the suspended app ends now (`CallSession.reconcile`).
+                call.reconcile()
                 if auth.isSignedIn { Task { await uploads.start() } }
                 promptOnOpen()
             default: break

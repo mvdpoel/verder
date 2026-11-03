@@ -309,7 +309,10 @@ struct CallPrepTests {
 
     final class FakeObserver: CallObserving {
         private var handler: (@MainActor (CallEvent) -> Void)?
+        /// What `CXCallObserver.calls` would say: id → hasEnded.
+        var live: [UUID: Bool] = [:]
         func observe(_ handler: @escaping @MainActor (CallEvent) -> Void) { self.handler = handler }
+        func currentCalls() -> [UUID: Bool] { live }
         func send(_ e: CallEvent) { handler?(e) }
     }
 
@@ -485,6 +488,150 @@ struct CallPrepTests {
         #expect(r.session.model == nil)
         #expect(r.session.isPresented == false)
         #expect(r.activities.isRunning == false)
+    }
+
+    /// A sign-out (or a 401 anywhere) while the talking points are still on
+    /// their way: the reply that lands after the wipe must not write the
+    /// party's name, number and points back to disk (review, 2026-11-03).
+    @Test func aReplyLandingAfterTheSessionEndedIsNotWrittenBack() async throws {
+        let body = try Self.fixture()
+        let gate = DossierModelTests.Gate()
+        let s = StubServer()
+        s.on { req in
+            guard req.url?.path().hasSuffix("/talking-points") == true else { return .status(404) }
+            gate.wait()
+            return .status(200, body: body)
+        }
+        let dir = Self.tempDir()
+        let cache = CallCache(dir: dir)
+        let epoch = SessionEpoch()
+        let session = CallSession(client: s.client(), cache: cache, activities: FakeActivities(),
+                                  observer: FakeObserver(), epoch: epoch, now: { self.now },
+                                  dial: { _ in }, openVoice: { _ in })
+        let opening = Task { await session.open(partyId: Self.noordkust, name: "Bewindkantoor Noordkust") }
+        await DossierModelTests.waitUntil { gate.arrived.withLock { $0 } }
+        epoch.end()
+        gate.open()
+        await opening.value
+        #expect(cache.load(Self.noordkust) == nil)
+        #expect(FileManager.default.fileExists(atPath: dir.path()) == false)
+        #expect(session.model == nil)
+    }
+
+    /// The model on its own, held by whoever opened it: the ended epoch
+    /// leaves it showing nothing new either.
+    @Test func theModelIgnoresAReplyFromAnEndedSession() async throws {
+        let body = try Self.fixture()
+        let gate = DossierModelTests.Gate()
+        let s = StubServer()
+        s.on { _ in gate.wait(); return .status(200, body: body) }
+        let dir = Self.tempDir()
+        let epoch = SessionEpoch()
+        let m = CallPrepModel(partyId: Self.noordkust, name: "X", client: s.client(), cache: CallCache(dir: dir),
+                              epoch: epoch, now: { self.now })
+        let loading = Task { await m.load() }
+        await DossierModelTests.waitUntil { gate.arrived.withLock { $0 } }
+        epoch.end()
+        gate.open()
+        await loading.value
+        #expect(m.dto == nil)
+        #expect(FileManager.default.fileExists(atPath: dir.path()) == false)
+    }
+
+    // MARK: - Coming back from the Phone app
+
+    /// "Bel" hands the call to the Phone app and iOS suspends verder for the
+    /// whole call, so the `.ended` callback may never arrive. Coming back to
+    /// the foreground compares with `CXCallObserver.calls`: a call this
+    /// session saw start that is no longer live has ended (review, 2026-11-03).
+    @Test func comingBackWithNoLiveCallEndsTheCallTheEndOfWhichWasMissed() async throws {
+        var clock = now
+        let activities = FakeActivities(), observer = FakeObserver()
+        let voice = Box<[VoicePrefill]>([])
+        let session = CallSession(client: server(try Self.fixture()).client(), cache: CallCache(dir: Self.tempDir()),
+                                  activities: activities, observer: observer, epoch: SessionEpoch(),
+                                  now: { clock }, dial: { _ in }, openVoice: { voice.value.append($0) })
+        await session.open(partyId: Self.noordkust, name: nil)
+        session.bel()
+        let call = UUID()
+        observer.live = [call: false]
+        observer.send(.started(call))
+        let started = clock
+        // No `.ended` is delivered. Twenty minutes later verder is back.
+        clock = clock.addingTimeInterval(1200)
+        observer.live = [:]
+        session.reconcile()
+        #expect(activities.isRunning == false)
+        #expect(activities.ends == 1)
+        #expect(session.callEnded)
+        #expect(session.isPresented)
+        session.logCall()
+        session.sheetDismissed()
+        #expect(voice.value.first?.occurredAt == started)
+        // A late `.ended` for the same call is not a second end.
+        session.dismissEnded()
+        observer.send(.ended(call))
+        #expect(session.callEnded == false)
+    }
+
+    /// CallKit still lists the call, but as ended: the same.
+    @Test func aCallListedAsEndedIsEnded() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        let call = UUID()
+        r.observer.send(.started(call))
+        r.observer.live = [call: true]
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+        #expect(r.activities.isRunning == false)
+    }
+
+    /// Still on the phone (Martin switched back to read the points): nothing ends.
+    @Test func comingBackDuringTheCallEndsNothing() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        let call = UUID()
+        r.observer.send(.started(call))
+        r.observer.live = [call: false]
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.isRunning)
+        // A Live Activity started by hand, with no call seen at all: kept too.
+        let other = try rig()
+        await other.session.open(partyId: Self.noordkust, name: nil)
+        other.session.startActivity()
+        other.session.reconcile()
+        #expect(other.activities.isRunning)
+        #expect(other.session.callEnded == false)
+    }
+
+    /// A call seen start while no sheet was active is forgotten on return, so
+    /// a LATER call sheet never takes its end (or its start time) for its own.
+    @Test func aStaleCallFromBeforeTheSheetIsNotTakenForThisOne() async throws {
+        var clock = now
+        let activities = FakeActivities(), observer = FakeObserver()
+        let voice = Box<[VoicePrefill]>([])
+        let session = CallSession(client: server(try Self.fixture()).client(), cache: CallCache(dir: Self.tempDir()),
+                                  activities: activities, observer: observer, epoch: SessionEpoch(),
+                                  now: { clock }, dial: { _ in }, openVoice: { voice.value.append($0) })
+        let old = UUID()
+        observer.send(.started(old)) // an unrelated call, no sheet open
+        observer.live = [:]
+        session.reconcile()           // its end was never delivered
+        clock = clock.addingTimeInterval(3600)
+        await session.open(partyId: Self.noordkust, name: nil)
+        session.bel()
+        let call = UUID()
+        observer.send(.started(call))
+        let started = clock
+        observer.send(.ended(old))    // a late echo of the old call
+        #expect(session.callEnded == false)
+        observer.send(.ended(call))
+        session.logCall()
+        session.sheetDismissed()
+        #expect(voice.value.first?.occurredAt == started)
     }
 
     @Test func activitiesOffInSettingsIsSaid() async throws {

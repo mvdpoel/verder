@@ -39,6 +39,7 @@ final class CallSession {
     @ObservationIgnored private let openVoice: @MainActor (VoicePrefill) -> Void
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let epoch: SessionEpoch
+    @ObservationIgnored private let observer: any CallObserving
     /// When the call this sheet is following started (CallKit's first word on it).
     @ObservationIgnored private var callStartedAt: Date?
     @ObservationIgnored private var callEndedAt: Date?
@@ -62,6 +63,7 @@ final class CallSession {
         self.openVoice = openVoice
         self.onUnauthorized = onUnauthorized
         self.epoch = epoch
+        self.observer = observer
         observer.observe { [weak self] event in self?.handle(event) }
         epoch.whenEnded { [weak self] in self?.forget() }
     }
@@ -81,7 +83,7 @@ final class CallSession {
             notice = nil
             callStartedAt = nil
             callEndedAt = nil
-            let m = CallPrepModel(partyId: partyId, name: name, client: client, cache: cache, now: now,
+            let m = CallPrepModel(partyId: partyId, name: name, client: client, cache: cache, epoch: epoch, now: now,
                                   onUnauthorized: onUnauthorized)
             m.onChecklistChanged = { [weak self, weak m] in
                 guard let self, let m, self.model === m else { return }
@@ -162,6 +164,25 @@ final class CallSession {
             endActivity()
             callEnded = true
             isPresented = true
+        }
+    }
+
+    /// The app is back in the foreground (RootView's `scenePhase == .active`).
+    ///
+    /// "Bel" hands the call to the Phone app, and iOS suspends verder for the
+    /// whole call — so the delegate's `.ended` may arrive late, coalesced, or
+    /// not at all. Waiting for it would leave the Live Activity on the lock
+    /// screen for hours, keep the sheet "active", and let some LATER call's
+    /// end be taken for this one. So the session asks CallKit what is live
+    /// NOW (`CXCallObserver.calls`) and ends every call it saw start that is
+    /// gone or listed as ended — through `handle`, so it is the same end.
+    ///
+    /// Only calls it SAW start: a Live Activity started by hand ("Toon tijdens
+    /// het gesprek") with no call yet is not ended by switching apps.
+    func reconcile() {
+        let live = observer.currentCalls()
+        for id in Array(startedCalls.keys) where live[id] != false {
+            handle(.ended(id))
         }
     }
 

@@ -6,7 +6,7 @@ Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief d
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 35 |
+| Gebouwd | 37 |
 | Deels gebouwd | 11 |
 | Nog te bouwen | 19 |
 | Niet mogelijk op iOS | 1 |
@@ -437,6 +437,12 @@ Het blad toont eerst de kopie op de telefoon, dan het antwoord van de server; zo
 
 **Status:** Gebouwd — `CallCache` in `apps/ios/Verder/Call/CallSystem.swift`, `CallPrepModel.swift`; tests in `CallPrepTests`.
 
+#### Uitloggen terwijl de punten nog onderweg zijn
+
+Logt Martin uit (of verloopt zijn sessie ergens in de app) terwijl de gesprekspunten nog van de server komen, dan wordt dat late antwoord weggegooid: het blad toont het niet en het wordt niet opgeslagen. Anders zou het antwoord de naam, het telefoonnummer en de punten van de partij weer op de telefoon zetten, net nadat het wissen ze had weggehaald.
+
+**Status:** Gebouwd — `CallPrepModel.load` controleert de `SessionEpoch` na het ophalen; tests `aReplyLandingAfterTheSessionEndedIsNotWrittenBack` en `theModelIgnoresAReplyFromAnEndedSession` in `CallPrepTests`.
+
 #### Bel
 
 "Bel 06 0000 0002" geeft het nummer aan de Telefoon-app (`tel:`-link) en zet tegelijk de Live Activity aan; het gesprek zelf is van de Telefoon-app. Een nummer met iets anders dan cijfers, één `+` vooraan en scheidingstekens krijgt géén knop, nooit een gok. Zonder nummer: "Geen telefoonnummer bekend in verder. Bel zoals je gewend bent; zet de punten wel op je toegangsscherm."
@@ -454,6 +460,12 @@ Start bij "Bel" of met "Toon tijdens het gesprek". Op het toegangsscherm en in h
 Als iOS (`CXCallObserver`) meldt dat een gesprek is afgelopen terwijl het blad open is of zijn Live Activity loopt, stopt de Live Activity en komt het blad terug met "Het gesprek is afgelopen.", "Gesprek vastleggen" en "Niet nu". "Gesprek vastleggen" opent de spraaknotitie met de afgevinkte punten als "Besproken: …" bovenaan (Martins eigen woorden komen eronder), de partij al gekozen en het tijdstip waarop het gesprek begon. Het blijft een **suggestie** die Martin in Voor jou goedkeurt. Een gesprek dat eindigt terwijl er geen blad actief is, doet niets; CallKit zegt niet met wie het gesprek was, dus de regel gaat over het blad, nooit over het nummer. Een notitie waar al tekst of een opname in zit, wordt nooit overschreven.
 
 **Status:** Gebouwd — `CallSession.handle`, `logCall`, `VoiceLogModel.apply`, `VoiceLogSession.open(prefill:)`; tests in `CallPrepTests` (met een nep-observer) en `VoicePrefillTests`. Niet gemeten: een echt telefoongesprek op Martins toestel.
+
+#### Terug uit de Telefoon-app
+
+Na "Bel" neemt de Telefoon-app het scherm over en zet iOS verder het hele gesprek stil. Het bericht dat het gesprek is afgelopen kan dan te laat komen, samengevoegd worden of helemaal wegblijven. Daarom kijkt verder elke keer dat de app weer op de voorgrond komt bij iOS na welke gesprekken er nu nog lopen (`CXCallObserver.calls`). Een gesprek dat verder zag beginnen en dat niet meer loopt (of als afgelopen staat), is afgelopen: de Live Activity stopt en het blad komt terug met "Gesprek vastleggen", met het begintijdstip van dat gesprek. Zonder deze controle bleef de Live Activity tot uren na het gesprek op het toegangsscherm staan, en kon het einde van een later, ander gesprek voor dit gesprek worden aangezien. Alleen gesprekken die verder zag beginnen tellen: een Live Activity die Martin met de hand aanzette zonder te bellen, blijft staan als hij van app wisselt. Een gesprek dat begon terwijl er geen blad actief was, wordt bij terugkomst vergeten, zodat een later blad het niet overneemt.
+
+**Status:** Gebouwd — `CallSession.reconcile`, `CallObserving.currentCalls` (`LiveCallObserver`), aangeroepen vanuit `RootView` bij `scenePhase == .active`; tests in `CallPrepTests` (begin gezien, geen einde, terugkomst zonder lopend gesprek; gesprek als afgelopen vermeld; nog in gesprek; handmatige Live Activity; oud gesprek van vóór het blad). Niet gemeten: op Martins toestel; dat moet één keer gebeuren voordat dit als klaar geldt.
 
 ### Terugkoppeling
 
