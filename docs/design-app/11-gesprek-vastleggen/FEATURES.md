@@ -6,9 +6,10 @@ Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief d
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 27 |
-| Deels gebouwd | 11 |
+| Gebouwd | 28 |
+| Deels gebouwd | 13 |
 | Nog te bouwen | 19 |
+| Niet mogelijk op iOS | 1 |
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
@@ -396,6 +397,34 @@ Het rustblad zegt "Je stem wordt op je iPhone omgezet. De opname gaat niet mee, 
 
 **Status:** Deels gebouwd — de omzetregel zegt "Omzetten naar tekst, op je telefoon…" en de schakelaar legt de opname uit ("Alleen dan gaat de opname naar verder…"); het rustblad zegt er niets over. Alleen UI-tekst.
 
+### Tijdens het gesprek: wat vertellen, wat vragen (toegevoegd 2026-11-03)
+
+Martin vroeg op 2026-11-03: "as for voice, it would be perfect if i can also record phone calls and transcribe them" en "maybe show tips / reminders to tell or ask about live while in the call, on screen in the app". Zijn keuze: gesprekspunten uit de **dossiergegevens** plus **één samenvattingsregel van AI**, nu bouwen.
+
+#### Een telefoongesprek opnemen en uitschrijven
+
+Wat iOS toelaat, online nagegaan vóór de bouw: een app van derden kan een telefoongesprek **niet opnemen en niet meeluisteren**. De Telefoon-app heeft een eigen opname (Meer → "Gesprek opnemen", bewaard in Notities), maar die hangt af van regio en taal, en of die in het Nederlands beschikbaar is, is niet bevestigd. `CXCallObserver` vertelt een app alleen *dat* een gesprek begint of eindigt, nooit met wie of wat er gezegd wordt. verder luistert dus niet mee; het zet het dossier voor Martin klaar (hieronder), en na het gesprek legt hij het vast met de gewone spraaknotitie.
+
+**Status:** Niet mogelijk op iOS — geen API; de opname van de Telefoon-app zelf is niet gemeten op Martins toestel.
+
+#### Gesprekspunten per partij: "Vertel" en "Vraag"
+
+Martin kiest met wie hij belt en ziet twee korte lijsten, elk hoogstens zes punten, elk met een link naar het stuk waar het vandaan komt. **Vraag**: taken die wachten op die partij ("Vraag naar: …", vroegste deadline eerst), mail die hij hun stuurde en waarop na twee dagen nog geen antwoord kwam ("Nog geen antwoord op je mail van 20 okt: …", langste stilte eerst, niet ouder dan 30 dagen), vorderingen waarbij ze betrokken zijn en waarvan het bedrag onbekend is ("Vraag het gevorderde bedrag: …"), en open haltes op een spoor dat over hen gaat ("Bespreek: …"). **Vertel**: wat hij deed sinds hun laatste mail (anders de laatste 30 dagen), nieuwste eerst: afgeronde taken ("Gedaan: …"), mail die te vers is om na te vragen ("Gemaild op 30 okt: …"), stukken die hij hun stuurde ("Opgestuurd op 30 okt: …") en stukken van hen die zijn opgeborgen. Een contactpersoon telt mee voor haar organisatie. Alles is af te leiden uit het dossier, zonder model; weggegooide en vernietigde documenten verschijnen nooit (effectieve status, twee keer gecontroleerd).
+
+**Status:** Deels gebouwd — server gebouwd: `GET /api/mobile/v1/parties/[id]/talking-points` (JSON 401 eerst, `no-store`, 400/404), pure `buildTalkingPoints` en de loader `loadTalkingPoints` (`parties.talkingPoints`), fixtures `FixtureData/_shared/parties/<id>/talking-points.json` voor Bewindkantoor Noordkust en Kade & Partners. Nog te bouwen: het scherm in de app (partij kiezen, de twee lijsten, tikken opent de bron). Niet uitgerold (migratie 0042 nog niet op de homelab).
+
+#### De samenvattingsregel van AI
+
+Boven de punten staat één zin, "wat ze het laatst vroegen en hoe dat ervoor staat", gemarkeerd als **"Samenvatting door AI"**. Hij wordt niet in het webverzoek en niet door Ollama gemaakt, maar door de bestaande drafter op de homelab (`ops/proposal-drafter.sh`, `claude -p --tools ""`, het token alleen in de omgeving van dat ene proces). Een nieuwe mail van een bekende partij zet haar samenvatting op `pending` (in dezelfde transactie als de mail); de drafter maakt hem binnen een paar minuten opnieuw. Het antwoord wordt **geweigerd** als het een id noemt dat niet in de verzamelde context stond, en de ruwe modeluitvoer, de prompt en de context blijven altijd bewaard (gouden regel). De app krijgt de zin **alleen** als hij `ready` is; tijdens `pending`, `drafting` of na `failed` is er geen zin, ook niet de vorige. Geen bewijs: geen ledgergebeurtenis.
+
+**Status:** Deels gebouwd — server en drafter gebouwd (migratie 0042 `party_briefs`, `briefs-pending`, `briefs-store`, `validateBrief`, de tweede lus in `proposal-drafter.sh`); nog te bouwen: de weergave in de app. Niet gemeten: een echte samenvatting op echte mail, en de vertraging na een echte mail.
+
+#### Een samenvatting klaarzetten bij nieuwe mail
+
+`ingestRawEmail` markeert de afzender (en de organisatie van een contactpersoon) als `pending` zodra een mail van een bekende partij binnenkomt, behalve bij het opzoeken van bonnetjes. Tien mails geven één nieuwe samenvatting, niet tien.
+
+**Status:** Gebouwd — `apps/worker/src/briefs/mark.ts`, `apps/worker/src/gmail.ts`; tests in `apps/worker/src/briefs/store.test.ts`.
+
 ### Terugkoppeling
 
 #### Haptiek buiten de opname
@@ -424,6 +453,7 @@ Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname 
 - De serverhelft is **uitgerold** (P3-D3, 2026-11-01: migratie 0041, `/api/mobile/v1/{entries/voice,parties}` live, JSON 401 eerst).
 - Niet gebouwd: live transcript, timer, afschuiven om te annuleren, tikken om aan/uit te zetten, het opnameaccessoire in de tabbalk ("Opname loopt 0:14 Stop" in het frame "blad omlaag"), partij en kanaal uit de tekst halen, het doorzoekbare partijblad, de bevestiging "Weggooien?", de link naar Voor jou na het versturen, de downloadvoortgang, de Actieknop en App Intent. Elk ervan, met wat het nodig heeft, staat onder [Ontworpen, nog niet gebouwd](#ontworpen-nog-niet-gebouwd).
 - `participantNames` is een momentopname van de naam van de partij op het moment van versturen.
+- **Gesprekspunten (2026-11-03): serverhelft gebouwd, NIET uitgerold.** Volgorde bij uitrollen (dezelfde valkuil als 0020–0041, met een ergere fout): rsync, dan `pnpm --filter @verder/db migrate` vanaf de homelab-HOST, pas daarna web+worker opnieuw bouwen. Een worker met deze code laat anders de hele ontvangst van elke mail van een bekende partij mislukken op `relation "party_briefs" does not exist`, en die mail wordt dan elke poll opnieuw geprobeerd en komt nooit binnen.
 
 ## Waar in de code
 
@@ -447,6 +477,7 @@ Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname 
 - `packages/api/src/voice-summary.ts` (+ test), `packages/api/src/entry-from-proposed.ts` (`VOICE_PROMPT_VERSION`, `source: manual`, gekozen partij)
 - `packages/db/drizzle/0041_doc_source_phone_voice.sql`, `packages/db/src/doc-source-voice.test.ts`
 - `apps/worker/src/voice-recording.ts` (+ test)
+- Gesprekspunten (2026-11-03): `apps/web/src/app/api/mobile/v1/parties/[id]/talking-points/route.ts` (+ test), `apps/web/src/lib/mobile-talking-points.ts` (+ `.fixture.test.ts`), `packages/api/src/talking-points.ts` en `talking-points-load.ts` (+ tests), `packages/db/drizzle/0042_party_briefs.sql`, `packages/db/src/party-briefs-grants.test.ts`, `apps/worker/src/briefs/` (`mark`, `context`, `prompt`, `validate`, `store` + tests), `apps/worker/src/ops/briefs-pending.ts`, `briefs-store.ts` (+ test), `ops/proposal-drafter.sh`
 
 **Documentatie:** spec `docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.4; plan `docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md` Tasks 24, 25, 27; design brief `docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §3.
 
