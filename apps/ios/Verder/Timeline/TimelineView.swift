@@ -303,13 +303,15 @@ struct RailGutter: View {
                 if rail.top { p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: y)) }
                 if rail.bottom { p.move(to: CGPoint(x: x, y: y)); p.addLine(to: CGPoint(x: x, y: size.height)) }
                 ctx.stroke(p, with: .color(rail.isRoot ? Color.steel.opacity(0.6) : Color.steelDim.opacity(0.7)),
-                           lineWidth: rail.isRoot ? 3 : 2)
+                           lineWidth: rail.isRoot ? 2 * TimelineLayout.Marks.railHalfWidth
+                               : 2 * TimelineLayout.Marks.detourHalfWidth)
             }
             for d in detours {
                 let x = lanes.detourX(d.lane)
                 var p = Path()
                 p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
-                ctx.stroke(p, with: .color(Color.steelDim.opacity(0.7)), lineWidth: 2)
+                ctx.stroke(p, with: .color(Color.steelDim.opacity(0.7)),
+                           lineWidth: 2 * TimelineLayout.Marks.detourHalfWidth)
             }
             for c in curves {
                 let xc = lanes.x(c.centerLane)
@@ -332,38 +334,41 @@ struct RailGutter: View {
             }
             // Afgerond: a double bar in steel. Geëindigd: a single muted bar.
             // Both are clean outcomes; neither is ever amber or red.
+            typealias M = TimelineLayout.Marks
             for cap in caps {
                 let x = lanes.x(cap.lane)
                 var p = Path()
                 switch cap.kind {
                 case .done:
                     for dy in [CGFloat(9), 13] {
-                        p.move(to: CGPoint(x: x - 7, y: y - dy)); p.addLine(to: CGPoint(x: x + 7, y: y - dy))
+                        p.move(to: CGPoint(x: x - M.doneCapHalfWidth, y: y - dy))
+                        p.addLine(to: CGPoint(x: x + M.doneCapHalfWidth, y: y - dy))
                     }
                     ctx.stroke(p, with: .color(Color.steel.opacity(0.8)), lineWidth: 2)
                 case .ended:
-                    p.move(to: CGPoint(x: x - 6, y: y - 10)); p.addLine(to: CGPoint(x: x + 6, y: y - 10))
+                    p.move(to: CGPoint(x: x - M.endedCapHalfWidth, y: y - 10))
+                    p.addLine(to: CGPoint(x: x + M.endedCapHalfWidth, y: y - 10))
                     ctx.stroke(p, with: .color(Color.steelDim.opacity(0.8)), lineWidth: 2)
                 }
             }
             if let dot {
                 let center = CGPoint(x: lanes.x(dot.lane), y: y)
-                let r: CGFloat = 5
+                let r = M.dotRadius
                 func circle(_ radius: CGFloat) -> Path {
                     Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: 2 * radius, height: 2 * radius))
                 }
                 switch dot.mark {
                 case .current:
-                    ctx.stroke(circle(r + 4), with: .color(Color.attn.opacity(0.5)), lineWidth: 1)
+                    ctx.stroke(circle(M.ringRadius), with: .color(Color.attn.opacity(0.5)), lineWidth: M.ringStroke)
                     ctx.fill(circle(r), with: .color(Color.attn))
                 case .waiting:
                     ctx.fill(circle(r), with: .color(Color.plate))
-                    ctx.stroke(circle(r), with: .color(Color.attn), lineWidth: 2)
+                    ctx.stroke(circle(r), with: .color(Color.attn), lineWidth: M.dotStroke)
                 case .done:
                     ctx.fill(circle(r), with: .color(Color.steel))
                 }
                 if dot.junction && dot.mark != .current {
-                    ctx.stroke(circle(r + 3), with: .color(Color.signal.opacity(0.55)), lineWidth: 1)
+                    ctx.stroke(circle(M.ringRadius), with: .color(Color.signal.opacity(0.55)), lineWidth: M.ringStroke)
                 }
             }
         }

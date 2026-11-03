@@ -90,8 +90,8 @@ struct TimelineLayoutTests {
 
     // MARK: - Lanes
 
-    @Test func lanesSitAtFixedSpacingUpToFour() {
-        for count in 1...4 {
+    @Test func lanesSitAtOneFixedPitchAtEveryCount() {
+        for count in 1...10 {
             let layout = TimelineLayout.Lanes(count: count)
             #expect(layout.spacing == TimelineLayout.Lanes.baseSpacing)
             #expect(layout.x(0) == TimelineLayout.Lanes.inset)
@@ -100,13 +100,36 @@ struct TimelineLayoutTests {
         }
     }
 
-    @Test func moreThanFourLanesSqueezeIntoTheFourLaneGutter() {
+    /// The marks are drawn at fixed sizes, so the pitch must fit them: a pitch
+    /// that shrank with the lane count put caps and rings over the next lane's
+    /// rail and a detour on top of the rail beside it — two sporen on one line.
+    @Test(arguments: [4, 5, 6, 7, 8])
+    func everyLaneCountLeavesRoomForTheMarks(_ count: Int) {
+        typealias M = TimelineLayout.Marks
+        let lanes = TimelineLayout.Lanes(count: count)
+        // Two dots, rings or caps on neighbouring lanes never touch.
+        #expect(lanes.spacing >= 2 * M.reach)
+        // No mark reaches the neighbouring lane's rail.
+        #expect(M.reach + M.railHalfWidth < lanes.spacing)
+        for lane in 1..<count {
+            let d = lanes.detourX(lane)
+            // A detour is clear of the dots on BOTH lanes beside it…
+            #expect(d - lanes.x(lane - 1) > M.dotRadius + M.detourHalfWidth)
+            #expect(lanes.x(lane) - d > M.dotRadius + M.detourHalfWidth)
+            // …and of the largest ring, so it never reads as the rail beside it.
+            #expect(d - lanes.x(lane - 1) >= M.reach + M.detourHalfWidth)
+            #expect(lanes.x(lane) - d >= M.reach + M.detourHalfWidth)
+        }
+    }
+
+    @Test func pastFourLanesTheGutterGrowsAndTheLabelsStillHaveRoom() {
         let four = TimelineLayout.Lanes(count: 4)
-        let six = TimelineLayout.Lanes(count: 6)
-        #expect(six.width == four.width)
-        #expect(six.x(5) == four.x(3))
-        #expect(six.spacing < four.spacing)
-        #expect(six.x(1) > six.x(0))
+        let eight = TimelineLayout.Lanes(count: 8)
+        #expect(eight.width > four.width)
+        #expect(eight.x(7) - eight.x(6) == four.x(3) - four.x(2))
+        // A 375 pt SE less the page's 16 pt gutters: the titles keep a real column.
+        let m = Self.map(bands: [], tracks: [], stops: [], lanes: 8)
+        #expect(TimelineLayout(m).labelWidth(total: 375 - 32) >= 180)
     }
 
     @Test func zeroLanesStillHasAGutter() {
@@ -376,6 +399,25 @@ struct TimelineLayoutTests {
     }
 
     // MARK: - The fixture
+
+    /// Six open sporen at once, from the real builder: seven lanes, each its own
+    /// line, each far enough from the next that its marks stay on it.
+    @Test func sixConcurrentSporenEachKeepTheirOwnLine() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appending(path: "Fixtures/case-map-concurrent.json")
+        let map = try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: Data(contentsOf: url))
+        try #require(map.laneCount >= 7) // the premise, from the real builder
+        let layout = TimelineLayout(map)
+        #expect(layout.lanes.count == map.laneCount)
+        let xs = (0..<map.laneCount).map(layout.lanes.x)
+        for (a, b) in zip(xs, xs.dropFirst()) {
+            #expect(b - a >= 2 * TimelineLayout.Marks.reach)
+        }
+        for (id, rails) in Self.railsByItem(layout) {
+            #expect(Dictionary(grouping: rails, by: \.lane).values.allSatisfy { Set($0.map(\.trackId)).count == 1 }, "\(id)")
+        }
+        #expect(Self.stopRows(layout).filter { $0.mark != .done }.count == 6)
+    }
 
     @Test func theTimelineFixtureLaysOutWithoutGaps() throws {
         let data = try #require(try FixtureTests.body("timeline", "case-map"))

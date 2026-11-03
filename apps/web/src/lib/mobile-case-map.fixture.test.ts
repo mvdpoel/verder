@@ -153,12 +153,41 @@ const laneShared = {
 };
 const layoutFile = (k: string) => `${LAYOUT}case-map-lane-shared-${k}.json`;
 
+/**
+ * MANY CONCURRENT SPOREN. Production has ten tracks with several open sporen
+ * running side by side into the `nu` band (Opstart, Bankrekening,
+ * Schuldregeling and the debt episodes), so `buildTrackMap` hands the phone
+ * more lanes than the four the gutter was first drawn for. Six open sporen
+ * branch off the trunk and are all still open: every one holds its own lane.
+ */
+const CONCURRENT_SPOREN = 6;
+const concurrentTrack = (i: number) => T(20 + i);
+const concurrent = () => {
+  const ts: TrackRow[] = [track({ id: ROOT, title: "Bewindvoering", parentTrackId: null })];
+  const ss: StopRow[] = [rootStop(80, "2026-09-01")];
+  for (let i = 0; i < CONCURRENT_SPOREN; i++) {
+    ts.push(track({ id: concurrentTrack(i), title: `Spoor ${i + 1}`, branchesAtStopId: S(80) }));
+    ss.push(
+      stop({ id: S(81 + 3 * i), trackId: concurrentTrack(i), orderIndex: 0, title: `Spoor ${i + 1} begint`,
+        happenedAt: day(`2026-09-${String(2 + i).padStart(2, "0")}`) }),
+      stop({ id: S(82 + 3 * i), trackId: concurrentTrack(i), orderIndex: 1, title: `Spoor ${i + 1} loopt`,
+        happenedAt: day(`2026-10-${String(10 + i).padStart(2, "0")}`) }),
+      stop({ id: S(83 + 3 * i), trackId: concurrentTrack(i), orderIndex: 2, title: `Spoor ${i + 1} wacht`,
+        state: "open" }),
+    );
+  }
+  return toCaseMapDTO({ map: buildTrackMap({ tracks: ts, stops: ss }), evidence: {},
+    hiddenDebtTrackCount: 0, debtEpisodesHidden: false });
+};
+const CONCURRENT_FILE = `${LAYOUT}case-map-concurrent.json`;
+
 describe("the phone's timeline fixture", () => {
   if (process.env.WRITE_FIXTURES === "1") {
     writeFileSync(SHOWN, text(dto(false)));
     writeFileSync(HIDDEN, text(dto(true)));
     writeFileSync(EMPTY, text(emptyDTO()));
     for (const [k, f] of Object.entries(laneShared)) writeFileSync(layoutFile(k), text(f()));
+    writeFileSync(CONCURRENT_FILE, text(concurrent()));
   }
 
   it("is the DTO over the synthetic case", () => {
@@ -168,6 +197,19 @@ describe("the phone's timeline fixture", () => {
     for (const [k, f] of Object.entries(laneShared)) {
       expect(readFileSync(layoutFile(k), "utf8")).toBe(text(f()));
     }
+    expect(readFileSync(CONCURRENT_FILE, "utf8")).toBe(text(concurrent()));
+  });
+
+  it("gives every concurrent open spoor its own lane, more than four of them", () => {
+    const m = concurrent();
+    expect(m.problems).toEqual([]);
+    const lanes = new Set(
+      m.tracks.filter((t) => !t.isRoot).map((t) => t.lane),
+    );
+    expect(lanes.size).toBe(CONCURRENT_SPOREN);
+    expect(m.laneCount).toBeGreaterThanOrEqual(CONCURRENT_SPOREN + 1);
+    // All six wait in the `nu` band at once.
+    expect(m.stops.filter((s) => s.bandKey === "nu" && s.state === "open")).toHaveLength(CONCURRENT_SPOREN);
   });
 
   it("puts two sporen that never overlap on ONE lane, whatever their connectors span", () => {

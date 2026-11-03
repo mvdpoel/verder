@@ -1,0 +1,556 @@
+{
+  "bands": [
+    {
+      "key": "nu",
+      "label": "Nu",
+      "fromRow": 0,
+      "toRow": 6,
+      "empty": false
+    },
+    {
+      "key": "2026-10",
+      "label": "oktober 2026",
+      "fromRow": 6,
+      "toRow": 12,
+      "empty": false
+    },
+    {
+      "key": "2026-09",
+      "label": "september 2026",
+      "fromRow": 12,
+      "toRow": 19,
+      "empty": false
+    }
+  ],
+  "tracks": [
+    {
+      "id": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Bewindvoering",
+      "status": "open",
+      "isRoot": true,
+      "parentTrackId": null,
+      "note": null,
+      "lane": 0,
+      "firstRow": 18,
+      "lastRow": 18,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000020",
+      "title": "Spoor 1",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 1,
+      "firstRow": 0,
+      "lastRow": 17,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000021",
+      "title": "Spoor 2",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 2,
+      "firstRow": 1,
+      "lastRow": 16,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000022",
+      "title": "Spoor 3",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 3,
+      "firstRow": 2,
+      "lastRow": 15,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000023",
+      "title": "Spoor 4",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 4,
+      "firstRow": 3,
+      "lastRow": 14,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000024",
+      "title": "Spoor 5",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 5,
+      "firstRow": 4,
+      "lastRow": 13,
+      "mergesBack": false,
+      "terminus": "open"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-400000000025",
+      "title": "Spoor 6",
+      "status": "open",
+      "isRoot": false,
+      "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
+      "note": null,
+      "lane": 6,
+      "firstRow": 5,
+      "lastRow": 12,
+      "mergesBack": false,
+      "terminus": "open"
+    }
+  ],
+  "stops": [
+    {
+      "id": "00000000-f1c5-4000-8000-500000000083",
+      "trackId": "00000000-f1c5-4000-8000-400000000020",
+      "title": "Spoor 1 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 0,
+      "lane": 1,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000086",
+      "trackId": "00000000-f1c5-4000-8000-400000000021",
+      "title": "Spoor 2 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 1,
+      "lane": 2,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000089",
+      "trackId": "00000000-f1c5-4000-8000-400000000022",
+      "title": "Spoor 3 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 2,
+      "lane": 3,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000092",
+      "trackId": "00000000-f1c5-4000-8000-400000000023",
+      "title": "Spoor 4 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 3,
+      "lane": 4,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000095",
+      "trackId": "00000000-f1c5-4000-8000-400000000024",
+      "title": "Spoor 5 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 4,
+      "lane": 5,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000098",
+      "trackId": "00000000-f1c5-4000-8000-400000000025",
+      "title": "Spoor 6 wacht",
+      "note": null,
+      "state": "open",
+      "kind": "other",
+      "happenedAt": null,
+      "row": 5,
+      "lane": 6,
+      "bandKey": "nu",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000097",
+      "trackId": "00000000-f1c5-4000-8000-400000000025",
+      "title": "Spoor 6 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-15T09:00:00.000Z",
+      "row": 6,
+      "lane": 6,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000094",
+      "trackId": "00000000-f1c5-4000-8000-400000000024",
+      "title": "Spoor 5 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-14T09:00:00.000Z",
+      "row": 7,
+      "lane": 5,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000091",
+      "trackId": "00000000-f1c5-4000-8000-400000000023",
+      "title": "Spoor 4 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-13T09:00:00.000Z",
+      "row": 8,
+      "lane": 4,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000088",
+      "trackId": "00000000-f1c5-4000-8000-400000000022",
+      "title": "Spoor 3 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-12T09:00:00.000Z",
+      "row": 9,
+      "lane": 3,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000085",
+      "trackId": "00000000-f1c5-4000-8000-400000000021",
+      "title": "Spoor 2 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-11T09:00:00.000Z",
+      "row": 10,
+      "lane": 2,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000082",
+      "trackId": "00000000-f1c5-4000-8000-400000000020",
+      "title": "Spoor 1 loopt",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-10-10T09:00:00.000Z",
+      "row": 11,
+      "lane": 1,
+      "bandKey": "2026-10",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000096",
+      "trackId": "00000000-f1c5-4000-8000-400000000025",
+      "title": "Spoor 6 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-07T09:00:00.000Z",
+      "row": 12,
+      "lane": 6,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000093",
+      "trackId": "00000000-f1c5-4000-8000-400000000024",
+      "title": "Spoor 5 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-06T09:00:00.000Z",
+      "row": 13,
+      "lane": 5,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000090",
+      "trackId": "00000000-f1c5-4000-8000-400000000023",
+      "title": "Spoor 4 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-05T09:00:00.000Z",
+      "row": 14,
+      "lane": 4,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000087",
+      "trackId": "00000000-f1c5-4000-8000-400000000022",
+      "title": "Spoor 3 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-04T09:00:00.000Z",
+      "row": 15,
+      "lane": 3,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000084",
+      "trackId": "00000000-f1c5-4000-8000-400000000021",
+      "title": "Spoor 2 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-03T09:00:00.000Z",
+      "row": 16,
+      "lane": 2,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000081",
+      "trackId": "00000000-f1c5-4000-8000-400000000020",
+      "title": "Spoor 1 begint",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-02T09:00:00.000Z",
+      "row": 17,
+      "lane": 1,
+      "bandKey": "2026-09",
+      "isJunction": false,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-500000000080",
+      "trackId": "00000000-f1c5-4000-8000-400000000001",
+      "title": "Hoofdlijn 2026-09-01",
+      "note": null,
+      "state": "done",
+      "kind": "other",
+      "happenedAt": "2026-09-01T09:00:00.000Z",
+      "row": 18,
+      "lane": 0,
+      "bandKey": "2026-09",
+      "isJunction": true,
+      "datesOutOfOrder": false,
+      "evidence": {
+        "entry": null,
+        "task": null,
+        "documents": [],
+        "email": null
+      }
+    }
+  ],
+  "edges": [
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000020",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 1,
+      "toRow": 17
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000021",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 2,
+      "toRow": 16
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000022",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 3,
+      "toRow": 15
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000023",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 4,
+      "toRow": 14
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000024",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 5,
+      "toRow": 13
+    },
+    {
+      "kind": "branch",
+      "trackId": "00000000-f1c5-4000-8000-400000000025",
+      "fromLane": 0,
+      "fromRow": 18,
+      "toLane": 6,
+      "toRow": 12
+    }
+  ],
+  "rowCount": 19,
+  "laneCount": 7,
+  "currentStopId": "00000000-f1c5-4000-8000-500000000083",
+  "problems": [],
+  "hiddenDebtTrackCount": 0,
+  "debtEpisodesHidden": false
+}

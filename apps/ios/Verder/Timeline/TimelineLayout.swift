@@ -74,22 +74,46 @@ enum TimelineCopy {
 /// connector is ROUTED instead — a curve at each end and a DETOUR half a lane
 /// to the left through the rows between — so two sporen never share a line.
 struct TimelineLayout: Equatable {
-    /// Lane x positions in the gutter left of the labels. Up to four lanes sit
-    /// at a fixed spacing; more squeeze into the same four-lane width, so the
-    /// label column on a 375 pt phone never narrows past it.
+    /// The sizes `RailGutter` draws at, in points. They are FIXED — a dot that
+    /// shrank with the lane count would stop being readable — so the lane pitch
+    /// is derived from them instead, and never the other way round.
+    enum Marks {
+        static let dotRadius: CGFloat = 5
+        /// The open stop's outline, outside the dot's radius.
+        static let dotStroke: CGFloat = 2
+        /// The current stop's halo and a junction's ring (never both on one dot).
+        static let ringRadius: CGFloat = 7
+        static let ringStroke: CGFloat = 1
+        /// Half the width of the afgerond (double) and geëindigd (single) bars.
+        static let doneCapHalfWidth: CGFloat = 6
+        static let endedCapHalfWidth: CGFloat = 5
+        /// Half the root rail's 3 pt stroke — the widest line in the gutter.
+        static let railHalfWidth: CGFloat = 1.5
+        /// Half a detour's (and a side rail's) 2 pt stroke.
+        static let detourHalfWidth: CGFloat = 1
+
+        /// How far the largest mark reaches from its lane's centre.
+        static let reach = max(dotRadius + dotStroke / 2, ringRadius + ringStroke / 2,
+                               doneCapHalfWidth, endedCapHalfWidth)
+    }
+
+    /// Lane x positions in the gutter left of the labels, at ONE pitch for any
+    /// number of lanes: past four the gutter grows and the label column gives
+    /// way, rather than the lanes squeezing until caps and rings cover the next
+    /// lane's rail and a detour lies on the rail beside it.
     struct Lanes: Equatable {
-        static let baseSpacing: CGFloat = 16
+        /// The smallest pitch at which a detour, half a lane from either rail,
+        /// stays clear of the largest mark on both lanes beside it.
+        static let minSpacing = 2 * (Marks.reach + Marks.detourHalfWidth)
+        static let baseSpacing: CGFloat = max(18, minSpacing)
         static let inset: CGFloat = 12
-        static let maxVisible = 4
 
         let count: Int
         let spacing: CGFloat
 
         init(count: Int) {
             self.count = count
-            spacing = count <= Self.maxVisible
-                ? Self.baseSpacing
-                : Self.baseSpacing * CGFloat(Self.maxVisible - 1) / CGFloat(count - 1)
+            spacing = Self.baseSpacing
         }
 
         func x(_ lane: Int) -> CGFloat { Self.inset + CGFloat(lane) * spacing }
@@ -98,10 +122,7 @@ struct TimelineLayout: Equatable {
         /// serves, so it never lies on any lane's rail.
         func detourX(_ lane: Int) -> CGFloat { x(lane) - spacing / 2 }
 
-        var width: CGFloat {
-            let visible = min(max(count, 1), Self.maxVisible)
-            return 2 * Self.inset + CGFloat(visible - 1) * Self.baseSpacing
-        }
+        var width: CGFloat { 2 * Self.inset + CGFloat(max(count, 1) - 1) * spacing }
     }
 
     /// A lane's slice of rail in one row: above the dot, below it, or both.
