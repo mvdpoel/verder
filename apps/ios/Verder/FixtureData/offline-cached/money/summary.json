@@ -1,0 +1,396 @@
+{
+  "accounts": [
+    {
+      "accountIban": "NL00TEST0123456789",
+      "months": [
+        {
+          "month": "2026-06",
+          "coverage": "complete",
+          "inCents": 240000,
+          "outCents": 215000,
+          "outByCategory": [
+            {
+              "category": "huur",
+              "cents": 95000
+            },
+            {
+              "category": "zorg",
+              "cents": 14500
+            },
+            {
+              "category": "energie",
+              "cents": 11000
+            },
+            {
+              "category": "leefgeld",
+              "cents": 40000
+            },
+            {
+              "category": "overig",
+              "cents": 54500
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-07",
+          "coverage": "complete",
+          "inCents": 240000,
+          "outCents": 228000,
+          "outByCategory": [
+            {
+              "category": "huur",
+              "cents": 95000
+            },
+            {
+              "category": "zorg",
+              "cents": 14500
+            },
+            {
+              "category": "energie",
+              "cents": 11000
+            },
+            {
+              "category": "leefgeld",
+              "cents": 50000
+            },
+            {
+              "category": "overig",
+              "cents": 57500
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-08",
+          "coverage": "complete",
+          "inCents": 240000,
+          "outCents": 219000,
+          "outByCategory": [
+            {
+              "category": "huur",
+              "cents": 95000
+            },
+            {
+              "category": "zorg",
+              "cents": 14500
+            },
+            {
+              "category": "energie",
+              "cents": 11000
+            },
+            {
+              "category": "leefgeld",
+              "cents": 40000
+            },
+            {
+              "category": "overig",
+              "cents": 58500
+            }
+          ],
+          "incidentalCents": 8500,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000001",
+              "bookedAt": "2026-08-19T10:00:00.000Z",
+              "amountCents": 8500,
+              "counterpartyName": "Zorgverzekeraar Duinzorg"
+            }
+          ]
+        },
+        {
+          "month": "2026-09",
+          "coverage": "complete",
+          "inCents": 240000,
+          "outCents": 221000,
+          "outByCategory": [
+            {
+              "category": "huur",
+              "cents": 95000
+            },
+            {
+              "category": "zorg",
+              "cents": 14500
+            },
+            {
+              "category": "energie",
+              "cents": 11000
+            },
+            {
+              "category": "leefgeld",
+              "cents": 40000
+            },
+            {
+              "category": "overig",
+              "cents": 60500
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-10",
+          "coverage": "partial",
+          "inCents": 240000,
+          "outCents": 176000,
+          "outByCategory": [
+            {
+              "category": "huur",
+              "cents": 95000
+            },
+            {
+              "category": "zorg",
+              "cents": 14500
+            },
+            {
+              "category": "leefgeld",
+              "cents": 40000
+            },
+            {
+              "category": "overig",
+              "cents": 26500
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-11",
+          "coverage": "none",
+          "inCents": 0,
+          "outCents": 0,
+          "outByCategory": [],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        }
+      ]
+    },
+    {
+      "accountIban": "NL00TEST9876543210",
+      "months": [
+        {
+          "month": "2026-06",
+          "coverage": "complete",
+          "inCents": 40000,
+          "outCents": 38200,
+          "outByCategory": [
+            {
+              "category": "boodschappen",
+              "cents": 29200
+            },
+            {
+              "category": "overig",
+              "cents": 9000
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-07",
+          "coverage": "complete",
+          "inCents": 50000,
+          "outCents": 47600,
+          "outByCategory": [
+            {
+              "category": "boodschappen",
+              "cents": 38600
+            },
+            {
+              "category": "overig",
+              "cents": 9000
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-08",
+          "coverage": "complete",
+          "inCents": 40000,
+          "outCents": 39100,
+          "outByCategory": [
+            {
+              "category": "boodschappen",
+              "cents": 30100
+            },
+            {
+              "category": "overig",
+              "cents": 9000
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-09",
+          "coverage": "complete",
+          "inCents": 40000,
+          "outCents": 38800,
+          "outByCategory": [
+            {
+              "category": "boodschappen",
+              "cents": 29800
+            },
+            {
+              "category": "overig",
+              "cents": 9000
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-10",
+          "coverage": "partial",
+          "inCents": 50000,
+          "outCents": 41210,
+          "outByCategory": [
+            {
+              "category": "boodschappen",
+              "cents": 37210
+            },
+            {
+              "category": "overig",
+              "cents": 4000
+            }
+          ],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        },
+        {
+          "month": "2026-11",
+          "coverage": "none",
+          "inCents": 0,
+          "outCents": 0,
+          "outByCategory": [],
+          "incidentalCents": 0,
+          "internalCents": 0,
+          "parseErrorRows": 0,
+          "internalRows": [],
+          "incidentalRows": []
+        }
+      ]
+    }
+  ],
+  "leefgeld": {
+    "state": "partial",
+    "accountIban": "NL00TEST9876543210",
+    "accountReason": "configured",
+    "week": {
+      "from": "2026-10-26",
+      "to": "2026-11-01"
+    },
+    "coveredThrough": "2026-10-31",
+    "budgetCents": 10000,
+    "spentCents": 6240,
+    "leftCents": 3760,
+    "spentRows": [
+      {
+        "id": "00000000-f1c5-4000-8000-500000000011",
+        "bookedAt": "2026-10-27T10:00:00.000Z",
+        "amountCents": -4120,
+        "counterpartyName": "Supermarkt"
+      },
+      {
+        "id": "00000000-f1c5-4000-8000-500000000012",
+        "bookedAt": "2026-10-28T10:00:00.000Z",
+        "amountCents": -670,
+        "counterpartyName": "Bakker"
+      },
+      {
+        "id": "00000000-f1c5-4000-8000-500000000013",
+        "bookedAt": "2026-10-30T10:00:00.000Z",
+        "amountCents": -1450,
+        "counterpartyName": "Apotheek"
+      }
+    ],
+    "depositCents": 10000,
+    "depositRows": [
+      {
+        "id": "00000000-f1c5-4000-8000-500000000014",
+        "bookedAt": "2026-10-29T10:00:00.000Z",
+        "amountCents": 10000,
+        "counterpartyName": "Bewindkantoor Noordkust"
+      }
+    ]
+  },
+  "previousWeek": {
+    "state": "complete",
+    "accountIban": "NL00TEST9876543210",
+    "accountReason": "configured",
+    "week": {
+      "from": "2026-10-19",
+      "to": "2026-10-25"
+    },
+    "coveredThrough": "2026-10-25",
+    "budgetCents": 10000,
+    "spentCents": 9150,
+    "leftCents": 850,
+    "spentRows": [
+      {
+        "id": "00000000-f1c5-4000-8000-500000000021",
+        "bookedAt": "2026-10-20T10:00:00.000Z",
+        "amountCents": -5230,
+        "counterpartyName": "Supermarkt"
+      },
+      {
+        "id": "00000000-f1c5-4000-8000-500000000022",
+        "bookedAt": "2026-10-23T10:00:00.000Z",
+        "amountCents": -1420,
+        "counterpartyName": "Drogist"
+      },
+      {
+        "id": "00000000-f1c5-4000-8000-500000000023",
+        "bookedAt": "2026-10-24T10:00:00.000Z",
+        "amountCents": -2500,
+        "counterpartyName": "Markt"
+      }
+    ],
+    "depositCents": 10000,
+    "depositRows": [
+      {
+        "id": "00000000-f1c5-4000-8000-500000000024",
+        "bookedAt": "2026-10-22T10:00:00.000Z",
+        "amountCents": 10000,
+        "counterpartyName": "Bewindkantoor Noordkust"
+      }
+    ]
+  },
+  "newestBooking": "2026-10-31"
+}

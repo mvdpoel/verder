@@ -23,6 +23,8 @@ struct VerderApp: App {
     /// The voice log (Meer, or the home screen quick action), owned here —
     /// above the lock gate and sign-in — so a relock or a 401 keeps its text.
     @State private var voice: VoiceLogSession
+    /// `AppServices.now`: Overzicht's clock.
+    private let now: @Sendable () -> Date
 
     init() {
         #if DEBUG
@@ -47,7 +49,8 @@ struct VerderApp: App {
         // (`SessionEpoch`): signing out, or a 401 anywhere, clears all three,
         // and a refresh still in flight writes nothing back.
         let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
-                               onUnauthorized: { auth.sessionRejected() }, epoch: auth.epoch)
+                               onUnauthorized: { auth.sessionRejected() }, now: s.now, epoch: auth.epoch)
+        now = s.now
         _inbox = State(initialValue: inbox)
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
                                                 epoch: auth.epoch))
@@ -70,7 +73,7 @@ struct VerderApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier, timeline: timeline, voice: voice)
+                     money: money, dossier: dossier, timeline: timeline, voice: voice, now: now)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

@@ -191,6 +191,8 @@ struct AccountCard: Equatable, Identifiable, Sendable {
 /// merged at any layer (Global Constraints; `cardsAreNeverSummed`).
 struct MoneyGlance: Equatable, Sendable {
     let leefgeld: LeefgeldCard?
+    /// Overzicht's shape of the same week (Verder/Home/LeefgeldGlance.swift).
+    let leefgeldGlance: LeefgeldGlance?
     let previousWeek: String?
     let accounts: [AccountCard]
     /// "laatste afschrift t/m do 29 okt" — the honest age of every figure.
@@ -200,6 +202,7 @@ struct MoneyGlance: Equatable, Sendable {
 
     init(_ dto: MoneySummaryDTO) {
         leefgeld = LeefgeldCard.make(dto.leefgeld, newestBooking: dto.newestBooking)
+        leefgeldGlance = LeefgeldGlance.make(dto.leefgeld, newestBooking: dto.newestBooking)
         previousWeek = LeefgeldCard.previousWeekLine(dto.previousWeek)
         accounts = dto.accounts.map(AccountCard.init)
         freshness = dto.newestBooking.flatMap(MoneyFormat.dayWithWeekday).map { "laatste afschrift t/m \($0)" }

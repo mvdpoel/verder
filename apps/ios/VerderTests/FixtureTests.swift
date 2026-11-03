@@ -13,8 +13,10 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "dossier", "empty", "money-complete", "money-empty", "money-geen-data", "money-no-account", "money-no-budget",
-        "money-overspent", "money-partial", "money-unrecognised", "offline", "timeline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
+        "calm", "dossier", "empty", "loading", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
+        "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
+        "voorjou-long", "voorjou-many", "weekly",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
     static let question = "00000000-f1c5-4000-8000-000000000002"
@@ -38,7 +40,7 @@ struct FixtureTests {
     }
 
     nonisolated static var fileFixtures: [String] {
-        expectedNames.filter { !["offline", "unauthorized"].contains($0) }
+        expectedNames.filter { !["offline", "unauthorized", "loading", "server-error"].contains($0) }
     }
 
     // MARK: - The set
@@ -181,6 +183,33 @@ struct FixtureTests {
         }
     }
 
+    /// Overzicht's states: nothing answered (the skeleton), a server that
+    /// fails from the start, and a board that loaded ONCE and then lost its
+    /// server or its connection — the first answer is the base case's.
+    @Test func overzichtFailureStatesAnswerAsTheyClaim() throws {
+        let inbox = FixtureServer.apiPrefix + "inbox"
+        #expect(try Self.server("loading").reply(method: "GET", path: inbox) == .never)
+        #expect(try Self.server("server-error").reply(method: "GET", path: inbox) == FixtureServer.error(503, "fixture status"))
+        #expect(try Self.server("server-error-cached").reply(method: "GET", path: inbox, answeredBefore: true)
+                == FixtureServer.error(503, "fixture failure"))
+        #expect(try Self.server("offline-cached").reply(method: "GET", path: inbox, answeredBefore: true) == .transportFailure)
+        // The first answer is the ordinary one, and a fixture without
+        // `thenFail` never fails on a repeat.
+        #expect(try Self.body("server-error-cached", "inbox") == Self.body("voorjou-few", "inbox"))
+        guard case .json(200, _) = try Self.server("voorjou-few").reply(method: "GET", path: inbox, answeredBefore: true)
+        else { Issue.record("a repeat on an ordinary fixture failed"); return }
+    }
+
+    @Test func calmAndOneItemAreTheOverzichtFrames() throws {
+        let calm = try Self.decode(InboxDTO.self, "calm", "inbox")
+        #expect(calm.count == 0 && calm.doneByVerder.count == 3)
+        #expect(try Self.decode(DashboardSummaryDTO.self, "calm", "dashboard/summary").tasks
+                == .init(openCount: 0, overdueCount: 0, waitingOnOthersCount: 2))
+        let one = try Self.decode(InboxDTO.self, "one-item", "inbox")
+        #expect(one.items.map(\.id) == [Self.reply])
+        #expect(try Self.decode(DashboardSummaryDTO.self, "one-item", "dashboard/summary").waitingCount == 1)
+    }
+
     // MARK: - Routes with no iOS DTO yet: the server's contract, key for key
 
     /// The JSON object at `path`, or a recorded failure.
@@ -214,7 +243,7 @@ struct FixtureTests {
     /// Every total is the sum of its disclosed rows, and there is NO total
     /// across accounts — the same laws as /money.
     @Test(arguments: ["money-complete", "money-partial", "money-geen-data", "money-empty", "money-no-account",
-                      "money-no-budget", "money-overspent", "money-unrecognised", "empty"])
+                      "money-no-budget", "money-overspent", "money-unrecognised", "empty", "offline-cached"])
     func moneyMatchesTheRouteContractAndReconciles(_ name: String) throws {
         let m = try Self.object(name, "money/summary")
         #expect(Set(m.keys) == ["accounts", "leefgeld", "previousWeek", "newestBooking"])
@@ -467,6 +496,13 @@ struct FixtureTests {
         #expect(l.tab == .voorjou)
         #expect(l.tab?.tabID == .voorJou)
         #expect(l.route == .link(.proposal(UUID(uuidString: Self.reply)!)))
+        #expect(l.scroll == nil && !l.scans)
+        let board = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "voorjou-few", "-fixtures-scroll", "end",
+                                                          "-fixtures-scans"]))
+        #expect(board.scroll == .end && board.scans)
+        #expect(throws: FixtureLaunch.ParseError.unknownScroll("top")) {
+            try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-scroll", "top"])
+        }
         #expect(try FixtureLaunch.parseRoute("suggestion:\(Self.suggestion)") == .link(.suggestion(UUID(uuidString: Self.suggestion)!)))
         #expect(try FixtureLaunch.parseRoute("task:\(Self.task)") == .link(.task(UUID(uuidString: Self.task)!)))
         for s in FixtureLaunch.Screen.allCases { #expect(try FixtureLaunch.parseRoute(s.rawValue) == .screen(s)) }

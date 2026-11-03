@@ -1,0 +1,8 @@
+{
+  "description": "The server answers 503 to the Overzicht routes from the first request: there is no board to keep.",
+  "statuses": {
+    "inbox": 503,
+    "dashboard/summary": 503,
+    "money/summary": 503
+  }
+}

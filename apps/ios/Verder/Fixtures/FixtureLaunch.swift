@@ -7,6 +7,8 @@ import Foundation
 ///
 ///     -fixtures <name>         answer every /api/mobile/v1 call from FixtureData/<name>
 ///     -fixtures-locked         keep the app lock closed: Overzicht's counts-only glance
+///     -fixtures-scans          the phone's queue holds today's scans: 2 sent, 1 waiting
+///     -fixtures-scroll <leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
 ///
@@ -40,7 +42,11 @@ struct FixtureLaunch: Equatable, Sendable {
         var id: String { rawValue }
     }
 
+    /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
+    enum Scroll: String, CaseIterable, Sendable { case leefgeld, rest, end }
+
     enum ParseError: Error, Equatable {
+        case unknownScroll(String)
         case missingValue(String)
         case unknownTab(String)
         case unknownRoute(String)
@@ -50,6 +56,9 @@ struct FixtureLaunch: Equatable, Sendable {
     let locked: Bool
     let tab: Tab?
     let route: Route?
+    /// Where Overzicht opens scrolled to; nil for the top.
+    var scroll: Scroll? = nil
+    var scans = false
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -68,7 +77,12 @@ struct FixtureLaunch: Equatable, Sendable {
         let route = try value(after: "-route").map { (raw: String) throws(ParseError) -> Route in
             try parseRoute(raw)
         }
-        return FixtureLaunch(fixture: fixture, locked: arguments.contains("-fixtures-locked"), tab: tab, route: route)
+        return FixtureLaunch(fixture: fixture, locked: arguments.contains("-fixtures-locked"), tab: tab, route: route,
+                             scroll: try value(after: "-fixtures-scroll").map { (raw: String) throws(ParseError) -> Scroll in
+                                 guard let s = Scroll(rawValue: raw) else { throw .unknownScroll(raw) }
+                                 return s
+                             },
+                             scans: arguments.contains("-fixtures-scans"))
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

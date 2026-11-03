@@ -26,7 +26,7 @@ The person the app is for is addressed as "je" and never named.
 
 ## Voor jou (fixture `voorjou-few`, 4 items, server order)
 
-1. **proposal · verder-priority** — "Antwoord aan Bewindkantoor Noordkust: loonstrook oktober" · trigger: "Ilse vraagt om je loonstrook van oktober" · 2 nov · draft body 4 lines, 1 attachment `Loonstrook.2026-10.pdf`.
+1. **proposal · verder-priority** — "Antwoord aan Bewindkantoor Noordkust: loonstrook oktober" · trigger: "Ilse vraagt om je loonstrook van oktober" · 2 nov (the inbox row's `at` is 1 nov 09:30, "vandaag" on the case's today) · draft body 4 lines, 1 attachment `Loonstrook.2026-10.pdf`.
 2. **question** — "Hoort deze brief bij de vordering van Kade & Partners?" · options: "Ja, koppel hem" / "Nee" / "Weet ik niet" · 1 nov.
 3. **suggestion (log-entry)** — "Telefoongesprek met Woonstichting Lindehof over de betalingsregeling" · 31 okt.
 4. **task · open, due tomorrow** — "Formulier bijzondere bijstand ondertekenen" · due 3 nov.
@@ -40,6 +40,21 @@ count on 2026-10-31, so the list's density is tested at the real scale.
 Door verder gedaan (3): "Opgeborgen als bankafschrift: Afschrift september" · "Hernoemd: Scan 2026-10-30 → Brief Gemeente Westerlaan 30 okt" · "Opgeborgen als brief: Herinnering Duinzorg".
 
 ## Overzicht
+
+The inbox rows' `subtitle` is what `waiting.ts` serves: the party for a
+proposal or question ("Bewindkantoor Noordkust", "Incassobureau Kade &
+Partners"), the suggestion's kind label ("Logboekregel") — so the preview's
+meta line reads `VOORSTEL · BEWINDKANTOOR NOORDKUST · VANDAAG`.
+
+Overzicht's own fixtures (added 2026-11-03, the Figma "overzicht · final" states):
+- `calm` — nothing waits (count 0), no open tasks, 2 waiting on someone else; Door verder gedaan still 3.
+- `one-item` — only item 1 waits; no open tasks, 2 waiting on someone else.
+- `loading` — no request is ever answered: the skeleton.
+- `server-error` — 503 on inbox, dashboard summary and money from the first request (no board to keep).
+- `server-error-cached` — the base case once, then 503 for every request (`"thenFail": 503`): a board kept through a failure, retried every minute.
+- `offline-cached` — the base case once, then no connection (`"thenFail": "offline"`); its leefgeld week is covered t/m za 31 okt (Supermarkt + Bakker + Apotheek = € 62,40 spent, zo: nog geen afschrift).
+- Launch flags: `-fixtures-scans` seeds the phone's queue with today's "2 verstuurd · 1 in de wachtrij"; `-fixtures-scroll <leefgeld|rest|end>` opens Overzicht scrolled for the lower parts of a "hele pagina" frame.
+- The case's clock in every fixture run is Sun 1 nov 2026 09:41 Amsterdam, running on from launch.
 
 - Headline ("waar het nu op wacht"): stop "Stukken aanleveren bij Team Startdossier" on track "Opstart bewind", 28 okt, note "Loonstroken en polissen nog sturen."
 - Tasks: 6 open · 1 te laat · 2 wacht op een ander.

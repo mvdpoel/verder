@@ -22,6 +22,13 @@ enum FixtureEnvironment {
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
     static let defaultsSuite = "pro.vanderpoel.verder.fixtures"
 
+    /// The synthetic case's "today": Sun 1 nov 2026, 09:41 in Amsterdam —
+    /// the reference frames' status bar. It runs on from launch, so a retry a
+    /// minute later reads a minute later.
+    nonisolated static let today = Date(timeIntervalSince1970: 1_793_522_460) // 2026-11-01T08:41:00Z
+    nonisolated static let launchedAt = Date()
+    nonisolated static let clock: @Sendable () -> Date = { today.addingTimeInterval(Date().timeIntervalSince(launchedAt)) }
+
     /// The fixture session: the app's own configuration (no cookies, no
     /// cache, no redirects) with `FixtureProtocol` in front.
     nonisolated static func sessionConfiguration(_ base: URLSessionConfiguration = APIClient.sessionConfiguration())
@@ -52,6 +59,7 @@ enum FixtureEnvironment {
 
         let dir = URL.temporaryDirectory.appending(path: "verder-fixture-uploads", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dir)
+        if launch.scans { seedUploads(sentToday: 2, pending: 1, in: dir) }
         let queue = UploadQueue(dir: dir)
         // Not a background session: those refuse custom protocols, and a scan
         // taken in a fixture run must reach the fixture server, not the network.
@@ -75,7 +83,32 @@ enum FixtureEnvironment {
                            // is synthetic bytes, and its transcript is the
                            // voice fixture's (synthetic-data doc).
                            makeRecorder: { FixtureRecorder() },
-                           transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback))
+                           transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
+                           now: clock)
+    }
+
+    /// `-fixtures-scans`: the data doc's "2 verstuurd · 1 in de wachtrij",
+    /// written in `UploadQueue`'s
+    /// own file format, before the queue opens it. Sent items were sent now
+    /// (the queue counts "today" on the real clock); pending ones are not due
+    /// for an hour, so nothing is sent during a capture.
+    private static func seedUploads(sentToday: Int, pending: Int, in dir: URL) {
+        struct Index: Encodable { let items: [UploadItem]; let signInRequired = false }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let now = Date()
+        var items: [UploadItem] = []
+        for n in 0..<(sentToday + pending) {
+            let sent = n < sentToday
+            let id = UUID()
+            items.append(UploadItem(id: id, fileName: "Scan fixture \(n + 1)", capturedAt: now, source: "phone-scan",
+                                    state: sent ? .sent : .pending, attempts: sent ? 0 : 1,
+                                    nextAttemptAt: sent ? nil : now.addingTimeInterval(3600),
+                                    sentAt: sent ? now : nil))
+            if !sent { try? Data("%PDF-1.4 fixture".utf8).write(to: dir.appending(path: "\(id.uuidString).pdf")) }
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(Index(items: items)).write(to: dir.appending(path: "queue.json"))
     }
 }
 

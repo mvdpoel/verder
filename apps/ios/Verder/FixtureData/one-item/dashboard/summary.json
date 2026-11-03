@@ -1,0 +1,14 @@
+{
+  "headline": {
+    "stopTitle": "Stukken aanleveren bij Team Startdossier",
+    "trackTitle": "Opstart bewind",
+    "happenedAt": "2026-10-28T09:00:00.000Z",
+    "note": "Loonstroken en polissen nog sturen."
+  },
+  "waitingCount": 1,
+  "tasks": {
+    "openCount": 0,
+    "overdueCount": 0,
+    "waitingOnOthersCount": 2
+  }
+}

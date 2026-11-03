@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 # Screenshot one screen of the app on the synthetic dataset, in the simulator.
-#   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked]
+#   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
+#                      [--text-size <size>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
-#            empty, offline, unauthorized, money-complete, money-partial,
+#            empty, offline, unauthorized, calm, one-item, loading, server-error,
+#            server-error-cached, offline-cached, money-complete, money-partial,
 #            money-geen-data, money-empty, money-no-account, money-unrecognised,
 #            money-no-budget, money-overspent, dossier, timeline, weekly, voice)
 #   tab      overzicht | voorjou | scan | dossier | meer
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
 #   --locked keep the app lock closed (Overzicht's counts-only glance)
+#   --scans  the phone's upload queue holds today's scans (2 sent, 1 waiting)
+#   --scrolled  open Overzicht scrolled to its end (the lower half of a
+#            "hele pagina" frame); --scroll <leefgeld|rest|end> to a card
+#   --text-size  the simulator's Dynamic Type size for this shot, as simctl
+#            spells it (e.g. accessibility-extra-extra-extra-large for AX5,
+#            large for the default); the previous size is put back afterwards
 #
 # A DEBUG build (the fixtures are compiled out of Release), installed on the
 # "iPhone 17" simulator, booted if it is not. Nothing reaches a server: every
@@ -25,10 +33,28 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
-FIXTURE="$1"; TARGET="$2"; OUT="$3"; LOCKED="${4:-}"
-[ -z "$LOCKED" ] || [ "$LOCKED" = "--locked" ] || usage
+FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
+LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""
+TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --locked) LOCKED=1 ;;
+    --scans) SCANS=1 ;;
+    --scrolled) SCROLLED=end ;;
+    --scroll)
+      [ $# -ge 2 ] || usage
+      case "$2" in leefgeld|rest|end) SCROLLED="$2" ;; *) echo "capture.sh: --scroll takes leefgeld, rest or end" >&2; exit 2 ;; esac
+      shift ;;
+    --text-size)
+      [ $# -ge 2 ] || usage
+      case " $TEXT_SIZES " in *" $2 "*) TEXT_SIZE="$2" ;; *) echo "capture.sh: unknown text size '$2'; known: $TEXT_SIZES" >&2; exit 2 ;; esac
+      shift ;;
+    *) usage ;;
+  esac
+  shift
+done
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT" ;; esac
 
 cd "$(dirname "$0")/.."
@@ -57,9 +83,12 @@ case "$TARGET" in
     ARGS=(-route "$TARGET") ;;
 esac
 [ -z "$LOCKED" ] || ARGS+=(-fixtures-locked)
+[ -z "$SCANS" ] || ARGS+=(-fixtures-scans)
+[ -z "$SCROLLED" ] || ARGS+=(-fixtures-scroll "$SCROLLED")
 [ "${CAPTURE_CHECK_ONLY:-0}" != 1 ] || { echo "capture.sh: arguments OK"; exit 0; }
 
-UDID="$(xcrun simctl list devices available | grep -E "^ +$DEVICE \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
+# -F: a name such as "iPhone SE (3rd generation)" holds regex metacharacters.
+UDID="$(xcrun simctl list devices available | grep -F "    $DEVICE (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
 [ -n "$UDID" ] || { echo "capture.sh: no available simulator named '$DEVICE'" >&2; exit 1; }
 
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
@@ -77,6 +106,12 @@ xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 xcrun simctl install "$UDID" "$APP"
+if [ -n "$TEXT_SIZE" ]; then
+  PREV_SIZE="$(xcrun simctl ui "$UDID" content_size 2>/dev/null || echo large)"
+  xcrun simctl ui "$UDID" content_size "$TEXT_SIZE"
+fi
+restore_size() { [ -z "$TEXT_SIZE" ] || xcrun simctl ui "$UDID" content_size "${PREV_SIZE:-large}" 2>/dev/null || true; }
+trap restore_size EXIT
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
 # `simctl launch` prints "<bundle>: <pid>"; a simulator app is a host process.
 LAUNCHED="$(xcrun simctl launch "$UDID" "$BUNDLE" -fixtures "$FIXTURE" "${ARGS[@]}")"
@@ -93,7 +128,7 @@ sleep "${SETTLE:-3}"
 alive || died "before the screenshot"
 mkdir -p "$(dirname "$OUT")"
 TMP="$OUT.partial.png"
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP"; restore_size' EXIT
 xcrun simctl io "$UDID" screenshot --type=png "$TMP" >/dev/null 2>&1
 alive || died "during the screenshot"
 mv -f "$TMP" "$OUT"

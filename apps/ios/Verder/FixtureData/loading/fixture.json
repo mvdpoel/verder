@@ -1,0 +1,4 @@
+{
+  "description": "No request is ever answered: every screen stays on its loading state.",
+  "behavior": "loading"
+}

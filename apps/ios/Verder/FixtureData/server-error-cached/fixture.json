@@ -1,0 +1,4 @@
+{
+  "description": "The base case once, then 503 for every request: a board kept through a server failure.",
+  "thenFail": 503
+}

@@ -33,10 +33,30 @@ struct FixtureServer: Sendable {
         case file(contentType: String, body: Data)
         /// No HTTP answer at all: the `offline` fixture.
         case transportFailure
+        /// No answer EVER: the `loading` fixture, so the skeleton stays up.
+        case never
     }
 
     struct Manifest: Decodable, Equatable, Sendable {
-        enum Behavior: String, Decodable, Sendable { case files, offline, unauthorized }
+        enum Behavior: String, Decodable, Sendable { case files, offline, unauthorized, loading }
+
+        /// How every request after a path's FIRST answer fails (`"offline"`
+        /// or a status such as `503`): a board that loaded once and then lost
+        /// its server, so the kept-board states can be captured.
+        enum ThenFail: Decodable, Equatable, Sendable {
+            case offline
+            case status(Int)
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.singleValueContainer()
+                if let code = try? c.decode(Int.self) { self = .status(code); return }
+                guard try c.decode(String.self) == "offline" else {
+                    throw DecodingError.dataCorruptedError(in: c, debugDescription: "thenFail is \"offline\" or a status")
+                }
+                self = .offline
+            }
+        }
+
         let description: String
         let behavior: Behavior?
         /// A status for a path instead of its file, e.g. `{"weekly": 404}` —
@@ -47,6 +67,7 @@ struct FixtureServer: Sendable {
         /// The voice fixture's dictated text. Not a route: transcription runs
         /// on the phone.
         let transcript: String?
+        let thenFail: ThenFail?
     }
 
     static let apiPrefix = "/api/mobile/v1/"
@@ -78,11 +99,19 @@ struct FixtureServer: Sendable {
         return entries.filter { FixtureServer(name: $0, root: root) != nil }.sorted()
     }
 
-    func reply(method: String, path rawPath: String, query: String? = nil) -> Reply {
+    /// `answeredBefore`: this fixture already answered this path once in this
+    /// process — only `thenFail` reads it (`FixtureProtocol` keeps the count).
+    func reply(method: String, path rawPath: String, query: String? = nil, answeredBefore: Bool = false) -> Reply {
         switch manifest.behavior ?? .files {
         case .offline: return .transportFailure
         case .unauthorized: return Self.error(401, "unauthorized")
+        case .loading: return .never
         case .files: break
+        }
+        switch answeredBefore ? manifest.thenFail : nil {
+        case .offline?: return .transportFailure
+        case .status(let code)?: return Self.error(code, "fixture failure")
+        case nil: break
         }
         guard rawPath.hasPrefix(Self.apiPrefix) else { return Self.error(404, "not a fixture route") }
         let path = String(rawPath.dropFirst(Self.apiPrefix.count))

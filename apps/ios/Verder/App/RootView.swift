@@ -20,6 +20,8 @@ struct RootView: View {
     let dossier: DossierModel
     let timeline: TimelineStore
     let voice: VoiceLogSession
+    /// Overzicht's clock (`AppServices.now`).
+    var now: @Sendable () -> Date = { Date() }
     @Environment(\.scenePhase) private var scenePhase
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
@@ -152,7 +154,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
                 // NOT gated: `.glance`, counts only while locked.
-                HomeTab(store: inbox, money: money, uploads: uploads, lock: lock,
+                HomeTab(store: inbox, money: money, uploads: uploads, lock: lock, now: now,
                         openInbox: { route in
                             inboxPath = route.map { [$0] } ?? []
                             tab = .voorJou

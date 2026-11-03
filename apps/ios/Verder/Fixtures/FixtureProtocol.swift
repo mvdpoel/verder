@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import Synchronization
 
 /// The URLProtocol the fixture session answers through. Installed ONLY on the
 /// URLSession `FixtureEnvironment` builds (its `protocolClasses`), never
@@ -11,6 +12,9 @@ import Foundation
 /// escaped the protocol could not resolve to anything real.
 final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     static let hostSuffix = ".fixtures.verder.invalid"
+    /// "<fixture>|<path>" for every path answered once — the only state, and
+    /// only `thenFail` fixtures act on it (`FixtureServer.reply(answeredBefore:)`).
+    private static let answered = Mutex<Set<String>>([])
 
     static func base(for fixture: String) -> URL {
         URL(string: "https://\(fixture)\(hostSuffix)")!
@@ -29,8 +33,13 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
             return
         }
-        switch server.reply(method: request.httpMethod ?? "GET", path: url.path(percentEncoded: false),
-                             query: url.query(percentEncoded: false)) {
+        let path = url.path(percentEncoded: false)
+        let key = "\(server.name)|\(path)"
+        let before = Self.answered.withLock { !$0.insert(key).inserted }
+        switch server.reply(method: request.httpMethod ?? "GET", path: path,
+                             query: url.query(percentEncoded: false), answeredBefore: before) {
+        case .never:
+            break
         case .transportFailure:
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
         case .json(let status, let body):

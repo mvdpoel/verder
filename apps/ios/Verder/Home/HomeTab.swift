@@ -1,128 +1,46 @@
 import SwiftUI
 
-/// What the Overzicht tab says, decided outside the view so it is testable.
-///
-/// EVERY NUMBER HERE IS THE SERVER'S: the waiting count is `loadWaiting`
-/// (packages/api/src/waiting.ts) as the inbox route serves it — the same number
-/// the badge, the widget and Voor jou show — and the task counts and the map
-/// headline are `/dashboard/summary`. The phone adds nothing up itself.
-/// AMBER ONLY for what waits on Martin: the waiting card when it is non-zero
-/// and overdue tasks; never the headline, never the upload queue.
-enum HomeSummary {
-    static let title = "Overzicht"
-    static let nothingWaiting = "Niets wacht op je."
-    static let noHeadline = "Geen open halte op de kaart."
-    static let headlineLabel = "WAAR HET NU OP WACHT"
-    static let waitingLabel = "WACHT OP JOU"
-    static let tasksLabel = "TAKEN"
-    static let scansLabel = "SCANS"
-    static let moneyLabel = "GELD"
-    /// How many of the ranked items the card previews.
-    static let previewCount = 3
-
-    static func waitingLine(_ count: Int) -> String {
-        switch count {
-        case 0: nothingWaiting
-        case 1: "1 ding wacht op je"
-        default: "\(count) dingen wachten op je"
-        }
-    }
-
-    static let lockedHeadline = "Ontgrendel om te zien waar het nu op wacht."
-    static let headlineHint = "Opent de tijdlijn"
-    static let reveal = "Toon details"
-
-    /// The first items in the SERVER's order — never re-ranked here. Empty
-    /// while the app is locked: the glance shows counts, never titles.
-    static func preview(_ inbox: InboxDTO, revealed: Bool) -> [WaitingItem] {
-        revealed ? Array(inbox.items.prefix(previewCount)) : []
-    }
-
-    /// "14 jul. 2026", in Amsterdam — the case's calendar, not the phone's.
-    static func day(_ date: Date) -> String {
-        date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
-                                        locale: Locale(identifier: "nl_NL"),
-                                        timeZone: TimeZone(identifier: "Europe/Amsterdam")!))
-    }
-
-    // MARK: Door verder gedaan
-
-    static let doneLabel = "DOOR VERDER GEDAAN"
-
-    /// Overzicht's "Door verder gedaan" card: the count always (a count is
-    /// glance material), the top items only when unlocked, and where a tap
-    /// leads. NEVER AMBER: what verder already did does not wait on Martin.
-    struct DoneCard: Equatable {
-        let line: String
-        let items: [VerderAction]
-        /// Nil when there is nothing to open.
-        let opens: InboxRoute?
-    }
-
-    /// The cards Overzicht draws, so their tint is decided in ONE place the
-    /// view reads, never hard-coded per card.
-    enum Card: CaseIterable { case waiting, money, done, tasks, scans }
-
-    /// Whether a card's label is drawn amber. Amber means "waits on Martin",
-    /// so only the waiting card can be amber, and only when something waits —
-    /// never "Door verder gedaan", whatever the inbox holds.
-    static func cardAmber(_ card: Card, inbox: InboxDTO?) -> Bool {
-        switch card {
-        case .waiting: (inbox?.count ?? 0) > 0
-        case .money, .done, .tasks, .scans: false
-        }
-    }
-
-    static func doneCard(_ inbox: InboxDTO, revealed: Bool) -> DoneCard {
-        let n = inbox.doneByVerder.count
-        let line = switch n {
-        case 0: DoneByVerderCopy.none
-        case 1: "1 ding door verder zelf gedaan"
-        default: "\(n) dingen door verder zelf gedaan"
-        }
-        return DoneCard(line: line,
-                        items: revealed ? Array(inbox.doneByVerder.prefix(previewCount)) : [],
-                        opens: n > 0 ? .doneByVerder : nil)
-    }
-
-    /// "Opgeborgen door verder" / "Hernoemd door verder".
-    static func doneRowLine(_ a: VerderAction) -> String { DoneByVerderCopy.headline(a) }
-
-    struct TaskLine: Equatable { let text: String; let amber: Bool }
-
-    static func taskLines(_ t: DashboardSummaryDTO.Tasks) -> [TaskLine] {
-        var out = [TaskLine(text: "\(t.openCount) open", amber: false)]
-        if t.overdueCount > 0 { out.append(TaskLine(text: "\(t.overdueCount) te laat", amber: true)) }
-        if t.waitingOnOthersCount > 0 {
-            out.append(TaskLine(text: "\(t.waitingOnOthersCount) wacht op een ander", amber: false))
-        }
-        return out
-    }
-}
-
-/// The tab the app opens on: the current state of the case at a glance —
-/// where it waits, what waits on Martin, the tasks, and the scan queue.
-/// Read-only: every action lives one tap further, on the screen that owns it.
+/// The tab the app opens on: the current state of the case at a glance, in
+/// the board's order (brief §3, Mercury's now → soon → later): what waits on
+/// Martin, the leefgeld week, then tasks · scans · Door verder gedaan, and the
+/// map's headline last. Read-only: every action lives one tap further, on the
+/// screen that owns it. Every word and number comes from `HomeSummary` and
+/// `LeefgeldGlance` (tested); this file only lays them out (Figma
+/// "overzicht · final").
 ///
 /// OPEN WHILE LOCKED (`AppLock.Area.glance`, Martin 2026-11-01): it shows
-/// counts and amounts only until `lock.revealsCaseContent`; the headline and
-/// the waiting preview are not even built while locked. Every tap lands on a
-/// gated screen, which asks for Face ID there — the money card included: its
-/// amounts show while locked, the Geld screen behind it names counterparties
-/// and is gated.
+/// counts and amounts only until `lock.revealsCaseContent`; the preview rows
+/// and the map headline are not even built while locked. Every tap lands on
+/// a gated screen, which asks for Face ID there.
+///
+/// It asks the server again every minute while it is on screen — the error
+/// copy promises "verder probeert het elke minuut opnieuw" — and a failed
+/// refresh keeps the board it had, with its age in the eyebrow.
 struct HomeTab: View {
     let store: InboxStore
     let money: MoneyStore
     let uploads: UploadCenter
     let lock: AppLock
+    /// The case's clock (`AppServices.now`).
+    var now: @Sendable () -> Date = { Date() }
     /// Opens Voor jou, optionally straight onto one item.
     let openInbox: (InboxRoute?) -> Void
     let openScan: () -> Void
-    /// Opens the Tijdlijn on Dossier. Offered only once case content shows:
-    /// while locked the headline card is the Face ID prompt, not a link.
+    /// Opens the Tijdlijn on Dossier. Offered only once case content shows.
     var openTimeline: () -> Void = {}
 
     @State private var showGeld = false
+    @State private var compactHeight = false
+    @State private var failedRetries = 0
+    @State private var failedUnlocks = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
+
+    private var ax: Bool { typeSize.isAccessibilitySize }
+    /// Soft hyphens only at the accessibility sizes, where a compound cannot
+    /// fit a line; at the ordinary sizes a word moves to the next line whole.
+    private func hy(_ s: String) -> String { ax ? HomeSummary.hyphenated(s) : s }
 
     var body: some View {
         NavigationStack {
@@ -137,261 +55,813 @@ struct HomeTab: View {
     private var page: some View {
         ZStack {
             Color.void.ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(HomeSummary.title)
-                        .font(.display(26, relativeTo: .title, weight: .ultraLight))
-                        .foregroundStyle(Color.inkBright)
-                    if let error = store.lastError, store.inbox == nil {
-                        Text(VoorJouTab.message(error))
-                            .font(.display(14, relativeTo: .callout, weight: .light))
-                            .foregroundStyle(Color.ink)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        header
+                        board
+                        Color.clear.frame(height: 1).id(Self.endID)
                     }
-                    headlineCard
-                    waitingCard
-                    moneyCard
-                    doneCard
-                    tasksCard
-                    scansCard
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Saira's own line height is ~1.57 em; the ramp sets
+                    // body 17 on 23 (Figma), a multiple of the point size.
+                    // Mono meta keeps its natural 17 (`.lineHeight(.normal)`).
+                    .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
+                    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3, dampingFraction: 0.9),
+                               value: animationKey)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 26)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .refreshable {
-                async let inbox: Void = store.refresh()
-                async let cash: Void = money.refresh()
-                _ = await (inbox, cash)
+                .refreshable { await refreshAll() }
+                #if DEBUG
+                .task {
+                    guard let target = FixtureLaunch.current?.scroll else { return }
+                    try? await Task.sleep(for: .seconds(1.5))
+                    if target == .end {
+                        proxy.scrollTo(Self.endID, anchor: .bottom)
+                    } else {
+                        proxy.scrollTo(target.rawValue, anchor: .top)
+                    }
+                }
+                #endif
             }
         }
+        .onGeometryChange(for: Bool.self) { $0.size.height < 700 } action: { compactHeight = $0 }
         .preferredColorScheme(.dark)
+        .sensoryFeedback(.error, trigger: failedRetries)
+        .sensoryFeedback(.error, trigger: failedUnlocks)
         .task {
-            async let inbox: Void = store.refresh()
-            async let cash: Void = money.refresh()
-            _ = await (inbox, cash)
-        }
-    }
-
-    // MARK: cards
-
-    /// Locked: the Face ID prompt. Unlocked: a tap opens the Tijdlijn, the
-    /// map this headline is the answer of.
-    @ViewBuilder private var headlineCard: some View {
-        if lock.revealsCaseContent {
-            Button { openTimeline() } label: {
-                card(label: HomeSummary.headlineLabel, chevron: true) { headlineContent }
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(HomeSummary.headlineHint)
-        } else {
-            card(label: HomeSummary.headlineLabel) { headlineContent }
-        }
-    }
-
-    @ViewBuilder private var headlineContent: some View {
-        Group {
-            if !lock.revealsCaseContent {
-                VStack(alignment: .leading, spacing: 10) {
-                    muted(HomeSummary.lockedHeadline)
-                    Button {
-                        Task { await lock.unlock() }
-                    } label: {
-                        Label(HomeSummary.reveal, systemImage: "faceid")
-                            .font(.display(14, relativeTo: .callout, weight: .regular))
-                            .foregroundStyle(Color.signal)
-                            .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(lock.isUnlocking)
-                }
-            } else if let h = store.summary?.headline {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(h.stopTitle)
-                        .font(.display(18, relativeTo: .title3, weight: .regular))
-                        .foregroundStyle(Color.inkBright)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        if let track = h.trackTitle { Text(track) }
-                        if let at = h.happenedAt { Text(HomeSummary.day(at)) }
-                    }
-                    .font(.mono(11, relativeTo: .caption2))
-                    .foregroundStyle(Color.inkDim)
-                    if let note = h.note, !note.isEmpty {
-                        Text(note)
-                            .font(.display(14, relativeTo: .callout, weight: .light))
-                            .foregroundStyle(Color.ink)
-                            .lineLimit(4)
-                    }
-                }
-            } else if store.summary != nil {
-                muted(HomeSummary.noHeadline)
-            } else {
-                loading
+            await refreshAll()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(HomeSummary.pollInterval))
+                if Task.isCancelled { break }
+                await refreshAll()
             }
         }
     }
 
-    @ViewBuilder private var waitingCard: some View {
+    private static let endID = "overzicht-end"
+
+    /// What changes a card's height, so the change springs (Reduce Motion: a crossfade).
+    private var animationKey: [Int] {
+        [store.inbox?.count ?? -1, store.inbox == nil ? 0 : 1, store.lastError == nil ? 0 : 1,
+         money.glance == nil ? 0 : 1, lock.revealsCaseContent ? 1 : 0]
+    }
+
+    private func refreshAll() async {
+        async let inbox: Void = store.refresh()
+        async let cash: Void = money.refresh()
+        _ = await (inbox, cash)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        let eyebrow = HomeSummary.eyebrow(now: now(), fetchedAt: store.inbox == nil ? nil : store.fetchedAt,
+                                          error: store.lastError)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if eyebrow.offline {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 13, weight: .regular))
+                        .accessibilityHidden(true)
+                }
+                Text(eyebrow.text)
+                    .textCase(.uppercase)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(HomeType.mono)
+            .lineHeight(.normal)
+            .foregroundStyle(Color.inkLabel)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(eyebrow.accessibilityLabel)
+            Text(HomeSummary.title)
+                .font(HomeType.title)
+                .foregroundStyle(Color.inkBright)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    // MARK: - The board
+
+    @ViewBuilder private var board: some View {
+        let notice = HomeSummary.errorNotice(store.lastError, attemptedAt: store.attemptedAt)
         if let inbox = store.inbox {
+            if let notice, store.lastError != nil, !isOffline {
+                strip(notice)
+            }
+            waitingCard(inbox)
+            leefgeldCard.id("leefgeld")
+            restCard(inbox).id("rest")
+            headlineCard
+        } else if let notice {
+            errorCard(notice)
+            card { scansRow }
+        } else {
+            WaitingSkeleton()
+            LeefgeldSkeleton()
+        }
+    }
+
+    private var isOffline: Bool {
+        if case .transport = store.lastError { return true }
+        return false
+    }
+
+    // MARK: Wacht op jou
+
+    private func waitingCard(_ inbox: InboxDTO) -> some View {
+        let amber = HomeSummary.cardAmber(.waiting, inbox: inbox)
+        let limit = HomeSummary.previewLimit(accessibilitySize: ax, compactHeight: compactHeight)
+        let rows = HomeSummary.preview(inbox, revealed: lock.revealsCaseContent, limit: limit)
+        return card {
             Button { openInbox(nil) } label: {
-                card(label: HomeSummary.waitingLabel, amber: HomeSummary.cardAmber(.waiting, inbox: inbox),
-                     chevron: true) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            if inbox.count > 0 {
-                                Text("\(inbox.count)")
-                                    .font(.display(34, relativeTo: .largeTitle, weight: .ultraLight))
-                                    .foregroundStyle(Color.attn)
-                            }
-                            Text(HomeSummary.waitingLine(inbox.count))
-                                .font(.display(15, relativeTo: .body, weight: .light))
-                                .foregroundStyle(Color.ink)
-                        }
-                        ForEach(HomeSummary.preview(inbox, revealed: lock.revealsCaseContent)) { item in
-                            previewRow(item)
-                        }
-                    }
-                }
+                cardHeader(HomeSummary.waitingLabel, amber: amber, chevron: true)
             }
             .buttonStyle(.plain)
-        } else {
-            card(label: HomeSummary.waitingLabel) { loading }
+            .accessibilityLabel(HomeSummary.waitingLabel)
+            if inbox.count == 0 {
+                calm
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(inbox.count)")
+                        .font(HomeType.hero)
+                        .lineHeight(.multiple(factor: 56.0 / 48.0))
+                        .foregroundStyle(Color.attn)
+                        .contentTransition(.numericText())
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility4)
+                    Text(hy(HomeSummary.countCaption(inbox.count)))
+                        .font(HomeType.body)
+                        .foregroundStyle(Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let hint = HomeSummary.manyHint(inbox.count, shown: lock.revealsCaseContent ? limit : 0),
+                       lock.revealsCaseContent {
+                        Text(hy(hint))
+                            .font(HomeType.body)
+                            .foregroundStyle(Color.inkMute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(HomeSummary.waitingLine(inbox.count))
+                if lock.revealsCaseContent {
+                    Rectangle().fill(Color.edge).frame(height: 1)
+                    ForEach(rows) { previewRow($0) }
+                    if inbox.count > rows.count {
+                        Button { openInbox(nil) } label: {
+                            linkRow(HomeSummary.seeAll(inbox.count))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    lockedReveal
+                }
+            }
+        }
+    }
+
+    private var calm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 40, weight: .thin))
+                .foregroundStyle(Color.okay)
+                .accessibilityHidden(true)
+            Text(HomeSummary.nothingWaiting)
+                .font(HomeType.title)
+                .foregroundStyle(Color.inkBright)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(hy(HomeSummary.calmBody))
+                .font(HomeType.body)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var lockedReveal: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                Task {
+                    await lock.unlock()
+                    if lock.isLocked { failedUnlocks += 1 }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "faceid")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(Color.signal)
+                        .accessibilityHidden(true)
+                    Text(HomeSummary.reveal)
+                        .font(HomeType.bodyStrong)
+                        .foregroundStyle(Color.inkBright)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .padding(.horizontal, 12)
+                .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip))
+                .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(lock.isUnlocking)
+            Text(hy(HomeSummary.lockedFootnote))
+                .font(HomeType.body)
+                .foregroundStyle(Color.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func previewRow(_ item: WaitingItem) -> some View {
-        Button { openInbox(InboxRoute(item)) } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Circle().fill(Color.attn).frame(width: 6, height: 6).padding(.top, 7)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.display(14, relativeTo: .callout, weight: .regular))
+        let route = InboxRoute(item)
+        return Button { openInbox(route) } label: {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(hy(item.title))
+                        .font(HomeType.bodyStrong)
                         .foregroundStyle(Color.inkBright)
-                        .lineLimit(2)
+                        .lineLimit(ax ? nil : 2)
+                        .truncationMode(.tail)
                         .multilineTextAlignment(.leading)
-                    Text(VoorJouList.kindLabel(item.kind))
-                        .font(.mono(10, relativeTo: .caption2))
-                        .foregroundStyle(Color.inkDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    meta(HomeSummary.meta(item, now: now()))
                 }
                 Spacer(minLength: 0)
+                chevron
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    /// Amounts only, so it shows while locked (brief §3: "counts and money").
-    /// No amber: nothing about money waits on Martin.
-    @ViewBuilder private var moneyCard: some View {
-        if let glance = money.glance {
-            Button { showGeld = true } label: {
-                card(label: HomeSummary.moneyLabel, chevron: true) {
-                    MoneyGlanceSummary(summary: glance.summary(revealed: lock.revealsCaseContent))
-                }
-            }
-            .buttonStyle(.plain)
-        } else if money.lastError == nil {
-            card(label: HomeSummary.moneyLabel) { loading }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(HomeSummary.rowAccessibilityLabel(item, now: now()))
+        .accessibilityAddTraits(.isButton)
+        .contextMenu {
+            Button { openInbox(route) } label: { Label("Bekijken", systemImage: "eye") }
         }
-        // A failed money fetch hides the card rather than adding a second
-        // error line to Overzicht; Geld itself says why.
     }
 
-    /// What verder did by itself; opens the section on Voor jou. Ink, never
-    /// amber. Titles only once unlocked (`HomeSummary.doneCard`).
-    @ViewBuilder private var doneCard: some View {
-        if let inbox = store.inbox {
-            let done = HomeSummary.doneCard(inbox, revealed: lock.revealsCaseContent)
-            let content = card(label: HomeSummary.doneLabel,
-                               amber: HomeSummary.cardAmber(.done, inbox: inbox),
-                               chevron: done.opens != nil) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(done.line)
-                        .font(.display(15, relativeTo: .subheadline, weight: .regular))
-                        .foregroundStyle(Color.ink)
-                    ForEach(done.items) { a in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(a.documentTitle ?? "Document")
-                                .font(.display(15, relativeTo: .subheadline, weight: .regular))
-                                .foregroundStyle(Color.inkBright)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            Text(HomeSummary.doneRowLine(a))
-                                .font(.mono(11, relativeTo: .caption2))
-                                .foregroundStyle(Color.inkDim)
+    // MARK: Leefgeld
+
+    /// Amounts only, so it shows while locked. No amber: nothing about money
+    /// waits on Martin. Without a weekly amount there is no leefgeld card;
+    /// unlocked, the per-account lines take its place (`MoneyGlance.summary`).
+    @ViewBuilder private var leefgeldCard: some View {
+        if let glance = money.glance {
+            if let lg = glance.leefgeldGlance {
+                Button { showGeld = true } label: {
+                    card { LeefgeldGlanceView(glance: lg, ax: ax, openWebsite: openWebsite) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(lg.accessibilityLabel)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opent Geld")
+            } else {
+                let summary = glance.summary(revealed: lock.revealsCaseContent)
+                if !summary.lines.isEmpty {
+                    Button { showGeld = true } label: {
+                        card {
+                            cardHeader(HomeSummary.moneyLabel, amber: false, chevron: true)
+                            ForEach(summary.lines, id: \.self) { line in
+                                Text(line).font(HomeType.body).foregroundStyle(Color.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            if let route = done.opens {
-                Button { openInbox(route) } label: { content }.buttonStyle(.plain)
+        } else if money.lastError == nil {
+            LeefgeldSkeleton()
+        }
+        // A failed money fetch with nothing kept hides the card rather than
+        // adding a second error to Overzicht; Geld itself says why.
+    }
+
+    private func openWebsite() {
+        openURL(APIClient.production.appending(path: LeefgeldGlance.websitePath))
+    }
+
+    // MARK: Tasks · scans · Door verder gedaan
+
+    private func restCard(_ inbox: InboxDTO) -> some View {
+        card {
+            if let tasks = store.summary?.tasks {
+                restRow(HomeSummary.tasksRow(tasks, inbox: inbox, now: now())) { openInbox(nil) }
+            }
+            scansRow
+            let done = HomeSummary.doneRow(inbox)
+            if let route = HomeSummary.doneOpens(inbox) {
+                restRow(done) { openInbox(route) }
+            } else {
+                restRow(done, action: nil)
+            }
+        }
+    }
+
+    private var scansRow: some View {
+        restRow(HomeSummary.scansRow(uploads.summary, offline: isOffline), action: openScan)
+    }
+
+    private func restRow(_ row: HomeSummary.Row, action: (() -> Void)?) -> some View {
+        let content = HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                rowTitle(row)
+                meta(row.meta)
+            }
+            Spacer(minLength: 0)
+            if action != nil { chevron }
+        }
+        .overlay(alignment: .topLeading) {
+            if row.dot && !ax {
+                Circle().fill(Color.attn).frame(width: 8, height: 8)
+                    .offset(x: -12, y: 8)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.accessibilityLabel)
+        return Group {
+            if let action {
+                Button(action: action) { content }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
             } else {
                 content
             }
         }
     }
 
-    @ViewBuilder private var tasksCard: some View {
-        card(label: HomeSummary.tasksLabel) {
-            if let tasks = store.summary?.tasks {
-                HStack(spacing: 14) {
-                    ForEach(HomeSummary.taskLines(tasks), id: \.text) { line in
-                        Text(line.text)
-                            .font(.display(15, relativeTo: .body, weight: .light))
-                            .foregroundStyle(line.amber ? Color.attn : Color.ink)
+    @ViewBuilder private func rowTitle(_ row: HomeSummary.Row) -> some View {
+        if ax, let suffix = row.amberSuffix {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(hy(row.title)).foregroundStyle(Color.inkBright)
+                Text(suffix).foregroundStyle(Color.attn)
+            }
+            .font(HomeType.bodyStrong)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text(Self.titleWithSuffix(row, ax: ax))
+                .font(HomeType.bodyStrong)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "6 taken voor jou · 1 te laat", the late part amber.
+    private static func titleWithSuffix(_ row: HomeSummary.Row, ax: Bool) -> AttributedString {
+        var title = AttributedString(ax ? HomeSummary.hyphenated(row.title) : row.title)
+        title.foregroundColor = Color.inkBright
+        guard let suffix = row.amberSuffix else { return title }
+        var dot = AttributedString(" · ")
+        dot.foregroundColor = Color.inkBright
+        var late = AttributedString(suffix.replacingOccurrences(of: " ", with: "\u{00A0}"))
+        late.foregroundColor = Color.attn
+        return title + dot + late
+    }
+
+    // MARK: The map headline
+
+    /// Unlocked only (a stop title is case content). A tap opens the Tijdlijn.
+    @ViewBuilder private var headlineCard: some View {
+        if lock.revealsCaseContent, let h = store.summary?.headline {
+            Button { openTimeline() } label: {
+                card {
+                    cardHeader(HomeSummary.headlineLabel, amber: false, chevron: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(hy(h.stopTitle))
+                            .font(HomeType.bodyStrong)
+                            .foregroundStyle(Color.inkBright)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        meta(HomeSummary.headlineMeta(h))
+                        if let note = h.note, !note.isEmpty {
+                            Text(hy(note))
+                                .font(HomeType.body)
+                                .foregroundStyle(Color.ink)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
-            } else {
-                loading
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(HomeSummary.headlineHint)
+        }
+    }
+
+    // MARK: Errors
+
+    /// Above a kept board: the board stays, this says it is not fresh.
+    private func strip(_ n: HomeSummary.ErrorNotice) -> some View {
+        card {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(Color.inkBright)
+                    .accessibilityHidden(true)
+                Text(n.strip)
+                    .font(HomeType.bodyStrong)
+                    .foregroundStyle(Color.inkBright)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            meta(n.readout).padding(.top, -8)
+            Button { retry() } label: {
+                Text(HomeSummary.retry)
+                    .font(HomeType.bodyStrong)
+                    .foregroundStyle(Color.signal)
+                    .frame(minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, -8)
+        }
+    }
+
+    /// No board to keep: what happened, that nothing is lost, and what to do.
+    private func errorCard(_ n: HomeSummary.ErrorNotice) -> some View {
+        card {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.inkBright)
+                .accessibilityHidden(true)
+            Text(n.headline)
+                .font(HomeType.title)
+                .foregroundStyle(Color.inkBright)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text(hy(n.body))
+                .font(HomeType.body)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            meta(n.readout)
+            Button { retry() } label: {
+                Text(HomeSummary.retry)
+                    .font(HomeType.bodyStrong)
+                    .foregroundStyle(Color.onSignal)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.vertical, 2)
+                    .background(
+                        LinearGradient(colors: [.signalLit, .signal], startPoint: .top, endPoint: .bottom),
+                        in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .glow(Glow.action)
+            }
+            .buttonStyle(.plain)
+            if let step = n.step {
+                Text(hy(step))
+                    .font(HomeType.body)
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private var scansCard: some View {
-        let summary = uploads.summary
-        return Button(action: openScan) {
-            card(label: HomeSummary.scansLabel, chevron: true) {
-                if summary.isEmpty {
-                    muted("Vandaag nog niets gescand.")
+    private func retry() {
+        Task {
+            await refreshAll()
+            if store.lastError != nil { failedRetries += 1 }
+        }
+    }
+
+    // MARK: - Pieces
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) { content() }
+            .padding(ax ? 12 : 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassPanel()
+            .contentShape(Rectangle())
+    }
+
+    private func cardHeader(_ label: String, amber: Bool, chevron showChevron: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(ax ? label : label.uppercased())
+                .font(HomeType.mono)
+            .lineHeight(.normal)
+                .foregroundStyle(amber ? Color.attn : Color.inkLabel)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            if showChevron && !ax {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// One mono meta line that wraps only at " · " — or, at the accessibility
+    /// sizes, one fact per line in sentence case (Figma it4: no dangling dots).
+    @ViewBuilder private func meta(_ parts: [String]) -> some View {
+        if !parts.isEmpty {
+            Group {
+                if ax {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(parts.enumerated()), id: \.offset) { _, p in Text(HomeSummary.sentence(p)) }
+                    }
                 } else {
-                    Text(summary.parts.joined(separator: " · "))
-                        .font(.display(15, relativeTo: .body, weight: .light))
-                        .foregroundStyle(Color.ink)
+                    Text(HomeSummary.metaLine(parts)).textCase(.uppercase)
                 }
             }
+            .font(HomeType.mono)
+            .lineHeight(.normal)
+            .foregroundStyle(Color.inkDim)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         }
-        .buttonStyle(.plain)
     }
 
-    // MARK: pieces
-
-    private func card<Content: View>(label: String, amber: Bool = false, chevron: Bool = false,
-                                     @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(label)
-                    .font(.mono(11, relativeTo: .caption2, weight: .medium))
-                    .foregroundStyle(amber ? Color.attn : Color.inkLabel)
-                Spacer(minLength: 0)
-                if chevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.inkFaint)
-                }
+    private func linkRow(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(text)
+                .font(HomeType.bodyStrong)
+                .foregroundStyle(Color.signal)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if !ax {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.signal)
             }
-            content()
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel()
+        .frame(minHeight: 24)
         .contentShape(Rectangle())
     }
 
-    private func muted(_ text: String) -> some View {
-        Text(text)
-            .font(.display(14, relativeTo: .callout, weight: .light))
-            .foregroundStyle(Color.inkMute)
+    /// Chevrons go at the accessibility sizes: the width is the text's.
+    @ViewBuilder private var chevron: some View {
+        if !ax {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.inkFaint)
+                .padding(.top, 4)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Overzicht's type ramp (Figma: 48 / 28 / 17 / 13), each tied to the text
+/// style it scales with — body 17 → 53 at AX5, title 28 → 58.
+enum HomeType {
+    static let hero = Font.display(48, relativeTo: .largeTitle, weight: .light)
+    static let title = Font.display(28, relativeTo: .title, weight: .regular)
+    static let money = Font.display(28, relativeTo: .title, weight: .regular)
+    static let body = Font.display(17, relativeTo: .body)
+    static let bodyStrong = Font.display(17, relativeTo: .body, weight: .medium)
+    static let mono = Font.mono(13, relativeTo: .footnote)
+    /// 23 / 17: the Figma ramp's line height as a multiple of the size.
+    static let sairaLineFactor: CGFloat = 23.0 / 17.0
+}
+
+// MARK: - Leefgeld card
+
+/// The Leefgeld card's content: header, figure or message, footnote.
+/// `LeefgeldGlance` decides every word; this lays it out.
+struct LeefgeldGlanceView: View {
+    let glance: LeefgeldGlance
+    let ax: Bool
+    let openWebsite: () -> Void
+
+    private func hy(_ s: String) -> String { ax ? HomeSummary.hyphenated(s) : s }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            switch glance.body {
+            case .figure(let f): figure(f)
+            case .message(let title, let readout, let text, let link): message(title, readout, text, link)
+            }
+            if let footnote = glance.footnote {
+                Text(hy(footnote))
+                    .font(HomeType.body)
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
-    private var loading: some View { ProgressView().tint(Color.signal) }
+    private var header: some View {
+        let label = Text(ax ? HomeSummary.leefgeldLabel : HomeSummary.leefgeldLabel.uppercased())
+            .foregroundStyle(Color.inkLabel)
+        let readout = glance.headerReadout.map { r in
+            Text(ax ? r : r.uppercased()).foregroundStyle(Color.inkLabel)
+        }
+        return Group {
+            if ax {
+                VStack(alignment: .leading, spacing: 0) {
+                    label
+                    readout
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    ViewThatFits(in: .horizontal) {
+                        // 24 pt clear between label and readout, or they stack:
+                        // a header that only just fits reads as one phrase.
+                        HStack(alignment: .firstTextBaseline) {
+                            label
+                            Spacer(minLength: 24)
+                            readout
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            label
+                            readout
+                        }
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.inkFaint)
+                }
+            }
+        }
+        .font(HomeType.mono)
+            .lineHeight(.normal)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+    }
+
+    @ViewBuilder private func figure(_ f: LeefgeldGlance.Figure) -> some View {
+        let hero = Text(f.hero)
+            .font(HomeType.money)
+            .foregroundStyle(Color.inkBright)
+            .contentTransition(.numericText())
+        let caption = Text(f.caption)
+            .font(HomeType.body)
+            .foregroundStyle(Color.ink)
+            .fixedSize(horizontal: false, vertical: true)
+        if f.captionBelow || ax {
+            VStack(alignment: .leading, spacing: 4) { hero; caption }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { hero.fixedSize(); caption.fixedSize() }
+                VStack(alignment: .leading, spacing: 4) { hero; caption }
+            }
+        }
+        LeefgeldBar(bar: f.bar)
+        if let note = f.coverageNote {
+            Text(ax ? HomeSummary.sentence(note) : note.uppercased())
+                .font(HomeType.mono)
+            .lineHeight(.normal)
+                .foregroundStyle(Color.inkLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        }
+        if ax || f.columns.count == 1 {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(f.columns, id: \.label) { column($0) }
+            }
+        } else {
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(f.columns, id: \.label) { column($0).frame(maxWidth: .infinity, alignment: .leading) }
+            }
+        }
+    }
+
+    private func column(_ c: LeefgeldGlance.Column) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(ax ? HomeSummary.sentence(c.label) : c.label.uppercased())
+                .font(HomeType.mono)
+            .lineHeight(.normal)
+                .foregroundStyle(Color.inkLabel)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            Text(c.value)
+                .font(HomeType.body)
+                .foregroundStyle(Color.inkBright)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func message(_ title: String, _ readout: String?, _ text: String, _ link: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(HomeType.bodyStrong)
+                    .foregroundStyle(Color.inkBright)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let readout {
+                    Text(ax ? HomeSummary.sentence(readout) : readout.uppercased())
+                        .font(HomeType.mono)
+            .lineHeight(.normal)
+                        .foregroundStyle(Color.inkLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                }
+            }
+            Text(hy(text))
+                .font(HomeType.body)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: openWebsite) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(link).font(HomeType.bodyStrong)
+                    Image(systemName: "arrow.up.right").font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(Color.signal)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, -10)
+        }
+    }
+}
+
+/// The 4 pt week bar: what is left (or the covered days) solid, the unknown
+/// days or the overspend hatched, the 100 % point of an overspent week ticked.
+struct LeefgeldBar: View {
+    let bar: LeefgeldGlance.Bar
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color.edgeStrong).frame(width: (bar.hatchedFrom ?? 1) * w)
+                Rectangle().fill(Color.inkSoft).frame(width: bar.solid * w)
+                if let from = bar.hatchedFrom {
+                    Hatch(spacing: 3).stroke(Color.inkDim, lineWidth: 1)
+                        .frame(width: (1 - from) * w)
+                        .clipped()
+                        .offset(x: from * w)
+                }
+            }
+            .frame(height: 4)
+            .frame(maxHeight: .infinity)
+            .overlay(alignment: .leading) {
+                if let tick = bar.tick {
+                    Rectangle().fill(Color.inkSoft).frame(width: 2, height: 12).offset(x: tick * w - 1)
+                }
+            }
+        }
+        .frame(height: bar.tick == nil ? 4 : 12)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Skeletons
+
+/// Loading: the shape of what is coming, not a spinner (brief §2.4) — the
+/// loaded cards' geometry, so nothing jumps when the data arrives.
+private struct WaitingSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            line(96, 10, in: 17)
+            line(56, 44, in: 56)
+            line(160, 12, in: 23)
+            Rectangle().fill(Color.edge).frame(height: 1)
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 0) {
+                    line(290, 12, in: 23)
+                    line(190, 12, in: 23)
+                    line(150, 8, in: 17).padding(.top, 4)
+                }
+            }
+            line(110, 12, in: 24)
+        }
+        .skeletonCard()
+    }
+}
+
+private struct LeefgeldSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack { line(72, 10, in: 17); Spacer(); line(110, 10, in: 17) }
+            HStack(spacing: 12) { line(100, 24, in: 34); line(130, 12, in: 34) }
+            SkeletonBar(width: nil, height: 4)
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(0..<2, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 4) { line(80, 8, in: 17); line(64, 10, in: 23) }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            line(200, 12, in: 23)
+        }
+        .skeletonCard()
+    }
+}
+
+/// A skeleton bar centred in the height of the text line it stands for.
+private func line(_ width: CGFloat, _ height: CGFloat, in lineHeight: CGFloat) -> some View {
+    SkeletonBar(width: width, height: height).frame(height: lineHeight)
+}
+
+private struct SkeletonBar: View {
+    let width: CGFloat?
+    let height: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Color.edgeStrong.opacity(0.6))
+            .frame(maxWidth: width ?? .infinity, alignment: .leading)
+            .frame(width: width, height: height)
+    }
+}
+
+private extension View {
+    func skeletonCard() -> some View {
+        padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassPanel()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Laden")
+    }
 }

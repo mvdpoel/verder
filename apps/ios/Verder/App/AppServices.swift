@@ -27,6 +27,9 @@ struct AppServices {
     /// The voice log's microphone and on-device transcription (Task 25).
     let makeRecorder: @MainActor () -> any VoiceRecording
     let transcriber: any Transcribing
+    /// The clock Overzicht reads its day and its ages from. A fixture run
+    /// sets it to the synthetic case's "today" (Sun 1 nov 2026, 09:41).
+    var now: @Sendable () -> Date = { Date() }
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()

@@ -1,0 +1,4 @@
+{
+  "description": "The base case once, then no connection: a board kept offline. Its leefgeld week is covered t/m za 31 okt (zo: no statement yet).",
+  "thenFail": "offline"
+}

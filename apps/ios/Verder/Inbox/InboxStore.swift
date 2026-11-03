@@ -24,6 +24,11 @@ final class InboxStore {
     private(set) var summary: DashboardSummaryDTO?
     /// The inbox fetch's failure, nil after a good refresh.
     private(set) var lastError: APIError?
+    /// When the inbox on hand was fetched: the age of a board kept through a
+    /// failure ("bijgewerkt gisteren 22:14"). Nil until the first good refresh.
+    private(set) var fetchedAt: Date?
+    /// When the last refresh finished, good or bad: "volgende poging" counts on it.
+    private(set) var attemptedAt: Date?
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let snapshotDir: URL?
@@ -74,6 +79,7 @@ final class InboxStore {
         guard epoch.isCurrent(started) else { return }
 
         if case .success(let fresh) = s { summary = fresh }
+        attemptedAt = now()
         let dto: InboxDTO
         switch i {
         case .success(let value): dto = value
@@ -87,6 +93,7 @@ final class InboxStore {
         }
         inbox = dto
         lastError = nil
+        fetchedAt = attemptedAt
 
         if let snapshotDir {
             let top = dto.items.first
@@ -115,6 +122,8 @@ final class InboxStore {
     /// memory, in the widget, or on the icon.
     private func sessionEnded() {
         lastError = nil
+        fetchedAt = nil
+        attemptedAt = nil
         forgetCaseContent()
         let setBadge = setBadge
         Task { await setBadge(0) }
