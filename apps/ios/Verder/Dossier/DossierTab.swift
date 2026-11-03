@@ -181,7 +181,7 @@ struct DossierTab: View {
                     let line = timeline.map.map { TimelineCopy.stats($0).joined(separator: " · ") } ?? TimelineCopy.rowLine
                     Text(typeSize.isAccessibilitySize ? HomeSummary.sentence(line) : line.uppercased())
                         .font(.mono(12, relativeTo: .caption))
-                        .tracking(typeSize.isAccessibilitySize ? 0 : 1)
+                        .tracking(0)
                         .foregroundStyle(Color.inkLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }

@@ -422,7 +422,7 @@ struct TimelineScreen: View {
             switch state {
             case .scroll(let id):
                 // A stop sits just under its pinned band; a band at the top.
-                proxy.scrollTo(id, anchor: id.hasPrefix("band:") ? .top : UnitPoint(x: 0, y: 0.1))
+                proxy.scrollTo(id, anchor: id.hasPrefix("band:") ? .top : UnitPoint(x: 0, y: 0.16))
             case .stop(let id):
                 proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.35))
                 try? await Task.sleep(for: .seconds(0.4))
