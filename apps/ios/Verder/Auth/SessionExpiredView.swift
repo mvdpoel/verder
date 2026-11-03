@@ -76,7 +76,7 @@ struct SessionExpiredView: View {
         .preferredColorScheme(.dark)
         .sensoryFeedback(.error, trigger: auth.errorMessage) { _, new in new != nil }
         .fullScreenCover(isPresented: $scanning) {
-            ScanTab(center: uploads, auth: auth)
+            ScanTab(center: uploads, auth: auth, cameraRequested: .constant(true))
                 .overlay(alignment: .topTrailing) {
                     Button("Sluiten") { scanning = false }
                         .font(HomeType.bodyStrong)

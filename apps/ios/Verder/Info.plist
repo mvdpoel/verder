@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>verder gebruikt de camera om brieven te scannen.</string>
+	<string>verder gebruikt de camera om brieven voor je dossier te scannen.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>verder vraagt Face ID zodat alleen jij je dossier opent.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -42,6 +42,14 @@
 	</dict>
 	<key>UIApplicationShortcutItems</key>
 	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>doc.viewfinder</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Scan een brief</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>pro.vanderpoel.verder.scan</string>
+		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>mic</string>

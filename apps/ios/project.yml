@@ -48,13 +48,16 @@ targets:
           - IBMPlexMono-Regular.ttf
           - IBMPlexMono-Medium.ttf
           - IBMPlexMono-SemiBold.ttf
-        NSCameraUsageDescription: "verder gebruikt de camera om brieven te scannen."
+        NSCameraUsageDescription: "verder gebruikt de camera om brieven voor je dossier te scannen."
         NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
         # The voice quick-log (plan 3 Task 25): recorded and transcribed on the phone.
         NSMicrophoneUsageDescription: "verder neemt je stem op om een gesprek vast te leggen."
         NSSpeechRecognitionUsageDescription: "verder zet je opname op je telefoon om in tekst."
         # Long-press the icon. Handled by App/QuickAction.swift.
         UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: pro.vanderpoel.verder.scan
+            UIApplicationShortcutItemTitle: "Scan een brief"
+            UIApplicationShortcutItemIconSymbolName: doc.viewfinder
           - UIApplicationShortcutItemType: pro.vanderpoel.verder.voice
             UIApplicationShortcutItemTitle: "Gesprek vastleggen"
             UIApplicationShortcutItemIconSymbolName: mic
@@ -205,6 +208,7 @@ targets:
           - Info.plist
           - VerderWidget.entitlements
       - path: Verder/Widget
+      - path: Verder/Shared/ScanLetterIntent.swift
       - path: Verder/Shared/WidgetSnapshot.swift
       - path: Verder/Shared/AppGroup.swift
       - path: Verder/Shared/KindLabel.swift

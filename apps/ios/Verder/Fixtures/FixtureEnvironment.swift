@@ -60,12 +60,15 @@ enum FixtureEnvironment {
         let dir = URL.temporaryDirectory.appending(path: "verder-fixture-uploads", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dir)
         if launch.scans { seedUploads(sentToday: 2, pending: 1, in: dir) }
+        if let preset = launch.queue { seedQueue(preset, in: dir) }
         let queue = UploadQueue(dir: dir)
         // Not a background session: those refuse custom protocols, and a scan
         // taken in a fixture run must reach the fixture server, not the network.
         let uploader = BackgroundUploader(queue: queue, client: client,
                                           configuration: sessionConfiguration(.ephemeral))
-        let uploads = UploadCenter(queue: queue, uploader: uploader, client: client)
+        let uploads = UploadCenter(queue: queue, uploader: uploader, client: client,
+                                   now: launch.queue.map(queueClock) ?? clock)
+        if launch.queue == .offline || server.manifest.behavior == .offline { uploads.setOffline(true) }
 
         // A fresh, temporary dossier per launch: synthetic documents never
         // land in the real Application Support folder, and every capture
@@ -75,7 +78,7 @@ enum FixtureEnvironment {
         let timelineDir = URL.temporaryDirectory.appending(path: "verder-fixture-timeline", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: timelineDir)
 
-        return AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
+        var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(), registerRemote: {},
                            snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
                            timelineDir: timelineDir,
@@ -85,6 +88,83 @@ enum FixtureEnvironment {
                            makeRecorder: { FixtureRecorder() },
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
                            now: clock)
+        services.camera = FixtureCamera(state: launch.camera ?? .authorized)
+        return services
+    }
+
+    /// The afternoon a queue preset happens in, on the case's day (1 nov):
+    /// the frames' scans are at 11:05 and 14:32, so "nog 8 min" needs 14:34.
+    nonisolated static func queueClock(_ preset: FixtureLaunch.QueuePreset) -> @Sendable () -> Date {
+        let start = amsterdam(queueNow(preset))
+        return { start.addingTimeInterval(Date().timeIntervalSince(launchedAt)) }
+    }
+
+    nonisolated static func queueNow(_ preset: FixtureLaunch.QueuePreset) -> String {
+        switch preset {
+        case .first, .done: "14:50"
+        case .underway, .failedRecent: "14:34"
+        case .offline: "14:55"
+        case .failed, .signin: "14:50"
+        case .signinRecent: "14:38"
+        }
+    }
+
+    /// "HH:mm" on Sun 1 nov 2026 in Amsterdam (CET, UTC+1).
+    nonisolated static func amsterdam(_ hhmm: String) -> Date {
+        let p = hhmm.split(separator: ":").compactMap { Int($0) }
+        // 1 nov 2026 00:00 CET = 31 oct 23:00 UTC.
+        let midnight = Date(timeIntervalSince1970: 1_793_487_600)
+        return midnight.addingTimeInterval(TimeInterval(p[0] * 3600 + p[1] * 60))
+    }
+
+    /// The queue a "scan · final" frame draws. Synthetic only: every id is
+    /// fresh, every file is a stub, and the pending ones are not due for a
+    /// day, so a capture never sends anything.
+    private static func seedQueue(_ preset: FixtureLaunch.QueuePreset, in dir: URL) {
+        struct Index: Encodable { let items: [UploadItem]; let signInRequired: Bool; let everEnqueued: Bool }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let later = Date().addingTimeInterval(86_400)
+        func sent(_ at: String, pages: Int, sentAt: String? = nil) -> UploadItem {
+            UploadItem(id: UUID(), fileName: "Scan fixture \(at)", capturedAt: amsterdam(at), source: "phone-scan",
+                       state: .sent, attempts: 0, nextAttemptAt: nil, sentAt: amsterdam(sentAt ?? at),
+                       pages: pages, documentId: UUID().uuidString.lowercased())
+        }
+        func waiting(_ at: String, pages: Int, bytes: Int, state: UploadItem.State = .pending,
+                     failure: UploadItem.Failure? = nil) -> UploadItem {
+            UploadItem(id: UUID(), fileName: "Scan fixture \(at)", capturedAt: amsterdam(at), source: "phone-scan",
+                       state: state, attempts: state == .failed ? 5 : 1, nextAttemptAt: state == .failed ? nil : later,
+                       sentAt: nil, pages: pages, byteCount: bytes, failure: failure)
+        }
+        let nine = ["09:05", "09:30", "10:02", "10:40", "11:15", "11:48", "11:58"].map { sent($0, pages: 1) }
+            + [sent("12:02", pages: 1), sent("13:10", pages: 3, sentAt: "13:11")]
+        var signIn = false
+        let items: [UploadItem]
+        switch preset {
+        case .first:
+            items = []
+        case .underway:
+            items = [sent("12:02", pages: 1), sent("13:10", pages: 3, sentAt: "13:11"),
+                     waiting("14:32", pages: 2, bytes: 1_400_000)]
+        case .done:
+            items = [sent("12:02", pages: 1), sent("13:10", pages: 3, sentAt: "13:11"),
+                     sent("14:32", pages: 2, sentAt: "14:33")]
+        case .offline:
+            items = nine + [waiting("14:32", pages: 2, bytes: 1_400_000), waiting("14:36", pages: 1, bytes: 600_000),
+                            waiting("14:41", pages: 3, bytes: 2_100_000)]
+        case .failed, .failedRecent:
+            items = nine + [waiting("11:05", pages: 1, bytes: 500_000, state: .failed, failure: .noAnswer),
+                            waiting("14:32", pages: 2, bytes: 1_400_000)]
+        case .signin, .signinRecent:
+            signIn = true
+            items = nine + [waiting("14:32", pages: 2, bytes: 1_400_000), waiting("14:36", pages: 1, bytes: 600_000)]
+        }
+        for item in items where item.state != .sent {
+            try? Data("%PDF-1.4 fixture".utf8).write(to: dir.appending(path: "\(item.id.uuidString).pdf"))
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(Index(items: items, signInRequired: signIn, everEnqueued: preset != .first))
+            .write(to: dir.appending(path: "queue.json"))
     }
 
     /// `-fixtures-scans`: the data doc's "2 verstuurd · 1 in de wachtrij",
@@ -145,6 +225,18 @@ struct FixtureTranscriber: Transcribing {
     func availability() async -> SpeechAvailability { .ready }
     func install() async throws(TranscriptionError) {}
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String { text }
+}
+
+/// The camera permission a capture asks for (`-fixtures-camera`). "Ga
+/// verder" on the pre-prompt allows it, as a tap on iOS's alert would.
+final class FixtureCamera: CameraAccess {
+    private let state: Mutex<CameraAuthorization>
+    init(state: CameraAuthorization) { self.state = Mutex(state) }
+    func status() -> CameraAuthorization { state.withLock { $0 } }
+    func request() async -> Bool {
+        state.withLock { $0 = .authorized }
+        return true
+    }
 }
 
 struct FixturePermission: NotificationPermission {

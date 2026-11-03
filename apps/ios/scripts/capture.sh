@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Screenshot one screen of the app on the synthetic dataset, in the simulator.
 #   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
-#                      [--text-size <size>]
+#                      [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -18,6 +18,12 @@
 #   --text-size  the simulator's Dynamic Type size for this shot, as simctl
 #            spells it (e.g. accessibility-extra-extra-extra-large for AX5,
 #            large for the default); the previous size is put back afterwards
+#   --queue  the Scan tab's upload queue as a "scan · final" frame draws it:
+#            first underway done offline failed failed-recent signin signin-recent
+#   --camera the camera permission: notDetermined | denied (default: allowed)
+#   --scan   open Scan on a state only a gesture reaches:
+#            handoff (the page mid-flight into the queue) | queue (the Wachtrij
+#            sheet) | note ("Iets bijzonders?") | preprompt (the camera pre-prompt)
 #
 # A DEBUG build (the fixtures are compiled out of Release), installed on the
 # "iPhone 17" simulator, booted if it is not. Nothing reaches a server: every
@@ -37,10 +43,10 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
-LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""
+LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +60,19 @@ while [ $# -gt 0 ]; do
     --text-size)
       [ $# -ge 2 ] || usage
       case " $TEXT_SIZES " in *" $2 "*) TEXT_SIZE="$2" ;; *) echo "capture.sh: unknown text size '$2'; known: $TEXT_SIZES" >&2; exit 2 ;; esac
+      shift ;;
+    --queue)
+      [ $# -ge 2 ] || usage
+      case "$2" in first|underway|done|offline|failed|failed-recent|signin|signin-recent) QUEUE="$2" ;;
+        *) echo "capture.sh: --queue takes first, underway, done, offline, failed, failed-recent, signin or signin-recent" >&2; exit 2 ;; esac
+      shift ;;
+    --camera)
+      [ $# -ge 2 ] || usage
+      case "$2" in notDetermined|denied) CAMERA="$2" ;; *) echo "capture.sh: --camera takes notDetermined or denied" >&2; exit 2 ;; esac
+      shift ;;
+    --scan)
+      [ $# -ge 2 ] || usage
+      case "$2" in handoff|queue|note|preprompt) SCAN_STATE="$2" ;; *) echo "capture.sh: --scan takes handoff, queue, note or preprompt" >&2; exit 2 ;; esac
       shift ;;
     *) usage ;;
   esac
@@ -89,6 +108,9 @@ esac
 [ -z "$LOCKED" ] || ARGS+=(-fixtures-locked)
 [ -z "$SCANS" ] || ARGS+=(-fixtures-scans)
 [ -z "$SCROLLED" ] || ARGS+=(-fixtures-scroll "$SCROLLED")
+[ -z "$QUEUE" ] || ARGS+=(-fixtures-queue "$QUEUE")
+[ -z "$CAMERA" ] || ARGS+=(-fixtures-camera "$CAMERA")
+[ -z "$SCAN_STATE" ] || ARGS+=(-fixtures-scan "$SCAN_STATE")
 [ "${CAPTURE_CHECK_ONLY:-0}" != 1 ] || { echo "capture.sh: arguments OK"; exit 0; }
 
 # -F: a name such as "iPhone SE (3rd generation)" holds regex metacharacters.

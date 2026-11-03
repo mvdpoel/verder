@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Observation
 import UIKit
 
@@ -31,6 +32,18 @@ final class UploadCenter {
     /// The answer of the last same-clientId resend (Meer → Ontwikkelaar).
     private(set) var resendResult: String?
     private(set) var isResending = false
+    /// Whether this phone ever queued anything ("Nog geen scans" until then).
+    private(set) var everEnqueued = false
+    /// No network path at all. The Scan tab says so ("Scannen werkt gewoon
+    /// zonder verbinding.") and names the waiting scans by it.
+    private(set) var isOffline = false
+    /// Bumped each time a capture reaches the queue: the `.impact(.medium)`
+    /// the brief puts on "scan handed to the queue" (§2.6).
+    private(set) var enqueuedCount = 0
+    /// The clock the Scan tab reads ("vandaag", the duplex window). The
+    /// fixtures run it from the synthetic case's day.
+    @ObservationIgnored let now: @Sendable () -> Date
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
 
     @ObservationIgnored let queue: UploadQueue
     @ObservationIgnored let uploader: BackgroundUploader
@@ -38,10 +51,12 @@ final class UploadCenter {
     @ObservationIgnored private var recovery: Task<Void, Never>?
     @ObservationIgnored private var timer: Task<Void, Never>?
 
-    init(queue: UploadQueue, uploader: BackgroundUploader, client: APIClient) {
+    init(queue: UploadQueue, uploader: BackgroundUploader, client: APIClient,
+         now: @escaping @Sendable () -> Date = { Date() }) {
         self.queue = queue
         self.uploader = uploader
         self.client = client
+        self.now = now
         uploader.setOnSettle { [weak self] in
             Task { @MainActor in await self?.refresh() }
         }
@@ -53,10 +68,32 @@ final class UploadCenter {
         let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
             ?? URL.applicationSupportDirectory
         let queue = UploadQueue(dir: base.appending(path: "uploads", directoryHint: .isDirectory))
-        return UploadCenter(queue: queue, uploader: BackgroundUploader(queue: queue, client: client), client: client)
+        let center = UploadCenter(queue: queue, uploader: BackgroundUploader(queue: queue, client: client), client: client)
+        center.watchNetwork()
+        return center
     }
 
-    var summary: QueueSummary { QueueSummary(items: items, now: Date()) }
+    var summary: QueueSummary { QueueSummary(items: items, now: now()) }
+
+    /// Watch the network path, for the offline state. The live app only: a
+    /// fixture run says offline itself (`setOffline`).
+    func watchNetwork() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let offline = path.status != .satisfied
+            Task { @MainActor in
+                guard let self, self.isOffline != offline else { return }
+                self.isOffline = offline
+                // Back online: whatever waited for the connection goes now.
+                if !offline { await self.drain() }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "verder.network"))
+        pathMonitor = monitor
+    }
+
+    func setOffline(_ offline: Bool) { isOffline = offline }
 
     /// Newest sent item: the one the debug resend sends again.
     var lastSent: UploadItem? {
@@ -95,6 +132,7 @@ final class UploadCenter {
     func refresh() async {
         items = await queue.items()
         signInRequired = await queue.signInRequired
+        everEnqueued = await queue.everEnqueued
         scheduleNextAttempt()
     }
 
@@ -103,7 +141,8 @@ final class UploadCenter {
     /// before the phone is pocketed must still reach the queue.
     func capture(_ pages: [UIImage], source: String = "phone-scan") {
         guard !pages.isEmpty else { return }
-        let capturedAt = Date()
+        let capturedAt = now()
+        let pageCount = pages.count
         let background = UIApplication.shared.beginBackgroundTask(withName: "verder.scan")
         preparing += 1
         message = nil
@@ -113,7 +152,8 @@ final class UploadCenter {
             }.value
             do {
                 guard !pdf.isEmpty else { throw CocoaError(.fileWriteUnknown) }
-                try await queue.enqueue(pdf: pdf, capturedAt: capturedAt, source: source)
+                try await queue.enqueue(pdf: pdf, capturedAt: capturedAt, source: source, pages: pageCount)
+                enqueuedCount += 1
             } catch {
                 message = Copy.saveFailed
             }
@@ -122,6 +162,22 @@ final class UploadCenter {
             UIApplication.shared.endBackgroundTask(background)
             await drain()
         }
+    }
+
+    func retry(_ id: UUID) async {
+        await queue.retry(id)
+        await refresh()
+        await drain()
+    }
+
+    func setNote(_ id: UUID, _ note: String?) async {
+        await queue.setNote(id, note)
+        await refresh()
+    }
+
+    func remove(_ id: UUID) async {
+        await queue.remove(id)
+        await refresh()
     }
 
     func retryFailed() async {

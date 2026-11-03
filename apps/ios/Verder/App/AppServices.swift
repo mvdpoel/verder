@@ -30,6 +30,8 @@ struct AppServices {
     /// The clock Overzicht reads its day and its ages from. A fixture run
     /// sets it to the synthetic case's "today" (Sun 1 nov 2026, 09:41).
     var now: @Sendable () -> Date = { Date() }
+    /// The camera permission behind Scan's pre-prompt and its "staat uit" state.
+    var camera: any CameraAccess = LiveCameraAccess()
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()

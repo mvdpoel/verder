@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         Self.current = self
+        ScanLaunch.run = { [weak self] in self?.links.deliver(.scan) }
         NotificationCategories.register()
         UNUserNotificationCenter.current().delegate = self
         return true

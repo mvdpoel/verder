@@ -25,6 +25,11 @@ actor UploadQueue {
     private struct Index: Codable {
         var items: [UploadItem] = []
         var signInRequired = false
+        /// Whether anything was ever enqueued on this phone: the Scan tab's
+        /// "Nog geen scans" must not come back once sent items are pruned.
+        /// Optional, so a queue.json from before it decodes (nil = look at
+        /// the items).
+        var everEnqueued: Bool? = nil
     }
 
     init(dir: URL, now: Date = Date()) {
@@ -49,6 +54,9 @@ actor UploadQueue {
 
     func items() -> [UploadItem] { index.items }
 
+    /// False only on a phone that never queued a scan or a share.
+    var everEnqueued: Bool { index.everEnqueued ?? !index.items.isEmpty }
+
     /// Where an item's bytes live: `<id>.<resolvedExtension>`. An item from
     /// before the share extension has no extension recorded and is a PDF.
     nonisolated func fileURL(_ item: UploadItem) -> URL {
@@ -64,9 +72,9 @@ actor UploadQueue {
 
     /// A scan: always a PDF, named by the Amsterdam clock.
     @discardableResult
-    func enqueue(pdf: Data, capturedAt: Date, source: String) throws -> UploadItem {
+    func enqueue(pdf: Data, capturedAt: Date, source: String, pages: Int? = nil) throws -> UploadItem {
         try enqueue(file: pdf, fileName: ScanNaming.title(capturedAt: capturedAt), mime: "application/pdf",
-                    fileExtension: "pdf", capturedAt: capturedAt, source: source)
+                    fileExtension: "pdf", capturedAt: capturedAt, source: source, pages: pages)
     }
 
     /// Any file. `id` is what lets a share's drop UUID become the clientId.
@@ -75,15 +83,17 @@ actor UploadQueue {
     /// already. That is what makes `importIncoming` safe to repeat.
     @discardableResult
     func enqueue(file: Data, id: UUID = UUID(), fileName: String, mime: String, fileExtension: String,
-                 capturedAt: Date, source: String) throws -> UploadItem {
+                 capturedAt: Date, source: String, pages: Int? = nil) throws -> UploadItem {
         if let existing = index.items.first(where: { $0.id == id }) { return existing }
         let item = UploadItem(id: id, fileName: fileName, capturedAt: capturedAt, source: source,
                               state: .pending, attempts: 0, nextAttemptAt: nil, sentAt: nil,
-                              mime: mime, fileExtension: UploadItem.safeExtension(fileExtension) ?? "bin")
+                              mime: mime, fileExtension: UploadItem.safeExtension(fileExtension) ?? "bin",
+                              pages: pages, byteCount: file.count)
         // The file first: an index entry pointing at no file is worse than a
         // file no entry points at.
         try file.write(to: fileURL(item), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         index.items.append(item)
+        index.everEnqueued = true
         try persist()
         return item
     }
@@ -102,17 +112,20 @@ actor UploadQueue {
                 claimed.append(index.items[i])
             } else {
                 index.items[i].state = .failed
+                index.items[i].failure = .missingFile
             }
         }
         try? persist()
         return claimed
     }
 
-    func markSent(_ id: UUID, now: Date = Date()) {
+    func markSent(_ id: UUID, documentId: String? = nil, now: Date = Date()) {
         guard let i = index.items.firstIndex(where: { $0.id == id }) else { return }
         index.items[i].state = .sent
         index.items[i].sentAt = now
         index.items[i].nextAttemptAt = nil
+        index.items[i].failure = nil
+        if let documentId { index.items[i].documentId = documentId }
         try? persist()
         try? FileManager.default.removeItem(at: fileURL(index.items[i]))
     }
@@ -125,10 +138,12 @@ actor UploadQueue {
             index.items[i].nextAttemptAt = nil
             index.signInRequired = true
         case .rejected:
+            index.items[i].failure = .refused
             index.items[i].attempts += 1
             index.items[i].state = .failed
             index.items[i].nextAttemptAt = nil
         case .server, .rateLimited, .transport:
+            index.items[i].failure = .noAnswer
             index.items[i].attempts += 1
             let n = index.items[i].attempts
             if n >= Self.maxAttempts {
@@ -149,6 +164,30 @@ actor UploadQueue {
         index.items[i].attempts = 0
         index.items[i].nextAttemptAt = nil
         try? persist()
+    }
+
+    /// "Iets bijzonders?": Martin's note on one capture, kept with it on the
+    /// phone and sent along as a `note` field. Blank clears it. Not on a sent
+    /// item: its upload has already gone.
+    func setNote(_ id: UUID, _ note: String?) {
+        guard let i = index.items.firstIndex(where: { $0.id == id }), index.items[i].state != .sent else { return }
+        let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        index.items[i].note = trimmed.isEmpty ? nil : trimmed
+        try? persist()
+    }
+
+    /// The row menu's "Verwijder": a scan Martin decided not to send. Only
+    /// one that is not on its way right now (`sending` belongs to the
+    /// uploader) and not sent (a sent one is already in the dossier, where
+    /// this queue cannot reach). The entry goes first, then the file.
+    @discardableResult
+    func remove(_ id: UUID) -> Bool {
+        guard let i = index.items.firstIndex(where: { $0.id == id }),
+              index.items[i].state == .pending || index.items[i].state == .failed else { return false }
+        let item = index.items.remove(at: i)
+        try? persist()
+        try? FileManager.default.removeItem(at: fileURL(item))
+        return true
     }
 
     func retryAllFailed() {

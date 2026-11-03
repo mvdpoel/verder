@@ -120,7 +120,7 @@ struct LinkDestinationTests {
     /// The tab is the destination's tab — one mapping, not two.
     @Test func theTabIsTheDestinationsTab() {
         let all: [DeepLink] = [.proposal(Self.id), .suggestion(Self.id), .task(Self.id), .document(Self.id),
-                               .inbox, .doneByVerder, .dossier, .timeline, .overzicht, .weekly, .money, .voice, .none]
+                               .inbox, .doneByVerder, .dossier, .timeline, .overzicht, .weekly, .money, .voice, .scan, .none]
         for link in all { #expect(link.tab == link.destination?.tab, "\(link)") }
     }
 

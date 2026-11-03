@@ -43,6 +43,10 @@ enum DeepLink: Equatable, Sendable {
     case overzicht
     /// `verder://money`: Geld, on Meer.
     case money
+    /// `verder://scan`: the camera on Scan, at once — the home screen quick
+    /// action, the Control Center control and the Action button (R20). Scan
+    /// is not lock-gated, so it opens without Face ID.
+    case scan
     case none
 
     init(userInfo: [AnyHashable: Any]) {
@@ -76,6 +80,8 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .overzicht : .none
         case "money":
             return parts.path.isEmpty ? .money : .none
+        case "scan":
+            return parts.path.isEmpty ? .scan : .none
         case "proposal", "suggestion", "task", "document":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
@@ -111,6 +117,7 @@ enum DeepLink: Equatable, Sendable {
         case .weekly: LinkDestination(tab: .meer, stack: .meer([.weekly]))
         case .money: LinkDestination(tab: .meer, stack: .meer([.money]))
         case .voice: LinkDestination(tab: nil, stack: nil, opensVoice: true)
+        case .scan: LinkDestination(tab: .scan, stack: nil, opensCamera: true)
         case .none: nil
         }
     }
@@ -129,6 +136,8 @@ struct LinkDestination: Equatable, Sendable {
     let tab: RootView.TabID?
     let stack: Stack?
     var opensVoice = false
+    /// Scan's camera opens straight away (no tap on the disc).
+    var opensCamera = false
 }
 
 private extension UUID {

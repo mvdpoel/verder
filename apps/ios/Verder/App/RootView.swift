@@ -22,7 +22,11 @@ struct RootView: View {
     let voice: VoiceLogSession
     /// Overzicht's clock (`AppServices.now`).
     var now: @Sendable () -> Date = { Date() }
+    var camera: any CameraAccess = LiveCameraAccess()
     @Environment(\.scenePhase) private var scenePhase
+    /// A `verder://scan` (quick action, control, Action button) waiting for
+    /// Scan to open its camera. ScanTab clears it once it has.
+    @State private var cameraRequested = false
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
     @State private var tab: TabID = .home
@@ -109,6 +113,7 @@ struct RootView: View {
             case nil: break
             }
             if to.opensVoice { voice.open() }
+            if to.opensCamera { cameraRequested = true }
         }
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.
@@ -176,7 +181,11 @@ struct RootView: View {
             }
             Tab("Scan", systemImage: "doc.viewfinder", value: TabID.scan) {
                 // NOT gated: plan Task 7 step 3.
-                ScanTab(center: uploads, auth: auth)
+                ScanTab(center: uploads, auth: auth, camera: camera, cameraRequested: $cameraRequested,
+                        openDocument: { id in
+                            dossierPath = [.document(id: id, title: nil)]
+                            tab = .dossier
+                        })
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
                 DossierTab(model: dossier, inbox: inbox, timeline: timeline, lock: lock, client: auth.client,

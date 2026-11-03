@@ -126,7 +126,7 @@ final class BackgroundUploader: NSObject, URLSessionDataDelegate, @unchecked Sen
 
     private func settle(_ id: UUID, _ outcome: Result<UploadResponse, APIError>) async {
         switch outcome {
-        case .success: await queue.markSent(id, now: now())
+        case .success(let answer): await queue.markSent(id, documentId: answer.id, now: now())
         case .failure(let error): await queue.markFailure(id, error: error, now: now())
         }
         try? FileManager.default.removeItem(at: queue.bodyURL(id))

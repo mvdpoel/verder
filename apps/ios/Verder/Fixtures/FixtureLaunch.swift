@@ -8,6 +8,10 @@ import Foundation
 ///     -fixtures <name>         answer every /api/mobile/v1 call from FixtureData/<name>
 ///     -fixtures-locked         keep the app lock closed: Overzicht's counts-only glance
 ///     -fixtures-scans          the phone's queue holds today's scans: 2 sent, 1 waiting
+///     -fixtures-queue <preset> the Scan tab's queue as a "scan · final" frame draws it
+///                              (`QueuePreset`; its own clock, 1 nov in the afternoon)
+///     -fixtures-camera <notDetermined|denied>  the camera permission (default: allowed)
+///     -fixtures-scan <handoff|queue|note|preprompt>  open Scan on a state only a gesture reaches
 ///     -fixtures-scroll <waiting|leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
@@ -42,6 +46,28 @@ struct FixtureLaunch: Equatable, Sendable {
         var id: String { rawValue }
     }
 
+    /// The Scan tab's queue, one per "scan · final" frame (FixtureEnvironment).
+    enum QueuePreset: String, CaseIterable, Sendable {
+        /// Nothing ever scanned: "Nog geen scans".
+        case first
+        /// "1 in de wachtrij": 14:32 on its way, two minutes ago.
+        case underway
+        /// "wachtrij leeg": three sent today, nothing waiting.
+        case done
+        /// Three waiting for the network.
+        case offline
+        /// 11:05 failed, 14:32 on its way, nine sent ("mislukt", "Wachtrij / veel").
+        case failed
+        /// `failed`, two minutes after the 14:32 capture (AX5 · mislukt).
+        case failedRecent = "failed-recent"
+        /// Two held for a sign-in ("log opnieuw in").
+        case signin
+        /// `signin`, minutes after the newest capture (AX5 · log opnieuw in).
+        case signinRecent = "signin-recent"
+    }
+
+    enum ScanState: String, CaseIterable, Sendable { case handoff, queue, note, preprompt }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end }
 
@@ -50,6 +76,7 @@ struct FixtureLaunch: Equatable, Sendable {
         case missingValue(String)
         case unknownTab(String)
         case unknownRoute(String)
+        case unknownValue(String, String)
     }
 
     let fixture: String
@@ -59,6 +86,9 @@ struct FixtureLaunch: Equatable, Sendable {
     /// Where Overzicht opens scrolled to; nil for the top.
     var scroll: Scroll? = nil
     var scans = false
+    var queue: QueuePreset? = nil
+    var camera: CameraAuthorization? = nil
+    var scanState: ScanState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -82,7 +112,23 @@ struct FixtureLaunch: Equatable, Sendable {
                                  guard let s = Scroll(rawValue: raw) else { throw .unknownScroll(raw) }
                                  return s
                              },
-                             scans: arguments.contains("-fixtures-scans"))
+                             scans: arguments.contains("-fixtures-scans"),
+                             queue: try value(after: "-fixtures-queue").map { (raw: String) throws(ParseError) -> QueuePreset in
+                                 guard let q = QueuePreset(rawValue: raw) else { throw .unknownValue("-fixtures-queue", raw) }
+                                 return q
+                             },
+                             camera: try value(after: "-fixtures-camera").map { (raw: String) throws(ParseError) -> CameraAuthorization in
+                                 switch raw {
+                                 case "notDetermined": return .notDetermined
+                                 case "denied": return .denied
+                                 case "authorized": return .authorized
+                                 default: throw .unknownValue("-fixtures-camera", raw)
+                                 }
+                             },
+                             scanState: try value(after: "-fixtures-scan").map { (raw: String) throws(ParseError) -> ScanState in
+                                 guard let s = ScanState(rawValue: raw) else { throw .unknownValue("-fixtures-scan", raw) }
+                                 return s
+                             })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

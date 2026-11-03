@@ -25,6 +25,7 @@ struct VerderApp: App {
     @State private var voice: VoiceLogSession
     /// `AppServices.now`: Overzicht's clock.
     private let now: @Sendable () -> Date
+    private let camera: any CameraAccess
 
     init() {
         #if DEBUG
@@ -51,6 +52,7 @@ struct VerderApp: App {
         let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
                                onUnauthorized: { auth.sessionRejected() }, now: s.now, epoch: auth.epoch)
         now = s.now
+        camera = s.camera
         _inbox = State(initialValue: inbox)
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
                                                 epoch: auth.epoch))
@@ -73,7 +75,7 @@ struct VerderApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier, timeline: timeline, voice: voice, now: now)
+                     money: money, dossier: dossier, timeline: timeline, voice: voice, now: now, camera: camera)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

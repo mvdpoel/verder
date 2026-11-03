@@ -21,10 +21,14 @@ enum UploadRequest {
     static func build(_ item: UploadItem, file: Data, mime: String? = nil,
                       client: APIClient) -> (URLRequest, Data) {
         let boundary = Multipart.makeBoundary()
+        var fields = [("clientId", item.clientId), ("source", item.source),
+                      ("capturedAt", item.capturedAt.formatted(.iso8601))]
+        // Martin's "iets bijzonders?". The route does not read it yet; it
+        // travels with the scan so nothing is lost when it does.
+        if let note = item.note, !note.isEmpty { fields.append(("note", note)) }
         let body = multipartBody(
             boundary: boundary,
-            fields: [("clientId", item.clientId), ("source", item.source),
-                     ("capturedAt", item.capturedAt.formatted(.iso8601))],
+            fields: fields,
             file: (name: "file", fileName: item.fileName, mime: Multipart.safeMediaType(mime ?? item.resolvedMime), data: file))
         var req = client.request(path, method: "POST", body: nil, contentType: Multipart.contentType(boundary: boundary))
         req.setValue(String(body.count), forHTTPHeaderField: "Content-Length")

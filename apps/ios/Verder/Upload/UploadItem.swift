@@ -30,6 +30,23 @@ struct UploadItem: Codable, Identifiable, Equatable, Sendable {
     /// what every item before this field was: a PDF.
     var mime: String? = nil
     var fileExtension: String? = nil
+    /// Added for the Scan tab's queue (Figma "scan · final"), and OPTIONAL for
+    /// the same reason as `mime`: a queue.json written before them must still
+    /// decode. Pages in a capture ("2 pagina's"); the file's size ("1,4 MB");
+    /// why the last attempt failed; the document the server filed it as (the
+    /// sent row's chevron opens it on Dossier); Martin's "iets bijzonders?".
+    var pages: Int? = nil
+    var byteCount: Int? = nil
+    var failure: Failure? = nil
+    var documentId: String? = nil
+    var note: String? = nil
+
+    /// Why an attempt failed, in the words the queue shows. Only what the
+    /// queue can know: the server never answered (5xx, 429, no connection),
+    /// it refused the bytes (other 4xx), or the file was gone.
+    enum Failure: String, Codable, Sendable {
+        case noAnswer, refused, missingFile
+    }
 
     enum State: String, Codable, Sendable {
         case pending, sending, sent, failed

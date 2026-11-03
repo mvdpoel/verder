@@ -56,5 +56,8 @@ struct VerderWidget: Widget {
 
 @main
 struct VerderWidgetBundle: WidgetBundle {
-    var body: some Widget { VerderWidget() }
+    var body: some Widget {
+        VerderWidget()
+        ScanControl()
+    }
 }

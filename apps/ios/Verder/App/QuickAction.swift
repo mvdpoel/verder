@@ -7,10 +7,13 @@ import UIKit
 enum QuickAction {
     /// "Gesprek vastleggen" (plan 3 Task 25).
     static let voiceType = "pro.vanderpoel.verder.voice"
+    /// "Scan een brief": the camera, at once, without Face ID (R20).
+    static let scanType = "pro.vanderpoel.verder.scan"
 
     static func link(forType type: String) -> DeepLink {
         switch type {
         case voiceType: .voice
+        case scanType: .scan
         default: .none
         }
     }
