@@ -188,7 +188,7 @@ struct LetterArt: View {
     }
 
     private func line(_ fraction: CGFloat) -> some View {
-        Capsule().fill(crossed ? Color.inkFaint : Color.steelDim).frame(width: width * fraction, height: 3)
+        Capsule().fill(crossed ? Color.inkFaint.opacity(0.6) : Color.inkFaint).frame(width: width * fraction, height: 3)
     }
 
     private struct Corners: Shape {

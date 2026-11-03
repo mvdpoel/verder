@@ -10,7 +10,9 @@ Geteld op 2026-11-03 tegen de working tree van `feat/iphone-app`, inclusief niet
 | Deels gebouwd | **11** |
 | Nog te bouwen | **13** |
 
-De drie belangrijkste dingen die nog gebouwd moeten worden:
+**Bijgewerkt 2026-11-04:** de inlogschermen (3.8–3.16), het aanbod voor een toegangssleutel (3.3), de vensters na een geannuleerde Face ID en zonder toegangscode (3.18–3.20), de afdekking in de app-kiezer (3.17), de regel op Scan (3.22) en de toestemmingsvragen vooraf voor meldingen en microfoon (3.7, 3.25–3.26) zijn gebouwd; de statusregels hieronder zeggen het per functie. De tabel hierboven is de telling van 2026-11-03. Nog open in deze groep: 3.11 (de iOS-fout is niet gemeten), 3.21, 3.23 (bedieningspaneel en Actieknop), 3.27, 3.29 en 3.30.
+
+De drie belangrijkste dingen die op 2026-11-03 nog gebouwd moesten worden:
 
 1. **De momentopname in de app-kiezer afdekken zolang de app vergrendeld is (3.17).** Dit is de enige privacybelofte uit de brief die de code niet nakomt: een ontgrendeld scherm, of de aantallen op Overzicht, verschijnen in de app-kiezer zoals ze zijn.
 2. **Het inlogscherm zoals ontworpen, met zijn eigen foutstaten (3.8–3.16).** Eerst de toegangssleutel, het wachtwoord als tweede stap. Aparte antwoorden voor "geen toegangssleutel op deze telefoon", "deze toegangssleutel hoort niet meer bij je account", "server reageert niet" tegenover "offline", en "te veel pogingen" met het tijdstip waarop het weer kan. Nu vallen die allemaal in een handvol algemene teksten.
@@ -76,7 +78,7 @@ Limiet: better-auth staat 10 per minuut toe op `/passkey/verify-authentication`,
 
 **Status (de handeling zelf, vanuit Meer → Account):** Gebouwd — `AuthModel.addPasskey()` in `Verder/Auth/AuthModel.swift`, `PasskeyAuth.swift`, knop in `Verder/More/MoreScreens.swift`.
 
-**Status (het eenmalige aanbod):** Deels gebouwd — het aanbod bestaat, maar als kaart bovenaan Meer (`Verder/More/MoreTab.swift`) in plaats van als volgende stap van de inlog zelf. De ontworpen stap noemt het resultaat ("Voortaan met Face ID inloggen?" / "Daarna is inloggen één tik."), zegt waar je het later vindt ("Later kan het in Meer → Account.") en wordt overgeslagen met "Sla over". Het wordt ook alleen aangeboden wanneer het account **helemaal geen** passkey heeft, dus een telefoon waarvan de toegangssleutel is verwijderd terwijl die van de Mac nog bestaat, krijgt nooit een nieuwe aangeboden (zie 3.12).
+**Status (het eenmalige aanbod):** Gebouwd (2026-11-04) — een volledige stap na een inlog met wachtwoord, `Verder/Auth/PasskeyOfferView.swift` ("Voortaan met Face ID inloggen?", "Zet toegangssleutel aan", "Sla over", "Later kan het in Meer → Account."), getoond door `RootView` zolang `AuthModel.passkeyOffer` staat; de kaart in Meer is weg. Na "deze toegangssleutel hoort niet meer bij je account" (3.12) wordt hij ook aangeboden als het account nog andere toegangssleutels heeft. Een 1006 toont "Je toegangssleutel werkt al" met "Ga naar Overzicht".
 
 - **Wanneer het wordt aangeboden:** direct na een inlog met **wachtwoord**, hoogstens **één keer per installatie** (UserDefaults `passkeyOfferShown`), en alleen wanneer `GET /api/auth/passkey/list-user-passkeys` een lege lijst teruggeeft. Een mislukte opvraging biedt niets aan: een aanbod is nooit een foutmelding waard. Het aanbod verschijnt als kaart bovenaan **Meer**, en de app wisselt naar dat tabblad. Het wordt nooit gestapeld op de toestemmingsvraag voor meldingen.
 - **Meer → Account** toont altijd "Passkey toevoegen" zodra `GET /api/mobile/v1/me` het aantal passkeys heeft teruggegeven. Dat aantal komt uit de tabel `passkey`, dezelfde die `/settings/security` toont.
@@ -95,7 +97,7 @@ Limiet: better-auth staat 10 per minuut toe op `/passkey/verify-authentication`,
 
 ### 3.4 Sessie verlopen
 
-**Status:** Deels gebouwd — `Verder/Auth/SessionExpiredView.swift` werkt van begin tot eind. Wat ontbreekt: het **moment** waarop de sessie eindigde ("UITGELOGD · 1 NOV 09:12" in het frame). `AuthModel.sessionRejected()` legt geen tijd vast, dus er is een tijdstempel nodig naast `sessionExpired` (in het geheugen is genoeg; het overleeft een herstart niet, en dat hoeft ook niet), plus de tekst. Het frame laat ook "Toch een brief scannen" weg; houden of schrappen is aan Martin, nu de snelle actie voor scannen (3.23) dezelfde behoefte dekt.
+**Status:** Gebouwd (2026-11-04) — `SessionExpiredView` is opgegaan in `SignInView`: titel "Log opnieuw in", melding "UITGELOGD · <dag> <tijd>" uit `AuthModel.sessionExpiredAt` (in het geheugen), "Je sessie is verlopen." en de tekst van het frame. "Toch een brief scannen" is geschrapt zoals het frame doet; de snelle actie voor scannen (3.23) dekt dezelfde behoefte. Martin kan dat terugdraaien.
 
 `SessionExpiredView` verschijnt wanneer de **server** de sessie heeft beëindigd, niet wanneer de telefoon zelf besloot dat de sessie weg was. Er staat:
 
@@ -167,7 +169,7 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 | **Spraakherkenning** | Niet gevraagd met een eigen aanroep. Transcriptie gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon, en de code controleert de *beschikbaarheid* (ready / needsDownload / unsupported) in plaats van een autorisatiestatus. | De plist bevat "verder zet je opname op je telefoon om in tekst." |
 | **Face ID** | De eerste `evaluatePolicy`. | "verder vraagt Face ID zodat alleen jij je dossier opent." |
 
-- **Toestemmingsvraag vooraf voor meldingen.** **Status:** Deels gebouwd — gevraagd op de juiste momenten en één keer per installatie (`Verder/Push/PushRegistrar.swift`, de `.alert` in `RootView`), maar als melding in systeemstijl. Het ontwerp maakt er een volledig scherm van, gevraagd op hetzelfde moment: een voorbeeldmelding ("Voorstel klaar om te keuren"), twee beloften ("Geen schuldeisers of bedragen op je vergrendelscherm." / "Per soort uit te zetten in Meer → Meldingen.") en één "Ga verder" met "Daarna vraagt iOS om toestemming.", zonder sluitknop. De tweede belofte hangt af van 3.28; tot die gebouwd is, mag het scherm haar niet doen.
+- **Toestemmingsvraag vooraf voor meldingen.** **Status:** Gebouwd (2026-11-04) — `NotificationPrePrompt` (volledig scherm, één "Ga verder", geen sluitknop) vervangt de `.alert`, op dezelfde momenten; de schakelaars per soort bestaan in Meer → Meldingen (`NotificationPrefs`), dus beide beloften kloppen. Eerder: gevraagd als melding in systeemstijl. Het ontwerp maakt er een volledig scherm van, gevraagd op hetzelfde moment: een voorbeeldmelding ("Voorstel klaar om te keuren"), twee beloften ("Geen schuldeisers of bedragen op je vergrendelscherm." / "Per soort uit te zetten in Meer → Meldingen.") en één "Ga verder" met "Daarna vraagt iOS om toestemming.", zonder sluitknop. De tweede belofte hangt af van 3.28; tot die gebouwd is, mag het scherm haar niet doen.
 - **Toestemmingsvraag vooraf voor de camera.** **Status:** Gebouwd — `CameraPrePrompt` in `Verder/Scan/ScanPermissionViews.swift`, `LiveCameraAccess` in `Verder/Scan/CameraAccess.swift`, aangesloten in `ScanTab.tapDisc()` / `openCamera()`. Niet gecommit in de working tree op 2026-11-03; nog geen unittest dekt de beslissing over de vraag vooraf.
 - **Toestemmingsvragen vooraf voor microfoon en spraakherkenning:** zie 3.25–3.27.
 - **Doeltekst voor Face ID.** **Status:** Gebouwd — `NSFaceIDUsageDescription` in `apps/ios/project.yml`.
@@ -193,79 +195,79 @@ Zodra er toestemming is, roept elke start met een sessie `registerForRemoteNotif
 
 Het eerste scherm biedt **één** hoofdhandeling, "Inloggen met toegangssleutel", met daaronder "Face ID bevestigt dat jij het bent.". Het wachtwoord is een link, "Inloggen met wachtwoord", die de velden voor e-mail en wachtwoord als tweede stap opent; vandaar gaat een link terug naar "Inloggen met toegangssleutel". Elk inlogscherm zegt wat inloggen oplevert: "Deze iPhone blijft 30 dagen ingelogd." (de sessie van 30 dagen uit 3.1 is echt, de regel wordt nog niet getoond). Dit is het doel uit §3 van de brief: 1 tik plus Face ID bij elke latere installatie.
 
-**Status:** Deels gebouwd — beide methoden werken (`Verder/Auth/SignInView.swift`), maar op één scherm, met de wachtwoordvelden altijd zichtbaar, geen link tussen de twee stappen en geen regel "30 dagen". Nodig is een `SignInView` in twee stappen (een `@State` voor de stap, met de veldfocus die meegaat) en de tekst; geen serverwijziging.
+**Status:** Gebouwd (2026-11-04) — `Verder/Auth/SignInView.swift`: stap één is de toegangssleutel met "Face ID bevestigt dat jij het bent.", het wachtwoord is een tweede stap achter een link, en elke stap toont "Deze iPhone blijft 30 dagen ingelogd.".
 
 ### 3.9 "Toegangssleutel", nooit "passkey", in de UI
 
 Elk label, elke melding en elke bevestiging zegt "toegangssleutel" (brief §3, commit `e2b2b0f`).
 
-**Status:** Deels gebouwd — `SessionExpiredView` zegt "toegangssleutel". Nog Engels: `SignInView` ("Inloggen met passkey"), `AuthModel.Copy` (`passkeyFailed`, `passkeyAlreadyOnDevice`, `passkeyAdded`, `passkeyAddFailed`, `passkeyNeedsFreshSignIn`), de aanbodkaart in Meer ("Passkey toevoegen?") en Meer → Account (`AccountCopy.passkeyLabel`, `passkeyLine`, de knop "Passkey toevoegen"). Alleen tekst, plus de verwachtingen in `AuthModelTests`/`MoreMenuTests` die de teksten citeren.
+**Status:** Gebouwd (2026-11-04) — geen enkele zichtbare tekst zegt nog "passkey" (`MoreMenuTests.noScreenSaysPasskey` controleert ook de inlogmeldingen en het aanbod). Alleen de technische oorzaakregel onder een algemene fout (`AuthModel.diagnostic`) kan een Swift-typenaam als `PasskeyError` tonen.
 
 ### 3.10 Een mislukking zegt wat voor soort het is en wanneer het gebeurde
 
 Elke mislukte inlog verschijnt als één melding bovenaan het scherm, met een label voor de soort en het tijdstip van de poging ("WACHTWOORD · 14:02", "TOEGANGSSLEUTEL · 14:02", "SERVER · 14:02", "NETWERK · 14:02", "BEVEILIGING · 14:02"), een titel van één regel die de oorzaak noemt, en één regel die zegt wat je daarna doet. Het tijdstip doet ertoe omdat er minuten later opnieuw naar het scherm gekeken kan worden, en een "lukte niet" zonder tijd leest als actueel.
 
-**Status:** Nog te bouwen — `AuthModel` heeft één string `errorMessage`. Nodig zijn een klein model (soort, tijd, titel, tekst) in `AuthModel`, een meldingsweergave die `SignInView` en `SessionExpiredView` delen, en tests die elke `APIError` / passkey-fout aan zijn soort koppelen. De oorzaakregel zonder geheimen (`AuthModel.diagnostic`) blijft, onder de tekst.
+**Status:** Gebouwd (2026-11-04) — `Verder/Auth/SignInNotice.swift` (soort, tijd, titel, tekst, en welke knoppen het scherm daarbij biedt), `AuthNoticeCard` in `AuthButton.swift`, `AuthModel.cause(for:)`; `VerderTests/SignInNoticeTests.swift`.
 
 ### 3.11 Geen toegangssleutel op deze telefoon
 
 Wanneer iOS op deze telefoon geen toegangssleutel voor verder heeft, zegt het scherm dat ("Geen toegangssleutel gevonden op deze iPhone." / "Log in met je wachtwoord. Daarna kun je er een toegangssleutel bij zetten."), toont het meteen de wachtwoordvelden, en houdt het "Probeer toegangssleutel opnieuw" als link. Na de inlog met wachtwoord volgt het eenmalige aanbod (3.3).
 
-**Status:** Nog te bouwen — nu komt dit uit in de algemene tekst `passkeyFailed` plus een oorzaakregel. Nodig: het geval herkennen in de foutvertaling van `PasskeyAuth.swift` (welke `ASAuthorizationError`-code iOS teruggeeft wanneer de allow-list leeg is en er geen credential bestaat, is **niet gemeten**; meet het op de telefoon voordat je het vertaalt, want een verkeerde vertaling zou een echte fout verbergen achter "gebruik je wachtwoord"), een nieuwe toestand in `AuthModel`, de schermvariant en een geval in `PasskeyErrorMappingTests`.
+**Status:** Deels gebouwd (2026-11-04) — de toestand, het scherm en de fixture (`--signin no-passkey`) bestaan. Nog niet: de vertaling van een echte iOS-fout naar deze toestand, want welke `ASAuthorizationError` iOS geeft als er geen credential is, is nog steeds **niet gemeten**. Tot dan komt dit geval uit als "Inloggen met toegangssleutel lukte niet." met de oorzaakregel.
 
 ### 3.12 Deze toegangssleutel hoort niet meer bij je account
 
 Wanneer de telefoon nog een toegangssleutel heeft maar de server die niet meer kent (verwijderd in `/settings/security` → Beveiliging), zegt het scherm "Deze toegangssleutel hoort niet meer bij je account." / "Misschien is hij verwijderd bij Beveiliging. Log in met je wachtwoord en zet daarna een nieuwe toegangssleutel aan.", verbergt het de knop voor de toegangssleutel, biedt het alleen "Inloggen met wachtwoord" aan, en belooft het "Daarna vragen we of je een nieuwe wilt." Na de inlog met wachtwoord verschijnt het aanbod om een nieuwe toe te voegen, **ook als het account nog andere passkeys heeft** (die van de Mac).
 
-**Status:** Nog te bouwen — een 401 van `verify-authentication` wordt vertaald naar de algemene `passkeyFailed`. Nodig: de foutcode van better-auth uit de body van de 401 lezen om "onbekende credential" te onderscheiden van elke andere weigering (de precieze code moet worden afgelezen uit de geïnstalleerde `@better-auth/passkey` 1.7.0, niet aangenomen), een nieuwe toestand in `AuthModel`, de schermvariant, en een wijziging van de aanbodregel in `AuthModel` zodat dit geval aanbiedt, ook als `list-user-passkeys` niet leeg is. Tests in `AuthModelTests` en `PasskeyAuthTests`.
+**Status:** Gebouwd (2026-11-04) — `APIClient.sendAuth` houdt de body van een weigering vast; een 401 met `PASSKEY_NOT_FOUND` (afgelezen uit `@better-auth/passkey` 1.7.0, dist/index.mjs:470) wordt `PasskeyError.notOnAccount`, en de volgende inlog met wachtwoord biedt een nieuwe toegangssleutel aan. Test: `SignInFlowTests.aRemovedPasskeyLeadsToANewOne`.
 
 ### 3.13 Te veel pogingen, met het tijdstip waarop het weer kan
 
 Een 429 zegt "Te veel pogingen." / "Wacht een minuut · daarna kun je het opnieuw proberen.", schakelt de inlogknop uit, en meldt "Weer mogelijk om 14:03". De knop komt op dat tijdstip vanzelf terug; er wordt niets automatisch verstuurd.
 
-**Status:** Deels gebouwd — de 429 wordt herkend en getoond (`APIError.rateLimited`, `AuthModel.Copy.rateLimited`). Wat ontbreekt: het tijdstip en de uitgeschakelde knop. Nodig: `APIError.rateLimited` moet een tijdstip voor opnieuw proberen meedragen (better-auth stuurt `X-Retry-After` in seconden; het antwoord van de Cloudflare-WAF stuurt mogelijk `Retry-After` of niets, val dan terug op één minuut na de poging), een timer in `SignInView`, en tests in `APIClientTests` / `AuthModelTests`.
+**Status:** Gebouwd (2026-11-04) — `AuthRefusal.retryAfter` leest `X-Retry-After` of `Retry-After` in seconden, anders één minuut na de poging; de knop is uit tot dat tijdstip en komt vanzelf terug ("Weer mogelijk om 14:03"); er wordt niets automatisch verstuurd.
 
 ### 3.14 De server reageert niet
 
 Wanneer de server van verder niet antwoordt (een 5xx, een foutpagina van de Cloudflare-tunnel, een time-out) terwijl de telefoon zelf online is, zegt het scherm "De server reageert niet." / "Het ligt niet aan jou · probeer het over een paar minuten opnieuw. Scans in de wachtrij blijven bewaard.", biedt het één "Probeer opnieuw" aan en toont het "Laatste poging 14:02".
 
-**Status:** Deels gebouwd — een 5xx geeft de algemene "Inloggen lukte niet…" en een time-out leest als "Geen verbinding" (`APIError.transport`). Nodig: "telefoon offline" (`NWPathMonitor` niet satisfied, zoals `UploadCenter` al gebruikt) onderscheiden van "server onbereikbaar" (pad satisfied, maar geen antwoord of een 5xx), een `Probeer opnieuw` die de laatste methode herhaalt, en de tijdregel. Een poging met de toegangssleutel herhalen betekent een nieuwe Face ID, dus "Probeer opnieuw" voert die nooit uit zonder een tik van Martin.
+**Status:** Gebouwd (2026-11-04) — `AuthModel.networkIsUp` (de `NWPathMonitor` van `UploadCenter`) onderscheidt offline van een server die niet antwoordt; "Probeer opnieuw" herhaalt de laatste methode, een toegangssleutel alleen op een tik.
 
 ### 3.15 Offline: inloggen wacht op het netwerk
 
 Zonder verbinding zegt het scherm "Geen verbinding." / "Inloggen kan pas als deze iPhone online is. We proberen het zelf opnieuw zodra er netwerk is.", met "Probeer opnieuw" en "Ook inloggen met toegangssleutel wacht op netwerk."
 
-**Status:** Nog te bouwen — de offline-tekst bestaat, maar niets op dit scherm let op het netwerk en niets wordt opnieuw geprobeerd. Nodig zijn een `NWPathMonitor` in `AuthModel` of `SignInView`, en een **beslissing**: het frame belooft een automatische nieuwe poging, terwijl de regel van deze groep (3.1, 3.2) is: één poging per tik, nooit herhaald, omdat elke herhaling de limiet opnieuw laat ingaan. Eén wachtwoordpoging zodra het pad satisfied wordt, respecteert de limiet; een poging met de toegangssleutel kan niet zonder Face ID en kan dus alleen opnieuw worden aangeboden. Tot Martin beslist, mag de tekst geen nieuwe poging beloven die de code niet doet.
+**Status:** Gebouwd (2026-11-04), met deze keuze: een wachtwoordpoging die de telefoon nooit verliet, wordt **één keer** opnieuw verstuurd zodra er netwerk is (`AuthModel.networkReturned`); een poging met de toegangssleutel nooit vanzelf, en dan belooft de tekst dat ook niet ("Probeer het opnieuw zodra er netwerk is."). Martin kan de automatische wachtwoordpoging nog schrappen.
 
 ### 3.16 Bezig en geannuleerd, gewoon gezegd
 
 Zolang de handeling met de toegangssleutel loopt, leest de knop "Wacht op Face ID…" en wordt het teken het Face ID-symbool. Een geannuleerd venster is geen fout, maar het scherm zegt het in één rustige regel: "Je tikte op Annuleer · er is niets veranderd."
 
-**Status:** Deels gebouwd — een tweede tik wordt genegeerd (`isBusy`) en een annulering toont geen fout. Op `SignInView` wordt de knop voor de toegangssleutel alleen grijs (de wachtwoordknop is degene die "Bezig…" leest); `SessionExpiredView` leest "Bezig…". De annuleerregel bestaat niet: `PasskeyError.cancelled` zet niets. Tekst en één vlag in `AuthModel`; geen serverwijziging.
+**Status:** Gebouwd (2026-11-04) — "Wacht op Face ID…" en de Face ID-tegel zolang het venster openstaat; na Annuleer de regel "Je tikte op Annuleer · er is niets veranderd." (`AuthModel.passkeyCancelled`).
 
 ### 3.17 De app-kiezer toont niets van het dossier
 
 Zolang de app niet op de voorgrond staat (scene `.inactive` of `.background`) en de vergrendeling geldt, is de momentopname van de app in de app-kiezer een effen afdekking met het verder-teken. Er verschijnt geen titel, geen aantal en geen bedrag.
 
-**Status:** Nog te bouwen — niets in de code reageert op `.inactive`. Een afgeschermd tabblad is al `LockView` zodra het vergrendeld is, maar de aantallen op Overzicht en elk **ontgrendeld** scherm tijdens de respijttijd van 5 minuten verschijnen in de app-kiezer zoals ze zijn. Nodig: een afdekweergave in `RootView`, gestuurd door `scenePhase != .active` (getekend bij `.inactive`, zodat iOS hem vastlegt), en een beslissing of die ook een ontgrendelde app afdekt (de brief zegt "while locked"; het frame toont de afdekking over een ontgrendeld Overzicht, wat de veiligere lezing is). Hij mag het eigen `.inactive`-moment van het Face ID-venster niet zo afdekken dat het bij elke ontgrendeling flikkert; `LockPolicy` onderscheidt dat geval al en kan worden hergebruikt. UI-test via een fixture.
+**Status:** Gebouwd (2026-11-04) — `PrivacyCover` in `Verder/Auth/LockView.swift`, over de hele app zodra de scene niet actief is (ook ontgrendeld: de veiligere lezing), behalve achter de eigen systeemvensters van de app (Face ID, toegangssleutel, toestemmingen; `SystemPrompts`). Fixture `--cover`. Hoe hij in de app-kiezer zelf staat, is niet vanuit de simulator vast te leggen.
 
 ### 3.18 Na een geannuleerde Face ID: drie manieren verder
 
 Een geannuleerd Face ID-venster laat Martin niet in een doodlopende straat staan. Een venster zegt "Ontgrendel je dossier" / "Je tikte op Annuleer · je dossier blijft vergrendeld.", legt de regel uit ("Eén keer bij openen. Ben je binnen 5 minuten terug, dan hoef je Face ID niet opnieuw te gebruiken.") en biedt drie manieren verder: "Ontgrendel met Face ID", "Bekijk alleen het overzicht" (gaat naar het vergrendelde Overzicht) en "Scan een brief" (opent de camera, die geen Face ID nodig heeft). Het werkt op de iPhone SE en bij AX5.
 
-**Status:** Nog te bouwen — na een annulering toont de code niets: een afgeschermd tabblad houdt `LockView` met zijn ene knop, en Overzicht houdt zijn beknopte weergave. Nodig: `AppLock` moet "de laatste poging is geannuleerd" beschikbaar maken, een venster in `RootView` (of `LockView`), en de twee handelingen aangesloten op `tab = .home` en `cameraRequested = true` (dat laatste bestaat al voor `verder://scan`). `AppLockTests` voor de geannuleerde toestand.
+**Status:** Gebouwd (2026-11-04) — `AppLock.unlockSheet` (`.cancelled`), `UnlockSheetView` in `LockView.swift`, getoond door `RootView` (niet op Scan); `UnlockSheetTests`.
 
 ### 3.19 De vergrendeling zegt wat erachter wacht, nooit wat erin staat
 
 Wanneer een aangetikte melding op de vergrendeling uitkomt (een koude start, of na de respijttijd), noemen het Face ID-moment en het geannuleerde venster **de soort** van wat er wacht, in amber omdat het op Martin wacht: "Een voorstel wacht na ontgrendelen". Achter het venster wordt het doelscherm getekend als lege plaatshouderrijen, nooit met zijn inhoud.
 
-**Status:** Nog te bouwen — de link zelf overleeft de vergrendeling (3.6), maar niets vertelt Martin wat het was. Nodig: `RootView` moet de soort van de wachtende link bewaren (voorstel, vraag, suggestie, taak, document) naast de stapel die hij al bewaart, een regel op `LockView` / het venster uit 3.18 die alleen uit de soort wordt opgebouwd (geen titel, geen partij), en een test dat er geen titel in terechtkomt.
+**Status:** Gebouwd (2026-11-04) — `LockedTarget` (alleen de soort), `LockedPlaceholder` op `LockView`, en de amber regel in het venster na annuleren; `UnlockSheetTests.aWaitingLinkIsNamedByKindOnly`.
 
 ### 3.20 Geen toegangscode op het toestel: één manier om het op te lossen
 
 Wanneer de iPhone geen toegangscode heeft, kan Face ID in verder niet werken. Een venster zegt "Zet eerst een toegangscode aan" / "Zonder toegangscode werkt Face ID niet in deze app. Zet hem aan, dan werkt het meteen.", met "Open Instellingen" en "Bekijk alleen het overzicht".
 
-**Status:** Deels gebouwd — het geval wordt herkend en de tekst verschijnt op `LockView` (`AppLock.Copy.unavailable`). Wat ontbreekt: de knop "Open Instellingen" (iOS biedt geen deep link naar de instellingen voor de toegangscode, dus hij opent de eigen pagina van de app in Instellingen of de hoofdpagina van Instellingen; de tekst mag geen plek beloven die hij niet kan openen) en "Bekijk alleen het overzicht". Alleen UI.
+**Status:** Gebouwd (2026-11-04) — `AppLock.unlockSheet == .noPasscode` toont "Zet eerst een toegangscode aan" met "Open Instellingen" (de eigen pagina van de app; er is geen deep link naar de toegangscode) en "Bekijk alleen het overzicht".
 
 ### 3.21 Een effen startscherm
 
@@ -277,7 +279,7 @@ Het startscherm is effen `void` (#04070d) zonder logo (brief §3, R27), zodat de
 
 De camera, de wachtrij en de ontspanknop werken vóór Face ID; op Scan wordt nooit iets gevraagd. Zolang de app vergrendeld is, toont Scan één rustige regel, "Vergrendeld · scannen kan zonder Face ID", zodat duidelijk is dat de camera geen weg naar het dossier is.
 
-**Status:** Deels gebouwd — Scan is niet afgeschermd en vraagt nooit (`ScanTab` leest bewust geen `AppLock`-toestand, zie het commentaar bovenaan). De regel ontbreekt, en die toevoegen betekent dat `ScanTab` **alleen** een boolean "vergrendeld" mag leren, nooit iets dat een vraag zou kunnen starten; geef die door vanuit `RootView` in plaats van hem de `AppLock` te geven.
+**Status:** Gebouwd (2026-11-04) — `ScanLockedPill`; `ScanTab` krijgt alleen de boolean `locked` van `RootView`, op het Scan-scherm en over de camera.
 
 ### 3.23 Scannen rechtstreeks vanaf een vergrendelde telefoon
 
@@ -291,19 +293,19 @@ Een brief scannen kost één handeling plus de pagina's, zonder eerst verder te 
 
 Wanneer de camera voor verder uit staat, vervangt Scan de schijf door "Scannen kan nu niet" / "De camera staat uit in Instellingen → verder → Camera. Zet hem aan, dan kun je meteen scannen." en één "Open Instellingen". De tabbalk blijft staan, dus het is geen doodlopende straat.
 
-**Status:** Gebouwd — `CameraDenied` in `Verder/Scan/ScanPermissionViews.swift`, getoond door `ScanTab` wanneer `CameraAccess.status()` `.denied` is. Niet gecommit in de working tree. De titel in de code luidt "De camera staat uit voor verder" waar het frame "Scannen kan nu niet" zegt (alleen tekst).
+**Status:** Gebouwd — `CameraDenied` in `Verder/Scan/ScanPermissionViews.swift`, met de titel en het doorgestreepte vel van het frame ("Scannen kan nu niet").
 
 ### 3.25 Toestemmingsvraag vooraf voor de microfoon
 
 Het eerste spraaklogboek vraagt het, vóór iOS dat doet, met één scherm in de app: waar de microfoon voor is en één "Ga verder", daarna de eigen melding van iOS.
 
-**Status:** Nog te bouwen — `VoiceRecorder` roept `AVAudioApplication.requestRecordPermission()` direct aan (`Verder/Voice/VoiceRecorder.swift`). Nodig: een statuscontrole vóór het opnemen, een weergave voor de vraag vooraf in het spraakvenster (de vorm van `CameraPrePrompt` kan worden hergebruikt), en een geval in `VoiceLogModelTests` voor het pad `undetermined`.
+**Status:** Gebouwd (2026-11-04) — `VoiceRecording.permission()` leest de stand zonder te vragen; bij `undetermined` toont het spraakvenster `MicrophonePrePrompt`, en pas "Ga verder" laat iOS vragen (`VoiceLogModel.acceptMicPrePrompt`). Fixture `--mic notDetermined`.
 
 ### 3.26 Microfoon geweigerd
 
 Wanneer de microfoon voor verder uit staat, zegt het spraakvenster dat ("verder mag de microfoon niet gebruiken.", met waar in Instellingen je hem aanzet) en biedt het "Open Instellingen" en "Sluit" aan.
 
-**Status:** Gebouwd — `VoiceLogModel.Copy.micDenied` en de knop "Open Instellingen" in `Verder/Voice/VoiceLogView.swift`. De langere tweede regel van het frame ("Uitgezet in Instellingen → verder → Microfoon. Zet het aan, dan kun je meteen inspreken.") is alleen tekst.
+**Status:** Gebouwd (2026-11-04) — `MicDeniedView` in een kort venster met de tekst van het frame, "Open Instellingen" en "Sluit". Fixture `--mic denied`.
 
 ### 3.27 Spraakherkenning: vraag vooraf en geweigerd
 
