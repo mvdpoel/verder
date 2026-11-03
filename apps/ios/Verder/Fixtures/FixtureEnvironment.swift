@@ -22,6 +22,23 @@ enum FixtureEnvironment {
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
     static let defaultsSuite = "pro.vanderpoel.verder.fixtures"
 
+    /// The host Over verder shows in a fixture run: the frames'
+    /// "verder.example", not the fixture's `<name>.fixtures.verder.invalid`.
+    nonisolated static let displayServer: URL? =
+        FixtureLaunch.current == nil ? nil : URL(string: "https://verder.example")
+
+    /// `-route meer:developer`: Ontwikkelaar as the frame draws it — a phone
+    /// registered for development pushes on 31 okt, a last scan, and an
+    /// upload test answered at 14:02. Synthetic; nothing registers with APNs
+    /// and nothing is sent.
+    static var opensDeveloper: Bool {
+        guard case .meer(let path)? = FixtureLaunch.current?.route else { return false }
+        return path.last == .developer
+    }
+    nonisolated static let developerTokenTail = "a41f"
+    nonisolated static let developerRegisteredAt = amsterdam("09:12").addingTimeInterval(-86_400)
+    nonisolated static let developerScan = "Brief Gemeente Westerlaan 30 okt.pdf"
+
     /// The synthetic case's "today": Sun 1 nov 2026, 09:41 in Amsterdam —
     /// the reference frames' status bar. It runs on from launch, so a retry a
     /// minute later reads a minute later.
@@ -74,6 +91,7 @@ enum FixtureEnvironment {
         try? FileManager.default.removeItem(at: dir)
         if launch.scans { seedUploads(sentToday: 2, pending: 1, in: dir) }
         if let preset = launch.queue { seedQueue(preset, in: dir) }
+        if opensDeveloper && launch.queue == nil && !launch.scans { seedDeveloperScan(in: dir) }
         let queue = UploadQueue(dir: dir)
         // Not a background session: those refuse custom protocols, and a scan
         // taken in a fixture run must reach the fixture server, not the network.
@@ -82,6 +100,7 @@ enum FixtureEnvironment {
         let uploads = UploadCenter(queue: queue, uploader: uploader, client: client,
                                    now: launch.queue.map(queueClock) ?? clock)
         if launch.queue == .offline || server.manifest.behavior == .offline { uploads.setOffline(true) }
+        if opensDeveloper { uploads.seedFixtureResend(duplicate: true, at: amsterdam("14:02")) }
         // `offlineAfter`: the network goes once the first answers are in, as
         // NWPathMonitor would report it (Meer's kept stand).
         if let after = server.manifest.offlineAfter {
@@ -186,6 +205,20 @@ enum FixtureEnvironment {
         encoder.dateEncodingStrategy = .iso8601
         try? encoder.encode(Index(items: items, signInRequired: signIn, everEnqueued: preset != .first))
             .write(to: dir.appending(path: "queue.json"))
+    }
+
+    /// Ontwikkelaar's "Laatste scan": one sent letter, the data doc's
+    /// Brief Gemeente Westerlaan of 30 okt.
+    private static func seedDeveloperScan(in dir: URL) {
+        struct Index: Encodable { let items: [UploadItem]; let signInRequired = false }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let at = amsterdam("13:55").addingTimeInterval(-86_400)
+        let item = UploadItem(id: UUID(), fileName: developerScan, capturedAt: at, source: "phone-scan",
+                              state: .sent, attempts: 0, nextAttemptAt: nil, sentAt: at, pages: 2,
+                              documentId: UUID().uuidString.lowercased())
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(Index(items: [item])).write(to: dir.appending(path: "queue.json"))
     }
 
     /// `-fixtures-scans`: the data doc's "2 verstuurd · 1 in de wachtrij",

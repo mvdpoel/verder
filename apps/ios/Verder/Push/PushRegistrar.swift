@@ -187,6 +187,16 @@ final class PushRegistrar {
         }
     }
 
+    #if DEBUG
+    /// A fixture run's registration as verder stored it (`FixtureEnvironment`):
+    /// nothing reaches APNs or a server.
+    func seedFixtureRegistration(environment: String, tokenTail: String, at: Date) {
+        registeredEnvironment = environment
+        registeredTokenTail = tokenTail
+        registeredAt = at
+    }
+    #endif
+
     /// From `application(_:didFailToRegisterForRemoteNotificationsWithError:)`.
     func didFail(_ error: Error) {
         let ns = error as NSError

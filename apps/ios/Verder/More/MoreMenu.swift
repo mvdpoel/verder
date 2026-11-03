@@ -51,14 +51,15 @@ enum MoreMenu {
         }
     }
 
-    /// SF Symbol beside the row.
+    /// SF Symbol beside the row, or one of `MoreGlyphName`'s outline glyphs
+    /// where SF has none (the frames' outline calendar and person).
     static func symbol(_ item: Item) -> String {
         switch item {
-        case .account: "person.crop.circle"
+        case .account: MoreGlyphName.personCircle
         case .notifications: "bell"
         case .money: "eurosign.circle"
         case .voice: "mic"
-        case .weekly: "calendar"
+        case .weekly: MoreGlyphName.calendar
         case .widgets: "square.grid.2x2"
         case .about: "info.circle"
         case .developer: "wrench.adjustable"
@@ -299,7 +300,8 @@ enum AccountCopy {
     static let passkeyLabel = "Toegangssleutel"
     /// The soft hyphen is where AX5 breaks it: "Toegangs-" / "sleutel".
     static let passkeyTitle = "Toegangs\u{00AD}sleutel"
-    static let addPasskey = "Toegangssleutel toevoegen"
+    /// Soft-hyphened like `passkeyTitle`: as a title it breaks "Toegangs-".
+    static let addPasskey = "Toegangs\u{00AD}sleutel toevoegen"
     static let devicesLabel = "Apparaten"
     static let devicesLink = "Apparaten op het web"
     static let signOutQuestion = "Uitloggen op deze iPhone?"
@@ -344,10 +346,13 @@ enum AccountCopy {
         }
     }
 
-    /// The lines under "Toegangssleutel".
-    static func passkeyLines(_ state: PasskeyState) -> [String] {
+    /// The lines under "Toegangssleutel". `compact` (the accessibility
+    /// sizes, Figma "Account / AX5 · midden") keeps only the first: the
+    /// website is the Apparaten card right below, and at AX5 the second line
+    /// alone is three lines tall. VoiceOver always hears both.
+    static func passkeyLines(_ state: PasskeyState, compact: Bool = false) -> [String] {
         switch state {
-        case .on: ["inloggen met Face ID", "andere apparaten via de website"]
+        case .on: compact ? ["inloggen met Face ID"] : ["inloggen met Face ID", "andere apparaten via de website"]
         case .off: ["niet ingesteld", "inloggen met wachtwoord"]
         case .unknown: ["onbekend tot je account is opgehaald"]
         case .loading: ["wordt opgehaald…"]
@@ -373,10 +378,12 @@ enum AccountCopy {
         offline ? laterOnline : "inloggen met Face ID in plaats van je wachtwoord"
     }
 
-    /// "3 ingelogd · beheer op de website".
+    /// "3 ingelogd · beheer op de website". The dot is bound to the word
+    /// before it, so a wrapped line ends on it and never starts with it (the
+    /// one rule for a " · " run, `PhraseFlow`).
     static func devicesLine(_ devices: Int?, offline: Bool) -> String {
         [devices.map { "\($0) ingelogd" }, offline ? laterOnline : "beheer op de website"]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.joined(separator: "\u{00A0}· ")
     }
 
     /// /settings/security on the server the app talks to.
@@ -451,7 +458,13 @@ enum NotificationsCopy {
         /// How loud the worker sends it (apps/worker/src): "tijdgevoelig",
         /// "gewoon", "stil".
         let level: String
+        /// Short facts, run on after the level on its first line
+        /// ("gewoon · een voorstel staat klaar"). May be empty: the level
+        /// then stands alone ("gewoon").
         let explanation: [String]
+        /// The explanatory sentence, on a line of its own under the level
+        /// (Figma "Meldingen / normaal": "er gaat niets weg zonder jou").
+        var detail: String? = nil
     }
 
     struct Group: Equatable, Sendable {
@@ -517,9 +530,9 @@ enum NotificationsCopy {
         ], footnote: "Post van je bewindvoerder staat altijd aan, zodat je niets van je bewind mist.\nOf een tijdgevoelige melding door een focus komt, kies je in iOS per focus."),
         Group(label: "Wat op je wacht", kinds: [
             Kind(category: "PROPOSAL", name: "Voorstel", symbol: "arrowshape.turn.up.left",
-                 level: "gewoon", explanation: ["een voorstel staat klaar", "er gaat niets weg zonder jou"]),
+                 level: "gewoon", explanation: ["een voorstel staat klaar"], detail: "er gaat niets weg zonder jou"),
             Kind(category: "REMINDER", name: "Herinnering", symbol: "clock",
-                 level: "gewoon", explanation: ["een voorstel wacht al een tijd op je"]),
+                 level: "gewoon", explanation: [], detail: "een voorstel wacht al een tijd op je"),
             Kind(category: "FOLLOW_UP", name: "Navragen", symbol: "arrow.triangle.2.circlepath",
                  level: "gewoon", explanation: ["iemand antwoordde nog niet", "verder stelt navragen voor"]),
             Kind(category: "TASK_DUE", name: "Termijn", symbol: "checkmark.square",
@@ -528,14 +541,30 @@ enum NotificationsCopy {
         Group(label: "Wat verder deed", kinds: [
             Kind(category: "FILING", name: "Opgeborgen", symbol: "archivebox",
                  level: "stil", explanation: ["wat verder zelf opborg, samenvoegde of ophaalde"]),
-            Kind(category: "WEEKLY", name: "Weekoverzicht", symbol: "calendar",
-                 level: "stil", explanation: ["zondag 18:00", "wat er die week gebeurde"]),
-            Kind(category: "SYSTEM", name: "Systeem", symbol: "gearshape",
+            Kind(category: "WEEKLY", name: "Weekoverzicht", symbol: MoreGlyphName.calendar,
+                 level: "stil", explanation: ["zondag 18:00"], detail: "wat er die week gebeurde"),
+            Kind(category: "SYSTEM", name: "Systeem", symbol: "sun.max",
                  level: "gewoon", explanation: ["als er in verder iets hapert, of weer hersteld is"]),
         ], footnote: "Stille meldingen komen in je meldingencentrum, zonder geluid en zonder dat je scherm aangaat. Lukt het versturen van een antwoord niet, dan meldt Systeem dat tijdgevoelig."),
     ]
 
     static var kinds: [Kind] { groups.flatMap(\.kinds) }
+
+    /// The lines under a kind's name: the level with its short facts, then
+    /// the sentence on its own line — never joined into one wrapped run.
+    /// While iOS holds every push back, the always-on kind says when it
+    /// comes back instead.
+    static func lines(_ kind: Kind, denied: Bool) -> [MoreMenu.Line] {
+        if denied && always.contains(kind.category) { return [.kind(level: kind.level, [verderMailWhileDenied])] }
+        return [.kind(level: kind.level, kind.explanation)] + (kind.detail.map { [MoreMenu.Line.phrases([$0])] } ?? [])
+    }
+
+    /// What VoiceOver reads for a kind: name, level and every line.
+    static func spoken(_ kind: Kind, denied: Bool) -> String {
+        let words = denied && always.contains(kind.category)
+            ? [verderMailWhileDenied] : kind.explanation + [kind.detail].compactMap { $0 }
+        return ([kind.name, kind.level] + words).joined(separator: ", ")
+    }
 }
 
 // MARK: - Widgets toevoegen
@@ -560,7 +589,10 @@ enum WidgetGuide {
     ]
 
     /// The illustration's numbers: an example, drawn the way the real
-    /// families draw it (`WidgetContent`) — the small one shows no age.
+    /// families draw it (`WidgetContent`) — the small one shows no age (the
+    /// brief's "Small: hero count plus 'wachten op jou'"), even where the
+    /// "meer · final" frame draws "oudste 2 dagen" under it: a guide that
+    /// promises a line the widget never shows is the one thing it must not do.
     static let sampleCount = "4"
     static let sampleWords = "wachten op jou"
     static let sampleLock = "4 wachten · oudste 2 d"
@@ -584,6 +616,8 @@ struct AboutInfo: Equatable {
     let version: String?
     let build: String?
 
+    /// `server` is the host shown, which a fixture run sets to the frames'
+    /// "verder.example" (`FixtureEnvironment.displayServer`).
     init(info: [String: Any], server: URL) {
         version = info["CFBundleShortVersionString"] as? String
         build = info["CFBundleVersion"] as? String
@@ -596,6 +630,12 @@ struct AboutInfo: Equatable {
             Line(label: "Versie", value: versionText, symbol: "info.circle"),
             Line(label: "Server", value: server.host() ?? server.absoluteString, symbol: "server.rack"),
         ]
+    }
+
+    /// A host that may wrap breaks only after a dot, never inside a label:
+    /// "voorjou-few." / "fixtures." / "verder.invalid".
+    static func breakableHost(_ host: String) -> String {
+        host.replacingOccurrences(of: ".", with: ".\u{200B}").replacingOccurrences(of: "-", with: "-\u{2060}")
     }
 
     static let label = "Over deze app"

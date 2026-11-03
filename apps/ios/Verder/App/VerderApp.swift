@@ -45,8 +45,15 @@ struct VerderApp: App {
         _auth = State(initialValue: auth)
         _lock = State(initialValue: s.lock)
         _uploads = State(initialValue: s.uploads)
-        _push = State(initialValue: PushRegistrar(client: s.client, auth: auth, permission: s.permission,
-                                                  defaults: s.defaults, registerRemote: s.registerRemote))
+        let push = PushRegistrar(client: s.client, auth: auth, permission: s.permission,
+                                 defaults: s.defaults, registerRemote: s.registerRemote)
+        #if DEBUG
+        if FixtureEnvironment.opensDeveloper {
+            push.seedFixtureRegistration(environment: "development", tokenTail: FixtureEnvironment.developerTokenTail,
+                                         at: FixtureEnvironment.developerRegisteredAt)
+        }
+        #endif
+        _push = State(initialValue: push)
         // Every store holding case content shares auth's ONE sign-out epoch
         // (`SessionEpoch`): signing out, or a 401 anywhere, clears all three,
         // and a refresh still in flight writes nothing back.

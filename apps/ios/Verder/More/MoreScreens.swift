@@ -87,7 +87,7 @@ struct AccountScreen: View {
             }
         case .loading:
             MoreCard {
-                labelled(AccountCopy.emailLabel, symbol: "person.crop.circle") {
+                labelled(AccountCopy.emailLabel, symbol: MoreGlyphName.personCircle) {
                     MoreSkeleton(fraction: 0.7).padding(.vertical, 6)
                     MoreSkeleton(fraction: 0.5).padding(.vertical, 4)
                 }
@@ -95,7 +95,7 @@ struct AccountScreen: View {
             }
         case .shown(let dto):
             MoreCard {
-                labelled(AccountCopy.emailLabel, symbol: "person.crop.circle") {
+                labelled(AccountCopy.emailLabel, symbol: MoreGlyphName.personCircle) {
                     Text(typeSize.isAccessibilitySize ? MoreText.breakableAddress(dto.email) : dto.email)
                         .font(MoreType.rowTitle)
                         .foregroundStyle(Color.inkBright)
@@ -124,13 +124,7 @@ struct AccountScreen: View {
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .padding(.leading, typeSize.isAccessibilitySize ? 0 : 32)
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                if !typeSize.isAccessibilitySize {
-                    Image(systemName: symbol)
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.inkMute)
-                        .frame(width: 20)
-                        .accessibilityHidden(true)
-                }
+                if !typeSize.isAccessibilitySize { MoreGlyph(name: symbol) }
                 VStack(alignment: .leading, spacing: 2) { content() }
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -141,7 +135,8 @@ struct AccountScreen: View {
         MoreCard {
             let badge = AccountCopy.passkeyBadge(passkey)
             MoreRowView(symbol: "key.horizontal", title: AccountCopy.passkeyTitle,
-                        lines: AccountCopy.passkeyLines(passkey).map { .phrases([$0]) }) {
+                        lines: AccountCopy.passkeyLines(passkey, compact: typeSize.isAccessibilitySize)
+                            .map { .phrases([$0]) }) {
                 if let badge { MoreBadge(text: badge, tone: passkey == .on ? .okay : .mute) }
             }
             .accessibilityElement(children: .ignore)
@@ -151,10 +146,10 @@ struct AccountScreen: View {
                 MoreDivider()
                 Button { Task { await auth.addPasskey() } } label: {
                     MoreRowView(symbol: "plus", title: AccountCopy.addPasskey,
-                                titleColor: offline ? .ink : .signal,
+                                titleColor: offline ? .inkBright : .signal,
                                 lines: [.phrases([AccountCopy.addPasskeyLine(offline: offline)])], dimmed: offline)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MoreRowButtonStyle())
                 .disabled(offline || auth.isBusy)
             }
             if let message = auth.passkeyMessage {
@@ -170,7 +165,7 @@ struct AccountScreen: View {
                             lines: [.phrases([AccountCopy.devicesLine(account.account?.devices, offline: offline)])],
                             chevron: .external, dimmed: offline)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MoreRowButtonStyle())
             .disabled(offline)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([AccountCopy.devicesLink,
@@ -357,19 +352,18 @@ struct NotificationsScreen: View {
     @ViewBuilder private func row(_ kind: NotificationsCopy.Kind) -> some View {
         let always = NotificationsCopy.always.contains(kind.category)
         let on = prefs.isOn(kind.category)
-        let explanation = push.permission == .denied && always
-            ? [NotificationsCopy.verderMailWhileDenied] : kind.explanation
-        let line = MoreMenu.Line.kind(level: kind.level, explanation)
-        let spoken = ([kind.name, kind.level] + explanation).joined(separator: ", ")
+        let denied = push.permission == .denied
+        let lines = NotificationsCopy.lines(kind, denied: denied)
+        let spoken = NotificationsCopy.spoken(kind, denied: denied)
         VStack(alignment: .leading, spacing: 0) {
             if always {
-                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) {
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: lines) {
                     if switchable { MoreBadge(text: NotificationsCopy.alwaysWord) } else { word(NotificationsCopy.alwaysWord) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(spoken), altijd aan")
             } else if switchable {
-                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) {
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: lines) {
                     Toggle(kind.name, isOn: Binding(get: { on },
                                                     set: { new in Task { await prefs.set(kind.category, on: new) } }))
                         .labelsHidden()
@@ -378,7 +372,7 @@ struct NotificationsScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(spoken)
             } else {
-                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) { word(on ? "aan" : "uit") }
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: lines) { word(on ? "aan" : "uit") }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(spoken), \(on ? "aan" : "uit")")
             }
@@ -569,7 +563,7 @@ struct AboutScreen: View {
                     MoreCard {
                         ForEach(Array(about.lines.enumerated()), id: \.element) { i, line in
                             if i > 0 { MoreDivider() }
-                            MoreRowView(symbol: line.symbol, title: line.label) { valueText(line.value) }
+                            valueRow(line)
                                 .accessibilityElement(children: .combine)
                                 .contextMenu {
                                     Button("Kopieer") { UIPasteboard.general.string = line.value }
@@ -600,13 +594,30 @@ struct AboutScreen: View {
         }
     }
 
-    private func valueText(_ value: String) -> some View {
-        Text(value)
-            .font(MoreType.value)
-            .foregroundStyle(Color.inkBright)
-            .multilineTextAlignment(.trailing)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
+    /// The value beside its label on one line when it fits ("Server ·
+    /// verder.example"); otherwise under the label at the full row width,
+    /// breaking only after a dot — never squeezed into a right-aligned
+    /// column that splits a hostname mid-word.
+    private func valueRow(_ line: AboutInfo.Line) -> some View {
+        ViewThatFits(in: .horizontal) {
+            MoreRowView(symbol: line.symbol, title: line.label) {
+                Text(line.value)
+                    .font(MoreType.value)
+                    .foregroundStyle(Color.inkBright)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .textSelection(.enabled)
+            }
+            MoreRowView(symbol: line.symbol, title: line.label) {
+                Text(AboutInfo.breakableHost(line.value))
+                    .font(MoreType.value)
+                    .foregroundStyle(Color.inkBright)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .environment(\.moreValueBelow, true)
+        }
     }
 }
 

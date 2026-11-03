@@ -134,6 +134,9 @@ struct MoreMenuTests {
         #expect(AccountCopy.passkeyState(nil, failed: false) == .loading)
         #expect(AccountCopy.passkeyLines(.on) == ["inloggen met Face ID", "andere apparaten via de website"])
         #expect(AccountCopy.passkeyLines(.off) == ["niet ingesteld", "inloggen met wachtwoord"])
+        // AX5 (Figma "Account / AX5 · midden"): the website line goes; the
+        // Apparaten card right below is that website.
+        #expect(AccountCopy.passkeyLines(.on, compact: true) == ["inloggen met Face ID"])
         #expect(AccountCopy.passkeyBadge(.on) == "aan")
         #expect(AccountCopy.passkeyBadge(.off) == "uit")
         #expect(AccountCopy.passkeyBadge(.unknown) == nil, "an unknown count shows no state")
@@ -142,11 +145,25 @@ struct MoreMenuTests {
         #expect(!AccountCopy.offersPasskey(.unknown), "an unknown count offers nothing")
     }
 
+    /// "Toegangs-" / "sleutel" at AX5: a word with a soft hyphen breaks there
+    /// and nowhere else (word joiners bind its other letters); words without
+    /// one are untouched.
+    @Test func aCompoundBreaksOnlyAtItsSoftHyphen() {
+        let out = MoreText.onlyAtSoftHyphens(AccountCopy.addPasskey)
+        #expect(out.replacingOccurrences(of: "\u{2060}", with: "") == AccountCopy.addPasskey)
+        #expect(out.hasSuffix(" toevoegen"), "a word without a soft hyphen is left alone")
+        let word = out.split(separator: " ")[0]
+        #expect(word.components(separatedBy: "\u{00AD}").count == 2)
+        #expect(!word.contains("\u{2060}\u{00AD}") && !word.contains("\u{00AD}\u{2060}"),
+                "nothing binds the soft hyphen itself")
+        #expect(MoreText.hyphenate(AccountCopy.passkeyTitle) == MoreText.onlyAtSoftHyphens(AccountCopy.passkeyTitle))
+    }
+
     /// The UI never says the English "passkey" (design brief).
     @Test func noScreenSaysPasskey() {
         var words = [AccountCopy.passkeyLabel, AccountCopy.passkeyTitle, AccountCopy.addPasskey,
                      AccountCopy.addPasskeyLine(offline: false)]
-        words += [.on, .off, .unknown, .loading].flatMap(AccountCopy.passkeyLines)
+        words += [.on, .off, .unknown, .loading].flatMap { AccountCopy.passkeyLines($0) }
         words += [AuthModel.Copy.passkeyFailed, AuthModel.Copy.passkeyAdded, AuthModel.Copy.passkeyAddFailed,
                   AuthModel.Copy.passkeyAlreadyOnDevice, AuthModel.Copy.passkeyNeedsFreshSignIn]
         for word in words { #expect(!word.lowercased().contains("passkey"), "\(word)") }
@@ -156,9 +173,9 @@ struct MoreMenuTests {
         // NBSP binds "1 dec" and "deze iPhone", and keeps the dot at a line's end.
         #expect(AccountCopy.sessionLine(Self.me.sessionExpiresAt) == "sessie tot 1\u{00A0}dec\u{00A0}· deze\u{00A0}iPhone")
         #expect(AccountCopy.sessionLine(nil) == "deze\u{00A0}iPhone")
-        #expect(AccountCopy.devicesLine(3, offline: false) == "3 ingelogd · beheer op de website")
+        #expect(AccountCopy.devicesLine(3, offline: false) == "3 ingelogd\u{00A0}· beheer op de website")
         #expect(AccountCopy.devicesLine(nil, offline: false) == "beheer op de website")
-        #expect(AccountCopy.devicesLine(3, offline: true) == "3 ingelogd · kan weer als je online bent")
+        #expect(AccountCopy.devicesLine(3, offline: true) == "3 ingelogd\u{00A0}· kan weer als je online bent")
         #expect(AccountCopy.addPasskeyLine(offline: true) == "kan weer als je online bent")
         let at = Date(timeIntervalSince1970: 1_793_538_120)
         #expect(AccountCopy.failureCause(.transport("x"), at: at, now: at) == "verder was niet bereikbaar · 14:02")
@@ -205,10 +222,38 @@ struct MoreMenuTests {
         #expect(Set(NotificationsCopy.kinds.map(\.category)) == Set(NotificationCategories.ids))
         #expect(NotificationsCopy.kinds.count == NotificationCategories.ids.count)
         for kind in NotificationsCopy.kinds {
-            #expect(!kind.name.isEmpty && !kind.explanation.isEmpty, "\(kind.category)")
+            #expect(!kind.name.isEmpty && !(kind.explanation.isEmpty && kind.detail == nil), "\(kind.category)")
             #expect(["tijdgevoelig", "gewoon", "stil"].contains(kind.level), "\(kind.category)")
         }
         #expect(NotificationsCopy.groups.map(\.label) == ["Post", "Wat op je wacht", "Wat verder deed"])
+    }
+
+    /// Figma "Meldingen / normaal": the level and its short fact on line 1,
+    /// the sentence on a line of its own — never joined by " · ".
+    @Test func aKindsSentenceHasItsOwnLine() throws {
+        func kind(_ c: String) throws -> NotificationsCopy.Kind {
+            try #require(NotificationsCopy.kinds.first { $0.category == c })
+        }
+        #expect(NotificationsCopy.lines(try kind("PROPOSAL"), denied: false)
+                == [.kind(level: "gewoon", ["een voorstel staat klaar"]), .phrases(["er gaat niets weg zonder jou"])])
+        #expect(NotificationsCopy.lines(try kind("REMINDER"), denied: false)
+                == [.kind(level: "gewoon", []), .phrases(["een voorstel wacht al een tijd op je"])])
+        #expect(NotificationsCopy.lines(try kind("WEEKLY"), denied: false)
+                == [.kind(level: "stil", ["zondag 18:00"]), .phrases(["wat er die week gebeurde"])])
+        #expect(NotificationsCopy.lines(try kind("CREDITOR_MAIL"), denied: false)
+                == [.kind(level: "gewoon", ["een schuldeiser of deurwaarder stuurde je iets"])])
+        #expect(NotificationsCopy.lines(try kind("VERDER_MAIL"), denied: true)
+                == [.kind(level: "tijdgevoelig", [NotificationsCopy.verderMailWhileDenied])])
+        #expect(NotificationsCopy.spoken(try kind("PROPOSAL"), denied: false)
+                == "Voorstel, gewoon, een voorstel staat klaar, er gaat niets weg zonder jou")
+    }
+
+    /// The frames' glyphs: an outline calendar and person, a sun for Systeem.
+    @Test func theGlyphsAreTheFrames() throws {
+        #expect(MoreMenu.symbol(.weekly) == MoreGlyphName.calendar)
+        #expect(MoreMenu.symbol(.account) == MoreGlyphName.personCircle)
+        #expect(try #require(NotificationsCopy.kinds.first { $0.category == "SYSTEM" }).symbol == "sun.max")
+        #expect(try #require(NotificationsCopy.kinds.first { $0.category == "WEEKLY" }).symbol == MoreGlyphName.calendar)
     }
 
     /// The levels the copy names are the ones the worker sets
@@ -269,6 +314,9 @@ struct MoreMenuTests {
                               server: URL(string: "https://verder.vanderpoel.pro")!)
         #expect(about.lines.map(\.value) == ["0.1 (7)", "verder.vanderpoel.pro"])
         #expect(about.version == "0.1" && about.build == "7")
+        // A hostname that must wrap breaks after a dot, never at its hyphen.
+        #expect(AboutInfo.breakableHost("voorjou-few.fixtures.verder.invalid")
+                == "voorjou-\u{2060}few.\u{200B}fixtures.\u{200B}verder.\u{200B}invalid")
         let bare = AboutInfo(info: [:], server: URL(string: "https://x.example")!)
         #expect(bare.lines.first?.value == "onbekend")
         #expect(AboutInfo.connection(offline: true, accountLoaded: true, lastError: nil) == .offline)
@@ -289,7 +337,7 @@ struct MoreMenuTests {
     /// Nothing in Meer promises something that is not there.
     @Test func noWordInMeerIsAPromise() {
         var words = MoreMenu.Item.allCases.map(MoreMenu.title)
-        words += NotificationsCopy.kinds.flatMap { [$0.name] + $0.explanation }
+        words += NotificationsCopy.kinds.flatMap { [$0.name] + $0.explanation + [$0.detail].compactMap { $0 } }
         words += NotificationsCopy.groups.map(\.footnote)
         words += WidgetGuide.homeSteps + WidgetGuide.lockSteps + [WidgetGuide.privacy]
         for word in words { #expect(!word.lowercased().contains("binnenkort"), "\(word)") }

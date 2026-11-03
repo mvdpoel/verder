@@ -202,6 +202,13 @@ final class UploadCenter {
         let at: Date
     }
 
+    #if DEBUG
+    /// A fixture run's answered upload test (`FixtureEnvironment`).
+    func seedFixtureResend(duplicate: Bool, at: Date) {
+        resendAnswer = ResendAnswer(duplicate: duplicate, at: at)
+    }
+    #endif
+
     func resendLastSent() async {
         guard let item = lastSent, !isResending else { return }
         isResending = true

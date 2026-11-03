@@ -58,7 +58,24 @@ enum MoreText {
     /// its own ("Toegangs\u{00AD}sleutel") keeps exactly those: the
     /// dictionary would break a compound where Dutch readers would not.
     static func hyphenate(_ text: String) -> String {
-        text.contains("\u{00AD}") ? text : HomeSummary.hyphenated(text)
+        text.contains("\u{00AD}") ? onlyAtSoftHyphens(text) : HomeSummary.hyphenated(text)
+    }
+
+    /// iOS hyphenates a Dutch word that cannot fit on its own, at the LAST
+    /// point that fits ("Toegangssleu-" / "tel"), soft hyphen or not; a word
+    /// joiner between the letters of a word that carries a soft hyphen leaves
+    /// it nowhere else to break ("Toegangs-" / "sleutel", Figma "Account /
+    /// AX5"). Words without one are left alone.
+    static func onlyAtSoftHyphens(_ text: String) -> String {
+        text.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
+            guard word.contains("\u{00AD}") else { return String(word) }
+            var out = ""
+            for (i, c) in word.enumerated() {
+                if i > 0, c != "\u{00AD}", out.last != "\u{00AD}" { out.append("\u{2060}") }
+                out.append(c)
+            }
+            return out
+        }.joined(separator: " ")
     }
 
     /// "jij@thuis." / "example": an address may break after a dot or the @
@@ -216,34 +233,32 @@ struct MoreRowView<Value: View, Accessory: View>: View {
     @ViewBuilder var accessory: Accessory
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.moreValueBelow) private var valueBelow
     private var ax: Bool { typeSize.isAccessibilitySize }
+    /// The value sits under the title: at the accessibility sizes, or where
+    /// the screen asked for it (a value too long to sit beside its label).
+    private var below: Bool { ax || valueBelow }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            if let symbol, !ax {
-                Image(systemName: symbol)
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(Color.inkMute)
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
-            }
+            if let symbol, !ax { MoreGlyph(name: symbol) }
             VStack(alignment: .leading, spacing: ax ? 4 : 2) {
                 titleView
-                if ax { value }
+                if below { value }
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in MoreLineView(line: line) }
                 if ax { accessory }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if !ax {
-                value
-                accessory
-            }
+            if !below { value }
+            if !ax { accessory }
             chevronView
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        .opacity(dimmed ? 0.75 : 1)
+        // `dimmed` (unavailable offline) mutes only the arrow: the title and
+        // its lines keep their inks, and the line itself says why (Figma
+        // "Account / offline").
         .contentShape(Rectangle())
     }
 
@@ -292,6 +307,11 @@ extension MoreRowView where Value == EmptyView {
     }
 }
 
+extension EnvironmentValues {
+    /// `MoreRowView` puts its value under the title, as at AX5.
+    @Entry var moreValueBelow = false
+}
+
 /// One line under a row's title.
 struct MoreLineView: View {
     let line: MoreMenu.Line
@@ -305,12 +325,14 @@ struct MoreLineView: View {
         case .phrases(let phrases):
             PhraseLine(phrases: phrases, lead: nil, color: color, ax: ax)
         case .kind(let level, let phrases):
-            // One running text, so the explanation continues on the level's
-            // own line ("gewoon · een schuldeiser of" / "deurwaarder stuurde
-            // je iets"); the dot is bound to the word before it, so a line
-            // never starts with one.
+            // One running text, so the facts continue on the level's own
+            // line ("gewoon · een schuldeiser of" / "deurwaarder stuurde je
+            // iets"); the dot is bound to the word before it, so a line never
+            // starts with one. No facts: the level stands alone ("gewoon").
             let rest = phrases.map { ax ? MoreText.hyphenate($0) : $0 }
-            Text(MoreText.mixed(level, color: .inkSoft) + MoreText.mixed("\u{00A0}· " + rest.joined(separator: "\u{00A0}· "), color: color))
+            let tail = rest.isEmpty ? AttributedString()
+                : MoreText.mixed("\u{00A0}· " + rest.joined(separator: "\u{00A0}· "), color: color)
+            Text(MoreText.mixed(level, color: .inkSoft) + tail)
                 .fixedSize(horizontal: false, vertical: true)
         case .mono(let text):
             Text(text)
@@ -335,9 +357,12 @@ struct MoreLineView: View {
 }
 
 /// Phrases joined by " · ", packed greedily: a phrase moves to the next
-/// line WHOLE and the dot before it goes (Figma "Geld-rij varianten SE":
-/// "leefgeld ··3210" / "deze week"); only a phrase wider than the line
-/// wraps inside itself. `lead` colours the first phrase (a push's level).
+/// line WHOLE and the dot before it STAYS at the end of the line it leaves
+/// ("versie 1.0 ·" / "build 31", Figma "Meer / AX5 · onderaan"). It is the
+/// one rule for every " · " run in the app — Overzicht's `metaLine` and
+/// Account's session line bind the dot the same way — so a line never
+/// starts with a dot. Only a phrase wider than the line wraps inside
+/// itself. `lead` colours the first phrase (a push's level).
 private struct PhraseLine: View {
     let phrases: [String]
     let lead: Color?
@@ -357,7 +382,8 @@ private struct PhraseLine: View {
 }
 
 /// The layout behind `PhraseLine`: subviews alternate phrase, separator,
-/// phrase…; a separator that would end a line is placed out of sight.
+/// phrase…; a separator that ends a line stays at its end, and is placed
+/// out of sight only when not even the dot fits there.
 struct PhraseFlow: Layout {
     private struct Placement {
         var origin: CGPoint
@@ -380,7 +406,17 @@ struct PhraseFlow: Layout {
                 x += ideal.width
                 lineHeight = max(lineHeight, ideal.height, sep.height)
             } else {
-                if i > 0 { y += lineHeight; x = 0; lineHeight = 0 }
+                if i > 0 {
+                    // The dot stays behind, at the end of the line it ends —
+                    // its trailing space falls past the text, so only the
+                    // dot itself has to fit.
+                    if x < width, x + sep.width * 0.67 <= width + 0.5 {
+                        out[i - 1] = Placement(origin: CGPoint(x: x, y: y), proposal: .unspecified, hidden: false)
+                        widest = max(widest, min(x + sep.width, width))
+                        lineHeight = max(lineHeight, sep.height)
+                    }
+                    y += lineHeight; x = 0; lineHeight = 0
+                }
                 if ideal.width <= width + 0.5 {
                     out[i] = Placement(origin: CGPoint(x: 0, y: y), proposal: .unspecified, hidden: false)
                     x = ideal.width
@@ -413,6 +449,86 @@ struct PhraseFlow: Layout {
                 view.place(at: CGPoint(x: bounds.minX + p.origin.x, y: bounds.minY + p.origin.y), proposal: p.proposal)
             }
         }
+    }
+}
+
+/// Glyphs the frames draw that SF Symbols has no outline form of: SF's
+/// "calendar" is a filled grid and "person.crop.circle" a filled bust.
+enum MoreGlyphName {
+    static let calendar = "verder.calendar"
+    static let personCircle = "verder.person.circle"
+}
+
+/// The 18 pt glyph beside a Meer row: an SF Symbol, or one of
+/// `MoreGlyphName`'s outline drawings, in the same ink and box.
+struct MoreGlyph: View {
+    let name: String
+
+    var body: some View {
+        Group {
+            switch name {
+            case MoreGlyphName.calendar:
+                OutlineCalendar()
+                    .stroke(Color.inkMute, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .frame(width: 17, height: 17)
+            case MoreGlyphName.personCircle:
+                ZStack {
+                    Circle().strokeBorder(Color.inkMute, lineWidth: 1.5)
+                    OutlinePerson()
+                        .stroke(Color.inkMute, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                }
+                .frame(width: 18, height: 18)
+            default:
+                Image(systemName: name)
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(Color.inkMute)
+            }
+        }
+        .frame(width: 20)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A wall calendar in outline: the page, the line under its header and the
+/// two rings above it.
+private struct OutlineCalendar: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let top = r.minY + r.height * 0.16
+        p.addRoundedRect(in: CGRect(x: r.minX + 0.75, y: top, width: r.width - 1.5, height: r.maxY - 0.75 - top),
+                         cornerSize: CGSize(width: r.width * 0.16, height: r.width * 0.16), style: .continuous)
+        let rule = top + (r.maxY - top) * 0.33
+        p.move(to: CGPoint(x: r.minX + 0.75, y: rule)); p.addLine(to: CGPoint(x: r.maxX - 0.75, y: rule))
+        for f in [0.32, 0.68] {
+            let x = r.minX + r.width * f
+            p.move(to: CGPoint(x: x, y: r.minY + 0.75)); p.addLine(to: CGPoint(x: x, y: top + r.height * 0.12))
+        }
+        return p
+    }
+}
+
+/// A head and shoulders in outline, inside `MoreGlyph`'s circle: the
+/// shoulders meet the circle at its bottom.
+private struct OutlinePerson: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width
+        p.addEllipse(in: CGRect(x: r.midX - w * 0.17, y: r.minY + w * 0.22, width: w * 0.34, height: w * 0.34))
+        // The shoulders: an arc from the circle's lower left to its lower right.
+        p.move(to: CGPoint(x: r.midX - w * 0.31, y: r.minY + w * 0.84))
+        p.addQuadCurve(to: CGPoint(x: r.midX + w * 0.31, y: r.minY + w * 0.84),
+                       control: CGPoint(x: r.midX, y: r.minY + w * 0.50))
+        return p
+    }
+}
+
+/// A row that is a button and may be unavailable: no pressed dimming and no
+/// disabled fade, so an offline row stays legible; `.disabled` still takes
+/// the tap away and tells VoiceOver.
+struct MoreRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.steelDim.opacity(0.12) : Color.clear)
     }
 }
 
@@ -491,7 +607,7 @@ struct MoreButton: View {
                         ProgressView().tint(foreground)
                     }
                 }
-                Text(title)
+                Text(MoreText.onlyAtSoftHyphens(title))
                     .font(MoreType.button)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)

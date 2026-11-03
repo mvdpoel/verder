@@ -54,7 +54,16 @@ struct MoreTab: View {
         self._weekly = State(initialValue: WeeklyStore(client: auth.client, onUnauthorized: rejected))
     }
 
-    private var about: AboutInfo { AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: auth.client.base) }
+    private var about: AboutInfo { AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: shownServer) }
+
+    /// The server Over verder names: the real one, or in a fixture run the
+    /// frames' "verder.example" rather than the fixture's own host.
+    private var shownServer: URL {
+        #if DEBUG
+        if let shown = FixtureEnvironment.displayServer { return shown }
+        #endif
+        return auth.client.base
+    }
 
     /// What the rows are read from (`MoreMenu.State`).
     private var state: MoreMenu.State {
@@ -193,7 +202,7 @@ struct MoreTab: View {
     private var passkeyOffer: some View {
         MoreCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Toegangssleutel toevoegen?")
+                Text(MoreText.onlyAtSoftHyphens("Toegangs\u{00AD}sleutel toevoegen?"))
                     .font(MoreType.rowTitle)
                     .foregroundStyle(Color.inkBright)
                 MoreText.body("Dan log je voortaan in met Face ID, zonder wachtwoord.")
