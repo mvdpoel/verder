@@ -53,6 +53,22 @@ final class CallSession {
     /// screen. The "Bel …?" prompt iOS shows first only makes the scene
     /// inactive, so a cancelled prompt never reads as a finished call.
     @ObservationIgnored private var leftAfterDial = false
+    /// Until when a `.started` for a call never seen is the late echo of a
+    /// call the DIAL PATH already ended (`reconcile`), not a new call. A
+    /// suspended app's queued CallKit callbacks are delivered on resume, and
+    /// their order against `scenePhase == .active` is unmeasured; the dial
+    /// path ends a call it never had an id for, so without this its late
+    /// `.started`/`.ended` pair ended it a second time — bringing back an
+    /// offer Martin dismissed — and a late `.started` alone sat in
+    /// `startedCalls` until the next `reconcile` ended whatever sheet was
+    /// active then (review, 2026-11-03).
+    @ObservationIgnored private var lateEchoUntil: Date?
+    /// Queued callbacks land within moments of resuming; a minute is slack,
+    /// and short enough that a genuinely new call counts. It outlives
+    /// "Gesprek vastleggen" and opening another party on purpose (an echo
+    /// arriving then would otherwise sit stale in `startedCalls`); only a new
+    /// "Bel" — a call verder itself just started — closes it early.
+    static let lateEchoWindow: TimeInterval = 60
     /// Waiting for the call sheet to finish dismissing (`sheetDismissed`).
     @ObservationIgnored private var pendingVoice: VoicePrefill?
 
@@ -142,6 +158,7 @@ final class CallSession {
         startActivity()
         dialledAt = now()
         leftAfterDial = false
+        lateEchoUntil = nil
         dial(url)
     }
 
@@ -163,6 +180,13 @@ final class CallSession {
     func handle(_ event: CallEvent) {
         switch event {
         case .started(let id):
+            // Already ended (a late `.started` after its `.ended`, or a call
+            // the dial path spent): never a call to follow again.
+            guard !endedCalls.contains(id) else { return }
+            if startedCalls[id] == nil, let until = lateEchoUntil, now() <= until {
+                endedCalls.insert(id)
+                return
+            }
             if startedCalls[id] == nil { startedCalls[id] = now() }
             if isActive, callStartedAt == nil { callStartedAt = startedCalls[id] }
         case .ended(let id):
@@ -209,14 +233,34 @@ final class CallSession {
     /// Not a Live Activity started by hand ("Toon tijdens het gesprek") with no
     /// call seen: switching apps does not end that. And not a cancelled
     /// "Bel …?" prompt: that never takes verder to the background.
+    ///
+    /// A return that comes WITHOUT a background since the dial, and with no
+    /// call live, is the cancelled prompt: it spends the dial there and then.
+    /// Kept armed, the dial waited for any later background (locking the
+    /// phone, another app) and the return after THAT ended a call that never
+    /// took place (review, 2026-11-03). With a call live it is not a cancel —
+    /// the in-call UI may only have made verder inactive — so the dial stays.
     func reconcile() {
         let live = observer.currentCalls()
         for id in Array(startedCalls.keys) where live[id] != false {
             handle(.ended(id))
         }
-        guard let dialledAt, leftAfterDial, isActive, !live.values.contains(false) else { return }
+        guard let dialledAt else { return }
+        let callLive = live.values.contains(false)
+        if !leftAfterDial {
+            if !callLive { forgetDial() }
+            return
+        }
+        guard isActive, !callLive else { return }
         if callStartedAt == nil { callStartedAt = dialledAt }
         endCall()
+        // The dial path never had this call's id. Whatever CallKit still
+        // lists is that call; what it does not list yet may still arrive.
+        for id in live.keys {
+            endedCalls.insert(id)
+            startedCalls.removeValue(forKey: id)
+        }
+        lateEchoUntil = now().addingTimeInterval(Self.lateEchoWindow)
     }
 
     /// RootView's `scenePhase == .background`: the Phone app has the screen.
@@ -268,6 +312,7 @@ final class CallSession {
     private func forget() {
         endActivity()
         forgetDial()
+        lateEchoUntil = nil
         model = nil
         isPresented = false
         callEnded = false

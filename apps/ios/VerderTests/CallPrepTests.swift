@@ -687,6 +687,91 @@ struct CallPrepTests {
         #expect(r.activities.isRunning)
     }
 
+    /// A cancelled prompt spends the dial. Without that, the dial stayed armed
+    /// until some LATER trip to the background (locking the phone, looking
+    /// something up in another app) and the return after it "ended" a call
+    /// that never took place, dated at the cancelled dial (review, 2026-11-03).
+    @Test func aCancelledDialPromptStaysEndedNothingAfterALaterBackground() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.observer.live = [:]
+        r.session.reconcile()            // the prompt was cancelled
+        r.session.sceneEnteredBackground() // later: the phone is locked
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.isRunning)
+    }
+
+    /// Back while the call is live but verder never reached the background
+    /// (the in-call UI only made it inactive): that is no cancelled prompt,
+    /// so the dial stays armed for the return after the call.
+    @Test func aReturnDuringALiveDialledCallKeepsTheDial() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.observer.live = [UUID(): false]
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        r.session.sceneEnteredBackground()
+        r.observer.live = [:]
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+    }
+
+    /// A suspended app's queued CallKit callbacks arrive on resume, in an
+    /// order relative to `scenePhase == .active` nobody has measured. When
+    /// they land AFTER the dial path ended the call, they are that same call:
+    /// an offer dismissed with "Niet nu" does not come back, and a late
+    /// `.started` left without its `.ended` cannot end the next sheet
+    /// (review, 2026-11-03).
+    @Test func lateCallKitEventsAfterADialPathEndAreThatSameCall() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.observer.live = [:]
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+        r.session.dismissEnded()
+        let call = UUID()
+        r.observer.send(.started(call))
+        r.observer.send(.ended(call))
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.ends == 1)
+        // Only the late `.started` arrives: the next sheet is not ended by it.
+        let other = try rig()
+        await other.session.open(partyId: Self.noordkust, name: nil)
+        other.session.bel()
+        other.session.sceneEnteredBackground()
+        other.observer.live = [:]
+        other.session.reconcile()
+        other.session.dismissEnded()
+        other.observer.send(.started(UUID()))
+        await other.session.open(partyId: Self.kade, name: nil)
+        other.session.startActivity()
+        other.session.reconcile()
+        #expect(other.session.callEnded == false)
+        #expect(other.activities.isRunning)
+    }
+
+    /// The calls CallKit still lists at a dial-path end (ended ones) are that
+    /// call's too: their late `.ended` is no second end.
+    @Test func callsListedAtADialPathEndAreSpent() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        let call = UUID()
+        r.observer.live = [call: true]
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+        r.session.dismissEnded()
+        r.observer.send(.started(call))
+        r.observer.send(.ended(call))
+        #expect(r.session.callEnded == false)
+    }
+
     /// The dial is consumed by its end: a second return to the app (or a
     /// later "Toon tijdens het gesprek" on the same sheet) is not a second end.
     @Test func aDialEndsOnlyOnce() async throws {
