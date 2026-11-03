@@ -1,167 +1,231 @@
 import Foundation
 
-/// Overzicht's Leefgeld card, decided outside the view (Figma "leefgeld-kaart
-/// · varianten"). The figures are `leefgeld-week.ts`'s; this only words and
-/// shapes them. Geld keeps its own fuller card (`LeefgeldCard`).
+/// Overzicht's Leefgeld card, decided outside the view (Figma "money · final",
+/// the Money glance frames). The figures are `leefgeld-week.ts`'s; this only
+/// words and shapes them. Geld keeps its own fuller card (`LeefgeldCard`).
 ///
-/// Shown WHILE LOCKED: amounts and the week, never an account — the
-/// footnote says which KIND of account ("je leefgeldrekening"), not which one.
+/// Shown WHILE LOCKED: amounts and the week, never an account. The one place
+/// the card names an account ("van beheerrekening" under Ontvangen) has a
+/// locked spelling ("weekbedrag"), and `Row.meta(revealed:)` picks it.
 ///
-/// THE CARD KEEPS ITS OWN COVERAGE. A partial week says "onvolledig" and
-/// shows what was spent up to the last statement, with the uncovered days
-/// hatched — never what is "left", which is not known yet. No age of the
-/// board around it (an offline eyebrow) ever upgrades it to complete.
+/// THE CARD KEEPS ITS OWN COVERAGE. A partial week carries a "deels" chip, a
+/// sentence saying which days are on a statement and which are not, and a
+/// meter hatched past what is known. No age of the board around it (an
+/// offline eyebrow) ever upgrades it to complete.
+///
+/// THE METER FILLS WHAT WAS SPENT, as a share of the weekly amount: solid up
+/// to it (clamped at the weekly amount, where an overspent week is ticked
+/// "€ 100"), hatched past it on an overspent or partial week.
 ///
 /// NEVER AMBER: an overspent week is information about money, not something
 /// waiting on Martin.
 struct LeefgeldGlance: Equatable, Sendable {
-    struct Column: Equatable, Sendable {
+    /// "Uitgegeven € 62,40 / 3 boekingen", full width.
+    struct Row: Equatable, Sendable {
         let label: String
         let value: String
+        /// The facts under the label, unlocked.
+        let meta: [String]
+        /// The same facts while locked: nothing that names an account.
+        let lockedMeta: [String]
+
+        func meta(revealed: Bool) -> [String] { revealed ? meta : lockedMeta }
     }
 
-    /// The 4 pt bar. Fractions of the bar's width, 0…1.
+    /// The 4 pt meter. Fractions of its width, 0…1.
     struct Bar: Equatable, Sendable {
-        /// What is left (complete) or the covered days (partial), solid.
+        /// What was spent, as a share of the weekly amount (clamped to the
+        /// weekly amount's point on an overspent week).
         let solid: Double
-        /// From here to the end is hatched: days no statement covers yet, or
-        /// what was spent past the weekly amount.
+        /// From here to the end is hatched: past the weekly amount, or the
+        /// part of the week no statement covers yet.
         let hatchedFrom: Double?
-        /// The 100 % point of an overspent week, drawn as a tick.
+        /// The weekly amount's point on an overspent week, drawn as a tick.
         let tick: Double?
+        /// "€ 100" over the tick.
+        let tickLabel: String?
     }
 
     struct Figure: Equatable, Sendable {
+        /// "€ 37,60"; "↑ € 12,40" on an overspent week.
         let hero: String
+        /// "over deze week", "over", "meer uitgegeven dan het weekbedrag".
         let caption: String
-        /// "boven het weekbedrag" sits under the figure, not beside it.
-        let captionBelow: Bool
+        /// At the accessibility sizes the partial week's sentence goes and
+        /// the caption carries the date instead: "over t/m do 29 okt".
+        let axCaption: String
+        /// "Gaat over ma t/m do 29 okt. Vr t/m zo staan nog niet op een afschrift."
+        let note: String?
         let bar: Bar
-        /// "vr–zo: nog geen afschrift".
-        let coverageNote: String?
-        let columns: [Column]
+        let rows: [Row]
+    }
+
+    /// No figure to give: what is the matter, and where it is fixed.
+    struct Message: Equatable, Sendable {
+        /// "geen data" is set large, as the display line of the card.
+        let display: Bool
+        let title: String
+        let meta: String?
+        let text: String
     }
 
     enum Body: Equatable, Sendable {
         case figure(Figure)
-        /// No figure to give: what is the matter and where to fix it.
-        case message(title: String, readout: String?, text: String, link: String)
+        case message(Message)
     }
 
     /// "26 okt – 1 nov"; nil when there is no week to name.
     let range: String?
-    /// A partial week: the header says "onvolledig" before the range.
-    let incomplete: Bool
+    /// A partial week: the header carries the "deels" chip.
+    let partial: Bool
     let body: Body
-    let footnote: String?
 
-    static let footnoteText = "Alleen je leefgeldrekening."
-    static let openWebsite = "Open op de website"
-    static let chooseOnWebsite = "Kies hem op de website"
-    /// Where every message's link leads: the web app's /money.
-    static let websitePath = "money"
+    static let partialChip = "deels"
 
-    /// The header's right-hand readout.
-    var headerReadout: String? {
+    /// The range as drawn: each date unbroken, so a wrapped range (AX5)
+    /// breaks only after "–" and never inside "26 okt".
+    var rangeUnbroken: String? {
         guard let range else { return nil }
-        return incomplete ? "onvolledig · \(range)" : range
-    }
-
-    /// The readout as drawn: an NBSP before the dash, so a wrapped range
-    /// (AX5) breaks after "–" and no line of the header starts with one.
-    var headerReadoutUnbroken: String? {
-        headerReadout?.replacingOccurrences(of: " –", with: "\u{00A0}–")
+        let halves = range.components(separatedBy: " – ")
+        guard halves.count == 2 else { return range }
+        let a = halves[0].replacingOccurrences(of: " ", with: "\u{00A0}")
+        let b = halves[1].replacingOccurrences(of: " ", with: "\u{00A0}")
+        return "\(a)\u{00A0}– \(b)"
     }
 
     /// The whole card in one sentence, for VoiceOver (one element).
-    var accessibilityLabel: String {
-        var parts = ["Leefgeld", headerReadout].compactMap { $0 }
+    func accessibilityLabel(revealed: Bool) -> String {
+        var parts = ["Leefgeld", partial ? Self.partialChip : nil, range].compactMap { $0 }
         switch body {
         case .figure(let f):
-            parts.append("\(f.hero) \(f.caption)")
-            if f.bar.tick == nil, !incomplete, f.bar.hatchedFrom == nil {
-                parts.append("\(Int((f.bar.solid * 100).rounded())) procent over")
-            }
-            if let note = f.coverageNote { parts.append(note) }
-            parts += f.columns.map { "\($0.label) \($0.value)" }
-        case .message(let title, let readout, let text, _):
-            parts += [title, readout, text].compactMap { $0 }
+            parts.append("\(f.hero.replacingOccurrences(of: "↑", with: "").trimmingCharacters(in: .whitespaces)) \(f.caption)")
+            if let note = f.note { parts.append(note) }
+            parts += f.rows.map { ([$0.label, $0.value] + $0.meta(revealed: revealed)).joined(separator: " ") }
+        case .message(let m):
+            parts += [m.title, m.meta, m.text].compactMap { $0 }
         }
-        if let footnote { parts.append(footnote) }
-        return parts.joined(separator: ", ")
+        return MoneyFormat.spokenDates(parts.joined(separator: ", "))
     }
 
     /// Nil when the card is not drawn at all (no weekly amount set).
-    static func make(_ week: LeefgeldWeek, newestBooking: String?) -> LeefgeldGlance? {
+    /// `currentWeek` names the week of a state that carries none (no account
+    /// recognised); `depositSource` is what the deposits' account is called
+    /// ("beheerrekening"), nil when the phone cannot say.
+    static func make(_ week: LeefgeldWeek, newestBooking: String?, currentWeek: LeefgeldWeek.Week? = nil,
+                     depositSource: String? = nil) -> LeefgeldGlance? {
         switch week {
         case .noBudget:
             return nil
         case .noAccount(let candidates):
-            if newestBooking == nil { return nothingImported }
-            let why = switch candidates.count {
-            case 0: "Geen rekening krijgt wekelijks geld binnen."
-            case 1: "1 rekening krijgt wekelijks geld binnen."
-            default: "\(candidates.count) rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een."
+            if newestBooking == nil { return nothingImported(currentWeek) }
+            let n = candidates.count
+            let meta = switch n {
+            case 0: "geen rekening krijgt wekelijks geld binnen"
+            case 1: "1 rekening krijgt wekelijks geld binnen"
+            default: "\(n) rekeningen krijgen wekelijks geld binnen"
             }
-            return LeefgeldGlance(range: nil, incomplete: false,
-                                  body: .message(title: "Leefgeldrekening niet herkend", readout: nil, text: why,
-                                                 link: chooseOnWebsite),
-                                  footnote: nil)
+            let setUp = "Welke je leefgeldrekening is, stel je in bij de installatie van verder."
+            let text = (n >= 2 ? "verder kiest er niet zelf een. \(setUp)" : setUp)
+                + "\n" + (n == 2 ? "Tik om beide rekeningen te bekijken." : "Tik om de rekeningen te bekijken.")
+            return LeefgeldGlance(range: currentWeek.flatMap(range), partial: false,
+                                  body: .message(Message(display: false, title: "Leefgeldrekening niet herkend",
+                                                         meta: meta, text: text)))
         case .geenData(_, _, let w, let newest):
-            guard let newest, let shown = MoneyFormat.dayWithWeekday(newest) else { return nothingImported }
-            return LeefgeldGlance(range: range(w), incomplete: false,
-                                  body: .message(title: "Geen data voor deze week",
-                                                 readout: "laatste afschrift t/m \(shown)",
-                                                 text: "Importeer een nieuw afschrift op de website. Daarna rekent verder deze week uit.",
-                                                 link: openWebsite),
-                                  footnote: nil)
+            guard let newest, let shown = MoneyFormat.dayWithWeekday(newest) else { return nothingImported(w) }
+            return LeefgeldGlance(range: range(w), partial: false,
+                                  body: .message(Message(
+                                      display: true, title: "geen data",
+                                      meta: "laatste afschrift t/m \(shown)",
+                                      text: "Lees het nieuwste afschrift in op de computer, onder Register → Afschrift inlezen.")))
         case .figure(let f):
-            return LeefgeldGlance(range: range(f.week), incomplete: f.partial, body: .figure(figure(f)),
-                                  footnote: footnoteText)
+            return LeefgeldGlance(range: range(f.week), partial: f.partial,
+                                  body: .figure(figure(f, depositSource: depositSource)))
         }
     }
 
-    private static let nothingImported = LeefgeldGlance(
-        range: nil, incomplete: false,
-        body: .message(title: "Nog geen afschriften", readout: nil,
-                       text: "Importeer je eerste afschrift op de website. Daarna zie je hier wat er deze week over is.",
-                       link: openWebsite),
-        footnote: nil)
+    private static func nothingImported(_ week: LeefgeldWeek.Week?) -> LeefgeldGlance {
+        LeefgeldGlance(
+            range: week.flatMap(range), partial: false,
+            body: .message(Message(
+                display: false, title: "Nog geen afschriften", meta: "0 boekingen in verder",
+                text: "Lees je eerste afschrift in op de computer, onder Register → Afschrift inlezen. Daarna staat hier wat er deze week over is.")))
+    }
 
-    /// An amount that never breaks: NBSP after the € and after a minus.
+    /// An amount that never breaks: NBSP after the €.
     static func euro(_ cents: Int) -> String {
-        let plain = MoneyFormat.euro(cents: abs(cents)).replacingOccurrences(of: " ", with: "\u{00A0}")
-        return cents < 0 ? "−\u{00A0}\(plain)" : plain
+        MoneyFormat.euro(cents: cents).replacingOccurrences(of: " ", with: "\u{00A0}")
     }
 
-    private static func figure(_ f: LeefgeldWeek.Figure) -> Figure {
-        let spent = Column(label: "uitgegeven", value: euro(f.spentCents))
-        let received = Column(label: "ontvangen", value: euro(f.depositCents))
+    private static func figure(_ f: LeefgeldWeek.Figure, depositSource: String?) -> Figure {
+        let overspent = f.leftCents < 0
+        let rows = [spentRow(f, overspent: overspent), receivedRow(f, source: depositSource)]
+        let budget = Double(max(f.budgetCents, 0))
+        let spentShare = budget > 0 ? min(1, max(0, Double(f.spentCents) / budget)) : 0
+
+        let covered = f.partial ? coveredDays(f.week.from, f.coveredThrough) : 7
+        let note = f.partial ? partialNote(f.week.from, through: f.coveredThrough, covered: covered) : nil
+        // "t/m" never splits at its slash and a date never leaves its month.
+        let through = MoneyFormat.dayWithWeekday(f.coveredThrough)
+            .map { " " + MoneyFormat.joinDates("t/m \($0)").replacingOccurrences(of: "t/m", with: "t/\u{2060}m") } ?? ""
+
+        if overspent {
+            let point = f.spentCents > 0 ? min(1, max(0, Double(f.budgetCents) / Double(f.spentCents))) : 1
+            let caption = "meer uitgegeven dan het weekbedrag"
+            return Figure(hero: "↑\u{00A0}\(euro(-f.leftCents))", caption: caption,
+                          axCaption: f.partial ? caption + through : caption, note: note,
+                          bar: Bar(solid: point, hatchedFrom: point, tick: point,
+                                   tickLabel: MoneyFormat.euroWhole(cents: f.budgetCents)),
+                          rows: rows)
+        }
         if f.partial {
-            let covered = coveredDays(f.week.from, f.coveredThrough)
-            let solid = Double(covered) / 7
-            let through = MoneyFormat.dayWithWeekday(f.coveredThrough) ?? f.coveredThrough
-            return Figure(hero: euro(f.spentCents), caption: "uitgegeven t/m \(through)", captionBelow: false,
-                          bar: Bar(solid: solid, hatchedFrom: covered < 7 ? solid : nil, tick: nil),
-                          coverageNote: uncoveredNote(f.week.from, covered: covered),
-                          columns: [Column(label: "over", value: "nog niet bekend")])
+            return Figure(hero: euro(f.leftCents), caption: "over", axCaption: "over\(through)", note: note,
+                          bar: Bar(solid: spentShare, hatchedFrom: covered < 7 ? spentShare : nil, tick: nil, tickLabel: nil),
+                          rows: rows)
         }
-        if f.leftCents < 0, f.spentCents > 0 {
-            let point = min(1, max(0, Double(f.budgetCents) / Double(f.spentCents)))
-            return Figure(hero: euro(f.leftCents), caption: "boven het weekbedrag", captionBelow: true,
-                          bar: Bar(solid: 0, hatchedFrom: point, tick: point),
-                          coverageNote: nil, columns: [spent, received])
+        return Figure(hero: euro(f.leftCents), caption: "over deze week", axCaption: "over deze week", note: nil,
+                      bar: Bar(solid: spentShare, hatchedFrom: nil, tick: nil, tickLabel: nil), rows: rows)
+    }
+
+    /// "3 boekingen"; on an overspent week also "laatste za 31 okt", the
+    /// booking that took it over.
+    private static func spentRow(_ f: LeefgeldWeek.Figure, overspent: Bool) -> Row {
+        let n = f.spentRows.count
+        var meta = [n == 1 ? "1 boeking" : "\(n) boekingen"]
+        if overspent, let last = f.spentRows.max(by: { $0.bookedAt < $1.bookedAt }) {
+            meta.append("laatste \(MoneyFormat.dayWithWeekday(last.bookedAt))")
         }
-        let left = f.budgetCents > 0 ? min(1, max(0, Double(f.leftCents) / Double(f.budgetCents))) : 0
-        return Figure(hero: euro(f.leftCents), caption: "over van \(euro(f.budgetCents))", captionBelow: false,
-                      bar: Bar(solid: left, hatchedFrom: nil, tick: nil), coverageNote: nil,
-                      columns: [spent, received])
+        return Row(label: "Uitgegeven", value: euro(f.spentCents), meta: meta, lockedMeta: meta)
+    }
+
+    /// "do 29 okt · van beheerrekening"; locked "do 29 okt · weekbedrag".
+    private static func receivedRow(_ f: LeefgeldWeek.Figure, source: String?) -> Row {
+        let rows = f.depositRows.sorted { $0.bookedAt < $1.bookedAt }
+        guard let last = rows.last else {
+            let meta = ["nog niets ontvangen"]
+            return Row(label: "Ontvangen", value: euro(f.depositCents), meta: meta, lockedMeta: meta)
+        }
+        let when = rows.count == 1 ? [MoneyFormat.dayWithWeekday(last.bookedAt)]
+            : ["\(rows.count)×", "laatste \(MoneyFormat.dayWithWeekday(last.bookedAt))"]
+        let locked = when + ["weekbedrag"]
+        return Row(label: "Ontvangen", value: euro(f.depositCents),
+                   meta: source.map { when + ["van \($0)"] } ?? locked, lockedMeta: locked)
     }
 
     /// "26 okt – 1 nov".
     private static func range(_ w: LeefgeldWeek.Week) -> String? {
         guard let from = MoneyFormat.day(w.from), let to = MoneyFormat.day(w.to) else { return nil }
         return "\(from) – \(to)"
+    }
+
+    /// The Monday-to-Sunday week (Amsterdam) that holds `date`.
+    static func week(containing date: Date) -> LeefgeldWeek.Week {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let weekday = cal.component(.weekday, from: date) // 1 = zondag
+        let back = (weekday + 5) % 7
+        let monday = cal.date(byAdding: .day, value: -back, to: date)!
+        let sunday = cal.date(byAdding: .day, value: 6, to: monday)!
+        return .init(from: MoneyFormat.dayKey(monday), to: MoneyFormat.dayKey(sunday))
     }
 
     /// Days of the week (from its Monday) a statement covers, 0…7.
@@ -171,15 +235,22 @@ struct LeefgeldGlance: Equatable, Sendable {
         return min(7, max(0, days))
     }
 
-    /// "vr–zo: nog geen afschrift", or "zo: …" for one day; nil when covered.
-    static func uncoveredNote(_ from: String, covered: Int) -> String? {
+    /// "Gaat over ma t/m do 29 okt. Vr t/m zo staan nog niet op een afschrift."
+    /// Nil when the whole week is covered.
+    static func partialNote(_ from: String, through: String, covered: Int) -> String? {
         guard covered < 7, let start = civilDate(from) else { return nil }
         func weekday(_ offset: Int) -> String {
             let d = utc.date(byAdding: .day, value: offset, to: start)!
             return MoneyFormat.weekdays[utc.component(.weekday, from: d) - 1]
         }
-        let first = weekday(covered), last = weekday(6)
-        return "\(covered == 6 ? first : "\(first)–\(last)"): nog geen afschrift"
+        guard covered > 0, let last = MoneyFormat.dayWithWeekday(through) else {
+            return "Deze week staat nog niet op een afschrift."
+        }
+        let known = covered == 1 ? "Gaat alleen over \(last)." : "Gaat over \(weekday(0)) t/m \(last)."
+        let missing = covered == 6
+            ? "\(MoneyFormat.sentence(weekday(6))) staat nog niet op een afschrift."
+            : "\(MoneyFormat.sentence(weekday(covered))) t/m \(weekday(6)) staan nog niet op een afschrift."
+        return "\(known) \(missing)"
     }
 
     private static var utc: Calendar {

@@ -365,21 +365,30 @@ struct GeldAccountCard: View {
         .accessibilityLabel(m.accessibilityLabel)
     }
 
-    private func readout(_ r: GeldMonth.Readout) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .lastTextBaseline, spacing: 12) {
-                    Text(r.title).font(HomeType.body).foregroundStyle(Color.inkSoft).fixedSize()
-                    Spacer(minLength: 0)
-                    Text(r.amount).font(HomeType.money).foregroundStyle(Color.inkBright).fixedSize()
-                        .contentTransition(.numericText())
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(r.title).font(HomeType.body).foregroundStyle(Color.inkSoft)
-                    Text(r.amount).font(HomeType.money).foregroundStyle(Color.inkBright)
-                }
+    /// Label in title weight, then (at the accessibility sizes) its meta,
+    /// then the amount: what the figure is, where it came from, how much.
+    @ViewBuilder private func readout(_ r: GeldMonth.Readout) -> some View {
+        let title = Text(r.title).font(HomeType.bodyStrong).foregroundStyle(Color.inkBright)
+        let amount = Text(r.amount).font(HomeType.money).foregroundStyle(Color.inkBright)
+            .contentTransition(.numericText())
+        if ax {
+            VStack(alignment: .leading, spacing: 4) {
+                title.fixedSize(horizontal: false, vertical: true)
+                if let meta = r.meta { GeldMeta(text: meta, ax: ax) }
+                amount.fixedSize(horizontal: false, vertical: true)
             }
-            if let meta = r.meta { GeldMeta(text: meta, ax: ax) }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .lastTextBaseline, spacing: 12) {
+                        title.fixedSize()
+                        Spacer(minLength: 0)
+                        amount.fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 0) { title; amount }
+                }
+                if let meta = r.meta { GeldMeta(text: meta, ax: ax) }
+            }
         }
     }
 

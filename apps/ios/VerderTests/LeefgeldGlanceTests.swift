@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Verder
 
-/// Overzicht's Leefgeld card (Figma "leefgeld-kaart · varianten"): one shape
-/// per state of `leefgeld-week.ts`, and the coverage it states is its own.
+/// Overzicht's Leefgeld card (Figma "money · final", the Money glance frames):
+/// one shape per state of `leefgeld-week.ts`, and the coverage it states is its own.
 struct LeefgeldGlanceTests {
     private static let week = LeefgeldWeek.Week(from: "2026-10-26", to: "2026-11-01")
 
@@ -19,76 +19,113 @@ struct LeefgeldGlanceTests {
         return nil
     }
 
-    @Test func completeWeekShowsWhatIsLeftOfTheBudget() throws {
-        let g = try #require(LeefgeldGlance.make(Self.figure(), newestBooking: "2026-11-01"))
+    private static func msg(_ g: LeefgeldGlance?) -> LeefgeldGlance.Message? {
+        if case .message(let m)? = g?.body { return m }
+        return nil
+    }
+
+    private static func row(_ id: String, _ day: String, _ cents: Int) -> DisclosedRow {
+        DisclosedRow(id: id, bookedAt: ISO8601DateFormatter().date(from: "\(day)T10:00:00Z")!,
+                     amountCents: cents, counterpartyName: "x")
+    }
+
+    @MainActor private static func fixture(_ name: String) throws -> LeefgeldGlance {
+        let dto = try FixtureTests.decode(MoneySummaryDTO.self, name, "money/summary")
+        return try #require(MoneyGlance(dto, now: sunday).leefgeldGlance)
+    }
+
+    /// The fixtures' clock: zo 1 nov 2026 09:41 Amsterdam.
+    static let sunday = ISO8601DateFormatter().date(from: "2026-11-01T08:41:00Z")!
+
+    /// money · final, "Money glance / complete".
+    @MainActor @Test func completeWeekShowsWhatIsLeftAndStackedRows() throws {
+        let g = try Self.fixture("money-complete")
         let f = try #require(Self.fig(g))
-        #expect(g.headerReadout == "26 okt – 1 nov")
+        #expect(g.range == "26 okt – 1 nov" && !g.partial)
         #expect(f.hero == "€\u{00A0}37,60")
-        #expect(f.caption == "over van €\u{00A0}100,00")
-        #expect(abs(f.bar.solid - 0.376) < 0.0001, "the fill is what is LEFT")
+        #expect(f.caption == "over deze week")
+        #expect(abs(f.bar.solid - 0.624) < 0.0001, "the fill is what was SPENT of the weekly amount")
         #expect(f.bar.hatchedFrom == nil && f.bar.tick == nil)
-        #expect(f.columns.map(\.label) == ["uitgegeven", "ontvangen"])
-        #expect(f.columns.map(\.value) == ["€\u{00A0}62,40", "€\u{00A0}100,00"])
-        #expect(g.footnote == "Alleen je leefgeldrekening.")
-        #expect(!g.accessibilityLabel.contains("NL00"), "never an account on the glance")
+        #expect(f.rows.map(\.label) == ["Uitgegeven", "Ontvangen"])
+        #expect(f.rows.map(\.value) == ["€\u{00A0}62,40", "€\u{00A0}100,00"])
+        #expect(f.rows[0].meta(revealed: true) == ["3 boekingen"])
+        #expect(f.rows[1].meta(revealed: true) == ["do 29 okt", "van beheerrekening"])
+        #expect(f.rows[1].meta(revealed: false) == ["do 29 okt", "weekbedrag"], "locked: no account named")
+        #expect(!g.accessibilityLabel(revealed: false).contains("rekening"))
     }
 
-    /// A partial week never claims what is left: it shows what was spent up to
-    /// the last statement, hatches the days no statement covers, and says so.
-    @Test func partialWeekSaysWhatIsNotKnownYet() throws {
-        let g = try #require(LeefgeldGlance.make(Self.figure(partial: true, covered: "2026-10-29", spent: 4790),
-                                                 newestBooking: "2026-10-29"))
+    /// "Money glance / partial": what is left, said to be partial three ways.
+    @MainActor @Test func partialWeekSaysWhichDaysAreKnown() throws {
+        let g = try Self.fixture("money-partial")
         let f = try #require(Self.fig(g))
-        #expect(g.headerReadout == "onvolledig · 26 okt – 1 nov")
-        #expect(g.headerReadoutUnbroken == "onvolledig · 26 okt\u{00A0}– 1 nov")
-        #expect(f.hero == "€\u{00A0}47,90")
-        #expect(f.caption == "uitgegeven t/m do 29 okt")
-        #expect(abs(f.bar.solid - 4.0 / 7) < 0.0001)
+        #expect(g.partial && g.range == "26 okt – 1 nov")
+        #expect(g.rangeUnbroken == "26\u{00A0}okt\u{00A0}– 1\u{00A0}nov")
+        #expect(f.hero == "€\u{00A0}52,10" && f.caption == "over")
+        #expect(f.axCaption == "over t/\u{2060}m\u{00A0}do 29\u{00A0}okt", "AX5 must not break \"t/m\" or \"29 okt\"")
+        #expect(f.note == "Gaat over ma t/m do 29 okt. Vr t/m zo staan nog niet op een afschrift.")
+        #expect(abs(f.bar.solid - 0.479) < 0.0001)
         #expect(f.bar.hatchedFrom == f.bar.solid)
-        #expect(f.coverageNote == "vr–zo: nog geen afschrift")
-        #expect(f.columns == [.init(label: "over", value: "nog niet bekend")])
+        #expect(f.rows[0].meta(revealed: true) == ["2 boekingen"])
     }
 
-    @Test func oneUncoveredDayIsNamedAlone() throws {
-        let g = LeefgeldGlance.make(Self.figure(partial: true, covered: "2026-10-31"), newestBooking: "2026-10-31")
-        #expect(Self.fig(g)?.coverageNote == "zo: nog geen afschrift")
-        #expect(Self.fig(g)?.caption == "uitgegeven t/m za 31 okt")
+    @Test func oneUncoveredDayIsNamedAlone() {
+        #expect(LeefgeldGlance.partialNote("2026-10-26", through: "2026-10-31", covered: 6)
+                == "Gaat over ma t/m za 31 okt. Zo staat nog niet op een afschrift.")
+        #expect(LeefgeldGlance.partialNote("2026-10-26", through: "2026-10-26", covered: 1)
+                == "Gaat alleen over ma 26 okt. Di t/m zo staan nog niet op een afschrift.")
+        #expect(LeefgeldGlance.partialNote("2026-10-26", through: "2026-11-01", covered: 7) == nil)
     }
 
-    /// Overspent: the amount over the weekly budget, with a minus, on its own
-    /// line, the bar ticked at the 100 % point — and never amber (there is no
-    /// tint in the model to give).
-    @Test func overspentWeekTicksTheBudget() throws {
-        let f = try #require(Self.fig(LeefgeldGlance.make(Self.figure(spent: 11240), newestBooking: "2026-11-01")))
-        #expect(f.hero == "−\u{00A0}€\u{00A0}12,40")
-        #expect(f.caption == "boven het weekbedrag")
-        #expect(f.captionBelow)
+    /// "Money glance / overspend": full to the € 100 tick, hatched past it,
+    /// and never amber (there is no tint in the model to give).
+    @MainActor @Test func overspentWeekTicksTheBudget() throws {
+        let f = try #require(Self.fig(try Self.fixture("money-overspent")))
+        #expect(f.hero == "↑\u{00A0}€\u{00A0}12,40")
+        #expect(f.caption == "meer uitgegeven dan het weekbedrag")
         let tick = try #require(f.bar.tick)
         #expect(abs(tick - 10000.0 / 11240) < 0.0001)
-        #expect(f.bar.hatchedFrom == tick)
-        #expect(f.bar.solid == 0)
+        #expect(f.bar.solid == tick && f.bar.hatchedFrom == tick)
+        #expect(f.bar.tickLabel == "€ 100")
+        #expect(f.rows[0].meta(revealed: true) == ["4 boekingen", "laatste za 31 okt"])
     }
 
-    @Test func messagesSayWhatIsMissingAndWhereToFixIt() {
-        let geen = LeefgeldGlance.make(.geenData(accountIban: "NL00TEST9876543210", accountReason: .configured,
-                                                 week: Self.week, newestBooking: "2026-10-18"), newestBooking: "2026-10-18")
-        #expect(geen?.body == .message(title: "Geen data voor deze week", readout: "laatste afschrift t/m zo 18 okt",
-                                       text: "Importeer een nieuw afschrift op de website. Daarna rekent verder deze week uit.",
-                                       link: "Open op de website"))
-        #expect(geen?.headerReadout == "26 okt – 1 nov")
+    @Test func spentShareIsClampedAndOverspentWithoutRowsStillTicks() throws {
+        let f = try #require(Self.fig(LeefgeldGlance.make(Self.figure(spent: 11240), newestBooking: "2026-11-01")))
+        #expect(f.bar.tick != nil && f.rows[0].meta(revealed: true) == ["0 boekingen"])
+        #expect(f.rows[1].meta(revealed: true) == ["nog niets ontvangen"])
+        let two = LeefgeldGlance.make(.figure(.init(
+            partial: false, accountIban: "i", accountReason: .configured, week: Self.week, coveredThrough: "2026-11-01",
+            budgetCents: 10000, spentCents: 100, leftCents: 9900, spentRows: [Self.row("s", "2026-10-27", -100)],
+            depositCents: 10000, depositRows: [Self.row("a", "2026-10-26", 5000), Self.row("b", "2026-10-29", 5000)])),
+            newestBooking: "2026-11-01")
+        #expect(Self.fig(two)?.rows[1].meta(revealed: false) == ["2×", "laatste do 29 okt", "weekbedrag"])
+    }
 
-        let nothing = LeefgeldGlance.make(.noAccount(candidates: []), newestBooking: nil)
-        let empty = LeefgeldGlance.make(.geenData(accountIban: "NL00TEST9876543210", accountReason: .configured,
-                                                  week: Self.week, newestBooking: nil), newestBooking: nil)
+    @MainActor @Test func messagesSayWhatIsMissingAndWhereToFixIt() throws {
+        let geen = try #require(Self.msg(try Self.fixture("money-geen-data")))
+        #expect(geen == .init(display: true, title: "geen data", meta: "laatste afschrift t/m zo 18 okt",
+                              text: "Lees het nieuwste afschrift in op de computer, onder Register → Afschrift inlezen."))
+
+        let nothing = try Self.fixture("money-no-account")
+        let empty = try Self.fixture("money-empty")
         #expect(nothing == empty, "no statements at all reads the same whether or not an IBAN is set")
-        guard case .message(let title, _, _, _)? = nothing?.body else { Issue.record("no message"); return }
-        #expect(title == "Nog geen afschriften")
-        #expect(nothing?.headerReadout == nil)
+        #expect(nothing.range == "26 okt – 1 nov", "the week is named even with no account")
+        #expect(Self.msg(nothing) == .init(
+            display: false, title: "Nog geen afschriften", meta: "0 boekingen in verder",
+            text: "Lees je eerste afschrift in op de computer, onder Register → Afschrift inlezen. Daarna staat hier wat er deze week over is."))
 
-        let unrecognised = LeefgeldGlance.make(.noAccount(candidates: ["a", "b"]), newestBooking: "2026-10-29")
-        #expect(unrecognised?.body == .message(title: "Leefgeldrekening niet herkend", readout: nil,
-                                               text: "2 rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een.",
-                                               link: "Kies hem op de website"))
+        let unrecognised = try Self.fixture("money-unrecognised")
+        #expect(unrecognised.range == "26 okt – 1 nov")
+        #expect(Self.msg(unrecognised) == .init(
+            display: false, title: "Leefgeldrekening niet herkend", meta: "2 rekeningen krijgen wekelijks geld binnen",
+            text: "verder kiest er niet zelf een. Welke je leefgeldrekening is, stel je in bij de installatie van verder.\nTik om beide rekeningen te bekijken."))
+        #expect(!unrecognised.accessibilityLabel(revealed: true).contains("website"))
+    }
+
+    @Test func theWeekRunsMondayToSundayInAmsterdam() {
+        #expect(LeefgeldGlance.week(containing: Self.sunday) == .init(from: "2026-10-26", to: "2026-11-01"))
+        let mondayEarly = ISO8601DateFormatter().date(from: "2026-11-01T23:30:00Z")! // ma 2 nov 00:30
+        #expect(LeefgeldGlance.week(containing: mondayEarly) == .init(from: "2026-11-02", to: "2026-11-08"))
     }
 
     @Test func noBudgetDrawsNoCard() {

@@ -37,7 +37,6 @@ struct HomeTab: View {
     @State private var failedUnlocks = 0
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openURL) private var openURL
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     /// Soft hyphens only at the accessibility sizes, where a compound cannot
@@ -335,11 +334,11 @@ struct HomeTab: View {
         if let glance = money.glance {
             if let lg = glance.leefgeldGlance {
                 Button { openGeld(glance.leefgeldAccountID) } label: {
-                    card { LeefgeldGlanceView(glance: lg, ax: ax, openWebsite: openWebsite) }
+                    card { LeefgeldGlanceView(glance: lg, ax: ax, revealed: lock.revealsCaseContent) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(lg.accessibilityLabel)
+                .accessibilityLabel(lg.accessibilityLabel(revealed: lock.revealsCaseContent))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Opent Geld")
             }
@@ -356,10 +355,6 @@ struct HomeTab: View {
     private func openGeld(_ account: String?) {
         geldFocus = account
         showGeld = true
-    }
-
-    private func openWebsite() {
-        openURL(APIClient.production.appending(path: LeefgeldGlance.websitePath))
     }
 
     // MARK: Tasks · scans · Door verder gedaan
@@ -669,63 +664,59 @@ enum HomeType {
 
 // MARK: - Leefgeld card
 
-/// The Leefgeld card's content: header, figure or message, footnote.
-/// `LeefgeldGlance` decides every word; this lays it out.
+/// The Leefgeld card's content: header, figure or message. `LeefgeldGlance`
+/// decides every word; this lays it out (Figma "money · final").
 struct LeefgeldGlanceView: View {
     let glance: LeefgeldGlance
     let ax: Bool
-    let openWebsite: () -> Void
+    /// Unlocked: the Ontvangen row may name the account the money came from.
+    let revealed: Bool
 
     private func hy(_ s: String) -> String { ax ? HomeSummary.hyphenated(s) : s }
-    /// The room a one-line figure must leave at its end (on top of the
-    /// HStack's 8 pt before the Spacer), or the figure stacks. 12, not 24:
-    /// "€ 47,90 uitgegeven t/m do 29 okt" needs ~318 pt at 12, inside the
-    /// 337 pt card at 402 (inline, as the money-partial frame draws it) and
-    /// over the 311 pt SE card (stacked, as its 343 pt frame draws it). At 24
-    /// it needed ~334 and wrapped at 402 too.
-    static let figureSlack: CGFloat = 12
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             switch glance.body {
             case .figure(let f): figure(f)
-            case .message(let title, let readout, let text, let link): message(title, readout, text, link)
-            }
-            if let footnote = glance.footnote {
-                Text(hy(footnote))
-                    .font(HomeType.body)
-                    .foregroundStyle(Color.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+            case .message(let m): message(m)
             }
         }
     }
 
+    // MARK: Header
+
     private var header: some View {
         let label = Text(ax ? HomeSummary.leefgeldLabel : HomeSummary.leefgeldLabel.uppercased())
             .foregroundStyle(Color.inkLabel)
-        let readout = glance.headerReadoutUnbroken.map { r in
+        let range = glance.rangeUnbroken.map { r in
             Text(ax ? r : r.uppercased()).foregroundStyle(Color.inkLabel)
+                .fixedSize(horizontal: false, vertical: true)
         }
         return Group {
             if ax {
-                VStack(alignment: .leading, spacing: 0) {
+                // Label, chip and range each on their own line: a run that
+                // wraps mid-phrase splits "26 okt" across two lines.
+                VStack(alignment: .leading, spacing: 4) {
                     label
-                    readout
+                    if glance.partial { chip }
+                    range
                 }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
                     ViewThatFits(in: .horizontal) {
-                        // 24 pt clear between label and readout, or they stack:
-                        // a header that only just fits reads as one phrase.
-                        HStack(alignment: .firstTextBaseline) {
+                        HStack(alignment: .center, spacing: 8) {
                             label
-                            Spacer(minLength: 24)
-                            readout
+                            Spacer(minLength: 16)
+                            if glance.partial { chip }
+                            range?.fixedSize()
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             label
-                            readout
+                            HStack(alignment: .center, spacing: 8) {
+                                if glance.partial { chip }
+                                range
+                            }
                         }
                     }
                     Image(systemName: "chevron.right")
@@ -735,130 +726,178 @@ struct LeefgeldGlanceView: View {
             }
         }
         .font(HomeType.mono)
-            .lineHeight(.normal)
+        .lineHeight(.normal)
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
+
+    /// "● DEELS", boxed: the week is not wholly on a statement.
+    private var chip: some View {
+        HStack(alignment: .center, spacing: 4) {
+            Circle().fill(Color.inkDim).frame(width: 5, height: 5)
+            Text(ax ? HomeSummary.sentence(LeefgeldGlance.partialChip) : LeefgeldGlance.partialChip.uppercased())
+                .foregroundStyle(Color.inkLabel)
+                .fixedSize()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color.edgeStrong, lineWidth: 1))
+    }
+
+    // MARK: Figure
 
     @ViewBuilder private func figure(_ f: LeefgeldGlance.Figure) -> some View {
         let hero = Text(f.hero)
             .font(HomeType.money)
             .foregroundStyle(Color.inkBright)
-            .contentTransition(.numericText())
-        let caption = Text(f.caption)
-            .font(HomeType.body)
-            .foregroundStyle(Color.ink)
+        let caption = ax ? f.axCaption : f.caption
+        // The caption flows after the amount, wrapping under it like a
+        // sentence ("↑ € 12,40 meer uitgegeven / dan het weekbedrag").
+        (hero + Text(" ") + Text(caption).font(HomeType.body).foregroundStyle(Color.ink))
             .fixedSize(horizontal: false, vertical: true)
-        if f.captionBelow || ax {
-            VStack(alignment: .leading, spacing: 4) { hero; caption }
-        } else {
-            ViewThatFits(in: .horizontal) {
-                // `figureSlack` to spare at the end, or they stack (Figma's SE
-                // frame stacks "€ 47,90" over its caption at a 343 pt card): a
-                // line that only just fits crowds the card's padding.
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    hero.fixedSize(); caption.fixedSize()
-                    Spacer(minLength: LeefgeldGlanceView.figureSlack)
-                }
-                VStack(alignment: .leading, spacing: 4) { hero; caption }
-            }
-        }
-        LeefgeldBar(bar: f.bar)
-        if let note = f.coverageNote {
-            Text(ax ? HomeSummary.sentence(note) : note.uppercased())
-                .font(HomeType.mono)
-            .lineHeight(.normal)
-                .foregroundStyle(Color.inkLabel)
-                .fixedSize(horizontal: false, vertical: true)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-        }
-        if ax || f.columns.count == 1 {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(f.columns, id: \.label) { column($0) }
-            }
-        } else {
-            HStack(alignment: .top, spacing: 16) {
-                ForEach(f.columns, id: \.label) { column($0).frame(maxWidth: .infinity, alignment: .leading) }
-            }
-        }
-    }
-
-    private func column(_ c: LeefgeldGlance.Column) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(ax ? HomeSummary.sentence(c.label) : c.label.uppercased())
-                .font(HomeType.mono)
-            .lineHeight(.normal)
-                .foregroundStyle(Color.inkLabel)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-            Text(c.value)
-                .font(HomeType.body)
-                .foregroundStyle(Color.inkBright)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func message(_ title: String, _ readout: String?, _ text: String, _ link: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(HomeType.bodyStrong)
-                    .foregroundStyle(Color.inkBright)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let readout {
-                    Text(ax ? HomeSummary.sentence(readout) : readout.uppercased())
-                        .font(HomeType.mono)
-            .lineHeight(.normal)
-                        .foregroundStyle(Color.inkLabel)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                }
-            }
-            Text(hy(text))
+            .contentTransition(.numericText())
+        if let note = f.note, !ax {
+            Text(note)
                 .font(HomeType.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(action: openWebsite) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(link).font(HomeType.bodyStrong)
-                    Image(systemName: "arrow.up.right").font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(Color.signal)
-                .frame(minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
+        }
+        LeefgeldBar(bar: f.bar)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(f.rows.enumerated()), id: \.offset) { i, r in
+                if i > 0 { Rectangle().fill(Color.edge).frame(height: 1) }
+                row(r)
             }
-            .buttonStyle(.plain)
-            .padding(.vertical, -10)
+        }
+    }
+
+    @ViewBuilder private func row(_ r: LeefgeldGlance.Row) -> some View {
+        let title = Text(r.label).font(HomeType.bodyStrong).foregroundStyle(Color.inkBright)
+        let value = Text(r.value).font(HomeType.bodyStrong).foregroundStyle(Color.inkBright)
+        if ax {
+            VStack(alignment: .leading, spacing: 4) {
+                title.fixedSize(horizontal: false, vertical: true)
+                meta(r.meta(revealed: revealed))
+                value.fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    title.fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    value.fixedSize()
+                }
+                meta(r.meta(revealed: revealed))
+            }
+        }
+    }
+
+    // MARK: Message
+
+    private func message(_ m: LeefgeldGlance.Message) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: m.display ? 17 : 15, weight: .regular))
+                        .foregroundStyle(Color.inkSoft)
+                        .accessibilityHidden(true)
+                    Text(m.title)
+                        .font(m.display ? HomeType.money : HomeType.bodyStrong)
+                        .foregroundStyle(Color.inkBright)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let readout = m.meta { meta([readout]) }
+            }
+            Text(hy(m.text))
+                .font(HomeType.body)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A mono meta line that wraps only at " · "; at the accessibility sizes
+    /// one fact per line, in sentence case.
+    @ViewBuilder private func meta(_ parts: [String]) -> some View {
+        if !parts.isEmpty {
+            Group {
+                if ax {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
+                            Text(HomeSummary.sentence(p)).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                } else {
+                    Text(HomeSummary.metaLine(parts)).textCase(.uppercase)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .font(HomeType.mono)
+            .lineHeight(.normal)
+            .foregroundStyle(Color.inkDim)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         }
     }
 }
 
-/// The 4 pt week bar: what is left (or the covered days) solid, the unknown
-/// days or the overspend hatched, the 100 % point of an overspent week ticked.
+/// The 4 pt week meter: what was spent solid (up to the weekly amount), the
+/// overspend or the days no statement covers yet hatched, and an overspent
+/// week's weekly amount ticked and labelled "€ 100".
 struct LeefgeldBar: View {
     let bar: LeefgeldGlance.Bar
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            ZStack(alignment: .leading) {
-                Rectangle().fill(Color.edgeStrong).frame(width: (bar.hatchedFrom ?? 1) * w)
-                Rectangle().fill(Color.inkSoft).frame(width: bar.solid * w)
-                if let from = bar.hatchedFrom {
-                    Hatch(spacing: 3).stroke(Color.inkDim, lineWidth: 1)
-                        .frame(width: (1 - from) * w)
-                        .clipped()
-                        .offset(x: from * w)
+        VStack(alignment: .leading, spacing: 4) {
+            if let label = bar.tickLabel, let tick = bar.tick {
+                TickLabelLayout(tick: tick) {
+                    Text(label)
+                        .font(HomeType.mono)
+                        .lineHeight(.normal)
+                        .foregroundStyle(Color.inkDim)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                        .fixedSize()
                 }
             }
-            .frame(height: 4)
-            .frame(maxHeight: .infinity)
-            .overlay(alignment: .leading) {
-                if let tick = bar.tick {
-                    Rectangle().fill(Color.inkSoft).frame(width: 2, height: 12).offset(x: tick * w - 1)
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Color.edgeStrong)
+                    Rectangle().fill(Color.inkSoft).frame(width: bar.solid * w)
+                    if let from = bar.hatchedFrom, from < 1 {
+                        Hatch(spacing: 3).stroke(Color.inkDim, lineWidth: 1)
+                            .frame(width: (1 - from) * w)
+                            .clipped()
+                            .offset(x: from * w)
+                    }
+                }
+                .frame(height: 4)
+                .frame(maxHeight: .infinity)
+                .overlay(alignment: .leading) {
+                    if let tick = bar.tick {
+                        Rectangle().fill(Color.inkBright).frame(width: 2, height: 12).offset(x: tick * w - 1)
+                    }
                 }
             }
+            .frame(height: bar.tick == nil ? 4 : 12)
         }
-        .frame(height: bar.tick == nil ? 4 : 12)
         .accessibilityHidden(true)
+    }
+}
+
+/// Puts the "€ 100" label's right edge 8 pt left of the tick (never past
+/// the meter's left end), as the overspend frame sets it.
+private struct TickLabelLayout: Layout {
+    let tick: Double
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(.unspecified) ?? .zero
+        return CGSize(width: proposal.width ?? size.width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let label = subviews.first else { return }
+        let size = label.sizeThatFits(.unspecified)
+        let x = max(bounds.minX, bounds.minX + bounds.width * tick - 8 - size.width)
+        label.place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(size))
     }
 }
 

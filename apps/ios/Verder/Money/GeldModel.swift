@@ -55,7 +55,10 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
 
     /// `accountNames`: what this screen calls each OTHER account, so a
     /// deposit from the beheerrekening reads "van beheerrekening".
-    init(_ account: MoneySummaryDTO.Account, name: String, accountNames: [String: String] = [:]) {
+    /// `counterpart`: the ONE other own account, when there are exactly two —
+    /// then every transfer between own accounts on this one is with it.
+    init(_ account: MoneySummaryDTO.Account, name: String, accountNames: [String: String] = [:],
+         counterpart: GeldSheet.Counterpart? = nil) {
         id = account.accountIban ?? "onbekend"
         title = name
         tail = account.accountIban.map(MoneyFormat.ibanDots)
@@ -80,7 +83,8 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
         var parts = ["\(posten) \(posten == 1 ? "post" : "posten")"]
         if partial > 0 { parts.append("\(partial) \(partial == 1 ? "maand" : "maanden") deels") }
         disclosureMeta = parts.joined(separator: " · ")
-        sheet = GeldSheet(account, title: name, tail: tail, months: months, internalGroups: internalGroups)
+        sheet = GeldSheet(account, title: name, tail: tail, months: months, internalGroups: internalGroups,
+                          counterpart: counterpart)
     }
 
     /// One card per account, named. The leefgeldrekening is the account the
@@ -88,7 +92,9 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
     /// beside exactly one of it, the one other known account is the
     /// beheerrekening — under bewind those are the two. Anything else is
     /// "Rekening": the phone never guesses which account is which.
-    static func make(_ accounts: [MoneySummaryDTO.Account]) -> [GeldAccount] {
+    /// `leefgeldDeposits`: this week's deposits on the leefgeldrekening, so a
+    /// transfer the other statement does not reach yet can be named.
+    static func make(_ accounts: [MoneySummaryDTO.Account], leefgeldDeposits: [DisclosedRow] = []) -> [GeldAccount] {
         let known = accounts.filter { $0.accountIban != nil }
         let leefgeld = known.filter(\.isLeefgeldAccount)
         let beheerIban: String? = leefgeld.count == 1 && known.count == 2
@@ -101,7 +107,20 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
         }
         var names: [String: String] = [:]
         for a in known { if let iban = a.accountIban { names[iban] = name(a) } }
-        return accounts.map { GeldAccount($0, name: name($0), accountNames: names) }
+        func counterpart(_ a: MoneySummaryDTO.Account) -> GeldSheet.Counterpart? {
+            guard known.count == 2, let mine = a.accountIban,
+                  let other = known.first(where: { $0.accountIban != mine }), let iban = other.accountIban else { return nil }
+            let otherName = name(other)
+            // "weekbedrag" only when the server says the other account's money
+            // from this one arrives weekly as its leefgeld.
+            let weekly = other.isLeefgeldAccount && other.months.contains { m in
+                (m.inSources ?? []).contains { $0.cadence == "weekly" && $0.fromAccountIban == mine }
+            }
+            return GeldSheet.Counterpart(
+                name: otherName, tail: MoneyFormat.ibanDots(iban), weekly: weekly,
+                laterDeposits: other.isLeefgeldAccount && otherName == "Leefgeldrekening" ? leefgeldDeposits : [])
+        }
+        return accounts.map { GeldAccount($0, name: name($0), accountNames: names, counterpart: counterpart($0)) }
     }
 }
 
@@ -230,6 +249,18 @@ struct GeldSheet: Equatable, Sendable {
 
     static let title = "Niet in de balken"
 
+    /// The one other own account (see `GeldAccount.init`).
+    struct Counterpart: Equatable, Sendable {
+        /// "Leefgeldrekening", "Beheerrekening", "Rekening".
+        let name: String
+        /// "··3210".
+        let tail: String
+        /// Its money from this account arrives weekly as leefgeld.
+        let weekly: Bool
+        /// Deposits on it this week (only when it is the leefgeldrekening).
+        let laterDeposits: [DisclosedRow]
+    }
+
     /// "beheerrekening · ··6789 · jun – nov".
     let meta: String
     let sections: [Section]
@@ -239,7 +270,8 @@ struct GeldSheet: Equatable, Sendable {
         var order: [String] = []
         var groups: [String: [DisclosedRow]] = [:]
         for r in rows.sorted(by: { $0.bookedAt < $1.bookedAt }) {
-            let key = r.counterpartyName ?? ""
+            // Per counterparty AND direction: "naar" and "van" never net out.
+            let key = "\(r.counterpartyName ?? "")|\(r.amountCents < 0)"
             if groups[key] == nil { order.append(key) }
             groups[key, default: []].append(r)
         }
@@ -247,7 +279,7 @@ struct GeldSheet: Equatable, Sendable {
     }
 
     init(_ account: MoneySummaryDTO.Account, title: String, tail: String?, months: [GeldMonth],
-         internalGroups: [[DisclosedRow]]) {
+         internalGroups: [[DisclosedRow]], counterpart: Counterpart? = nil) {
         let span = [months.first?.short, months.last?.short].compactMap { $0 }
         meta = ([title.lowercased(), tail, span.count == 2 ? "\(span[0]) – \(span[1])" : nil]
             .compactMap { $0 }).joined(separator: " · ")
@@ -261,16 +293,7 @@ struct GeldSheet: Equatable, Sendable {
             }, note: nil))
         }
         if !internalGroups.isEmpty {
-            sections.append(Section(heading: "Tussen je eigen rekeningen", rows: internalGroups.compactMap { g in
-                guard let first = g.first, let last = g.last else { return nil }
-                let total = g.reduce(0) { $0 + $1.amountCents }
-                let n = g.count
-                let range = n == 1 ? MoneyFormat.day(first.bookedAt)
-                    : "\(MoneyFormat.day(first.bookedAt)) t/m \(MoneyFormat.day(last.bookedAt))"
-                return Row(id: first.id, title: first.counterpartyName ?? "Eigen rekening",
-                           amount: MoneyFormat.euro(cents: total),
-                           meta: "\(n)× · \(range)")
-            }, note: "Staat op de andere rekening als ontvangen. Geld tussen je eigen rekeningen is geen inkomen en geen uitgave."))
+            sections.append(Self.internalSection(internalGroups, account: account, counterpart: counterpart))
         }
         let open = months.filter { $0.coverage != .complete }
         if !open.isEmpty {
@@ -285,6 +308,52 @@ struct GeldSheet: Equatable, Sendable {
             }, note: nil))
         }
         self.sections = sections
+    }
+}
+
+extension GeldSheet {
+    /// "Tussen je eigen rekeningen". With a named counterpart: "Naar
+    /// leefgeldrekening € 2.100,00 / ··3210 · 21× weekbedrag · jun t/m 24 okt",
+    /// and the note says where those rows stand as received — and which of
+    /// them only the other statement reaches yet.
+    static func internalSection(_ groups: [[DisclosedRow]], account: MoneySummaryDTO.Account,
+                                counterpart: Counterpart?) -> Section {
+        let newest = account.newestBooking
+        let rows: [Row] = groups.compactMap { g in
+            guard let first = g.first, let last = g.last else { return nil }
+            let total = g.reduce(0) { $0 + $1.amountCents }
+            let n = g.count
+            guard let other = counterpart else {
+                let range = n == 1 ? MoneyFormat.day(first.bookedAt)
+                    : "\(MoneyFormat.day(first.bookedAt)) t/m \(MoneyFormat.day(last.bookedAt))"
+                return Row(id: first.id, title: first.counterpartyName ?? "Eigen rekening",
+                           amount: MoneyFormat.euro(cents: abs(total)), meta: "\(n)× · \(range)")
+            }
+            // A span of rows runs to the statement's own end when the last
+            // row is in the statement's last month: "jun t/m 24 okt".
+            let lastKey = MoneyFormat.dayKey(last.bookedAt)
+            let end = newest.flatMap { key in key.prefix(7) == lastKey.prefix(7) && key >= lastKey ? MoneyFormat.day(key) : nil }
+                ?? MoneyFormat.day(last.bookedAt)
+            let range = n == 1 ? MoneyFormat.day(first.bookedAt)
+                : "\(MoneyFormat.monthShort(String(MoneyFormat.dayKey(first.bookedAt).prefix(7))) ?? "") t/m \(end)"
+            let count = other.weekly ? (n == 1 ? "weekbedrag" : "\(n)× weekbedrag") : "\(n)×"
+            return Row(id: first.id, title: "\(total < 0 ? "Naar" : "Van") \(other.name.lowercased())",
+                       amount: MoneyFormat.euro(cents: abs(total)), meta: [other.tail, count, range].joined(separator: " · "))
+        }
+        guard let other = counterpart else {
+            return Section(heading: "Tussen je eigen rekeningen", rows: rows,
+                           note: "Staat op de andere rekening als ontvangen. Geld tussen je eigen rekeningen is geen inkomen en geen uitgave.")
+        }
+        var note = "Staat daar als ontvangen."
+        if let newest, let through = MoneyFormat.day(newest) {
+            let later = other.laterDeposits.map { MoneyFormat.dayKey($0.bookedAt) }.filter { $0 > newest }
+            let days = Array(Set(later)).sorted().compactMap(MoneyFormat.dayWithWeekday)
+            if !days.isEmpty {
+                let list = days.count == 1 ? days[0] : days.dropLast().joined(separator: ", ") + " en " + days.last!
+                note += " \(MoneyFormat.sentence(list)) \(days.count == 1 ? "staat" : "staan") alleen op de \(other.name.lowercased()): het afschrift van deze rekening loopt t/m \(through)."
+            }
+        }
+        return Section(heading: "Tussen je eigen rekeningen", rows: rows, note: note)
     }
 }
 

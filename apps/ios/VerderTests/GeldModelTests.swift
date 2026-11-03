@@ -130,17 +130,42 @@ struct GeldModelTests {
 
     @Test func theSheetListsWhatTheBarsLeaveOut() throws {
         let beheer = try #require(try geld("money-partial").first)
-        #expect(beheer.disclosureMeta == "1 post · 1 maand deels")
+        #expect(beheer.disclosureMeta == "2 posten · 1 maand deels")
         #expect(beheer.sheet.meta == "beheerrekening · ··6789 · jun – nov")
-        #expect(beheer.sheet.sections.map(\.heading) == ["Eenmalig binnengekomen", "Welke maanden op een afschrift staan"])
+        #expect(beheer.sheet.sections.map(\.heading)
+                == ["Eenmalig binnengekomen", "Tussen je eigen rekeningen", "Welke maanden op een afschrift staan"])
         #expect(beheer.sheet.sections[0].rows == [
             .init(id: "00000000-f1c5-4000-8000-500000000001", title: "Zorgverzekeraar Duinzorg",
                   amount: "€ 85,00", meta: "19 aug"),
         ])
-        #expect(beheer.sheet.sections[1].rows.map(\.meta) == ["deels · t/m za 24 okt", "geen data · geen afschrift"])
+        // The weekly transfers to the leefgeldrekening, named by the one other
+        // own account; the note names what only the other statement reaches.
+        let transfers = beheer.sheet.sections[1]
+        #expect(transfers.rows.map(\.title) == ["Naar leefgeldrekening"])
+        #expect(transfers.rows.map(\.amount) == ["€ 2.100,00"])
+        #expect(transfers.rows.map(\.meta) == ["··3210 · 21× weekbedrag · jun t/m 24 okt"])
+        #expect(transfers.note == "Staat daar als ontvangen. Do 29 okt staat alleen op de leefgeldrekening: het afschrift van deze rekening loopt t/m 24 okt.")
+        #expect(beheer.sheet.sections[2].rows.map(\.meta) == ["deels · t/m za 24 okt", "geen data · geen afschrift"])
 
         let leefgeld = try #require(try geld("money-partial").last)
         #expect(leefgeld.disclosureMeta == "0 posten · 1 maand deels")
+    }
+
+    /// Without exactly two own accounts the phone cannot say which account a
+    /// transfer went to, so the row keeps the bank's counterparty name.
+    @Test func internalTransfersWithoutACounterpartKeepTheBanksName() throws {
+        let rows = (0..<2).map { i in
+            DisclosedRow(id: "t\(i)", bookedAt: ISO8601DateFormatter().date(from: "2026-10-0\(i + 1)T10:00:00Z")!,
+                         amountCents: -10_000, counterpartyName: "Eigen")
+        }
+        let m = MonthSeries(month: "2026-10", coverage: .complete, inCents: 0, outCents: 0, outByCategory: [],
+                            incidentalCents: 0, internalCents: -20_000, parseErrorRows: 0, internalRows: rows,
+                            incidentalRows: [])
+        let a = GeldAccount(.init(accountIban: "NL00TEST0000000001", months: [m]), name: "Rekening")
+        let section = try #require(a.sheet.sections.first)
+        #expect(section.rows.map(\.title) == ["Eigen"])
+        #expect(section.rows.map(\.meta) == ["2× · 1 okt t/m 2 okt"])
+        #expect(section.rows.map(\.amount) == ["€ 200,00"])
     }
 
     @Test func internalTransfersAreGroupedPerCounterparty() {

@@ -31,9 +31,34 @@
             }
           ],
           "incidentalCents": 0,
-          "internalCents": 0,
+          "internalCents": -40000,
           "parseErrorRows": 0,
-          "internalRows": [],
+          "internalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000301",
+              "bookedAt": "2026-06-04T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000302",
+              "bookedAt": "2026-06-11T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000303",
+              "bookedAt": "2026-06-18T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000304",
+              "bookedAt": "2026-06-25T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            }
+          ],
           "incidentalRows": [],
           "outRows": 15,
           "inSources": [
@@ -73,9 +98,40 @@
             }
           ],
           "incidentalCents": 0,
-          "internalCents": 0,
+          "internalCents": -50000,
           "parseErrorRows": 0,
-          "internalRows": [],
+          "internalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000305",
+              "bookedAt": "2026-07-02T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000306",
+              "bookedAt": "2026-07-09T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000307",
+              "bookedAt": "2026-07-16T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000308",
+              "bookedAt": "2026-07-23T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000309",
+              "bookedAt": "2026-07-30T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            }
+          ],
           "incidentalRows": [],
           "outRows": 16,
           "inSources": [
@@ -115,9 +171,34 @@
             }
           ],
           "incidentalCents": 8500,
-          "internalCents": 0,
+          "internalCents": -40000,
           "parseErrorRows": 0,
-          "internalRows": [],
+          "internalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000310",
+              "bookedAt": "2026-08-06T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000311",
+              "bookedAt": "2026-08-13T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000312",
+              "bookedAt": "2026-08-20T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000313",
+              "bookedAt": "2026-08-27T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            }
+          ],
           "incidentalRows": [
             {
               "id": "00000000-f1c5-4000-8000-500000000001",
@@ -164,9 +245,34 @@
             }
           ],
           "incidentalCents": 0,
-          "internalCents": 0,
+          "internalCents": -40000,
           "parseErrorRows": 0,
-          "internalRows": [],
+          "internalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000314",
+              "bookedAt": "2026-09-03T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000315",
+              "bookedAt": "2026-09-10T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000316",
+              "bookedAt": "2026-09-17T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000317",
+              "bookedAt": "2026-09-24T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            }
+          ],
           "incidentalRows": [],
           "outRows": 17,
           "inSources": [
@@ -198,9 +304,34 @@
             }
           ],
           "incidentalCents": 0,
-          "internalCents": 0,
+          "internalCents": -40000,
           "parseErrorRows": 0,
-          "internalRows": [],
+          "internalRows": [
+            {
+              "id": "00000000-f1c5-4000-8000-500000000318",
+              "bookedAt": "2026-10-01T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000319",
+              "bookedAt": "2026-10-08T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000320",
+              "bookedAt": "2026-10-15T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            },
+            {
+              "id": "00000000-f1c5-4000-8000-500000000321",
+              "bookedAt": "2026-10-22T08:00:00.000Z",
+              "amountCents": -10000,
+              "counterpartyName": "Bewindkantoor Noordkust"
+            }
+          ],
           "incidentalRows": [],
           "outRows": 14,
           "inSources": [

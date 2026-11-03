@@ -221,13 +221,31 @@ struct MoneyGlance: Equatable, Sendable {
         return geld.map { AccountRow(id: $0.id, title: $0.title, meta: [$0.tail, $0.newestLine].compactMap { $0 }) }
     }
 
+    /// What the leefgeld week's deposits' account is called on this screen
+    /// ("beheerrekening"): the one other own account the leefgeldrekening's
+    /// weekly money came from, per the server's newest month that says. Nil
+    /// when nothing says so — the card then writes "weekbedrag" alone.
+    static func depositSource(_ dto: MoneySummaryDTO, geld: [GeldAccount]) -> String? {
+        guard case .figure(let f) = dto.leefgeld,
+              let account = dto.accounts.first(where: { $0.accountIban == f.accountIban }),
+              let sources = account.months.last(where: { !($0.inSources ?? []).isEmpty })?.inSources else { return nil }
+        let own = Set(sources.filter { $0.cadence == "weekly" }.compactMap(\.fromAccountIban))
+        guard own.count == 1, let iban = own.first,
+              let name = geld.first(where: { $0.id == iban })?.title else { return nil }
+        return name == "Rekening" ? "eigen rekening" : name.lowercased()
+    }
+
     /// Where a tap on the leefgeld card lands on Geld: the leefgeldrekening's card.
     var leefgeldAccountID: String? { geld.first { $0.title == "Leefgeldrekening" }?.id }
 
-    init(_ dto: MoneySummaryDTO) {
-        geld = GeldAccount.make(dto.accounts)
+    /// `now` names "deze week" for a state the server sends no week with.
+    init(_ dto: MoneySummaryDTO, now: Date = Date()) {
+        let leefgeldDeposits: [DisclosedRow] = if case .figure(let f) = dto.leefgeld { f.depositRows } else { [] }
+        geld = GeldAccount.make(dto.accounts, leefgeldDeposits: leefgeldDeposits)
         leefgeld = LeefgeldCard.make(dto.leefgeld, newestBooking: dto.newestBooking)
-        leefgeldGlance = LeefgeldGlance.make(dto.leefgeld, newestBooking: dto.newestBooking)
+        leefgeldGlance = LeefgeldGlance.make(dto.leefgeld, newestBooking: dto.newestBooking,
+                                             currentWeek: LeefgeldGlance.week(containing: now),
+                                             depositSource: Self.depositSource(dto, geld: geld))
         previousWeek = LeefgeldCard.previousWeekLine(dto.previousWeek)
         accounts = dto.accounts.map(AccountCard.init)
         freshness = dto.newestBooking.flatMap(MoneyFormat.dayWithWeekday).map { "laatste afschrift t/m \($0)" }
@@ -329,7 +347,7 @@ final class MoneyStore {
         attemptedAt = at
         switch result {
         case .success(let dto):
-            glance = MoneyGlance(dto)
+            glance = MoneyGlance(dto, now: now())
             lastError = nil
             fetchedAt = at
         case .failure(let error):

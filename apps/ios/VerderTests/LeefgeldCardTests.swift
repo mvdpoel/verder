@@ -153,10 +153,11 @@ struct LeefgeldCardTests {
     @Test func disclosuresTravelWithTheirMonth() throws {
         let beheer = try #require(try glance("money-complete").accounts.first)
         let august = try #require(beheer.months.first { $0.month == "2026-08" })
-        #expect(august.disclosures == [
-            .init(id: "00000000-f1c5-4000-8000-500000000001", kind: "eenmalig", day: "19 aug",
-                  name: "Zorgverzekeraar Duinzorg", amount: "€ 85,00"),
-        ])
+        #expect(august.disclosures.first == .init(id: "00000000-f1c5-4000-8000-500000000001", kind: "eenmalig",
+                                                  day: "19 aug", name: "Zorgverzekeraar Duinzorg", amount: "€ 85,00"))
+        // August's four weekly transfers to the leefgeldrekening follow it.
+        #expect(august.disclosures.dropFirst().map(\.kind) == Array(repeating: "eigen overboeking", count: 4))
+        #expect(august.disclosures.dropFirst().map(\.day) == ["6 aug", "13 aug", "20 aug", "27 aug"])
     }
 
     /// Bars scale to their OWN account's largest month, never to another's.

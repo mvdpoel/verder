@@ -57,6 +57,19 @@ enum MoneyFormat {
         return "\(c.day ?? 0) \(months[(c.month ?? 1) - 1])"
     }
 
+    /// A booking instant → its Amsterdam day key, "2026-10-29".
+    static func dayKey(_ date: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let c = cal.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// A booking instant on Amsterdam's calendar → "do 29 okt".
+    static func dayWithWeekday(_ date: Date) -> String {
+        dayWithWeekday(dayKey(date)) ?? day(date)
+    }
+
     /// "NL00 TEST 0123 4567 89".
     static func iban(_ iban: String) -> String {
         var out = ""
