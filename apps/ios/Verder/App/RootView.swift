@@ -59,6 +59,8 @@ struct RootView: View {
         Group {
             if auth.isSignedIn {
                 tabs
+            } else if auth.sessionExpired {
+                SessionExpiredView(auth: auth, uploads: uploads)
             } else {
                 SignInView(auth: auth)
             }

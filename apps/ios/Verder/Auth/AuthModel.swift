@@ -33,6 +33,10 @@ final class AuthModel {
     private(set) var sessionGeneration = 0
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// The server ended the session (a 401), as opposed to Martin signing out
+    /// or a first launch: the sign-in screen then says "Je sessie is verlopen."
+    /// Cleared by the next sign-in and by an explicit sign-out.
+    private(set) var sessionExpired = false
     /// After a password sign-in with no passkey on the account yet: offer one,
     /// once per install.
     private(set) var passkeyOfferPending = false
@@ -92,6 +96,7 @@ final class AuthModel {
             }
             try store.save(cookie)
             isSignedIn = true
+            sessionExpired = false
             sessionGeneration += 1
         } catch let error as APIError {
             errorMessage = Self.message(for: error)
@@ -113,6 +118,7 @@ final class AuthModel {
         do {
             try await passkeys.signIn()
             isSignedIn = true
+            sessionExpired = false
             sessionGeneration += 1
         } catch PasskeyError.cancelled {
             // Martin closed the sheet; nothing to say.
@@ -175,6 +181,7 @@ final class AuthModel {
     func signOut() async {
         let req = client.request("/api/auth/sign-out", method: "POST", body: Data("{}".utf8), contentType: "application/json")
         _ = try? await client.send(req)
+        sessionExpired = false
         forgetLocally()
     }
 
@@ -182,6 +189,7 @@ final class AuthModel {
     /// registration): forget it here and show sign-in. No sign-out request —
     /// the server already holds no such session.
     func sessionRejected() {
+        if isSignedIn { sessionExpired = true }
         forgetLocally()
     }
 

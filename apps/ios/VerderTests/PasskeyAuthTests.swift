@@ -355,6 +355,22 @@ struct AuthModelPasskeyTests {
         #expect(reloads.n == 1)
     }
 
+    /// A 401 says "Je sessie is verlopen."; Martin signing out does not.
+    @Test func onlyARejectedSessionCountsAsExpired() async {
+        let server = StubServer()
+        server.on { _ in .status(200, body: Data(#"{"success":true}"#.utf8)) }
+        let store = InMemorySessionStore(SessionCookie(name: "better-auth.session_token", value: "tok", expires: nil))
+        let client = server.client(store: store)
+        let model = AuthModel(client: client, store: store,
+                              passkeys: PasskeyAuth(client: client, store: store, authenticator: PasskeyAuthTests.FakeAuthenticator()),
+                              defaults: Self.defaults())
+        #expect(!model.sessionExpired)
+        model.sessionRejected()
+        #expect(model.sessionExpired && !model.isSignedIn)
+        await model.signOut()
+        #expect(!model.sessionExpired, "an explicit sign-out is not an expiry")
+    }
+
     final class Counter { var n = 0 }
 
     static let caseSnapshot = WidgetSnapshot(
