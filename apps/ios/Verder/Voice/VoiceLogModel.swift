@@ -32,7 +32,9 @@ import Observation
 /// phone with progress, and sends the edited text as the same suggestion.
 /// The drop in the App Group is deleted after a successful send or a
 /// cancel, and kept through a failed send, a relock or a sign-in, so even a
-/// killed app offers it again. A call sheet active for a party within the
+/// killed app offers it again — under the SAME clientId, because a drop's
+/// clientId is the drop's id, so a retry after a relaunch dedups instead of
+/// storing the call twice. A call sheet active for a party within the
 /// last hour (`RecentCallSheet`) preselects that party and puts its ticked
 /// points on top, as "Gesprek vastleggen" after a call does.
 ///
@@ -425,6 +427,14 @@ final class VoiceLogModel {
         // or swipe) deletes it. The original stays in Notes.
         importedDrop = source.drop
         importedGroupDir = source.groupDir
+        // A drop's clientId IS the drop's id. The drop outlives this model (a
+        // failed send keeps it, and a killed app reopens it in a fresh model),
+        // so a per-model UUID would post a send whose outcome was unknown
+        // under a second id, and the route — which dedups on
+        // `phone:<clientId>` only — would store the call twice. With the drop
+        // id, every retry of it answers `duplicate: true`. A picked file has
+        // no drop and no afterlife, so it keeps the model's own id.
+        if let drop = source.drop { clientId = drop }
         let url = dir.appending(path: "\(clientId.uuidString.lowercased()).\(source.fileExtension)")
         do {
             // The same class as a dictated recording, set on the folder before

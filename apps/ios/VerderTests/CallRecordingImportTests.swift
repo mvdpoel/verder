@@ -434,6 +434,39 @@ struct CallRecordingImportTests {
         #expect(m.hasRecording)
     }
 
+    /// A send whose outcome is unknown (timeout after the server stored it),
+    /// then a killed app: the relaunch opens the SAME drop in a fresh model.
+    /// The route dedups on `phone:<clientId>` only, so the retry must post
+    /// the same clientId or the call is stored as a second suggestion.
+    @Test func aDropRetriedAfterARelaunchPostsTheSameClientId() async throws {
+        let group = try group()
+        let drop = try audioDrop(group)
+        let failing = server(voiceStatus: 503)
+        let first = VoiceLogSession(factory: VoiceLogFactory { try! model(failing) }, groupDir: group)
+        await first.openPendingRecording()?.value
+        await first.model?.prepare()
+        await first.model?.send()
+        #expect(IncomingDrop.pendingAudio(groupDir: group).map(\.id) == [drop.id])
+
+        // The app is killed: a new session and model over the same App Group.
+        let working = server()
+        let second = VoiceLogSession(factory: VoiceLogFactory { try! model(working) }, groupDir: group)
+        await second.openPendingRecording()?.value
+        await second.model?.prepare()
+        await second.model?.send()
+
+        let firstId = try #require(clientId(in: try posted(failing)))
+        let secondId = try #require(clientId(in: try posted(working)))
+        #expect(firstId == secondId)
+        #expect(firstId == drop.id.uuidString.lowercased())
+    }
+
+    /// The `clientId` field of a posted multipart body.
+    func clientId(in body: String) -> String? {
+        guard let r = body.range(of: "name=\"clientId\"") else { return nil }
+        return body[r.upperBound...].split(whereSeparator: \.isNewline).first.map(String.init)
+    }
+
     @Test func cancellingDeletesTheDropAndVerdersCopy() async throws {
         let group = try group()
         let drop = try audioDrop(group)
