@@ -16,7 +16,7 @@ import Foundation
 ///     -fixtures-geld <open|nov|sep|sheet>  push Geld from Overzicht (as a card tap does): as it opens, with
 ///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
-///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice|call:<partyId>>
+///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice|opname|call:<partyId>>
 ///
 /// Without `-fixtures` none of the others does anything: a DEBUG build on the
 /// real server never jumps tabs because of a stale scheme argument.
@@ -48,6 +48,9 @@ struct FixtureLaunch: Equatable, Sendable {
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
         case voice
+        /// The voice log writing out a synthetic call recording shared from
+        /// Notes ("opname uitschrijven", Added 2026-11-03).
+        case opname
         var id: String { rawValue }
     }
 

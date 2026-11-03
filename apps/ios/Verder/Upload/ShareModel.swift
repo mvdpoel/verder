@@ -21,6 +21,9 @@ final class ShareModel {
         case saving
         /// `delivered`: the server confirmed every file before the bound.
         case done(delivered: Bool)
+        /// A call recording, left for the app as an audio drop: it is
+        /// transcribed in verder, on the phone, and never uploaded from here.
+        case handedToApp
         case refused(String)
     }
 
@@ -38,6 +41,9 @@ final class ShareModel {
         static let noGroup = "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
         static let unreadable = "verder kon hier niets uit lezen. Er is niets verstuurd."
         static let close = "Sluiten"
+        static let openToTranscribe = "Open verder om het gesprek uit te schrijven."
+        static let audioAlone = "Deel een opname los, één tegelijk, zonder andere bestanden erbij."
+        static let tooLargeAudio = "Deze opname is te groot voor verder (max. 300 MB)."
         /// `Dat zijn er 12. verder neemt er maximaal 10 tegelijk mee; deel ze in delen.`
         static func tooMany(_ count: Int) -> String {
             "Dat zijn er \(count). verder neemt er maximaal \(ShareModel.maxItems) tegelijk mee; deel ze in delen."
@@ -59,6 +65,18 @@ final class ShareModel {
     /// (`ShareStaging`), copied rather than buffered into its drop, and only a
     /// drop under `ShareSender.foregroundLimit` is sent from the extension.
     nonisolated static let maxFileBytes = 48 * 1024 * 1024
+
+    /// A call recording is transcribed ON the phone and only uploaded when
+    /// Martin keeps it (where the voice route's 50 MB applies and the voice
+    /// log says so), so it may be far larger than a document: an hour of
+    /// 16-bit mono WAV at 44.1 kHz is ~320 MB… of which this takes most.
+    /// Staged by copying, never read into the extension's memory.
+    nonisolated static let maxAudioBytes = 300 * 1024 * 1024
+
+    /// The size limit for one shared file of this name and type.
+    nonisolated static func limit(fileName: String, mime: String) -> Int {
+        IncomingDrop.isAudio(fileName: fileName, mime: mime) ? maxAudioBytes : maxFileBytes
+    }
 
     private(set) var phase: Phase = .loading
     private(set) var prepared: [PreparedShare] = []
@@ -104,7 +122,13 @@ final class ShareModel {
         prepared = result.files
         photoPages = result.photoPages
         leftOut = result.leftOut
-        if result.tooLarge > 0 || prepared.contains(where: { $0.byteCount > Self.maxFileBytes }) {
+        let audio = prepared.filter { IncomingDrop.isAudio(fileName: $0.fileName, mime: $0.mime) }
+        if !audio.isEmpty, prepared.count > 1 || result.tooLarge > 0 || result.leftOut > 0 {
+            phase = .refused(Copy.audioAlone)
+        } else if let one = audio.first, one.byteCount > Self.maxAudioBytes {
+            phase = .refused(Copy.tooLargeAudio)
+        } else if audio.isEmpty,
+                  result.tooLarge > 0 || prepared.contains(where: { $0.byteCount > Self.maxFileBytes }) {
             phase = .refused(Copy.tooLarge)
         } else if prepared.isEmpty {
             phase = .refused(inputs.isEmpty ? Copy.nothing : Copy.unreadable)
@@ -133,6 +157,11 @@ final class ShareModel {
 
     var canSend: Bool { phase == .ready }
 
+    /// The share is ONE call recording: it goes to the voice log, not the queue.
+    var isAudio: Bool {
+        prepared.count == 1 && IncomingDrop.isAudio(fileName: prepared[0].fileName, mime: prepared[0].mime)
+    }
+
     /// Annuleren is offered only while it is TRUE: before Versturen, or after
     /// a refusal that left nothing behind. From `.saving` on, the drops are
     /// written and the app WILL send them (each one a permanent
@@ -141,7 +170,7 @@ final class ShareModel {
     var canCancel: Bool {
         switch phase {
         case .loading, .ready, .refused: true
-        case .saving, .done: false
+        case .saving, .done, .handedToApp: false
         }
     }
 
@@ -155,13 +184,33 @@ final class ShareModel {
 
     /// The screen closes itself after Versturen only when there is nothing
     /// to read; with a warning, Martin closes it.
-    var closesByItself: Bool { warning == nil }
+    var closesByItself: Bool { warning == nil && phase != .handedToApp }
 
     /// Versturen.
     func commit() async {
         guard phase == .ready else { return }
         guard let groupDir else { phase = .refused(Copy.noGroup); return }
         phase = .saving
+        if isAudio {
+            // Never uploaded from here: verder transcribes it on the phone,
+            // and the audio leaves only if Martin keeps it.
+            let file = prepared[0]
+            do {
+                switch file.content {
+                case .data(let data):
+                    try IncomingDrop.write(file: data, fileName: file.fileName, mime: file.mime, kind: .audio,
+                                           capturedAt: now(), to: groupDir)
+                case .file(let url):
+                    try IncomingDrop.write(fileAt: url, fileName: file.fileName, mime: file.mime, kind: .audio,
+                                           capturedAt: now(), to: groupDir)
+                }
+            } catch {
+                phase = .refused(Copy.saveFailed)
+                return
+            }
+            phase = .handedToApp
+            return
+        }
         var ids: [UUID] = []
         do {
             for file in prepared {
@@ -202,6 +251,7 @@ final class ShareModel {
         case .ready: nil
         case .saving: Copy.saving
         case .done(let delivered): delivered ? Copy.delivered : Copy.queued
+        case .handedToApp: Copy.openToTranscribe
         case .refused(let why): why
         }
     }

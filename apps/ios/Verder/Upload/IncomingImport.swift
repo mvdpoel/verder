@@ -37,7 +37,10 @@ extension UploadQueue {
         var unreadable: [URL] = []
         for name in names where name.hasSuffix(".json") {
             let json = dir.appending(path: name)
-            if let drop = IncomingDrop.read(json) { drops.append(drop) } else { unreadable.append(json) }
+            guard let drop = IncomingDrop.read(json) else { unreadable.append(json); continue }
+            // A call recording is the voice log's, never an upload
+            // (`IncomingDrop.Kind.audio`): it stays where it is.
+            if drop.kind == .document { drops.append(drop) }
         }
 
         var imported: [UploadItem] = []

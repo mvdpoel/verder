@@ -15,7 +15,7 @@ struct FixtureTests {
     nonisolated static let expectedNames = [
         "call", "calm", "dossier", "empty", "loading", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
-        "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
+        "one-item", "opname", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
         "voorjou-long", "voorjou-many", "weekly",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"

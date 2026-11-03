@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Makes a voice log's model: one per fresh log (`VoiceLogSession`), so each
 /// log has its own clientId and its own (emptied) recordings folder.
@@ -50,6 +51,8 @@ extension VoiceLogModel {
 struct VoiceLogView: View {
     @Bindable var model: VoiceLogModel
     let close: () -> Void
+    /// "Opname kiezen": the document picker for a call recording.
+    @State private var picking = false
 
     var body: some View {
         ZStack {
@@ -83,11 +86,16 @@ struct VoiceLogView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .preferredColorScheme(.dark)
+        // Audio only; the picked file is copied, never moved or changed.
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.audio]) { result in
+            guard case .success(let url) = result else { return }
+            Task { await model.importPicked(url) }
+        }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Gesprek vastleggen")
+            Text(model.title)
                 .font(.display(26, relativeTo: .title, weight: .ultraLight))
                 .foregroundStyle(Color.inkBright)
                 .accessibilityAddTraits(.isHeader)
@@ -130,13 +138,26 @@ struct VoiceLogView: View {
                 .foregroundStyle(Color.inkMute)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-            if model.phase == .transcribing {
+            if model.phase == .transcribing, let progress = model.transcriptionProgress {
+                // A long call takes a while on the phone: say how far.
+                ProgressView(value: progress)
+                    .tint(Color.signal)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                    .accessibilityLabel(model.phaseLine)
+            } else if model.phase == .transcribing {
                 ProgressView().tint(Color.signal).frame(height: 132)
             } else if model.canRecord || model.phase == .recording {
                 HoldToRecord(model: model)
             }
             if model.phase == .idle {
                 AuthButton(title: "Typ zelf", weight: .secondary) { model.typeInstead() }
+                AuthButton(title: VoiceLogModel.Copy.pickRecording, weight: .secondary) { picking = true }
+                Text(VoiceLogModel.Copy.phoneRecordingHint)
+                    .font(.display(13, relativeTo: .footnote, weight: .light))
+                    .foregroundStyle(Color.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity)
@@ -181,6 +202,11 @@ struct VoiceLogView: View {
             if model.canRecordAgain {
                 AuthButton(title: VoiceLogModel.Copy.recordAgain, weight: .secondary) { model.recordAgain() }
             }
+            if model.canRetryTranscription {
+                AuthButton(title: VoiceLogModel.Copy.retryTranscription, weight: .secondary) {
+                    Task { await model.retryTranscription() }
+                }
+            }
 
             if model.hasRecording {
                 VStack(alignment: .leading, spacing: 6) {
@@ -190,7 +216,7 @@ struct VoiceLogView: View {
                             .foregroundStyle(Color.inkBright)
                     }
                     .tint(Color.signal)
-                    Text("Alleen dan gaat de opname naar verder. Anders wordt ze na het versturen gewist.")
+                    Text(model.keepRecordingHint)
                         .font(.display(14, relativeTo: .callout, weight: .light))
                         .foregroundStyle(Color.inkMute)
                         .fixedSize(horizontal: false, vertical: true)

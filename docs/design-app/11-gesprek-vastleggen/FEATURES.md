@@ -6,7 +6,7 @@ Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief d
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 38 |
+| Gebouwd | 44 |
 | Deels gebouwd | 11 |
 | Nog te bouwen | 19 |
 | Niet mogelijk op iOS | 1 |
@@ -161,6 +161,27 @@ Bij succes wordt de lokale opname verwijderd (een bewaarde staat nu in de kluis)
 Een mislukte verzending houdt de tekst en de opname vast en keert terug naar de editor. Martin probeert het opnieuw door weer op "Verstuur als voorstel" te tikken, wat **dezelfde `clientId`** gebruikt, zodat een verloren antwoord het gesprek nooit twee keer kan opslaan. Er is geen automatische nieuwe poging en geen wachtrij: anders dan scans wacht een spraaknotitie alleen in het geheugen, in het open blad.
 
 **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogModel.swift` (`send`, `copy(for:)`)
+
+### Een opgenomen gesprek uitschrijven (toegevoegd 2026-11-03)
+
+Martin: "it would be perfect if i can also record phone calls and transcribe them". verder kan zelf geen telefoongesprek opnemen: iOS geeft geen enkele app van derden het geluid van een gesprek, en `CXCallObserver` zegt alleen *dat* een gesprek begon of eindigde, nooit met wie of wat er gezegd werd. De Telefoon-app kan het wél (tijdens het gesprek: Meer › "Gesprek opnemen"); de opname komt als audiobijlage in Notities. Of Apple dat in het Nederlands en in Nederland aanbiedt, is niet bevestigd. Daarom komt de opname bínnen in verder, en wordt ze daar op de telefoon uitgeschreven.
+
+- **Delen vanuit Notities.** De deelextensie herkent audio (`.m4a`, `.aac`, `.wav`, `.caf`, of elk `audio/*`-type) en uploadt die **niet** als document. Ze laat een `IncomingDrop` van soort `audio` achter in de App Group en zegt "Open verder om het gesprek uit te schrijven."; het blad sluit niet vanzelf, zodat Martin dat kan lezen. Een opname gaat alleen, zonder andere bestanden erbij ("Deel een opname los, één tegelijk, zonder andere bestanden erbij."), en mag groter zijn dan een document (tot 300 MB, gekopieerd en nooit in het geheugen gelezen), omdat ze op de telefoon wordt uitgeschreven. De uploadwachtrij slaat audiodrops over (`importIncoming`).
+  **Status:** Gebouwd — `apps/ios/Verder/Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, `apps/ios/VerderShare/ShareViewController.swift`
+- **De app opent "Opname uitschrijven".** Bij het openen en bij elke terugkeer naar de voorgrond (ingelogd, en niet over het gespreksblad heen) opent de oudste wachtende opname de spraaknotitie in de modus "Opname uitschrijven". Een notitie waaraan Martin werkt wordt nooit vervangen; de opname wacht dan tot de volgende keer. Dezelfde opname wordt niet twee keer geopend.
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogSession.swift` (`openPendingRecording`, `openImport`), `apps/ios/Verder/App/RootView.swift`
+- **Uitschrijven van een bestand, met voortgang.** `SpeechAnalyzer` + `SpeechTranscriber` in `nl_NL`, op het toestel, op verders eigen kopie van het bestand (Complete-beveiliging, met een echte extensie zodat `AVAudioFile` het leest). Een lang gesprek toont een voortgangsbalk en "Opname uitschrijven, op je telefoon… 40%". Dezelfde foutzinnen als bij inspreken (niets verstaan, omzetten lukte niet, Nederlands niet beschikbaar, model ontbreekt met "Opnieuw proberen"); bij een mislukte poging staat "Opnieuw uitschrijven" klaar, en typen werkt altijd. Daarna de gewone editor: tekst bewerkbaar, partij, kanaal, tijdstip, "Verstuur als voorstel" naar dezelfde `POST /api/mobile/v1/entries/voice` — een suggestie, nooit een logboekregel. Een geïmporteerd gesprek biedt geen "Opnieuw opnemen".
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/Transcriber.swift` (`transcribe(_:progress:)`), `VoiceLogModel.swift` (`importRecording`, `retryTranscription`). Niet gemeten op de telefoon: of iOS 27.2 `nl_NL` uitschrijft, en hoe lang een gesprek van een uur duurt.
+- **"Opname kiezen".** Een knop in het opnamescherm opent de documentkiezer voor audio (Bestanden, Dictafoon-export). Het gekozen bestand wordt gekopieerd; het origineel wordt nooit aangeraakt. Daaronder staat waar de Telefoon-app zijn opnames bewaart.
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogView.swift` (`fileImporter`), `VoiceLogModel.importPicked`
+- **Bewaar opname, of wissen.** Alleen met "Bewaar opname" aan gaat het geluid mee (als `phone-voice`-document, met het eigen type en de eigen extensie: "Gesprek 2026-11-01.caf", `audio/x-caf`). Anders wist verder zijn kopie én de drop in de App Group na het versturen of na "Sluiten"/"Weggooien"; het origineel in Notities blijft staan. Een mislukte verzending, een vergrendeling of een nieuwe inlog houdt de drop vast, zodat zelfs een afgesloten app de opname opnieuw aanbiedt.
+  **Status:** Gebouwd — `VoiceLogModel.send`, `discard`, `VoiceDraft.audioMime`/`audioExtension`
+- **De aangevinkte punten van het gespreksblad.** Was er in het laatste uur een gespreksblad actief, dan staat die partij voorgeselecteerd, staan de aangevinkte punten ("Besproken: …") boven de uitgeschreven tekst en is het tijdstip het begin van dat gesprek. iOS zegt niet van welk gesprek een opname is, dus dit is de beste gok en Martin past alles aan voor hij verstuurt. Alleen in het geheugen; uitloggen vergeet het. Zonder recent gespreksblad krijgt de opname het moment van delen als tijdstip.
+  **Status:** Gebouwd — `apps/ios/Verder/Call/RecentCallSheet.swift`, `CallSession` (`noteActive`)
+- **Fixture:** `-fixtures opname -route opname` toont het uitgeschreven synthetische gesprek met Bewindkantoor Noordkust (gegevensdocument, "A call recording").
+  **Status:** Gebouwd — `apps/ios/Verder/FixtureData/opname/`, `apps/ios/Verder/Fixtures/FixtureEnvironment.swift`
+- **verder neemt het gesprek zelf op.** Niet mogelijk: iOS laat geen app van derden een telefoongesprek horen of opnemen.
+  **Status:** Niet mogelijk op iOS
 
 ## Toestanden
 

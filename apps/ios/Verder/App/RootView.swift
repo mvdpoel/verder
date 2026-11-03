@@ -86,6 +86,7 @@ struct RootView: View {
                 call.reconcile()
                 if auth.isSignedIn { Task { await uploads.start() } }
                 promptOnOpen()
+                openSharedRecording()
             default: break
             }
         }
@@ -163,6 +164,16 @@ struct RootView: View {
     /// is showing; after that every tab is open until the next lock. Overzicht
     /// shows its counts behind the sheet meanwhile. The one exception stays the
     /// camera: on Scan nothing prompts, so the shutter is never covered.
+    /// A call recording shared from Notes (the share extension's audio drop,
+    /// Added 2026-11-03) opens the voice log in "opname uitschrijven" mode.
+    /// Not over the call sheet (two sheets cannot show at once; the drop
+    /// waits for the next return), and only with a session, since the log
+    /// sends to the server.
+    private func openSharedRecording() {
+        guard auth.isSignedIn, !call.isPresented else { return }
+        voice.openPendingRecording()
+    }
+
     private func promptOnOpen() {
         guard auth.isSignedIn, lock.isLocked, tab != .scan else { return }
         Task { await lock.autoPromptIfNeeded() }
@@ -242,6 +253,7 @@ struct RootView: View {
         // scene-phase change above never fires for it.
         .onAppear {
             promptOnOpen()
+            openSharedRecording()
             #if DEBUG
             applyFixtureStart()
             #endif

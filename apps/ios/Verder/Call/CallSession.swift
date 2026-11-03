@@ -71,13 +71,18 @@ final class CallSession {
     static let lateEchoWindow: TimeInterval = 60
     /// Waiting for the call sheet to finish dismissing (`sheetDismissed`).
     @ObservationIgnored private var pendingVoice: VoicePrefill?
+    /// The last active sheet's ticks, for a call recording imported within
+    /// the hour (`RecentCallSheet`, Added 2026-11-03).
+    @ObservationIgnored let recent: RecentCallSheet
 
     init(client: APIClient, cache: CallCache, activities: any CallActivityControlling,
          observer: any CallObserving, epoch: SessionEpoch,
          now: @escaping @MainActor () -> Date = { Date() },
          dial: @escaping @MainActor (URL) -> Void,
          openVoice: @escaping @MainActor (VoicePrefill) -> Void,
+         recent: RecentCallSheet = RecentCallSheet(),
          onUnauthorized: @escaping @MainActor () -> Void = {}) {
+        self.recent = recent
         self.client = client
         self.cache = cache
         self.activities = activities
@@ -112,10 +117,12 @@ final class CallSession {
             m.onChecklistChanged = { [weak self, weak m] in
                 guard let self, let m, self.model === m else { return }
                 self.activities.update(m.checklist.activityState)
+                self.noteActive()
             }
             model = m
         }
         isPresented = true
+        noteActive()
         let started = epoch.current
         await model?.load()
         guard epoch.isCurrent(started) else { return }
@@ -129,6 +136,7 @@ final class CallSession {
     /// "Sluiten": the sheet goes. A running Live Activity keeps the call
     /// active — Martin may be on the phone, reading the Phone app.
     func close() {
+        noteActive()
         isPresented = false
     }
 
@@ -138,6 +146,7 @@ final class CallSession {
 
     /// The call is over and nothing is to be logged ("Niet nu", "Stoppen").
     func finish() {
+        noteActive()
         endActivity()
         forgetDial()
         model = nil
@@ -207,6 +216,15 @@ final class CallSession {
         callEnded = true
         isPresented = true
         forgetDial()
+        noteActive()
+    }
+
+    /// While the sheet is active, `recent` holds its party and ticks: the
+    /// voice log reads them when a recording of this call is imported.
+    private func noteActive() {
+        guard let model, isActive || callEnded else { return }
+        recent.record(partyId: model.partyId, text: model.checklist.prefillText,
+                      startedAt: callStartedAt, at: now())
     }
 
     private func forgetDial() {
@@ -318,6 +336,7 @@ final class CallSession {
         callEnded = false
         pendingVoice = nil
         parties = []
+        recent.forget()
         cache.wipe()
     }
 }

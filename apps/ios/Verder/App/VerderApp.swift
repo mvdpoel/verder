@@ -66,18 +66,23 @@ struct VerderApp: App {
                                                       onUnauthorized: { auth.sessionRejected() },
                                                       epoch: auth.epoch))
         let client = s.client
+        let clock = s.now
+        // The last active call sheet's ticks, for a call recording imported
+        // within the hour (Added 2026-11-03). Shared by the two sessions.
+        let recent = RecentCallSheet()
         let voice = VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
-                          dir: VoiceLogModel.liveDirectory, onUnauthorized: { auth.sessionRejected() })
-        })
+                          dir: VoiceLogModel.liveDirectory, recentCall: { recent.prefill(now: clock()) },
+                          onUnauthorized: { auth.sessionRejected() })
+        }, groupDir: s.snapshotDir)
         _voice = State(initialValue: voice)
-        let clock = s.now
         _call = State(initialValue: CallSession(
             client: client, cache: CallCache(dir: s.callCacheDir), activities: s.makeCallActivities(),
             observer: s.makeCallObserver(), epoch: auth.epoch, now: { clock() },
             // The call itself is the Phone app's: verder only hands it the number.
             dial: { UIApplication.shared.open($0) },
             openVoice: { voice.open(prefill: $0) },
+            recent: recent,
             onUnauthorized: { auth.sessionRejected() }))
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).

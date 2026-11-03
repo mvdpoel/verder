@@ -18,13 +18,30 @@ import UniformTypeIdentifiers
 /// so the extension's attempt and the app's can never make two documents: the
 /// second one is answered `duplicate: true` through `phone:<clientId>`.
 ///
+/// AUDIO DROPS (Added 2026-11-03): a call recording shared from Notes (the
+/// Phone app's own "Gesprek opnemen" saves there; verder itself can never
+/// record a call — iOS gives no third-party app the call audio) is a drop of
+/// kind `.audio`. It is NOT an upload: `importIncoming` leaves it alone, and
+/// the voice log (`VoiceLogSession.openPendingRecording`) transcribes it ON
+/// the phone and deletes it after sending or cancelling. Its bytes reach the
+/// server only when Martin turns on "bewaar opname".
+///
 /// Foundation only: compiled into the app and the extension.
 struct IncomingDrop: Codable, Equatable, Sendable {
+    enum Kind: String, Codable, Sendable {
+        /// A file for the upload queue (the default, and every drop written
+        /// before audio existed).
+        case document
+        /// A recording for the voice log; never uploaded as a document.
+        case audio
+    }
+
     let id: UUID
     let fileName: String
     let mime: String
     let fileExtension: String
     let capturedAt: Date
+    let kind: Kind
 
     static let source = "phone-share"
 
@@ -38,13 +55,13 @@ struct IncomingDrop: Codable, Equatable, Sendable {
 
     /// Writes the bytes, then the description, and returns the drop's UUID.
     @discardableResult
-    static func write(file: Data, fileName: String, mime: String, capturedAt: Date,
+    static func write(file: Data, fileName: String, mime: String, kind: Kind = .document, capturedAt: Date,
                       to groupDir: URL) throws -> UUID {
         let dir = directory(groupDir: groupDir)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let drop = IncomingDrop(id: UUID(), fileName: fileName, mime: mime,
                                 fileExtension: fileExtension(fileName: fileName, mime: mime),
-                                capturedAt: capturedAt)
+                                capturedAt: capturedAt, kind: kind)
         let protection: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
         try file.write(to: binURL(drop.id, in: dir), options: protection)
         try encoder.encode(drop).write(to: jsonURL(drop.id, in: dir), options: protection)
@@ -55,13 +72,13 @@ struct IncomingDrop: Codable, Equatable, Sendable {
     /// into memory (a shared file of tens of MB must not cost tens of MB of
     /// the extension's budget). Same order: bytes first, description last.
     @discardableResult
-    static func write(fileAt source: URL, fileName: String, mime: String, capturedAt: Date,
-                      to groupDir: URL) throws -> UUID {
+    static func write(fileAt source: URL, fileName: String, mime: String, kind: Kind = .document,
+                      capturedAt: Date, to groupDir: URL) throws -> UUID {
         let dir = directory(groupDir: groupDir)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let drop = IncomingDrop(id: UUID(), fileName: fileName, mime: mime,
                                 fileExtension: fileExtension(fileName: fileName, mime: mime),
-                                capturedAt: capturedAt)
+                                capturedAt: capturedAt, kind: kind)
         let bin = binURL(drop.id, in: dir)
         try FileManager.default.copyItem(at: source, to: bin)
         try FileManager.default.setAttributes(
@@ -99,6 +116,29 @@ struct IncomingDrop: Codable, Equatable, Sendable {
         return drop
     }
 
+    /// The extensions a call recording arrives with: the Phone app's
+    /// recordings in Notes are `.m4a`; Voice Memos, Files and other recorders
+    /// give `.aac`, `.wav` or `.caf`. Anything with an `audio/*` type counts too.
+    static let audioExtensions: Set<String> = ["m4a", "aac", "wav", "caf"]
+
+    /// A recording, by its type or (when the type is uninformative, as
+    /// `application/octet-stream` often is) by its extension.
+    static func isAudio(fileName: String, mime: String) -> Bool {
+        if mime.lowercased().hasPrefix("audio/") { return true }
+        return audioExtensions.contains((fileName as NSString).pathExtension.lowercased())
+    }
+
+    /// The audio drops waiting for the voice log, oldest first. Complete
+    /// drops only (a `.json` is written last).
+    static func pendingAudio(groupDir: URL) -> [IncomingDrop] {
+        let dir = directory(groupDir: groupDir)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path(percentEncoded: false))) ?? []
+        return names.filter { $0.hasSuffix(".json") }
+            .compactMap { read(dir.appending(path: $0)) }
+            .filter { $0.kind == .audio }
+            .sorted { ($0.capturedAt, $0.id.uuidString) < ($1.capturedAt, $1.id.uuidString) }
+    }
+
     /// The extension a shared file is stored under: its own, if that is a safe
     /// one, else the mime's preferred one, else `bin`. Never a path.
     static func fileExtension(fileName: String, mime: String) -> String {
@@ -122,5 +162,20 @@ struct IncomingDrop: Codable, Equatable, Sendable {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
+    }
+}
+
+extension IncomingDrop {
+    private enum CodingKeys: String, CodingKey { case id, fileName, mime, fileExtension, capturedAt, kind }
+
+    /// A drop written before audio existed carries no `kind`: a document.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(UUID.self, forKey: .id),
+                  fileName: try c.decode(String.self, forKey: .fileName),
+                  mime: try c.decode(String.self, forKey: .mime),
+                  fileExtension: try c.decode(String.self, forKey: .fileExtension),
+                  capturedAt: try c.decode(Date.self, forKey: .capturedAt),
+                  kind: try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .document)
     }
 }

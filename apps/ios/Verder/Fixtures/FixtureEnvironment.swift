@@ -274,6 +274,23 @@ struct FixtureScreen: View {
                         await model.stopRecording()
                     }
                 }
+            case .opname:
+                if let voiceModel {
+                    VoiceLogView(model: voiceModel, close: { dismiss() })
+                } else {
+                    Color.void.ignoresSafeArea().task {
+                        let model = voice.make()
+                        voiceModel = model
+                        await model.prepare()
+                        // Synthetic bytes, never a real call: the transcript
+                        // is the `opname` fixture's (synthetic-data doc).
+                        let file = URL.temporaryDirectory.appending(path: "Gesprek met Noordkust.m4a")
+                        try? Data("fixture-call-recording".utf8).write(to: file)
+                        await model.importRecording(RecordingImport(
+                            file: file, fileName: "Gesprek met Noordkust.m4a", mime: "audio/mp4",
+                            capturedAt: FixtureEnvironment.today, drop: nil, groupDir: nil))
+                    }
+                }
             }
         }
     }

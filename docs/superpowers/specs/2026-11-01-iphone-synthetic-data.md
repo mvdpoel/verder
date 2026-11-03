@@ -121,6 +121,14 @@ Besproken:
 
 and Bewindkantoor Noordkust preselected.
 
+### A call recording (fixture `opname`, `-route opname`, added 2026-11-03)
+
+The same synthetic call, recorded by the Phone app and shared from Notes as **"Gesprek met Noordkust.m4a"** (the bytes are `fixture-call-recording`, never audio). `-fixtures opname -route opname` opens "Opname uitschrijven" with it already written out, dated the case's today (Sun 1 nov, 09:41), as:
+
+"Gebeld met Bewindkantoor Noordkust, Team Startdossier. De loonstroken van september en oktober zijn binnen. Ze laten weten of er nog iets ontbreekt; zo niet, dan gaat het dossier deze week naar de bewindvoerder."
+
+No call sheet was active in the capture, so the party is the voice log's usual default (Woonstichting Lindehof, most recent contact) and no "Besproken:" prefill shows; the tests (`CallRecordingImportTests`) cover the prefilled case with Noordkust.
+
 ## Fields the fixtures needed beyond the above (added 2026-11-01, Task FX)
 
 The JSON in `apps/ios/Verder/FixtureData/` holds everything above, plus these
