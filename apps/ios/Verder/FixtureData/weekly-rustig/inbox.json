@@ -1,0 +1,70 @@
+{
+  "count": 0,
+  "items": [],
+  "lastClearedAt": "2026-10-30T15:10:00.000Z",
+  "doneByVerder": [
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000001",
+      "documentId": "00000000-f1c5-4000-8000-200000000101",
+      "documentTitle": "Afschrift september",
+      "at": "2026-11-01T07:40:00.000Z",
+      "kind": "auto-file",
+      "before": {
+        "status": "inbox",
+        "title": "Afschrift september",
+        "docType": null
+      },
+      "after": {
+        "status": "filed",
+        "title": "Afschrift september",
+        "docType": "bank-statement"
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": true,
+      "notUndoableReason": null
+    },
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000002",
+      "documentId": "00000000-f1c5-4000-8000-200000000102",
+      "documentTitle": "Brief Gemeente Westerlaan 30 okt",
+      "at": "2026-10-31T16:20:00.000Z",
+      "kind": "auto-name",
+      "before": {
+        "status": "inbox",
+        "title": "Scan 2026-10-30",
+        "docType": null
+      },
+      "after": {
+        "status": "inbox",
+        "title": "Brief Gemeente Westerlaan 30 okt",
+        "docType": null
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": false,
+      "notUndoableReason": "naam staat ook op de NAS"
+    },
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000003",
+      "documentId": "00000000-f1c5-4000-8000-200000000103",
+      "documentTitle": "Herinnering Duinzorg",
+      "at": "2026-10-31T11:02:00.000Z",
+      "kind": "auto-file",
+      "before": {
+        "status": "inbox",
+        "title": "Herinnering Duinzorg",
+        "docType": null
+      },
+      "after": {
+        "status": "filed",
+        "title": "Herinnering Duinzorg",
+        "docType": "letter"
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": true,
+      "notUndoableReason": null
+    }
+  ]
+}

@@ -19,6 +19,7 @@ struct RootView: View {
     let money: MoneyStore
     let dossier: DossierModel
     let timeline: TimelineStore
+    let weekly: WeeklyStore
     let voice: VoiceLogSession
     /// Overzicht's clock (`AppServices.now`).
     var now: @Sendable () -> Date = { Date() }
@@ -206,9 +207,17 @@ struct RootView: View {
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
                 MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier, path: $meerPath,
                         openVoice: { voice.open() }, forgetVoice: { voice.close() },
-                        liveWaiting: inbox.inbox?.count,
+                        weekly: weekly, inbox: inbox,
                         openVoorJou: {
                             inboxPath = []
+                            tab = .voorJou
+                        },
+                        openDossier: {
+                            dossierPath = []
+                            tab = .dossier
+                        },
+                        openDoneByVerder: {
+                            inboxPath = [.doneByVerder]
                             tab = .voorJou
                         }, now: now).lockGated(by: lock)
             }

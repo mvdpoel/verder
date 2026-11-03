@@ -16,7 +16,8 @@ struct FixtureTests {
         "calm", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
-        "voorjou-long", "voorjou-many", "weekly",
+        "voorjou-long", "voorjou-many", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
+        "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
     static let question = "00000000-f1c5-4000-8000-000000000002"
@@ -40,7 +41,7 @@ struct FixtureTests {
     }
 
     nonisolated static var fileFixtures: [String] {
-        expectedNames.filter { !["offline", "unauthorized", "loading", "server-error"].contains($0) }
+        expectedNames.filter { !["offline", "unauthorized", "loading", "server-error", "weekly-loading"].contains($0) }
     }
 
     // MARK: - The set
@@ -136,11 +137,12 @@ struct FixtureTests {
         if name != "meer-account-fails" { _ = try Self.decode(AccountDTO.self, name, "me") }
         _ = try Self.decode(CaseMapDTO.self, name, "case-map")
         _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
-        // Every fixture but `empty` (404: no Sunday yet) holds a summary.
+        // Every fixture holds a summary but `empty` and `weekly-eerste`
+        // (404: no Sunday yet) and `weekly-fout` (503 by design).
         if let weekly = try Self.body(name, "weekly") {
             _ = try APIClient.jsonDecoder.decode(WeeklyDTO.self, from: weekly)
         } else {
-            #expect(name == "empty")
+            #expect(["empty", "weekly-eerste", "weekly-fout"].contains(name))
         }
     }
 
@@ -367,8 +369,11 @@ struct FixtureTests {
         }
 
         let weekly = try Self.object("weekly", "weekly")
+        // `history` and `renamedByVerder` are the two fields the "weekly ·
+        // final" frames need beyond packages/api/src/weekly-summary.ts; the
+        // phone treats them as optional (`WeeklyDTO`).
         #expect(Set(weekly.keys) == ["week", "from", "to", "sent", "received", "filedByMartin", "filedByVerder",
-                                     "tasksDone", "waiting", "topWaiting"])
+                                     "tasksDone", "waiting", "topWaiting", "history", "renamedByVerder"])
         #expect(weekly["week"]?.string == "2026-W44")
         let top = try JSONDecoder.verder.decode([WaitingItem].self,
                                                 from: JSONEncoder().encode(weekly["topWaiting"] ?? .null))

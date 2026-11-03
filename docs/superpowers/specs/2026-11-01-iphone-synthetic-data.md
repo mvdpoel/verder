@@ -88,6 +88,25 @@ Open tasks under it: 6. Search "bijstand" finds 2.
 
 Week 2026-W44: 3 verstuurd · 7 binnen · 5 opgeborgen (3 door jou, 2 door verder) · 2 taken klaar · 4 wachten op jou; top 3 = Voor jou items 1–3.
 
+Added 2026-11-03 for the "weekly · final" frames. The case's today for every
+`weekly*` fixture is **Mon 2 nov 09:41** (manifest `today`), past the Sunday
+18:00 that closed week 44, and their Voor jou's oldest item is from **31 okt**
+(item 4 at 31 okt 09:00).
+
+- `history` (earlier summaries; steps = verstuurd + door jou opgeborgen + taken klaar):
+  W37 3 · W38 6 · W39 4 · W40 5 · W41 7 · W42 4 · W43 5 (average 5); W43 is
+  1 verstuurd · 9 ontvangen · 4 opgeborgen (2/2) · 2 taken klaar · 6 wachtten.
+  This week 8 steps. `renamedByVerder`: 1 ("1 scan een naam gegeven").
+- `weekly-rustig`: 0 verstuurd · 2 ontvangen · 2 opgeborgen (0/2) · 1 taak klaar ·
+  0 wachtten; nothing waits now, last dealt with vr 30 okt 16:10.
+- `weekly-tweede`: only W43 before it (1 · 3 · 2 (2/0) · 1 · 3 = 4 steps);
+  this week 2 · 5 · 3 (2/1) · 2 · 4 = 6 steps.
+- `weekly-eerste`: 404 — the first summary comes zo 8 nov 18:00 (W45).
+- `weekly-loading`: nothing answers (the skeleton, "WEEK 44").
+- `weekly-offline-kept`: read at zo 1 nov 19:02, then offline.
+- `weekly-offline-missing`: read at zo 1 nov 17:40 when the server still held W43, then offline.
+- `weekly-fout`: `/weekly` 503; Voor jou read at 17:40, then 503.
+
 ## Voice quick-log (fixture `voice`)
 
 Transcript: "Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van vijftig euro per maand, de eerste betaling is op één december." Party picker recent: Woonstichting Lindehof, Bewindkantoor Noordkust, Kade & Partners.

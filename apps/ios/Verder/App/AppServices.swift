@@ -24,6 +24,9 @@ struct AppServices {
     /// The Tijdlijn's copy of the case map (`TimelineCache`): Application
     /// Support, never the App Group.
     let timelineDir: URL
+    /// The Weekoverzicht's kept copy (`WeeklyCache`): Application Support,
+    /// never the App Group.
+    var weeklyDir: URL = WeeklyCache.live.dir
     /// The voice log's microphone and on-device transcription (Task 25).
     let makeRecorder: @MainActor () -> any VoiceRecording
     let transcriber: any Transcribing

@@ -50,8 +50,9 @@ enum FixtureEnvironment {
     /// `keptAt` while the first, good answers are given — so the kept stand is
     /// stamped the evening before — and the case's today once a repeat has
     /// failed, so the stand on screen reads "gisteren 22:14".
-    nonisolated static func clock(keptAt: Date?) -> @Sendable () -> Date {
-        guard let keptAt else { return clock }
+    nonisolated static func clock(keptAt: Date?, today fixtureToday: Date? = nil) -> @Sendable () -> Date {
+        let today = fixtureToday ?? today
+        guard let keptAt else { return { today.addingTimeInterval(Date().timeIntervalSince(launchedAt)) } }
         return {
             let elapsed = Date().timeIntervalSince(launchedAt)
             return (FixtureProtocol.hasFailedRepeat ? today : keptAt).addingTimeInterval(elapsed)
@@ -117,6 +118,8 @@ enum FixtureEnvironment {
         try? FileManager.default.removeItem(at: dossierDir)
         let timelineDir = URL.temporaryDirectory.appending(path: "verder-fixture-timeline", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: timelineDir)
+        let weeklyDir = URL.temporaryDirectory.appending(path: "verder-fixture-weekly", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: weeklyDir)
 
         var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(state: launch.push ?? .allowed), registerRemote: {},
@@ -127,7 +130,8 @@ enum FixtureEnvironment {
                            // voice fixture's (synthetic-data doc).
                            makeRecorder: { FixtureRecorder() },
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
-                           now: clock(keptAt: server.manifest.keptAt))
+                           now: clock(keptAt: server.manifest.keptAt, today: server.manifest.today))
+        services.weeklyDir = weeklyDir
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
         return services
     }

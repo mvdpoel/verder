@@ -9,7 +9,9 @@
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
 #            server-error-cached, offline-cached, money-complete, money-partial,
 #            money-geen-data, money-empty, money-no-account, money-unrecognised,
-#            money-no-budget, money-overspent, dossier, timeline, weekly, voice)
+#            money-no-budget, money-overspent, dossier, timeline, weekly, weekly-rustig,
+#            weekly-tweede, weekly-eerste, weekly-loading, weekly-offline-kept,
+#            weekly-offline-missing, weekly-fout, voice)
 #   tab      overzicht | voorjou | scan | dossier | meer
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
 #            | meer:account | meer:notifications | meer:widgets | meer:about | meer:developer
@@ -19,6 +21,7 @@
 #   --scrolled  open Overzicht scrolled to its end (the lower half of a
 #            "hele pagina" frame); --scroll <waiting|leefgeld|rest|end> to a card
 #            (waiting: the end of Wacht op jou, at the bottom of the screen).
+#            On the Weekoverzicht: end, or middle (the chart; at AX sizes the live card).
 #            On Meer and its screens: end (the column's end) or middle (the
 #            screen's middle anchor: Account's Toegangssleutel group at the top)
 #   --push   the notification permission: denied | notDetermined (default: allowed)
@@ -150,6 +153,19 @@ case "$TARGET" in
     ARGS=(-route "$TARGET") ;;
 esac
 [ -z "$LOCKED" ] || ARGS+=(-fixtures-locked)
+# `simctl ui content_size` alone does not reach an app launched right after it
+# (measured 2026-11-03: the weekly screen drew at Large under an AX5 setting),
+# so the app is also given UIKit's own launch override for the same size.
+if [ -n "$TEXT_SIZE" ]; then
+  case "$TEXT_SIZE" in
+    extra-small) CAT=XS ;; small) CAT=S ;; medium) CAT=M ;; large) CAT=L ;; extra-large) CAT=XL ;;
+    extra-extra-large) CAT=XXL ;; extra-extra-extra-large) CAT=XXXL ;;
+    accessibility-medium) CAT=AccessibilityM ;; accessibility-large) CAT=AccessibilityL ;;
+    accessibility-extra-large) CAT=AccessibilityXL ;; accessibility-extra-extra-large) CAT=AccessibilityXXL ;;
+    accessibility-extra-extra-extra-large) CAT=AccessibilityXXXL ;;
+  esac
+  ARGS+=(-UIPreferredContentSizeCategoryName "UICTContentSizeCategory$CAT")
+fi
 [ -z "$SCANS" ] || ARGS+=(-fixtures-scans)
 [ -z "$SCROLLED" ] || ARGS+=(-fixtures-scroll "$SCROLLED")
 [ -z "$QUEUE" ] || ARGS+=(-fixtures-queue "$QUEUE")

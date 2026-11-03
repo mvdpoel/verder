@@ -84,9 +84,13 @@ struct FixtureServer: Sendable {
         /// Seconds after launch at which the phone reports no network
         /// (`UploadCenter.isOffline`), with `thenFail: "offline"`.
         let offlineAfter: Double?
+        /// The case's "today" for this fixture instead of Sun 1 nov 09:41
+        /// (`FixtureEnvironment.today`): the Weekoverzicht's states need a
+        /// clock past that Sunday's 18:00, when week 44 has been composed.
+        let today: Date?
 
         private enum Key: String, CodingKey {
-            case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter
+            case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter, today
         }
 
         init(from decoder: Decoder) throws {
@@ -101,6 +105,12 @@ struct FixtureServer: Sendable {
             keptAt = try c.decodeIfPresent(String.self, forKey: .keptAt).map { (raw: String) throws -> Date in
                 guard let d = ISO8601DateFormatter().date(from: raw) else {
                     throw DecodingError.dataCorruptedError(forKey: .keptAt, in: c, debugDescription: "keptAt is ISO 8601")
+                }
+                return d
+            }
+            today = try c.decodeIfPresent(String.self, forKey: .today).map { (raw: String) throws -> Date in
+                guard let d = ISO8601DateFormatter().date(from: raw) else {
+                    throw DecodingError.dataCorruptedError(forKey: .today, in: c, debugDescription: "today is ISO 8601")
                 }
                 return d
             }

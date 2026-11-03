@@ -20,23 +20,30 @@ struct MoreTab: View {
     /// Signing out on purpose drops a voice log waiting from an earlier 401
     /// (`VoiceLogSession.close`); only a REJECTED session keeps it.
     let forgetVoice: () -> Void
-    /// What waits on Martin now (`InboxStore`), for the Weekoverzicht's next step.
-    let liveWaiting: Int?
+    /// The Sunday summary: Meer's row and the Weekoverzicht.
+    let weekly: WeeklyStore
+    /// What waits on Martin now, for the Weekoverzicht's live card.
+    let inbox: InboxStore
     /// The Weekoverzicht's one next step.
     let openVoorJou: () -> Void
+    /// The Weekoverzicht's "ontvangen" / "opgeborgen" rows.
+    var openDossier: () -> Void = {}
+    /// The Weekoverzicht's "Door verder gedaan" row.
+    var openDoneByVerder: () -> Void = {}
     /// The case's clock (`AppServices.now`): "bijgewerkt 14:02".
     var now: @Sendable () -> Date = { Date() }
 
     @State private var account: AccountModel
     @State private var prefs: NotificationPrefsModel
-    @State private var weekly: WeeklyStore
     @State private var scrolled = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(auth: AuthModel, center: UploadCenter, push: PushRegistrar, money: MoneyStore, dossier: DossierModel,
          path: Binding<[MoreRoute]>, openVoice: @escaping () -> Void, forgetVoice: @escaping () -> Void,
-         liveWaiting: Int?, openVoorJou: @escaping () -> Void, now: @escaping @Sendable () -> Date = { Date() }) {
+         weekly: WeeklyStore, inbox: InboxStore, openVoorJou: @escaping () -> Void,
+         openDossier: @escaping () -> Void = {}, openDoneByVerder: @escaping () -> Void = {},
+         now: @escaping @Sendable () -> Date = { Date() }) {
         self.auth = auth
         self.center = center
         self.push = push
@@ -45,13 +52,15 @@ struct MoreTab: View {
         self._path = path
         self.openVoice = openVoice
         self.forgetVoice = forgetVoice
-        self.liveWaiting = liveWaiting
+        self.weekly = weekly
+        self.inbox = inbox
         self.openVoorJou = openVoorJou
+        self.openDossier = openDossier
+        self.openDoneByVerder = openDoneByVerder
         self.now = now
         let rejected: @MainActor () -> Void = { auth.sessionRejected() }
         self._account = State(initialValue: AccountModel(client: auth.client, onUnauthorized: rejected, now: now))
         self._prefs = State(initialValue: NotificationPrefsModel(client: auth.client, onUnauthorized: rejected))
-        self._weekly = State(initialValue: WeeklyStore(client: auth.client, onUnauthorized: rejected))
     }
 
     private var about: AboutInfo { AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: shownServer) }
@@ -76,8 +85,9 @@ struct MoreTab: View {
         switch weekly.state {
         case .loading: s.weekly = .loading
         case .notYet: s.weekly = .notYet
-        case .failed: s.weekly = .failed
+        case .missing: s.weekly = .failed
         case .loaded(let screen): s.weekly = screen.meer
+        case .kept(let kept, _): s.weekly = kept.screen.meer
         }
         s.permission = push.permission
         s.kinds = prefs.count.map { .init(on: $0.on, of: $0.of) }
@@ -94,8 +104,8 @@ struct MoreTab: View {
                 .navigationDestination(for: MoreRoute.self) { route in
                     switch route {
                     case .weekly:
-                        WeeklyView(client: auth.client, onUnauthorized: { auth.sessionRejected() },
-                                   liveWaiting: liveWaiting, openVoorJou: openVoorJou)
+                        WeeklyView(store: weekly, inbox: inbox, now: now, openVoorJou: openVoorJou,
+                                   openDossier: openDossier, openDoneByVerder: openDoneByVerder)
                     case .money:
                         GeldScreen(store: money)
                     case .account:

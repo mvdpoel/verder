@@ -1,0 +1,109 @@
+{
+  "week": "2026-W43",
+  "from": "2026-10-18T16:00:00.000Z",
+  "to": "2026-10-25T17:00:00.000Z",
+  "sent": 1,
+  "received": 9,
+  "filedByMartin": 2,
+  "filedByVerder": 2,
+  "tasksDone": 2,
+  "waiting": 6,
+  "topWaiting": [
+    {
+      "kind": "proposal",
+      "id": "00000000-f1c5-4000-8000-000000000001",
+      "title": "Antwoord aan Bewindkantoor Noordkust: loonstrook oktober",
+      "subtitle": "Ilse vraagt om je loonstrook van oktober",
+      "priority": 1,
+      "at": "2026-11-02T08:30:00.000Z",
+      "dueAt": null,
+      "verder": true
+    },
+    {
+      "kind": "question",
+      "id": "00000000-f1c5-4000-8000-000000000002",
+      "title": "Hoort deze brief bij de vordering van Kade & Partners?",
+      "subtitle": null,
+      "priority": 2,
+      "at": "2026-11-01T10:15:00.000Z",
+      "dueAt": null,
+      "verder": false
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000003",
+      "title": "Telefoongesprek met Woonstichting Lindehof over de betalingsregeling",
+      "subtitle": null,
+      "priority": 3,
+      "at": "2026-10-31T14:05:00.000Z",
+      "dueAt": null,
+      "verder": false
+    }
+  ],
+  "history": [
+    {
+      "week": "2026-W36",
+      "sent": 2,
+      "received": 6,
+      "filedByMartin": 1,
+      "filedByVerder": 1,
+      "tasksDone": 1,
+      "waiting": 4
+    },
+    {
+      "week": "2026-W37",
+      "sent": 1,
+      "received": 5,
+      "filedByMartin": 1,
+      "filedByVerder": 0,
+      "tasksDone": 1,
+      "waiting": 3
+    },
+    {
+      "week": "2026-W38",
+      "sent": 2,
+      "received": 8,
+      "filedByMartin": 2,
+      "filedByVerder": 1,
+      "tasksDone": 2,
+      "waiting": 4
+    },
+    {
+      "week": "2026-W39",
+      "sent": 1,
+      "received": 6,
+      "filedByMartin": 2,
+      "filedByVerder": 1,
+      "tasksDone": 1,
+      "waiting": 5
+    },
+    {
+      "week": "2026-W40",
+      "sent": 2,
+      "received": 7,
+      "filedByMartin": 1,
+      "filedByVerder": 2,
+      "tasksDone": 2,
+      "waiting": 5
+    },
+    {
+      "week": "2026-W41",
+      "sent": 3,
+      "received": 10,
+      "filedByMartin": 2,
+      "filedByVerder": 1,
+      "tasksDone": 2,
+      "waiting": 4
+    },
+    {
+      "week": "2026-W42",
+      "sent": 1,
+      "received": 6,
+      "filedByMartin": 1,
+      "filedByVerder": 2,
+      "tasksDone": 2,
+      "waiting": 7
+    }
+  ],
+  "renamedByVerder": 0
+}

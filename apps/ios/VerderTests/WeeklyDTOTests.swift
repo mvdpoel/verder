@@ -6,8 +6,8 @@ import UserNotifications
 /// The Sunday summary on the phone (Plan 3 Task 26, iOS half): the `/weekly`
 /// contract decodes field for field, the window reads as the two Sunday 18:00
 /// instants it is (never Monday–Sunday), the screen says only what the stored
-/// summary counted — no comparison, nothing invented — and ends with ONE next
-/// step to Voor jou. A WEEKLY push opens it.
+/// summary counted — compared only with weeks the server counted, nothing
+/// invented — and ends with the LIVE card to Voor jou. A WEEKLY push opens it.
 @MainActor
 struct WeeklyDTOTests {
     /// The route's example, with the synthetic case's numbers.
@@ -93,102 +93,203 @@ struct WeeklyDTOTests {
 
     // MARK: - The screen
 
-    @Test func countsAreTheStoredOnesWithSingularForms() throws {
-        let s = WeeklyScreen(try Self.dto())
-        #expect(s.counts.map(\.text) == ["3 verstuurd", "7 binnen", "5 opgeborgen", "2 taken klaar"])
-        let one = WeeklyScreen(try Self.dto(sent: 1, received: 1, filedByMartin: 1, filedByVerder: 0, tasksDone: 1))
-        #expect(one.counts.map(\.text) == ["1 verstuurd", "1 binnen", "1 opgeborgen", "1 taak klaar"])
-        let none = WeeklyScreen(try Self.dto(sent: 0, received: 0, filedByMartin: 0, filedByVerder: 0, tasksDone: 0))
-        #expect(none.counts.map(\.text) == ["0 verstuurd", "0 binnen", "0 opgeborgen", "0 taken klaar"])
+    /// Martin's seven earlier weeks as the fixture holds them: 3 6 4 5 7 4 5.
+    nonisolated static let history = #"""
+    [{"week":"2026-W37","sent":1,"received":5,"filedByMartin":1,"filedByVerder":0,"tasksDone":1,"waiting":3},
+     {"week":"2026-W38","sent":2,"received":8,"filedByMartin":2,"filedByVerder":1,"tasksDone":2,"waiting":4},
+     {"week":"2026-W39","sent":1,"received":6,"filedByMartin":2,"filedByVerder":1,"tasksDone":1,"waiting":5},
+     {"week":"2026-W40","sent":2,"received":7,"filedByMartin":1,"filedByVerder":2,"tasksDone":2,"waiting":5},
+     {"week":"2026-W41","sent":3,"received":10,"filedByMartin":2,"filedByVerder":1,"tasksDone":2,"waiting":4},
+     {"week":"2026-W42","sent":1,"received":6,"filedByMartin":1,"filedByVerder":2,"tasksDone":2,"waiting":7},
+     {"week":"2026-W43","sent":1,"received":9,"filedByMartin":2,"filedByVerder":2,"tasksDone":2,"waiting":6}]
+    """#
+
+    static func withHistory(_ history: String = Self.history, renamed: Int? = 1, sent: Int = 3, received: Int = 7,
+                            filedByMartin: Int = 3, filedByVerder: Int = 2, tasksDone: Int = 2,
+                            waiting: Int = 4) throws -> WeeklyDTO {
+        try decode("""
+        {"week":"2026-W44","from":"2026-10-25T17:00:00.000Z","to":"2026-11-01T17:00:00.000Z",
+         "sent":\(sent),"received":\(received),"filedByMartin":\(filedByMartin),"filedByVerder":\(filedByVerder),
+         "tasksDone":\(tasksDone),"waiting":\(waiting),"topWaiting":[],
+         "history":\(history)\(renamed.map { #","renamedByVerder":\#($0)"# } ?? "")}
+        """)
     }
 
-    /// What verder filed on its own is stated plainly, beside what Martin filed.
-    @Test func whatVerderDidOnItsOwnIsStatedPlainly() throws {
-        let s = WeeklyScreen(try Self.dto(filedByMartin: 3, filedByVerder: 2))
-        #expect(s.counts[2].detail == "3 door jou · 2 door verder zelf")
-        let verderOnly = WeeklyScreen(try Self.dto(filedByMartin: 0, filedByVerder: 1))
-        #expect(verderOnly.counts[2].detail == "0 door jou · 1 door verder zelf")
-        let nothing = WeeklyScreen(try Self.dto(filedByMartin: 0, filedByVerder: 0))
-        #expect(nothing.counts[2].detail == nil)
+    /// Mon 2 nov 2026 09:41 Amsterdam: week 44 has been composed.
+    nonisolated static let monday = parseISODate("2026-11-02T08:41:00.000Z")!
+
+    @Test func theHeroCountsMartinsOwnSteps() throws {
+        let s = WeeklyScreen(try Self.dto())
+        #expect(s.hero.value == 8)
+        #expect(s.hero.words == "stappen door jou")
+        #expect(s.hero.parts == ["3 verstuurd", "3 door jou opgeborgen", "2 taken klaar"])
+        let one = WeeklyScreen(try Self.dto(sent: 0, filedByMartin: 0, tasksDone: 1))
+        #expect(one.hero.words == "stap door jou")
+        #expect(one.hero.parts == ["niets verstuurd", "niets door jou opgeborgen", "1 taak klaar"])
+        #expect(s.eyebrow == ["WEEK 44", "T/M ZO 1 NOV 18:00"])
     }
 
-    /// `/weekly` holds ONE week. Any "meer dan vorige week" would be invented —
-    /// on the summary AND on the next step, in every live state.
-    @Test func comparedWithNothingInvented() throws {
+    /// Without `history` the server counted no earlier week: no chart, no
+    /// average, no "vorige week" — nothing invented.
+    @Test func withoutHistoryNothingIsCompared() throws {
         let s = WeeklyScreen(try Self.dto())
-        let steps = [nil, 0, 1, 4].map { WeeklyScreen.nextStep(liveWaiting: $0) }
-        let words = ([s.allText] + steps.flatMap { [$0.title, $0.detail] }).joined(separator: "\n").lowercased()
-        for invented in ["vorige week", "meer dan", "minder dan", "gemiddeld", "dan je", "record", "%"] {
+        #expect(s.chart == nil)
+        #expect(s.sentence == nil)
+        let words = s.allText.lowercased()
+        for invented in ["vorige week", "gemiddeld", "dan je", "rustige", "%"] {
             #expect(!words.contains(invented), "\(invented)")
         }
     }
 
-    /// Everything the stored summary says is HISTORY: the counts AND Sunday's
-    /// waiting snapshot are drawn in the ink scale, never amber. The view
-    /// colours by `tone`, so tinting a count `attn` means changing the model,
-    /// and this test.
-    @Test func theSummaryIsHistoryAndNeverAmber() throws {
-        let s = WeeklyScreen(try Self.dto(waiting: 4, top: 3))
-        #expect(s.counts.allSatisfy { $0.tone == .history })
-        #expect(s.waiting.tone == .history, "Sunday's snapshot may have been decided long since")
+    @Test func theChartIsEightWeeksAgainstTheAverageOfTheSevenBefore() throws {
+        let s = WeeklyScreen(try Self.withHistory())
+        let chart = try #require(s.chart)
+        #expect(chart.title == "JOUW STAPPEN · 8 WEKEN")
+        #expect(chart.bars.map(\.label) == ["W37", "W38", "W39", "W40", "W41", "W42", "W43", "W44"])
+        #expect(chart.bars.map(\.value) == [3, 6, 4, 5, 7, 4, 5, 8])
+        #expect(chart.bars.map(\.isCurrent) == [false, false, false, false, false, false, false, true])
+        #expect(chart.average == 5) // 34 / 7 = 4.86
+        #expect(chart.caption == nil)
+        #expect(s.sentence == .init(full: "Meer dan je gemiddelde van 5 per week. Goed bezig.",
+                                    compact: "Meer dan je gemiddelde (5). Goed bezig."))
     }
 
-    /// `waiting` is Sunday's snapshot, and the screen says so.
-    @Test func waitingIsSundaysSnapshot() throws {
-        let s = WeeklyScreen(try Self.dto(waiting: 4, top: 3))
-        #expect(s.waiting.headline == "Op zondag wachtten er 4 op je")
-        #expect(s.waiting.items.count == 3)
-        #expect(s.waiting.items[0].kind == "suggestie")
-        let one = WeeklyScreen(try Self.dto(waiting: 1, top: 1))
-        #expect(one.waiting.headline == "Op zondag wachtte er 1 op je")
-        let none = WeeklyScreen(try Self.dto(waiting: 0, top: 0))
-        #expect(none.waiting.headline == "Op zondag wachtte er niets op je")
-        #expect(none.waiting.items.isEmpty)
+    /// The frames' rule: a value keeps 8 to the dashed line — above its bar,
+    /// inside a bar whose top is near the line, or above the line for a bar
+    /// too short to hold it.
+    @Test func noValueTouchesTheAverageLine() throws {
+        let chart = try #require(WeeklyScreen(try Self.withHistory()).chart)
+        #expect(chart.bars.map { chart.placement($0.value ?? 0) } ==
+                [.aboveLine, .above, .inside, .inside, .above, .inside, .inside, .above])
+        let calm = try #require(WeeklyScreen(try Self.withHistory(sent: 0, filedByMartin: 0, tasksDone: 1)).chart)
+        #expect(calm.placement(1) == .above)
+        #expect(calm.placement(3) == .aboveLine)
     }
 
-    /// A failed read is not a dead end: it offers "Opnieuw proberen" AND the
-    /// same next step as every other state, to Voor jou. Loading offers
-    /// nothing yet; the other states end in the one next step.
-    @Test func everyStateEndsInANextStepAFailureInTwo() throws {
-        let live = WeeklyScreen.nextStep(liveWaiting: 2)
-        #expect(WeeklyScreen.steps(for: .failed(.transport("x")), liveWaiting: 2) == [.retry, .voorJou(live)])
-        #expect(WeeklyScreen.steps(for: .notYet, liveWaiting: 2) == [.voorJou(live)])
-        #expect(WeeklyScreen.steps(for: .loaded(WeeklyScreen(try Self.dto())), liveWaiting: 2) == [.voorJou(live)])
-        #expect(WeeklyScreen.steps(for: .loading, liveWaiting: 2) == [])
-        #expect(WeeklyScreen.retry == "Opnieuw proberen")
+    /// Below the average is never a deficit (brief: Gentler Streak).
+    @Test func aQuietWeekIsNeverADeficit() throws {
+        let s = WeeklyScreen(try Self.withHistory(sent: 0, received: 2, filedByMartin: 0, tasksDone: 1, waiting: 0))
+        #expect(s.sentence?.full == "Een rustige week — en dat mag.")
+        for word in ["minder", "−", "slechter", "achter"] { #expect(!s.allText.contains(word), "\(word)") }
+        #expect(s.rows.map(\.title) == ["Niets verstuurd", "2 ontvangen", "2 opgeborgen", "1 taak klaar",
+                                        "Niets wachtte op je"])
     }
 
-    /// The server sends at most three; a longer list is cut, never all shown.
-    @Test func topWaitingIsAtMostThree() throws {
-        #expect(WeeklyScreen(try Self.dto(waiting: 9, top: 5)).waiting.items.count == 3)
+    @Test func theSecondWeekWaitsForAnAverage() throws {
+        let s = WeeklyScreen(try Self.withHistory(#"[{"week":"2026-W43","sent":1,"received":3,"filedByMartin":2,"filedByVerder":0,"tasksDone":1,"waiting":3}]"#,
+                                                  renamed: 0, sent: 2, received: 5, filedByMartin: 2, filedByVerder: 1))
+        let chart = try #require(s.chart)
+        #expect(chart.title == "JOUW STAPPEN · 2 WEKEN")
+        #expect(chart.bars.map(\.value) == [nil, nil, nil, nil, nil, nil, 4, 6])
+        #expect(chart.average == nil)
+        #expect(chart.caption == "geen data vóór week 43")
+        #expect(s.sentence?.full == "Je tweede week met verder. Een gemiddelde volgt vanaf 3 weken.")
+        #expect(s.verder.map(\.title) == ["1 stuk opgeborgen"])
+        #expect(s.verder[0].lines == [["Klopt het niet? In de lijst maak je het met één tik ongedaan."]])
     }
 
-    /// The screen ends with exactly one next step, to Voor jou. Its amber is
-    /// the LIVE count (`loadWaiting`, the same number as the badge), never
-    /// Sunday's: on Wednesday with nothing waiting it is not amber, whatever
-    /// Sunday said.
-    @Test func endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount() {
-        let four = WeeklyScreen.nextStep(liveWaiting: 4)
-        #expect(four.title == "Naar Voor jou")
-        #expect(four.detail == "4 wachten nog op je")
-        #expect(four.tone == .waitsOnMartin)
-        let one = WeeklyScreen.nextStep(liveWaiting: 1)
-        #expect(one.detail == "1 wacht nog op je")
-        #expect(one.tone == .waitsOnMartin)
-        let none = WeeklyScreen.nextStep(liveWaiting: 0)
-        #expect(none.title == "Naar Voor jou")
-        #expect(none.detail == "Niets wacht nu op je.")
-        #expect(none.tone == .history)
-        // Voor jou not loaded yet: no number is invented, and nothing is amber.
-        let unknown = WeeklyScreen.nextStep(liveWaiting: nil)
-        #expect(unknown.detail == "Kijk wat er nu op je wacht.")
-        #expect(unknown.tone == .history)
+    /// Each row compares with the week before only, from `history`; an equal
+    /// week reads "ook". Only rows with a list in the app carry a way there.
+    @Test func rowsCompareWithLastWeek() throws {
+        let s = WeeklyScreen(try Self.withHistory())
+        #expect(s.rows.map(\.title) == ["3 verstuurd", "7 ontvangen", "5 opgeborgen", "2 taken klaar", "4 wachtten op je"])
+        #expect(s.rows.map(\.lines) == [
+            [["vorige week: 1"]],
+            [["mail en scans", "vorige week: 9"]],
+            [["3 door jou", "2 door verder"], ["vorige week: 4"]],
+            [["vorige week: ook 2"]],
+            [["momentopname zo 18:00", "vorige week: 6"]],
+        ])
+        #expect(s.rows.map(\.destination) == [nil, .dossier, .dossier, nil, nil])
     }
 
-    @Test func theHeaderNamesTheWeekAndItsWindow() throws {
-        let s = WeeklyScreen(try Self.dto())
-        #expect(s.title == "Weekoverzicht")
-        #expect(s.windowLine == "week 44 · zo 25 okt 18:00 – zo 1 nov 18:00")
+    /// What verder did on its own is stated plainly, and the rename says why
+    /// it cannot be undone here.
+    @Test func whatVerderDidOnItsOwnIsStatedPlainly() throws {
+        let s = WeeklyScreen(try Self.withHistory())
+        #expect(s.verder.map(\.title) == ["2 stukken opgeborgen", "1 scan een naam gegeven"])
+        #expect(s.verder.map(\.destination) == [.doneByVerder, nil])
+        #expect(s.verder[1].lines == [["Die naam staat ook op de NAS, dus terugzetten kan niet in de app."]])
+        #expect(WeeklyScreen(try Self.dto(filedByVerder: 0)).verder.isEmpty)
+    }
+
+    /// AMBER IS LIVE OR NOT AT ALL: nothing in the stored summary carries a
+    /// tone, and the live card says what waits NOW, by Voor jou's count.
+    @Test func theLiveCardIsTheOnlyAmberAndItIsLive() {
+        let oldest = parseISODate("2026-10-31T09:00:00.000Z")
+        #expect(LiveCard.make(.init(count: 4, oldestAt: oldest), .summary)
+                == .waiting("4 wachten nog op je — de oudste sinds 31 okt."))
+        #expect(LiveCard.make(.init(count: 4, oldestAt: oldest), .notYet)
+                == .waiting("4 wachten nu op je — de oudste sinds 31 okt."))
+        #expect(LiveCard.make(.init(count: 1, oldestAt: oldest), .summary) == .waiting("1 wacht nog op je — sinds 31 okt."))
+        let kept = parseISODate("2026-11-01T18:02:00.000Z")
+        #expect(LiveCard.make(.init(count: 4, oldestAt: oldest, keptAt: kept), .summary)
+                == .waiting("4 wachten op je — stand van 19:02. Voor\u{00A0}jou laat zien wat er bewaard is."))
+        #expect(LiveCard.make(.init(count: 4, oldestAt: oldest, keptAt: kept), .notFetched)
+                == .waiting("4 wachten op je — stand van 19:02."))
+        #expect(LiveCard.make(.init(count: 0, lastClearedAt: parseISODate("2026-10-30T15:10:00.000Z")), .summary)
+                == .calm(caption: "laatst afgehandeld: vr 30 okt"))
+        #expect(LiveCard.make(.init(), .summary) == .unknown)
+    }
+
+    // MARK: - The page per state
+
+    @Test func loadingNamesTheWeekThePhoneExpects() {
+        let page = WeeklyPage.make(.loading, now: Self.monday, live: .init(count: 4))
+        #expect(page.eyebrow == ["WEEK 44"])
+        #expect(page.body == .skeleton)
+        #expect(page.live == nil)
+    }
+
+    @Test func beforeTheFirstSundayItSaysWhichSunday() throws {
+        let page = WeeklyPage.make(.notYet, now: Self.monday, live: .init(count: 4))
+        #expect(page.eyebrow == ["EERSTE WEEK"])
+        guard case .notYet(let e, let preview) = page.body else { Issue.record("\(page.body)"); return }
+        #expect(e.title == "Je eerste weekoverzicht komt zondag 8 november om 18:00")
+        #expect(preview.title == "ZO ZIET HET ERUIT")
+        #expect(preview.bars.map(\.label) == ["W38", "W39", "W40", "W41", "W42", "W43", "W44", "W45"])
+        #expect(preview.bars.allSatisfy { $0.value == nil })
+        #expect(preview.caption == "eerste balk: W45 · zo 8 nov")
+    }
+
+    @Test func aKeptSummaryShowsItsStand() throws {
+        let kept = WeeklyStore.Kept(screen: WeeklyScreen(try Self.withHistory()),
+                                    savedAt: try #require(parseISODate("2026-11-01T18:02:00.000Z")))
+        let page = WeeklyPage.make(.kept(kept, cause: .transport("x")), now: Self.monday, live: .init(count: 4))
+        #expect(page.status == .init(badge: "GEEN VERBINDING", stand: "stand van zo 1 nov 19:02", retry: true))
+        #expect(page.eyebrow == ["WEEK 44", "T/M ZO 1 NOV 18:00"])
+    }
+
+    @Test func offlineWithAnOlderWeekOffersIt() throws {
+        let older = try Self.decode(Self.json.replacingOccurrences(of: "2026-W44", with: "2026-W43"))
+        let kept = WeeklyStore.Kept(screen: WeeklyScreen(older),
+                                    savedAt: try #require(parseISODate("2026-11-01T16:40:00.000Z")))
+        let page = WeeklyPage.make(.missing(cause: .transport("x"), older: kept), now: Self.monday, live: .init(count: 4))
+        #expect(page.status == .init(badge: "GEEN VERBINDING", stand: "stand van zo 1 nov 17:40", retry: false))
+        guard case .empty(let e) = page.body else { Issue.record("\(page.body)"); return }
+        #expect(e.title == "Je weekoverzicht van week 44 staat klaar zodra je weer online bent")
+        #expect(e.retry && e.older == "Bekijk week 43 (bewaard)")
+    }
+
+    @Test func aServerFailureSaysNothingIsLost() {
+        let page = WeeklyPage.make(.missing(cause: .server(503), older: nil), now: Self.monday, live: .init())
+        #expect(page.eyebrow == ["WEEK 44"])
+        guard case .empty(let e) = page.body else { Issue.record("\(page.body)"); return }
+        #expect(e.title == "Je weekoverzicht kon niet worden opgehaald")
+        #expect(e.body == "Er is niets verloren. De server is even niet bereikbaar (fout 503); probeer het zo opnieuw.")
+        #expect(e.retry && e.older == nil)
+        #expect(page.live == .unknown)
+    }
+
+    /// Sunday 18:00 Amsterdam, across the change to winter time too.
+    @Test func theSundayCloseIsAmsterdams() throws {
+        #expect(WeeklyFormat.lastClose(atOrBefore: Self.monday) == parseISODate("2026-11-01T17:00:00.000Z"))
+        #expect(WeeklyFormat.nextClose(after: Self.monday) == parseISODate("2026-11-08T17:00:00.000Z"))
+        let sundayMorning = try #require(parseISODate("2026-11-01T08:41:00.000Z"))
+        #expect(WeeklyFormat.lastClose(atOrBefore: sundayMorning) == parseISODate("2026-10-25T17:00:00.000Z"))
+        #expect(WeeklyFormat.weekKey(Self.monday) == "2026-W45")
+        #expect(WeeklyFormat.weekKey(try #require(parseISODate("2026-11-01T17:00:00.000Z"))) == "2026-W44")
+        #expect(WeeklyFormat.weekKey(try #require(parseISODate("2026-01-01T12:00:00.000Z"))) == "2026-W01")
     }
 
     // MARK: - The store
@@ -198,45 +299,104 @@ struct WeeklyDTOTests {
         #expect(store.state == .loading)
         await store.refresh()
         guard case .loaded(let s) = store.state else { Issue.record("\(store.state)"); return }
-        #expect(s.counts.map(\.text) == ["3 verstuurd", "7 binnen", "5 opgeborgen", "2 taken klaar"])
-        #expect(s.waiting.items.count == 3)
+        #expect(s.hero.value == 8)
+        #expect(s.chart?.average == 5)
+        #expect(s.verder.count == 2)
     }
 
-    /// 404 before the first Sunday is not an error: it says when the first comes.
-    @Test func beforeTheFirstSundayItSaysWhenItComes() async {
+    /// 404 before the first Sunday is not an error.
+    @Test func beforeTheFirstSundayTheStoreSaysNotYet() async {
         let store = WeeklyStore(client: FixtureEnvironment.client(fixture: "empty"))
         await store.refresh()
         #expect(store.state == .notYet)
-        #expect(WeeklyStore.Copy.notYet == "Je eerste weekoverzicht komt zondag om 18:00")
     }
 
-    @Test func unauthorizedEndsTheSession() async {
+    @Test func unauthorizedEndsTheSessionAndKeepsNothing() async {
         var rejected = 0
         let store = WeeklyStore(client: FixtureEnvironment.client(fixture: "unauthorized"),
                                 onUnauthorized: { rejected += 1 })
         await store.refresh()
         #expect(rejected == 1)
-        #expect(store.state == .failed(.unauthorized))
+        #expect(store.state == .missing(cause: .unauthorized, older: nil))
     }
 
-    @Test func offlineFailsWithoutAFigure() async {
+    @Test func offlineWithNothingKeptIsMissing() async {
         let store = WeeklyStore(client: FixtureEnvironment.client(fixture: "offline"))
         await store.refresh()
-        guard case .failed(.transport) = store.state else { Issue.record("\(store.state)"); return }
+        guard case .missing(.transport, nil) = store.state else { Issue.record("\(store.state)"); return }
     }
 
-    /// A failed refresh keeps the summary already on screen.
-    @Test func aFailedRefreshKeepsWhatIsShown() async throws {
+    static func flaky() -> StubServer {
         let server = StubServer()
         let calls = Calls()
         server.on { _ in
             calls.count() == 0 ? .status(200, body: Data(Self.json.utf8)) : .failure(.notConnectedToInternet)
         }
-        let store = WeeklyStore(client: server.client())
+        return server
+    }
+
+    /// A failed refresh keeps the expected week, with when it was read.
+    @Test func aFailedRefreshKeepsTheExpectedWeek() async throws {
+        let server = Self.flaky()
+        let store = WeeklyStore(client: server.client(), now: { Self.monday })
         await store.refresh()
         await store.refresh()
-        guard case .loaded = store.state else { Issue.record("\(store.state)"); return }
+        guard case .kept(let k, .transport) = store.state else { Issue.record("\(store.state)"); return }
+        #expect(k.screen.week == "2026-W44" && k.savedAt == Self.monday)
         #expect(server.requests.map { $0.url?.path() } == [WeeklyStore.path, WeeklyStore.path])
+    }
+
+    /// A week later the same copy is OLDER than the expected week: the screen
+    /// says the new one is missing and offers the old one as "bewaard".
+    @Test func anOlderKeptWeekIsOfferedNotShownAsCurrent() async throws {
+        let later = Self.monday.addingTimeInterval(7 * 86_400)
+        let clock = Clock(Self.monday)
+        let store = WeeklyStore(client: Self.flaky().client(), now: { clock.now })
+        await store.refresh()
+        clock.now = later
+        await store.retry()
+        guard case .missing(.transport, let older?) = store.state else { Issue.record("\(store.state)"); return }
+        #expect(older.screen.week == "2026-W44")
+        #expect(store.failedRetries == 1)
+        store.showOlder()
+        guard case .kept(let k, _) = store.state else { Issue.record("\(store.state)"); return }
+        #expect(k.screen.week == "2026-W44")
+    }
+
+    /// The copy on disk outlives the store: a relaunch offline shows it with its stand.
+    @Test func theKeptCopySurvivesARelaunch() async throws {
+        let dir = URL.temporaryDirectory.appending(path: "weekly-cache-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let server = StubServer()
+        server.on { _ in .status(200, body: Data(Self.json.utf8)) }
+        let first = WeeklyStore(client: server.client(), cache: WeeklyCache(dir: dir), now: { Self.monday })
+        await first.refresh()
+        let offline = WeeklyStore(client: FixtureEnvironment.client(fixture: "offline"), cache: WeeklyCache(dir: dir),
+                                  now: { Self.monday.addingTimeInterval(3600) })
+        await offline.refresh()
+        guard case .kept(let k, _) = offline.state else { Issue.record("\(offline.state)"); return }
+        #expect(k.savedAt == Self.monday)
+    }
+
+    /// Meer and the screen both refresh when a link opens it: one request.
+    @Test func concurrentRefreshesShareOneRead() async {
+        let server = StubServer()
+        server.on { _ in .status(200, body: Data(Self.json.utf8)) }
+        let store = WeeklyStore(client: server.client())
+        async let a: Void = store.refresh()
+        async let b: Void = store.refresh()
+        _ = await (a, b)
+        #expect(server.requests.count == 1)
+    }
+
+    final class Clock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: Date
+        init(_ now: Date) { value = now }
+        var now: Date {
+            get { lock.lock(); defer { lock.unlock() }; return value }
+            set { lock.lock(); value = newValue; lock.unlock() }
+        }
     }
 
     final class Calls: @unchecked Sendable {

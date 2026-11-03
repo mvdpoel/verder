@@ -1,0 +1,9 @@
+{
+  "description": "The weekly route answers 503 from the first request; Voor jou was read once at zo 1 nov 17:40 and then fails too.",
+  "today": "2026-11-02T08:41:00Z",
+  "statuses": {
+    "weekly": 503
+  },
+  "thenFail": 503,
+  "keptAt": "2026-11-01T16:40:00Z"
+}
