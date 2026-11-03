@@ -211,7 +211,12 @@ struct MoneyGlance: Equatable, Sendable {
             guard let m = a.months.last(where: { $0.coverage != .none }),
                   let inText = m.inText, let outText = m.outText else { return nil }
             let deels = m.hatched ? " deels" : ""
-            return "\(a.shortTitle) · \(m.label)\(deels) · in \(inText) · uit \(outText)"
+            // Each label is bound to its amount with NBSP, so a wrap never
+            // leaves "uit" at a line's end and its amount on the next.
+            let pair = { (label: String, amount: String) in
+                "\(label) \(amount)".replacingOccurrences(of: " ", with: "\u{00A0}")
+            }
+            return "\(a.shortTitle) · \(m.label)\(deels) · \(pair("in", inText)) · \(pair("uit", outText))"
         }
     }
 

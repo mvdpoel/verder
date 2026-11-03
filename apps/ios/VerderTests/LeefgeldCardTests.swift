@@ -280,6 +280,13 @@ struct MoneyGlanceSummaryTests {
         #expect(!glance.overview.isEmpty, "fixture should carry an account month, or this test proves nothing")
         let revealed = glance.summary(revealed: true)
         #expect(revealed.lines == glance.overview)
+        // A wrap never splits a label from its amount: "uit" and "€ 1.760,00" are one word.
+        for line in glance.overview {
+            for label in ["in", "uit"] {
+                #expect(line.contains("· \(label)\u{00A0}€\u{00A0}"), "\(label) is bound to its amount in \(line)")
+                #expect(!line.contains("\(label) €"))
+            }
+        }
         let iban = try #require(dto.accounts.first?.accountIban)
         #expect(revealed.allText.contains(MoneyFormat.ibanTail(iban)))
         #expect(revealed.freshness == glance.freshness)

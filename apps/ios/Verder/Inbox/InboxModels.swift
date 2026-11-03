@@ -149,6 +149,10 @@ struct InboxDTO: Codable, Equatable, Sendable {
     let count: Int
     let items: [WaitingItem]
     let doneByVerder: [VerderAction]
+    /// When the last item that waited on Martin was dealt with — the calm
+    /// card's "jij was klaar · vandaag 08:20". Optional: absent, the card
+    /// simply says nothing about when.
+    var lastClearedAt: Date? = nil
 }
 
 // MARK: - Suggestion

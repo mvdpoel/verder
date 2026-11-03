@@ -141,6 +141,14 @@ enum HomeSummary {
         count == 0 ? nothingWaiting : "\(count) \(countCaption(count))"
     }
 
+    /// The calm card's footer: "jij was klaar · vandaag 08:20" — always with
+    /// its day, even today, because "jij was klaar · 08:20" reads as a clock.
+    /// Nil when the server did not say when.
+    static func clearedLine(_ clearedAt: Date?, now: Date) -> [String]? {
+        guard let clearedAt else { return nil }
+        return ["jij was klaar", "\(age(clearedAt, now: now)) \(clock(clearedAt))"]
+    }
+
     /// Only for a long list: permission to start at the top.
     static func manyHint(_ count: Int, shown: Int) -> String? {
         guard count >= manyThreshold else { return nil }
@@ -162,6 +170,30 @@ enum HomeSummary {
             guard let s, !s.isEmpty else { return nil }
             return s
         }
+    }
+
+    /// The preview meta in the two shapes a row may take. `oneLine` is the
+    /// frames' "VOORSTEL · BEWINDKANTOOR NOORDKUST · VANDAAG"; when that does
+    /// not fit the row, `stacked` keeps kind and age together on the first
+    /// line and gives the party the second ("VOORSTEL · VANDAAG ·" /
+    /// "BEWINDKANTOOR NOORDKUST"), so a wrap never leaves the age alone on a
+    /// line. The party is the SERVER's full name — the phone never shortens a
+    /// name it did not get (synthetic-data spec §Overzicht) — and its own
+    /// spaces stay breakable, so a name wider than the row wraps at words.
+    struct PreviewMeta: Equatable {
+        let oneLine: String
+        let stacked: [String]
+    }
+
+    static func previewMeta(_ item: WaitingItem, now: Date) -> PreviewMeta {
+        let kind = VoorJouList.kindLabel(item.kind)
+        let when = age(item.at, now: now)
+        guard let who = item.subtitle, !who.isEmpty else {
+            let line = metaLine([kind, when])
+            return PreviewMeta(oneLine: line, stacked: [line])
+        }
+        return PreviewMeta(oneLine: metaLine([kind, who, when]),
+                           stacked: [metaLine([kind, when]) + "\u{00A0}·", who])
     }
 
     /// One row, read whole: kind, title, who, "wacht op jou", age.

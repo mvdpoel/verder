@@ -79,6 +79,9 @@ struct HomeTab: View {
                     try? await Task.sleep(for: .seconds(1.5))
                     if target == .end {
                         proxy.scrollTo(Self.endID, anchor: .bottom)
+                    } else if target == .waiting {
+                        // The end of Wacht op jou, clear of the tab bar.
+                        proxy.scrollTo(Self.waitingEndID, anchor: UnitPoint(x: 0.5, y: 0.8))
                     } else {
                         proxy.scrollTo(target.rawValue, anchor: .top)
                     }
@@ -101,6 +104,7 @@ struct HomeTab: View {
     }
 
     private static let endID = "overzicht-end"
+    private static let waitingEndID = "waiting"
 
     /// What changes a card's height, so the change springs (Reduce Motion: a crossfade).
     private var animationKey: [Int] {
@@ -182,7 +186,7 @@ struct HomeTab: View {
             .buttonStyle(.plain)
             .accessibilityLabel(HomeSummary.waitingLabel)
             if inbox.count == 0 {
-                calm
+                calm(inbox)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(inbox.count)")
@@ -214,6 +218,7 @@ struct HomeTab: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    Color.clear.frame(height: 0).id(Self.waitingEndID)
                 } else {
                     lockedReveal
                 }
@@ -221,7 +226,7 @@ struct HomeTab: View {
         }
     }
 
-    private var calm: some View {
+    private func calm(_ inbox: InboxDTO) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 40, weight: .thin))
@@ -235,6 +240,9 @@ struct HomeTab: View {
                 .font(HomeType.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
+            if let cleared = HomeSummary.clearedLine(inbox.lastClearedAt, now: now()) {
+                meta(cleared)
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -283,7 +291,7 @@ struct HomeTab: View {
                         .truncationMode(.tail)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    meta(HomeSummary.meta(item, now: now()))
+                    previewMeta(item)
                 }
                 Spacer(minLength: 0)
                 chevron
@@ -573,6 +581,31 @@ struct HomeTab: View {
         }
     }
 
+    /// A preview row's meta: on one line when it fits, else kind and age
+    /// together over the party (`HomeSummary.previewMeta`). At the
+    /// accessibility sizes, one fact per line, as every meta.
+    @ViewBuilder private func previewMeta(_ item: WaitingItem) -> some View {
+        if ax {
+            meta(HomeSummary.meta(item, now: now()))
+        } else {
+            let m = HomeSummary.previewMeta(item, now: now())
+            ViewThatFits(in: .horizontal) {
+                Text(m.oneLine).lineLimit(1)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(m.stacked.enumerated()), id: \.offset) { _, line in
+                        Text(line).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .textCase(.uppercase)
+            .font(HomeType.mono)
+            .lineHeight(.normal)
+            .foregroundStyle(Color.inkDim)
+            .multilineTextAlignment(.leading)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        }
+    }
+
     private func linkRow(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(text)
@@ -605,7 +638,8 @@ struct HomeTab: View {
 /// Overzicht's type ramp (Figma: 48 / 28 / 17 / 13), each tied to the text
 /// style it scales with — body 17 → 53 at AX5, title 28 → 58.
 enum HomeType {
-    static let hero = Font.display(48, relativeTo: .largeTitle, weight: .light)
+    /// Regular, as the frames' "10" / "498": a light numeral reads half as heavy.
+    static let hero = Font.display(48, relativeTo: .largeTitle, weight: .regular)
     static let title = Font.display(28, relativeTo: .title, weight: .regular)
     static let money = Font.display(28, relativeTo: .title, weight: .regular)
     static let body = Font.display(17, relativeTo: .body)
@@ -625,6 +659,7 @@ struct LeefgeldGlanceView: View {
     let openWebsite: () -> Void
 
     private func hy(_ s: String) -> String { ax ? HomeSummary.hyphenated(s) : s }
+    static let figureSlack: CGFloat = 24
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -693,7 +728,13 @@ struct LeefgeldGlanceView: View {
             VStack(alignment: .leading, spacing: 4) { hero; caption }
         } else {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) { hero.fixedSize(); caption.fixedSize() }
+                // 24 pt to spare at the end, or they stack (Figma's SE frame
+                // stacks "€ 47,90" over its caption at a 343 pt card): a line
+                // that only just fits crowds the card's padding.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    hero.fixedSize(); caption.fixedSize()
+                    Spacer(minLength: LeefgeldGlanceView.figureSlack)
+                }
                 VStack(alignment: .leading, spacing: 4) { hero; caption }
             }
         }

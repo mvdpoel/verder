@@ -8,7 +8,7 @@ import Foundation
 ///     -fixtures <name>         answer every /api/mobile/v1 call from FixtureData/<name>
 ///     -fixtures-locked         keep the app lock closed: Overzicht's counts-only glance
 ///     -fixtures-scans          the phone's queue holds today's scans: 2 sent, 1 waiting
-///     -fixtures-scroll <leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
+///     -fixtures-scroll <waiting|leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
 ///
@@ -43,7 +43,7 @@ struct FixtureLaunch: Equatable, Sendable {
     }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
-    enum Scroll: String, CaseIterable, Sendable { case leefgeld, rest, end }
+    enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end }
 
     enum ParseError: Error, Equatable {
         case unknownScroll(String)

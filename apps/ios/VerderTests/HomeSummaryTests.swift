@@ -80,6 +80,26 @@ struct HomeSummaryTests {
         #expect(line == "vraag\u{00A0}· Incassobureau\u{00A0}Kade\u{00A0}&\u{00A0}Partners\u{00A0}· vandaag")
     }
 
+    /// One line when it fits; else kind and age stay together and the party
+    /// takes the second line — the age is never left alone on a line.
+    @Test func previewMetaKeepsKindAndAgeTogetherWhenItWraps() {
+        let row = item(2, kind: .question, subtitle: "Incassobureau Kade & Partners", at: Self.date("2026-11-01T09:15:00Z"))
+        let m = HomeSummary.previewMeta(row, now: now)
+        #expect(m.oneLine == HomeSummary.metaLine(["vraag", "Incassobureau Kade & Partners", "vandaag"]))
+        #expect(m.stacked == ["vraag\u{00A0}· vandaag\u{00A0}·", "Incassobureau Kade & Partners"])
+        #expect(!m.stacked[1].contains("\u{00A0}"), "a party wider than the row wraps at its own words")
+        let bare = HomeSummary.previewMeta(item(3, at: Self.date("2026-10-31T10:00:00Z")), now: now)
+        #expect(bare.oneLine == "taak\u{00A0}· gisteren")
+        #expect(bare.stacked == [bare.oneLine])
+    }
+
+    /// The calm card says when Martin was done, always with its day.
+    @Test func clearedLineCarriesItsDay() {
+        #expect(HomeSummary.clearedLine(Self.date("2026-11-01T07:20:00Z"), now: now) == ["jij was klaar", "vandaag 08:20"])
+        #expect(HomeSummary.clearedLine(Self.date("2026-10-31T21:14:00Z"), now: now) == ["jij was klaar", "gisteren 22:14"])
+        #expect(HomeSummary.clearedLine(nil, now: now) == nil)
+    }
+
     // MARK: - Eyebrow
 
     @Test func eyebrowIsTheDayUntilTheBoardIsOld() {

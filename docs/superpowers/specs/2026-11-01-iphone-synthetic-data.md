@@ -44,16 +44,21 @@ Door verder gedaan (3): "Opgeborgen als bankafschrift: Afschrift september" · "
 The inbox rows' `subtitle` is what `waiting.ts` serves: the party for a
 proposal or question ("Bewindkantoor Noordkust", "Incassobureau Kade &
 Partners"), the suggestion's kind label ("Logboekregel") — so the preview's
-meta line reads `VOORSTEL · BEWINDKANTOOR NOORDKUST · VANDAAG`.
+meta line reads `VOORSTEL · BEWINDKANTOOR NOORDKUST · VANDAAG`. The phone never
+shortens a name it was served (the Figma frames' `NOORDKUST` / `LINDEHOF` are
+not data the server has): when the line does not fit, kind and age stay
+together on the first line and the party takes the second
+(`VOORSTEL · VANDAAG ·` / `BEWINDKANTOOR NOORDKUST`), so the age is never left
+alone on a line (decided 2026-11-03, `HomeSummary.previewMeta`).
 
 Overzicht's own fixtures (added 2026-11-03, the Figma "overzicht · final" states):
-- `calm` — nothing waits (count 0), no open tasks, 2 waiting on someone else; Door verder gedaan still 3.
+- `calm` — nothing waits (count 0), no open tasks, 2 waiting on someone else; Door verder gedaan still 3; `lastClearedAt` 08:20 today → "JIJ WAS KLAAR · VANDAAG 08:20" (the frame's 11:20 is after the case clock's 09:41). The server does not serve `lastClearedAt` yet, so in production the line is absent.
 - `one-item` — only item 1 waits; no open tasks, 2 waiting on someone else.
 - `loading` — no request is ever answered: the skeleton.
 - `server-error` — 503 on inbox, dashboard summary and money from the first request (no board to keep).
 - `server-error-cached` — the base case once, then 503 for every request (`"thenFail": 503`): a board kept through a failure, retried every minute.
 - `offline-cached` — the base case once, then no connection (`"thenFail": "offline"`); its leefgeld week is covered t/m za 31 okt (Supermarkt + Bakker + Apotheek = € 62,40 spent, zo: nog geen afschrift).
-- Launch flags: `-fixtures-scans` seeds the phone's queue with today's "2 verstuurd · 1 in de wachtrij"; `-fixtures-scroll <leefgeld|rest|end>` opens Overzicht scrolled for the lower parts of a "hele pagina" frame.
+- Launch flags: `-fixtures-scans` seeds the phone's queue with today's "2 verstuurd · 1 in de wachtrij"; `-fixtures-scroll <waiting|leefgeld|rest|end>` opens Overzicht scrolled for the lower parts of a "hele pagina" frame.
 - The case's clock in every fixture run is Sun 1 nov 2026 09:41 Amsterdam, running on from launch.
 
 - Headline ("waar het nu op wacht"): stop "Stukken aanleveren bij Team Startdossier" on track "Opstart bewind", 28 okt, note "Loonstroken en polissen nog sturen."

@@ -13,7 +13,8 @@
 #   --locked keep the app lock closed (Overzicht's counts-only glance)
 #   --scans  the phone's upload queue holds today's scans (2 sent, 1 waiting)
 #   --scrolled  open Overzicht scrolled to its end (the lower half of a
-#            "hele pagina" frame); --scroll <leefgeld|rest|end> to a card
+#            "hele pagina" frame); --scroll <waiting|leefgeld|rest|end> to a card
+#            (waiting: the end of Wacht op jou, at the bottom of the screen)
 #   --text-size  the simulator's Dynamic Type size for this shot, as simctl
 #            spells it (e.g. accessibility-extra-extra-extra-large for AX5,
 #            large for the default); the previous size is put back afterwards
@@ -45,7 +46,7 @@ while [ $# -gt 0 ]; do
     --scrolled) SCROLLED=end ;;
     --scroll)
       [ $# -ge 2 ] || usage
-      case "$2" in leefgeld|rest|end) SCROLLED="$2" ;; *) echo "capture.sh: --scroll takes leefgeld, rest or end" >&2; exit 2 ;; esac
+      case "$2" in waiting|leefgeld|rest|end) SCROLLED="$2" ;; *) echo "capture.sh: --scroll takes waiting, leefgeld, rest or end" >&2; exit 2 ;; esac
       shift ;;
     --text-size)
       [ $# -ge 2 ] || usage

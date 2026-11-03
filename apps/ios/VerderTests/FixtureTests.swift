@@ -203,6 +203,8 @@ struct FixtureTests {
     @Test func calmAndOneItemAreTheOverzichtFrames() throws {
         let calm = try Self.decode(InboxDTO.self, "calm", "inbox")
         #expect(calm.count == 0 && calm.doneByVerder.count == 3)
+        #expect(calm.lastClearedAt == ISO8601DateFormatter().date(from: "2026-11-01T07:20:00Z"),
+                "the calm card's 'jij was klaar · vandaag 08:20'")
         #expect(try Self.decode(DashboardSummaryDTO.self, "calm", "dashboard/summary").tasks
                 == .init(openCount: 0, overdueCount: 0, waitingOnOthersCount: 2))
         let one = try Self.decode(InboxDTO.self, "one-item", "inbox")
@@ -500,6 +502,8 @@ struct FixtureTests {
         let board = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "voorjou-few", "-fixtures-scroll", "end",
                                                           "-fixtures-scans"]))
         #expect(board.scroll == .end && board.scans)
+        #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end"],
+                "capture.sh's --scroll grammar")
         #expect(throws: FixtureLaunch.ParseError.unknownScroll("top")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-scroll", "top"])
         }
