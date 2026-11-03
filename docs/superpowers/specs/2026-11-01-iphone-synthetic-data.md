@@ -68,8 +68,8 @@ Overzicht's own fixtures (added 2026-11-03, the Figma "overzicht · final" state
 ## Money (fixtures `money-complete`, `money-partial`, `money-geen-data`, `money-empty`, `money-no-account`, `money-unrecognised`, `money-no-budget`, `money-overspent`)
 
 Two accounts, never summed:
-- `NL00TEST0123456789` (beheerrekening) — months jun–nov, jun–sep complete, okt partial (hatched), nov `geen data`. Income line € 2.400,00/month from Atelier Sterrenwacht; one incidental € 85,00 "teruggave".
-- `NL00TEST9876543210` (leefgeldrekening) — weekly credit € 100,00 every Thursday; months jun–okt complete, nov `geen data` (no rows yet — never a covered € 0,00).
+- `NL00TEST0123456789` (beheerrekening) — months jun–nov, jun–sep complete, okt partial (hatched), nov `geen data`. Income line € 2.400,00/month from Atelier Sterrenwacht; out jun € 2.150,00 · jul € 2.300,00 · aug € 2.050,00 · sep € 2.200,00 · okt (t/m za 24 okt) € 1.210,35 — the Geld frames' figures; one incidental € 85,00 "teruggave". Its own newest booking is za 24 okt (`newestBooking` per account, 2026-11-03).
+- `NL00TEST9876543210` (leefgeldrekening, `isLeefgeldAccount: true` wherever LEEFGELD_IBAN is set or the week recognised it) — weekly credit € 100,00 every Thursday; in/out jun € 400,00/€ 372,10 · jul € 500,00/€ 481,60 · aug € 400,00/€ 391,60 · sep € 400,00/€ 405,20 · okt € 500,00/€ 468,30; nov `geen data` (no rows yet — never a covered € 0,00). Its newest booking is the table's newest, capped at vr 30 okt where November has no rows.
 - Leefgeld week (`money-complete`): week from Mon 26 okt, budget € 100,00, spent € 62,40 (rows: "Supermarkt" € 41,20, "Bakker" € 6,70, "Apotheek" € 14,50), received € 100,00, left € 37,60.
 - `money-partial`: covered t/m do 29 okt.
 - `money-geen-data`: newest booking 18 okt → "geen data — laatste afschrift t/m 18 okt".

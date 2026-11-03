@@ -30,6 +30,8 @@ struct HomeTab: View {
     var openTimeline: () -> Void = {}
 
     @State private var showGeld = false
+    /// The account Geld lands on when it opens (the card that was tapped).
+    @State private var geldFocus: String?
     @State private var compactHeight = false
     @State private var failedRetries = 0
     @State private var failedUnlocks = 0
@@ -45,10 +47,20 @@ struct HomeTab: View {
     var body: some View {
         NavigationStack {
             page
+                // Never drawn (the bar is hidden); it names this screen in the
+                // back button's long-press history menu on Geld. iOS 26 draws
+                // the back button itself as a glass chevron, without the title.
+                .navigationTitle("Overzicht")
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(isPresented: $showGeld) {
-                    GeldScreen(store: money).lockGated(by: lock)
+                    GeldScreen(store: money, focusAccount: geldFocus).lockGated(by: lock)
                 }
+                #if DEBUG
+                .task {
+                    // `-fixtures-geld`: Geld pushed from here, as a card tap does.
+                    if FixtureLaunch.current?.geld != nil { showGeld = true }
+                }
+                #endif
         }
     }
 
@@ -315,7 +327,7 @@ struct HomeTab: View {
     @ViewBuilder private var leefgeldCard: some View {
         if let glance = money.glance {
             if let lg = glance.leefgeldGlance {
-                Button { showGeld = true } label: {
+                Button { openGeld(glance.leefgeldAccountID) } label: {
                     card { LeefgeldGlanceView(glance: lg, ax: ax, openWebsite: openWebsite) }
                 }
                 .buttonStyle(.plain)
@@ -323,26 +335,20 @@ struct HomeTab: View {
                 .accessibilityLabel(lg.accessibilityLabel)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Opent Geld")
-            } else {
-                let summary = glance.summary(revealed: lock.revealsCaseContent)
-                if !summary.lines.isEmpty {
-                    Button { showGeld = true } label: {
-                        card {
-                            cardHeader(HomeSummary.moneyLabel, amber: false, chevron: true)
-                            ForEach(summary.lines, id: \.self) { line in
-                                Text(line).font(HomeType.body).foregroundStyle(Color.ink)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
             }
+            // No weekly amount: no leefgeld card. The accounts lead the rest
+            // card instead (`restCard`), Figma "Money glance / no-budget".
         } else if money.lastError == nil {
             LeefgeldSkeleton()
         }
         // A failed money fetch with nothing kept hides the card rather than
         // adding a second error to Overzicht; Geld itself says why.
+    }
+
+    /// Geld, landing on that account's card.
+    private func openGeld(_ account: String?) {
+        geldFocus = account
+        showGeld = true
     }
 
     private func openWebsite() {
@@ -353,6 +359,11 @@ struct HomeTab: View {
 
     private func restCard(_ inbox: InboxDTO) -> some View {
         card {
+            // Without a weekly amount the accounts lead this card: no
+            // amounts, no total, unlocked only (the tail names an account).
+            ForEach(money.glance?.accountRows(revealed: lock.revealsCaseContent) ?? []) { a in
+                restRow(HomeSummary.Row(title: a.title, amberSuffix: nil, meta: a.meta)) { openGeld(a.id) }
+            }
             if let tasks = store.summary?.tasks {
                 restRow(HomeSummary.tasksRow(tasks, inbox: inbox, now: now())) { openInbox(nil) }
             }

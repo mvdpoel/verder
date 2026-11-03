@@ -40,7 +40,7 @@
           "month": "2026-07",
           "coverage": "complete",
           "inCents": 240000,
-          "outCents": 228000,
+          "outCents": 230000,
           "outByCategory": [
             {
               "category": "huur",
@@ -60,7 +60,7 @@
             },
             {
               "category": "overig",
-              "cents": 57500
+              "cents": 59500
             }
           ],
           "incidentalCents": 0,
@@ -73,7 +73,7 @@
           "month": "2026-08",
           "coverage": "complete",
           "inCents": 240000,
-          "outCents": 219000,
+          "outCents": 205000,
           "outByCategory": [
             {
               "category": "huur",
@@ -93,7 +93,7 @@
             },
             {
               "category": "overig",
-              "cents": 58500
+              "cents": 44500
             }
           ],
           "incidentalCents": 8500,
@@ -113,7 +113,7 @@
           "month": "2026-09",
           "coverage": "complete",
           "inCents": 240000,
-          "outCents": 221000,
+          "outCents": 220000,
           "outByCategory": [
             {
               "category": "huur",
@@ -133,7 +133,7 @@
             },
             {
               "category": "overig",
-              "cents": 60500
+              "cents": 59500
             }
           ],
           "incidentalCents": 0,
@@ -145,12 +145,12 @@
         {
           "month": "2026-10",
           "coverage": "partial",
-          "inCents": 0,
-          "outCents": 95000,
+          "inCents": 240000,
+          "outCents": 121035,
           "outByCategory": [
             {
               "category": "huur",
-              "cents": 95000
+              "cents": 121035
             }
           ],
           "incidentalCents": 0,
@@ -171,7 +171,9 @@
           "internalRows": [],
           "incidentalRows": []
         }
-      ]
+      ],
+      "newestBooking": "2026-10-18",
+      "isLeefgeldAccount": false
     },
     {
       "accountIban": "NL00TEST9876543210",
@@ -180,7 +182,7 @@
           "month": "2026-06",
           "coverage": "complete",
           "inCents": 40000,
-          "outCents": 38200,
+          "outCents": 37210,
           "outByCategory": [
             {
               "category": "boodschappen",
@@ -188,7 +190,7 @@
             },
             {
               "category": "overig",
-              "cents": 9000
+              "cents": 8010
             }
           ],
           "incidentalCents": 0,
@@ -201,7 +203,7 @@
           "month": "2026-07",
           "coverage": "complete",
           "inCents": 50000,
-          "outCents": 47600,
+          "outCents": 48160,
           "outByCategory": [
             {
               "category": "boodschappen",
@@ -209,7 +211,7 @@
             },
             {
               "category": "overig",
-              "cents": 9000
+              "cents": 9560
             }
           ],
           "incidentalCents": 0,
@@ -222,7 +224,7 @@
           "month": "2026-08",
           "coverage": "complete",
           "inCents": 40000,
-          "outCents": 39100,
+          "outCents": 39160,
           "outByCategory": [
             {
               "category": "boodschappen",
@@ -230,7 +232,7 @@
             },
             {
               "category": "overig",
-              "cents": 9000
+              "cents": 9060
             }
           ],
           "incidentalCents": 0,
@@ -243,7 +245,7 @@
           "month": "2026-09",
           "coverage": "complete",
           "inCents": 40000,
-          "outCents": 38800,
+          "outCents": 40520,
           "outByCategory": [
             {
               "category": "boodschappen",
@@ -251,7 +253,7 @@
             },
             {
               "category": "overig",
-              "cents": 9000
+              "cents": 10720
             }
           ],
           "incidentalCents": 0,
@@ -263,12 +265,12 @@
         {
           "month": "2026-10",
           "coverage": "partial",
-          "inCents": 20000,
-          "outCents": 12900,
+          "inCents": 50000,
+          "outCents": 46830,
           "outByCategory": [
             {
               "category": "boodschappen",
-              "cents": 12900
+              "cents": 46830
             }
           ],
           "incidentalCents": 0,
@@ -289,7 +291,9 @@
           "internalRows": [],
           "incidentalRows": []
         }
-      ]
+      ],
+      "newestBooking": "2026-10-18",
+      "isLeefgeldAccount": true
     }
   ],
   "leefgeld": {

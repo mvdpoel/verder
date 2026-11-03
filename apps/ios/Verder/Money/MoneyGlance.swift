@@ -199,8 +199,33 @@ struct MoneyGlance: Equatable, Sendable {
     let freshness: String
     /// One line per account for the Overzicht card: its newest month with data.
     let overview: [String]
+    /// The Geld screen's cards, one per account, never merged.
+    let geld: [GeldAccount]
+
+    /// Overzicht's rows when no weekly amount is set (Figma "Money glance /
+    /// no-budget"): one per account, "Beheerrekening" / "··6789 · nieuwste
+    /// boeking za 24 okt", each opening Geld on that account. No amounts and
+    /// no total. Unlocked only: the tail identifies an account.
+    struct AccountRow: Equatable, Identifiable, Sendable {
+        let id: String
+        let title: String
+        let meta: [String]
+        var accessibilityLabel: String {
+            ([title] + meta.map { $0.replacingOccurrences(of: "··", with: "eindigend op ") }).joined(separator: ", ")
+        }
+    }
+
+    /// Empty while locked, and whenever the leefgeld card is drawn instead.
+    func accountRows(revealed: Bool) -> [AccountRow] {
+        guard revealed, leefgeldGlance == nil else { return [] }
+        return geld.map { AccountRow(id: $0.id, title: $0.title, meta: [$0.tail, $0.newestLine].compactMap { $0 }) }
+    }
+
+    /// Where a tap on the leefgeld card lands on Geld: the leefgeldrekening's card.
+    var leefgeldAccountID: String? { geld.first { $0.title == "Leefgeldrekening" }?.id }
 
     init(_ dto: MoneySummaryDTO) {
+        geld = GeldAccount.make(dto.accounts)
         leefgeld = LeefgeldCard.make(dto.leefgeld, newestBooking: dto.newestBooking)
         leefgeldGlance = LeefgeldGlance.make(dto.leefgeld, newestBooking: dto.newestBooking)
         previousWeek = LeefgeldCard.previousWeekLine(dto.previousWeek)
@@ -264,19 +289,29 @@ final class MoneyStore {
 
     private(set) var glance: MoneyGlance?
     private(set) var lastError: APIError?
+    /// When the glance on screen was fetched ("bijgewerkt 08:14").
+    private(set) var fetchedAt: Date?
+    /// When the last attempt started, good or bad ("volgende poging 14:06").
+    private(set) var attemptedAt: Date?
 
     @ObservationIgnored private let client: APIClient
+    /// The case's clock: what "bijgewerkt 08:14" is measured against.
+    @ObservationIgnored let now: @Sendable () -> Date
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
 
     @ObservationIgnored private let epoch: SessionEpoch
 
-    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {}, epoch: SessionEpoch = SessionEpoch()) {
+    init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {}, epoch: SessionEpoch = SessionEpoch(),
+         now: @escaping @Sendable () -> Date = Date.init) {
         self.client = client
+        self.now = now
         self.onUnauthorized = onUnauthorized
         self.epoch = epoch
         epoch.whenEnded { [weak self] in
             self?.glance = nil
             self?.lastError = nil
+            self?.fetchedAt = nil
+            self?.attemptedAt = nil
         }
     }
 
@@ -284,12 +319,19 @@ final class MoneyStore {
     /// dropped, its 401 included: it belongs to a session already gone.
     func refresh() async {
         let started = epoch.current
+        let at = now()
         let result = await Self.fetch(client)
         guard epoch.isCurrent(started) else { return }
+        // A refresh cancelled because its screen went away (Overzicht's poll
+        // when Geld is pushed over it) learned nothing: it must not paint the
+        // kept stand "offline".
+        guard !Task.isCancelled else { return }
+        attemptedAt = at
         switch result {
         case .success(let dto):
             glance = MoneyGlance(dto)
             lastError = nil
+            fetchedAt = at
         case .failure(let error):
             lastError = error
             if error == .unauthorized { onUnauthorized() }

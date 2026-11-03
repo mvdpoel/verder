@@ -70,6 +70,46 @@ enum MoneyFormat {
     /// "…6789": enough to tell two accounts apart at a glance.
     static func ibanTail(_ iban: String) -> String { "…\(iban.suffix(4))" }
 
+    /// "··6789": the Geld cards' account tail (Figma money · final).
+    static func ibanDots(_ iban: String) -> String { "··\(iban.suffix(4))" }
+
+    /// Whole euros for a chart scale: "€ 2.400"; cents are dropped, never rounded up.
+    static func euroWhole(cents: Int) -> String {
+        let full = euro(cents: cents - cents % 100)
+        return String(full.dropLast(3))
+    }
+
+    static let monthsLong = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus",
+                             "september", "oktober", "november", "december"]
+
+    /// "2026-10" → "okt".
+    static func monthShort(_ key: String) -> String? { monthIndex(key).map { months[$0] } }
+
+    /// "2026-10" → "oktober".
+    static func monthLong(_ key: String) -> String? { monthIndex(key).map { monthsLong[$0] } }
+
+    private static func monthIndex(_ key: String) -> Int? {
+        let parts = key.split(separator: "-")
+        guard parts.count == 2, parts[0].count == 4, parts[1].count == 2,
+              let month = Int(parts[1]), (1...12).contains(month) else { return nil }
+        return month - 1
+    }
+
+    /// The first letter upper-cased.
+    static func sentence(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
+
+    /// What VoiceOver should hear for a written line: "t/m" is "tot en met".
+    static func spokenDates(_ s: String) -> String { s.replacingOccurrences(of: "t/m", with: "tot en met") }
+
+    /// NBSP inside the date units only: "t/m 24 okt" keeps "t/m 24" and
+    /// "24 okt" together, "· " keeps its dot on the line before.
+    static func joinDates(_ s: String) -> String {
+        var out = s.replacingOccurrences(of: "t/m ", with: "t/m\u{00A0}")
+        out = out.replacingOccurrences(of: " · ", with: "\u{00A0}· ")
+        out = out.replacing(/(\d) ([a-z]{3})\b/) { "\($0.1)\u{00A0}\($0.2)" }
+        return out
+    }
+
     private static func civil(_ key: String) -> (year: Int, month: Int, day: Int)? {
         let parts = key.split(separator: "-", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,

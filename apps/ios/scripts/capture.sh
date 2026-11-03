@@ -2,7 +2,7 @@
 # Screenshot one screen of the app on the synthetic dataset, in the simulator.
 #   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
 #                      [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]
-#                      [--press <text>]
+#                      [--press <text>] [--geld <state>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -25,6 +25,10 @@
 #   --scan   open Scan on a state only a gesture reaches:
 #            handoff (the page mid-flight into the queue) | queue (the Wachtrij
 #            sheet) | note ("Iets bijzonders?") | preprompt (the camera pre-prompt)
+#   --geld   push Geld from Overzicht, as the money card's tap does (tab overzicht):
+#            open | nov (beheerrekening on November, leefgeldrekening on
+#            September) | sep (beheerrekening on September) | sheet ("Niet in
+#            de balken" for the beheerrekening)
 #   --press  long-press the text that reads exactly <text> and shoot what that
 #            opens (with --scan queue: the row menu, "Wachtrij / rij-acties").
 #            A simulator cannot be long-pressed from the shell, so the app is
@@ -48,10 +52,10 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
-LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""
+LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -78,6 +82,10 @@ while [ $# -gt 0 ]; do
     --scan)
       [ $# -ge 2 ] || usage
       case "$2" in handoff|queue|note|preprompt) SCAN_STATE="$2" ;; *) echo "capture.sh: --scan takes handoff, queue, note or preprompt" >&2; exit 2 ;; esac
+      shift ;;
+    --geld)
+      [ $# -ge 2 ] || usage
+      case "$2" in open|nov|sep|sheet) GELD="$2" ;; *) echo "capture.sh: --geld takes open, nov, sep or sheet" >&2; exit 2 ;; esac
       shift ;;
     --press)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
@@ -120,6 +128,7 @@ esac
 [ -z "$QUEUE" ] || ARGS+=(-fixtures-queue "$QUEUE")
 [ -z "$CAMERA" ] || ARGS+=(-fixtures-camera "$CAMERA")
 [ -z "$SCAN_STATE" ] || ARGS+=(-fixtures-scan "$SCAN_STATE")
+[ -z "$GELD" ] || ARGS+=(-fixtures-geld "$GELD")
 [ "${CAPTURE_CHECK_ONLY:-0}" != 1 ] || { echo "capture.sh: arguments OK"; exit 0; }
 
 # -F: a name such as "iPhone SE (3rd generation)" holds regex metacharacters.

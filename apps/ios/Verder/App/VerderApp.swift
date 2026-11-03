@@ -55,7 +55,7 @@ struct VerderApp: App {
         camera = s.camera
         _inbox = State(initialValue: inbox)
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
-                                                epoch: auth.epoch))
+                                                epoch: auth.epoch, now: s.now))
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
                                                     onUnauthorized: { auth.sessionRejected() },
                                                     epoch: auth.epoch))

@@ -25,6 +25,10 @@ for bad in proposal:nope suggestion:123 task: task:00000000-f1c5-4000-8000-00000
   Overzicht bogus inbox; do
   expect 2 "refuses $bad" check "$bad"
 done
+for g in open nov sep sheet; do
+  expect 0 "accepts --geld $g" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh money-partial overzicht "$TMP/x.png" --geld "$g"
+done
+expect 2 "refuses --geld okt" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh money-partial overzicht "$TMP/x.png" --geld okt
 expect 2 "refuses an unknown fixture" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh nope overzicht "$TMP/x.png"
 
 if [ "${1:-}" = --live ]; then

@@ -13,6 +13,8 @@ import Foundation
 ///     -fixtures-camera <notDetermined|denied>  the camera permission (default: allowed)
 ///     -fixtures-scan <handoff|queue|note|preprompt>  open Scan on a state only a gesture reaches
 ///     -fixtures-scroll <waiting|leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
+///     -fixtures-geld <open|nov|sep|sheet>  push Geld from Overzicht (as a card tap does): as it opens, with
+///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
 ///
@@ -68,6 +70,9 @@ struct FixtureLaunch: Equatable, Sendable {
 
     enum ScanState: String, CaseIterable, Sendable { case handoff, queue, note, preprompt }
 
+    /// Geld pushed from Overzicht, in one of the "money · final" Geld states.
+    enum GeldState: String, CaseIterable, Sendable { case open, nov, sep, sheet }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end }
 
@@ -89,6 +94,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var queue: QueuePreset? = nil
     var camera: CameraAuthorization? = nil
     var scanState: ScanState? = nil
+    var geld: GeldState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -127,6 +133,10 @@ struct FixtureLaunch: Equatable, Sendable {
                              },
                              scanState: try value(after: "-fixtures-scan").map { (raw: String) throws(ParseError) -> ScanState in
                                  guard let s = ScanState(rawValue: raw) else { throw .unknownValue("-fixtures-scan", raw) }
+                                 return s
+                             },
+                             geld: try value(after: "-fixtures-geld").map { (raw: String) throws(ParseError) -> GeldState in
+                                 guard let s = GeldState(rawValue: raw) else { throw .unknownValue("-fixtures-geld", raw) }
                                  return s
                              })
     }

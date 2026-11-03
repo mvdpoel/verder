@@ -250,8 +250,12 @@ struct FixtureTests {
         let m = try Self.object(name, "money/summary")
         #expect(Set(m.keys) == ["accounts", "leefgeld", "previousWeek", "newestBooking"])
         for account in Self.array(m["accounts"]) {
-            #expect(Self.keys(account) == ["accountIban", "months"])
+            #expect(Self.keys(account) == ["accountIban", "months", "newestBooking", "isLeefgeldAccount"])
             #expect(account["accountIban"]?.string?.hasPrefix("NL00TEST") == true)
+            // An account's own newest booking is never newer than the table's.
+            if let own = account["newestBooking"]?.string {
+                #expect(own <= (m["newestBooking"]?.string ?? ""), "\(name): an account newer than the whole table")
+            }
             for month in Self.array(account["months"]) {
                 #expect(Self.keys(month) == Self.monthKeys)
                 #expect(["complete", "partial", "none"].contains(month["coverage"]?.string ?? ""))
@@ -508,6 +512,12 @@ struct FixtureTests {
         let board = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "voorjou-few", "-fixtures-scroll", "end",
                                                           "-fixtures-scans"]))
         #expect(board.scroll == .end && board.scans)
+        let geld = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-partial", "-fixtures-geld", "nov"]))
+        #expect(geld.geld == .nov)
+        #expect(FixtureLaunch.GeldState.allCases.map(\.rawValue) == ["open", "nov", "sep", "sheet"], "capture.sh's --geld grammar")
+        #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-geld", "okt")) {
+            try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-geld", "okt"])
+        }
         #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end"],
                 "capture.sh's --scroll grammar")
         #expect(throws: FixtureLaunch.ParseError.unknownScroll("top")) {

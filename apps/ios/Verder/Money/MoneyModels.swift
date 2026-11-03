@@ -13,6 +13,30 @@ struct MoneySummaryDTO: Decodable, Equatable, Sendable {
         /// into a known one.
         let accountIban: String?
         let months: [MonthSeries]
+        /// This account's own newest readable booking (Amsterdam day key).
+        /// Nil from a server that predates the field, or an account with no
+        /// readable row: the card then simply leaves the line out.
+        let newestBooking: String?
+        /// The leefgeldrekening (LEEFGELD_IBAN, or the account the leefgeld
+        /// week recognised). False from a server that predates the field.
+        let isLeefgeldAccount: Bool
+
+        init(accountIban: String?, months: [MonthSeries], newestBooking: String? = nil, isLeefgeldAccount: Bool = false) {
+            self.accountIban = accountIban
+            self.months = months
+            self.newestBooking = newestBooking
+            self.isLeefgeldAccount = isLeefgeldAccount
+        }
+
+        private enum Key: String, CodingKey { case accountIban, months, newestBooking, isLeefgeldAccount }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Key.self)
+            accountIban = try c.decodeIfPresent(String.self, forKey: .accountIban)
+            months = try c.decode([MonthSeries].self, forKey: .months)
+            newestBooking = try c.decodeIfPresent(String.self, forKey: .newestBooking)
+            isLeefgeldAccount = try c.decodeIfPresent(Bool.self, forKey: .isLeefgeldAccount) ?? false
+        }
     }
 
     let accounts: [Account]
