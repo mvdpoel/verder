@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,16 @@ import { createDb, schema, type Db } from "@verder/db";
 import { appRouter } from "./root";
 import { createContext } from "./trpc";
 import { addressesIn, loadTalkingPoints } from "./talking-points-load";
+import * as pure from "./talking-points";
+
+// The loader's OWN discard/purge filter is tested on what it hands the pure
+// half, not only on the final answer: buildTalkingPoints re-checks discarded
+// and purged as a second guard, so an assertion on the output alone passes
+// with the loader's SQL filter removed. The spy wraps the real function.
+vi.mock("./talking-points", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("./talking-points")>();
+  return { ...orig, buildTalkingPoints: vi.fn(orig.buildTalkingPoints) };
+});
 
 const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
 // raw_emails, document_texts and party_briefs are written by the WORKER in
@@ -63,11 +73,15 @@ describe("loadTalkingPoints", () => {
     return r;
   }
 
-  async function doc(title: string) {
+  /** An upload linked to the party by default; `via` makes it an attachment of that mail instead, with no party. */
+  async function doc(title: string, via?: { gmailMessageId: string }) {
     const sha = crypto.randomUUID().replaceAll("-", "").padEnd(64, "c");
     const d = await caller().documents.registerUpload({
       sha256: sha, sizeBytes: 10, mime: "application/pdf", title: `${title} ${RUN}`,
-      source: "upload", sourceRef: `tp-${RUN}`, receivedAt: ago(1), partyId });
+      ...(via
+        ? { source: "email-attachment" as const, sourceRef: via.gmailMessageId }
+        : { source: "upload" as const, sourceRef: `tp-${RUN}`, partyId }),
+      receivedAt: ago(1) });
     // What storeDocumentText writes for an unreadable file: keeps the fixture
     // out of pendingDocMeta's backlog on the shared dev database.
     await writer.execute(sql`INSERT INTO document_texts (document_id, sha256, text, extractor, char_count)
@@ -99,6 +113,16 @@ describe("loadTalkingPoints", () => {
     const purged = await doc("Vernietigd");
     await caller().documents.update({ id: purged.id, status: "filed" });
     await caller().documents.purge({ id: purged.id, reason: "test" });
+    // The path a thrown-away document can REALLY leak by: an attachment of
+    // Martin's own mail to them is listed as "sent" whatever its status, so
+    // only the loader's discard/purge filter keeps these two off the screen.
+    // `kept` is the control that proves the path is reached at all.
+    const kept = await doc("Huurcontract", silent);
+    const sentDiscarded = await doc("Handtekening", silent);
+    await caller().documents.update({ id: sentDiscarded.id, status: "discarded" });
+    const sentPurged = await doc("Paspoort", silent);
+    await caller().documents.purge({ id: sentPurged.id, reason: "test" });
+    vi.mocked(pure.buildTalkingPoints).mockClear();
 
     const before = await db.execute(sql`SELECT count(*)::int AS n FROM ledger_events`);
     const r = await caller().parties.talkingPoints({ id: partyId });
@@ -111,11 +135,16 @@ describe("loadTalkingPoints", () => {
     expect(r.ask[1].text).toMatch(/^Nog geen antwoord op je mail van \d+ \w+: Stukken huur$/);
     const tellIds = r.tell.map((p) => p.id);
     expect(tellIds).toEqual(expect.arrayContaining([
-      `tell:mail:${fresh.id}`, `tell:task:${done.id}`, `tell:document:${filed.id}`]));
-    expect(tellIds).toHaveLength(3);
+      `tell:mail:${fresh.id}`, `tell:task:${done.id}`, `tell:document:${filed.id}`, `tell:document:${kept.id}`]));
+    expect(tellIds).toHaveLength(4);
     const all = JSON.stringify(r);
-    expect(all).not.toContain(discarded.id);
-    expect(all).not.toContain(purged.id);
+    for (const gone of [discarded.id, purged.id, sentDiscarded.id, sentPurged.id]) expect(all).not.toContain(gone);
+    // …and the loader itself never handed them on (the pure re-check is the second guard, not the first).
+    const input = vi.mocked(pure.buildTalkingPoints).mock.calls.at(-1)![0];
+    const handed = input.documents.map((d) => d.id);
+    expect(handed).toContain(kept.id);
+    expect(input.documents.find((d) => d.id === kept.id)?.how).toBe("sent");
+    for (const gone of [discarded.id, purged.id, sentDiscarded.id, sentPurged.id]) expect(handed).not.toContain(gone);
     expect(all).not.toContain("Spoof");
     expect(r.summary).toBeNull();
   });
