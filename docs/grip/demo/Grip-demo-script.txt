@@ -1,0 +1,27 @@
+# Grip — volledige productdemo (definitief)
+
+16:9 · ca. 3:45 · AI-stem als Martin (Achird) · geen ondertitels · schermopname-stijl: grote telefoon in beeld, tikjes zichtbaar, schermen scrollen en wisselen zoals in een echte opname.
+Alle schermen: definitieve Figma-frames met voorbeeldgegevens. Web: lokale kopie met voorbeeldgegevens.
+
+| # | Tijd | Beeld | Voice-over |
+|---|---|---|---|
+| 0 | 0:00 | Grip-logo, "De volledige demo" | In de eerste film zag je wát Grip doet. Nu laat ik zien hóe het werkt. Van de brief op de mat tot het complete dossier bij jullie. |
+| 1 | 0:12 | Face ID → Overzicht, scrollt naar leefgeld | Grip opent met Face ID. Het eerste scherm beantwoordt één vraag: wacht er iets op mij? Bovenaan staat wat het belangrijkst is. Daaronder mijn leefgeld van deze week. |
+| 2 | 0:28 | Scan → brief vliegt erin → wachtrij | Komt er een brief? Ik tik op Scan, houd de telefoon boven de brief, en Grip maakt de foto zelf. Dubbelzijdig? Dan draai ik de stapel om. Zonder bereik wacht de scan in de wachtrij, en gaat hij later vanzelf. |
+| 3 | 0:48 | Deelblad → "Gedeeld naar Grip" | Een pdf uit mijn mail of een foto uit WhatsApp deel ik met één tik naar Grip. |
+| 4 | 0:56 | Voor jou → Vraag → beantwoord → Suggestie vordering | Op de server leest Grip elke brief: wie stuurt hem, over welke vordering, met welk kenmerk. Is het zeker, dan bergt Grip hem zelf op, en kan ik dat met één tik ongedaan maken. Twijfelt Grip, dan stelt hij mij een vraag. Hoort deze brief bij Stroomnet Energie? Ja, koppel hem. En vindt Grip een nieuwe schuld, dan doet hij een voorstel, met bedrag en kenmerk, dat ik eerst goedkeur. |
+| 5 | 1:24 | Melding "mail van Verder" → concept → aanpassen → vasthouden + Face ID → verstuurd | Mailen jullie mij, dan krijg ik direct een melding. Grip zoekt het gevraagde stuk op en schrijft een antwoord. Ik zie waar Grip op leunt, ik kan elke zin aanpassen, en pas als ik vasthoud en Face ID geef, gaat het weg. Niets verlaat mijn dossier zonder mij. |
+| 6 | 1:50 | Gesprek vastleggen: opnemen → tekst → in Voor jou | Belt een schuldeiser, of bellen jullie? Na het gesprek houd ik één knop ingedrukt en vertel ik wat er is afgesproken. De spraak wordt óp de telefoon omgezet, en wordt een logboekregel die ik eerst goedkeur. |
+| 7 | 2:08 | Dossier → zoeken "bijstand" → brief → Toon aan de balie | Mijn hele dossier staat ook op de telefoon. Ik zoek op wat er ín een brief staat, en aan een balie laat ik hem schermvullend zien, ook zonder bereik. |
+| 8 | 2:22 | Tijdlijn scrollt · Geld · Weekoverzicht · widget | De tijdlijn laat zien hoe mijn zaak ervoor staat. Geld toont mijn beheer- en leefgeldrekening. En elke zondag vat Grip mijn week samen. |
+| 9 | 2:36 | Web (lokale demo): dashboard · register · logboek · rapport voor Verder | Achter de app staat het systeem, op mijn eigen server. Elke schuldeiser en elk abonnement in één register. Elk contactmoment in het logboek. En met één klik een rapport voor jullie, klaar om te printen. |
+| 10 | 2:56 | Slot/kluis, NL, Face ID, vergrendelscherm zonder bedragen | Privacy staat voorop. Alles staat op een server in Nederland. De app opent met Face ID. Op het web log ik in met een toegangssleutel. En een melding op het vergrendelscherm noemt nooit een schuldeiser of een bedrag. |
+| 11 | 3:12 | Kantoor van Verder · pilot-kaart | Voor jullie verandert er weinig, behalve dat het makkelijker wordt. Jullie mailen zoals altijd, en krijgen complete antwoorden terug. Mijn voorstel: een pilot van drie maanden, met mij en een paar cliënten die jullie kiezen. Samen bouwen we jullie overzicht van wat compleet is en wat nog wacht. En we meten wat het oplevert. |
+| 12 | 3:38 | Eindkaart Grip | Grip. Voor cliënt én bewindvoerder. Laten we beginnen. |
+
+## Te checken door Martin
+1. Pilot: **drie maanden**, **"een paar cliënten die jullie kiezen"**: klopt dat met wat je wilt aanbieden?
+2. "Samen bouwen we jullie overzicht": het kantoor-overzicht bestaat nog niet. Ik toon het als pilotkaart, niet als scherm. Goed zo?
+3. "Alles staat op een server in Nederland": je homelab staat in NL? Back-ups ook?
+4. "Het web met een toegangssleutel": passkey-login op het web, klopt dat?
+5. "Is het zeker, dan bergt Grip hem zelf op, en kan ik dat met één tik ongedaan maken": klopt dat met hoe het nu werkt?
