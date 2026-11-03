@@ -36,7 +36,7 @@ final class VoiceLogSession {
         self.groupDir = groupDir
     }
 
-    // MARK: - A call recording shared from Notes (Added 2026-11-03)
+    // MARK: - A call recording shared from any app (Added 2026-11-03)
 
     /// On launch and every return to the foreground (RootView): the oldest
     /// recording the share extension left opens the voice log in "opname

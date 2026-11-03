@@ -6,10 +6,11 @@ import UniformTypeIdentifiers
 /// The share extension (spec §7.8, plan 3 Task 22): PDFs, photos and files from
 /// any app go into verder's upload queue with source `phone-share`.
 ///
-/// A CALL RECORDING (Added 2026-11-03) does not: shared from Notes — where the
-/// Phone app's own "Gesprek opnemen" saves it, the only way a call is recorded
-/// on an iPhone, since iOS lets no third-party app hear a call — it becomes an
-/// audio drop for the voice log and this screen says "Open verder om het
+/// A CALL RECORDING (Added 2026-11-03) does not: shared from any app — a
+/// call-recording app, Voice Memos, Files, AirDrop (iOS lets no app record a
+/// call on the same iPhone, and the iPhone's built-in call recording is not
+/// available in the Netherlands, so a recording is always made elsewhere) — it
+/// becomes an audio drop for the voice log and this screen says "Open verder om het
 /// gesprek uit te schrijven." (`ShareModel.handedToApp`). Nothing is uploaded.
 ///
 /// It loads what the share sheet handed over, shows ONE screen (thumbnail,

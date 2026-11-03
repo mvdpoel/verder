@@ -164,7 +164,7 @@ struct RootView: View {
     /// is showing; after that every tab is open until the next lock. Overzicht
     /// shows its counts behind the sheet meanwhile. The one exception stays the
     /// camera: on Scan nothing prompts, so the shutter is never covered.
-    /// A call recording shared from Notes (the share extension's audio drop,
+    /// A call recording shared from any app (the share extension's audio drop,
     /// Added 2026-11-03) opens the voice log in "opname uitschrijven" mode —
     /// never over the call sheet; it opens when that sheet goes
     /// (`SharedRecordingGate`, tested).

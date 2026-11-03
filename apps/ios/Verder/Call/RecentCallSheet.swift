@@ -1,9 +1,9 @@
 import Foundation
 
 /// The call sheet that was last ACTIVE, remembered for an hour (Added
-/// 2026-11-03), so a call RECORDING imported afterwards — shared from Notes,
-/// where the Phone app's own "Gesprek opnemen" saves it — starts from the
-/// points Martin ticked during that call, with that party preselected.
+/// 2026-11-03), so a call RECORDING imported afterwards — shared from any
+/// app, or picked with "Opname kiezen" — starts from the points Martin ticked
+/// during that call, with that party preselected.
 ///
 /// Why a time window and not "the same call": iOS never tells an app WHICH
 /// call a recording is of (`CXCallObserver` only says that a call started or

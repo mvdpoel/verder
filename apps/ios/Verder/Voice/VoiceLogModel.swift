@@ -25,8 +25,9 @@ import Observation
 /// the text is edited instead and no re-record is offered.
 ///
 /// AN IMPORTED CALL (Added 2026-11-03, `importRecording`): the same flow
-/// from a FILE — a call the Phone app recorded and Martin shared from Notes
-/// (an audio `IncomingDrop`), or one picked with "Opname kiezen". verder
+/// from a FILE — a recording made elsewhere (a call-recording app, a second
+/// device on the speaker) that Martin shared from any app (an audio
+/// `IncomingDrop`), or one picked with "Opname kiezen". verder
 /// copies it into its own folder (the copy is what is read and, kept, what
 /// is sent; the picked original is never touched), transcribes it on the
 /// phone with progress, and sends the edited text as the same suggestion.
@@ -107,10 +108,11 @@ final class VoiceLogModel {
         static let pickRecording = "Opname kiezen"
         static let importFailed = "Deze opname kon niet worden geopend. Kies een andere, of typ zelf wat er besproken is."
         static let retryTranscription = "Opnieuw uitschrijven"
-        /// The Phone app's own recording, said where Martin looks for it. "Als
-        /// je iPhone het aanbiedt": Apple offers it per region and language,
-        /// and whether it does in Dutch is not confirmed.
-        static let phoneRecordingHint = "Een gesprek opgenomen met de Telefoon-app (tijdens het gesprek: Meer › Gesprek opnemen, als je iPhone het aanbiedt) staat in Notities. Deel de opname daar naar verder, of kies hem hier."
+        /// Honest about where a recording can come from: the iPhone's own
+        /// call recording is not available in the Netherlands and no app can
+        /// record a call on the same iPhone (Martin, 2026-11-03), so it never
+        /// promises one — it names the ways a recording is made elsewhere.
+        static let phoneRecordingHint = "De iPhone kan in Nederland zelf geen gesprekken opnemen. Heb je wel een opname — van een opname-app of een tweede toestel op de luidspreker? Deel hem met verder, of kies hem hier."
         static let keepRecordingHint = "Alleen dan gaat de opname naar verder. Anders wordt ze na het versturen gewist."
         static let keepImportHint = "Alleen dan gaat de opname naar verder. Anders wist verder zijn kopie na het versturen; het origineel blijft staan waar het stond."
     }
@@ -424,7 +426,7 @@ final class VoiceLogModel {
         notice = nil
         // Claimed before the copy: success or not, this log now owns the
         // drop — `VoiceLogSession` will not reopen it, and `discard()` (close
-        // or swipe) deletes it. The original stays in Notes.
+        // or swipe) deletes it. The original stays where it was.
         importedDrop = source.drop
         importedGroupDir = source.groupDir
         // A drop's clientId IS the drop's id. The drop outlives this model (a

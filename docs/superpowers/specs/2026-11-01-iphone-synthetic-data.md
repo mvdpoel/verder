@@ -123,7 +123,7 @@ and Bewindkantoor Noordkust preselected.
 
 ### A call recording (fixture `opname`, `-route opname`, added 2026-11-03)
 
-The same synthetic call, recorded by the Phone app and shared from Notes as **"Gesprek met Noordkust.m4a"** (the bytes are `fixture-call-recording`, never audio). `-fixtures opname -route opname` opens "Opname uitschrijven" with it already written out, dated the case's today (Sun 1 nov, 09:41), as:
+The same synthetic call, recorded elsewhere and shared from any app (a call-recording app, Voice Memos, Files, AirDrop) as **"Gesprek met Noordkust.m4a"** (the bytes are `fixture-call-recording`, never audio). `-fixtures opname -route opname` opens "Opname uitschrijven" with it already written out, dated the case's today (Sun 1 nov, 09:41), as:
 
 "Gebeld met Bewindkantoor Noordkust, Team Startdossier. De loonstroken van september en oktober zijn binnen. Ze laten weten of er nog iets ontbreekt; zo niet, dan gaat het dossier deze week naar de bewindvoerder."
 

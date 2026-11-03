@@ -49,7 +49,7 @@ struct FixtureLaunch: Equatable, Sendable {
     enum Screen: String, CaseIterable, Identifiable, Sendable {
         case voice
         /// The voice log writing out a synthetic call recording shared from
-        /// Notes ("opname uitschrijven", Added 2026-11-03).
+        /// any app ("opname uitschrijven", Added 2026-11-03).
         case opname
         var id: String { rawValue }
     }

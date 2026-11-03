@@ -98,11 +98,14 @@ struct VoiceDraft: Equatable, Sendable {
 ///
 /// verder cannot record the call: iOS gives no third-party app a phone call's
 /// audio, and `CXCallObserver` only says THAT a call started or ended. The
-/// Phone app records calls itself (during a call: More → "Gesprek opnemen";
-/// the recording is saved to Notes as an audio attachment) where Apple offers
-/// it — region and language dependent, and Dutch availability is not
-/// confirmed. So the recording comes IN: shared from Notes (an audio
-/// `IncomingDrop`) or picked with "Opname kiezen".
+/// iPhone's built-in call recording is NOT available in the Netherlands
+/// (Martin, 2026-11-03: support.apple.com/nl-nl/guide/iphone/iph57c6590e9/ios,
+/// ben.nl/blog/telefoongesprek-opnemen-iphone,
+/// simyo.nl/blog/telefoongesprek-opnemen-iphone), so a recording is made
+/// ELSEWHERE — a call-recording app, a second device on the speaker. It comes
+/// IN: shared from any app — a call-recording app, Voice Memos, Files, AirDrop
+/// (an audio `IncomingDrop`) — or picked with "Opname kiezen". The main path
+/// stays the talking points plus dictating after the call.
 struct RecordingImport: Equatable, Sendable {
     /// Where the bytes are: the drop's `.bin`, or the picked file.
     let file: URL

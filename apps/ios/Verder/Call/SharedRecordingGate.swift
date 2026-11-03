@@ -1,11 +1,11 @@
 import Foundation
 
-/// When a call recording shared from Notes (an audio `IncomingDrop`, Added
+/// When a call recording shared from any app (an audio `IncomingDrop`, Added
 /// 2026-11-03) may open the voice log in "opname uitschrijven" mode. RootView
 /// asks on launch, on every return to the foreground, AND when the call sheet
 /// goes — the last one is the case the import is built for: after a call the
 /// sheet comes back ("Niet nu" keeps it up), Martin shares the recording from
-/// Notes and returns to verder with the call sheet still showing. Two sheets
+/// the app that holds it and returns to verder with the call sheet still showing. Two sheets
 /// cannot show at once, so it waits; without the third moment it waited until
 /// he left the app and came back (review finding, 2026-11-03).
 @MainActor

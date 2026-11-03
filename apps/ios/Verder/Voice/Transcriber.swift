@@ -86,8 +86,8 @@ struct OnDeviceTranscriber: Transcribing {
         try await transcribe(audio, progress: { _ in })
     }
 
-    /// Works on a FILE of any format `AVAudioFile` reads (the Phone app's
-    /// `.m4a` in Notes, `.aac`, `.wav`, `.caf`): `analyzeSequence(from:)`
+    /// Works on a FILE of any format `AVAudioFile` reads (`.m4a`, `.aac`,
+    /// `.wav`, `.caf`): `analyzeSequence(from:)`
     /// converts to the analyzer's format itself. Progress is the end of each
     /// result's audio range over the file's length, so a long call shows
     /// "… 40%" rather than a spinner with no end.

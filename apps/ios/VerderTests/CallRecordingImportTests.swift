@@ -7,9 +7,10 @@ import Synchronization
 /// would be perfect if i can also record phone calls and transcribe them").
 ///
 /// verder cannot record a call itself: iOS gives no third-party app the call
-/// audio. The Phone app can (More → "Gesprek opnemen", saved to Notes as an
-/// audio attachment, region and language dependent). So the recording comes
-/// IN: shared from Notes (the share extension leaves an audio drop and does
+/// audio, and the iPhone's built-in call recording is not available in the
+/// Netherlands (Martin, 2026-11-03), so a recording is made elsewhere. It comes
+/// IN: shared from any app — a call-recording app, Voice Memos, Files, AirDrop
+/// (the share extension leaves an audio drop and does
 /// NOT upload it), or picked in the voice sheet ("Opname kiezen"). It is
 /// transcribed on the phone, edited, and sent as a SUGGESTION through the
 /// same `POST /entries/voice` — never an entry. The audio leaves the phone
@@ -19,7 +20,7 @@ import Synchronization
 struct CallRecordingImportTests {
     nonisolated static let lindehof = VoiceLogModelTests.lindehof
     nonisolated static let noordkust = VoiceLogModelTests.noordkust
-    nonisolated static let callBytes = Data("FAKE-CALL-RECORDING-FROM-NOTES".utf8)
+    nonisolated static let callBytes = Data("FAKE-CALL-RECORDING-SHARED".utf8)
     nonisolated static let transcript = "Met Bewindkantoor Noordkust gesproken over de stukken."
 
     let t0 = Date(timeIntervalSince1970: 1_793_540_000)
@@ -58,7 +59,7 @@ struct CallRecordingImportTests {
         return String(decoding: try #require(req.httpBody), as: UTF8.self)
     }
 
-    /// A recording shared from Notes, as the extension leaves it.
+    /// A recording shared from another app, as the extension leaves it.
     func audioDrop(_ group: URL, name: String = "Gesprek met Noordkust.m4a", mime: String = "audio/x-m4a",
                    at: Date? = nil) throws -> IncomingDrop {
         let id = try IncomingDrop.write(file: Self.callBytes, fileName: name, mime: mime, kind: .audio,
@@ -230,7 +231,7 @@ struct CallRecordingImportTests {
     // MARK: - Waiting behind the call sheet (review finding, 2026-11-03)
 
     /// The case a recording is built for: the call sheet comes back after the
-    /// call ("Niet nu" keeps it up), Martin shares the recording from Notes and
+    /// call ("Niet nu" keeps it up), Martin shares the recording from another app and
     /// returns to verder. Nothing opens over the call sheet — two sheets cannot
     /// show at once — and the recording opens the moment that sheet goes, not
     /// at the next return to the foreground.
@@ -346,7 +347,7 @@ struct CallRecordingImportTests {
     }
 
     /// A drop that has waited longer than `IncomingDrop.audioMaxAge` ages out
-    /// (its original is still in Notes); a younger one stays.
+    /// (its original is still in its own app); a younger one stays.
     @Test func anOldAudioDropAgesOut() throws {
         let group = try group()
         let old = try audioDrop(group)

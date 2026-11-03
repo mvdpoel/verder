@@ -9,9 +9,11 @@ import Foundation
 ///
 /// WHY THIS IS A CHECKLIST AND NOT A RECORDING (Martin asked for both on
 /// 2026-11-03; checked online before building): a third-party iOS app cannot
-/// record or hear a phone call — there is no API for it. The Phone app's own
-/// call recording (More → "Gesprek opnemen", saved to Notes) is region- and
-/// language-dependent and its Dutch availability is unconfirmed. And
+/// record or hear a phone call — there is no API for it. The iPhone's own
+/// call recording is NOT available in the Netherlands (Martin, 2026-11-03:
+/// support.apple.com/nl-nl/guide/iphone/iph57c6590e9/ios,
+/// ben.nl/blog/telefoongesprek-opnemen-iphone,
+/// simyo.nl/blog/telefoongesprek-opnemen-iphone). And
 /// `CXCallObserver` (CallKit) tells an app only THAT a call started or ended,
 /// never with whom or what was said. So verder puts the dossier in front of
 /// Martin during the call and lets him tick it off; after the call he records

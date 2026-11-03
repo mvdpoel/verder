@@ -18,9 +18,10 @@ import UniformTypeIdentifiers
 /// so the extension's attempt and the app's can never make two documents: the
 /// second one is answered `duplicate: true` through `phone:<clientId>`.
 ///
-/// AUDIO DROPS (Added 2026-11-03): a call recording shared from Notes (the
-/// Phone app's own "Gesprek opnemen" saves there; verder itself can never
-/// record a call — iOS gives no third-party app the call audio) is a drop of
+/// AUDIO DROPS (Added 2026-11-03): a call recording shared from any app — a
+/// call-recording app, Voice Memos, Files, AirDrop (verder itself can never
+/// record a call — iOS gives no third-party app the call audio, and the
+/// iPhone's built-in recording is not available in the Netherlands) — is a drop of
 /// kind `.audio`. It is NOT an upload: `importIncoming` leaves it alone, and
 /// the voice log (`VoiceLogSession.openPendingRecording`) transcribes it ON
 /// the phone and deletes it after sending or cancelling. Its bytes reach the
@@ -116,9 +117,8 @@ struct IncomingDrop: Codable, Equatable, Sendable {
         return drop
     }
 
-    /// The extensions a call recording arrives with: the Phone app's
-    /// recordings in Notes are `.m4a`; Voice Memos, Files and other recorders
-    /// give `.aac`, `.wav` or `.caf`. Anything with an `audio/*` type counts too.
+    /// The extensions a call recording arrives with: Voice Memos and most
+    /// recording apps give `.m4a`; others give `.aac`, `.wav` or `.caf`. Anything with an `audio/*` type counts too.
     static let audioExtensions: Set<String> = ["m4a", "aac", "wav", "caf"]
 
     /// A recording, by its type or (when the type is uninformative, as
@@ -130,10 +130,10 @@ struct IncomingDrop: Codable, Equatable, Sendable {
 
     /// How long a shared recording waits for the voice log before it ages
     /// out. Longer than `UploadQueue.orphanAge` (24 h) on purpose: sharing
-    /// from Notes does not open verder, so a recording Martin has not yet
+    /// from another app does not open verder, so a recording Martin has not yet
     /// opened the app for is not an orphan — a day of not opening the app
     /// must not lose it. A week is the bound on a drop that, for whatever
-    /// reason, keeps coming back; the original stays in Notes either way.
+    /// reason, keeps coming back; the original stays in its own app either way.
     static let audioMaxAge: TimeInterval = 7 * 86_400
 
     /// The audio drops waiting for the voice log, oldest first. Complete
