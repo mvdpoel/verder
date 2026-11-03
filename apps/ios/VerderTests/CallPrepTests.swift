@@ -634,6 +634,76 @@ struct CallPrepTests {
         #expect(voice.value.first?.occurredAt == started)
     }
 
+    /// "Bel", then verder is suspended before CallKit's `.started` reaches it:
+    /// on return `startedCalls` is empty AND `CXCallObserver.calls` lists
+    /// nothing. The session dialled and went to the background, so the call
+    /// is over — the dial time stands in for the start (review, 2026-11-03).
+    @Test func aDialledCallWhoseStartWasNeverSeenEndsOnReturn() async throws {
+        var clock = now
+        let activities = FakeActivities(), observer = FakeObserver()
+        let voice = Box<[VoicePrefill]>([])
+        let session = CallSession(client: server(try Self.fixture()).client(), cache: CallCache(dir: Self.tempDir()),
+                                  activities: activities, observer: observer, epoch: SessionEpoch(),
+                                  now: { clock }, dial: { _ in }, openVoice: { voice.value.append($0) })
+        await session.open(partyId: Self.noordkust, name: nil)
+        let dialled = clock
+        session.bel()
+        session.sceneEnteredBackground()
+        clock = clock.addingTimeInterval(900)
+        observer.live = [:]
+        session.reconcile()
+        #expect(session.callEnded)
+        #expect(session.isPresented)
+        #expect(activities.isRunning == false)
+        #expect(activities.ends == 1)
+        session.logCall()
+        session.sheetDismissed()
+        #expect(voice.value.first?.occurredAt == dialled)
+    }
+
+    /// Still on that call (it is live, its `.started` simply never arrived):
+    /// nothing ends.
+    @Test func aDialledCallStillLiveIsKeptEvenUnseen() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.observer.live = [UUID(): false]
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.isRunning)
+    }
+
+    /// iOS asks "Bel …?" over the app before dialling; that alert makes the
+    /// scene inactive, never background. Cancelling it brings verder back
+    /// with no call — and that is no call to log.
+    @Test func aCancelledDialPromptEndsNothing() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.observer.live = [:]
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.isRunning)
+    }
+
+    /// The dial is consumed by its end: a second return to the app (or a
+    /// later "Toon tijdens het gesprek" on the same sheet) is not a second end.
+    @Test func aDialEndsOnlyOnce() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+        r.session.dismissEnded()
+        r.session.startActivity()
+        r.session.sceneEnteredBackground()
+        r.session.reconcile()
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.isRunning)
+    }
+
     @Test func activitiesOffInSettingsIsSaid() async throws {
         let r = try rig()
         r.activities.allowed = false

@@ -46,6 +46,13 @@ final class CallSession {
     /// Calls already reported ended: CallKit may say so more than once.
     @ObservationIgnored private var endedCalls: Set<UUID> = []
     @ObservationIgnored private var startedCalls: [UUID: Date] = [:]
+    /// When "Bel" handed the number to the Phone app, until that call's end
+    /// is taken. Lets `reconcile` end a call whose `.started` never arrived.
+    @ObservationIgnored private var dialledAt: Date?
+    /// verder went to the BACKGROUND since that dial — the Phone app took the
+    /// screen. The "Bel …?" prompt iOS shows first only makes the scene
+    /// inactive, so a cancelled prompt never reads as a finished call.
+    @ObservationIgnored private var leftAfterDial = false
     /// Waiting for the call sheet to finish dismissing (`sheetDismissed`).
     @ObservationIgnored private var pendingVoice: VoicePrefill?
 
@@ -83,6 +90,7 @@ final class CallSession {
             notice = nil
             callStartedAt = nil
             callEndedAt = nil
+            forgetDial()
             let m = CallPrepModel(partyId: partyId, name: name, client: client, cache: cache, epoch: epoch, now: now,
                                   onUnauthorized: onUnauthorized)
             m.onChecklistChanged = { [weak self, weak m] in
@@ -115,6 +123,7 @@ final class CallSession {
     /// The call is over and nothing is to be logged ("Niet nu", "Stoppen").
     func finish() {
         endActivity()
+        forgetDial()
         model = nil
         callEnded = false
         isPresented = false
@@ -131,6 +140,8 @@ final class CallSession {
     func bel() {
         guard let model, let url = model.dialURL else { return }
         startActivity()
+        dialledAt = now()
+        leftAfterDial = false
         dial(url)
     }
 
@@ -160,11 +171,23 @@ final class CallSession {
             let startedAt = startedCalls.removeValue(forKey: id)
             guard isActive else { return }
             if callStartedAt == nil { callStartedAt = startedAt }
-            callEndedAt = now()
-            endActivity()
-            callEnded = true
-            isPresented = true
+            endCall()
         }
+    }
+
+    /// The followed call is over: the Live Activity goes, the sheet comes
+    /// back offering "Gesprek vastleggen", and the dial is spent.
+    private func endCall() {
+        callEndedAt = now()
+        endActivity()
+        callEnded = true
+        isPresented = true
+        forgetDial()
+    }
+
+    private func forgetDial() {
+        dialledAt = nil
+        leftAfterDial = false
     }
 
     /// The app is back in the foreground (RootView's `scenePhase == .active`).
@@ -177,13 +200,28 @@ final class CallSession {
     /// NOW (`CXCallObserver.calls`) and ends every call it saw start that is
     /// gone or listed as ended — through `handle`, so it is the same end.
     ///
-    /// Only calls it SAW start: a Live Activity started by hand ("Toon tijdens
-    /// het gesprek") with no call yet is not ended by switching apps.
+    /// A call it never saw start counts too, when THIS sheet dialled it: once
+    /// verder is suspended the `.started` can be lost exactly like the
+    /// `.ended` (what CallKit delivers to a suspended app is unmeasured), so
+    /// "dialled, went to the background, and nothing is live now" is a call
+    /// that is over, started at the dial (review, 2026-11-03).
+    ///
+    /// Not a Live Activity started by hand ("Toon tijdens het gesprek") with no
+    /// call seen: switching apps does not end that. And not a cancelled
+    /// "Bel …?" prompt: that never takes verder to the background.
     func reconcile() {
         let live = observer.currentCalls()
         for id in Array(startedCalls.keys) where live[id] != false {
             handle(.ended(id))
         }
+        guard let dialledAt, leftAfterDial, isActive, !live.values.contains(false) else { return }
+        if callStartedAt == nil { callStartedAt = dialledAt }
+        endCall()
+    }
+
+    /// RootView's `scenePhase == .background`: the Phone app has the screen.
+    func sceneEnteredBackground() {
+        if dialledAt != nil { leftAfterDial = true }
     }
 
     /// "Niet nu" on the ended banner: the sheet stays, the offer goes.
@@ -229,6 +267,7 @@ final class CallSession {
 
     private func forget() {
         endActivity()
+        forgetDial()
         model = nil
         isPresented = false
         callEnded = false

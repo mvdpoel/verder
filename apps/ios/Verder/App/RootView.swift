@@ -76,7 +76,9 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .background: lock.sceneDidEnterBackground()
+            case .background:
+                lock.sceneDidEnterBackground()
+                call.sceneEnteredBackground()
             case .active:
                 lock.sceneDidBecomeActive()
                 // Back from the Phone app: a call whose end iOS never
