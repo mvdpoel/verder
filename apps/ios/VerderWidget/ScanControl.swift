@@ -8,10 +8,10 @@ struct ScanControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "pro.vanderpoel.verder.scan") {
             ControlWidgetButton(action: ScanLetterIntent()) {
-                Label("Scan een brief", systemImage: "doc.viewfinder")
+                Label(ScanLetterIntent.label, systemImage: ScanLetterIntent.symbol)
             }
         }
-        .displayName("Scan een brief")
+        .displayName(LocalizedStringResource(stringLiteral: ScanLetterIntent.label))
         .description("Opent de camera van verder, zonder Face ID.")
     }
 }

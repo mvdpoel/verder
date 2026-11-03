@@ -131,20 +131,30 @@ struct ScanTab: View {
                 }
             }
             .padding(.horizontal, 16)
+            // The iPhone SE's status bar is 20 pt, so the header would sit
+            // against it; the frame keeps the eyebrow ~40 pt from the top.
+            .padding(.top, compactHeight ? 12 : 0)
             .padding(.bottom, 24)
             .frame(maxWidth: .infinity)
             // Overzicht's rhythm: Saira on 23/17 rather than its own ~1.57 em.
             .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
         }
         .scrollBounceBehavior(.basedOnSize)
-        .safeAreaBar(edge: .bottom) {
+        // A plain inset, not `safeAreaBar`: a bar draws the system's scroll
+        // edge effect as a full-width band with a hard top edge, which sliced
+        // a line of text in half at AX5 (frames "AX5 · mislukt"). The frames
+        // fade the page out softly just above the accessory instead.
+        .scrollEdgeEffectHidden(screen.accessory != nil, for: .bottom)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if let accessory = screen.accessory {
                 QueueAccessoryView(accessory: accessory, ax: ax,
                                    open: { showQueue = true },
                                    act: { act(accessory.action) })
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { accessoryFrame = $0 }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .background(alignment: .top) { AccessoryFade() }
                     .transition(.opacity)
             }
         }
@@ -180,9 +190,9 @@ struct ScanTab: View {
         if !ax {
             slot(screen.slot)
                 .frame(minHeight: 44)
-                .padding(.top, compactHeight ? 24 : 41)
+                .padding(.top, compactHeight ? 14 : 41)
         }
-        ScanDisc(size: compactHeight ? 148 : 168, label: screen.discTitle) { tapDisc() }
+        ScanDisc(size: compactHeight ? 138 : 168, label: screen.discTitle) { tapDisc() }
             .padding(.top, ax ? 24 : 16)
         VStack(spacing: 4) {
             Text(screen.discTitle)
@@ -208,7 +218,7 @@ struct ScanTab: View {
                 .padding(.top, 8)
         }
         DuplexCard(duplex: screen.duplex)
-            .padding(.top, compactHeight ? 32 : 32)
+            .padding(.top, compactHeight ? 24 : 32)
     }
 
     @ViewBuilder private func slot(_ slot: ScanScreen.Slot) -> some View {
@@ -370,6 +380,27 @@ struct NoteTarget: Identifiable, Equatable {
 }
 
 // MARK: - Pieces
+
+/// Behind the queue accessory: the page fades into the void over 40 pt and is
+/// solid for the inset's own 12 pt above the accessory and down past the tab
+/// bar, so a line scrolled under it fades out and is never sliced at the
+/// accessory's edge (frames "AX5 · mislukt", "iPhone SE").
+/// Not in the layout: the inset's height stays the accessory's own.
+private struct AccessoryFade: View {
+    static let height: CGFloat = 40
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [Color.void.opacity(0), Color.void], startPoint: .top, endPoint: .bottom)
+                .frame(height: Self.height)
+            Color.void
+        }
+        .padding(.top, -Self.height)
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
 
 /// The camera button: a dark disc with the signal ring, the one thing on the
 /// tab you can press. Glow only here (brief: glow is a signal).

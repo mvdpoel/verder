@@ -2,6 +2,7 @@
 # Screenshot one screen of the app on the synthetic dataset, in the simulator.
 #   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
 #                      [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]
+#                      [--press <text>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -24,6 +25,10 @@
 #   --scan   open Scan on a state only a gesture reaches:
 #            handoff (the page mid-flight into the queue) | queue (the Wachtrij
 #            sheet) | note ("Iets bijzonders?") | preprompt (the camera pre-prompt)
+#   --press  long-press the text that reads exactly <text> and shoot what that
+#            opens (with --scan queue: the row menu, "Wachtrij / rij-acties").
+#            A simulator cannot be long-pressed from the shell, so the app is
+#            launched and pressed by the VerderCapture UI test instead.
 #
 # A DEBUG build (the fixtures are compiled out of Release), installed on the
 # "iPhone 17" simulator, booted if it is not. Nothing reaches a server: every
@@ -43,10 +48,10 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
-LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""
+LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -73,6 +78,10 @@ while [ $# -gt 0 ]; do
     --scan)
       [ $# -ge 2 ] || usage
       case "$2" in handoff|queue|note|preprompt) SCAN_STATE="$2" ;; *) echo "capture.sh: --scan takes handoff, queue, note or preprompt" >&2; exit 2 ;; esac
+      shift ;;
+    --press)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      PRESS="$2"
       shift ;;
     *) usage ;;
   esac
@@ -139,6 +148,22 @@ fi
 restore_size() { [ -z "$TEXT_SIZE" ] || xcrun simctl ui "$UDID" content_size "${PREV_SIZE:-large}" 2>/dev/null || true; }
 trap restore_size EXIT
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
+if [ -n "$PRESS" ]; then
+  # The UI test launches the app with these arguments, presses, and writes
+  # the PNG itself; it fails (and writes nothing) if the text is not on screen.
+  ALL_ARGS=(-fixtures "$FIXTURE" "${ARGS[@]}")
+  mkdir -p "$(dirname "$OUT")"
+  rm -f "$OUT.partial.png"
+  TEST_RUNNER_CAPTURE_ARGS="$(printf '%s\n' "${ALL_ARGS[@]}")" TEST_RUNNER_CAPTURE_PRESS="$PRESS" \
+    TEST_RUNNER_CAPTURE_OUT="$OUT.partial.png" \
+    env -u NODE_ENV xcodebuild test -scheme VerderCapture -destination "id=$UDID" \
+    -derivedDataPath build/DD -quiet >/dev/null \
+    || { echo "capture.sh: the --press capture failed — not writing $OUT." >&2; rm -f "$OUT.partial.png"; exit 1; }
+  [ -s "$OUT.partial.png" ] || { echo "capture.sh: the --press capture wrote no PNG." >&2; exit 1; }
+  mv -f "$OUT.partial.png" "$OUT"
+  echo "$OUT"
+  exit 0
+fi
 # `simctl launch` prints "<bundle>: <pid>"; a simulator app is a host process.
 LAUNCHED="$(xcrun simctl launch "$UDID" "$BUNDLE" -fixtures "$FIXTURE" "${ARGS[@]}")"
 PID="${LAUNCHED##*: }"

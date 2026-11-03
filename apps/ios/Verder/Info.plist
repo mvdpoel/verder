@@ -44,7 +44,7 @@
 	<array>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>doc.viewfinder</string>
+			<string>doc.text.viewfinder</string>
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Scan een brief</string>
 			<key>UIApplicationShortcutItemType</key>

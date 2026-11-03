@@ -57,7 +57,7 @@ targets:
         UIApplicationShortcutItems:
           - UIApplicationShortcutItemType: pro.vanderpoel.verder.scan
             UIApplicationShortcutItemTitle: "Scan een brief"
-            UIApplicationShortcutItemIconSymbolName: doc.viewfinder
+            UIApplicationShortcutItemIconSymbolName: doc.text.viewfinder
           - UIApplicationShortcutItemType: pro.vanderpoel.verder.voice
             UIApplicationShortcutItemTitle: "Gesprek vastleggen"
             UIApplicationShortcutItemIconSymbolName: mic
@@ -253,7 +253,26 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Verder.app/Verder
         BUNDLE_LOADER: $(TEST_HOST)
+  # scripts/capture.sh --press: a long press only a UI test can make. Its
+  # own scheme below, so the Verder test action never runs it.
+  VerderCapture:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [VerderCapture]
+    dependencies:
+      - target: Verder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.capture
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Verder
 schemes:
+  VerderCapture:
+    build:
+      targets:
+        VerderCapture: [test]
+    test:
+      targets: [VerderCapture]
   Verder:
     build:
       targets:

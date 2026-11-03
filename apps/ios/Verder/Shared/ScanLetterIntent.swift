@@ -12,6 +12,13 @@ struct ScanLetterIntent: AppIntent {
     static let description = IntentDescription("Opent de camera van verder, zonder Face ID.")
     static let openAppWhenRun = true
 
+    /// The words and glyph all three ways in share (frame "Scan · snelstart"):
+    /// the Control Center control, the Action button's App Shortcut and the
+    /// home-screen quick action (Info.plist, pinned by ScanLinkTests). The
+    /// glyph is the disc's own, the page with lines in its viewfinder.
+    static let label = "Scan een brief"
+    static let symbol = "doc.text.viewfinder"
+
     @MainActor
     func perform() async throws -> some IntentResult {
         ScanLaunch.run?()

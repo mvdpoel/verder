@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UIKit
 @testable import Verder
 
 /// The words of every "scan · final" frame, read from `ScanScreen` and
@@ -222,7 +223,20 @@ struct ScanLinkTests {
     @Test func theQuickActionIsDeclared() throws {
         let items = try #require(Bundle.main.object(forInfoDictionaryKey: "UIApplicationShortcutItems") as? [[String: Any]])
         let scan = try #require(items.first { $0["UIApplicationShortcutItemType"] as? String == QuickAction.scanType })
-        #expect(scan["UIApplicationShortcutItemTitle"] as? String == "Scan een brief")
+        #expect(scan["UIApplicationShortcutItemTitle"] as? String == ScanLetterIntent.label)
+        #expect(scan["UIApplicationShortcutItemIconSymbolName"] as? String == ScanLetterIntent.symbol,
+                "the quick action wears the control's and the Action button's glyph")
+    }
+
+    /// Frame "Scan · snelstart": "Scan een brief", the page-with-lines
+    /// viewfinder, and no Face ID — the intent runs in the app and opens Scan,
+    /// which is never lock-gated.
+    @Test func theShortcutsShareOneLabelAndGlyph() {
+        #expect(ScanLetterIntent.label == "Scan een brief")
+        #expect(ScanLetterIntent.symbol == "doc.text.viewfinder")
+        #expect(String(localized: ScanLetterIntent.title) == ScanLetterIntent.label)
+        #expect(ScanLetterIntent.openAppWhenRun)
+        #expect(UIImage(systemName: ScanLetterIntent.symbol) != nil)
     }
 
     @Test func fixtureFlagsParse() throws {

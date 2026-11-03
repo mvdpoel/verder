@@ -134,9 +134,9 @@ struct QueueSheetView: View {
             .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
         }
         .scrollBounceBehavior(.basedOnSize)
-        // The frames' sheet leaves the Scan title showing above it; at the
-        // accessibility sizes it may still be pulled to full height.
-        .presentationDetents([.fraction(0.87), .large])
+        // The frames' sheet leaves only the dimmed date and Scan title above
+        // it; at the accessibility sizes it may still be pulled to full height.
+        .presentationDetents([.custom(QueueDetent.self), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.black)
         .preferredColorScheme(.dark)
@@ -238,6 +238,19 @@ struct QueueSheetView: View {
         } else {
             content
         }
+    }
+}
+
+/// The Wachtrij's height: just short of the large detent, so its top edge sits
+/// where the frame draws it (118 of 874 pt) with only the Scan header showing
+/// dimmed behind. A `.fraction` is of the large height, not the screen's, and
+/// 0.87 of it left half of the state line sliced by the sheet's edge.
+struct QueueDetent: CustomPresentationDetent {
+    /// How much of the large detent's height the sheet gives up.
+    static let headerRoom: CGFloat = 35
+
+    static func height(in context: Context) -> CGFloat? {
+        max(context.maxDetentValue - headerRoom, context.maxDetentValue * 0.8)
     }
 }
 
