@@ -214,7 +214,7 @@ struct AuthModelPasskeyTests {
         await model.signInWithPasskey()
 
         #expect(model.isSignedIn)
-        #expect(model.errorMessage == nil)
+        #expect(model.notice == nil)
         // A passkey sign-in never offers a passkey.
         #expect(!model.passkeyOfferPending)
     }
@@ -234,7 +234,9 @@ struct AuthModelPasskeyTests {
         await model.signInWithPasskey()
 
         #expect(!model.isSignedIn)
-        #expect(model.errorMessage == nil)
+        #expect(model.notice == nil)
+        // …but one calm line says nothing changed.
+        #expect(model.passkeyCancelled)
     }
 
     @Test func passwordSignInOffersAPasskeyOnceWhenNoneExists() async {

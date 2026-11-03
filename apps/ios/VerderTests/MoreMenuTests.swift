@@ -164,8 +164,12 @@ struct MoreMenuTests {
         var words = [AccountCopy.passkeyLabel, AccountCopy.passkeyTitle, AccountCopy.addPasskey,
                      AccountCopy.addPasskeyLine(offline: false)]
         words += [.on, .off, .unknown, .loading].flatMap { AccountCopy.passkeyLines($0) }
-        words += [AuthModel.Copy.passkeyFailed, AuthModel.Copy.passkeyAdded, AuthModel.Copy.passkeyAddFailed,
+        words += [AuthModel.Copy.passkeyAdded, AuthModel.Copy.passkeyAddFailed,
                   AuthModel.Copy.passkeyAlreadyOnDevice, AuthModel.Copy.passkeyNeedsFreshSignIn]
+        words += SignInNoticeTests.everyNotice.flatMap { [$0.title, $0.body, $0.label] + [$0.caption(now: $0.at)].compactMap { $0 } }
+        words += [SignInView.Copy.passkey, SignInView.Copy.retryPasskey, SignInView.Copy.cancelled,
+                  PasskeyOfferView.Copy.title, PasskeyOfferView.Copy.body, PasskeyOfferView.Copy.add,
+                  PasskeyOfferView.Copy.worksTitle, PasskeyOfferView.Copy.worksBody, PasskeyOfferView.Copy.later]
         for word in words { #expect(!word.lowercased().contains("passkey"), "\(word)") }
     }
 

@@ -565,7 +565,7 @@ struct FixtureTests {
         let asking = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-complete", "-fixtures-locked",
                                                            "-fixtures-faceid", "asking"]))
         #expect(asking.faceID == .asking && asking.locked)
-        #expect(FixtureLaunch.FaceIDState.allCases.map(\.rawValue) == ["asking", "idle"], "capture.sh's --faceid grammar")
+        #expect(FixtureLaunch.FaceIDState.allCases.map(\.rawValue) == ["asking", "idle", "nopasscode"], "capture.sh's --faceid grammar")
         #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-faceid", "ja")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-faceid", "ja"])
         }

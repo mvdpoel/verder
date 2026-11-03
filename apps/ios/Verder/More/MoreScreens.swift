@@ -522,7 +522,9 @@ struct WidgetGuideScreen: View {
 }
 
 /// verder's own icon in the home-screen mock: the app's AppIcon.
-private struct AppIconTile: View {
+struct AppIconTile: View {
+    var size: CGFloat = 58
+
     var body: some View {
         Group {
             if let icon = Self.image {
@@ -531,8 +533,8 @@ private struct AppIconTile: View {
                 Color.plate
             }
         }
-        .frame(width: 58, height: 58)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 13 / 58, style: .continuous))
         .accessibilityHidden(true)
     }
 

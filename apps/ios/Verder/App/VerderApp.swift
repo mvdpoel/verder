@@ -43,7 +43,13 @@ struct VerderApp: App {
 
     private init(services s: AppServices) {
         let auth = AuthModel(client: s.client, store: s.store, defaults: s.defaults, widgetSnapshotDir: s.snapshotDir,
-                             pendingSignOut: s.pendingSignOut)
+                             pendingSignOut: s.pendingSignOut, now: s.now)
+        // A missing answer reads "offline" only when the phone has no network
+        // path; otherwise it is verder not answering ("De server reageert niet.").
+        auth.networkIsUp = { [uploads = s.uploads] in !uploads.isOffline }
+        #if DEBUG
+        if let state = FixtureLaunch.current?.signIn { auth.fixtureSeed(state) }
+        #endif
         _auth = State(initialValue: auth)
         _lock = State(initialValue: s.lock)
         _uploads = State(initialValue: s.uploads)

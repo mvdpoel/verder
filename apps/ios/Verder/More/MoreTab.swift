@@ -163,7 +163,6 @@ struct MoreTab: View {
                 ScrollView {
                     MoreColumn(top: 4) {
                         MoreText.title("Meer").padding(.bottom, 4)
-                        if auth.passkeyOfferPending { passkeyOffer }
                         ForEach(Array(MoreMenu.sections.enumerated()), id: \.offset) { _, section in
                             MoreGroup(label: section.label) {
                                 MoreCard {
@@ -207,24 +206,6 @@ struct MoreTab: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.accessibilityLabel)
         .accessibilityAddTraits(.isButton)
-    }
-
-    private var passkeyOffer: some View {
-        MoreCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(MoreText.onlyAtSoftHyphens("Toegangs\u{00AD}sleutel toevoegen?"))
-                    .font(MoreType.rowTitle)
-                    .foregroundStyle(Color.inkBright)
-                MoreText.body("Dan log je voortaan in met Face ID, zonder wachtwoord.")
-                MoreButton(title: AccountCopy.addPasskey, weight: .primary, enabled: !auth.isBusy) {
-                    Task { await auth.addPasskey() }
-                }
-                MoreButton(title: "Niet nu", weight: .plain, enabled: !auth.isBusy) {
-                    auth.dismissPasskeyOffer()
-                }
-            }
-            .padding(16)
-        }
     }
 }
 

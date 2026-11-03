@@ -20,6 +20,10 @@ struct ScanTab: View {
     var camera: any CameraAccess = LiveCameraAccess()
     /// Set by a `verder://scan` link; cleared here once the camera opened.
     @Binding var cameraRequested: Bool
+    /// The app lock is closed. Scan only ever READS this one boolean (never
+    /// `AppLock`, which could start a prompt): it says, once, that scanning
+    /// needs no Face ID (FEATURES 3.22).
+    var locked = false
     /// A sent row's chevron: the document on Dossier.
     var openDocument: (String) -> Void = { _ in }
     /// The flight's host above the TabView (RootView). Nil: Scan draws the
@@ -82,11 +86,14 @@ struct ScanTab: View {
                 },
                 onCancel: { cameraOpen = false })
             .ignoresSafeArea()
+            .overlay(alignment: .top) {
+                if locked { ScanLockedPill().padding(.top, 56) }
+            }
         }
         .fullScreenCover(isPresented: $prePrompt) {
             CameraPrePrompt {
                 Task {
-                    let allowed = await camera.request()
+                    let allowed = await SystemPrompts.around { await camera.request() }
                     cameraStatus = camera.status()
                     prePrompt = false
                     if allowed { openCamera() }
@@ -132,7 +139,7 @@ struct ScanTab: View {
                 header(screen)
                 if cameraStatus == .denied {
                     CameraDenied { openURL(URL(string: UIApplication.openSettingsURLString)!) }
-                        .padding(.top, ax ? 32 : compactHeight ? 120 : 222)
+                        .padding(.top, ax ? 32 : compactHeight ? 40 : 110)
                 } else {
                     content(screen)
                 }
@@ -238,6 +245,8 @@ struct ScanTab: View {
 
     @ViewBuilder private func slot(_ slot: ScanScreen.Slot) -> some View {
         switch slot {
+        case .none where locked:
+            ScanLockedPill()
         case .none:
             Color.clear.frame(height: 44).accessibilityHidden(true)
         case .note(let id, let time):
@@ -418,6 +427,27 @@ struct ScanDisc: View {
 /// The disc's glyph: a page with lines in a viewfinder, as the frames draw it.
 /// A vector asset, not `doc.text.viewfinder`: since SF Symbols 7 that name
 /// draws the same folded-corner page with no lines as `doc.viewfinder`.
+/// "Vergrendeld · scannen kan zonder Face ID" — the camera is no way into the
+/// dossier, and Scan says so in one calm line while the app is locked.
+struct ScanLockedPill: View {
+    var body: some View {
+        Label {
+            Text("Vergrendeld · scannen kan zonder Face\u{00A0}ID")
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "lock.fill").font(.system(size: 11, weight: .medium))
+        }
+        .font(.mono(12, relativeTo: .caption))
+        .foregroundStyle(Color.inkSoft)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(minHeight: 32)
+        .background(Capsule().fill(Color.rail.opacity(0.92)))
+        .overlay(Capsule().strokeBorder(Color.edge, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct ScanGlyph: View {
     /// The disc's diameter; the glyph's viewfinder spans 30 % of it.
     let size: CGFloat

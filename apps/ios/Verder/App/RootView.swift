@@ -30,6 +30,12 @@ struct RootView: View {
     @State private var cameraRequested = false
     /// Scan's page-into-the-queue flight, drawn above the TabView.
     @State private var scanHandoff = ScanHandoff()
+    /// The item a link points at while the app is locked: its KIND only, for
+    /// the lock's placeholder and the sheet's amber line (`LockedTarget`).
+    @State private var lockedTarget: LockedTarget?
+    /// Martin's own system sheets (Face ID, a permission alert) make the scene
+    /// inactive too; the privacy cover leaves those alone.
+    private var prompts: SystemPrompts { SystemPrompts.shared }
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
     @State private var tab: TabID = .home
@@ -64,13 +70,25 @@ struct RootView: View {
 
     private var signedInOrSignIn: some View {
         Group {
-            if auth.isSignedIn {
+            if auth.isSignedIn, auth.passkeyOffer != nil {
+                // The next step of a password sign-in (Figma "Sign-in /
+                // Toegangssleutel toevoegen"); Overzicht after it.
+                PasskeyOfferView(auth: auth) {
+                    auth.dismissPasskeyOffer()
+                    tab = .home
+                }
+            } else if auth.isSignedIn {
                 tabs
-            } else if auth.sessionExpired {
-                SessionExpiredView(auth: auth, uploads: uploads)
             } else {
-                SignInView(auth: auth)
+                // A first sign-in, and a session the server ended ("Log opnieuw in").
+                signIn
             }
+        }
+        // The app-switcher snapshot shows the mark, never the dossier
+        // (FEATURES 3.17). Not over the app's own system sheets: Face ID would
+        // otherwise flash the cover behind its own prompt at every unlock.
+        .overlay {
+            if coversContent { PrivacyCover().transition(.identity) }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -97,6 +115,7 @@ struct RootView: View {
             Task { await push.requestPermissionIfNeeded() }
         }
         .onChange(of: lock.isLocked) { _, locked in
+            if !locked { lockedTarget = nil }
             if !locked && auth.isSignedIn { Task { await push.requestPermissionIfNeeded() } }
         }
         // Every launch with a session refreshes the APNs token (tokens change);
@@ -108,7 +127,9 @@ struct RootView: View {
         // link points at shows only after unlock.
         .onChange(of: links.pending, initial: true) { _, _ in
             // Where it lands is `DeepLink.destination` (tested); this only applies it.
-            guard let to = links.take().destination else { return }
+            let link = links.take()
+            guard let to = link.destination else { return }
+            lockedTarget = lock.isLocked ? LockedTarget(link) : nil
             if let target = to.tab { tab = target }
             switch to.stack {
             case .inbox(let path)?: inboxPath = path
@@ -128,20 +149,16 @@ struct RootView: View {
         .onChange(of: uploads.isOffline) { _, offline in
             if !offline && auth.signOutPending { Task { await auth.retryPendingSignOut() } }
         }
-        // Never stacked on the passkey offer: that one waits in Meer first.
-        .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
-            get: { push.prePromptPending && auth.isSignedIn && !auth.passkeyOfferPending },
+        // The notification pre-prompt (Figma "Pre-prompt / Meldingen", brief
+        // R25): one screen, one "Ga verder", no close; iOS's alert follows.
+        // Never stacked on the toegangssleutel offer, and never over the lock.
+        .fullScreenCover(isPresented: Binding(
+            get: { push.prePromptPending && auth.isSignedIn && auth.passkeyOffer == nil && !lock.isLocked },
             set: { _ in }
         )) {
-            Button(PushRegistrar.Copy.allow) { Task { await push.acceptPrePrompt() } }
-            Button(PushRegistrar.Copy.notNow, role: .cancel) { push.declinePrePrompt() }
-        } message: {
-            Text(PushRegistrar.Copy.prePrompt)
-        }
-        // The one-time passkey offer lives in Meer; it only ever appears right
-        // after an interactive password sign-in, so Martin is looking.
-        .onChange(of: auth.passkeyOfferPending) { _, pending in
-            if pending { tab = .meer }
+            NotificationPrePrompt {
+                Task { await SystemPrompts.around { await push.acceptPrePrompt() } }
+            }
         }
         // Uploads only with a session: without one every send is a 401.
         .task(id: auth.isSignedIn) {
@@ -162,6 +179,30 @@ struct RootView: View {
     /// is showing; after that every tab is open until the next lock. Overzicht
     /// shows its counts behind the sheet meanwhile. The one exception stays the
     /// camera: on Scan nothing prompts, so the shutter is never covered.
+    @ViewBuilder private var signIn: some View {
+        #if DEBUG
+        SignInView(auth: auth, offline: uploads.isOffline,
+                   prefill: FixtureLaunch.current?.signIn?.prefill,
+                   startOnPassword: FixtureLaunch.current?.signIn == .keyboard)
+        #else
+        SignInView(auth: auth, offline: uploads.isOffline)
+        #endif
+    }
+
+    private var coversContent: Bool {
+        #if DEBUG
+        if FixtureLaunch.current?.cover == true { return true }
+        #endif
+        return scenePhase != .active && prompts.open == 0
+    }
+
+    /// The sheet after a cancelled (or impossible) Face ID. Not on Scan: the
+    /// shutter is never covered; not over the voice sheet, which shows its own lock.
+    private var unlockSheet: Binding<AppLock.UnlockSheet?> {
+        Binding(get: { tab == .scan || voice.isPresented || !auth.isSignedIn ? nil : lock.unlockSheet },
+                set: { if $0 == nil { lock.dismissUnlockSheet() } })
+    }
+
     private func promptOnOpen() {
         guard auth.isSignedIn, lock.isLocked, tab != .scan else { return }
         Task { await lock.autoPromptIfNeeded() }
@@ -195,10 +236,12 @@ struct RootView: View {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
                            onUnauthorized: { auth.sessionRejected() })
                     .lockGated(by: lock)
+                    .environment(\.lockedTarget, lockedTarget?.tab == .voorJou ? lockedTarget : nil)
             }
             Tab("Scan", image: ScanGlyph.tabAsset, value: TabID.scan) {
                 // NOT gated: plan Task 7 step 3.
                 ScanTab(center: uploads, auth: auth, camera: camera, cameraRequested: $cameraRequested,
+                        locked: lock.isLocked,
                         openDocument: { id in
                             dossierPath = [.document(id: id, title: nil)]
                             tab = .dossier
@@ -214,6 +257,7 @@ struct RootView: View {
                                tab = .voorJou
                            })
                     .lockGated(by: lock)
+                    .environment(\.lockedTarget, lockedTarget?.tab == .dossier ? lockedTarget : nil)
             }
             Tab("Meer", systemImage: "ellipsis", value: TabID.meer) {
                 MoreTab(auth: auth, center: uploads, push: push, money: money, dossier: dossier, path: $meerPath,
@@ -234,6 +278,20 @@ struct RootView: View {
             }
         }
         .tint(Color.signal)
+        .background {
+            Color.clear.sheet(item: unlockSheet) { sheet in
+                UnlockSheetView(sheet: sheet, lock: lock, target: lockedTarget,
+                                overview: {
+                                    lock.dismissUnlockSheet()
+                                    tab = .home
+                                },
+                                scan: {
+                                    lock.dismissUnlockSheet()
+                                    tab = .scan
+                                    cameraRequested = true
+                                })
+            }
+        }
         // Above the tab bar: the handoff dims it too (frame "Scan · overdracht").
         .overlay { ScanHandoffOverlay(handoff: scanHandoff) }
         .preferredColorScheme(.dark)
@@ -264,6 +322,11 @@ struct RootView: View {
         guard !fixtureStartApplied, let launch = FixtureLaunch.current else { return }
         fixtureStartApplied = true
         if let start = launch.tab { tab = start.tabID }
+        // `-fixtures-mic`: the voice log opens as the quick action opens it,
+        // on its pre-prompt or its "microfoon uit" sheet.
+        if launch.mic != nil { voice.open() }
+        // `-fixtures-push-preprompt`: the moment after a sign-in, when it asks.
+        if launch.pushPrePrompt { Task { await push.requestPermissionIfNeeded() } }
         switch launch.route {
         case .link(let link)?: links.deliver(link)
         case .screen(let screen)?: fixtureScreen = screen

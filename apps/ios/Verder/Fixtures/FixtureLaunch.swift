@@ -19,6 +19,13 @@ import Foundation
 ///                              prompt counted as asked, nothing cancelled ("Toon details" and its footnote)
 ///     -fixtures-faceid asking  with -fixtures-locked: the automatic Face ID prompt never answers,
 ///                              so Overzicht holds its "vraagt" state (no button)
+///     -fixtures-faceid nopasscode  with -fixtures-locked: the phone has no passcode, so the
+///                              automatic prompt cannot work ("Zet eerst een toegangscode aan")
+///     -fixtures-signin <state> signed out, on a sign-in state (`SignInState`), or signed in on the
+///                              toegangssleutel offer (offer, already-on)
+///     -fixtures-push-preprompt the notification permission never asked: the pre-prompt shows
+///     -fixtures-cover          draw the app-switcher privacy cover, as the scene going inactive does
+///     -fixtures-mic <notDetermined|denied>  the microphone permission (default: allowed)
 ///     -fixtures-push <denied|notDetermined>  the notification permission (default: allowed)
 ///     -fixtures-more <signout|savefail>  a Meer screen in a state only a gesture reaches: the
 ///                              Uitloggen sheet up (Account), or a Meldingen switch whose save failed
@@ -94,7 +101,24 @@ struct FixtureLaunch: Equatable, Sendable {
     enum GeldState: String, CaseIterable, Sendable { case open, nov, sep, sheet }
 
     /// The moment of the Face ID prompt a locked capture holds.
-    enum FaceIDState: String, CaseIterable, Sendable { case asking, idle }
+    enum FaceIDState: String, CaseIterable, Sendable { case asking, idle, nopasscode }
+
+    /// A sign-in state only a failure (or a gesture) reaches (`-fixtures-signin`).
+    enum SignInState: String, CaseIterable, Sendable {
+        case standard = "default", keyboard, busy, cancelled
+        case noPasskey = "no-passkey", wrongPassword = "wrong-password", rateLimited = "rate-limited"
+        case server, notOnAccount = "not-on-account", expired, offline
+        /// Signed in, on the one-time offer and on its 1006 answer.
+        case offer, alreadyOn = "already-on"
+
+        var signedIn: Bool { self == .offer || self == .alreadyOn }
+        /// "Wachtwoord klopt niet" shows what was typed (synthetic address).
+        var prefill: (email: String, password: String)? {
+            self == .wrongPassword ? ("jij@thuis.example", "fixture-pw") : nil
+        }
+    }
+
+    enum MicState: String, CaseIterable, Sendable { case notDetermined, denied }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
@@ -144,6 +168,10 @@ struct FixtureLaunch: Equatable, Sendable {
     var push: PushPermission? = nil
     var more: MoreState? = nil
     var timeline: [TimelineState] = []
+    var signIn: SignInState? = nil
+    var cover = false
+    var pushPrePrompt = false
+    var mic: MicState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -210,7 +238,17 @@ struct FixtureLaunch: Equatable, Sendable {
                                          throw .unknownValue("-fixtures-timeline", String(raw))
                                      }
                                      return s
-                                 })
+                                 },
+                             signIn: try value(after: "-fixtures-signin").map { (raw: String) throws(ParseError) -> SignInState in
+                                 guard let s = SignInState(rawValue: raw) else { throw .unknownValue("-fixtures-signin", raw) }
+                                 return s
+                             },
+                             cover: arguments.contains("-fixtures-cover"),
+                             pushPrePrompt: arguments.contains("-fixtures-push-preprompt"),
+                             mic: try value(after: "-fixtures-mic").map { (raw: String) throws(ParseError) -> MicState in
+                                 guard let s = MicState(rawValue: raw) else { throw .unknownValue("-fixtures-mic", raw) }
+                                 return s
+                             })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

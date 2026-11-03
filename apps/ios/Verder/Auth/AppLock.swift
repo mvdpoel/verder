@@ -119,6 +119,19 @@ final class AppLock {
     /// error, so no `message`; Overzicht says it in its own words.
     private(set) var lastAttemptCancelled = false
 
+    /// The sheet that follows an unlock that did not open the app (Figma
+    /// "Lock / Face ID geannuleerd", "Lock / Geen toegangscode"), so a
+    /// cancelled or impossible Face ID never leaves Martin at a dead end.
+    enum UnlockSheet: Hashable, Identifiable, Sendable {
+        /// Ontgrendel met Face ID · Bekijk alleen het overzicht · Scan een brief.
+        case cancelled
+        /// No device passcode: Face ID cannot work here at all.
+        case noPasscode
+        var id: Self { self }
+    }
+    /// Nil while asking, after an unlock, and once Martin chose a way on.
+    private(set) var unlockSheet: UnlockSheet?
+
     @ObservationIgnored private let authenticator: any DeviceOwnerAuthenticator
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var backgroundedAt: Date?
@@ -149,17 +162,28 @@ final class AppLock {
         defer { isUnlocking = false }
         message = nil
         lastAttemptCancelled = false
+        unlockSheet = nil
         do {
-            try await authenticator.authenticate(reason: Copy.reason)
+            try await SystemPrompts.around { () async throws(DeviceOwnerAuthError) in
+                try await authenticator.authenticate(reason: Copy.reason)
+            }
             isLocked = false
         } catch {
             switch error {
-            case .cancelled: lastAttemptCancelled = true // Martin closed the sheet; not an error.
-            case .unavailable: message = Copy.unavailable
+            case .cancelled:
+                lastAttemptCancelled = true // Martin closed the sheet; not an error.
+                unlockSheet = .cancelled
+            case .unavailable:
+                message = Copy.unavailable
+                unlockSheet = .noPasscode
             case .failed: message = Copy.failed
             }
         }
     }
+
+    /// Martin chose a way on from the sheet (the overview, the camera) or
+    /// swiped it away. The lock stays exactly as it was.
+    func dismissUnlockSheet() { unlockSheet = nil }
 
     #if DEBUG
     /// `-fixtures-faceid idle`: the automatic prompt counts as asked, so the
@@ -181,6 +205,7 @@ final class AppLock {
         isLocked = false
         message = nil
         lastAttemptCancelled = false
+        unlockSheet = nil
     }
 
     func sceneDidEnterBackground() {
@@ -198,6 +223,7 @@ final class AppLock {
             autoPrompted = false
             message = nil
             lastAttemptCancelled = false
+            unlockSheet = nil
         }
     }
 }

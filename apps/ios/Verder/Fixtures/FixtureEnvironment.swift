@@ -77,18 +77,21 @@ enum FixtureEnvironment {
             let known = FixtureServer.bundledRoot.map(FixtureServer.names(in:)) ?? []
             fatalError("fixtures: no fixture named \(launch.fixture); known: \(known.joined(separator: ", "))")
         }
-        let store = InMemorySessionStore(cookie)
+        // A sign-in capture starts signed out (the offer states are signed in).
+        let signedOut = launch.signIn.map { !$0.signedIn } ?? false
+        let store = signedOut ? InMemorySessionStore() : InMemorySessionStore(cookie)
         let client = client(fixture: launch.fixture, store: store)
 
         let idle = launch.locked && launch.faceID == .idle
         let lock = AppLock(authenticator: FixtureOwner(declinesFirst: launch.locked && !idle,
-                                                       holdsFirst: launch.locked && launch.faceID == .asking))
+                                                       holdsFirst: launch.locked && launch.faceID == .asking,
+                                                       noPasscode: launch.locked && launch.faceID == .nopasscode))
         if !launch.locked { lock.didSignIn() }
         if idle { lock.fixtureSkipAutoPrompt() }
 
         let defaults = UserDefaults(suiteName: defaultsSuite) ?? .standard
         defaults.removePersistentDomain(forName: defaultsSuite)
-        defaults.set(true, forKey: PushRegistrar.askedKey)
+        if !launch.pushPrePrompt { defaults.set(true, forKey: PushRegistrar.askedKey) }
 
         let dir = URL.temporaryDirectory.appending(path: "verder-fixture-uploads", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dir)
@@ -128,13 +131,13 @@ enum FixtureEnvironment {
         try? FileManager.default.removeItem(at: weeklyDir)
 
         var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
-                           permission: FixturePermission(state: launch.push ?? .allowed), registerRemote: {},
+                           permission: FixturePermission(state: launch.pushPrePrompt ? .notDetermined : launch.push ?? .allowed), registerRemote: {},
                            snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
                            timelineDir: timelineDir,
                            // No microphone and no speech model: a "recording"
                            // is synthetic bytes, and its transcript is the
                            // voice fixture's (synthetic-data doc).
-                           makeRecorder: { FixtureRecorder() },
+                           makeRecorder: { FixtureRecorder(mic: launch.mic) },
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
                            now: clock(keptAt: server.manifest.keptAt, today: server.manifest.today))
         services.weeklyDir = weeklyDir
@@ -265,13 +268,17 @@ enum FixtureEnvironment {
 final class FixtureOwner: DeviceOwnerAuthenticator {
     private let declines: Mutex<Bool>
     private let holds: Mutex<Bool>
+    private let noPasscode: Bool
 
-    init(declinesFirst: Bool, holdsFirst: Bool = false) {
+    init(declinesFirst: Bool, holdsFirst: Bool = false, noPasscode: Bool = false) {
         declines = Mutex(declinesFirst)
         holds = Mutex(holdsFirst)
+        self.noPasscode = noPasscode
     }
 
     func authenticate(reason: String) async throws(DeviceOwnerAuthError) {
+        // `-fixtures-faceid nopasscode`: this phone can never prove its owner.
+        if noPasscode { throw .unavailable }
         let hold = holds.withLock { value in
             defer { value = false }
             return value
@@ -292,7 +299,22 @@ final class FixtureOwner: DeviceOwnerAuthenticator {
 /// The voice log's microphone in a fixture run: synthetic bytes, never the
 /// microphone, so a capture needs no permission and records nothing real.
 final class FixtureRecorder: VoiceRecording {
-    func requestPermission() async -> Bool { true }
+    private var mic: MicPermission
+
+    init(mic: FixtureLaunch.MicState? = nil) {
+        switch mic {
+        case .notDetermined?: self.mic = .undetermined
+        case .denied?: self.mic = .denied
+        case nil: self.mic = .granted
+        }
+    }
+
+    func permission() -> MicPermission { mic }
+    /// iOS's alert, answered yes (a capture never records anything real).
+    func requestPermission() async -> Bool {
+        if mic == .undetermined { mic = .granted }
+        return mic == .granted
+    }
     func start(to url: URL) throws { try Data("fixture-recording".utf8).write(to: url) }
     func stop() -> TimeInterval { 4 }
     func cancel() {}

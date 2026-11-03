@@ -67,6 +67,25 @@ struct APIClient: Sendable {
 
     /// Returns only on 2xx; every other answer throws its `APIError`.
     func send(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (data, http) = try await sendAnyStatus(req)
+        if let error = APIError.from(status: http.statusCode) { throw error }
+        return (data, http)
+    }
+
+    /// Like `send`, but a refusal throws `AuthRefusal`, which keeps what the
+    /// sign-in screen needs beyond the status: better-auth's error `code`
+    /// (`PASSKEY_NOT_FOUND` tells a removed toegangssleutel from any other
+    /// 401) and the retry hint of a 429. Only the /api/auth paths use it.
+    func sendAuth(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (data, http) = try await sendAnyStatus(req)
+        if let error = APIError.from(status: http.statusCode) {
+            throw AuthRefusal(error: error, code: AuthRefusal.code(in: data), retryAfter: AuthRefusal.retryAfter(http))
+        }
+        return (data, http)
+    }
+
+    /// Every HTTP answer comes back; only a missing one throws (`.transport`).
+    private func sendAnyStatus(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
@@ -81,8 +100,31 @@ struct APIClient: Sendable {
         guard let http = response as? HTTPURLResponse else {
             throw APIError.transport("not an HTTP response")
         }
-        if let error = APIError.from(status: http.statusCode) { throw error }
         return (data, http)
+    }
+}
+
+/// A refused /api/auth call, with what the answer said beyond its status.
+struct AuthRefusal: Error, Equatable, Sendable {
+    let error: APIError
+    /// better-auth's `{"code": …}`, e.g. `PASSKEY_NOT_FOUND`, `INVALID_EMAIL_OR_PASSWORD`.
+    let code: String?
+    /// Seconds until a 429 lifts: better-auth's `X-Retry-After`, or a standard
+    /// `Retry-After` in seconds (the WAF's answer may carry either or none).
+    let retryAfter: TimeInterval?
+
+    static func code(in body: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["code"] as? String
+    }
+
+    static func retryAfter(_ response: HTTPURLResponse) -> TimeInterval? {
+        for name in ["X-Retry-After", "Retry-After"] {
+            if let raw = response.value(forHTTPHeaderField: name), let seconds = TimeInterval(raw.trimmingCharacters(in: .whitespaces)),
+               seconds >= 0 {
+                return seconds
+            }
+        }
+        return nil
     }
 }
 

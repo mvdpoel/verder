@@ -29,7 +29,7 @@ struct AuthModelTests {
         #expect(store.load()?.name == "__Secure-better-auth.session_token")
         #expect(store.load()?.value == "tok.sig")
         #expect(model.isSignedIn)
-        #expect(model.errorMessage == nil)
+        #expect(model.notice == nil)
     }
 
     /// The upload queue resumes after a re-sign-in on THIS changing, because
@@ -59,13 +59,17 @@ struct AuthModelTests {
     /// message, no retry loop that would keep the limit armed.
     @Test func rateLimitedShowsWaitAndDoesNotRetry() async {
         let server = StubServer()
-        server.on { _ in .status(429) }
+        server.on { _ in .status(429, headers: ["X-Retry-After": "42"]) }
         let store = InMemorySessionStore()
-        let model = AuthModel(client: server.client(store: store), store: store)
+        let at = Date(timeIntervalSince1970: 1_793_522_460)
+        let model = AuthModel(client: server.client(store: store), store: store, now: { at })
 
         await model.signInWithPassword(email: "martin@vanderpoel.pro", password: "x")
 
-        #expect(model.errorMessage == "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw.")
+        // The button comes back at the moment better-auth named, not before.
+        #expect(model.notice?.cause == .rateLimited(until: at.addingTimeInterval(42)))
+        #expect(model.notice?.primaryEnabled(now: at) == false)
+        #expect(model.notice?.primaryEnabled(now: at.addingTimeInterval(42)) == true)
         #expect(server.requests.count == 1)
         #expect(!model.isSignedIn)
         #expect(!model.isBusy)
@@ -79,7 +83,8 @@ struct AuthModelTests {
 
         await model.signInWithPassword(email: "martin@vanderpoel.pro", password: "wrong")
 
-        #expect(model.errorMessage == AuthModel.Copy.wrongCredentials)
+        #expect(model.notice?.cause == .wrongPassword)
+        #expect(model.notice?.kind == .wachtwoord)
         #expect(store.load() == nil)
     }
 
@@ -93,7 +98,7 @@ struct AuthModelTests {
         await model.signInWithPassword(email: "martin@vanderpoel.pro", password: "x")
 
         #expect(!model.isSignedIn)
-        #expect(model.errorMessage == AuthModel.Copy.generic)
+        #expect(model.notice?.cause == .failed(nil))
     }
 
     @Test func expiredStoredCookieIsSignedOut() {

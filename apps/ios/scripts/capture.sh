@@ -5,6 +5,7 @@
 #                      [--press <text>] [--geld <state>] [--faceid <asking|idle>]
 #                      [--push <denied|notDetermined>] [--more <signout|savefail>]
 #                      [--timeline <state[,state…]>] [--tap <label>]
+#                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -47,6 +48,16 @@
 #            asked and nothing cancelled, so "Toon details" stands with its footnote
 #   --faceid asking  with --locked: the automatic Face ID prompt never answers,
 #            so Overzicht holds "Face ID vraagt" (no button)
+#   --faceid nopasscode  with --locked: the phone has no passcode ("Zet eerst een
+#            toegangscode aan"). Plain --locked (no --faceid) cancels the automatic
+#            prompt: the "Ontgrendel je dossier" sheet
+#   --signin a sign-in state ("auth · final", Sign-in row): default keyboard busy
+#            cancelled no-passkey wrong-password rate-limited server not-on-account
+#            expired offline offer already-on (the last two are signed in)
+#   --push-preprompt  notifications never asked: the "Meldingen" pre-prompt shows
+#   --cover  the app-switcher privacy cover, as the scene going inactive draws it
+#   --mic    the microphone permission, with the voice log open over the tab:
+#            notDetermined (its pre-prompt) | denied ("microfoon uit")
 #   --timeline  the Tijdlijn in a state only a gesture reaches (route timeline,
 #            or tab overzicht with "overzicht"): verborgen | sheet | end |
 #            overzicht | dicht (the raised sheet closed again) |
@@ -80,6 +91,8 @@ set -euo pipefail
 usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>] [--faceid <asking|idle>] [--push <state>] [--more <state>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
+SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
+SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
 TIMELINE=""; TAP=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
@@ -116,7 +129,7 @@ while [ $# -gt 0 ]; do
       shift ;;
     --faceid)
       [ $# -ge 2 ] || usage
-      case "$2" in asking|idle) FACEID="$2" ;; *) echo "capture.sh: --faceid takes asking or idle" >&2; exit 2 ;; esac
+      case "$2" in asking|idle|nopasscode) FACEID="$2" ;; *) echo "capture.sh: --faceid takes asking, idle or nopasscode" >&2; exit 2 ;; esac
       shift ;;
     --push)
       [ $# -ge 2 ] || usage
@@ -125,6 +138,16 @@ while [ $# -gt 0 ]; do
     --more)
       [ $# -ge 2 ] || usage
       case "$2" in signout|savefail) MORE="$2" ;; *) echo "capture.sh: --more takes signout or savefail" >&2; exit 2 ;; esac
+      shift ;;
+    --signin)
+      [ $# -ge 2 ] || usage
+      case " $SIGNIN_STATES " in *" $2 "*) SIGNIN="$2" ;; *) echo "capture.sh: --signin takes one of: $SIGNIN_STATES" >&2; exit 2 ;; esac
+      shift ;;
+    --cover) COVER=1 ;;
+    --push-preprompt) PUSHPRE=1 ;;
+    --mic)
+      [ $# -ge 2 ] || usage
+      case "$2" in notDetermined|denied) MIC="$2" ;; *) echo "capture.sh: --mic takes notDetermined or denied" >&2; exit 2 ;; esac
       shift ;;
     --press)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
@@ -198,6 +221,10 @@ fi
 [ -z "$PUSH" ] || ARGS+=(-fixtures-push "$PUSH")
 [ -z "$MORE" ] || ARGS+=(-fixtures-more "$MORE")
 [ -z "$TIMELINE" ] || ARGS+=(-fixtures-timeline "$TIMELINE")
+[ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
+[ -z "$COVER" ] || ARGS+=(-fixtures-cover)
+[ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)
+[ -z "$MIC" ] || ARGS+=(-fixtures-mic "$MIC")
 [ -z "$PRESS" ] || [ -z "$TAP" ] || { echo "capture.sh: --press and --tap are one gesture each; pick one" >&2; exit 2; }
 if [ -n "$FACEID" ]; then
   [ -n "$LOCKED" ] || { echo "capture.sh: --faceid needs --locked" >&2; exit 2; }

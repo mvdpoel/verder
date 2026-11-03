@@ -105,6 +105,9 @@ final class VoiceLogModel {
     private(set) var sendAttempted = false
     private(set) var notice: String?
     private(set) var micDenied = false
+    /// The microphone was never asked: the pre-prompt shows first, and iOS's
+    /// alert only after its "Ga verder" (brief R25).
+    private(set) var micPrePrompt = false
     private(set) var clientId = UUID()
 
     @ObservationIgnored private let client: APIClient
@@ -194,6 +197,11 @@ final class VoiceLogModel {
     /// Parties first (the picker should be ready the moment the transcript
     /// is), then the speech model, which may download once.
     func prepare() async {
+        switch recorder.permission() {
+        case .undetermined: micPrePrompt = true
+        case .denied: micDenied = true
+        case .granted: break
+        }
         await loadParties()
         await prepareSpeech()
     }
@@ -225,6 +233,14 @@ final class VoiceLogModel {
         await prepareSpeech()
     }
 
+    /// "Ga verder" on the microphone pre-prompt: now iOS asks.
+    func acceptMicPrePrompt() async {
+        micPrePrompt = false
+        let allowed = await SystemPrompts.around { await recorder.requestPermission() }
+        micDenied = !allowed
+        notice = allowed ? nil : Copy.micDenied
+    }
+
     func prepareSpeech() async {
         speech = .checking
         switch await transcriber.availability() {
@@ -254,6 +270,10 @@ final class VoiceLogModel {
         releasedEarly = false
         defer { startPending = false }
         notice = nil
+        if recorder.permission() == .undetermined {
+            micPrePrompt = true
+            return
+        }
         guard await recorder.requestPermission() else {
             micDenied = true
             notice = Copy.micDenied

@@ -15,21 +15,112 @@ struct VoiceLogFactory {
 /// an explicit close discards (`VoiceLogSession.close`).
 struct VoiceLogSheet: View {
     let session: VoiceLogSession
+    @State private var deniedHeight: CGFloat = 320
 
     var body: some View {
         Group {
             if let model = session.model {
-                VoiceLogView(model: model, close: { session.close() })
-                    .interactiveDismissDisabled(model.holdsUnsentWork)
-                    .task { await model.prepare() }
+                if model.micDenied && model.phase == .idle {
+                    // A short sheet that says where the switch is (Figma
+                    // "Pre-prompt / Microfoon geweigerd").
+                    MicDeniedView(close: { session.close() }, height: { deniedHeight = $0 })
+                        .presentationDetents([.height(deniedHeight)])
+                } else {
+                    VoiceLogView(model: model, close: { session.close() })
+                        .interactiveDismissDisabled(model.holdsUnsentWork || model.micPrePrompt)
+                        .presentationDetents(model.micPrePrompt ? [.large] : [.medium, .large])
+                }
             } else {
                 Color.void.ignoresSafeArea()
             }
         }
+        .task(id: session.model.map(ObjectIdentifier.init)) { await session.model?.prepare() }
         // Gone without a close (lock screen, sign-in): keep, never discard.
         .onDisappear { session.sheetDisappeared() }
-        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+/// The microphone pre-prompt: the first voice log asks before iOS does.
+struct MicrophonePrePrompt: View {
+    let proceed: () -> Void
+
+    enum Copy {
+        static let title = "Een gesprek vastleggen"
+        static let purpose = "Houd de knop vast en vertel wat er gezegd is. De microfoon staat alleen aan zolang jij vasthoudt."
+        static let promises = ["Het wordt een suggestie die jij goedkeurt, geen logboekregel."]
+        static let sample = "“Gebeld met Woonstichting Lindehof…”"
+    }
+
+    var body: some View {
+        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) {
+            VStack(spacing: 20) {
+                Capsule().fill(Color.inkFaint).frame(width: 36, height: 4)
+                Image(systemName: "mic")
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(Color.inkBright)
+                    .frame(width: 96, height: 96)
+                    .overlay(Circle().strokeBorder(Color.signal.opacity(0.5), lineWidth: 1.5))
+                Text(Copy.sample)
+                    .font(AuthType.callout)
+                    .foregroundStyle(Color.inkSoft)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(Color.rail, in: RoundedRectangle(cornerRadius: Radius.panel))
+            .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(Color.edge, lineWidth: 1))
+            .padding(.top, 140)
+        }
+    }
+}
+
+/// The microphone is off for verder: where to turn it on, and a way out.
+struct MicDeniedView: View {
+    let close: () -> Void
+    /// The content's own height, for the sheet's detent.
+    var height: (CGFloat) -> Void = { _ in }
+    @Environment(\.openURL) private var openURL
+
+    enum Copy {
+        static let title = "Een gesprek vastleggen"
+        static let cause = "verder mag de microfoon niet gebruiken."
+        static let body = "Uitgezet in Instellingen → verder → Microfoon. Zet het aan, dan kun je meteen inspreken."
+        static let close = "Sluit"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                AuthTitle(Copy.title)
+                Text(Copy.cause)
+                    .font(AuthType.headline)
+                    .foregroundStyle(Color.inkBright)
+                    .padding(.top, 16)
+                Text(Copy.body)
+                    .font(AuthType.callout)
+                    .foregroundStyle(Color.inkSoft)
+                    .padding(.top, 12)
+                VStack(spacing: 12) {
+                    AuthButton(title: "Open Instellingen") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                    AuthButton(title: Copy.close, weight: .ghost, action: close)
+                }
+                .padding(.top, 20)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.top, 32)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height($0) }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .lineHeight(.multiple(factor: AuthType.lineFactor))
+        .authTypeCap()
+        .background(Color.rail.ignoresSafeArea())
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -52,6 +143,14 @@ struct VoiceLogView: View {
     let close: () -> Void
 
     var body: some View {
+        if model.micPrePrompt {
+            MicrophonePrePrompt { Task { await model.acceptMicPrePrompt() } }
+        } else {
+            screen
+        }
+    }
+
+    private var screen: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             ScrollView {

@@ -75,6 +75,11 @@ enum PasskeyError: Error, Equatable, Sendable {
     /// 1006, measured on Martin's iPhone 2026-10-31). Not a failure — he can
     /// sign in with it as it is.
     case alreadyOnDevice
+    /// The server no longer knows the toegangssleutel this phone signed with:
+    /// better-auth answers verify-authentication with 401 `PASSKEY_NOT_FOUND`
+    /// (@better-auth/passkey 1.7.0, dist/index.mjs:470) — it was removed at
+    /// Beveiliging on the web while iOS kept it.
+    case notOnAccount
     /// AuthenticationServices refused: no passkey for this RP, the associated
     /// domain does not validate, Face ID failed, …
     case failed(String)
@@ -97,6 +102,9 @@ final class PasskeyAuth {
         static let listPasskeys = "/api/auth/passkey/list-user-passkeys"
     }
 
+    /// better-auth's code for a credential the server does not hold.
+    static let passkeyNotFound = "PASSKEY_NOT_FOUND"
+
     /// In order of preference, as `SessionCookie.names`: production is https.
     static let challengeCookieNames = ["__Secure-better-auth.better-auth-passkey", "better-auth.better-auth-passkey"]
 
@@ -115,7 +123,7 @@ final class PasskeyAuth {
         var optionsReq = client.request(Endpoint.authenticateOptions, method: "GET", body: nil, contentType: nil)
         // Whatever the store still holds is not a session we are signing in with.
         optionsReq.setValue(nil, forHTTPHeaderField: "Cookie")
-        let (optionsBody, optionsResponse) = try await client.send(optionsReq)
+        let (optionsBody, optionsResponse) = try await client.sendAuth(optionsReq)
         let challenge = try challengeCookie(optionsResponse, optionsReq)
         let options = try AssertionOptions.decode(optionsBody)
 
@@ -125,7 +133,12 @@ final class PasskeyAuth {
         let body = try JSONSerialization.data(withJSONObject: ["response": json])
         var verifyReq = client.request(Endpoint.verifyAuthentication, method: "POST", body: body, contentType: "application/json")
         verifyReq.setValue(challenge.pair, forHTTPHeaderField: "Cookie")
-        let (_, verifyResponse) = try await client.send(verifyReq)
+        let verifyResponse: HTTPURLResponse
+        do {
+            (_, verifyResponse) = try await client.sendAuth(verifyReq)
+        } catch let refusal as AuthRefusal where refusal.code == Self.passkeyNotFound {
+            throw PasskeyError.notOnAccount
+        }
         guard let session = sessionCookie(from: verifyResponse, url: verifyResponse.url ?? verifyReq.url!) else {
             throw PasskeyError.noSessionCookie
         }

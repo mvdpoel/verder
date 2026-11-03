@@ -3,8 +3,14 @@ import Foundation
 
 /// The microphone, as the voice log needs it. A protocol so the flow runs in
 /// tests (and in fixture captures) without one.
+/// The microphone permission, read WITHOUT asking: the pre-prompt (Figma
+/// "Pre-prompt / Microfoon") comes before iOS's alert, never after it.
+enum MicPermission: Equatable, Sendable { case undetermined, granted, denied }
+
 @MainActor
 protocol VoiceRecording: AnyObject {
+    /// The current permission; never shows anything.
+    func permission() -> MicPermission
     /// Asks once (the system remembers); true when recording is allowed.
     func requestPermission() async -> Bool
     func start(to url: URL) throws
@@ -27,6 +33,14 @@ final class AudioRecorder: VoiceRecording {
     ]
 
     private var recorder: AVAudioRecorder?
+
+    func permission() -> MicPermission {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: .granted
+        case .denied: .denied
+        default: .undetermined
+        }
+    }
 
     func requestPermission() async -> Bool {
         switch AVAudioApplication.shared.recordPermission {
@@ -59,4 +73,9 @@ final class AudioRecorder: VoiceRecording {
     func cancel() {
         _ = stop()
     }
+}
+
+extension VoiceRecording {
+    /// A recorder that cannot tell (tests' fakes) reads as allowed.
+    func permission() -> MicPermission { .granted }
 }
