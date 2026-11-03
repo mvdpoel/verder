@@ -159,6 +159,11 @@ final class VoiceLogModel {
     @ObservationIgnored private var releasedEarly = false
     @ObservationIgnored private let recentCall: @MainActor () -> VoicePrefill?
     @ObservationIgnored private var imported: RecordingImport?
+    /// The App Group that holds `importedDrop`. Set BEFORE the copy, with
+    /// `importedDrop`, so a drop whose copy failed is still this log's to
+    /// delete on cancel (review finding 2026-11-03: otherwise it reopened the
+    /// sheet with `importFailed` on every foreground, forever).
+    @ObservationIgnored private var importedGroupDir: URL?
 
     init(client: APIClient, recorder: any VoiceRecording, transcriber: any Transcribing, dir: URL,
          now: @escaping @MainActor () -> Date = { Date() },
@@ -415,6 +420,11 @@ final class VoiceLogModel {
         guard phase == .idle, !hasRecording, !sendAttempted, holdsNoOwnWords else { return }
         if prefill == nil, let recent = recentCall() { apply(recent) }
         notice = nil
+        // Claimed before the copy: success or not, this log now owns the
+        // drop — `VoiceLogSession` will not reopen it, and `discard()` (close
+        // or swipe) deletes it. The original stays in Notes.
+        importedDrop = source.drop
+        importedGroupDir = source.groupDir
         let url = dir.appending(path: "\(clientId.uuidString.lowercased()).\(source.fileExtension)")
         do {
             // The same class as a dictated recording, set on the folder before
@@ -432,7 +442,6 @@ final class VoiceLogModel {
         }
         mode = .importRecording
         imported = source
-        importedDrop = source.drop
         recordingURL = url
         if !occurredAtSetByHand { occurredAt = min(source.capturedAt ?? now(), now()) }
         await transcribeImported()
@@ -569,6 +578,7 @@ final class VoiceLogModel {
         transcriptionProgress = nil
         imported = nil
         importedDrop = nil
+        importedGroupDir = nil
         clientId = UUID()
         partyId = parties.first?.id
     }
@@ -581,7 +591,7 @@ final class VoiceLogModel {
     /// The shared recording in the App Group: its job is done (sent) or
     /// called off (cancelled). A picked file has no drop and is never touched.
     private func deleteImportedDrop() {
-        guard let imported, let id = imported.drop, let groupDir = imported.groupDir else { return }
+        guard let id = importedDrop, let groupDir = importedGroupDir else { return }
         IncomingDrop.remove(id, groupDir: groupDir)
     }
 

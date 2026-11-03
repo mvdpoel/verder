@@ -227,6 +227,81 @@ struct CallRecordingImportTests {
         #expect(IncomingDrop.pendingAudio(groupDir: group).count == 1)
     }
 
+    // MARK: - A drop that cannot be written out (review finding, 2026-11-03)
+
+    /// A copy that throws (a full disk; here a voice folder that is a file)
+    /// still belongs to this log: the same foreground does not reopen it, and
+    /// closing the sheet deletes it — or the sheet came back with "kon niet
+    /// worden geopend" on every launch, forever.
+    @Test func aDropWhoseCopyFailsIsClosedForGood() async throws {
+        let group = try group()
+        let drop = try audioDrop(group)
+        let notADir = try scratchDir().appending(path: "voice-is-a-file")
+        try Data("x".utf8).write(to: notADir)
+        let s = server()
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(s, dir: notADir) }, groupDir: group)
+
+        await session.openPendingRecording()?.value
+        let m = try #require(session.model)
+        #expect(m.notice == VoiceLogModel.Copy.importFailed)
+        #expect(!m.hasRecording)
+        #expect(m.importedDrop == drop.id)
+        // Opened twice: the second foreground sees it as already open.
+        #expect(session.openPendingRecording() == nil)
+        #expect(session.model === m)
+
+        session.close()
+        #expect(IncomingDrop.pendingAudio(groupDir: group).isEmpty)
+        #expect(files(incoming(group)).isEmpty)
+        #expect(session.openPendingRecording() == nil)
+        #expect(session.model == nil)
+    }
+
+    /// The same through a swipe: an empty failed log is closed, and its drop with it.
+    @Test func swipingAwayAFailedDropDeletesIt() async throws {
+        let group = try group()
+        _ = try audioDrop(group)
+        let notADir = try scratchDir().appending(path: "voice-is-a-file")
+        try Data("x".utf8).write(to: notADir)
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server(), dir: notADir) }, groupDir: group)
+        await session.openPendingRecording()?.value
+        session.presentationChanged(false)
+        #expect(files(incoming(group)).isEmpty)
+        #expect(session.openPendingRecording() == nil)
+    }
+
+    /// A description whose bytes are gone can never be written out: it is not
+    /// pending, and it is removed (the extension writes the `.bin` FIRST, so a
+    /// `.json` without one is never a drop still being written).
+    @Test func aDropWithoutItsBytesIsNotPendingAndIsRemoved() throws {
+        let group = try group()
+        let drop = try audioDrop(group)
+        try FileManager.default.removeItem(at: IncomingDrop.binURL(drop.id, in: incoming(group)))
+
+        #expect(IncomingDrop.pendingAudio(groupDir: group).isEmpty)
+        #expect(files(incoming(group)).isEmpty)
+
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server()) }, groupDir: group)
+        #expect(session.openPendingRecording() == nil)
+        #expect(session.model == nil)
+    }
+
+    /// A drop that has waited longer than `IncomingDrop.audioMaxAge` ages out
+    /// (its original is still in Notes); a younger one stays.
+    @Test func anOldAudioDropAgesOut() throws {
+        let group = try group()
+        let old = try audioDrop(group)
+        let young = try audioDrop(group, name: "Nieuw.m4a", at: t0 + 1)
+        let now = Date()
+        for url in [IncomingDrop.jsonURL(old.id, in: incoming(group)), IncomingDrop.binURL(old.id, in: incoming(group))] {
+            try FileManager.default.setAttributes([.modificationDate: now - IncomingDrop.audioMaxAge - 60],
+                                                  ofItemAtPath: url.path())
+        }
+
+        #expect(IncomingDrop.pendingAudio(groupDir: group, now: now).map(\.id) == [young.id])
+        #expect(files(incoming(group)) == ["\(young.id.uuidString).bin", "\(young.id.uuidString).json"])
+    }
+
     // MARK: - Transcribing a file
 
     @Test func longRecordingsShowProgressThenAnEditableTranscript() async throws {

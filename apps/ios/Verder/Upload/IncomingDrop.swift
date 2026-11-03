@@ -128,14 +128,37 @@ struct IncomingDrop: Codable, Equatable, Sendable {
         return audioExtensions.contains((fileName as NSString).pathExtension.lowercased())
     }
 
+    /// How long a shared recording waits for the voice log before it ages
+    /// out. Longer than `UploadQueue.orphanAge` (24 h) on purpose: sharing
+    /// from Notes does not open verder, so a recording Martin has not yet
+    /// opened the app for is not an orphan — a day of not opening the app
+    /// must not lose it. A week is the bound on a drop that, for whatever
+    /// reason, keeps coming back; the original stays in Notes either way.
+    static let audioMaxAge: TimeInterval = 7 * 86_400
+
     /// The audio drops waiting for the voice log, oldest first. Complete
-    /// drops only (a `.json` is written last).
-    static func pendingAudio(groupDir: URL) -> [IncomingDrop] {
+    /// drops only (a `.json` is written last). A drop whose `.bin` is gone
+    /// (it can never be written out — the extension writes the bytes FIRST,
+    /// so this is never a drop mid-write) or that has waited longer than
+    /// `audioMaxAge` is removed here rather than returned: returned, it
+    /// would open the voice sheet on every foreground with nothing to show.
+    static func pendingAudio(groupDir: URL, now: Date = Date()) -> [IncomingDrop] {
         let dir = directory(groupDir: groupDir)
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path(percentEncoded: false))) ?? []
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: dir.path(percentEncoded: false))) ?? []
         return names.filter { $0.hasSuffix(".json") }
             .compactMap { read(dir.appending(path: $0)) }
             .filter { $0.kind == .audio }
+            .filter { drop in
+                let json = jsonURL(drop.id, in: dir)
+                let written = (try? fm.attributesOfItem(atPath: json.path(percentEncoded: false)))?[.modificationDate] as? Date
+                let tooOld = written.map { $0 < now - audioMaxAge } ?? false
+                guard fm.fileExists(atPath: binURL(drop.id, in: dir).path(percentEncoded: false)), !tooOld else {
+                    remove(drop.id, groupDir: groupDir)
+                    return false
+                }
+                return true
+            }
             .sorted { ($0.capturedAt, $0.id.uuidString) < ($1.capturedAt, $1.id.uuidString) }
     }
 
