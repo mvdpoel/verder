@@ -18,6 +18,7 @@ struct ProposalScreen: View {
     @State private var rejectReason = ""
     @State private var pendingOption: ProposalDetail.Option?
     @State private var freeText = ""
+    @Environment(CallSession.self) private var call: CallSession?
 
     var body: some View {
         ZStack {
@@ -68,6 +69,12 @@ struct ProposalScreen: View {
     @ViewBuilder
     private func content(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
         header(model, d)
+        // The sender, as a call: what to tell them and what to ask.
+        if let partyId = d.partyId, let call {
+            AuthButton(title: CallCopy.title, weight: .secondary) {
+                Task { await call.open(partyId: partyId, name: d.partyName) }
+            }
+        }
         if let ask = d.ask { section("Wat ze vragen") { para(ask) } }
         if let due = model.dueText {
             Text(due)

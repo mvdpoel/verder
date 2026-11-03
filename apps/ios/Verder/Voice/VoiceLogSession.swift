@@ -38,6 +38,15 @@ final class VoiceLogSession {
         isPresented = true
     }
 
+    /// "Gesprek vastleggen" after a call: the log in progress if there is one
+    /// (its work is never overwritten — `VoiceLogModel.apply` refuses), else a
+    /// new one starting from the call's ticked points.
+    func open(prefill: VoicePrefill) {
+        if model == nil { model = factory.make() }
+        model?.apply(prefill)
+        isPresented = true
+    }
+
     /// Martin closed it: throw away whatever was not sent.
     func close() {
         model?.discard()

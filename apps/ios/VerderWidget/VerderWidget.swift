@@ -59,5 +59,6 @@ struct VerderWidgetBundle: WidgetBundle {
     var body: some Widget {
         VerderWidget()
         ScanControl()
+        CallLiveActivity()
     }
 }

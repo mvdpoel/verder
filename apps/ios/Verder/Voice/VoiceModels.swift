@@ -11,6 +11,16 @@ struct PartyDTO: Codable, Identifiable, Equatable, Sendable {
     let lastContactAt: Date?
 }
 
+/// What a finished call hands the voice quick-log (`CallSession.logCall`):
+/// the ticked points as "Besproken: …", the party it was with, and when the
+/// call started as CallKit reported it. Nothing in it is sent until Martin
+/// presses "Verstuur als voorstel", and then only as a suggestion.
+struct VoicePrefill: Equatable, Sendable {
+    let partyId: String
+    let text: String
+    let occurredAt: Date?
+}
+
 /// `POST /api/mobile/v1/entries/voice`'s answer.
 struct VoiceEntryAnswer: Codable, Equatable, Sendable {
     let suggestionId: String

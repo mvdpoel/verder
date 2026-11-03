@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "dossier", "empty", "loading", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "call", "calm", "dossier", "empty", "loading", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
         "voorjou-long", "voorjou-many", "weekly",

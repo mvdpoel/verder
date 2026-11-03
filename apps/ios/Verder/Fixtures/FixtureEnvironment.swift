@@ -89,6 +89,10 @@ enum FixtureEnvironment {
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
                            now: clock)
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
+        // The call sheet's copy of the synthetic points, never the real folder.
+        let callDir = URL.temporaryDirectory.appending(path: "verder-fixture-calls", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: callDir)
+        services.callCacheDir = callDir
         return services
     }
 

@@ -2,12 +2,12 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief de niet-gecommitte working tree). Dit document beschrijft de **volledige** functieset van dit scherm: wat de code doet en wat de definitieve frames, de spec (§7.4) en de design brief (§2.5, §3) daaraan toevoegen. Elke functie heeft één statusregel.
+Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief de niet-gecommitte working tree; het gespreksblad en de Live Activity op branch `feat/iphone-calls`). Dit document beschrijft de **volledige** functieset van dit scherm: wat de code doet en wat de definitieve frames, de spec (§7.4) en de design brief (§2.5, §3) daaraan toevoegen. Elke functie heeft één statusregel.
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 28 |
-| Deels gebouwd | 13 |
+| Gebouwd | 35 |
+| Deels gebouwd | 11 |
 | Nog te bouwen | 19 |
 | Niet mogelijk op iOS | 1 |
 
@@ -411,19 +411,49 @@ Wat iOS toelaat, online nagegaan vóór de bouw: een app van derden kan een tele
 
 Martin kiest met wie hij belt en ziet twee korte lijsten, elk hoogstens zes punten, elk met een link naar het stuk waar het vandaan komt. **Vraag**: taken die wachten op die partij ("Vraag naar: …", vroegste deadline eerst), mail die hij hun stuurde en waarop na twee dagen nog geen antwoord kwam ("Nog geen antwoord op je mail van 20 okt: …", langste stilte eerst, niet ouder dan 30 dagen), vorderingen waarbij ze betrokken zijn en waarvan het bedrag onbekend is ("Vraag het gevorderde bedrag: …"), en open haltes op een spoor dat over hen gaat ("Bespreek: …"). **Vertel**: wat hij deed sinds hun laatste mail (anders de laatste 30 dagen), nieuwste eerst: afgeronde taken ("Gedaan: …"), mail die te vers is om na te vragen ("Gemaild op 30 okt: …"), stukken die hij hun stuurde ("Opgestuurd op 30 okt: …") en stukken van hen die zijn opgeborgen. Een contactpersoon telt mee voor haar organisatie. Alles is af te leiden uit het dossier, zonder model; weggegooide en vernietigde documenten verschijnen nooit (effectieve status, twee keer gecontroleerd).
 
-**Status:** Deels gebouwd — server gebouwd: `GET /api/mobile/v1/parties/[id]/talking-points` (JSON 401 eerst, `no-store`, 400/404), pure `buildTalkingPoints` en de loader `loadTalkingPoints` (`parties.talkingPoints`), fixtures `FixtureData/_shared/parties/<id>/talking-points.json` voor Bewindkantoor Noordkust en Kade & Partners. Nog te bouwen: het scherm in de app (partij kiezen, de twee lijsten, tikken opent de bron). Niet uitgerold (migraties 0042 en 0043 nog niet op de homelab).
+**Status:** Gebouwd — server: `GET /api/mobile/v1/parties/[id]/talking-points` (JSON 401 eerst, `no-store`, 400/404), pure `buildTalkingPoints` en de loader `loadTalkingPoints` (`parties.talkingPoints`); app: het blad "Gesprek voorbereiden" met de lijsten "Vertellen" en "Vragen" (zie hieronder), elk punt met een vinkje en een knop die de bron opent. Fixtures `FixtureData/_shared/parties/<id>/talking-points.json` voor Bewindkantoor Noordkust en Kade & Partners. Niet uitgerold (migraties 0042 en 0043 nog niet op de homelab).
 
 #### De samenvattingsregel van AI
 
 Boven de punten staat één zin, "wat ze het laatst vroegen en hoe dat ervoor staat", gemarkeerd als **"Samenvatting door AI"**. Hij wordt niet in het webverzoek en niet door Ollama gemaakt, maar door de bestaande drafter op de homelab (`ops/proposal-drafter.sh`, `claude -p --tools ""`, het token alleen in de omgeving van dat ene proces). Een nieuwe mail van een bekende partij zet haar samenvatting op `pending` (in dezelfde transactie als de mail); de drafter maakt hem binnen een paar minuten opnieuw. Het antwoord wordt **geweigerd** als het een id noemt dat niet in de verzamelde context stond, en de ruwe modeluitvoer, de prompt en de context blijven altijd bewaard (gouden regel) — niet alleen van de laatste poging: `party_briefs` wordt bij elke nieuwe versie overschreven, dus elke poging (goedgekeurd, geweigerd, mislukt of te laat) wordt ook toegevoegd aan `party_brief_drafts`, waarin niets wordt gewijzigd of verwijderd. De app krijgt de zin **alleen** als hij `ready` is; tijdens `pending`, `drafting` of na `failed` is er geen zin, ook niet de vorige. Geen bewijs: geen ledgergebeurtenis.
 
-**Status:** Deels gebouwd — server en drafter gebouwd (migratie 0042 `party_briefs`, migratie 0043 `party_brief_drafts` voor de geschiedenis, `briefs-pending`, `briefs-store`, `validateBrief`, de tweede lus in `proposal-drafter.sh`); nog te bouwen: de weergave in de app. Niet gemeten: een echte samenvatting op echte mail, en de vertraging na een echte mail.
+**Status:** Gebouwd — server en drafter (migratie 0042 `party_briefs`, migratie 0043 `party_brief_drafts` voor de geschiedenis, `briefs-pending`, `briefs-store`, `validateBrief`, de tweede lus in `proposal-drafter.sh`); in de app bovenaan het blad als kaart **"AI-samenvatting · 30 okt"** (altijd als AI gemarkeerd, met de dag waarop hij is geschreven); een tik klapt "Gebaseerd op" open met de bronnen, elk een knop naar zijn scherm (een mail of vordering opent Dossier). Geen kaart als er geen `ready`-samenvatting is. Niet gemeten: een echte samenvatting op echte mail, en de vertraging na een echte mail.
 
 #### Een samenvatting klaarzetten bij nieuwe mail
 
 `ingestRawEmail` markeert de afzender (en de organisatie van een contactpersoon) als `pending` zodra een mail van een bekende partij binnenkomt, behalve bij het opzoeken van bonnetjes. Tien mails geven één nieuwe samenvatting, niet tien.
 
 **Status:** Gebouwd — `apps/worker/src/briefs/mark.ts`, `apps/worker/src/gmail.ts`; tests in `apps/worker/src/briefs/store.test.ts`.
+
+#### Gesprek voorbereiden: het blad openen
+
+Het blad hoort bij één partij en opent op drie plekken: de kaart **"BELLEN"** in Dossier (partijen op volgorde van laatste contact, zes zichtbaar, "Alle partijen (n)" voor de rest), lang drukken op een item in Voor jou dat een partij heeft (een voorstel of vraag; ook als VoiceOver-actie "Gesprek voorbereiden"), en de knop "Gesprek voorbereiden" onder de afzender van een voorstel. Bovenaan: "GESPREK VOORBEREIDEN", de naam van de partij, "bijgewerkt 09:41", dan de AI-kaart, "2 van 5 besproken" met een balk, "VERTELLEN" en "VRAGEN". Een lege lijst zegt "Niets om te vertellen." / "Niets om te vragen.". Een tik op een punt vinkt het af (staalkleur, doorgestreept, selectie-haptiek); het pijltje opent de bron en zet het blad opzij. Nergens amber: iets om aan een ander te vragen wacht niet op Martin. Het blad is vergrendeld achter Face ID (het noemt de partij). Onderaan, één keer: "verder luistert niet mee: iOS laat geen app een telefoongesprek opnemen. Leg het na afloop vast met je stem."
+
+**Status:** Gebouwd — `apps/ios/Verder/Call/CallPrepSheet.swift`, `CallSession.swift`, `CallChecklist.swift`; de server geeft `partyId` mee op voorstel-items in Voor jou en op `proposals.get`. Tests in `CallPrepTests`. Fixture `call`, `-route call:<partyId>`.
+
+#### Zonder verbinding: de laatst opgehaalde punten
+
+Het blad toont eerst de kopie op de telefoon, dan het antwoord van de server; zonder verbinding blijven de laatste punten staan met hun leeftijd ("offline · bijgewerkt 09:41"). Nooit opgehaald en geen verbinding: "Geen verbinding, en deze punten staan nog niet op je telefoon." met "Opnieuw proberen". Vinkjes blijven staan bij een verversing (de punt-id's zijn stabiel). De kopie staat in `Application Support/calls`, `completeFileProtection`, niet in de back-up, en wordt gewist bij uitloggen.
+
+**Status:** Gebouwd — `CallCache` in `apps/ios/Verder/Call/CallSystem.swift`, `CallPrepModel.swift`; tests in `CallPrepTests`.
+
+#### Bel
+
+"Bel 06 0000 0002" geeft het nummer aan de Telefoon-app (`tel:`-link) en zet tegelijk de Live Activity aan; het gesprek zelf is van de Telefoon-app. Een nummer met iets anders dan cijfers, één `+` vooraan en scheidingstekens krijgt géén knop, nooit een gok. Zonder nummer: "Geen telefoonnummer bekend in verder. Bel zoals je gewend bent; zet de punten wel op je toegangsscherm."
+
+**Status:** Gebouwd — `CallCopy.dialURL`; de server stuurt `party.phone` mee in de gesprekspunten. Niet gemeten: op Martins telefoon (alleen de simulator).
+
+#### Live Activity tijdens het gesprek
+
+Start bij "Bel" of met "Toon tijdens het gesprek". Op het toegangsscherm en in het compacte en minimale Dynamic Island staan **alleen aantallen** ("Gesprek · verder", "2 van 5 besproken", "2/5"), nooit de naam van de partij of de tekst van een punt: iedereen kan een toegangsscherm lezen. De naam zit niet eens in de gegevens van de Live Activity. Alleen het uitgeklapte Dynamic Island (ontgrendeld gebruik) toont "VOLGENDE" met de tekst van het eerstvolgende open punt, gemarkeerd als privacygevoelig. Afvinken in de app werkt de Live Activity direct bij. Een tik opent het blad weer (`verder://call`). "Niet meer tonen" haalt hem weg; staan Live Activities uit in Instellingen, dan zegt het blad dat.
+
+**Status:** Gebouwd — `apps/ios/Verder/Shared/CallActivity.swift` (`CallActivityAttributes`, `CallActivityFaces`), `apps/ios/Verder/Widget/CallActivityViews.swift`, `apps/ios/VerderWidget/CallLiveActivity.swift`, `NSSupportsLiveActivities`; de privacyregel is getest (en met een mutatie gecontroleerd) in `CallPrepTests`. Niet gemeten: de Live Activity op een echt toegangsscherm en in het Dynamic Island.
+
+#### Gesprek afgelopen: vastleggen
+
+Als iOS (`CXCallObserver`) meldt dat een gesprek is afgelopen terwijl het blad open is of zijn Live Activity loopt, stopt de Live Activity en komt het blad terug met "Het gesprek is afgelopen.", "Gesprek vastleggen" en "Niet nu". "Gesprek vastleggen" opent de spraaknotitie met de afgevinkte punten als "Besproken: …" bovenaan (Martins eigen woorden komen eronder), de partij al gekozen en het tijdstip waarop het gesprek begon. Het blijft een **suggestie** die Martin in Voor jou goedkeurt. Een gesprek dat eindigt terwijl er geen blad actief is, doet niets; CallKit zegt niet met wie het gesprek was, dus de regel gaat over het blad, nooit over het nummer. Een notitie waar al tekst of een opname in zit, wordt nooit overschreven.
+
+**Status:** Gebouwd — `CallSession.handle`, `logCall`, `VoiceLogModel.apply`, `VoiceLogSession.open(prefill:)`; tests in `CallPrepTests` (met een nep-observer) en `VoicePrefillTests`. Niet gemeten: een echt telefoongesprek op Martins toestel.
 
 ### Terugkoppeling
 
@@ -458,6 +488,7 @@ Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname 
 ## Waar in de code
 
 **iOS (`apps/ios/`)**
+- Gesprek voorbereiden (2026-11-03): `Verder/Call/` (`TalkingPoints.swift`, `CallChecklist.swift`, `CallPrepModel.swift`, `CallSession.swift`, `CallSystem.swift`, `CallPrepSheet.swift`), `Verder/Shared/CallActivity.swift`, `Verder/Widget/CallActivityViews.swift`, `VerderWidget/CallLiveActivity.swift`; tests `VerderTests/CallPrepTests.swift`
 - `Verder/Voice/VoiceLogModel.swift`: alle toestand, elke Nederlandse tekst, versturen, nieuwe poging en bestandsbeveiliging
 - `Verder/Voice/VoiceLogView.swift`: het blad (alleen layout), `HoldToRecord`, `VoiceLogFactory`, `holdsUnsentWork`
 - `Verder/Voice/VoiceLogSession.swift`: eigendom boven de vergrendeling en het inloggen

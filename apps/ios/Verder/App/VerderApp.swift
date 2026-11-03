@@ -23,6 +23,9 @@ struct VerderApp: App {
     /// The voice log (Meer, or the home screen quick action), owned here —
     /// above the lock gate and sign-in — so a relock or a 401 keeps its text.
     @State private var voice: VoiceLogSession
+    /// "Gesprek voorbereiden" and its Live Activity, owned here for the same
+    /// reason: the Phone app taking the screen, or a relock, keeps the ticks.
+    @State private var call: CallSession
     /// `AppServices.now`: Overzicht's clock.
     private let now: @Sendable () -> Date
     private let camera: any CameraAccess
@@ -63,10 +66,19 @@ struct VerderApp: App {
                                                       onUnauthorized: { auth.sessionRejected() },
                                                       epoch: auth.epoch))
         let client = s.client
-        _voice = State(initialValue: VoiceLogSession(factory: VoiceLogFactory {
+        let voice = VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
                           dir: VoiceLogModel.liveDirectory, onUnauthorized: { auth.sessionRejected() })
-        }))
+        })
+        _voice = State(initialValue: voice)
+        let clock = s.now
+        _call = State(initialValue: CallSession(
+            client: client, cache: CallCache(dir: s.callCacheDir), activities: s.makeCallActivities(),
+            observer: s.makeCallObserver(), epoch: auth.epoch, now: { clock() },
+            // The call itself is the Phone app's: verder only hands it the number.
+            dial: { UIApplication.shared.open($0) },
+            openVoice: { voice.open(prefill: $0) },
+            onUnauthorized: { auth.sessionRejected() }))
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).
         AppDelegate.services = .init(client: s.client, inbox: inbox)
@@ -75,7 +87,8 @@ struct VerderApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier, timeline: timeline, voice: voice, now: now, camera: camera)
+                     money: money, dossier: dossier, timeline: timeline, voice: voice, call: call,
+                     now: now, camera: camera)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

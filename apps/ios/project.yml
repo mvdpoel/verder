@@ -62,6 +62,9 @@ targets:
             UIApplicationShortcutItemTitle: "Gesprek vastleggen"
             UIApplicationShortcutItemIconSymbolName: mic
         UIBackgroundModes: [remote-notification]
+        # The call sheet's Live Activity (Call/, drawn by VerderWidget):
+        # counts only on the lock screen — see Shared/CallActivity.swift.
+        NSSupportsLiveActivities: true
         # The keychain-access-groups entitlement below, resolved by the same
         # build setting, so KeychainSessionStore names the group it is entitled to.
         VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
@@ -208,6 +211,7 @@ targets:
           - Info.plist
           - VerderWidget.entitlements
       - path: Verder/Widget
+      - path: Verder/Shared/CallActivity.swift
       - path: Verder/Shared/ScanLetterIntent.swift
       - path: Verder/Shared/WidgetSnapshot.swift
       - path: Verder/Shared/AppGroup.swift

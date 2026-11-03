@@ -72,6 +72,7 @@ struct VoorJouTab: View {
     let onUnauthorized: @MainActor () -> Void
 
     @State private var done: DoneByVerderModel
+    @Environment(CallSession.self) private var call: CallSession?
 
     init(store: InboxStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
          onUnauthorized: @escaping @MainActor () -> Void) {
@@ -139,12 +140,15 @@ struct VoorJouTab: View {
                     .foregroundStyle(Color.inkMute)
             }
             ForEach(rows) { row in
-                if let route = row.route {
-                    Button { path.append(route) } label: { rowView(row) }
-                        .buttonStyle(.plain)
-                } else {
-                    rowView(row)
+                Group {
+                    if let route = row.route {
+                        Button { path.append(route) } label: { rowView(row) }
+                            .buttonStyle(.plain)
+                    } else {
+                        rowView(row)
+                    }
                 }
+                .modifier(PrepareCallAction(partyId: row.item.partyId, name: row.item.subtitle, call: call))
             }
             if !inbox.doneByVerder.isEmpty {
                 DoneByVerderSection(actions: inbox.doneByVerder, model: done)
@@ -199,6 +203,32 @@ struct VoorJouTab: View {
         case .unauthorized: "Log opnieuw in."
         case .transport: ProposalModel.Copy.offline
         default: ProposalModel.Copy.failed
+        }
+    }
+}
+
+/// A Voor jou row about a party offers "Gesprek voorbereiden" on a long
+/// press (and as a VoiceOver action); a row with no party offers nothing.
+private struct PrepareCallAction: ViewModifier {
+    let partyId: String?
+    let name: String?
+    let call: CallSession?
+
+    func body(content: Content) -> some View {
+        if let partyId, let call {
+            content
+                .contextMenu {
+                    Button {
+                        Task { await call.open(partyId: partyId, name: name) }
+                    } label: {
+                        Label(CallCopy.title, systemImage: "phone")
+                    }
+                }
+                .accessibilityAction(named: CallCopy.title) {
+                    Task { await call.open(partyId: partyId, name: name) }
+                }
+        } else {
+            content
         }
     }
 }

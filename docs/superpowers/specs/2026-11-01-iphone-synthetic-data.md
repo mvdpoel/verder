@@ -104,6 +104,23 @@ The second file is the no-AI state: **Incassobureau Kade & Partners** (`…60000
 
 Mail ids use the `9…` prefix and debt ids the `a…` prefix; neither has a fixture screen of its own, so their points link to `verder://dossier`.
 
+### The phone's call sheet (fixture `call`, `-route call:<partyId>`, added 2026-11-03)
+
+The fixture `call` holds no files of its own: `-fixtures call -route call:00000000-f1c5-4000-8000-600000000002` opens "Gesprek voorbereiden" for Noordkust from the two shared files above (`-route call:…600000000003` for Kade & Partners). Two invented details, both in the generated DTO:
+
+- **Noordkust's number: `06 0000 0002`.** Invented, and in the 06-0 block, which no Dutch mobile number is issued from, so "Bel" in a capture dials nobody. The sheet's button reads "Bel 06 0000 0002" and hands `tel:0600000002` to the Phone app.
+- **Kade & Partners has no number** (`phone: null`): the sheet shows "Geen telefoonnummer bekend in verder." instead of "Bel", and still offers "Toon tijdens het gesprek".
+
+During the synthetic call Martin ticks the first two Vertel points, so the Live Activity reads **"2 van 5 besproken"** with "Gemaild op 30 okt: Loonstroken september en oktober" as the next point (expanded Dynamic Island only; the lock screen shows the count alone). When the call ends, "Gesprek vastleggen" opens the voice log with:
+
+```
+Besproken:
+- Opgestuurd op 30 okt: Loonstrook 2026-10
+- Opgestuurd op 30 okt: Loonstrook 2026-09
+```
+
+and Bewindkantoor Noordkust preselected.
+
 ## Fields the fixtures needed beyond the above (added 2026-11-01, Task FX)
 
 The JSON in `apps/ios/Verder/FixtureData/` holds everything above, plus these

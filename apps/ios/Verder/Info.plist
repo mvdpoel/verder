@@ -28,6 +28,8 @@
 	<string>verder neemt je stem op om een gesprek vast te leggen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>verder zet je opname op je telefoon om in tekst.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Saira-Variable.ttf</string>

@@ -106,6 +106,10 @@ final class VoiceLogModel {
     private(set) var notice: String?
     private(set) var micDenied = false
     private(set) var clientId = UUID()
+    /// "Besproken: …" from a finished call's ticked points (`CallSession`):
+    /// shown above the recorder and put on top of whatever Martin then
+    /// dictates or types. Nil for a voice log opened any other way.
+    private(set) var prefill: String?
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let recorder: any VoiceRecording
@@ -164,7 +168,8 @@ final class VoiceLogModel {
     /// the transcription failed), never over text Martin has, never once a
     /// send was attempted, and only while Dutch speech is ready.
     var canRecordAgain: Bool {
-        phase == .editing && speech == .ready && trimmedTranscript.isEmpty && !sendAttempted
+        phase == .editing && speech == .ready && !sendAttempted
+            && (trimmedTranscript.isEmpty || trimmedTranscript == prefill?.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// The latest time "Gesprek was om" may say: now. A call is never in the
@@ -190,6 +195,27 @@ final class VoiceLogModel {
     var selectedParty: PartyDTO? { parties.first { $0.id == partyId } }
 
     // MARK: - Opening
+
+    /// A voice log opened from a finished call: the ticked points, the party
+    /// and the call's own time. Applied only to a FRESH log — never over a
+    /// recording or text Martin already has (that work "blijft staan").
+    func apply(_ p: VoicePrefill) {
+        guard phase == .idle, trimmedTranscript.isEmpty, !hasRecording, !sendAttempted else { return }
+        let text = p.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        prefill = text.isEmpty ? nil : text
+        partyId = p.partyId
+        if let at = p.occurredAt {
+            occurredAt = min(at, now())
+            occurredAtSetByHand = true
+        }
+    }
+
+    /// The prefill on top, Martin's own words under it.
+    private func withPrefill(_ words: String) -> String {
+        guard let prefill else { return words }
+        let own = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? prefill : prefill + "\n\n" + own
+    }
 
     /// Parties first (the picker should be ready the moment the transcript
     /// is), then the speech model, which may download once.
@@ -301,9 +327,10 @@ final class VoiceLogModel {
         }
         phase = .transcribing
         do throws(TranscriptionError) {
-            transcript = try await transcriber.transcribe(url)
+            transcript = withPrefill(try await transcriber.transcribe(url))
             notice = nil
         } catch {
+            if prefill != nil && trimmedTranscript.isEmpty { transcript = withPrefill("") }
             notice = switch error {
             case .languageUnsupported: Copy.unsupported
             case .assetsUnavailable: nil // said once, with its retry, in the speech line
@@ -337,6 +364,7 @@ final class VoiceLogModel {
     func typeInstead() {
         guard phase == .idle else { return }
         occurredAt = occurredAt ?? now()
+        if trimmedTranscript.isEmpty { transcript = withPrefill("") }
         notice = nil
         phase = .editing
     }
@@ -397,6 +425,7 @@ final class VoiceLogModel {
         occurredAtSetByHand = false
         sendAttempted = false
         notice = nil
+        prefill = nil
         clientId = UUID()
         partyId = parties.first?.id
     }

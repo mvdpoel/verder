@@ -32,6 +32,12 @@ struct AppServices {
     var now: @Sendable () -> Date = { Date() }
     /// The camera permission behind Scan's pre-prompt and its "staat uit" state.
     var camera: any CameraAccess = LiveCameraAccess()
+    /// The call sheet's copy of the talking points (`CallCache`): Application
+    /// Support, never the App Group.
+    var callCacheDir: URL = CallCache.live.dir
+    /// The call's Live Activity and CallKit's "a call started/ended".
+    var makeCallActivities: @MainActor () -> any CallActivityControlling = { LiveCallActivities() }
+    var makeCallObserver: @MainActor () -> any CallObserving = { LiveCallObserver() }
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()

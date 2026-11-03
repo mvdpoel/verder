@@ -110,6 +110,9 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     let attachable: [Attachable]
     let options: [Option]
     let error: String?
+    /// The proposal's party, for "Gesprek voorbereiden"; nil when it has none
+    /// (and from an older server).
+    var partyId: String? = nil
 }
 
 /// What the phone may change before approving, exactly the `payload` of

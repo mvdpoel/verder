@@ -113,6 +113,18 @@ struct VoiceLogView: View {
 
     private var capture: some View {
         VStack(spacing: 20) {
+            // From a finished call (`CallSession`): goes on top of the text.
+            if let prefill = model.prefill {
+                section("Uit je gesprekspunten") {
+                    Text(prefill)
+                        .font(.display(15, relativeTo: .subheadline, weight: .light))
+                        .foregroundStyle(Color.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(12)
+                        .glassPanel()
+                }
+            }
             Text(model.phaseLine)
                 .font(.display(15, relativeTo: .subheadline))
                 .foregroundStyle(Color.inkMute)

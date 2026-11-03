@@ -20,6 +20,9 @@ struct RootView: View {
     let dossier: DossierModel
     let timeline: TimelineStore
     let voice: VoiceLogSession
+    /// "Gesprek voorbereiden" (Call/): opened from Dossier, Voor jou and a
+    /// proposal through the environment.
+    let call: CallSession
     /// Overzicht's clock (`AppServices.now`).
     var now: @Sendable () -> Date = { Date() }
     var camera: any CameraAccess = LiveCameraAccess()
@@ -116,6 +119,7 @@ struct RootView: View {
             }
             if to.opensVoice { voice.open() }
             if to.opensCamera { cameraRequested = true }
+            if to.opensCall { call.reopen() }
         }
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.
@@ -217,6 +221,18 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { voice.isPresented }, set: { voice.presentationChanged($0) })) {
             VoiceLogSheet(session: voice).lockGated(by: lock)
         }
+        // Lock-gated: it names the party and the points. The Live Activity
+        // outside it shows counts only. "Gesprek vastleggen" opens the voice
+        // log once this sheet has gone (`sheetDismissed`).
+        .sheet(isPresented: Binding(get: { call.isPresented }, set: { call.presentationChanged($0) }),
+               onDismiss: { call.sheetDismissed() }) {
+            CallPrepSheet(session: call, open: { link in
+                call.close()
+                links.deliver(DeepLink.parse(link))
+            })
+            .lockGated(by: lock)
+        }
+        .environment(call)
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
         .onAppear {
@@ -240,6 +256,7 @@ struct RootView: View {
         switch launch.route {
         case .link(let link)?: links.deliver(link)
         case .screen(let screen)?: fixtureScreen = screen
+        case .call(let partyId)?: Task { await call.open(partyId: partyId, name: nil) }
         case nil: break
         }
     }

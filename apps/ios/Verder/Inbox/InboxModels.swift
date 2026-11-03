@@ -112,6 +112,10 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     let dueAt: String?
     /// A Verder-priority proposal.
     let verder: Bool
+    /// The party a proposal or question is about, so its row can open
+    /// "Gesprek voorbereiden"; nil for every other kind (and from an older
+    /// server, which does not send it).
+    var partyId: String? = nil
 }
 
 /// One thing verder did on its own (spec §6.6), as `verderActions.list` builds

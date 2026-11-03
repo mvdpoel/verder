@@ -16,7 +16,7 @@ import Foundation
 ///     -fixtures-geld <open|nov|sep|sheet>  push Geld from Overzicht (as a card tap does): as it opens, with
 ///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
-///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
+///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice|call:<partyId>>
 ///
 /// Without `-fixtures` none of the others does anything: a DEBUG build on the
 /// real server never jumps tabs because of a stale scheme argument.
@@ -41,6 +41,9 @@ struct FixtureLaunch: Equatable, Sendable {
         /// A screen a link cannot show in its capture state: the voice log
         /// already recorded and transcribed (`FixtureScreen`).
         case screen(Screen)
+        /// "Gesprek voorbereiden" for this party (`CallSession.open`), the
+        /// sheet a Dossier row or a proposal's sender opens.
+        case call(String)
     }
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
@@ -151,6 +154,11 @@ struct FixtureLaunch: Equatable, Sendable {
         if raw == "weekly" { return .link(.weekly) }
         if raw == "geld" { return .link(.money) }
         if raw == "timeline" { return .link(.timeline) }
+        if raw.hasPrefix("call:") {
+            let id = String(raw.dropFirst("call:".count))
+            guard let uuid = UUID(uuidString: id) else { throw .unknownRoute(raw) }
+            return .call(uuid.uuidString.lowercased())
+        }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)

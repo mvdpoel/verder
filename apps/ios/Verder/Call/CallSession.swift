@@ -1,0 +1,218 @@
+import Foundation
+import Observation
+
+/// The call in progress, owned ABOVE the lock gate and the tabs (like
+/// `VoiceLogSession`), so a relock, a tab switch or the Phone app taking the
+/// screen never loses the ticks. One call at a time.
+///
+/// THE FLOW: Dossier, a Voor jou item or a proposal opens the sheet for a
+/// party → "Bel" starts the Live Activity and hands the number to the Phone
+/// app (`tel:`; the call itself is the Phone app's) → Martin ticks points,
+/// and each tick updates the Live Activity → `CXCallObserver` reports the
+/// call ended → the Live Activity ends, the sheet comes back with "Gesprek
+/// vastleggen", and that opens the voice quick-log with "Besproken: …" and
+/// the party preselected. Nothing here writes the dossier: the voice log
+/// still sends a SUGGESTION that Martin approves in Voor jou.
+///
+/// "ACTIVE" — when a call's end means something: a call sheet is prepared
+/// AND either showing or mirrored by its Live Activity. A call that ends
+/// while Martin is just reading Dossier offers nothing. CallKit cannot say
+/// WHICH call it was (only that one ended), so the rule is about the sheet,
+/// never about the number.
+@MainActor
+@Observable
+final class CallSession {
+    private(set) var model: CallPrepModel?
+    private(set) var isPresented = false
+    /// The call ended while this sheet was active: offer "Gesprek vastleggen".
+    private(set) var callEnded = false
+    private(set) var notice: String?
+    /// Dossier's "Bellen" card.
+    private(set) var parties: [PartyDTO] = []
+    private(set) var partiesFailed = false
+
+    @ObservationIgnored private let client: APIClient
+    @ObservationIgnored private let cache: CallCache
+    @ObservationIgnored private let activities: any CallActivityControlling
+    @ObservationIgnored private let now: @MainActor () -> Date
+    @ObservationIgnored private let dial: @MainActor (URL) -> Void
+    @ObservationIgnored private let openVoice: @MainActor (VoicePrefill) -> Void
+    @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
+    @ObservationIgnored private let epoch: SessionEpoch
+    /// When the call this sheet is following started (CallKit's first word on it).
+    @ObservationIgnored private var callStartedAt: Date?
+    @ObservationIgnored private var callEndedAt: Date?
+    /// Calls already reported ended: CallKit may say so more than once.
+    @ObservationIgnored private var endedCalls: Set<UUID> = []
+    @ObservationIgnored private var startedCalls: [UUID: Date] = [:]
+    /// Waiting for the call sheet to finish dismissing (`sheetDismissed`).
+    @ObservationIgnored private var pendingVoice: VoicePrefill?
+
+    init(client: APIClient, cache: CallCache, activities: any CallActivityControlling,
+         observer: any CallObserving, epoch: SessionEpoch,
+         now: @escaping @MainActor () -> Date = { Date() },
+         dial: @escaping @MainActor (URL) -> Void,
+         openVoice: @escaping @MainActor (VoicePrefill) -> Void,
+         onUnauthorized: @escaping @MainActor () -> Void = {}) {
+        self.client = client
+        self.cache = cache
+        self.activities = activities
+        self.now = now
+        self.dial = dial
+        self.openVoice = openVoice
+        self.onUnauthorized = onUnauthorized
+        self.epoch = epoch
+        observer.observe { [weak self] event in self?.handle(event) }
+        epoch.whenEnded { [weak self] in self?.forget() }
+    }
+
+    var isActive: Bool { model != nil && (isPresented || activities.isRunning) }
+    /// The controller's state, mirrored so the sheet redraws when it changes.
+    private(set) var activityRunning = false
+
+    // MARK: - Opening
+
+    /// The sheet for this party. The same party keeps its call (and its
+    /// ticks); another party ends the running Live Activity first.
+    func open(partyId: String, name: String?) async {
+        if model?.partyId != partyId {
+            endActivity()
+            callEnded = false
+            notice = nil
+            callStartedAt = nil
+            callEndedAt = nil
+            let m = CallPrepModel(partyId: partyId, name: name, client: client, cache: cache, now: now,
+                                  onUnauthorized: onUnauthorized)
+            m.onChecklistChanged = { [weak self, weak m] in
+                guard let self, let m, self.model === m else { return }
+                self.activities.update(m.checklist.activityState)
+            }
+            model = m
+        }
+        isPresented = true
+        let started = epoch.current
+        await model?.load()
+        guard epoch.isCurrent(started) else { return }
+    }
+
+    /// The Live Activity's tap (`verder://call`): the call in progress, if any.
+    func reopen() {
+        if model != nil { isPresented = true }
+    }
+
+    /// "Sluiten": the sheet goes. A running Live Activity keeps the call
+    /// active — Martin may be on the phone, reading the Phone app.
+    func close() {
+        isPresented = false
+    }
+
+    func presentationChanged(_ presented: Bool) {
+        if presented { reopen() } else { close() }
+    }
+
+    /// The call is over and nothing is to be logged ("Niet nu", "Stoppen").
+    func finish() {
+        endActivity()
+        model = nil
+        callEnded = false
+        isPresented = false
+    }
+
+    // MARK: - During the call
+
+    func toggle(_ id: String) {
+        model?.toggle(id)
+    }
+
+    /// "Bel": the Live Activity first (the app is about to leave the screen),
+    /// then the number to the Phone app. No number, no dialler.
+    func bel() {
+        guard let model, let url = model.dialURL else { return }
+        startActivity()
+        dial(url)
+    }
+
+    /// "Toon tijdens het gesprek": the Live Activity without dialling.
+    func startActivity() {
+        guard let model else { return }
+        if activities.isRunning { activities.update(model.checklist.activityState); return }
+        notice = activities.start(model.checklist.activityState) ? nil : CallCopy.activitiesOff
+        activityRunning = activities.isRunning
+    }
+
+    func endActivity() {
+        activities.end()
+        activityRunning = false
+    }
+
+    // MARK: - CallKit
+
+    func handle(_ event: CallEvent) {
+        switch event {
+        case .started(let id):
+            if startedCalls[id] == nil { startedCalls[id] = now() }
+            if isActive, callStartedAt == nil { callStartedAt = startedCalls[id] }
+        case .ended(let id):
+            guard !endedCalls.contains(id) else { return }
+            endedCalls.insert(id)
+            let startedAt = startedCalls.removeValue(forKey: id)
+            guard isActive else { return }
+            if callStartedAt == nil { callStartedAt = startedAt }
+            callEndedAt = now()
+            endActivity()
+            callEnded = true
+            isPresented = true
+        }
+    }
+
+    /// "Niet nu" on the ended banner: the sheet stays, the offer goes.
+    func dismissEnded() {
+        callEnded = false
+    }
+
+    /// "Gesprek vastleggen": the call sheet goes, and the voice log opens once
+    /// it has (`sheetDismissed`) — two sheets cannot swap in one frame.
+    func logCall() {
+        guard let model else { return }
+        pendingVoice = VoicePrefill(partyId: model.partyId, text: model.checklist.prefillText,
+                                    occurredAt: callStartedAt ?? callEndedAt ?? now())
+        finish()
+    }
+
+    /// The sheet's `onDismiss`.
+    func sheetDismissed() {
+        guard let prefill = pendingVoice else { return }
+        pendingVoice = nil
+        openVoice(prefill)
+    }
+
+    // MARK: - Dossier's party list
+
+    func loadParties() async {
+        if parties.isEmpty, let cached = cache.loadParties() { parties = cached }
+        let started = epoch.current
+        do {
+            let rows: [PartyDTO] = try await client.getJSON("/api/mobile/v1/parties?recent=1")
+            guard epoch.isCurrent(started) else { return }
+            parties = rows
+            partiesFailed = false
+            try? cache.saveParties(rows)
+        } catch {
+            guard epoch.isCurrent(started), !APIError.isCancellation(error) else { return }
+            if (error as? APIError) == .unauthorized { onUnauthorized(); return }
+            partiesFailed = parties.isEmpty
+        }
+    }
+
+    // MARK: - The session ended
+
+    private func forget() {
+        endActivity()
+        model = nil
+        isPresented = false
+        callEnded = false
+        pendingVoice = nil
+        parties = []
+        cache.wipe()
+    }
+}

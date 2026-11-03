@@ -18,6 +18,9 @@ struct DossierTab: View {
     @Binding var path: [DossierRoute]
     let onUnauthorized: @MainActor () -> Void
     @Environment(\.scenePhase) private var scenePhase
+    /// "Bellen": the parties to prepare a call with (Call/).
+    @Environment(CallSession.self) private var call: CallSession?
+    @State private var showsAllParties = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -33,6 +36,7 @@ struct DossierTab: View {
                         } else {
                             headlineCard
                             timelineRow
+                            callCard
                             tasksCard
                             documentsCard
                         }
@@ -62,6 +66,7 @@ struct DossierTab: View {
             await model.loadCached()
             if inbox.summary == nil { await inbox.refresh() }
             await refresh()
+            await call?.loadParties()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
@@ -132,6 +137,53 @@ struct DossierTab: View {
         .frame(minHeight: 44)
         .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.chip, style: .continuous).strokeBorder(Color.edgeStrong))
+    }
+
+    // MARK: - Bellen
+
+    /// The parties, most recent contact first; a tap opens "Gesprek
+    /// voorbereiden". Six at first, the rest behind "Alle partijen".
+    @ViewBuilder private var callCard: some View {
+        if let call, !call.parties.isEmpty || call.partiesFailed {
+            DossierCard(label: "BELLEN") {
+                if call.parties.isEmpty {
+                    Text("De partijen konden niet worden geladen.")
+                        .font(.display(14, relativeTo: .callout, weight: .light))
+                        .foregroundStyle(Color.ink)
+                }
+                let shown = showsAllParties ? call.parties : Array(call.parties.prefix(6))
+                ForEach(shown) { party in
+                    Button {
+                        Task { await call.open(partyId: party.id, name: party.name) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "phone")
+                                .font(.system(size: 15, weight: .light))
+                                .foregroundStyle(Color.signalLink)
+                                .accessibilityHidden(true)
+                            Text(party.name)
+                                .font(.display(16, relativeTo: .body))
+                                .foregroundStyle(Color.inkBright)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.inkFaint)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Gesprek voorbereiden: wat je vertelt en wat je vraagt.")
+                }
+                if call.parties.count > 6 && !showsAllParties {
+                    Button("Alle partijen (\(call.parties.count))") { showsAllParties = true }
+                        .font(.mono(12, relativeTo: .caption, weight: .medium))
+                        .foregroundStyle(Color.signalLink)
+                        .frame(minHeight: 44)
+                }
+            }
+        }
     }
 
     // MARK: - No query
