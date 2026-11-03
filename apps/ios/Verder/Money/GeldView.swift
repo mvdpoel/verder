@@ -707,7 +707,9 @@ struct GeldSheetView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
         }
-        .presentationDetents([.medium, .large])
+        // 70 %: the frame's sheet top sits at 268 of 874 pt, so the page's
+        // header stays visible above it; drag up for the whole list.
+        .presentationDetents([.fraction(0.7), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.plate)
         .preferredColorScheme(.dark)

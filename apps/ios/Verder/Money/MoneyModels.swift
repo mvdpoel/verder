@@ -62,6 +62,24 @@ struct MonthSeries: Decodable, Equatable, Sendable {
     let parseErrorRows: Int
     let internalRows: [DisclosedRow]
     let incidentalRows: [DisclosedRow]
+    /// The readable debits under the spending bar (apps/web/src/lib/
+    /// mobile-money-meta.ts). Nil from a server that predates it: the card
+    /// then leaves the count out rather than guessing one.
+    var outRows: Int? = nil
+    /// Who the income bar's money came from, largest group first. Nil from a
+    /// server that predates it.
+    var inSources: [InSource]? = nil
+}
+
+/// One group of the rows the income bar counted in (`monthMeta`).
+struct InSource: Decodable, Equatable, Sendable {
+    let label: String?
+    let count: Int
+    /// "weekly", "monthly", "quarterly", "yearly"; kept as text, so a new
+    /// cadence on the server never fails the whole summary.
+    let cadence: String
+    /// One of Martin's OWN other accounts paid all of it; nil for anyone else.
+    let fromAccountIban: String?
 }
 
 /// `DisclosedRow` (money-series.ts): one bank row behind a disclosed total.

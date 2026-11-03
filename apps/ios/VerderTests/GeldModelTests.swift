@@ -62,8 +62,8 @@ struct GeldModelTests {
         #expect(october.groupLabel == "oktober · deels · t/m 24 okt")
         #expect(october.hatched)
         #expect(october.readouts == [
-            .init(title: "Inkomen", amount: "€ 2.400,00", meta: nil),
-            .init(title: "Uitgegeven", amount: "€ 1.210,35", meta: "t/m 24 okt"),
+            .init(title: "Inkomen", amount: "€ 2.400,00", meta: "Atelier Sterrenwacht"),
+            .init(title: "Uitgegeven", amount: "€ 1.210,35", meta: "14 boekingen · t/m 24 okt"),
         ])
         #expect(october.stateLine == "deels · t/m 24 okt")
         #expect(october.sheetLine == "deels · t/m za 24 okt")
@@ -72,7 +72,39 @@ struct GeldModelTests {
 
         let september = try #require(beheer.months.first { $0.month == "2026-09" })
         #expect(september.groupLabel == "september · hele maand")
-        #expect(september.readouts.allSatisfy { $0.meta == nil })
+        #expect(september.readouts.map(\.meta) == ["Atelier Sterrenwacht", "17 boekingen"])
+    }
+
+    /// The leefgeldrekening's deposits name the beheerrekening as their payer,
+    /// in this screen's own name for it (Figma: "5× weekbedrag · van
+    /// beheerrekening"), and the spending names its bookings.
+    @Test func theLeefgeldDepositsNameTheirOwnAccount() throws {
+        let cards = try geld("money-complete")
+        let leefgeld = try #require(cards.last)
+        let october = try #require(leefgeld.months.first { $0.month == "2026-10" })
+        #expect(october.groupLabel == "oktober · deels · t/m 30 okt")
+        #expect(october.readouts.map(\.meta) == ["5× weekbedrag · van beheerrekening", "38 boekingen · t/m 30 okt"])
+        let september = try #require(leefgeld.months.first { $0.month == "2026-09" })
+        #expect(september.readouts.map(\.meta) == ["4× weekbedrag · van beheerrekening", "35 boekingen"])
+        // No names known: never a guessed one.
+        #expect(try geld("money-unrecognised").last?.months[4].readouts.first?.meta == "5× van eigen rekening")
+    }
+
+    @Test func sourcesLineSaysOnlyWhatTheServerGave() {
+        func src(_ label: String?, _ n: Int, _ cadence: String = "monthly", from: String? = nil) -> InSource {
+            InSource(label: label, count: n, cadence: cadence, fromAccountIban: from)
+        }
+        #expect(GeldMonth.sourcesLine([], leefgeld: false, accountNames: [:]) == nil)
+        #expect(GeldMonth.sourcesLine([src("Atelier", 1)], leefgeld: false, accountNames: [:]) == "Atelier")
+        #expect(GeldMonth.sourcesLine([src("Atelier", 2)], leefgeld: false, accountNames: [:]) == "2× Atelier")
+        #expect(GeldMonth.sourcesLine([src(nil, 1, "weekly", from: "X")], leefgeld: true,
+                                      accountNames: ["X": "Beheerrekening"]) == "weekbedrag · van beheerrekening")
+        #expect(GeldMonth.sourcesLine([src("A", 1), src("B", 1)], leefgeld: false, accountNames: [:]) == "A · B")
+        #expect(GeldMonth.sourcesLine([src("A", 1), src("B", 1), src("C", 1)], leefgeld: false, accountNames: [:]) == "3 bronnen")
+        // An older server sends no captions: none are drawn.
+        let old = MonthSeries(month: "2026-10", coverage: .complete, inCents: 100, outCents: 50, outByCategory: [],
+                              incidentalCents: 0, internalCents: 0, parseErrorRows: 0, internalRows: [], incidentalRows: [])
+        #expect(GeldMonth(old, peak: 100, newestBooking: nil, inTitle: "Inkomen").readouts.allSatisfy { $0.meta == nil })
     }
 
     /// A month with no rows is "geen data" with its sentence — never € 0,00.
@@ -142,7 +174,12 @@ struct GeldModelTests {
 
         let offline = try #require(GeldCopy.offline(error: .transport("x"), fetchedAt: fetched, now: now))
         #expect(offline.stamp == "bijgewerkt gisteren 22:14")
-        #expect(offline.sentence.hasPrefix("Je ziet de stand van gisteren 22:14."))
+        #expect(offline.sentence.hasPrefix("Je ziet de stand van gisteravond."))
+        let afternoon = try #require(cal.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 14, minute: 2)))
+        #expect(GeldCopy.spoken(afternoon, now: now) == "gisteren 14:02")
+        #expect(GeldCopy.spoken(now, now: now) == "14:05")
+        let older = try #require(cal.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 22, minute: 14)))
+        #expect(GeldCopy.spoken(older, now: now) == "vr 30 okt 22:14")
         #expect(GeldCopy.offline(error: .server(503), fetchedAt: fetched, now: now) == nil)
         #expect(GeldCopy.offline(error: .transport("x"), fetchedAt: nil, now: now) == nil)
 

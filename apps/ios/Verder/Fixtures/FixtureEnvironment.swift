@@ -29,6 +29,18 @@ enum FixtureEnvironment {
     nonisolated static let launchedAt = Date()
     nonisolated static let clock: @Sendable () -> Date = { today.addingTimeInterval(Date().timeIntervalSince(launchedAt)) }
 
+    /// The clock of a fixture with a `keptAt` (`offline-cached`): it reads
+    /// `keptAt` while the first, good answers are given — so the kept stand is
+    /// stamped the evening before — and the case's today once a repeat has
+    /// failed, so the stand on screen reads "gisteren 22:14".
+    nonisolated static func clock(keptAt: Date?) -> @Sendable () -> Date {
+        guard let keptAt else { return clock }
+        return {
+            let elapsed = Date().timeIntervalSince(launchedAt)
+            return (FixtureProtocol.hasFailedRepeat ? today : keptAt).addingTimeInterval(elapsed)
+        }
+    }
+
     /// The fixture session: the app's own configuration (no cookies, no
     /// cache, no redirects) with `FixtureProtocol` in front.
     nonisolated static func sessionConfiguration(_ base: URLSessionConfiguration = APIClient.sessionConfiguration())
@@ -50,7 +62,8 @@ enum FixtureEnvironment {
         let store = InMemorySessionStore(cookie)
         let client = client(fixture: launch.fixture, store: store)
 
-        let lock = AppLock(authenticator: FixtureOwner(declinesFirst: launch.locked))
+        let lock = AppLock(authenticator: FixtureOwner(declinesFirst: launch.locked,
+                                                       holdsFirst: launch.locked && launch.faceID == .asking))
         if !launch.locked { lock.didSignIn() }
 
         let defaults = UserDefaults(suiteName: defaultsSuite) ?? .standard
@@ -87,7 +100,7 @@ enum FixtureEnvironment {
                            // voice fixture's (synthetic-data doc).
                            makeRecorder: { FixtureRecorder() },
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
-                           now: clock)
+                           now: clock(keptAt: server.manifest.keptAt))
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
         return services
     }
@@ -195,12 +208,28 @@ enum FixtureEnvironment {
 /// Face ID for a fixture run. Unlocked runs never ask (the lock opens at
 /// launch); a locked run declines the FIRST ask — the automatic one on open —
 /// and allows every later one, so the glance can be captured and still opened.
+///
+/// With `-fixtures-faceid asking` the first ask is HELD instead (it never
+/// answers), so the "Face ID vraagt" state stays on screen for a capture.
 final class FixtureOwner: DeviceOwnerAuthenticator {
     private let declines: Mutex<Bool>
+    private let holds: Mutex<Bool>
 
-    init(declinesFirst: Bool) { declines = Mutex(declinesFirst) }
+    init(declinesFirst: Bool, holdsFirst: Bool = false) {
+        declines = Mutex(declinesFirst)
+        holds = Mutex(holdsFirst)
+    }
 
     func authenticate(reason: String) async throws(DeviceOwnerAuthError) {
+        let hold = holds.withLock { value in
+            defer { value = false }
+            return value
+        }
+        if hold {
+            // A prompt nobody answers: suspend until the task is cancelled.
+            while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
+            throw .cancelled
+        }
         let decline = declines.withLock { value in
             defer { value = false }
             return value

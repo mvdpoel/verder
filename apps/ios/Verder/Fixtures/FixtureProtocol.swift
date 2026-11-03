@@ -15,6 +15,10 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     /// "<fixture>|<path>" for every path answered once — the only state, and
     /// only `thenFail` fixtures act on it (`FixtureServer.reply(answeredBefore:)`).
     private static let answered = Mutex<Set<String>>([])
+    /// Whether a repeat has been failed (`thenFail`) in this process: the
+    /// moment a kept stand becomes a kept stand (`FixtureEnvironment.clock(keptAt:)`).
+    private static let failedRepeat = Mutex(false)
+    static var hasFailedRepeat: Bool { failedRepeat.withLock { $0 } }
 
     static func base(for fixture: String) -> URL {
         URL(string: "https://\(fixture)\(hostSuffix)")!
@@ -36,8 +40,12 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
         let path = url.path(percentEncoded: false)
         let key = "\(server.name)|\(path)"
         let before = Self.answered.withLock { !$0.insert(key).inserted }
-        switch server.reply(method: request.httpMethod ?? "GET", path: path,
-                             query: url.query(percentEncoded: false), answeredBefore: before) {
+        let reply = server.reply(method: request.httpMethod ?? "GET", path: path,
+                                 query: url.query(percentEncoded: false), answeredBefore: before)
+        if before, server.manifest.thenFail != nil, reply == .transportFailure || reply.isError {
+            Self.failedRepeat.withLock { $0 = true }
+        }
+        switch reply {
         case .never:
             break
         case .transportFailure:

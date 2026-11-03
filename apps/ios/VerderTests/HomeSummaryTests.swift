@@ -13,6 +13,25 @@ struct HomeSummaryTests {
                     at: at ?? Date(timeIntervalSince1970: 0), dueAt: dueAt, verder: false)
     }
 
+    // MARK: - Locked
+
+    /// "money · final", vergrendeld: while the sheet asks there is no button;
+    /// after a cancel the card says so above a plain button; otherwise
+    /// Overzicht's glyph button with the footnote under it.
+    @Test func lockedPromptFollowsTheFaceIDMoment() {
+        let asking = HomeSummary.lockedPrompt(asking: true, cancelled: true)
+        #expect(asking.button == nil)
+        #expect(asking.text == "Titels verschijnen na Face\u{00A0}ID.")
+        let cancelled = HomeSummary.lockedPrompt(asking: false, cancelled: true)
+        #expect(cancelled.text == "Face\u{00A0}ID is geannuleerd. Titels zie je na ontgrendelen.")
+        #expect(cancelled.button == HomeSummary.reveal && cancelled.textFirst && !cancelled.glyph)
+        let idle = HomeSummary.lockedPrompt(asking: false, cancelled: false)
+        #expect(idle.text == HomeSummary.lockedFootnote)
+        #expect(idle.button == HomeSummary.reveal && !idle.textFirst && idle.glyph)
+        // Counts only: none of the three names anything from the case.
+        for p in [asking, cancelled, idle] { #expect(!p.text.contains("passkey")) }
+    }
+
     // MARK: - Wacht op jou
 
     @Test func previewKeepsTheServersOrderAndStopsAtTheLimit() {

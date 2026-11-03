@@ -3,6 +3,7 @@ import { dashboardMoneySlice } from "@/lib/dashboard-money-slice";
 import { addDays, dayKey, weekBounds } from "@verder/api/src/amsterdam";
 import { leefgeldWeek, type LeefgeldWeek } from "@verder/api/src/leefgeld-week";
 import type { MonthSeries } from "@verder/api/src/money-series";
+import { monthMeta, type MonthMeta } from "@/lib/mobile-money-meta";
 
 /**
  * The phone's money glance (Plan 3 Task 18, spec §7.6): each account's last
@@ -18,7 +19,11 @@ import type { MonthSeries } from "@verder/api/src/money-series";
 interface MoneySummaryDTO {
   accounts: {
     accountIban: string | null;
-    months: MonthSeries[];
+    /**
+     * Each month as /money builds it, plus the captions under the phone's two
+     * headline numbers (`monthMeta`): additive fields an older phone ignores.
+     */
+    months: (MonthSeries & MonthMeta)[];
     /**
      * This account's own newest readable booking (Amsterdam day), or null.
      * Two statements of two accounts end on different days, so the phone's
@@ -85,14 +90,19 @@ export const GET = mobileGet(async (caller): Promise<MoneySummaryDTO> => {
     ? leefgeld.accountIban : null;
   const leefgeldIban = configuredIban ?? recognised;
 
+  const ownIbans = new Set(series.map((s) => s.accountIban).filter((i): i is string => i !== null));
+
   return {
     accounts: series.map((s) => {
       const newest = newestByAccount.get(s.accountIban);
+      const meta = monthMeta(s, txs, ownIbans);
       return {
         accountIban: s.accountIban,
         // dashboardMoneySlice on ONE account is just its six newest months; it
         // never chooses between accounts here.
-        months: dashboardMoneySlice([s])?.months ?? [],
+        months: (dashboardMoneySlice([s])?.months ?? []).map((m) => ({
+          ...m, ...(meta.get(m.month) ?? { outRows: 0, inSources: [] }),
+        })),
         newestBooking: newest ? dayKey(newest) : null,
         isLeefgeldAccount: s.accountIban !== null && s.accountIban === leefgeldIban,
       };

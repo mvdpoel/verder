@@ -193,6 +193,11 @@ struct FixtureTests {
         #expect(try Self.server("server-error-cached").reply(method: "GET", path: inbox, answeredBefore: true)
                 == FixtureServer.error(503, "fixture failure"))
         #expect(try Self.server("offline-cached").reply(method: "GET", path: inbox, answeredBefore: true) == .transportFailure)
+        // The kept stand is the evening before the case's today (Geld / offline:
+        // "bijgewerkt gisteren 22:14", "de stand van gisteravond").
+        let kept = try #require(try Self.server("offline-cached").manifest.keptAt)
+        #expect(HomeSummary.stamp(kept, now: FixtureEnvironment.today) == "gisteren 22:14")
+        #expect(try Self.server("voorjou-few").manifest.keptAt == nil)
         // The first answer is the ordinary one, and a fixture without
         // `thenFail` never fails on a repeat.
         #expect(try Self.body("server-error-cached", "inbox") == Self.body("voorjou-few", "inbox"))
@@ -238,7 +243,9 @@ struct FixtureTests {
 
     static let disclosedRowKeys: Set<String> = ["id", "bookedAt", "amountCents", "counterpartyName"]
     static let monthKeys: Set<String> = ["month", "coverage", "inCents", "outCents", "outByCategory", "incidentalCents",
-                                         "internalCents", "parseErrorRows", "internalRows", "incidentalRows"]
+                                         "internalCents", "parseErrorRows", "internalRows", "incidentalRows",
+                                         "outRows", "inSources"]
+    static let inSourceKeys: Set<String> = ["label", "count", "cadence", "fromAccountIban"]
 
     /// `MoneySummaryDTO` (apps/web/src/app/api/mobile/v1/money/summary/route.ts),
     /// `MonthSeries` (money-series.ts) and `LeefgeldWeek` (leefgeld-week.ts).
@@ -265,6 +272,14 @@ struct FixtureTests {
                     #expect(Self.ints(month["inCents"]) != 0 || Self.ints(month["outCents"]) != 0,
                             "\(name) \(month["month"]?.string ?? "?"): a covered month with no money is a month with no rows")
                 }
+                // The captions (mobile-money-meta.ts) describe the bars they
+                // sit under: income has a source exactly when it has money,
+                // and a month with no rows counts no bookings.
+                let sources = Self.array(month["inSources"])
+                #expect(sources.allSatisfy { Self.keys($0) == Self.inSourceKeys })
+                #expect(sources.isEmpty == (Self.ints(month["inCents"]) == 0))
+                if month["coverage"]?.string == "none" { #expect(Self.ints(month["outRows"]) == 0) }
+                #expect((Self.ints(month["outRows"]) ?? 0) > 0 || Self.ints(month["outCents"]) == 0)
                 let cats = Self.array(month["outByCategory"]).compactMap { Self.ints($0["cents"]) }
                 #expect(cats.reduce(0, +) == Self.ints(month["outCents"]))
                 for (total, rows) in [("incidentalCents", "incidentalRows"), ("internalCents", "internalRows")] {
@@ -517,6 +532,13 @@ struct FixtureTests {
         #expect(FixtureLaunch.GeldState.allCases.map(\.rawValue) == ["open", "nov", "sep", "sheet"], "capture.sh's --geld grammar")
         #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-geld", "okt")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-geld", "okt"])
+        }
+        let asking = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-complete", "-fixtures-locked",
+                                                           "-fixtures-faceid", "asking"]))
+        #expect(asking.faceID == .asking && asking.locked)
+        #expect(FixtureLaunch.FaceIDState.allCases.map(\.rawValue) == ["asking"], "capture.sh's --faceid grammar")
+        #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-faceid", "ja")) {
+            try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-faceid", "ja"])
         }
         #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end"],
                 "capture.sh's --scroll grammar")

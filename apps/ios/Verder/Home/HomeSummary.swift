@@ -26,6 +26,32 @@ enum HomeSummary {
     static let reveal = "Toon details"
     /// NBSP in "Face ID": it never breaks over two lines.
     static let lockedFootnote = "Titels en de kaart verschijnen na Face\u{00A0}ID."
+
+    /// The locked Wacht op jou card under its count, per moment of the Face ID
+    /// prompt (Figma "money · final", vergrendeld · vraagt / geannuleerd):
+    /// while the sheet is up there is nothing to tap, after a cancel the card
+    /// says so above the button, and otherwise (not asked yet, or a failed
+    /// attempt) it is Overzicht's own button-then-footnote.
+    struct LockedPrompt: Equatable {
+        let text: String
+        /// Nil while the sheet is asking: a second button would stack a prompt.
+        let button: String?
+        /// The sentence reads first (cancelled) or under the button (idle).
+        let textFirst: Bool
+        /// The Face ID glyph on the button; the cancelled frame draws it plain.
+        let glyph: Bool
+    }
+
+    static func lockedPrompt(asking: Bool, cancelled: Bool) -> LockedPrompt {
+        if asking {
+            return LockedPrompt(text: "Titels verschijnen na Face\u{00A0}ID.", button: nil, textFirst: true, glyph: false)
+        }
+        if cancelled {
+            return LockedPrompt(text: "Face\u{00A0}ID is geannuleerd. Titels zie je na ontgrendelen.",
+                                button: reveal, textFirst: true, glyph: false)
+        }
+        return LockedPrompt(text: lockedFootnote, button: reveal, textFirst: false, glyph: true)
+    }
     static let headlineHint = "Opent de tijdlijn"
     static let retry = "Opnieuw proberen"
     /// How long the board waits before it asks the server again — after a

@@ -345,4 +345,31 @@ from.
   `leefgeld-kaart · varianten`) draws "over van € 100,00", a partial week as
   "€ 47,90 uitgegeven t/m do 29 okt · OVER nog niet bekend". The build keeps
   the NEWER overzicht variant (it is also the one that never claims what is
-  left of a week no statement covers yet). Martin to choose.
+  left of a week no statement covers yet). Martin to choose. What switching
+  to the money-final card would take, as compared on 2026-11-03: stacked
+  Uitgegeven/Ontvangen rows with meta lines ("3 boekingen", "do 29 okt · van
+  beheerrekening") instead of two columns and the "Alleen je
+  leefgeldrekening." footer; a partial week as "€ 52,10 over" with a "• Deels"
+  chip and "Gaat over ma t/m do 29 okt…"; overspend as "↑ € 12,40 meer
+  uitgegeven / dan het weekbedrag" with a "€ 100" marker label; a document
+  icon and a meta line on geen data / nog geen afschriften / niet herkend, and
+  the Geld screen's instruction ("Lees … in op de computer, onder Register →
+  Afschrift inlezen.") instead of "Importeer … op de website" plus a link.
+  The two wordings now disagree between Overzicht and Geld; whichever card
+  wins, one of them should change.
+- **Geld's "Niet in de balken" in the money-final frame shows money the
+  server never leaves out of the bars.** The sheet frame lists "Tussen je
+  eigen rekeningen · Naar leefgeldrekening € 2.100,00", but
+  `splitInternalTransfers` (money-series.ts) only pairs legs WITHIN one
+  account, so a beheer → leefgeld transfer is a debit in the beheerrekening's
+  spending bar (the fixtures carry it as `leefgeld` in `outByCategory`).
+  Putting those rows in the fixture would draw a disclosure the server cannot
+  produce. Likewise the frame titles a one-off credit by its kind
+  ("Teruggave"), which no field holds; the build titles it by counterparty.
+  Both need a server decision first, not a fixture.
+- **The Geld captions under the headline numbers** (2026-11-03) come from the
+  server (`apps/web/src/lib/mobile-money-meta.ts`: `outRows`, `inSources`),
+  NOT YET DEPLOYED. Until the web image is rebuilt the phone draws none of
+  them (it decodes both as optional). The income caption names the payer the
+  bank wrote ("Atelier Sterrenwacht"); the frame's "Salaris ·" is a kind the
+  server does not know and is not invented.

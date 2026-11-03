@@ -67,6 +67,12 @@ struct LeefgeldGlance: Equatable, Sendable {
         return incomplete ? "onvolledig · \(range)" : range
     }
 
+    /// The readout as drawn: an NBSP before the dash, so a wrapped range
+    /// (AX5) breaks after "–" and no line of the header starts with one.
+    var headerReadoutUnbroken: String? {
+        headerReadout?.replacingOccurrences(of: " –", with: "\u{00A0}–")
+    }
+
     /// The whole card in one sentence, for VoiceOver (one element).
     var accessibilityLabel: String {
         var parts = ["Leefgeld", headerReadout].compactMap { $0 }

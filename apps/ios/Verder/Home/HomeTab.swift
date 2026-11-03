@@ -260,34 +260,41 @@ struct HomeTab: View {
     }
 
     private var lockedReveal: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                Task {
-                    await lock.unlock()
-                    if lock.isLocked { failedUnlocks += 1 }
+        let prompt = HomeSummary.lockedPrompt(asking: lock.isUnlocking, cancelled: lock.lastAttemptCancelled)
+        let text = Text(hy(prompt.text))
+            .font(HomeType.body)
+            .foregroundStyle(prompt.textFirst ? Color.ink : Color.inkSoft)
+            .fixedSize(horizontal: false, vertical: true)
+        return VStack(alignment: .leading, spacing: 12) {
+            if prompt.textFirst { text }
+            if let button = prompt.button {
+                Button {
+                    Task {
+                        await lock.unlock()
+                        if lock.isLocked { failedUnlocks += 1 }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if prompt.glyph {
+                            Image(systemName: "faceid")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(Color.signal)
+                                .accessibilityHidden(true)
+                        }
+                        Text(button)
+                            .font(HomeType.bodyStrong)
+                            .foregroundStyle(Color.inkBright)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 12)
+                    .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1))
+                    .contentShape(Rectangle())
                 }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "faceid")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(Color.signal)
-                        .accessibilityHidden(true)
-                    Text(HomeSummary.reveal)
-                        .font(HomeType.bodyStrong)
-                        .foregroundStyle(Color.inkBright)
-                }
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .padding(.horizontal, 12)
-                .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip))
-                .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1))
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .disabled(lock.isUnlocking)
             }
-            .buttonStyle(.plain)
-            .disabled(lock.isUnlocking)
-            Text(hy(HomeSummary.lockedFootnote))
-                .font(HomeType.body)
-                .foregroundStyle(Color.inkSoft)
-                .fixedSize(horizontal: false, vertical: true)
+            if !prompt.textFirst { text }
         }
     }
 
@@ -697,7 +704,7 @@ struct LeefgeldGlanceView: View {
     private var header: some View {
         let label = Text(ax ? HomeSummary.leefgeldLabel : HomeSummary.leefgeldLabel.uppercased())
             .foregroundStyle(Color.inkLabel)
-        let readout = glance.headerReadout.map { r in
+        let readout = glance.headerReadoutUnbroken.map { r in
             Text(ax ? r : r.uppercased()).foregroundStyle(Color.inkLabel)
         }
         return Group {

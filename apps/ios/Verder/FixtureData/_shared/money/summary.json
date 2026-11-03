@@ -34,7 +34,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 15,
+          "inSources": [
+            {
+              "label": "Atelier Sterrenwacht",
+              "count": 1,
+              "cadence": "monthly",
+              "fromAccountIban": null
+            }
+          ]
         },
         {
           "month": "2026-07",
@@ -67,7 +76,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 16,
+          "inSources": [
+            {
+              "label": "Atelier Sterrenwacht",
+              "count": 1,
+              "cadence": "monthly",
+              "fromAccountIban": null
+            }
+          ]
         },
         {
           "month": "2026-08",
@@ -107,6 +125,15 @@
               "amountCents": 8500,
               "counterpartyName": "Zorgverzekeraar Duinzorg"
             }
+          ],
+          "outRows": 15,
+          "inSources": [
+            {
+              "label": "Atelier Sterrenwacht",
+              "count": 1,
+              "cadence": "monthly",
+              "fromAccountIban": null
+            }
           ]
         },
         {
@@ -140,7 +167,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 17,
+          "inSources": [
+            {
+              "label": "Atelier Sterrenwacht",
+              "count": 1,
+              "cadence": "monthly",
+              "fromAccountIban": null
+            }
+          ]
         },
         {
           "month": "2026-10",
@@ -165,7 +201,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 14,
+          "inSources": [
+            {
+              "label": "Atelier Sterrenwacht",
+              "count": 1,
+              "cadence": "monthly",
+              "fromAccountIban": null
+            }
+          ]
         },
         {
           "month": "2026-11",
@@ -177,7 +222,9 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 0,
+          "inSources": []
         }
       ],
       "newestBooking": "2026-10-24",
@@ -205,7 +252,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 33,
+          "inSources": [
+            {
+              "label": "Bewindkantoor Noordkust",
+              "count": 4,
+              "cadence": "weekly",
+              "fromAccountIban": "NL00TEST0123456789"
+            }
+          ]
         },
         {
           "month": "2026-07",
@@ -226,7 +282,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 41,
+          "inSources": [
+            {
+              "label": "Bewindkantoor Noordkust",
+              "count": 5,
+              "cadence": "weekly",
+              "fromAccountIban": "NL00TEST0123456789"
+            }
+          ]
         },
         {
           "month": "2026-08",
@@ -247,7 +312,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 34,
+          "inSources": [
+            {
+              "label": "Bewindkantoor Noordkust",
+              "count": 4,
+              "cadence": "weekly",
+              "fromAccountIban": "NL00TEST0123456789"
+            }
+          ]
         },
         {
           "month": "2026-09",
@@ -268,11 +342,20 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 35,
+          "inSources": [
+            {
+              "label": "Bewindkantoor Noordkust",
+              "count": 4,
+              "cadence": "weekly",
+              "fromAccountIban": "NL00TEST0123456789"
+            }
+          ]
         },
         {
           "month": "2026-10",
-          "coverage": "complete",
+          "coverage": "partial",
           "inCents": 50000,
           "outCents": 46830,
           "outByCategory": [
@@ -289,7 +372,16 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 38,
+          "inSources": [
+            {
+              "label": "Bewindkantoor Noordkust",
+              "count": 5,
+              "cadence": "weekly",
+              "fromAccountIban": "NL00TEST0123456789"
+            }
+          ]
         },
         {
           "month": "2026-11",
@@ -301,7 +393,9 @@
           "internalCents": 0,
           "parseErrorRows": 0,
           "internalRows": [],
-          "incidentalRows": []
+          "incidentalRows": [],
+          "outRows": 0,
+          "inSources": []
         }
       ],
       "newestBooking": "2026-10-30",

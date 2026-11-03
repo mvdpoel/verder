@@ -40,6 +40,7 @@ struct LeefgeldGlanceTests {
                                                  newestBooking: "2026-10-29"))
         let f = try #require(Self.fig(g))
         #expect(g.headerReadout == "onvolledig · 26 okt – 1 nov")
+        #expect(g.headerReadoutUnbroken == "onvolledig · 26 okt\u{00A0}– 1 nov")
         #expect(f.hero == "€\u{00A0}47,90")
         #expect(f.caption == "uitgegeven t/m do 29 okt")
         #expect(abs(f.bar.solid - 4.0 / 7) < 0.0001)

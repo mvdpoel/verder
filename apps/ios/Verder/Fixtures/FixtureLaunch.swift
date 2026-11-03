@@ -15,6 +15,8 @@ import Foundation
 ///     -fixtures-scroll <waiting|leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
 ///     -fixtures-geld <open|nov|sep|sheet>  push Geld from Overzicht (as a card tap does): as it opens, with
 ///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
+///     -fixtures-faceid asking  with -fixtures-locked: the automatic Face ID prompt never answers,
+///                              so Overzicht holds its "vraagt" state (no button)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
 ///
@@ -73,6 +75,9 @@ struct FixtureLaunch: Equatable, Sendable {
     /// Geld pushed from Overzicht, in one of the "money · final" Geld states.
     enum GeldState: String, CaseIterable, Sendable { case open, nov, sep, sheet }
 
+    /// The moment of the Face ID prompt a locked capture holds.
+    enum FaceIDState: String, CaseIterable, Sendable { case asking }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end }
 
@@ -95,6 +100,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var camera: CameraAuthorization? = nil
     var scanState: ScanState? = nil
     var geld: GeldState? = nil
+    var faceID: FaceIDState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -137,6 +143,10 @@ struct FixtureLaunch: Equatable, Sendable {
                              },
                              geld: try value(after: "-fixtures-geld").map { (raw: String) throws(ParseError) -> GeldState in
                                  guard let s = GeldState(rawValue: raw) else { throw .unknownValue("-fixtures-geld", raw) }
+                                 return s
+                             },
+                             faceID: try value(after: "-fixtures-faceid").map { (raw: String) throws(ParseError) -> FaceIDState in
+                                 guard let s = FaceIDState(rawValue: raw) else { throw .unknownValue("-fixtures-faceid", raw) }
                                  return s
                              })
     }

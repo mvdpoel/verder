@@ -76,6 +76,19 @@ struct AppLockTests {
         await lock.unlock()
         #expect(lock.isLocked)
         #expect(lock.message == nil)
+        #expect(lock.lastAttemptCancelled)
+    }
+
+    /// The cancel is remembered only until something else happens: a failed
+    /// attempt is not "geannuleerd", and neither is an open lock.
+    @Test func cancelIsForgottenByTheNextAttemptAndBySignIn() async {
+        let (lock, _) = make(.failure(.failed), clock: Clock(t0))
+        await lock.unlock()
+        #expect(!lock.lastAttemptCancelled)
+        let (cancelled, _) = make(.failure(.cancelled), clock: Clock(t0))
+        await cancelled.unlock()
+        cancelled.didSignIn()
+        #expect(!cancelled.lastAttemptCancelled)
     }
 
     /// A phone with no passcode cannot prove its owner. Fail closed, and say

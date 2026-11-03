@@ -55,6 +55,7 @@ const series = buildMoneySeries({ transactions: txs, items: [] });
 type MonthJson = {
   month: string; outCents: number; incidentalCents: number;
   incidentalRows: unknown[]; internalRows: unknown[];
+  outRows: number; inSources: unknown[];
 };
 type Body = {
   accounts: { accountIban: string | null; months: MonthJson[]; newestBooking: string | null; isLeefgeldAccount: boolean }[];
@@ -187,6 +188,37 @@ describe("GET /api/mobile/v1/money/summary", () => {
       amountCents: 120_000, counterpartyName: "BELASTINGDIENST",
     }]);
     expect(september.internalRows).toEqual([]);
+  });
+
+  it("each month says how many bookings its bars hold and who paid in", async () => {
+    const body = await (await GET(req(), ctx)).json();
+    const [sep, oct] = accountOf(body, BEHEER).months;
+    // The debits under the spending bar, counted by the bar's own filter.
+    expect(sep.outRows).toBe(1);
+    expect(oct.outRows).toBe(2);
+    // A one-off from a stranger is no income line, so it names no source.
+    expect(sep.inSources).toEqual([]);
+    const leefOct = accountOf(body, LEEFGELD).months.find((m) => m.month === "2026-10");
+    if (!leefOct) throw new Error("no October on the leefgeldrekening");
+    expect(leefOct.outRows).toBe(3);
+    // The weekly payer is a stranger here: named, but never as an own account.
+    expect(leefOct.inSources).toEqual([
+      { label: "VERDERGROEP BEWINDVOERING", count: 4, cadence: "weekly", fromAccountIban: null },
+    ]);
+
+    // The beheerrekening paying the leefgeld is named as an OWN account.
+    const own = [
+      tx(BEHEER, "2026-10-01", -2_000, "BANKKOSTEN", "NL00ABNA0000000000"),
+      ...["2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"].map((d) =>
+        tx(LEEFGELD, d, 10_000, "M. EIGEN", BEHEER)),
+    ];
+    mocks.glance.mockResolvedValue({
+      series: buildMoneySeries({ transactions: own, items: [] }), txs: own, newestBooking: "2026-10-26",
+    });
+    const body2 = await (await GET(req(), ctx)).json();
+    expect(accountOf(body2, LEEFGELD).months[0].inSources).toEqual([
+      { label: "M. EIGEN", count: 4, cadence: "weekly", fromAccountIban: BEHEER },
+    ]);
   });
 
   it("an empty table answers geen data, never a figure", async () => {

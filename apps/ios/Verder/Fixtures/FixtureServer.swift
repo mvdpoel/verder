@@ -35,6 +35,12 @@ struct FixtureServer: Sendable {
         case transportFailure
         /// No answer EVER: the `loading` fixture, so the skeleton stays up.
         case never
+
+        /// An HTTP error status (4xx/5xx).
+        var isError: Bool {
+            if case .json(let status, _) = self { return status >= 400 }
+            return false
+        }
     }
 
     struct Manifest: Decodable, Equatable, Sendable {
@@ -68,6 +74,30 @@ struct FixtureServer: Sendable {
         /// on the phone.
         let transcript: String?
         let thenFail: ThenFail?
+        /// With `thenFail`: the moment the first, good answers were given
+        /// ("2026-10-31T21:14:00Z", the evening before the case's today), so a
+        /// kept stand reads "bijgewerkt gisteren 22:14" instead of the
+        /// capture's own minute. The clock reads it until the first failure,
+        /// then the case's today (`FixtureEnvironment.clock(keptAt:)`).
+        let keptAt: Date?
+
+        private enum Key: String, CodingKey { case description, behavior, statuses, generate, transcript, thenFail, keptAt }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Key.self)
+            description = try c.decode(String.self, forKey: .description)
+            behavior = try c.decodeIfPresent(Behavior.self, forKey: .behavior)
+            statuses = try c.decodeIfPresent([String: Int].self, forKey: .statuses)
+            generate = try c.decodeIfPresent(String.self, forKey: .generate)
+            transcript = try c.decodeIfPresent(String.self, forKey: .transcript)
+            thenFail = try c.decodeIfPresent(ThenFail.self, forKey: .thenFail)
+            keptAt = try c.decodeIfPresent(String.self, forKey: .keptAt).map { (raw: String) throws -> Date in
+                guard let d = ISO8601DateFormatter().date(from: raw) else {
+                    throw DecodingError.dataCorruptedError(forKey: .keptAt, in: c, debugDescription: "keptAt is ISO 8601")
+                }
+                return d
+            }
+        }
     }
 
     static let apiPrefix = "/api/mobile/v1/"

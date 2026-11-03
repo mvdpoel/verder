@@ -115,6 +115,9 @@ final class AppLock {
     /// cancel: closing the sheet is not an error.
     private(set) var message: String?
     private(set) var isUnlocking = false
+    /// The last attempt ended in a cancel (Martin closed the sheet). Not an
+    /// error, so no `message`; Overzicht says it in its own words.
+    private(set) var lastAttemptCancelled = false
 
     @ObservationIgnored private let authenticator: any DeviceOwnerAuthenticator
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -145,12 +148,13 @@ final class AppLock {
         isUnlocking = true
         defer { isUnlocking = false }
         message = nil
+        lastAttemptCancelled = false
         do {
             try await authenticator.authenticate(reason: Copy.reason)
             isLocked = false
         } catch {
             switch error {
-            case .cancelled: break // Martin closed the sheet; nothing to say.
+            case .cancelled: lastAttemptCancelled = true // Martin closed the sheet; not an error.
             case .unavailable: message = Copy.unavailable
             case .failed: message = Copy.failed
             }
@@ -170,6 +174,7 @@ final class AppLock {
     func didSignIn() {
         isLocked = false
         message = nil
+        lastAttemptCancelled = false
     }
 
     func sceneDidEnterBackground() {
@@ -186,6 +191,7 @@ final class AppLock {
             isLocked = true
             autoPrompted = false
             message = nil
+            lastAttemptCancelled = false
         }
     }
 }

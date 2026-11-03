@@ -53,7 +53,9 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
         return "\(title), eindigend op \(id.dropFirst(2))"
     }
 
-    init(_ account: MoneySummaryDTO.Account, name: String) {
+    /// `accountNames`: what this screen calls each OTHER account, so a
+    /// deposit from the beheerrekening reads "van beheerrekening".
+    init(_ account: MoneySummaryDTO.Account, name: String, accountNames: [String: String] = [:]) {
         id = account.accountIban ?? "onbekend"
         title = name
         tail = account.accountIban.map(MoneyFormat.ibanDots)
@@ -65,7 +67,10 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
         let peak = covered.map { max($0.inCents, $0.outCents) }.max() ?? 0
         scaleLabel = peak > 0 ? MoneyFormat.euroWhole(cents: peak) : nil
         let inTitle = inTitle
-        months = account.months.map { GeldMonth($0, peak: peak, newestBooking: newest, inTitle: inTitle) }
+        let leefgeld = account.isLeefgeldAccount
+        months = account.months.map {
+            GeldMonth($0, peak: peak, newestBooking: newest, inTitle: inTitle, leefgeld: leefgeld, accountNames: accountNames)
+        }
         defaultSelection = months.lastIndex { $0.coverage != .none } ?? max(0, months.count - 1)
 
         let incidental = account.months.flatMap(\.incidentalRows)
@@ -88,14 +93,15 @@ struct GeldAccount: Equatable, Identifiable, Sendable {
         let leefgeld = known.filter(\.isLeefgeldAccount)
         let beheerIban: String? = leefgeld.count == 1 && known.count == 2
             ? known.first { !$0.isLeefgeldAccount }?.accountIban : nil
-        return accounts.map { a in
-            let name: String
-            if a.accountIban == nil { name = "Onbekende rekening" }
-            else if a.isLeefgeldAccount && leefgeld.count == 1 { name = "Leefgeldrekening" }
-            else if a.accountIban == beheerIban { name = "Beheerrekening" }
-            else { name = "Rekening" }
-            return GeldAccount(a, name: name)
+        func name(_ a: MoneySummaryDTO.Account) -> String {
+            if a.accountIban == nil { return "Onbekende rekening" }
+            if a.isLeefgeldAccount && leefgeld.count == 1 { return "Leefgeldrekening" }
+            if a.accountIban == beheerIban { return "Beheerrekening" }
+            return "Rekening"
         }
+        var names: [String: String] = [:]
+        for a in known { if let iban = a.accountIban { names[iban] = name(a) } }
+        return accounts.map { GeldAccount($0, name: name($0), accountNames: names) }
     }
 }
 
@@ -142,7 +148,8 @@ struct GeldMonth: Equatable, Identifiable, Sendable {
         return MoneyFormat.spokenDates(parts.joined(separator: ", "))
     }
 
-    init(_ m: MonthSeries, peak: Int, newestBooking: String?, inTitle: String) {
+    init(_ m: MonthSeries, peak: Int, newestBooking: String?, inTitle: String,
+         leefgeld: Bool = false, accountNames: [String: String] = [:]) {
         month = m.month
         short = MoneyFormat.monthShort(m.month) ?? m.month
         long = MoneyFormat.monthLong(m.month) ?? m.month
@@ -170,14 +177,37 @@ struct GeldMonth: Equatable, Identifiable, Sendable {
             stateLine = "geen data · geen afschrift"
             sheetLine = stateLine
         }
+        let bookings = m.outRows.map { "\($0) \($0 == 1 ? "boeking" : "boekingen")" }
+        let outMeta = [bookings, through].compactMap { $0 }.joined(separator: " · ")
         readouts = has ? [
-            Readout(title: inTitle, amount: MoneyFormat.euro(cents: m.inCents), meta: nil),
-            Readout(title: "Uitgegeven", amount: MoneyFormat.euro(cents: m.outCents), meta: through),
+            Readout(title: inTitle, amount: MoneyFormat.euro(cents: m.inCents),
+                    meta: Self.sourcesLine(m.inSources ?? [], leefgeld: leefgeld, accountNames: accountNames)),
+            Readout(title: "Uitgegeven", amount: MoneyFormat.euro(cents: m.outCents), meta: outMeta.isEmpty ? nil : outMeta),
         ] : []
         noDataText = has ? nil
             : "Van \(long) is er nog geen afschrift. Lees het afschrift in op de computer, onder Register → Afschrift inlezen."
         parseErrorText = has && m.parseErrorRows > 0
             ? "\(m.parseErrorRows) \(m.parseErrorRows == 1 ? "regel" : "regels") onleesbaar" : nil
+    }
+}
+
+extension GeldMonth {
+    /// The caption under the income figure: "Atelier Sterrenwacht",
+    /// "5× weekbedrag · van beheerrekening"; nil with nothing to say. Never a
+    /// word the server did not give: no "salaris" for a payer it only names.
+    static func sourcesLine(_ sources: [InSource], leefgeld: Bool, accountNames: [String: String]) -> String? {
+        guard !sources.isEmpty else { return nil }
+        guard sources.count <= 2 else { return "\(sources.count) bronnen" }
+        let parts: [String] = sources.compactMap { s in
+            let who: String? = s.fromAccountIban.map { "van \(accountNames[$0].map { $0 == "Rekening" ? "eigen rekening" : $0.lowercased() } ?? "eigen rekening")" }
+                ?? s.label
+            if leefgeld, s.cadence == "weekly" {
+                return [s.count == 1 ? "weekbedrag" : "\(s.count)× weekbedrag", who].compactMap { $0 }.joined(separator: " · ")
+            }
+            if s.count > 1 { return who.map { "\(s.count)× \($0)" } ?? "\(s.count)×" }
+            return who
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
@@ -283,7 +313,15 @@ enum GeldCopy {
         guard case .transport? = error, let fetchedAt else { return nil }
         let stand = HomeSummary.stamp(fetchedAt, now: now)
         return Offline(badge: "offline", stamp: "bijgewerkt \(stand)",
-                       sentence: "Je ziet de stand van \(stand). Zodra er weer verbinding is, wordt Geld vanzelf bijgewerkt.")
+                       sentence: "Je ziet de stand van \(spoken(fetchedAt, now: now)). Zodra er weer verbinding is, wordt Geld vanzelf bijgewerkt.")
+    }
+
+    /// The stand in the sentence: "gisteravond" for yesterday from 18:00,
+    /// otherwise the stamp itself ("09:41", "gisteren 14:05", "vr 30 okt 08:14").
+    static func spoken(_ fetchedAt: Date, now: Date) -> String {
+        let hour = HomeSummary.calendar.component(.hour, from: fetchedAt)
+        if HomeSummary.age(fetchedAt, now: now) == "gisteren", hour >= 18 { return "gisteravond" }
+        return HomeSummary.stamp(fetchedAt, now: now)
     }
 
     struct Failure: Equatable, Sendable {
