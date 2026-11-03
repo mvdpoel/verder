@@ -56,6 +56,7 @@ struct QueueAccessoryView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
         .background(Color.plate, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.edgeStrong, lineWidth: 1))
     }

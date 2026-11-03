@@ -125,7 +125,7 @@ struct ScanTab: View {
                 header(screen)
                 if cameraStatus == .denied {
                     CameraDenied { openURL(URL(string: UIApplication.openSettingsURLString)!) }
-                        .padding(.top, compactHeight ? 120 : 222)
+                        .padding(.top, ax ? 32 : compactHeight ? 120 : 222)
                 } else {
                     content(screen)
                 }
@@ -196,6 +196,9 @@ struct ScanTab: View {
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
+        // AX4 is already two lines across the width; AX5 would break
+        // "Volgende brief" itself (Figma AX5 · 1).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility4)
         .padding(.top, 16)
         .accessibilityHidden(true)
         if unsupported {
