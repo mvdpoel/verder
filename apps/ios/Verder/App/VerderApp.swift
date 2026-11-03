@@ -18,6 +18,8 @@ struct VerderApp: App {
     @State private var money: MoneyStore
     /// The pocket dossier behind the Dossier tab.
     @State private var dossier: DossierModel
+    /// The case map behind the Tijdlijn (Dossier, and a tap on Overzicht's headline).
+    @State private var timeline: TimelineStore
     /// The voice log (Meer, or the home screen quick action), owned here —
     /// above the lock gate and sign-in — so a relock or a 401 keeps its text.
     @State private var voice: VoiceLogSession
@@ -52,6 +54,9 @@ struct VerderApp: App {
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
                                                     onUnauthorized: { auth.sessionRejected() },
                                                     epoch: auth.epoch))
+        _timeline = State(initialValue: TimelineStore(client: s.client, cache: TimelineCache(dir: s.timelineDir),
+                                                      onUnauthorized: { auth.sessionRejected() },
+                                                      epoch: auth.epoch))
         let client = s.client
         _voice = State(initialValue: VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
@@ -65,7 +70,7 @@ struct VerderApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier, voice: voice)
+                     money: money, dossier: dossier, timeline: timeline, voice: voice)
                 .onAppear { appDelegate.attach(push) }
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in

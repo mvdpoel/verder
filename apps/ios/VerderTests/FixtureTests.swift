@@ -14,7 +14,7 @@ struct FixtureTests {
     /// that asked for them.
     nonisolated static let expectedNames = [
         "dossier", "empty", "money-complete", "money-empty", "money-geen-data", "money-no-account", "money-no-budget",
-        "money-overspent", "money-partial", "money-unrecognised", "offline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
+        "money-overspent", "money-partial", "money-unrecognised", "offline", "timeline", "unauthorized", "voice", "voorjou-few", "voorjou-long", "voorjou-many", "weekly",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
     static let question = "00000000-f1c5-4000-8000-000000000002"
@@ -56,6 +56,42 @@ struct FixtureTests {
         #expect(s.reply(method: "GET", path: "/api/mobile/v1/no-such-route") == FixtureServer.error(404, "not found"))
     }
 
+    /// `<path>~<query>.json` answers a request WITH that query, so the
+    /// Tijdlijn's "Schuldeisers verbergen" shows the filtered map in a capture;
+    /// without the file the query is ignored, as before.
+    @Test func aQueryVariantAnswersItsOwnQuery() throws {
+        let s = try Self.server("timeline")
+        let path = FixtureServer.apiPrefix + "case-map"
+        guard case .json(200, let hiddenBody) = s.reply(method: "GET", path: path, query: "schuldeisers=verborgen"),
+              case .json(200, let shownBody) = s.reply(method: "GET", path: path) else {
+            Issue.record("case-map did not answer"); return
+        }
+        let hidden = try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: hiddenBody)
+        let shown = try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: shownBody)
+        #expect(hidden.debtEpisodesHidden && !shown.debtEpisodesHidden)
+        #expect(s.reply(method: "GET", path: FixtureServer.apiPrefix + "me", query: "x=1")
+                == s.reply(method: "GET", path: FixtureServer.apiPrefix + "me"))
+        // A query cannot name a file outside the fixture.
+        #expect(s.reply(method: "GET", path: path, query: "../../x") == s.reply(method: "GET", path: path))
+    }
+
+    /// The data doc's case: the hoofdlijn's open stop is the headline, the
+    /// ended Lindehof spoor is a clean outcome, and hiding schuldeisers drops
+    /// the Kade & Partners spoor and its trigger.
+    @Test func theTimelineIsTheDataDocsCase() throws {
+        let map = try Self.decode(CaseMapDTO.self, "timeline", "case-map")
+        let current = try #require(map.stops.first { $0.id == map.currentStopId })
+        #expect(current.title == "Stukken aanleveren bij Team Startdossier")
+        #expect(map.tracks.first { $0.isRoot }?.title == "Bewindvoering")
+        #expect(map.tracks.first { $0.title == "Huurachterstand Lindehof" }?.terminus == "ended")
+        #expect(map.tracks.first { $0.title == "Aanvraag bewindvoering" }?.terminus == "merge")
+        let hidden = try Self.decode(CaseMapDTO.self, "timeline", "case-map~schuldeisers=verborgen")
+        #expect(!hidden.stops.contains { $0.title.contains("Kade & Partners") })
+        #expect(!hidden.tracks.contains { $0.title == "Vordering Kade & Partners" })
+        let empty = try Self.decode(CaseMapDTO.self, "empty", "case-map")
+        #expect(empty.stops.isEmpty)
+    }
+
     // MARK: - Decoding into the real DTOs
 
     @Test(arguments: fileFixtures)
@@ -84,6 +120,7 @@ struct FixtureTests {
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
         _ = try Self.decode([PartyDTO].self, name, "parties")
         _ = try Self.decode(AccountDTO.self, name, "me")
+        _ = try Self.decode(CaseMapDTO.self, name, "case-map")
         _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
         // Every fixture but `empty` (404: no Sunday yet) holds a summary.
         if let weekly = try Self.body(name, "weekly") {

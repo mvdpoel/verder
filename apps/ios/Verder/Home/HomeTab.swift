@@ -29,6 +29,7 @@ enum HomeSummary {
     }
 
     static let lockedHeadline = "Ontgrendel om te zien waar het nu op wacht."
+    static let headlineHint = "Opent de tijdlijn"
     static let reveal = "Toon details"
 
     /// The first items in the SERVER's order — never re-ranked here. Empty
@@ -117,6 +118,9 @@ struct HomeTab: View {
     /// Opens Voor jou, optionally straight onto one item.
     let openInbox: (InboxRoute?) -> Void
     let openScan: () -> Void
+    /// Opens the Tijdlijn on Dossier. Offered only once case content shows:
+    /// while locked the headline card is the Face ID prompt, not a link.
+    var openTimeline: () -> Void = {}
 
     @State private var showGeld = false
 
@@ -170,8 +174,22 @@ struct HomeTab: View {
 
     // MARK: cards
 
+    /// Locked: the Face ID prompt. Unlocked: a tap opens the Tijdlijn, the
+    /// map this headline is the answer of.
     @ViewBuilder private var headlineCard: some View {
-        card(label: HomeSummary.headlineLabel) {
+        if lock.revealsCaseContent {
+            Button { openTimeline() } label: {
+                card(label: HomeSummary.headlineLabel, chevron: true) { headlineContent }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(HomeSummary.headlineHint)
+        } else {
+            card(label: HomeSummary.headlineLabel) { headlineContent }
+        }
+    }
+
+    @ViewBuilder private var headlineContent: some View {
+        Group {
             if !lock.revealsCaseContent {
                 VStack(alignment: .leading, spacing: 10) {
                     muted(HomeSummary.lockedHeadline)

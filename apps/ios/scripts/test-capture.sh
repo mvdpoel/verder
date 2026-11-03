@@ -15,7 +15,7 @@ expect() { # <want-exit> <description> <cmd...>
 }
 check() { CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few "$1" "$TMP/x.png"; }
 
-for good in overzicht voorjou scan dossier meer geld weekly voice \
+for good in overzicht voorjou scan dossier meer geld weekly timeline voice \
   proposal:00000000-f1c5-4000-8000-000000000002 suggestion:00000000-F1C5-4000-8000-000000000003 \
   task:00000000-f1c5-4000-8000-000000000004 document:00000000-f1c5-4000-8000-200000000311; do
   expect 0 "accepts $good" check "$good"

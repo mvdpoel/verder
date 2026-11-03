@@ -97,6 +97,7 @@ struct LinkDestinationTests {
         #expect(DeepLink.document(Self.id).destination
                 == .init(tab: .dossier, stack: .dossier([.document(id: Self.lower, title: nil)])))
         #expect(DeepLink.dossier.destination == .init(tab: .dossier, stack: .dossier([])))
+        #expect(DeepLink.timeline.destination == .init(tab: .dossier, stack: .dossier([.timeline])))
         #expect(DeepLink.overzicht.destination == .init(tab: .home, stack: nil))
         #expect(DeepLink.weekly.destination == .init(tab: .meer, stack: .meer([.weekly])))
         #expect(DeepLink.money.destination == .init(tab: .meer, stack: .meer([.money])))
@@ -109,7 +110,9 @@ struct LinkDestinationTests {
         #expect(DeepLink.parse("verder://dossier") == .dossier)
         #expect(DeepLink.parse("verder://done-by-verder") == .doneByVerder)
         #expect(DeepLink.parse("verder://money") == .money)
-        for junk in ["verder://overzicht/x", "verder://dossier?x=1", "verder://done-by-verder/1", "verder://money#a"] {
+        #expect(DeepLink.parse("verder://timeline") == .timeline)
+        for junk in ["verder://overzicht/x", "verder://dossier?x=1", "verder://done-by-verder/1", "verder://money#a",
+                     "verder://timeline/x", "verder://timeline?schuldeisers=verborgen"] {
             #expect(DeepLink.parse(junk) == DeepLink.none, "\(junk)")
         }
     }
@@ -117,7 +120,7 @@ struct LinkDestinationTests {
     /// The tab is the destination's tab — one mapping, not two.
     @Test func theTabIsTheDestinationsTab() {
         let all: [DeepLink] = [.proposal(Self.id), .suggestion(Self.id), .task(Self.id), .document(Self.id),
-                               .inbox, .doneByVerder, .dossier, .overzicht, .weekly, .money, .voice, .none]
+                               .inbox, .doneByVerder, .dossier, .timeline, .overzicht, .weekly, .money, .voice, .none]
         for link in all { #expect(link.tab == link.destination?.tab, "\(link)") }
     }
 
@@ -192,7 +195,7 @@ struct LinkDestinationTests {
     }
 
     @Test func everyFixtureRouteIsALinkThatLands() throws {
-        for raw in ["geld", "weekly", "proposal:\(Self.lower)", "suggestion:\(Self.lower)",
+        for raw in ["geld", "weekly", "timeline", "proposal:\(Self.lower)", "suggestion:\(Self.lower)",
                     "task:\(Self.lower)", "document:\(Self.lower)"] {
             guard case .link(let link) = try FixtureLaunch.parseRoute(raw) else {
                 Issue.record("\(raw) is not a link"); continue
@@ -200,5 +203,6 @@ struct LinkDestinationTests {
             #expect(link.destination != nil, "\(raw)")
         }
         #expect(try FixtureLaunch.parseRoute("geld") == .link(.money))
+        #expect(try FixtureLaunch.parseRoute("timeline") == .link(.timeline))
     }
 }

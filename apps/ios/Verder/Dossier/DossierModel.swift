@@ -8,6 +8,8 @@ enum DossierRoute: Hashable, Sendable {
     /// the row was known; the viewer then looks it up.
     case document(id: String, title: String?)
     case task(String)
+    /// The Tijdlijn: the case as a metro map (`TimelineScreen`).
+    case timeline
 }
 
 /// The words and choices of the Dossier tab, decided outside the view.

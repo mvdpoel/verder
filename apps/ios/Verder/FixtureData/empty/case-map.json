@@ -1,0 +1,14 @@
+{
+  "bands": [],
+  "tracks": [],
+  "stops": [],
+  "edges": [],
+  "rowCount": 0,
+  "laneCount": 0,
+  "currentStopId": null,
+  "problems": [
+    "geen hoofdlijn gevonden"
+  ],
+  "hiddenDebtTrackCount": 0,
+  "debtEpisodesHidden": false
+}

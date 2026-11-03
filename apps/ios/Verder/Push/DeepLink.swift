@@ -5,7 +5,7 @@ import Observation
 /// (`verder://proposal/<uuid>`, `verder://suggestion/<uuid>`,
 /// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`,
 /// `verder://weekly`, `verder://voice`, `verder://done-by-verder`,
-/// `verder://dossier`, `verder://overzicht`, `verder://money`).
+/// `verder://dossier`, `verder://timeline`, `verder://overzicht`, `verder://money`).
 ///
 /// EVERY CASE BUT `.none` HAS A `destination` — a tab, a stack or the voice
 /// sheet — and `LinkDestinationTests` checks that every link the worker and
@@ -37,6 +37,8 @@ enum DeepLink: Equatable, Sendable {
     /// `verder://dossier`: the Dossier tab at its root (a link-less filing
     /// push: a merged duplex scan, a new loonstrook).
     case dossier
+    /// `verder://timeline`: the Tijdlijn (the case map) on Dossier.
+    case timeline
     /// `verder://overzicht`: the Overzicht tab (a link-less system push).
     case overzicht
     /// `verder://money`: Geld, on Meer.
@@ -68,6 +70,8 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .doneByVerder : .none
         case "dossier":
             return parts.path.isEmpty ? .dossier : .none
+        case "timeline":
+            return parts.path.isEmpty ? .timeline : .none
         case "overzicht":
             return parts.path.isEmpty ? .overzicht : .none
         case "money":
@@ -102,6 +106,7 @@ enum DeepLink: Equatable, Sendable {
         case .doneByVerder: LinkDestination(tab: .voorJou, stack: .inbox([.doneByVerder]))
         case .document(let id): LinkDestination(tab: .dossier, stack: .dossier([.document(id: id.lowerString, title: nil)]))
         case .dossier: LinkDestination(tab: .dossier, stack: .dossier([]))
+        case .timeline: LinkDestination(tab: .dossier, stack: .dossier([.timeline]))
         case .overzicht: LinkDestination(tab: .home, stack: nil)
         case .weekly: LinkDestination(tab: .meer, stack: .meer([.weekly]))
         case .money: LinkDestination(tab: .meer, stack: .meer([.money]))

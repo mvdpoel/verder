@@ -21,6 +21,9 @@ struct AppServices {
     /// The pocket dossier's folder (`DossierStore`): Application Support,
     /// never the App Group.
     let dossierDir: URL
+    /// The Tijdlijn's copy of the case map (`TimelineCache`): Application
+    /// Support, never the App Group.
+    let timelineDir: URL
     /// The voice log's microphone and on-device transcription (Task 25).
     let makeRecorder: @MainActor () -> any VoiceRecording
     let transcriber: any Transcribing
@@ -40,6 +43,7 @@ struct AppServices {
                            snapshotDir: AppGroup.containerURL,
                            setBadge: InboxStore.systemBadge,
                            dossierDir: URL.applicationSupportDirectory.appending(path: "dossier", directoryHint: .isDirectory),
+                           timelineDir: TimelineCache.live.dir,
                            makeRecorder: { AudioRecorder() },
                            transcriber: OnDeviceTranscriber())
     }

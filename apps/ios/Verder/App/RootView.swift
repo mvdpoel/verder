@@ -18,6 +18,7 @@ struct RootView: View {
     let inbox: InboxStore
     let money: MoneyStore
     let dossier: DossierModel
+    let timeline: TimelineStore
     let voice: VoiceLogSession
     @Environment(\.scenePhase) private var scenePhase
 
@@ -156,7 +157,13 @@ struct RootView: View {
                             inboxPath = route.map { [$0] } ?? []
                             tab = .voorJou
                         },
-                        openScan: { tab = .scan })
+                        openScan: { tab = .scan },
+                        // Only reachable unlocked (the headline is hidden
+                        // while locked); Dossier is lock-gated regardless.
+                        openTimeline: {
+                            dossierPath = [.timeline]
+                            tab = .dossier
+                        })
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
@@ -168,7 +175,8 @@ struct RootView: View {
                 ScanTab(center: uploads, auth: auth)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
-                DossierTab(model: dossier, inbox: inbox, lock: lock, client: auth.client, path: $dossierPath,
+                DossierTab(model: dossier, inbox: inbox, timeline: timeline, lock: lock, client: auth.client,
+                           path: $dossierPath,
                            onUnauthorized: { auth.sessionRejected() })
                     .lockGated(by: lock)
             }

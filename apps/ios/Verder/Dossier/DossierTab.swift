@@ -11,6 +11,8 @@ import SwiftUI
 struct DossierTab: View {
     let model: DossierModel
     let inbox: InboxStore
+    /// The case map behind the Tijdlijn row.
+    let timeline: TimelineStore
     let lock: AppLock
     let client: APIClient
     @Binding var path: [DossierRoute]
@@ -30,6 +32,7 @@ struct DossierTab: View {
                             serverResults
                         } else {
                             headlineCard
+                            timelineRow
                             tasksCard
                             documentsCard
                         }
@@ -48,6 +51,8 @@ struct DossierTab: View {
                                    store: model.store, client: client, onUnauthorized: onUnauthorized)
                 case .task(let id):
                     TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
+                case .timeline:
+                    TimelineScreen(store: timeline, open: { path.append($0) })
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -160,6 +165,37 @@ struct DossierTab: View {
                 SkeletonLines(count: 2)
             }
         }
+    }
+
+    /// The way into the Tijdlijn, right under the headline it explains.
+    private var timelineRow: some View {
+        Button { path.append(.timeline) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    .foregroundStyle(Color.signal)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(TimelineCopy.rowTitle)
+                        .font(.display(17, relativeTo: .body, weight: .medium))
+                        .foregroundStyle(Color.inkBright)
+                    Text(TimelineCopy.rowLine)
+                        .font(.mono(12, relativeTo: .caption))
+                        .foregroundStyle(Color.inkLabel)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .glassPanel()
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var tasksCard: some View {
@@ -377,12 +413,12 @@ struct DossierRow: View {
     }
 }
 
-private struct Hairline: View {
+struct Hairline: View {
     var body: some View { Rectangle().fill(Color.hairline).frame(height: 1) }
 }
 
 /// The loading state in the shape of rows, never a spinner (brief §2.1).
-private struct SkeletonLines: View {
+struct SkeletonLines: View {
     let count: Int
 
     var body: some View {

@@ -21,7 +21,10 @@ import Foundation
 /// answers `{}` — the routes answer more than the phone reads (`Ignored`).
 /// A GET with no `.json` falls back to `<path>.pdf` / `<path>.jpg`, served as
 /// bytes: that is how `documents/<id>/file` answers (Plan 3 Task 21).
-/// The query string is ignored: one fixture is one state of the world.
+/// The query string is ignored — one fixture is one state of the world —
+/// EXCEPT where a fixture holds `<path>~<query>.json`: then a GET with exactly
+/// that query reads it (the Tijdlijn's `?schuldeisers=verborgen`), so a
+/// switch on screen shows its own answer in a capture.
 struct FixtureServer: Sendable {
     enum Reply: Equatable, Sendable {
         case json(status: Int, body: Data)
@@ -75,7 +78,7 @@ struct FixtureServer: Sendable {
         return entries.filter { FixtureServer(name: $0, root: root) != nil }.sorted()
     }
 
-    func reply(method: String, path rawPath: String) -> Reply {
+    func reply(method: String, path rawPath: String, query: String? = nil) -> Reply {
         switch manifest.behavior ?? .files {
         case .offline: return .transportFailure
         case .unauthorized: return Self.error(401, "unauthorized")
@@ -91,6 +94,11 @@ struct FixtureServer: Sendable {
         if let status = manifest.statuses?[path] { return Self.error(status, "fixture status") }
 
         if method.uppercased() == "GET" {
+            // A query names a file only when it cannot leave the folder.
+            if let query, !query.isEmpty, !query.contains("/"), !query.contains(".."),
+               let data = file(path + "~" + query + ".json") {
+                return .json(status: 200, body: generated(path, data))
+            }
             if let data = file(path + ".json") { return .json(status: 200, body: generated(path, data)) }
             for (ext, type) in Self.binaryTypes {
                 if let data = file(path + "." + ext) { return .file(contentType: type, body: data) }

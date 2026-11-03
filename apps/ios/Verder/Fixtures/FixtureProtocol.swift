@@ -29,7 +29,8 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
             return
         }
-        switch server.reply(method: request.httpMethod ?? "GET", path: url.path(percentEncoded: false)) {
+        switch server.reply(method: request.httpMethod ?? "GET", path: url.path(percentEncoded: false),
+                             query: url.query(percentEncoded: false)) {
         case .transportFailure:
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
         case .json(let status, let body):

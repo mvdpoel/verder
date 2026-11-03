@@ -64,10 +64,13 @@ enum FixtureEnvironment {
         // starts from an empty phone.
         let dossierDir = URL.temporaryDirectory.appending(path: "verder-fixture-dossier", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dossierDir)
+        let timelineDir = URL.temporaryDirectory.appending(path: "verder-fixture-timeline", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: timelineDir)
 
         return AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(), registerRemote: {},
                            snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
+                           timelineDir: timelineDir,
                            // No microphone and no speech model: a "recording"
                            // is synthetic bytes, and its transcript is the
                            // voice fixture's (synthetic-data doc).
