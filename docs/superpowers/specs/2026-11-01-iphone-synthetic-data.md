@@ -126,3 +126,23 @@ loading (skeleton) · empty · one item · many (498) · long Dutch titles · er
 ## Account (`me`, all fixtures)
 
 Meer → Account reads `GET /api/mobile/v1/me`: `{"email": "jij@thuis.example", "name": null, "passkeys": 1}`. The person stays unnamed.
+
+## Tijdlijn / de zaak (fixture `timeline`, added 2026-11-03)
+
+The case map, as `tracks.map` / `buildTrackMap` serves it: newest at the TOP, month bands down the screen, the hoofdlijn as the leftmost lane, sporen as lanes to its right. A spoor either MERGES back (it was a prerequisite) or ENDS — and `ended` is a CLEAN outcome, never drawn or worded as a failure. All invented.
+
+Hoofdlijn "Bewindvoering" (stops, newest first):
+- nu · open — "Stukken aanleveren bij Team Startdossier" (headline: waar het nu op wacht)
+- 30 okt · done — "Brief Gemeente Westerlaan over bijzondere bijstand" (trigger)
+- 14 okt · done — "Sommatie Kade & Partners namens Stroomnet Energie" (trigger)
+- 2 okt · done — "Rekening overgenomen door Bewindkantoor Noordkust" (trigger)
+- 3 jun · done — "Beschikking: onder bewind gesteld"
+- 12 mei · done — "Aanmelding bij Bewindkantoor Noordkust"
+
+Sporen:
+- "Aanvraag bewindvoering" · done · branches at Aanmelding, MERGES at Beschikking — stops: "Intake" (19 mei), "Verzoek naar de rechtbank" (26 mei)
+- "Opstart en stukken" · open · branches at Beschikking — stops: "Team Startdossier vraagt stukken" (5 jun), "Loonstroken gestuurd" (20 jun), "Stukken aanleveren bij Team Startdossier" is the open stop on the hoofdlijn it feeds
+- "Vordering Kade & Partners" · open · branches at the sommatie — stops: "Kade & Partners — verwerkt als vordering" (done, 15 okt), "Kade & Partners — melden bij Noordkust" (open, undated)
+- "Huurachterstand Lindehof" · ended (clean) · stops: "Betalingsregeling afgesproken" (done, 8 sep), "Regeling loopt" (done, 1 okt)
+
+Filter: "Schuldeisers verbergen" hides the Kade & Partners spoor AND its trigger on the hoofdlijn (structurally, via the spoor's branch pointer — never by title).
