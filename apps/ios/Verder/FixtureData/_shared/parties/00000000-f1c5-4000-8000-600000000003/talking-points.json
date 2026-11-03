@@ -1,7 +1,8 @@
 {
   "party": {
     "id": "00000000-f1c5-4000-8000-600000000003",
-    "name": "Incassobureau Kade & Partners"
+    "name": "Incassobureau Kade & Partners",
+    "phone": null
   },
   "tell": [],
   "ask": [

@@ -18,7 +18,8 @@ export interface TalkingPointDTO {
 }
 
 export interface TalkingPointsDTO {
-  party: { id: string; name: string };
+  /** `phone`: the number the call sheet's "Bel" dials (a `tel:` link), or null. */
+  party: { id: string; name: string; phone: string | null };
   tell: TalkingPointDTO[];
   ask: TalkingPointDTO[];
   summary: null | {
@@ -35,7 +36,7 @@ const pointDTO = (p: PartyTalkingPoints["tell"][number]): TalkingPointDTO => ({
 export function toTalkingPointsDTO(r: PartyTalkingPoints): TalkingPointsDTO {
   const s = r.summary;
   return {
-    party: { id: r.party.id, name: r.party.name },
+    party: { id: r.party.id, name: r.party.name, phone: r.party.phone ?? null },
     tell: r.tell.map(pointDTO),
     ask: r.ask.map(pointDTO),
     summary: s ? {

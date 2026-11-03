@@ -37,6 +37,12 @@ export interface WaitingItem {
   at: string;
   dueAt: string | null;
   verder: boolean;
+  /**
+   * The party a proposal is about, so the phone can open "Gesprek
+   * voorbereiden" from it; null for every other kind and for a proposal with
+   * no party. Optional in the type so older hand-built items still check.
+   */
+  partyId?: string | null;
 }
 
 /** A pending proposal, as the loader reads it. `payload` is the stored JSON. */
@@ -47,6 +53,8 @@ export interface ProposalRow {
   createdAt: Date;
   payload: unknown;
   partyName: string | null;
+  /** `proposals.party_id`; optional so a caller that never reads it need not select it. */
+  partyId?: string | null;
   senderGuess: unknown;
 }
 
@@ -105,6 +113,7 @@ function proposalItem(p: ProposalRow): WaitingItem {
     at: p.createdAt.toISOString(),
     dueAt: str(field(p.payload, "dueAt")),
     verder,
+    partyId: p.partyId ?? null,
   };
 }
 
@@ -139,7 +148,7 @@ export function waitingOnMartin(input: {
   const suggestions = byAt(input.suggestions).map((s): WaitingItem => ({
     kind: "suggestion", id: s.id, title: suggestionTitle(s),
     subtitle: SUGGESTION_LABEL[s.kind] ?? null, priority: 3,
-    at: s.createdAt.toISOString(), dueAt: null, verder: false,
+    at: s.createdAt.toISOString(), dueAt: null, verder: false, partyId: null,
   }));
 
   // 4: tasks Martin is to do, earliest deadline first, undated last.
@@ -158,7 +167,7 @@ export function waitingOnMartin(input: {
       // names it here rather than as a second item.
       subtitle: stop?.taskId === t.id ? stop.title : null,
       priority: t.dueAt && t.dueAt.getTime() <= soon ? 1 : 3,
-      at: t.createdAt.toISOString(), dueAt: t.dueAt?.toISOString() ?? null, verder: false,
+      at: t.createdAt.toISOString(), dueAt: t.dueAt?.toISOString() ?? null, verder: false, partyId: null,
     }));
 
   // 5: the map's current open stop, unless its task already stands for it.
@@ -166,7 +175,7 @@ export function waitingOnMartin(input: {
     stop && !tasks.some((t) => t.id === stop.taskId)
       ? [{ kind: "stop", id: stop.id, title: stop.title, subtitle: null, priority: 3,
           at: (stop.happenedAt ?? stop.expectedAt ?? input.now).toISOString(),
-          dueAt: null, verder: false }]
+          dueAt: null, verder: false, partyId: null }]
       : [];
 
   return [...verderFirst, ...suggestions, ...tasks, ...stopItems];
@@ -191,7 +200,8 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
     db.select({
       id: schema.proposals.id, kind: schema.proposals.kind, priority: schema.proposals.priority,
       createdAt: schema.proposals.createdAt, payload: schema.proposals.payload,
-      partyName: schema.parties.name, senderGuess: schema.proposals.senderGuess,
+      partyName: schema.parties.name, partyId: schema.proposals.partyId,
+      senderGuess: schema.proposals.senderGuess,
     }).from(schema.proposals)
       .leftJoin(schema.parties, eq(schema.parties.id, schema.proposals.partyId))
       .where(eq(schema.proposals.status, "pending")),

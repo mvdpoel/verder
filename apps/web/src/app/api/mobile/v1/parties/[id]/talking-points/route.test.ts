@@ -40,7 +40,8 @@ const brief = (status: string): BriefRow => ({
   promptVersion: "brief-v1", generatedAt: ago(1), sourceRefs: [{ type: "mail", id: "r1" }],
 });
 const loaded = (status: string | null) => ({
-  party: { id: PARTY, name: "Bewindkantoor Noordkust", email: "ilse@noordkust.example", notes: "privé" },
+  party: { id: PARTY, name: "Bewindkantoor Noordkust", phone: "06 0000 0002",
+    email: "ilse@noordkust.example", notes: "privé" },
   ...buildTalkingPoints(dossier),
   summary: briefSummary(status === null ? null : brief(status)),
 });
@@ -68,7 +69,8 @@ describe("GET /api/mobile/v1/parties/[id]/talking-points", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(mocks.talkingPoints).toHaveBeenCalledWith({ id: PARTY });
     const body = await res.json();
-    expect(body.party).toEqual({ id: PARTY, name: "Bewindkantoor Noordkust" });
+    // The phone number is the call sheet's "Bel"; the email and the note never travel.
+    expect(body.party).toEqual({ id: PARTY, name: "Bewindkantoor Noordkust", phone: "06 0000 0002" });
     expect(body.ask).toEqual([
       { id: "ask:task:t1", text: "Vraag naar: Beschikking toesturen",
         source: { type: "task", id: "t1", link: "verder://task/t1" } },

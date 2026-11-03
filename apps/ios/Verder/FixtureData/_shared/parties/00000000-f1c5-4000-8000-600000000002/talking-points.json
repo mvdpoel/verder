@@ -1,7 +1,8 @@
 {
   "party": {
     "id": "00000000-f1c5-4000-8000-600000000002",
-    "name": "Bewindkantoor Noordkust"
+    "name": "Bewindkantoor Noordkust",
+    "phone": "06 0000 0002"
   },
   "tell": [
     {

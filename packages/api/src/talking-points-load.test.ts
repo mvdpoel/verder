@@ -129,7 +129,8 @@ describe("loadTalkingPoints", () => {
     const after = await db.execute(sql`SELECT count(*)::int AS n FROM ledger_events`);
     expect(after.rows[0].n).toBe(before.rows[0].n);
 
-    expect(r.party).toEqual({ id: partyId, name: `Bewindkantoor Testfixture ${RUN}` });
+    // The call sheet's "Bel" dials the party's own number; the fixture party has none.
+    expect(r.party).toEqual({ id: partyId, name: `Bewindkantoor Testfixture ${RUN}`, phone: null });
     expect(r.ask.map((p) => p.id)).toEqual([
       `ask:task:${waiting.id}`, `ask:mail:${silent.id}`, `ask:debt:${debt.id}`]);
     expect(r.ask[1].text).toMatch(/^Nog geen antwoord op je mail van \d+ \w+: Stukken huur$/);

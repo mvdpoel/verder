@@ -383,6 +383,8 @@ export const proposalsRouter = router({
     return {
       id: p.id, kind: p.kind, status: p.status, priority: p.priority,
       ask: payload?.ask ?? null, partyName, triggerAt: trigger.date, createdAt: p.createdAt,
+      // The phone's "Gesprek voorbereiden" opens from the proposal's sender.
+      partyId: p.partyId,
       trigger,
       dueAt: payload?.dueAt ?? null,
       missing: payload?.missing ?? [],

@@ -63,10 +63,10 @@ const kade: TalkingPointsInput = {
   openStops: [],
 };
 
-const dto = (party: { id: string; name: string }, input: TalkingPointsInput, brief: Parameters<typeof briefSummary>[0]) =>
+const dto = (party: { id: string; name: string; phone: string | null }, input: TalkingPointsInput, brief: Parameters<typeof briefSummary>[0]) =>
   toTalkingPointsDTO({ party, ...buildTalkingPoints(input), summary: briefSummary(brief) });
 
-const noordkustDTO = () => dto({ id: NOORDKUST, name: "Bewindkantoor Noordkust" }, noordkust, {
+const noordkustDTO = () => dto({ id: NOORDKUST, name: "Bewindkantoor Noordkust", phone: "06 0000 0002" }, noordkust, {
   status: "ready",
   summary: "Team Startdossier vroeg op 28 okt om je loonstroken; die heb je op 30 okt gestuurd, een antwoord is er nog niet.",
   model: "claude-cli 2.1.0 (Claude Code)", promptVersion: "brief-v1",
@@ -74,7 +74,7 @@ const noordkustDTO = () => dto({ id: NOORDKUST, name: "Bewindkantoor Noordkust" 
   sourceRefs: [{ type: "mail", id: MAIL(1) }, { type: "mail", id: MAIL(3) }],
 });
 // Kade & Partners' brief is still pending: the screen shows the points and no AI line.
-const kadeDTO = () => dto({ id: KADE, name: "Incassobureau Kade & Partners" }, kade, {
+const kadeDTO = () => dto({ id: KADE, name: "Incassobureau Kade & Partners", phone: null }, kade, {
   status: "pending", summary: null, model: null, promptVersion: null, generatedAt: null, sourceRefs: [],
 });
 
@@ -105,6 +105,8 @@ describe("the phone's talking-points fixtures", () => {
       "Gemaild op 30 okt: Loonstroken september en oktober",
     ]);
     expect(n.summary?.label).toBe("Samenvatting door AI");
+    // An invented number in the unassigned 06-0 block: the call sheet's "Bel".
+    expect(n.party.phone).toBe("06 0000 0002");
     const k = kadeDTO();
     expect(k.ask.map((p) => p.text)).toEqual([
       "Vraag naar: Reactie Kade & Partners op de sommatie",
@@ -112,5 +114,7 @@ describe("the phone's talking-points fixtures", () => {
     ]);
     expect(k.tell).toEqual([]);
     expect(k.summary).toBeNull();
+    // No number recorded: the sheet says so instead of offering a dead "Bel".
+    expect(k.party.phone).toBeNull();
   });
 });

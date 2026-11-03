@@ -19,7 +19,8 @@ import {
  */
 
 export interface PartyTalkingPoints {
-  party: { id: string; name: string };
+  /** `phone` is what the call sheet's "Bel" dials; null when none is recorded. */
+  party: { id: string; name: string; phone: string | null };
   tell: TalkingPoint[];
   ask: TalkingPoint[];
   summary: BriefSummary | null;
@@ -61,7 +62,9 @@ const uuids = (ids: string[]) => (ids.length ? sql.join(ids.map((d) => sql`${d}:
 const texts = (ids: string[]) => (ids.length ? sql.join(ids.map((d) => sql`${d}`), sql`, `) : sql`NULL`);
 
 export async function loadTalkingPoints(db: Db, partyId: string, now = new Date()): Promise<PartyTalkingPoints> {
-  const [party] = await db.select({ id: schema.parties.id, name: schema.parties.name, email: schema.parties.email })
+  const [party] = await db.select({
+    id: schema.parties.id, name: schema.parties.name, email: schema.parties.email, phone: schema.parties.phone,
+  })
     .from(schema.parties).where(eq(schema.parties.id, partyId));
   if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
   const contacts = await db.select({ id: schema.parties.id, email: schema.parties.email })
@@ -227,5 +230,5 @@ export async function loadTalkingPoints(db: Db, partyId: string, now = new Date(
     documents,
     openStops: stopRows.map((s) => ({ id: s.id, title: s.title, at: s.at ? new Date(s.at) : null })),
   });
-  return { party: { id: party.id, name: party.name }, ...points, summary: briefSummary(brief ?? null) };
+  return { party: { id: party.id, name: party.name, phone: party.phone }, ...points, summary: briefSummary(brief ?? null) };
 }

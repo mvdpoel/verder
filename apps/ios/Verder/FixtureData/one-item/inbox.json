@@ -9,7 +9,8 @@
       "priority": 1,
       "at": "2026-11-01T08:30:00.000Z",
       "dueAt": null,
-      "verder": true
+      "verder": true,
+      "partyId": "00000000-f1c5-4000-8000-600000000002"
     }
   ],
   "doneByVerder": [
