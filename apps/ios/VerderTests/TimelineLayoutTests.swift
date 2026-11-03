@@ -164,6 +164,54 @@ struct TimelineLayoutTests {
         #expect(b.curves == [.init(kind: .branch, trackId: "huur", centerLane: 0, edgeLane: 1, edge: .level)])
     }
 
+    /// A trigger on the trunk logged AFTER the first stop of its own spoor (a
+    /// sommatie entered a day after "verwerkt als vordering"): the branch stop
+    /// sits ABOVE the spoor's oldest stop. `buildTrackMap` still emits the edge
+    /// and rings the junction, so the phone must draw a line out of that ring —
+    /// down into the spoor's lane — and the spoor's rail must reach it.
+    @Test func aBranchFromAStopNewerThanTheSpoorsOldestStillLeavesTheRing() {
+        let m = Self.map(
+            bands: [Self.band("2026-10", "oktober 2026", 0, 4)],
+            tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 0...3, root: true),
+                     Self.track("kvk", "Vordering KvK", lane: 1, rows: 2...3)],
+            stops: [Self.stop("r0", track: "root", row: 0, lane: 0, band: "2026-10"),
+                    Self.stop("trigger", track: "root", row: 1, lane: 0, band: "2026-10"),
+                    Self.stop("k2", track: "kvk", row: 2, lane: 1, band: "2026-10"),
+                    Self.stop("k3", track: "kvk", row: 3, lane: 1, band: "2026-10")],
+            edges: [.init(kind: "branch", trackId: "kvk", fromLane: 0, fromRow: 1, toLane: 1, toRow: 3)])
+        let layout = TimelineLayout(m)
+        let trigger = Self.stopRows(layout).first { $0.stop.id == "trigger" }!
+        #expect(trigger.curves == [.init(kind: .branch, trackId: "kvk", centerLane: 0, edgeLane: 1, edge: .bottom)])
+        // The curve is the spoor's slice in the trigger row — no extra rail beside it.
+        #expect(!trigger.rails.contains { $0.lane == 1 })
+        // The spoor's rail runs from the curve down to its own stops, unbroken.
+        #expect(Self.rails(layout, "k2").first { $0.lane == 1 }
+            == .init(lane: 1, trackId: "kvk", isRoot: false, top: true, bottom: true))
+        #expect(Self.rails(layout, "k3").first { $0.lane == 1 }
+            == .init(lane: 1, trackId: "kvk", isRoot: false, top: true, bottom: false))
+        // Nothing of the spoor floats above the ring.
+        #expect(!Self.rails(layout, "r0").contains { $0.lane == 1 })
+    }
+
+    /// The same shape with the trigger BETWEEN two of the spoor's stops: the
+    /// rail already passes that row, and the ring still gets its line out.
+    @Test func aBranchFromInsideTheSpoorsSpanStillDrawsItsConnector() {
+        let m = Self.map(
+            bands: [Self.band("2026-10", "oktober 2026", 0, 3)],
+            tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 1...1, root: true),
+                     Self.track("kvk", "Vordering KvK", lane: 1, rows: 0...2)],
+            stops: [Self.stop("k0", track: "kvk", row: 0, lane: 1, band: "2026-10"),
+                    Self.stop("trigger", track: "root", row: 1, lane: 0, band: "2026-10"),
+                    Self.stop("k2", track: "kvk", row: 2, lane: 1, band: "2026-10")],
+            edges: [.init(kind: "branch", trackId: "kvk", fromLane: 0, fromRow: 1, toLane: 1, toRow: 2)])
+        let layout = TimelineLayout(m)
+        let trigger = Self.stopRows(layout).first { $0.stop.id == "trigger" }!
+        #expect(trigger.curves == [.init(kind: .branch, trackId: "kvk", centerLane: 0, edgeLane: 1, edge: .bottom)])
+        // Above the curve the spoor's rail still comes down to the row.
+        #expect(trigger.rails.first { $0.lane == 1 }
+            == .init(lane: 1, trackId: "kvk", isRoot: false, top: true, bottom: false))
+    }
+
     @Test func aTrackWithNoStopsDrawsNothing() {
         let m = Self.map(
             bands: [Self.band("2026-10", "oktober 2026", 0, 1)],

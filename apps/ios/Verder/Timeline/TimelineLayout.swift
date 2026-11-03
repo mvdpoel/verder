@@ -62,7 +62,9 @@ enum TimelineCopy {
 ///
 /// Connectors are a curve in ONE row. A branch leaves the parent's dot at the
 /// branch stop and rises into the spoor's lane; the spoor's rail then runs up
-/// to its oldest stop. A merge comes down the spoor's lane and curves into the
+/// to its oldest stop. When the branch stop is newer than the spoor's oldest
+/// stop, the curve goes DOWN into the spoor's lane instead and the rail runs
+/// up to meet it. A merge comes down the spoor's lane and curves into the
 /// parent's dot at the merge stop.
 struct TimelineLayout: Equatable {
     /// Lane x positions in the gutter left of the labels. Up to four lanes sit
@@ -212,6 +214,16 @@ struct TimelineLayout: Equatable {
                     } else if edge.fromRow == edge.toRow && edge.fromLane != edge.toLane {
                         curvesAt[edge.fromRow, default: []].append(Curve(
                             kind: .branch, trackId: t.id, centerLane: edge.fromLane, edgeLane: edge.toLane, edge: .level))
+                    } else if edge.fromRow < e.bottom && edge.fromLane != edge.toLane {
+                        // The branch stop is NEWER than the spoor's oldest stop — a
+                        // trigger logged after the spoor's first step. `buildTrackMap`
+                        // still emits the edge and rings the junction, so the line
+                        // leaves the ring DOWNWARD into the spoor's lane, and the
+                        // spoor's rail reaches up to it. A ring with no line out of
+                        // it is the one thing the map must never draw.
+                        e.top = min(e.top, edge.fromRow)
+                        curvesAt[edge.fromRow, default: []].append(Curve(
+                            kind: .branch, trackId: t.id, centerLane: edge.fromLane, edgeLane: edge.toLane, edge: .bottom))
                     }
                 case "merge":
                     if edge.toRow < e.top {
