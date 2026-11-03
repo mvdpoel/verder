@@ -1,0 +1,28 @@
+{
+  "party": {
+    "id": "00000000-f1c5-4000-8000-600000000003",
+    "name": "Incassobureau Kade & Partners"
+  },
+  "tell": [],
+  "ask": [
+    {
+      "id": "ask:task:00000000-f1c5-4000-8000-300000000016",
+      "text": "Vraag naar: Reactie Kade & Partners op de sommatie",
+      "source": {
+        "type": "task",
+        "id": "00000000-f1c5-4000-8000-300000000016",
+        "link": "verder://task/00000000-f1c5-4000-8000-300000000016"
+      }
+    },
+    {
+      "id": "ask:debt:00000000-f1c5-4000-8000-a00000000001",
+      "text": "Vraag het gevorderde bedrag: Stroomnet Energie (KP-2026-0114)",
+      "source": {
+        "type": "debt",
+        "id": "00000000-f1c5-4000-8000-a00000000001",
+        "link": "verder://dossier"
+      }
+    }
+  ],
+  "summary": null
+}

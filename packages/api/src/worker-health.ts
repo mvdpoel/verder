@@ -44,7 +44,7 @@ import {
   NOTIFY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME,
   PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTO_FILE_WORKER_NAME,
-  AUTOFILE_DIGEST_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME,
+  AUTOFILE_DIGEST_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME, PARTY_BRIEF_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -348,6 +348,10 @@ const DECLS: Record<string, WorkerDecl> = {
   // auto-file rides suggest.docmeta: one row per docmeta suggestion it
   // considered, applied or refused, and none at all while DOCMETA_AUTO_APPLY is off.
   [AUTO_FILE_WORKER_NAME]: { kind: "on-demand" },
+  // party-brief rides the host drafter, but only when a known party's mail
+  // marked a brief pending, so it can be silent for days. The drafter's pulse
+  // is proposal-draft's heartbeat, which stays the watcher.
+  [PARTY_BRIEF_WORKER_NAME]: { kind: "on-demand" },
 
   // ---- hand-run ops scripts. Silent for weeks by design. -----------------
   // `pnpm --filter worker <script>`, typed by a human during a deploy or a

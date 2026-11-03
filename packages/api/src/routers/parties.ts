@@ -4,6 +4,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { schema } from "@verder/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
+import { loadTalkingPoints } from "../talking-points-load";
 
 export const partiesRouter = router({
   list: protectedProcedure.query(({ ctx }) =>
@@ -37,6 +38,15 @@ export const partiesRouter = router({
       .groupBy(schema.parties.id)
       .orderBy(sql`${last} DESC NULLS LAST`, asc(schema.parties.name), asc(schema.parties.id));
   }),
+
+  /**
+   * What to tell and what to ask this party during a call (Added 2026-11-03):
+   * deterministic points read off the dossier, plus the one AI line when the
+   * host drafter has made it. Read-only; NOT_FOUND when the id names no party.
+   */
+  talkingPoints: protectedProcedure.input(z.object({ id: z.string().uuid() }))
+    .query(({ ctx, input }) => loadTalkingPoints(ctx.db, input.id)),
+
   create: protectedProcedure.input(z.object({
     kind: z.enum(["person", "organization"]),
     name: z.string().min(1),

@@ -2,6 +2,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { ingestDocument } from "@verder/api/src/routers/documents";
 import { storeFile } from "@verder/api/src/storage";
+import { markBriefPending } from "./briefs/mark";
 import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
@@ -248,6 +249,11 @@ export async function ingestRawEmail(
     // message shares one sender. See resolveSenderPartyId for why this is not
     // a plain string/SQL-lower() comparison against msg.from.
     const senderPartyId = await resolveSenderPartyId(tx, msg.from);
+    // Talking points (Added 2026-11-03): mail from a known party makes its
+    // call brief stale, so the host drafter re-briefs it. In THIS transaction,
+    // so the mail and the request land together. Receipt lookups
+    // (`skipSuggest`) are financial evidence, not correspondence: no brief.
+    if (senderPartyId && !opts?.skipSuggest) await markBriefPending(tx, senderPartyId);
     for (const att of msg.attachments) {
       const { sha256 } = await storeFile(deps.vaultDir, att.data);
       await ingestDocument(tx, { sha256, sizeBytes: att.data.length,

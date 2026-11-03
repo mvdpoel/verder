@@ -312,6 +312,9 @@ case " $* " in
   *" proposals-pending --ids "*) [ -n "$PENDING_IDS" ] && printf '%s\\n' $PENDING_IDS; exit "\${PENDING_RC:-0}";;
   *" proposals-pending --prompt "*) for id; do :; done; printf 'PROMPT for %s\\nline two' "$id"; exit 0;;
   *" proposals-store --heartbeat "*) echo heartbeat >> "$STUB_STATE/store"; exit 0;;
+  *" briefs-pending --ids "*) [ -n "$BRIEF_IDS" ] && printf '%s\\n' $BRIEF_IDS; exit "\${BRIEF_RC:-0}";;
+  *" briefs-pending --prompt "*) for id; do :; done; printf 'BRIEF PROMPT for %s' "$id"; exit 0;;
+  *" briefs-store "*) echo "brief-store $*" >> "$STUB_STATE/store"; cat >> "$STUB_STATE/store"; echo >> "$STUB_STATE/store"; exit 0;;
   *" proposals-store "*) echo "store $*" >> "$STUB_STATE/store"; cat >> "$STUB_STATE/store"; echo >> "$STUB_STATE/store"; exit 0;;
 esac
 exit 0
@@ -443,6 +446,52 @@ exit "\${CLAUDE_RC:-0}"
     const r = t.run({ PENDING_IDS: ID1 });
     expect(r.status).toBe(1);
     expect(t.log()).toBe("");
+  });
+
+  // Talking points (Added 2026-11-03): party briefs ride the same run.
+  const P1 = crypto.randomUUID();
+
+  it("briefs only: records the proposals heartbeat, then drafts each brief into briefs-store", () => {
+    const t = drafterTree();
+    const answer = '{"summary":"Ze vroegen om je loonstrook.","sources":["m1"]}';
+    const r = t.run({ PENDING_IDS: "", BRIEF_IDS: P1, CLAUDE_ANSWER: answer });
+    expect(r.status).toBe(0);
+    const store = t.store();
+    expect(store).toContain("heartbeat");
+    expect(t.claudeIn()).toContain(`BRIEF PROMPT for ${P1}`);
+    expect(t.claudeIn()).toContain("token-in-env");
+    expect(store).toContain(`briefs-store --party ${P1} --model claude-cli 2.1.0 (Claude Code)`);
+    expect(store).toContain(answer);
+    expect(t.drafterLog()).toContain(`brief ${P1} stored after`);
+    for (const out of [r.stdout, r.stderr, t.log(), store, t.claudeIn(), t.drafterLog()]) {
+      expect(out).not.toContain(TOKEN);
+    }
+  });
+
+  it("proposals first, then briefs, in one run", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: ID1, BRIEF_IDS: P1, CLAUDE_ANSWER: "{}" });
+    const store = t.store();
+    expect(store.indexOf(`proposals-store --id ${ID1}`)).toBeGreaterThanOrEqual(0);
+    expect(store.indexOf(`briefs-store --party ${P1}`)).toBeGreaterThan(store.indexOf(`proposals-store --id ${ID1}`));
+  });
+
+  it("claude failing marks the brief failed with the exit code", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: "", BRIEF_IDS: P1, CLAUDE_ANSWER: "", CLAUDE_RC: "124" });
+    expect(t.store()).toContain(`briefs-store --party ${P1} --model claude-cli 2.1.0 (Claude Code) --failed claude-exit-124`);
+  });
+
+  it("refuses a malformed brief id, and a failed brief listing never stops the proposals", () => {
+    const t = drafterTree();
+    t.run({ PENDING_IDS: ID1, BRIEF_IDS: "--failed;rm", CLAUDE_ANSWER: "{}" });
+    expect(t.log()).not.toContain("briefs-pending --prompt");
+    expect(t.store()).not.toContain("briefs-store");
+    const u = drafterTree();
+    u.run({ PENDING_IDS: ID1, BRIEF_IDS: P1, BRIEF_RC: "1", CLAUDE_ANSWER: "{}" });
+    expect(u.store()).toContain(`proposals-store --id ${ID1}`);
+    expect(u.store()).not.toContain("briefs-store");
+    expect(u.drafterLog()).toContain("briefs-pending failed");
   });
 
   it("keeps all state under the state dir, nothing inside the repo tree", () => {
