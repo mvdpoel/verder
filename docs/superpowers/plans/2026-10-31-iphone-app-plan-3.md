@@ -46,7 +46,7 @@ The Face ID check: **(merged)** `ApprovalGate` wraps Plan 1's `protocol DeviceOw
 - **Deploy order is never interchangeable:** `next build` locally, then rsync (dry run first), then migrate from the homelab HOST, then rebuild web+worker, then `nightly-verify`, then check the ledger head. The rsync is written out literally every time, never in a variable or array, and uses Homebrew's rsync (macOS's openrsync rejects `--info=del`):
 
   ```text
-  /opt/homebrew/bin/rsync -av --delete --dry-run --info=del --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod*' --exclude 'secrets' --exclude 'vault-files' --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' --exclude 'apps/ios/build' --exclude '*.xcodeproj' ./ homelab:~/apps/verder/
+  /opt/homebrew/bin/rsync -av --delete --dry-run --info=del --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude '.turbo' --exclude '.serena' --exclude 'nightly.log' --exclude '.env.prod*' --exclude 'secrets' --exclude 'vault-files' --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' --exclude 'apps/ios/build' --exclude '*.xcodeproj' --exclude '/docs/grip/**/*.mp4' ./ homelab:~/apps/verder/
   ```
 
   Read every `deleting` line. Then run the same command without `--dry-run --info=del`.

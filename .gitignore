@@ -18,3 +18,6 @@ next-env.d.ts
 
 # Serena MCP server workspace cache
 .serena/
+
+# Grip pitch videos (823 MB): local only, never in git (Martin, 2026-11-03)
+docs/grip/**/*.mp4
