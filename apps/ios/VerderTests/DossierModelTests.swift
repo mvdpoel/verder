@@ -151,4 +151,47 @@ struct DossierModelTests {
         #expect(DossierCopy.notHeldLine(0) == nil)
         #expect(DossierCopy.notHeldLine(3)?.hasPrefix("3 documenten staan") == true)
     }
+
+    // MARK: - The Tijdlijn names a document's soort on every path
+
+    /// Overzicht pushes the Tijdlijn before Dossier was ever opened: the
+    /// shared preparation reads (and, never synced, syncs) the phone's copy,
+    /// so the row says "document · brief · opent in dossier" there too.
+    @Test func theTimelinesDocumentLineNamesTheSoortWithoutOpeningDossierFirst() async throws {
+        let server = StubServer()
+        server.on(Self.syncRoutes(file: DossierStoreTests.pdf(DossierStoreTests.bytesA)))
+        let model = DossierModel(store: DossierStore(dir: DossierStoreTests.tempDir()), client: server.client())
+        #expect(model.doc(Self.a) == nil)
+        await model.prepareForTimeline(isLocked: false, isActive: true)
+        let line = TimelineCopy.documentLine(docType: model.doc(Self.a)?.docType, held: model.doc(Self.a) != nil,
+                                             offline: false)
+        #expect(line == "document · brief · opent in dossier")
+        // Dossier's own path, already synced, prepares to the same answer.
+        await model.prepareForTimeline(isLocked: false, isActive: true)
+        #expect(model.doc(Self.a)?.docType == "letter")
+    }
+
+    @Test func aLockedPhoneDoesNotSyncForTheTimeline() async throws {
+        let server = StubServer()
+        server.on(Self.syncRoutes(file: DossierStoreTests.pdf(DossierStoreTests.bytesA)))
+        let model = DossierModel(store: DossierStore(dir: DossierStoreTests.tempDir()), client: server.client())
+        await model.prepareForTimeline(isLocked: true, isActive: true)
+        #expect(model.doc(Self.a) == nil)
+    }
+
+    @Test func theSearchFieldKeepsOneLine() {
+        #expect(DossierCopy.searchLine("bijstand") == "bijstand")
+        #expect(DossierCopy.searchLine("bijstand\n") == "bijstand")
+        #expect(DossierCopy.searchLine("loon\nstrook") == "loon strook")
+    }
+
+    @Test func freshnessReadsTheCasesClock() async throws {
+        let at = Date(timeIntervalSince1970: 1_793_522_460) // 1 nov 09:41 Amsterdam
+        let server = StubServer()
+        server.on(Self.syncRoutes(file: DossierStoreTests.pdf(DossierStoreTests.bytesA)))
+        let model = DossierModel(store: DossierStore(dir: DossierStoreTests.tempDir(), now: { at }),
+                                 client: server.client(), now: { at })
+        await model.refresh(isLocked: false, isActive: true)
+        #expect(model.freshness == "bijgewerkt 09:41")
+    }
 }

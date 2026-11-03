@@ -396,6 +396,33 @@ struct TimelineLayoutTests {
         }
     }
 
+    @Test func anEndedStopKeepsItsSpoorAsAPartSoAWrapDropsTheSeparator() {
+        let m = Self.map(
+            bands: [Self.band("2026-10", "oktober 2026", 0, 1)],
+            tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 0...0, root: true),
+                     Self.track("huur", "Huurachterstand Lindehof", lane: 1, rows: 0...0, status: "ended", terminus: "ended")],
+            stops: [Self.stop("a", track: "huur", row: 0, lane: 1, band: "2026-10")])
+        let r = Self.stopRows(TimelineLayout(m))[0].readouts[0]
+        #expect(r.parts.first == "afgehandeld")
+        #expect(r.parts.last == "Huurachterstand Lindehof")
+        // The arrangement the frame draws is on offer, and no line ends in "·".
+        let candidates = TimelineLayout.lineBreaks(r.parts)
+        #expect(candidates.contains { $0.count == 2 && $0[1] == ["Huurachterstand Lindehof"] })
+        for lines in candidates {
+            for line in lines { #expect(!line.joined(separator: " · ").hasSuffix("·")) }
+        }
+    }
+
+    @Test func lineBreaksTryFewestLinesThenTheLongestFirstLine() {
+        #expect(TimelineLayout.lineBreaks(["a"]) == [[["a"]]])
+        #expect(TimelineLayout.lineBreaks(["a", "b", "c"]) == [
+            [["a", "b", "c"]],
+            [["a", "b"], ["c"]],
+            [["a"], ["b", "c"]],
+            [["a"], ["b"], ["c"]],
+        ])
+    }
+
     @Test func theReadoutsNameTheDateTheSpoorAndHowItEnded() {
         let layout = TimelineLayout(Self.mergingCase)
         let rows = Dictionary(uniqueKeysWithValues: Self.stopRows(layout).map { ($0.stop.id, $0) })

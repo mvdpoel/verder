@@ -428,10 +428,38 @@ struct TimelineLayout: Equatable {
     }
 
     /// One readout line under a title.
+    /// One mono line under a stop's title, kept as its " · " PARTS so the
+    /// view can break it between parts and never leave a "·" dangling at a
+    /// line's end (`lineBreaks`).
     struct Readout: Equatable, Sendable {
         enum Tone: Equatable, Sendable { case label, signal, attn }
-        let text: String
+        let parts: [String]
         var tone: Tone = .label
+        var text: String { parts.joined(separator: " · ") }
+
+        init(text: String, tone: Tone = .label) { parts = [text]; self.tone = tone }
+        init(parts: [String], tone: Tone = .label) { self.parts = parts; self.tone = tone }
+    }
+
+    /// The ways to set `parts` on lines, in the order the view tries them:
+    /// fewest lines first, and among those the longest first line. A break
+    /// falls only BETWEEN parts, so the " · " goes with it: "afgehandeld ·
+    /// 1 okt" over "huurachterstand lindehof", never "… 1 okt ·" over it.
+    static func lineBreaks(_ parts: [String]) -> [[[String]]] {
+        guard parts.count > 1 else { return [[parts]] }
+        let gaps = parts.count - 1
+        var out: [[[String]]] = []
+        for mask in 0..<(1 << gaps) {
+            var lines: [[String]] = [[parts[0]]]
+            for i in 1..<parts.count {
+                if mask & (1 << (i - 1)) != 0 { lines.append([parts[i]]) } else { lines[lines.count - 1].append(parts[i]) }
+            }
+            out.append(lines)
+        }
+        return out.sorted { a, b in
+            if a.count != b.count { return a.count < b.count }
+            return b.map(\.count).lexicographicallyPrecedes(a.map(\.count))
+        }
     }
 
     struct BandRow: Equatable, Identifiable {
@@ -803,7 +831,7 @@ struct TimelineLayout: Equatable {
                 // its own line, as the frame sets it.
                 return running.map { Readout(text: "spoor \($0.title)\nloopt hierheen") }
             case .open:
-                return [Readout(text: (["wacht op jou", when(s)].compactMap { $0 }).joined(separator: " · "), tone: .attn)]
+                return [Readout(parts: ["wacht op jou", when(s)].compactMap { $0 }, tone: .attn)]
                     + (spoor.map { [Readout(text: $0)] } ?? [])
             case .done:
                 var prefix: String?
@@ -814,12 +842,12 @@ struct TimelineLayout: Equatable {
                     case "done": prefix = "afgerond"
                     case "merge":
                         let back = mergeStop(t)?.happenedAt.map { "terug op \(day($0))" } ?? "terug op de hoofdlijn"
-                        tail = Readout(text: "laatste halte · \(back)")
+                        tail = Readout(parts: ["laatste halte", back])
                     default: break
                     }
                 }
-                let line = [prefix, when(s), spoor].compactMap { $0 }.joined(separator: " · ")
-                return (line.isEmpty ? [] : [Readout(text: line)]) + (tail.map { [$0] } ?? [])
+                let line = [prefix, when(s), spoor].compactMap { $0 }
+                return (line.isEmpty ? [] : [Readout(parts: line)]) + (tail.map { [$0] } ?? [])
             }
         }
 

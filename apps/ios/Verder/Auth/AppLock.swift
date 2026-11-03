@@ -161,6 +161,12 @@ final class AppLock {
         }
     }
 
+    #if DEBUG
+    /// `-fixtures-faceid idle`: the automatic prompt counts as asked, so the
+    /// glance holds its resting state ("Toon details") for a capture.
+    func fixtureSkipAutoPrompt() { autoPrompted = true }
+    #endif
+
     /// The lock screen's own prompt: at most ONCE per time the app locks. After
     /// that, only the button asks.
     func autoPromptIfNeeded() async {

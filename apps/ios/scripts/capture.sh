@@ -2,7 +2,7 @@
 # Screenshot one screen of the app on the synthetic dataset, in the simulator.
 #   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
 #                      [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]
-#                      [--press <text>] [--geld <state>] [--faceid asking]
+#                      [--press <text>] [--geld <state>] [--faceid <asking|idle>]
 #                      [--push <denied|notDetermined>] [--more <signout|savefail>]
 #                      [--timeline <state[,state…]>] [--tap <label>]
 #
@@ -43,6 +43,8 @@
 #            open | nov (beheerrekening on November, leefgeldrekening on
 #            September) | sep (beheerrekening on September) | sheet ("Niet in
 #            de balken" for the beheerrekening)
+#   --faceid idle    with --locked: the glance at rest — the automatic prompt counted as
+#            asked and nothing cancelled, so "Toon details" stands with its footnote
 #   --faceid asking  with --locked: the automatic Face ID prompt never answers,
 #            so Overzicht holds "Face ID vraagt" (no button)
 #   --timeline  the Tijdlijn in a state only a gesture reaches (route timeline,
@@ -75,7 +77,7 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>] [--faceid asking] [--push <state>] [--more <state>]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>] [--faceid <asking|idle>] [--push <state>] [--more <state>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
@@ -114,7 +116,7 @@ while [ $# -gt 0 ]; do
       shift ;;
     --faceid)
       [ $# -ge 2 ] || usage
-      case "$2" in asking) FACEID="$2" ;; *) echo "capture.sh: --faceid takes asking" >&2; exit 2 ;; esac
+      case "$2" in asking|idle) FACEID="$2" ;; *) echo "capture.sh: --faceid takes asking or idle" >&2; exit 2 ;; esac
       shift ;;
     --push)
       [ $# -ge 2 ] || usage

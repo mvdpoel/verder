@@ -25,6 +25,8 @@ struct TimelineScreen: View {
     /// The phone's copy of a document, if it holds one (its soort, and whether
     /// it opens offline).
     var heldDocument: (String) -> DossierDoc? = { _ in nil }
+    /// Readies `heldDocument` (`DossierModel.prepareForTimeline`).
+    var prepareDocuments: () async -> Void = {}
     private var now: @Sendable () -> Date { store.now }
 
     @State private var selected: CaseMapDTO.Stop?
@@ -54,6 +56,22 @@ struct TimelineScreen: View {
 
     var body: some View {
         scroller
+        // A stop's sheet floats (iOS 26) with the map visible below its
+        // rounded bottom edge; the map is dimmed hard there, as the frames
+        // draw it, so no map label reads beside the sheet's last row.
+        .overlay {
+            // Near-opaque at the bottom, where the sheet's curved edge sits.
+            LinearGradient(stops: [.init(color: Color.void.opacity(0.7), location: 0),
+                                   .init(color: Color.void.opacity(0.7), location: 0.72),
+                                   .init(color: Color.void.opacity(0.97), location: 0.88),
+                                   .init(color: Color.void.opacity(0.97), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .opacity(selected == nil ? 0 : 1)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .animation(.easeInOut(duration: 0.25), value: selected == nil)
+        }
         .navigationTitle(TimelineCopy.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -65,11 +83,14 @@ struct TimelineScreen: View {
                     .opacity(pinned ? 1 : 0)
                     .accessibilityHidden(!pinned)
             }
-            ToolbarItem(placement: .topBarTrailing) { filterMenu }
+            ToolbarItem(placement: .topBarTrailing) {
+                filterMenu.opacity(selected == nil ? 1 : 0.4)
+            }
         }
         .toolbar(.visible, for: .navigationBar)
         .preferredColorScheme(.dark)
         .task { await store.load() }
+        .task { await prepareDocuments() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await store.refresh() } }
         }
@@ -271,7 +292,7 @@ struct TimelineScreen: View {
                     ForEach(Array(parts.enumerated()), id: \.offset) { _, p in Text(HomeSummary.sentence(p)) }
                 }
             } else {
-                Text(parts.joined(separator: " · ").uppercased()).tracking(1)
+                ReadoutLines(parts: parts)
             }
         }
         .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
@@ -681,11 +702,9 @@ struct TimelineStopRowView: View {
                 }
             } else {
                 ForEach(Array(row.readouts.enumerated()), id: \.offset) { _, r in
-                    Text(r.text.uppercased())
+                    ReadoutLines(parts: r.parts)
                         .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                        .tracking(1)
                         .foregroundStyle(r.tone == .signal ? Color.signal : r.tone == .attn ? Color.attn : Color.inkLabel)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if row.stop.datesOutOfOrder {
                     Text("! " + TimelineCopy.flagged.uppercased())
@@ -1215,18 +1234,28 @@ struct TimelineStopSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 24)
-            .padding(.bottom, 24)
+            .padding(.bottom, 40) // clear of a floating sheet's curved bottom edge
             .frame(maxWidth: .infinity, alignment: .leading)
             .lineHeight(.multiple(factor: ax ? TimelineType.axLineFactor : TimelineType.lineFactor))
         }
         .background(Color.plate.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .presentationDetents([.fraction(0.66), .large], selection: $detent)
+        .presentationDetents(Self.detents(offline: offline), selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.plate)
-        // Offline the sheet opens tall, so the note on a file the phone does
-        // not hold and the website footer are in view.
-        .onAppear { if ax || offline { detent = .large } }
+        // Offline the sheet opens taller, so the note on a file the phone
+        // does not hold and the website footer are in view.
+        .onAppear {
+            if ax { detent = .large } else if offline { detent = Self.offlineDetent }
+        }
+    }
+
+    /// Offline the sheet opens taller, with a peek of the map above it (the
+    /// frame: the sheet's top at ~16% of the screen; the fraction is of the
+    /// height below the status bar).
+    static let offlineDetent = PresentationDetent.fraction(0.87)
+    static func detents(offline: Bool) -> Set<PresentationDetent> {
+        offline ? [.fraction(0.66), offlineDetent, .large] : [.fraction(0.66), .large]
     }
 
     private var top: some View {
@@ -1420,7 +1449,7 @@ struct TimelineStopSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.title)
                     .font(.display(15, relativeTo: .subheadline))
-                    .foregroundStyle(row.unavailable ? Color.inkSoft : Color.inkBright)
+                    .foregroundStyle(row.unavailable ? Color.inkMute : Color.inkBright)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 lineText(row)
@@ -1530,4 +1559,33 @@ struct TimelineBadge: View {
 enum TimelineType {
     static let lineFactor: CGFloat = 23.0 / 17.0
     static let axLineFactor: CGFloat = 1.25
+}
+
+/// A mono readout set in capitals, broken only BETWEEN its " · " parts
+/// (`TimelineLayout.lineBreaks`): the first arrangement whose lines fit the
+/// width, so a wrap never leaves a "·" at a line's end. A part too long for
+/// any line on its own wraps inside itself, the last resort.
+struct ReadoutLines: View {
+    let parts: [String]
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(TimelineLayout.lineBreaks(parts).enumerated()), id: \.offset) { _, lines in
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Text(line.joined(separator: " · ").uppercased()).tracking(1)
+                            .fixedSize()
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
+                    Text(p.uppercased()).tracking(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(parts.joined(separator: ", "))
+    }
 }

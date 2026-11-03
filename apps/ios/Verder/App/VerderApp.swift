@@ -66,9 +66,10 @@ struct VerderApp: App {
         _inbox = State(initialValue: inbox)
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
                                                 epoch: auth.epoch, now: s.now))
-        _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir), client: s.client,
+        _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir, now: s.now),
+                                                    client: s.client,
                                                     onUnauthorized: { auth.sessionRejected() },
-                                                    epoch: auth.epoch))
+                                                    epoch: auth.epoch, now: s.now))
         _timeline = State(initialValue: TimelineStore(client: s.client, cache: TimelineCache(dir: s.timelineDir),
                                                       onUnauthorized: { auth.sessionRejected() },
                                                       epoch: auth.epoch, now: s.now))

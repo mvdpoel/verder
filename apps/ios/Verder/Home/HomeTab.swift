@@ -32,6 +32,9 @@ struct HomeTab: View {
     /// A document or task behind a stop: shown on Dossier, where they live.
     var openDossier: (DossierRoute) -> Void = { _ in }
     var openVoorJou: () -> Void = {}
+    /// The phone's copy of the dossier: the Tijdlijn names a document's soort
+    /// from it, on this path exactly as on Dossier's.
+    var dossier: DossierModel? = nil
 
     @State private var showGeld = false
     @State private var showTimeline = false
@@ -62,7 +65,11 @@ struct HomeTab: View {
                 .navigationDestination(isPresented: $showTimeline) {
                     if let timeline {
                         TimelineScreen(store: timeline, open: openDossier, openVoorJou: openVoorJou,
-                                       raiseCurrent: true)
+                                       raiseCurrent: true,
+                                       heldDocument: { dossier?.doc($0) },
+                                       prepareDocuments: { [lock] in
+                                           await dossier?.prepareForTimeline(isLocked: lock.isLocked, isActive: true)
+                                       })
                             .lockGated(by: lock)
                     }
                 }
@@ -299,9 +306,10 @@ struct HomeTab: View {
                                 .foregroundStyle(Color.signal)
                                 .accessibilityHidden(true)
                         }
+                        // The accent, as the frames draw it: an action, not text.
                         Text(button)
                             .font(HomeType.bodyStrong)
-                            .foregroundStyle(Color.inkBright)
+                            .foregroundStyle(Color.signal)
                     }
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .padding(.horizontal, 12)

@@ -123,11 +123,15 @@ actor DossierStore {
 
     /// `writer` first: a single trailing closure in the tests is the writer.
     init(dir: URL, writer: @escaping Writer = DossierStore.defaultWriter,
-         reader: @escaping Reader = DossierStore.defaultReader) {
+         reader: @escaping Reader = DossierStore.defaultReader,
+         now: @escaping @Sendable () -> Date = { Date() }) {
         self.dir = dir
         self.reader = reader
         self.writer = writer
+        self.now = now
     }
+    /// The case's clock (`AppServices.now`): stamps "bijgewerkt".
+    private let now: @Sendable () -> Date
 
     /// Reads the disk copy once. True when the store is loaded (now or
     /// before); false when a read failed for any reason other than the file
@@ -258,7 +262,7 @@ actor DossierStore {
                 throw error
             }
             state.cursor = delta.cursor
-            state.syncedAt = Date()
+            state.syncedAt = now()
             try save(gen)
             if !delta.more { break }
         }

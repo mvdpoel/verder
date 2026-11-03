@@ -15,6 +15,8 @@ import Foundation
 ///     -fixtures-scroll <waiting|leefgeld|rest|end>  open Overzicht scrolled to that card (the rest of a "hele pagina" frame)
 ///     -fixtures-geld <open|nov|sep|sheet>  push Geld from Overzicht (as a card tap does): as it opens, with
 ///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
+///     -fixtures-faceid idle    with -fixtures-locked: the glance before any answer — the automatic
+///                              prompt counted as asked, nothing cancelled ("Toon details" and its footnote)
 ///     -fixtures-faceid asking  with -fixtures-locked: the automatic Face ID prompt never answers,
 ///                              so Overzicht holds its "vraagt" state (no button)
 ///     -fixtures-push <denied|notDetermined>  the notification permission (default: allowed)
@@ -92,7 +94,7 @@ struct FixtureLaunch: Equatable, Sendable {
     enum GeldState: String, CaseIterable, Sendable { case open, nov, sep, sheet }
 
     /// The moment of the Face ID prompt a locked capture holds.
-    enum FaceIDState: String, CaseIterable, Sendable { case asking }
+    enum FaceIDState: String, CaseIterable, Sendable { case asking, idle }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).

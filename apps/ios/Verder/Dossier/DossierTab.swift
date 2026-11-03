@@ -57,7 +57,8 @@ struct DossierTab: View {
                 case .timeline, .timelineNow:
                     TimelineScreen(store: timeline, open: { path.append($0) }, openVoorJou: openVoorJou,
                                    raiseCurrent: route == .timelineNow,
-                                   heldDocument: { model.doc($0) })
+                                   heldDocument: { model.doc($0) },
+                                   prepareDocuments: { await model.prepareForTimeline(isLocked: lock.isLocked, isActive: true) })
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -120,15 +121,37 @@ struct DossierTab: View {
 
     private var searchField: some View {
         HStack(spacing: 8) {
+            // A small glyph at every size (capped): at AX5 a body-sized
+            // magnifier took a fifth of the field from the prompt.
             Image(systemName: "magnifyingglass")
+                .font(.system(size: 17))
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(Color.inkLabel)
                 .accessibilityHidden(true)
-            TextField(DossierCopy.searchPrompt, text: Binding(get: { model.query }, set: { model.query = $0 }))
-                .font(.display(17, relativeTo: .body))
-                .foregroundStyle(Color.inkBright)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
+            // At the accessibility sizes the field grows downward and the
+            // prompt is drawn by hand, wrapped (a TextField truncates its own
+            // prompt to one line). A return typed in the wrapping field is
+            // not a line: `DossierCopy.searchLine` drops it.
+            ZStack(alignment: .topLeading) {
+                if ax && model.query.isEmpty {
+                    // Sizes the field too, so a two-line prompt has its room.
+                    Text(DossierCopy.searchPrompt)
+                        .font(.display(17, relativeTo: .body))
+                        .foregroundStyle(Color.inkLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
+                }
+                TextField(ax ? "" : DossierCopy.searchPrompt,
+                          text: Binding(get: { model.query }, set: { model.query = DossierCopy.searchLine($0) }),
+                          axis: ax ? .vertical : .horizontal)
+                    .lineLimit(ax ? 1...4 : 1...1)
+                    .accessibilityLabel(DossierCopy.searchPrompt)
+                    .font(.display(17, relativeTo: .body))
+                    .foregroundStyle(Color.inkBright)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+            }
             if !model.query.isEmpty {
                 Button { model.query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -140,6 +163,7 @@ struct DossierTab: View {
             }
         }
         .padding(.horizontal, 12)
+        .padding(.vertical, ax ? 8 : 0)
         .frame(minHeight: 44)
         .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.chip, style: .continuous).strokeBorder(Color.edgeStrong))
@@ -250,7 +274,7 @@ struct DossierTab: View {
     }
 
     private func taskRow(_ t: TaskDTO) -> some View {
-        let line = DossierCopy.taskLine(dueAt: t.dueAt, now: Date())
+        let line = DossierCopy.taskLine(dueAt: t.dueAt, now: model.now())
         return HStack(alignment: .center, spacing: 12) {
             Circle().strokeBorder(Color.attn, lineWidth: 2).frame(width: 9, height: 9)
                 .accessibilityHidden(true)

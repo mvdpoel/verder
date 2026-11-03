@@ -188,7 +188,8 @@ struct RootView: View {
                         openVoorJou: {
                             inboxPath = []
                             tab = .voorJou
-                        })
+                        },
+                        dossier: dossier)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,

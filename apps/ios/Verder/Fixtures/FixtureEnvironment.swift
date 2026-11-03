@@ -80,9 +80,11 @@ enum FixtureEnvironment {
         let store = InMemorySessionStore(cookie)
         let client = client(fixture: launch.fixture, store: store)
 
-        let lock = AppLock(authenticator: FixtureOwner(declinesFirst: launch.locked,
+        let idle = launch.locked && launch.faceID == .idle
+        let lock = AppLock(authenticator: FixtureOwner(declinesFirst: launch.locked && !idle,
                                                        holdsFirst: launch.locked && launch.faceID == .asking))
         if !launch.locked { lock.didSignIn() }
+        if idle { lock.fixtureSkipAutoPrompt() }
 
         let defaults = UserDefaults(suiteName: defaultsSuite) ?? .standard
         defaults.removePersistentDomain(forName: defaultsSuite)

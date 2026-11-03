@@ -46,6 +46,14 @@ enum DossierCopy {
     }
     static let retry = "Opnieuw proberen"
 
+    /// The search field's text as one line: at the accessibility sizes the
+    /// field wraps (a vertical TextField), where Return would type a newline.
+    static func searchLine(_ typed: String) -> String {
+        typed.contains(where: \.isNewline)
+            ? typed.split(whereSeparator: \.isNewline).joined(separator: " ")
+            : typed
+    }
+
     /// The docmeta vocabulary in Dutch; a soort Martin typed himself stays as typed.
     static func docTypeLabel(_ docType: String?) -> String? {
         guard let t = docType?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil }
@@ -181,10 +189,13 @@ final class DossierModel {
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
     @ObservationIgnored private let epoch: SessionEpoch
+    /// The case's clock (`AppServices.now`): "bijgewerkt" and every due date.
+    @ObservationIgnored let now: @Sendable () -> Date
 
     init(store: DossierStore, client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
          isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
-         epoch: SessionEpoch = SessionEpoch()) {
+         epoch: SessionEpoch = SessionEpoch(), now: @escaping @Sendable () -> Date = { Date() }) {
+        self.now = now
         self.store = store
         self.epoch = epoch
         self.client = client
@@ -200,10 +211,20 @@ final class DossierModel {
 
     var results: [IndexedDoc] { DossierSearch.search(query, in: docs) }
     var isSearching: Bool { !DossierSearch.words(query).isEmpty }
-    var freshness: String? { DossierCopy.freshness(syncedAt: syncedAt, offline: offline) }
+    var freshness: String? { DossierCopy.freshness(syncedAt: syncedAt, offline: offline, now: now()) }
     var notHeldLine: String? { DossierCopy.notHeldLine(notHeldCount) }
 
     func doc(_ id: String) -> DossierDoc? { docs.first { $0.id == id }?.doc }
+
+    /// What the Tijdlijn needs before it can describe a document behind a
+    /// stop (its soort, and whether it opens offline): the phone's copy read,
+    /// and synced once if it never was. ONE spelling for every path the
+    /// Tijdlijn is opened from — pushed from Overzicht before Dossier was ever
+    /// opened, `doc(_:)` would otherwise answer nil and the row lose its soort.
+    func prepareForTimeline(isLocked: Bool, isActive: Bool) async {
+        await loadCached()
+        if syncedAt == nil { await refresh(isLocked: isLocked, isActive: isActive) }
+    }
 
     /// The disk copy, before any network. While the phone's copy cannot be
     /// read yet (a launch while locked), `loaded` stays false — the skeleton,
