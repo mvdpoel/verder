@@ -267,6 +267,18 @@ struct MoreMenuTests {
         #expect(try level("WEEKLY") == "stil")
     }
 
+    /// DELIBERATELY NOT THE FRAME: "meer · final" draws Termijn as "gewoon"
+    /// and its two footnotes without these sentences, but the worker sends
+    /// task-due time-sensitive (clocks.ts, `kind: "task-due"`), reminders and
+    /// follow-ups about Verder's mail time-sensitive (clocks.ts LEVEL), and a
+    /// failed send as a time-sensitive Systeem alert (proposals/send.ts). The
+    /// copy follows what arrives; the design is to be brought to it.
+    @Test func theFootnotesSayWhatIsTimeSensitive() {
+        let foot = NotificationsCopy.groups.map(\.footnote)
+        #expect(foot[1].contains("08:00 en 22:00") && foot[1].contains("post van je bewindvoerder, dan zijn ze tijdgevoelig"))
+        #expect(foot[2].contains("meldt Systeem dat tijdgevoelig"))
+    }
+
     /// Breaking through a focus is NOT measured (CLAUDE.md, iPhone push): the
     /// copy says iOS decides it per focus, no more.
     @Test func verderMailClaimsNoFocusBreakthrough() throws {
@@ -301,12 +313,24 @@ struct MoreMenuTests {
     }
 
     /// The illustration draws what the widgets really draw: the small one
-    /// shows no age, only the rectangle on the lock screen does.
+    /// and the lock-screen rectangle both show the age of the oldest, and the
+    /// two previews state the same age.
     @Test func theWidgetPreviewIsTrue() {
-        #expect(!WidgetContent.showsOldest(.systemSmall))
+        #expect(WidgetContent.showsOldest(.systemSmall))
         #expect(WidgetContent.showsOldest(.accessoryRectangular))
-        #expect(!WidgetGuide.sampleWords.contains("oudste"))
-        #expect(WidgetGuide.sampleLock.contains("oudste"))
+        #expect(!WidgetContent.showsOldest(.systemMedium))
+        let now = Date(timeIntervalSince1970: 1_793_530_800)
+        #expect(WidgetGuide.sampleOldest
+                == WidgetContent.oldest(since: now.addingTimeInterval(-Double(WidgetGuide.sampleDays) * 86_400), now: now))
+        #expect(WidgetGuide.sampleOldest == "oudste 2 dagen")
+        #expect(WidgetGuide.sampleLock == "4 wachten · oudste 2 d")
+    }
+
+    /// Adding a toegangssleutel and the web's device list need verder: offline
+    /// both are drawn unavailable and cannot be tapped.
+    @Test func onlineOnlyAccountActionsAreUnavailableOffline() {
+        #expect(AccountCopy.onlineOnlyAvailable(offline: false))
+        #expect(!AccountCopy.onlineOnlyAvailable(offline: true))
     }
 
     @Test func aboutReadsTheBundleAndTheServer() {

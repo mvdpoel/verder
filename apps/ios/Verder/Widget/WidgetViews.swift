@@ -139,15 +139,26 @@ private struct ItemRow: View {
 
 // MARK: - Home screen
 
+/// Masthead, the count, its words and the age of the oldest — 40 pt, the
+/// medium face's count, so the four lines fit the 126 pt inside the margins
+/// on the smallest phone (`WidgetEntryTests.everyHomeScreenFaceFitsItsFamily`).
 private struct WidgetSmall: View {
     let content: WidgetContent
-    var countSize: CGFloat = 48
+    var countSize: CGFloat = 40
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Masthead(content: content)
             Spacer(minLength: 0)
             CountBlock(content: content, size: countSize)
+            if let oldest = content.oldestText {
+                Text(oldest)
+                    .font(.mono(12, relativeTo: .caption))
+                    .foregroundStyle(Color.inkLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

@@ -146,11 +146,12 @@ struct AccountScreen: View {
                 MoreDivider()
                 Button { Task { await auth.addPasskey() } } label: {
                     MoreRowView(symbol: "plus", title: AccountCopy.addPasskey,
-                                titleColor: offline ? .inkBright : .signal,
-                                lines: [.phrases([AccountCopy.addPasskeyLine(offline: offline)])], dimmed: offline)
+                                titleColor: .signal,
+                                lines: [.phrases([AccountCopy.addPasskeyLine(offline: offline)])],
+                                dimmed: !AccountCopy.onlineOnlyAvailable(offline: offline))
                 }
                 .buttonStyle(MoreRowButtonStyle())
-                .disabled(offline || auth.isBusy)
+                .disabled(!AccountCopy.onlineOnlyAvailable(offline: offline) || auth.isBusy)
             }
             if let message = auth.passkeyMessage {
                 MoreText.body(message).padding(.horizontal, 16).padding(.bottom, 12)
@@ -163,10 +164,10 @@ struct AccountScreen: View {
             Button { openURL(AccountCopy.devicesURL(base: auth.client.base)) } label: {
                 MoreRowView(symbol: "laptopcomputer", title: AccountCopy.devicesLink,
                             lines: [.phrases([AccountCopy.devicesLine(account.account?.devices, offline: offline)])],
-                            chevron: .external, dimmed: offline)
+                            chevron: .external, dimmed: !AccountCopy.onlineOnlyAvailable(offline: offline))
             }
             .buttonStyle(MoreRowButtonStyle())
-            .disabled(offline)
+            .disabled(!AccountCopy.onlineOnlyAvailable(offline: offline))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([AccountCopy.devicesLink,
                                  AccountCopy.devicesLine(account.account?.devices, offline: offline),
@@ -428,7 +429,7 @@ struct WidgetGuideScreen: View {
                 .padding(16)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Voorbeeld: verder op je beginscherm, 4 wachten op jou, en op je toegangsscherm, 4 wachten, oudste 2 dagen. \(WidgetGuide.privacy)")
+            .accessibilityLabel("Voorbeeld: verder op je beginscherm, 4 wachten op jou, \(WidgetGuide.sampleOldest), en op je toegangsscherm, 4 wachten, \(WidgetGuide.sampleOldest). \(WidgetGuide.privacy)")
             MoreGroup(label: WidgetGuide.homeLabel) { steps(WidgetGuide.homeSteps) }
             MoreGroup(label: WidgetGuide.lockLabel) { steps(WidgetGuide.lockSteps) }
         }
@@ -447,6 +448,10 @@ struct WidgetGuideScreen: View {
                     .font(.display(40, relativeTo: .largeTitle, weight: .light))
                     .foregroundStyle(Color.inkBright)
                 Text(WidgetGuide.sampleWords).font(MoreType.body).foregroundStyle(Color.ink)
+                Text(WidgetGuide.sampleOldest)
+                    .font(.mono(12, relativeTo: .caption))
+                    .foregroundStyle(Color.inkLabel)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)

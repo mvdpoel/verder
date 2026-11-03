@@ -143,8 +143,11 @@ struct WidgetContent: Equatable {
         family == .systemLarge || family == .systemExtraLarge
     }
 
+    /// The small face carries the age under its words (Figma "widgets ·
+    /// final", "meer · final": "4 / wachten op jou / oudste 2 dagen"); the
+    /// medium face spends that line on its two items instead.
     static func showsOldest(_ family: WidgetFamily) -> Bool {
-        family == .accessoryRectangular || showsHeadline(family)
+        family == .systemSmall || family == .accessoryRectangular || showsHeadline(family)
     }
 
     static func make(snapshot: WidgetSnapshot?, family: WidgetFamily, now: Date) -> WidgetContent {

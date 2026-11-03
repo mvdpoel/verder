@@ -67,6 +67,8 @@ struct WidgetEntryTests {
 
     @Test func eachFamilyShowsItsShareOfItems() {
         #expect(Self.content(Self.snapshot(), .systemSmall).rows.isEmpty)
+        #expect(Self.content(Self.snapshot(), .systemSmall).oldestText == "oudste 3 dagen")
+        #expect(Self.content(Self.snapshot(), .systemMedium).oldestText == nil)
         #expect(Self.content(Self.snapshot(), .systemMedium).rows.map(\.text) == Self.items.prefix(2).map(\.title))
         #expect(Self.content(Self.snapshot(), .systemLarge).rows.map(\.text) == Self.items.map(\.title))
         #expect(Self.content(Self.snapshot(), .systemMedium).headline == nil)

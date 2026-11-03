@@ -241,7 +241,7 @@ struct MoreRowView<Value: View, Accessory: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            if let symbol, !ax { MoreGlyph(name: symbol) }
+            if let symbol, !ax { MoreGlyph(name: symbol, color: dimmed ? .inkLabel : .inkMute) }
             VStack(alignment: .leading, spacing: ax ? 4 : 2) {
                 titleView
                 if below { value }
@@ -256,8 +256,9 @@ struct MoreRowView<Value: View, Accessory: View>: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        // `dimmed` (unavailable offline) mutes only the arrow: the title and
-        // its lines keep their inks, and the line itself says why (Figma
+        // `dimmed` (unavailable offline) mutes the title, the glyph and the
+        // arrow; the lines keep their inks, so the line that says why
+        // ("kan weer als je online bent") stays readable (Figma
         // "Account / offline").
         .contentShape(Rectangle())
     }
@@ -266,7 +267,7 @@ struct MoreRowView<Value: View, Accessory: View>: View {
         if let title {
             Text(ax ? (title.contains("@") ? MoreText.breakableAddress(title) : MoreText.hyphenate(title)) : title)
                 .font(MoreType.rowTitle)
-                .foregroundStyle(titleColor)
+                .foregroundStyle(dimmed ? Color.inkMute : titleColor)
                 .lineHeight(.multiple(factor: MoreType.titleLineFactor))
                 .fixedSize(horizontal: false, vertical: true)
         } else {
@@ -285,7 +286,7 @@ struct MoreRowView<Value: View, Accessory: View>: View {
         case .external:
             Image(systemName: "arrow.up.right")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(dimmed ? Color.inkMute : Color.signal)
+                .foregroundStyle(dimmed ? Color.inkLabel : Color.signal)
                 .accessibilityHidden(true)
         }
     }
@@ -463,25 +464,26 @@ enum MoreGlyphName {
 /// `MoreGlyphName`'s outline drawings, in the same ink and box.
 struct MoreGlyph: View {
     let name: String
+    var color: Color = .inkMute
 
     var body: some View {
         Group {
             switch name {
             case MoreGlyphName.calendar:
                 OutlineCalendar()
-                    .stroke(Color.inkMute, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
                     .frame(width: 17, height: 17)
             case MoreGlyphName.personCircle:
                 ZStack {
-                    Circle().strokeBorder(Color.inkMute, lineWidth: 1.5)
+                    Circle().strokeBorder(color, lineWidth: 1.5)
                     OutlinePerson()
-                        .stroke(Color.inkMute, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                        .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
                 }
                 .frame(width: 18, height: 18)
             default:
                 Image(systemName: name)
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(Color.inkMute)
+                    .foregroundStyle(color)
             }
         }
         .frame(width: 20)

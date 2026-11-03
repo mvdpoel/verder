@@ -374,6 +374,11 @@ enum AccountCopy {
     /// the website, as the row's own line says.
     static func offersPasskey(_ state: PasskeyState) -> Bool { state == .off }
 
+    /// Adding a toegangssleutel and the web's device list both need verder:
+    /// offline they are drawn unavailable (muted title, glyph and arrow) and
+    /// cannot be tapped, while their line says when they come back.
+    static func onlineOnlyAvailable(offline: Bool) -> Bool { !offline }
+
     static func addPasskeyLine(offline: Bool) -> String {
         offline ? laterOnline : "inloggen met Face ID in plaats van je wachtwoord"
     }
@@ -589,13 +594,15 @@ enum WidgetGuide {
     ]
 
     /// The illustration's numbers: an example, drawn the way the real
-    /// families draw it (`WidgetContent`) — the small one shows no age (the
-    /// brief's "Small: hero count plus 'wachten op jou'"), even where the
-    /// "meer · final" frame draws "oudste 2 dagen" under it: a guide that
-    /// promises a line the widget never shows is the one thing it must not do.
+    /// families draw it (`WidgetContent`) — the small one shows the count,
+    /// its words and the age of the oldest; the lock-screen rectangle the
+    /// count and the same age, shortened. One age for both, so the two
+    /// previews never disagree.
     static let sampleCount = "4"
+    static let sampleDays = 2
     static let sampleWords = "wachten op jou"
-    static let sampleLock = "4 wachten · oudste 2 d"
+    static let sampleOldest = "oudste \(sampleDays) dagen"
+    static let sampleLock = "\(sampleCount) wachten · oudste \(sampleDays) d"
     static let sampleDate = "maandag 2 november"
 
     static let privacy = "Op je toegangsscherm staan nooit titels: alleen hoeveel er wacht en hoe lang al."
