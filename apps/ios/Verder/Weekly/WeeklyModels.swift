@@ -590,7 +590,10 @@ struct WeeklyPage: Equatable, Sendable {
                                              accessibilityLabel: "")
             let empty = WeeklyEmpty(
                 symbol: "calendar",
-                title: "Je eerste weekoverzicht komt zondag \(WeeklyFormat.dayMonthLong(next)) om 18:00",
+                // "8 november om 18:00" is one unit: non-breaking spaces keep the
+                // day from being stranded at a line end, away from its month.
+                title: "Je eerste weekoverzicht komt zondag "
+                    + "\(WeeklyFormat.dayMonthLong(next)) om 18:00".replacingOccurrences(of: " ", with: "\u{00A0}"),
                 body: "Elke zondag zet verder je week op een rij: wat je verstuurde, wat je ontving, wat je opborg en wat nog op je wacht.",
                 retry: false, older: nil)
             return WeeklyPage(eyebrow: ["EERSTE WEEK"], status: nil, body: .notYet(empty, preview: preview),

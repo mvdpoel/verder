@@ -245,7 +245,10 @@ struct WeeklyDTOTests {
         let page = WeeklyPage.make(.notYet, now: Self.monday, live: .init(count: 4))
         #expect(page.eyebrow == ["EERSTE WEEK"])
         guard case .notYet(let e, let preview) = page.body else { Issue.record("\(page.body)"); return }
-        #expect(e.title == "Je eerste weekoverzicht komt zondag 8 november om 18:00")
+        #expect(e.title == "Je eerste weekoverzicht komt zondag 8\u{00A0}november\u{00A0}om\u{00A0}18:00")
+        // The only ordinary spaces are before the date: it wraps as one unit.
+        #expect(!e.title.hasSuffix(" 18:00"))
+        #expect(e.title.split(separator: " ").last == "8\u{00A0}november\u{00A0}om\u{00A0}18:00")
         #expect(preview.title == "ZO ZIET HET ERUIT")
         #expect(preview.bars.map(\.label) == ["W38", "W39", "W40", "W41", "W42", "W43", "W44", "W45"])
         #expect(preview.bars.allSatisfy { $0.value == nil })
