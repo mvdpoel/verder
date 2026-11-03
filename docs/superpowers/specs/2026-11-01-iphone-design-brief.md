@@ -227,7 +227,7 @@ separately because it is not Martin's effort but is still friction.
 
 | Screen | Goal | Now | Target | What changes |
 |---|---|---|---|---|
-| **Sign-in** | First sign-in | email + password + Inloggen; passkey offered afterwards | 1 tap + Face ID (passkey) on any later install | Buttons name the method: "Inloggen met passkey" first, "Inloggen met wachtwoord" second (R26). A cause line under every failure. |
+| **Sign-in** | First sign-in | email + password + Inloggen; passkey offered afterwards | 1 tap + Face ID (passkey) on any later install | Buttons name the method: "Inloggen met toegangssleutel" first (never the English "passkey" in the UI; session expiry reads "Je sessie is verlopen."), "Inloggen met wachtwoord" second (R26). A cause line under every failure. |
 | **Lock** | Reveal titles from Overzicht | tap "Toon details" + Face ID | **Face ID once, by itself, on open and on reopen past the 5-min grace — never per screen switch** (Martin, 2026-11-01; `252a4fc`); not on Scan, so the shutter is never covered | The app-switcher snapshot is covered while locked. The launch screen is plain `void` with no logo (R27). |
 | **Overzicht** (opens first; **ungated, counts and money only, titles after unlock** — Martin, 2026-11-01) | Know "is anything waiting on me?" | 0 taps (count card) | 0 taps | Board-style order now → soon → later (Mercury): waiting count as the hero number → money glance → tasks → scans → "Door verder gedaan" count. A preview of the top 3 with "Alles bekijken" after unlock (Copilot "To Review"). A calm state is a real state. |
 | | Open the top waiting item | tab Voor jou → row (2) | 1 (tap the preview row; Face ID if locked) | Preview rows deep-link. |
