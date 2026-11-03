@@ -10,9 +10,9 @@ import { PARTY_BRIEF_STATUSES } from "./schema";
 // rule (prompt, model output, model, prompt version) is kept on the row. The
 // web app only READS it; the worker marks a party pending on ingest and the
 // host drafter's store step writes the answer, so the worker holds SELECT,
-// INSERT, UPDATE — and no role holds DELETE, because a brief is overwritten by
-// the next draft, never removed, and its model output is the only record of
-// what the model said.
+// INSERT, UPDATE — and no role holds DELETE: a brief is overwritten by the
+// next draft, never removed. The row holds only the LATEST model output; the
+// record of every earlier one is the append-only `party_brief_drafts` (0043).
 const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
 
 describe("party_briefs (0042)", () => {

@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, or } from "drizzle-orm";
+import { and, asc, eq, lt, or, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { PARTY_BRIEF_WORKER_NAME } from "@verder/api/src/worker-names";
 import { recordRun } from "../heartbeat";
@@ -18,8 +18,11 @@ import { validateBrief } from "./validate";
  * died between the two calls, and nothing else would ever move it.
  *
  * Golden rule: the context, prompt, prompt version, model and RAW model output
- * are all kept on the row — a refused answer too. NOT EVIDENCE: nothing here
- * appends a ledger event. Every store call writes one `party-brief` run row.
+ * are kept on the row — a refused answer too — AND, because the row is
+ * overwritten by the next draft, every attempt is APPENDED to
+ * `party_brief_drafts` (0043) in the same transaction as the row's update:
+ * ready, refused, a drafter failure, and a late answer. NOT EVIDENCE: nothing
+ * here appends a ledger event. Every store call writes one `party-brief` run row.
  */
 
 export const BRIEF_BATCH = 5;
@@ -84,17 +87,32 @@ export async function storeBrief(
       .where(eq(schema.partyBriefs.partyId, input.partyId)).for("update");
     if (!row) return { outcome: "not-found" };
     // A late answer (re-marked pending by a newer mail, a second drafter run)
-    // never overwrites anything; the next run drafts the newer state.
-    if (row.status !== "drafting") return { outcome: "not-drafting", reason: row.status };
+    // never overwrites the row; the next run drafts the newer state. What the
+    // model said is still kept — WITHOUT a context or prompt, because the
+    // row's may already belong to a newer claim and would misattribute it.
+    if (row.status !== "drafting") {
+      await tx.insert(schema.partyBriefDrafts).values({
+        partyId: row.partyId, verdict: "late", model: input.model, modelOutput: answer,
+        error: `not-drafting: ${row.status}`, createdAt: now,
+      });
+      return { outcome: "not-drafting", reason: row.status };
+    }
+    const attempt = {
+      partyId: row.partyId, context: row.context, prompt: row.prompt, promptVersion: row.promptVersion,
+      model: input.model, modelOutput: answer, createdAt: now,
+    };
     const v = tooLong
       ? { ok: false as const, reason: `the answer is longer than ${MAX_BRIEF_ANSWER_CHARS} characters` }
       : validateBrief(answer, row.context as BriefContext);
     if (!v.ok) {
+      await tx.insert(schema.partyBriefDrafts).values({ ...attempt, verdict: "refused", error: v.reason });
       await tx.update(schema.partyBriefs).set({
         status: "failed", error: v.reason, modelOutput: answer, model: input.model, updatedAt: now,
       }).where(eq(schema.partyBriefs.partyId, row.partyId));
       return { outcome: "failed", reason: v.reason };
     }
+    await tx.insert(schema.partyBriefDrafts).values({
+      ...attempt, verdict: "ready", summary: v.summary, sourceRefs: v.sourceRefs });
     await tx.update(schema.partyBriefs).set({
       status: "ready", summary: v.summary, sourceRefs: v.sourceRefs, modelOutput: answer, model: input.model,
       generatedAt: now, error: null, updatedAt: now,
@@ -110,10 +128,17 @@ export async function storeBrief(
 export async function storeBriefFailure(
   db: Db, input: { partyId: string; model?: string; reason: string }, now = new Date(),
 ): Promise<BriefStoreResult> {
-  const updated = await db.update(schema.partyBriefs).set({
-    status: "failed", error: `drafter: ${input.reason}`, model: input.model ?? null, updatedAt: now,
-  }).where(and(eq(schema.partyBriefs.partyId, input.partyId), eq(schema.partyBriefs.status, "drafting")))
-    .returning({ partyId: schema.partyBriefs.partyId });
+  const error = `drafter: ${input.reason}`;
+  // One statement: the attempt is appended only when the row really was
+  // drafting, with the context and prompt that draft was given.
+  const updated = (await db.execute(sql`
+    WITH failed AS (
+      UPDATE party_briefs SET status = 'failed', error = ${error}, model = ${input.model ?? null}, updated_at = ${now}
+      WHERE party_id = ${input.partyId}::uuid AND status = 'drafting'
+      RETURNING party_id, context, prompt, prompt_version)
+    INSERT INTO party_brief_drafts (party_id, verdict, context, prompt, prompt_version, model, error, created_at)
+    SELECT party_id, 'failed', context, prompt, prompt_version, ${input.model ?? null}, ${error}, ${now} FROM failed
+    RETURNING party_id`)).rows;
   const result: BriefStoreResult = updated.length
     ? { outcome: "failed", reason: `drafter: ${input.reason}` }
     : { outcome: "not-drafting" };
