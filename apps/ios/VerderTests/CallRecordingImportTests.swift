@@ -259,6 +259,24 @@ struct CallRecordingImportTests {
         #expect(m.importedDrop == drop.id)
     }
 
+    /// Once the call sheet's going has opened the waiting recording, the next
+    /// foreground (`open`) does not open it a second time: the same model
+    /// stays, nothing replaces it.
+    @Test func aRecordingOpenedWhenTheCallSheetWentIsNotOpenedAgain() async throws {
+        let group = try group()
+        let drop = try audioDrop(group)
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server()) }, groupDir: group)
+        let r = try CallPrepTests().rig()
+        await r.session.open(partyId: CallPrepTests.noordkust, name: nil)
+        r.session.close()
+        await SharedRecordingGate.callSheetDismissed(signedIn: true, call: r.session, voice: session)?.value
+        let m = try #require(session.model)
+        #expect(m.importedDrop == drop.id)
+
+        #expect(SharedRecordingGate.open(signedIn: true, call: r.session, voice: session) == nil)
+        #expect(session.model === m)
+    }
+
     /// "Gesprek vastleggen" hands the call's points to the voice log as the
     /// sheet goes; that hand-off wins and the recording waits (it is never
     /// opened over a log being started — and the log can pick it itself).

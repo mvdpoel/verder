@@ -772,6 +772,59 @@ struct CallPrepTests {
         #expect(r.session.callEnded == false)
     }
 
+    /// A LONE late `.ended` after a dial-path end — no `.started` ever seen,
+    /// the id not listed at `reconcile` — is that same call's echo, exactly
+    /// like a lone `.started`: it does not end the call a second time or
+    /// bring back the offer Martin dismissed (review, 2026-11-03).
+    @Test func aLoneLateEndedAfterADialPathEndIsThatSameCall() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.observer.live = [:]
+        r.session.reconcile()
+        #expect(r.session.callEnded)
+        r.session.dismissEnded()
+        r.observer.send(.ended(UUID()))
+        #expect(r.session.callEnded == false)
+        #expect(r.activities.ends == 1)
+    }
+
+    /// Opening ANOTHER party inside the echo window is a new call to follow:
+    /// its own `.started`/`.ended` are not swallowed as the old call's echo.
+    @Test func aNewPartyInsideTheEchoWindowFollowsItsCall() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.observer.live = [:]
+        r.session.reconcile()
+        r.session.dismissEnded()
+        await r.session.open(partyId: Self.kade, name: nil)
+        let call = UUID()
+        r.observer.send(.started(call))
+        r.observer.send(.ended(call))
+        #expect(r.session.callEnded)
+    }
+
+    /// "Toon tijdens het gesprek" on the same sheet inside the echo window
+    /// starts a new call to follow, too.
+    @Test func aStartedActivityInsideTheEchoWindowFollowsItsCall() async throws {
+        let r = try rig()
+        await r.session.open(partyId: Self.noordkust, name: nil)
+        r.session.bel()
+        r.session.sceneEnteredBackground()
+        r.observer.live = [:]
+        r.session.reconcile()
+        r.session.dismissEnded()
+        r.session.startActivity()
+        let call = UUID()
+        r.observer.send(.started(call))
+        r.observer.send(.ended(call))
+        #expect(r.session.callEnded)
+        #expect(r.activities.ends == 2)
+    }
+
     /// The dial is consumed by its end: a second return to the app (or a
     /// later "Toon tijdens het gesprek" on the same sheet) is not a second end.
     @Test func aDialEndsOnlyOnce() async throws {

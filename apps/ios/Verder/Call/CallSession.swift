@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+#if DEBUG
+import os
+#endif
 
 /// The call in progress, owned ABOVE the lock gate and the tabs (like
 /// `VoiceLogSession`), so a relock, a tab switch or the Phone app taking the
@@ -65,9 +68,12 @@ final class CallSession {
     @ObservationIgnored private var lateEchoUntil: Date?
     /// Queued callbacks land within moments of resuming; a minute is slack,
     /// and short enough that a genuinely new call counts. It outlives
-    /// "Gesprek vastleggen" and opening another party on purpose (an echo
-    /// arriving then would otherwise sit stale in `startedCalls`); only a new
-    /// "Bel" — a call verder itself just started — closes it early.
+    /// "Gesprek vastleggen" and "Niet nu"; it closes early on anything that
+    /// starts a NEW call to follow — "Bel", "Toon tijdens het gesprek"
+    /// (`startActivity`) or opening another party — because inside the
+    /// window that call's own `.started`/`.ended` would otherwise be taken
+    /// for the old call's echo and never followed (review, 2026-11-03). An
+    /// echo landing after such a step is the accepted cost.
     static let lateEchoWindow: TimeInterval = 60
     /// Waiting for the call sheet to finish dismissing (`sheetDismissed`).
     @ObservationIgnored private var pendingVoice: VoicePrefill?
@@ -112,6 +118,7 @@ final class CallSession {
             callStartedAt = nil
             callEndedAt = nil
             forgetDial()
+            lateEchoUntil = nil
             let m = CallPrepModel(partyId: partyId, name: name, client: client, cache: cache, epoch: epoch, now: now,
                                   onUnauthorized: onUnauthorized)
             m.onChecklistChanged = { [weak self, weak m] in
@@ -168,12 +175,17 @@ final class CallSession {
         dialledAt = now()
         leftAfterDial = false
         lateEchoUntil = nil
+        #if DEBUG
+        traceDialAt = dialledAt
+        traceDial("bel")
+        #endif
         dial(url)
     }
 
     /// "Toon tijdens het gesprek": the Live Activity without dialling.
     func startActivity() {
         guard let model else { return }
+        lateEchoUntil = nil
         if activities.isRunning { activities.update(model.checklist.activityState); return }
         notice = activities.start(model.checklist.activityState) ? nil : CallCopy.activitiesOff
         activityRunning = activities.isRunning
@@ -187,6 +199,12 @@ final class CallSession {
     // MARK: - CallKit
 
     func handle(_ event: CallEvent) {
+        #if DEBUG
+        switch event {
+        case .started(let id): traceDial("callkit started \(id.uuidString.prefix(8))")
+        case .ended(let id): traceDial("callkit ended \(id.uuidString.prefix(8))")
+        }
+        #endif
         switch event {
         case .started(let id):
             // Already ended (a late `.started` after its `.ended`, or a call
@@ -201,6 +219,11 @@ final class CallSession {
         case .ended(let id):
             guard !endedCalls.contains(id) else { return }
             endedCalls.insert(id)
+            // A lone `.ended` for a call never seen start, inside the window
+            // after a dial-path end, is that call's echo (its `.started` was
+            // lost, or landed before the dial path spent it): ending again
+            // would bring back an offer Martin dismissed with "Niet nu".
+            if startedCalls[id] == nil, let until = lateEchoUntil, now() <= until { return }
             let startedAt = startedCalls.removeValue(forKey: id)
             guard isActive else { return }
             if callStartedAt == nil { callStartedAt = startedAt }
@@ -258,7 +281,21 @@ final class CallSession {
     /// phone, another app) and the return after THAT ended a call that never
     /// took place (review, 2026-11-03). With a call live it is not a cancel —
     /// the in-call UI may only have made verder inactive — so the dial stays.
+    ///
+    /// NOT MEASURED ON THE DEVICE (review, 2026-11-03): this rule ASSUMES a
+    /// CONFIRMED dial always takes verder to `.background` before it is
+    /// `.active` again with nothing in `CXCallObserver.calls`. If iOS ever
+    /// brings verder back to `.active` after a confirmed dial without a
+    /// `.background` in between — and lists no call at that moment (the
+    /// call not yet registered, or already gone) — the dial is spent here as
+    /// a cancelled prompt and that real call's end is never offered. The
+    /// DEBUG build logs the scene phases and `CXCallObserver.calls` around
+    /// every dial (`traceDial`, subsystem `pro.vanderpoel.verder`, category
+    /// `call-dial`) so one real call on Martin's phone can settle it.
     func reconcile() {
+        #if DEBUG
+        traceDial("reconcile dialled=\(dialledAt != nil) leftAfterDial=\(leftAfterDial) active=\(isActive)")
+        #endif
         let live = observer.currentCalls()
         for id in Array(startedCalls.keys) where live[id] != false {
             handle(.ended(id))
@@ -285,6 +322,29 @@ final class CallSession {
     func sceneEnteredBackground() {
         if dialledAt != nil { leftAfterDial = true }
     }
+
+    #if DEBUG
+    /// When the last "Bel" was tapped, for `traceDial` only (it outlives the
+    /// dial, so what happens AFTER the dial is spent is in the log too).
+    @ObservationIgnored private var traceDialAt: Date?
+    static let traceDialWindow: TimeInterval = 30 * 60
+    private static let dialLog = Logger(subsystem: "pro.vanderpoel.verder", category: "call-dial")
+
+    /// DEBUG only: one line per scene phase, CallKit event and `reconcile`
+    /// within half an hour of a "Bel", with what `CXCallObserver.calls`
+    /// lists at that moment — to measure the cancelled-dial assumption
+    /// (`reconcile`) on the phone. NO PII: never the number, the party or
+    /// a name; a call is its UUID's first 8 characters (random per call)
+    /// and whether it has ended.
+    func traceDial(_ step: String) {
+        guard let at = traceDialAt, now().timeIntervalSince(at) <= Self.traceDialWindow else { return }
+        let calls = observer.currentCalls()
+            .map { "\($0.key.uuidString.prefix(8)):\($0.value ? "ended" : "live")" }
+            .sorted().joined(separator: ",")
+        let t = Int(now().timeIntervalSince(at))
+        Self.dialLog.notice("+\(t, privacy: .public)s \(step, privacy: .public) calls=[\(calls, privacy: .public)]")
+    }
+    #endif
 
     /// "Niet nu" on the ended banner: the sheet stays, the offer goes.
     func dismissEnded() {

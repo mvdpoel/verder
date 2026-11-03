@@ -75,6 +75,11 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
+            #if DEBUG
+            // The cancelled-dial rule is NOT MEASURED on the device; this
+            // records the phase sequence around a dial (`CallSession.traceDial`).
+            call.traceDial("scene \(phase)")
+            #endif
             switch phase {
             case .background:
                 lock.sceneDidEnterBackground()
