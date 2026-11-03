@@ -24,7 +24,10 @@
 # /api/mobile/v1 call is answered from the bundled synthetic JSON.
 #
 # Env: DEVICE (simulator name, default "iPhone 17"), SKIP_BUILD=1 to reuse the
-# last build, SETTLE (seconds to wait before the shot, default 3).
+# last build, SETTLE (seconds to wait before the shot, default 3; 68 for a
+# fixture with "thenFail", whose state — the kept board after a failed
+# refresh — appears only once Overzicht's one-minute poll has asked again:
+# at 3 s it is the first good load, identical to the base case).
 # CAPTURE_CHECK_ONLY=1 validates the arguments and exits (no simulator).
 # CAPTURE_UNCHECKED_TARGET=1 skips the target grammar check — ONLY for
 # scripts/test-capture.sh, which needs a bad route to reach the app to prove
@@ -125,7 +128,9 @@ died() {
   echo "  xcrun simctl spawn $UDID log show --last 2m --predicate 'process == \"Verder\"'" >&2
   exit 1
 }
-sleep "${SETTLE:-3}"
+DEFAULT_SETTLE=3
+grep -q '"thenFail"' "Verder/FixtureData/$FIXTURE/fixture.json" && DEFAULT_SETTLE=68
+sleep "${SETTLE:-$DEFAULT_SETTLE}"
 alive || died "before the screenshot"
 mkdir -p "$(dirname "$OUT")"
 TMP="$OUT.partial.png"

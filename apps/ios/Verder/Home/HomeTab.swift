@@ -659,7 +659,13 @@ struct LeefgeldGlanceView: View {
     let openWebsite: () -> Void
 
     private func hy(_ s: String) -> String { ax ? HomeSummary.hyphenated(s) : s }
-    static let figureSlack: CGFloat = 24
+    /// The room a one-line figure must leave at its end (on top of the
+    /// HStack's 8 pt before the Spacer), or the figure stacks. 12, not 24:
+    /// "€ 47,90 uitgegeven t/m do 29 okt" needs ~318 pt at 12, inside the
+    /// 337 pt card at 402 (inline, as the money-partial frame draws it) and
+    /// over the 311 pt SE card (stacked, as its 343 pt frame draws it). At 24
+    /// it needed ~334 and wrapped at 402 too.
+    static let figureSlack: CGFloat = 12
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -728,9 +734,9 @@ struct LeefgeldGlanceView: View {
             VStack(alignment: .leading, spacing: 4) { hero; caption }
         } else {
             ViewThatFits(in: .horizontal) {
-                // 24 pt to spare at the end, or they stack (Figma's SE frame
-                // stacks "€ 47,90" over its caption at a 343 pt card): a line
-                // that only just fits crowds the card's padding.
+                // `figureSlack` to spare at the end, or they stack (Figma's SE
+                // frame stacks "€ 47,90" over its caption at a 343 pt card): a
+                // line that only just fits crowds the card's padding.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     hero.fixedSize(); caption.fixedSize()
                     Spacer(minLength: LeefgeldGlanceView.figureSlack)

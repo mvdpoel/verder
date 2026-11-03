@@ -331,3 +331,12 @@ from.
   proposals, Passive for digests. Keep it until Martin decides.
 - **Face ID setting.** R26 discourages an in-app biometric opt-in. The lock
   stays always-on, with no toggle in Meer.
+- **The GELD card when no weekly budget is set (`money-no-budget`).** There is
+  no Figma frame for it. As built (2026-11-03): with LEEFGELD_WEEKLY_CENTS unset
+  the leefgeld card gives way to a `GELD` card with one line per account. Each
+  line shows that account's newest month WITH ROWS: "…6789 · okt '26 deels · in
+  € 2.400,00 · uit € 1.760,00". A month with no rows is skipped, never drawn as
+  "€ 0,00 deels". At 402 pt the beheerrekening's line wraps after a " ·",
+  never inside a segment, because the segments are NBSP-joined. It is not
+  forced onto one line: the amounts must not shrink, and dropping "in"/"uit"
+  would leave two bare numbers. Wants a frame, or Martin's OK on this layout.

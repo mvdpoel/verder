@@ -69,7 +69,7 @@ Overzicht's own fixtures (added 2026-11-03, the Figma "overzicht · final" state
 
 Two accounts, never summed:
 - `NL00TEST0123456789` (beheerrekening) — months jun–nov, jun–sep complete, okt partial (hatched), nov `geen data`. Income line € 2.400,00/month from Atelier Sterrenwacht; one incidental € 85,00 "teruggave".
-- `NL00TEST9876543210` (leefgeldrekening) — weekly credit € 100,00 every Thursday.
+- `NL00TEST9876543210` (leefgeldrekening) — weekly credit € 100,00 every Thursday; months jun–okt complete, nov `geen data` (no rows yet — never a covered € 0,00).
 - Leefgeld week (`money-complete`): week from Mon 26 okt, budget € 100,00, spent € 62,40 (rows: "Supermarkt" € 41,20, "Bakker" € 6,70, "Apotheek" € 14,50), received € 100,00, left € 37,60.
 - `money-partial`: covered t/m do 29 okt.
 - `money-geen-data`: newest booking 18 okt → "geen data — laatste afschrift t/m 18 okt".

@@ -180,6 +180,11 @@ struct LeefgeldCardTests {
         #expect(g.leefgeld == nil)
         #expect(g.accounts.count == 2)
         #expect(!g.overview.isEmpty, "the Overzicht card still has something to say")
+        // The leefgeldrekening's November has no rows: its line falls back to
+        // October, and no line draws a month without rows as € 0,00.
+        #expect(g.overview.count == 2)
+        #expect(!g.overview.contains { $0.contains(/€\s0,00/) })
+        #expect(g.overview.allSatisfy { !$0.contains("nov") })
     }
 
     @Test func freshnessNamesTheNewestBooking() throws {

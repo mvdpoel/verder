@@ -255,6 +255,12 @@ struct FixtureTests {
             for month in Self.array(account["months"]) {
                 #expect(Self.keys(month) == Self.monthKeys)
                 #expect(["complete", "partial", "none"].contains(month["coverage"]?.string ?? ""))
+                // A month with no rows is `none` ("geen data"), never a covered
+                // € 0,00: the GELD card would draw "nov '26 deels · in € 0,00".
+                if month["coverage"]?.string != "none" {
+                    #expect(Self.ints(month["inCents"]) != 0 || Self.ints(month["outCents"]) != 0,
+                            "\(name) \(month["month"]?.string ?? "?"): a covered month with no money is a month with no rows")
+                }
                 let cats = Self.array(month["outByCategory"]).compactMap { Self.ints($0["cents"]) }
                 #expect(cats.reduce(0, +) == Self.ints(month["outCents"]))
                 for (total, rows) in [("incidentalCents", "incidentalRows"), ("internalCents", "internalRows")] {

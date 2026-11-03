@@ -295,7 +295,7 @@
         },
         {
           "month": "2026-11",
-          "coverage": "partial",
+          "coverage": "none",
           "inCents": 0,
           "outCents": 0,
           "outByCategory": [],
