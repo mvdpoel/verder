@@ -55,6 +55,12 @@ struct WeeklyView: View {
                     }
                     .padding(.horizontal, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // At accessibility sizes Saira's own ~1.57 em leading set
+                    // the lines of ONE wrapped title nearly a line apart, so
+                    // "2 stukken / opgeborgen" read as two rows; the AX5 frame
+                    // sets them tight. Below AX the frames match the natural
+                    // leading, so only the accessibility sizes change.
+                    .lineHeight(ax ? .multiple(factor: WeeklyType.axLineFactor) : .normal)
                     .animation(reduceMotion ? .easeInOut(duration: 0.2) : .default, value: page)
                 }
                 .refreshable { await refreshAll() }
@@ -601,4 +607,12 @@ private struct WeeklySkeleton: View {
             .frame(maxWidth: width == nil ? .infinity : nil)
             .frame(width: width, height: height)
     }
+}
+
+/// The Weekoverzicht's type metrics that are not a font.
+enum WeeklyType {
+    /// Line pitch at accessibility sizes, as a multiple of the point size:
+    /// the AX5 frame's ~1.17 (a 40-pt body on ~47). Text never clips at a
+    /// pitch above 1, it only stops wrapped lines drifting apart.
+    static let axLineFactor: CGFloat = 1.2
 }
