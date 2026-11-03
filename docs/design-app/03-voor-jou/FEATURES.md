@@ -1,0 +1,569 @@
+# Voor jou en "Door verder gedaan": functies
+
+## Stand van de bouw
+
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03. Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.2, §6.6, §12.9) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §2.1, §2.4–2.7 en de flowtabel in §3) die vastleggen. Elke functie heeft één statusregel, bepaald door de code te lezen.
+
+| Status | Aantal |
+|---|---|
+| **Gebouwd** | 25 |
+| **Deels gebouwd** | 8 |
+| **Nog te bouwen** | 22 |
+
+De drie belangrijkste dingen die nog gebouwd moeten worden:
+
+1. **Beslissen vanuit de lijst** (functies 16–19 en 24): veegacties, contextmenu's en de undo-toast van 5 seconden. Ze maken van "rij → detail → beslissen" (2–3 tikken) één veeg. Ze hebben geen nieuwe schrijfroute nodig, maar het inbox-item moet zeggen of een suggestie ongewijzigd kan worden goedgekeurd en welke taakstatussen zijn toegestaan (vandaag draagt `WaitingItem` geen van beide), en een echt undo-venster betekent dat de POST op de telefoon wordt vastgehouden.
+2. **Het aantal in de kop en de secties** (functies 11–14): "498 wachten op jou · bijgewerkt 14:02", Nu / Kan wachten met aantallen, en 20 rijen per sectie met "Toon alle". Zonder deze is een lange lijst helemaal niet te triëren.
+3. **Een lijst die een herstart overleeft, en eerlijke foutstaten** (functies 37–38 en 40–42): een skelet in plaats van een spinner, de laatste lijst van schijf binnen 300 ms, en offline-, storings- en geen-cache-kaarten met "Opnieuw proberen" en de leeftijd van de lijst. Vandaag toont een koude start zonder netwerk één regel tekst en verder niets.
+
+---
+
+Voor jou is de inbox van de iPhone-app: één lijst van alles wat op Martin wacht, gerangschikt door de server. Daaronder staat "Door verder gedaan", een lijst van wat verder zelf heeft gedaan, met ongedaan maken in één tik. Alleen Martin gebruikt de app.
+
+Het visuele ontwerp valt hier buiten; dat staat in Figma (bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectie `voorjou · final`, node `339:12478`), en de frames in `frames/` zijn daaruit geëxporteerd op 2026-11-03 met de synthetische fixture-dataset, niet met echte dossiergegevens. UI-teksten staan in het Nederlands geciteerd, precies zoals de app ze toont (of, bij een nog niet gebouwde functie, zoals het frame ze toont).
+
+## Doel
+
+- **Eén antwoord op "wat wacht er op mij?"** Voor jou toont openstaande voorstellen en vragen, open suggesties, de taken die Martin moet doen, en de huidige open halte van de kaart, in de volgorde van de server.
+- **Overal één aantal.** De lijst, de badge op het icoon, de widgets, Overzicht en het webdashboard lezen allemaal dezelfde definitie, `loadWaiting` in `packages/api/src/waiting.ts`. Het icoon kan nooit 3 zeggen boven een lijst van 2.
+- **Routinebeslissingen vanuit de lijst, de rest één stap dieper.** Zoals ontworpen wordt een ongewijzigde suggestie goedgekeurd en een taak afgerond met één veeg, en kunnen meerdere suggesties tegelijk worden beslist. Versturen hoort daar nooit bij: een voorstel wordt alleen vanaf zijn eigen scherm verstuurd, achter een verse Face ID. Vandaag wordt elke beslissing op het detailscherm genomen.
+- **"Door verder gedaan"** is er om te controleren, niet om op te handelen. Het toont wat verder in de afgelopen 7 dagen zelf heeft opgeborgen of hernoemd, en biedt ongedaan maken aan waar de server dat toestaat.
+
+## Hoe je er komt, en waar het heen leidt
+
+### 1. Ingangen
+
+- **De tabbalk:** het tweede tabblad, "Voor jou" (`TabID.voorJou`), na Overzicht, waarop de app opent.
+- **Overzicht:** de kop "Wacht op jou", "Alle N bekijken" en de takenrij openen Voor jou op het hoofdniveau. Een voorbeeldrij opent dat item. "Door verder gedaan · N" opent het scherm "Door verder gedaan". Zie `../02-overzicht/FEATURES.md`.
+- **Meldingen.** Een tik of "Bekijken" levert de `link` van de push af (`NotificationRouter`, `DeepLink`):
+  - `verder://inbox` opent Voor jou op het hoofdniveau;
+  - `verder://proposal/<uuid>`, `verder://suggestion/<uuid>` en `verder://task/<uuid>` openen Voor jou met het scherm van dat item erbovenop;
+  - `verder://done-by-verder` opent het scherm "Door verder gedaan".
+
+  Een push zonder link valt terug op zijn categorie: `VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP` en `TASK_DUE` openen Voor jou. Een `FILING`-push met als link `verder://inbox` (de auto-file-samenvatting van 19:00) wordt in plaats daarvan naar "Door verder gedaan" geleid.
+- **Widgets.** Een tik op de widget opent zijn `widgetURL` (`verder://inbox`); bij de varianten die items tonen is elke rij een `Link` naar de `verder://`-link van dat item. Beide komen uit bij `RootView.onOpenURL`, dat dezelfde strikte `DeepLink.parse` toepast.
+- **Het Weekoverzicht** (Meer) eindigt met "Naar Voor jou", dat de actuele lijst opent.
+- **Er is geen URL-schema geregistreerd.** `verder://`-links werken alleen binnen een push of vanuit verders eigen widget. Geen webpagina of andere app kan er een afvuren.
+
+**Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift`, `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Widget/WidgetContent.swift`.
+
+### 2. Een deep link overleeft de vergrendeling
+
+De Voor jou-stack (`inboxPath: [InboxRoute]`) wordt in `RootView` bewaard, niet in het tabblad. Het tabblad is vergrendeld (`.lockGated(by: lock)`), dus de inhoud ervan bestaat niet zolang de app vergrendeld is. Een link die binnenkomt terwijl de app vergrendeld is, zet het tabblad en `inboxPath` in `RootView` meteen; het scherm van het item wordt pas opgebouwd, en de gegevens pas opgehaald, zodra Face ID slaagt.
+
+**Status:** Gebouwd — `App/RootView.swift`, `Auth/AppLock.swift`.
+
+**Uitgangen (elke tik), zoals vandaag gebouwd:**
+
+| Tik | Gaat naar |
+|---|---|
+| Een voorstelrij (antwoord of opvolging) | `ProposalScreen` (Plan 2): aanleiding, concept, Versturen / Aanpassen / Afwijzen |
+| Een vraagrij | Hetzelfde `ProposalScreen`, dat de opties als knoppen toont plus "Iets anders…" |
+| Een suggestierij | `SuggestionDetailView` |
+| Een taakrij | `TaskScreen` (`TaskRowView.swift`) |
+| De huidige halte van de kaart | Niets. De rij wordt getekend zonder chevron en is geen knop (de frames openen hem: functie 10). |
+| Een soort die deze build niet kent | Niets. De rij wordt getekend, niet geopend. |
+| "Door verder gedaan · N" | Klapt ter plekke open (een `DisclosureGroup`). Het is een sectie, geen link. |
+
+## Functies
+
+### De lijst
+
+#### 3. Eén ophaalactie voedt de lijst
+
+`GET /api/mobile/v1/inbox`. De route roept `caller.inbox.list()` (→ `loadWaiting`) en `caller.verderActions.list({ sinceDays: 7 })` samen aan, en antwoordt met `{ count, items, doneByVerder }`. `count` is de lengte van `items` op de server. Dezelfde ophaalactie, in de ene `InboxStore`, voedt ook de badge en de widget-snapshot.
+
+**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/inbox/route.ts`, `apps/ios/Verder/Inbox/InboxStore.swift`.
+
+#### 4. Eén definitie van "wacht op Martin"
+
+Eén keer gedefinieerd in `waiting.ts` (spec §12.9):
+
+- alleen voorstellen met `status = 'pending'`. Drafting, draft-failed, approved en sending wachten op verder, niet op Martin;
+- suggesties die `pending` of `needs-manual` zijn, en niet bij een weggegooid of vernietigd document horen;
+- taken waarvan de effectieve status `open` of `in-progress` is. Martin besliste op 2026-10-31 dat `in-progress` meetelt, omdat hij degene is die ermee bezig is. `waiting` betekent wachten op iemand anders en telt niet mee;
+- de huidige open halte van de kaart, tenzij een getoonde taak er al voor staat. In dat geval draagt de taakrij de titel van de halte als ondertitel, zodat één stuk werk één keer telt.
+
+**Status:** Gebouwd — `packages/api/src/waiting.ts` (`loadWaiting`, `WAITING_TASK_STATUSES`).
+
+#### 5. De volgorde van de server, nooit herschikt
+
+`waitingOnMartin` (puur): eerst voorstellen met Verder-prioriteit, dan de overige voorstellen en vragen (nieuwste eerst), dan suggesties (nieuwste eerst), dan taken (vroegste deadline eerst, zonder datum achteraan), dan de halte. Elk item draagt ook een `priority` (1 voor een Verder-voorstel of een taak die binnen 24 uur vervalt); dat is data voor de client en verandert deze volgorde niet, en de telefoon leest het niet. `VoorJouList.rows` neemt de array van de server één op één over (`InboxRankingTests.rendersServerOrderUnchanged`).
+
+**Status:** Gebouwd — `packages/api/src/waiting.ts` (`waitingOnMartin`), `Inbox/VoorJouTab.swift` (`VoorJouList`).
+
+#### 6. Titels komen van de server
+
+Een vraag gebruikt zijn prompt. Een voorstel gebruikt zijn `ask`, of valt terug op "Voorstel van verder" / "Vraag van verder". Een suggestie gebruikt de voorgestelde samenvatting, naam, schuldeiser of titel, en daarna de documenttitel of het onderwerp van de mail.
+
+**Status:** Gebouwd — `packages/api/src/waiting.ts`, `apps/web/src/lib/mobile-dto.ts` (`toInboxDTO`).
+
+#### 7. Trekken om te verversen, en verversen bij terugkeer
+
+Trekken om te verversen haalt opnieuw op. Het tabblad ververst ook wanneer het voor het eerst verschijnt en wanneer de stack terugkeert naar het hoofdniveau (`onChange(of: path)`), zodat wat op een detailscherm is beslist uit de lijst verdwenen is.
+
+**Status:** Gebouwd — `Inbox/VoorJouTab.swift`.
+
+#### 8. Eén rij per zaak
+
+Elke rij leest als een vertrekbord (brief §1.1): wat het is, van wie het komt, hoe lang het al wacht, en of het op Martin wacht.
+
+- **Soort:** een symbool per soort (antwoord, vraag, logboek, document, taak, halte) en het Nederlandse soortlabel: "voorstel", "vraag", "suggestie", "taak", "halte" in de frames ("op de kaart" in de code), "overig" voor een onbekende soort.
+- **Wie / wat:** de ondertitel (naam van de partij, "Verder", of het soort suggestie, zoals "Logboek" / "Document"). Een halterij zegt hoeveel taken eraan hangen ("halte · 1 taak").
+- **Deadline,** relatief waar dat helpt: "uiterlijk morgen".
+- **Leeftijd,** rechts uitgelijnd: "vandaag", "gisteren", "31 okt", uit de `at` van het item.
+- **Amber:** de stip staat op de Nu-rijen (voorstellen en vragen); de Kan wachten-rijen dragen hun soortsymbool. Het aantal in de kop draagt "wachten op jou" met zijn amberen stip, zodat de kleur nooit zonder woorden staat.
+- Een chevron markeert een rij die opent.
+
+**Status:** Deels gebouwd — de rij toont een amberen stip op elke rij, de titel, het soortlabel, de ondertitel en "uiterlijk <dag maand>", plus de chevron (`Inbox/VoorJouTab.swift` `rowView`, `Shared/KindLabel.swift`). Ontbreekt: de soortsymbolen, de leeftijdskolom (`at` zit al in `WaitingItem` maar wordt niet getekend), de relatieve deadline, het label "halte · N taken" (de server stuurt geen takenaantal voor de halte) en de scheiding amber-alleen-op-Nu, die met de secties komt (functie 13).
+
+#### 9. Lange titels
+
+De frames beperken een titel tot twee regels met een staart ("…"), en korten een lange bestandsnaam in het midden in, zodat de datum en de extensie zichtbaar blijven ("Loonstrook.2026-10.Atelier-Sterrenwacht.defin…Noordkust.pdf"). Aantallen worden nooit afgekapt.
+
+**Status:** Nog te bouwen — de code laat elke titel volledig doorlopen (`fixedSize(vertical:)`). Nodig: een limiet van twee regels, afkappen in het midden voor bestandsnaamtitels (een titel die eruitziet als een bestandsnaam), en een controle dat VoiceOver nog steeds de hele titel voorleest.
+
+#### 10. De huidige halte van de kaart opent
+
+In de frames heeft de halterij ("Stukken aanleveren bij Team Startdossier · halte · 1 taak") een chevron en opent die halte op de Tijdlijn, waar de status, notitie en bewijsstukken staan.
+
+**Status:** Deels gebouwd — de halte wordt getoond en geteld (`waiting.ts`), en de Tijdlijn met zijn haltesheet bestaat (`Timeline/TimelineScreen.swift`, `verder://timeline`). Ontbreekt: `InboxRoute` geeft nil terug voor `.stop`, en er is geen link naar ÉÉN halte (`DeepLink` kent alleen `verder://timeline`). Nodig: een link `verder://stop/<uuid>` (of een `InboxRoute.stop`) die de Tijdlijn opent met de sheet van die halte, en een `LinkDestinationTests`-geval.
+
+### De kop
+
+#### 11. Aantal en actualiteit
+
+"MAANDAG 2 NOV" als mono-bovenregel, de titel "Voor jou", dan het aantal als hoofdgetal met "wachten op jou" (enkelvoud "1 wacht op jou") en zijn amberen stip, en daaronder "bijgewerkt 14:02". Offline staat er "offline · bijgewerkt 14:02"; bij een serverstoring "laatste stand 14:02". Het getal telt mee wanneer een beslissing het verandert (functie 22).
+
+**Status:** Nog te bouwen — de code toont alleen de titel "Voor jou". De gegevens zijn er: `InboxDTO.count` en `InboxStore.fetchedAt`. Nodig: de kopweergave, Nederlands enkelvoud/meervoud, de formatter voor Amsterdamse tijd die Overzicht al gebruikt (bovenregel van `HomeSummary`), en een test dat het aantal de `count` van de server is, nooit een `items.count` die op de telefoon is uitgerekend.
+
+#### 12. Compacte titel tijdens het scrollen
+
+Bij scrollen maakt de grote kop plaats voor een gecentreerd "Voor jou" met "• 498 wachten op jou" eronder, zodat het aantal zichtbaar blijft verderop in de lijst.
+
+**Status:** Nog te bouwen — nodig: een compacte kop gestuurd door de scrollpositie (of een titel in de navigatiebalk met ondertitel). Komt met functie 11.
+
+#### 13. Secties: Nu en Kan wachten
+
+"NU 2" bevat voorstellen en vragen; "KAN WACHTEN 496" bevat suggesties, taken en de halte. Elke sectie heeft zijn aantal. De splitsing herschikt niets: de volgorde van de server zet al elk voorstel en elke vraag vóór elke suggestie.
+
+**Status:** Nog te bouwen — de code tekent één platte lijst. Nodig: de sectiesplitsing (bij voorkeur een veld `section` uit `waiting.ts`, zodat de definitie op de server blijft; een splitsing op soort op de telefoon zou de volgorde ook bewaren), sectiekoppen met aantallen, en een test dat de rijen binnen elke sectie de volgorde van de server houden.
+
+#### 14. 20 per sectie, dan "Toon alle"
+
+Een lange sectie toont zijn eerste 20 rijen en zegt dat ("20 GETOOND"), met "Toon alle 496" om de rest te zien (brief §3: "most relevant first, offer view more").
+
+**Status:** Nog te bouwen — de code tekent elk item dat de server stuurt. Nodig: de limiet, het label "N getoond", het uitklappen met "Toon alle", en een controle dat een limiet nooit een Nu-item verbergt.
+
+#### 15. Selecteer
+
+Een knop "Selecteer" in de kop opent de selectiemodus (functie 21).
+
+**Status:** Nog te bouwen — zie functie 21.
+
+### Beslissen vanuit de lijst
+
+Al deze acties roepen dezelfde routes aan als de detailschermen, dus een beslissing vanuit de lijst wordt precies zo vastgelegd als een vanaf een detailscherm: het oordeel, de bewerkingsdiff (leeg) en eventuele ledger-events. **Geen van alle verstuurt iets.** Voorstellen en vragen hebben in de lijst geen andere actie dan "Bekijken".
+
+#### 16. Naar rechts vegen: Goedkeuren (een suggestie)
+
+Een veeg vanaf de voorkant op een suggestie keurt hem goed zoals voorgesteld ("Goedkeuren"). Alleen voor een suggestie die ongewijzigd kan worden goedgekeurd: geen registry-item (alleen op het web), geen needs-manual-suggestie waarvan een verplicht veld leeg is.
+
+**Status:** Nog te bouwen — nodig: `.swipeActions(edge: .leading)` op suggestierijen; een serverveld per item dat zegt of het ongewijzigd goed te keuren is (vandaag heeft `WaitingItem` geen suggestiesoort en geen goedkeurbaarheid, en de approve-route antwoordt 409 voor een registry-item); de bestaande `POST /api/mobile/v1/suggestions/:id/approve` met `{ edits: {} }`; de undo-toast (functie 24); tests dat een registry- of onvolledige suggestie geen veeg aanbiedt.
+
+#### 17. Naar rechts vegen: Gedaan (een taak)
+
+Een veeg vanaf de voorkant op een taak zet die op afgerond ("Gedaan"), **+1 `task.status`**.
+
+**Status:** Nog te bouwen — nodig: de veeg; de `validNext` van de taak (het inbox-item draagt die niet; voeg hem toe aan de taakitems in `toInboxDTO` of lees `GET /api/mobile/v1/tasks`), zodat de veeg alleen wordt aangeboden wanneer `done` is toegestaan; de bestaande `POST /api/mobile/v1/tasks/:id/status`; de undo-toast.
+
+#### 18. Naar links vegen: Niet relevant
+
+Een veeg vanaf de achterkant wijst een suggestie af ("Niet relevant"), zonder reden en **zonder ledger-event**. Op een taak betekent hetzelfde woord "laten vallen" (`dropped`, +1 `task.status`).
+
+**Status:** Nog te bouwen — nodig: de veeg vanaf de achterkant en de bestaande `POST …/suggestions/:id/reject` (reden optioneel) of `POST …/tasks/:id/status` met `dropped`.
+
+#### 19. Contextmenu's
+
+Lang drukken opent een menu met de acties van de rij en "Bekijken":
+
+- **suggestie:** Bekijken · Keur goed · Markeer als niet relevant;
+- **taak:** Bekijken · Markeer als gedaan · Zet op bezig · Zet op wacht op een ander · Markeer als niet relevant — alleen de stappen die `validNext` toestaat (brief §3: `waiting` en `in-progress` bereikbaar vanuit het menu);
+- **voorstel of vraag:** alleen Bekijken, met de regel "Versturen kan alleen in het voorstel zelf, met Face ID."
+
+**Status:** Nog te bouwen — nodig: `.contextMenu` per soort op de rijen (de voorbeeldrijen van Overzicht hebben er al een, `Home/HomeTab.swift`), `validNext` voor taken (zoals bij functie 17), en een test dat het menu van een voorstel niets aanbiedt dat verstuurt.
+
+#### 20. Haptiek bij de veegdrempel
+
+Het passeren van de actiedrempel van een veeg geeft één `.selection`-tik, één keer per passage (brief §2.5).
+
+**Status:** Nog te bouwen — komt met functies 16–18.
+
+#### 21. Selectiemodus: meerdere suggesties tegelijk
+
+"Selecteer" maakt van de lijst een selectie: "Annuleer · 3 geselecteerd · Alle 18 hier". Alleen suggesties kunnen worden aangevinkt; de Nu-sectie zegt "Alleen suggesties kun je samen afhandelen. Voorstellen, vragen en taken beslis je één voor één." De balk onderaan biedt "Niet relevant (3)" en "Keur 3 goed". Goedkeuren vraagt eerst bevestiging en noemt elk item: "3 suggesties goedkeuren? Telefoongesprek met …, Afschrift oktober … en Brief …. Daarna heb je 5 seconden om het ongedaan te maken." **Er is nooit een bulkverzending** (brief §5.6).
+
+**Status:** Nog te bouwen — nodig: de UI van de selectiemodus en de balk onderaan, goedkeurbaarheid per item (zoals bij functie 16), de bevestiging die de items noemt, en ofwel één approve/reject-aanroep per item (geen nieuwe route; een gedeeltelijke mislukking toont zich dan per rij, functie 26) ofwel een bulkroute die elk item door zijn eigen procedure haalt. Tests: voorstellen, vragen en taken kunnen niet worden geselecteerd; de bevestiging noemt precies de geselecteerde titels.
+
+#### 22. Beslist items verlaten de lijst
+
+Na een beslissing schuift de rij weg en klapt in (0,25 s) en telt het aantal in de kop af (`.contentTransition(.numericText())`); met Beperk beweging vervaagt hij (brief §2.6).
+
+**Status:** Nog te bouwen — vandaag ververst de lijst gewoon wanneer Martin terugkomt van het detailscherm. Nodig: de verwijderovergang en het aantal in de kop (functie 11).
+
+#### 23. Overgang van rij naar detail
+
+Een rij openen zoomt vanaf de titel van de rij in naar het detailscherm (veer 0,35 s, demping 0,86), met de lijst gedimd erachter; Beperk beweging geeft een crossfade van 0,2 s (brief §2.6).
+
+**Status:** Nog te bouwen — de code gebruikt de standaard navigatie-push. Nodig: `.navigationTransition(.zoom(…))` met een gekoppelde bron per rij.
+
+### Ongedaan maken en mislukken
+
+#### 24. Undo-toast, 5 seconden
+
+Na een beslissing vanuit de lijst zegt een toast wat er gebeurde en biedt "Ongedaan maken" met een aftelling ("Goedgekeurd · Telefoongesprek met Woonstichting Lindehof … · nog 4 s"). Bij toegankelijkheidstekstgroottes groeit de toast en geeft het frame hem langer ("nog 8 s"). Een undo, geen waarschuwing (brief §3, R24).
+
+**Status:** Nog te bouwen — er bestaat geen toast. Nodig: een toastcomponent, en een besluit over het mechanisme. Ofwel HOUDT de telefoon de POST vast gedurende het venster en verstuurt hem wanneer de toast eindigt (er wordt niets vastgelegd als Martin het ongedaan maakt; de beslissing moet nog steeds worden verstuurd als de app naar de achtergrond gaat), ofwel post hij meteen en roept ongedaan maken een omgekeerde actie per soort aan (er bestaat vandaag geen omkeerroute voor een goedgekeurde of een afgewezen suggestie). De POST vasthouden is de variant die de ledger schoon houdt.
+
+#### 25. Eén toast voor meerdere beslissingen
+
+Twee beslissingen binnen één venster smelten samen tot één toast: "2 beslissingen · Laatste: Gedaan — Formulier bijzondere bijstand ondertekenen. Ook 1 goedgekeurd." met "Ongedaan maken" (de laatste) en "Bekijk beide".
+
+**Status:** Nog te bouwen — komt met functie 24; nodig: een kleine wachtrij van openstaande beslissingen en een sheet "Bekijk beide".
+
+#### 26. "NIET OPGESLAGEN": een mislukte beslissing, ter plekke bewaard
+
+Wanneer een beslissing vanuit de lijst niet kan worden opgeslagen, blijft de rij staan waar hij stond, met een melding in de rij: "NIET OPGESLAGEN · Je goedkeuring is nog niet opgeslagen: de server van verder heeft een storing. Probeer het opnieuw zodra verder weer werkt." met "Opnieuw proberen" en "Goedkeuring intrekken". Haptiek bij mislukken `.error`.
+
+**Status:** Nog te bouwen — vandaag toont een mislukte beslissing zijn melding op het detailscherm en wordt hij niet bewaard. Nodig: een toestand per rij voor een openstaande beslissing (dezelfde wachtrij als bij functie 24), opnieuw proberen en intrekken, en de foutoorzaak uit `APIError` (`server(Int)` / `transport`).
+
+### "Door verder gedaan"
+
+Onder het opbergamendement (CLAUDE.md, Project laws; spec §6.6) mag verder zelf een document opbergen: het past de soort uit een document-meta-suggestie toe en zet de status op opgeborgen, nooit de titel. Het mag ook een document hernoemen (auto-name). Elke zulke wijziging is een `document_status_changes`-rij met `actor = 'verder'` en wordt in de ledger vastgelegd. **Automatisch opbergen staat bij oplevering UIT.** `DOCMETA_AUTO_APPLY` is in productie niet gezet, omdat de gemeten drempel geen beslist verleden had om op te slagen (Plan 3 Task 13). Vandaag bevat deze lijst daarom auto-name-hernoemingen.
+
+#### 27. De sectie onderaan de lijst
+
+Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByVerderIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByVerder` — `listVerderActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
+
+**Status:** Gebouwd — `Inbox/DoneByVerderSection.swift`, `packages/api/src/routers/verder-actions.ts`.
+
+#### 28. Een eigen scherm
+
+`InboxRoute.doneByVerder` (`DoneByVerderScreen`), geopend vanuit Overzicht, vanuit `verder://done-by-verder` en vanuit de samenvattingspush van 19:00. Het draagt de uitleg "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan." Als er niets is gedaan, staat er "verder deed niets zelf."
+
+**Status:** Gebouwd — `Inbox/DoneByVerderSection.swift`, `Inbox/VoorJouTab.swift`.
+
+#### 29. Wat elke rij zegt
+
+"Opgeborgen door verder" of "Hernoemd door verder" met de datum en tijd; de documenttitel; één regel per veld dat veranderde, afgeleid uit voor en na: "inbox → opgeborgen", "soort zonder soort → Brief", "naam … → …".
+
+**Status:** Gebouwd — `DoneByVerderCopy` in `Inbox/DoneByVerderSection.swift`.
+
+#### 30. Ongedaan maken in één tik
+
+"Ongedaan maken" verschijnt alleen wanneer de server zegt dat de rij `undoable` is en hij nog niet ongedaan is gemaakt. Een tik roept `POST /api/mobile/v1/verder-actions/:changeId/undo` aan met een lege body, en de route weigert elk veld daarin. **Geen Face ID**, met opzet: een undo onthult niets en verstuurt niets. In één transactie, onder de vergrendeling per document, doet de server het volgende:
+
+- hij voegt een Martin-rij (actor NULL) toe aan `document_status_changes`, die de status, titel en soort van vóór de wijziging van verder herstelt;
+- hij voegt **+1 `document.updated`** ledger-event toe in de brede payloadvorm;
+- als de wijziging uit een suggestie kwam, markeert hij de undo op de `final_payload` van die suggestie, als leersignaal.
+
+Er wordt niets verwijderd of bijgewerkt in de bewijstabellen. Twee keer tikken is onschadelijk: de rij van de eerste undo is nieuwer, dus de tweede wordt geweigerd met "al aangepast" en voegt niets toe. Na een geslaagde undo of een 409 ververst de inbox. Meldingen: "Ongedaan gemaakt.", "Al aangepast of vernietigd — de lijst is bijgewerkt." (409), "Dit kan hier niet ongedaan worden gemaakt." (400) en "Log opnieuw in.".
+
+**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/verder-actions/[changeId]/undo/route.ts`, `DoneByVerderModel` in `Inbox/DoneByVerderSection.swift`.
+
+#### 31. Waarom er geen knop is
+
+Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server beslist en de telefoon toont alleen de reden van de server:
+
+- "Ongedaan gemaakt", als het al gebeurd is;
+- "Al aangepast — niet meer terug te draaien", als er sindsdien iets aan het document is veranderd;
+- "Vernietigd", als het document definitief is verwijderd;
+- "De naam staat ook op de NAS; terugdraaien gaat op de server", voor **elke auto-name**. De naam staat ook op de NAS-share, die de webcontainer niet koppelt, dus een undo alleen in de database zou de share en het dossier met elkaar laten verschillen. Een hernoeming wordt teruggedraaid met `pnpm --filter worker normalize-names --undo`.
+
+**Status:** Gebouwd — `DoneByVerderCopy.note`, `packages/api/src/routers/verder-actions.ts`.
+
+#### 32. Een toast na een undo, met een eigen undo
+
+Na "Ongedaan maken" toont het frame een toast "Terug in Kan wachten · Afschrift september" met "Ongedaan maken" en een aftelling, en verschijnt de suggestie van het document weer in Kan wachten. Haptiek `.impact(.light)` (brief §2.5).
+
+**Status:** Nog te bouwen — vandaag is de undo definitief zodra de server antwoordt, en is het resultaat een regel tekst. Nodig: de toast (functie 24) en, voor zijn "Ongedaan maken", ofwel een vastgehouden POST ofwel een route om opnieuw toe te passen; geen van beide bestaat.
+
+### Een item openen
+
+Elke schrijfactie hieronder gaat door dezelfde tRPC-procedure die het web gebruikt. Een oordeel vanaf de telefoon wordt daarom precies zo vastgelegd als een oordeel op het web: het oordeel, de bewerkingsdiff en eventuele ledger-events.
+
+#### 33. Voorstel of vraag → `ProposalScreen`
+
+(Plan 2; het volledige gedrag hoort in het document van dat scherm.)
+
+- `GET /api/mobile/v1/proposals/:id`.
+- "Versturen" vereist een verse Face ID via `ApprovalGate`. Daarna roept het `POST …/proposals/:id/approve` aan met de definitieve tekst. De worker verstuurt later, en de uitgaande logboekregel en zijn `entry.created`-event worden pas geschreven nadat Gmail het bericht heeft geaccepteerd. **Er wordt niets verstuurd zonder dat Martin de definitieve tekst goedkeurt.**
+- "Afwijzen" roept `POST …/proposals/:id/reject` aan met een optionele reden, die het leren voedt.
+- Het antwoord op een vraag roept `POST …/proposals/:id/answer` aan met `{ revision, option }` (na een bevestiging van de gekozen optie) of `{ revision, freeText }`. Daarvoor is geen verse Face ID nodig, omdat het niets naar buiten verstuurt; de app-vergrendeling dekt het al. Het voorstel gaat naar `sent` met het oordeel `approved` (een optie) of `edited` (vrije tekst). Een optie voert een bestaande procedure uit op Martins caller: `set-task-status` → `tasks.setStatus`, **+1 `task.status`**; `link-document-to-debt` → een `debt_documents`-rij, geen ledger-event (schulden zijn geen bewijs); `create-task` → een `tasks`-rij, geen ledger-event bij het aanmaken; `none` → niets. Vrije tekst voert niets uit.
+
+**Status:** Gebouwd — `Proposals/ProposalScreen.swift`, `Proposals/ApprovalGate.swift`, `apps/web/src/app/api/mobile/v1/proposals/[id]/`.
+
+#### 34. Suggestie → `SuggestionDetailView`
+
+- `GET /api/mobile/v1/suggestions/:id` geeft de soort, status, `proposed`, de aanleidende mail (van, onderwerp, datum), de EFFECTIEVE titel, soort en status van het document, en de opgehaalde verwijzingen terug.
+- De velden per soort volgen de `/queue`-kaart op het web: logboekregel, document-meta (titel en soort), schuld en taak.
+- **"Klopt zo"** roept `POST …/suggestions/:id/approve` aan met `{ edits }`, met daarin **alleen de velden die Martin heeft veranderd** (`SuggestionDetailTests.approveSendsOnlyChangedFields`). De server kiest de procedure op basis van de opgeslagen soort van de suggestie en bouwt `{ ...proposed, ...edits }` via het eigen schema van die procedure. Een onbekende bewerkingssleutel wordt geweigerd met 400. Het oordeel wordt vastgelegd als `approved`, of als `edited` wanneer er iets is veranderd. Wat er wordt toegevoegd, hangt af van de soort:
+  - log-entry: een logboekregel, +1 `entry.created`;
+  - document-meta: een `document_status_changes`-rij met status `filed`, +1 `document.updated`. Geweigerd met 409 ("weggegooid" / "vernietigd") als het document intussen is weggegooid of definitief verwijderd; de telefoon toont dan "Deze suggestie is al afgehandeld.";
+  - debt: een `debts`-rij en **geen ledger-event** (schulden zijn geen bewijs);
+  - task: een `tasks`-rij en geen ledger-event bij het aanmaken (alleen statuswijzigingen worden in de ledger vastgelegd).
+- **"Aanpassen"** opent de bewerkbare velden. "Klaar met aanpassen" sluit ze. Een verplicht veld moet tekst bevatten voordat "Klopt zo" beschikbaar wordt.
+- **"Niet relevant"** vraagt "Waarom? Niet verplicht — verder leert ervan." en roept daarna `POST …/suggestions/:id/reject` aan met een optionele reden van hooguit 2000 tekens. Het legt het oordeel `rejected` vast met de reden en voegt **geen ledger-event** toe.
+- Een schuldsuggestie draagt de regel "Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben."
+- Uitkomsten: "Vastgelegd.", "Afgewezen.", "Deze suggestie is al afgehandeld." (409, een elders gegeven oordeel blijft staan), "verder weigerde dit. Controleer de velden." (400) en "Deze suggestie bestaat niet (meer)."
+
+**AI-uitvoer is een suggestie.** Niets wat een model voorstelde komt in de ledger voordat Martin op "Klopt zo" tikt (of verder een document opbergt onder het opbergamendement, hierboven).
+
+**Status:** Gebouwd — `Inbox/SuggestionDetailView.swift`, `apps/web/src/app/api/mobile/v1/suggestions/[id]/{route,approve,reject}`. (De markering "aangepast" uit de brief op bewerkte velden vóór het goedkeuren hoort in het eigen document van het suggestiescherm, `../05-vraag-suggestie-taak/`.)
+
+#### 35. Een registry-item wordt op het web beslist
+
+Een registry-item (Vaste last) heeft geen formulier op de telefoon. Het scherm zegt "Een vaste last leg je vast op de website: daar kies je de categorie." met een link "Open op de website" naar `/queue`, biedt geen "Klopt zo", en de approve-route antwoordt 409 "open op de website" als hij toch wordt aangeroepen. "Niet relevant" wordt nog wel aangeboden, dus een registry-item kan op de telefoon worden afgewezen.
+
+**Status:** Gebouwd — `Inbox/SuggestionDetailView.swift`, `suggestions/[id]/approve/route.ts`.
+
+#### 36. Taak → `TaskScreen`
+
+- Er is geen route voor één taak. Het scherm leest `GET /api/mobile/v1/tasks` en kiest de taak op id. Elke taak draagt zijn effectieve status en `validNext`. Een taak die niet in de lijst staat, toont "Deze taak bestaat niet (meer)."
+- Het toont "WACHT OP JOU" in amber wanneer de status `open` of `in-progress` is, daarna de titel, "taak · <status>", de deadline, de toegewezene en de details.
+- "STATUS WIJZIGEN" biedt **alleen `validNext`** aan, het antwoord van de server uit dezelfde overgangsmatrix die `tasks.setStatus` afdwingt. De statussen zijn "open", "mee bezig", "wacht op iemand", "klaar" en "laten vallen".
+- Eén tik opent de bevestiging "Status wordt: <status>", en een tweede tik bevestigt. Dan `POST /api/mobile/v1/tasks/:id/status` met `{ status }` → `tasks.setStatus` → **+1 `task.status`** ledger-event. De route is strikt: hij accepteert `status` en een optionele `note` (hooguit 2000 tekens, die de telefoon nooit stuurt), en weigert een `overrideReason` of een `taskId`, zodat de telefoon nooit een geblokkeerde overgang kan forceren. Het antwoord draagt de nieuwe `validNext`, zodat de knoppen opnieuw worden getekend zonder tweede verzoek.
+- Een 400 (de stap is niet meer toegestaan) laadt de taak opnieuw en zegt "Die stap kan niet (meer). De taak is bijgewerkt."
+
+**Status:** Gebouwd — `Inbox/TaskRowView.swift`, `apps/web/src/app/api/mobile/v1/tasks/route.ts`, `tasks/[id]/status/route.ts`. (De gesegmenteerde statusbediening uit de brief hoort in het eigen document van het taakscherm.)
+
+## Staten
+
+Brief §2.4: elke staat heeft een volgende stap, en geen frame is een doodlopende weg.
+
+#### 37. Laden: een skelet
+
+Vóór de eerste ophaalactie tekent de lijst grijze plaatshouderrijen in de vorm van de echte secties, zodat het eerste betekenisvolle frame binnen 100 ms op het scherm staat (brief §2.1: geen kale spinner waar een lijst zal verschijnen).
+
+**Status:** Nog te bouwen — de code toont de titel en een `ProgressView`. Nodig: een skeletrijweergave (met `.redacted(reason: .placeholder)` of getekende balken) en de capture van de `loading`-fixture.
+
+#### 38. De laatste lijst, bewaard over herstarts heen
+
+De telefoon toont de laatst bekende lijst van schijf binnen 300 ms nadat het tabblad verschijnt, en ververst daarna ter plekke (brief §2.1, §1.5: offline is een ontworpen staat). Dit is wat de offline- en storingsframes na een koude start mogelijk maakt.
+
+**Status:** Nog te bouwen — `InboxStore` houdt de lijst alleen in het geheugen; de widget-snapshot op schijf bevat alleen de bovenste vijf. Nodig: een cache op schijf van de hele `InboxDTO` met dezelfde beschermingsklasse als de widget-snapshot (of `.completeFileProtection`, zoals `TimelineStore` doet) en uitgesloten van de back-up, gewist door dezelfde `SessionEpoch` bij uitloggen of een geweigerde sessie, en tests voor beide (`TimelineStore` is het patroon).
+
+#### 39. Leeg: niets wacht
+
+"Niets wacht op je" als grote regel met een vinkzegel, dan "Goed bezig. Je rondde zaterdag 31 okt het laatste af. Komt er iets nieuws binnen, dan krijg je een melding." en "0 wachten · bijgewerkt 14:02". "Door verder gedaan" blijft bereikbaar, als samenvattingsregel ("3 dingen deed verder deze week zelf. …") met "Bekijken".
+
+**Status:** Deels gebouwd — de code zegt "Niets wacht op je." in gedempte inkt en toont nog steeds de sectie "Door verder gedaan" (`VoorJouList.emptyText`). Ontbreekt: de regel "wanneer werd het laatste afgehandeld" — de telefoon decodeert `InboxDTO.lastClearedAt` al (Overzicht gebruikt het), maar `toInboxDTO` stuurt het nooit, dus de server moet het berekenen (de nieuwste beslissing die de lijst leegmaakte) — plus de actualiteitsregel en de vorm van de sectie als samenvatting met Bekijken.
+
+#### 40. Offline over de laatste lijst
+
+Een kaart "OFFLINE · Je ziet je laatste stand. Goedkeuren en afronden kan weer zodra je verbinding hebt.", de kop met "offline · bijgewerkt 14:02", en de Kan wachten-sectie gemarkeerd als "ALLEEN LEZEN · OFFLINE": acties die de server nodig hebben, zijn uitgeschakeld met de reden erbij, nooit stilzwijgend (brief §2.4).
+
+**Status:** Deels gebouwd — de code toont "Geen verbinding met verder. Probeer het opnieuw." boven een lijst die in dit proces is opgehaald, en rijen openen nog steeds (`VoorJouTab.message`). Ontbreekt: de kaart, de leeftijd, de alleen-lezen-markering met uitgeschakelde vegen en menu's, en — na een koude start — überhaupt een lijst (functie 38).
+
+#### 41. Storing over de laatste lijst
+
+Een kaart "STORING · De server van verder heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan." met "Opnieuw proberen", en de kop met "laatste stand 14:02".
+
+**Status:** Deels gebouwd — de code toont "Dat lukte niet. Probeer het over een moment opnieuw." boven een eventuele lijst in het geheugen; opnieuw proberen kan alleen door te trekken om te verversen. Ontbreekt: de kaart, de knop om opnieuw te proberen, de leeftijd.
+
+#### 42. Mislukken zonder iets om te tonen
+
+"Voor jou laadt nu niet · De server van verder heeft een storing. Er is niets verloren gegaan." met "Opnieuw proberen" en "laatste poging 14:02 · serverfout 502".
+
+**Status:** Deels gebouwd — de code toont alleen de melding; trekken om te verversen probeert opnieuw. Ontbreekt: de knop en de regel met de laatste poging. De gegevens zijn er: `InboxStore.attemptedAt` en `APIError.server(Int)`.
+
+#### 43. Sessie verlopen
+
+Een 401 op `/inbox` of een detailaanroep laat de store de lijst en de samenvatting vergeten, de widget-snapshot wissen en de badge op nul zetten. `AuthModel.sessionRejected()` vervangt daarna de tabbladen door `SessionExpiredView`: "Je sessie is verlopen." met "Inloggen met toegangssleutel", "Inloggen met wachtwoord" en "Toch een brief scannen". Er flitst eerst geen lijst. Scans in de wachtrij blijven bewaard.
+
+**Status:** Gebouwd — `Inbox/InboxStore.swift`, `Auth/SessionExpiredView.swift`.
+
+#### 44. Vergrendeld
+
+Het vergrendelscherm (`LockGate`) in plaats van het tabblad; Face ID of de toegangscode, waarna een openstaande deep link opent.
+
+**Status:** Gebouwd — `Auth/AppLock.swift`, `Auth/LockView.swift`.
+
+#### 45. Grote tekst, tot en met AX5
+
+Elk lettertype schaalt mee met Dynamic Type en titels worden bij toegankelijkheidsgroottes nooit afgekapt. Bij AX5 stapelt de metaregel verticaal (soort, wie, deadline, leeftijd elk op een eigen regel) en worden aantallen nooit afgekapt (brief §2.7).
+
+**Status:** Deels gebouwd — elk lettertype is ingesteld met `relativeTo:` en titels lopen door (`Inbox/VoorJouTab.swift`). Ontbreekt: de metaregel is één `HStack` en stapelt niet bij toegankelijkheidsgroottes (nodig: een `ViewThatFits` of een schakeling op `dynamicTypeSize.isAccessibilitySize`).
+
+#### 46. Kleine telefoon (iPhone SE, 375 × 667)
+
+Dezelfde lijst in één kolom, niets afgesneden.
+
+**Status:** Gebouwd — `Inbox/VoorJouTab.swift` (één kolom met een marge van 16 pt).
+
+## Toegankelijkheid
+
+#### 47. VoiceOver leest één rij als één zin
+
+Eén element per rij, voorgelezen in de volgorde soort, titel, wie, "wacht op jou", leeftijd — bijvoorbeeld "Voorstel, antwoord aan Regio 3, wacht op jou, 2 dagen". De schermtitel is een kop.
+
+**Status:** Deels gebouwd — een rij die opent is een `Button`, dus VoiceOver leest hem als één element, maar in weergavevolgorde (titel eerst, geen "wacht op jou", geen leeftijd), en de halterij is helemaal niet samengevoegd. Overzicht bouwt deze zin al (`HomeSummary`-regel "One row, read whole"); Voor jou heeft hetzelfde `accessibilityLabel` nodig en `.accessibilityAddTraits(.isHeader)` op de titel.
+
+#### 48. Veegacties als VoiceOver-acties
+
+Elke veeg- en contextmenuactie is ook een aangepaste VoiceOver-actie op de rij (brief §2.7), zodat niets van een gebaar afhangt.
+
+**Status:** Nog te bouwen — komt met functies 16–19 (`.accessibilityActions`, zoals `Scan/QueueViews.swift` al doet).
+
+## Privacy en beveiliging
+
+#### 49. Face ID bewaakt het tabblad; alleen versturen vraagt opnieuw
+
+Voor jou is vergrendeld. De app vraagt om Face ID (of de toegangscode) bij een koude start en na meer dan 5 minuten op de achtergrond (`LockPolicy.graceSeconds = 300`). Overzicht en Scan openen zonder, maar Overzicht toont tot het ontgrendelen alleen aantallen en geld. Binnen Voor jou vraagt het versturen van een voorstel altijd om een **verse** Face ID (`ApprovalGate`), ook terwijl de app ontgrendeld is; een suggestie goedkeuren of afwijzen, een taakstatus wijzigen, een vraag beantwoorden en een actie van verder ongedaan maken vragen geen verdere Face ID. Geen van alle verstuurt iets naar buiten.
+
+**Status:** Gebouwd — `Auth/AppLock.swift`, `Proposals/ApprovalGate.swift`.
+
+#### 50. Vergrendelscherm, meldingen en widgets tonen geen dossierinhoud
+
+- Met verborgen voorvertoningen luidt een melding alleen "Nieuw bericht van verder": geen titel, geen afzender.
+- "Bekijken" (`OPEN`, op `PROPOSAL`, `REMINDER` en `FOLLOW_UP`) is `.foreground` en `.authenticationRequired`. Het opent het item achter de vergrendeling en verstuurt nooit.
+- De antwoordknoppen van een vraag (categorieën `q.<id>`) vereisen authenticatie. Ze draaien op de achtergrond, omdat een antwoord niets verstuurt.
+- De widgetvarianten voor het vergrendelscherm tonen alleen aantallen. Titels op het beginscherm zijn gemarkeerd als `.privacySensitive()`. De widget leest `widget/snapshot.json` in de App Group: het aantal, de bovenste vijf items (soort, id, titel), de kop van de kaart en de leeftijd van het oudste item. De app schrijft het na elke geslaagde verversing met `.completeFileProtectionUntilFirstUserAuthentication` (gemeten op het toestel: `NSFileProtectionCompleteUntilFirstUserAuthentication`). Een mislukte verversing laat de oude snapshot staan, en de widget laat die na 24 uur verlopen ("Open verder om bij te werken").
+
+**Status:** Gebouwd — `Push/NotificationCategories.swift`, `Push/QuestionCategories.swift`, `Shared/WidgetSnapshot.swift`, `Widget/WidgetContent.swift`.
+
+#### 51. Er blijft niets van het dossier achter nadat de sessie eindigt
+
+Op de telefoon: de inboxlijst en de samenvatting staan alleen in het geheugen; de widget-snapshot is het enige bestand op schijf; de sessiecookie staat in de Keychain (`AfterFirstUnlockThisDeviceOnly`). Bij uitloggen of een geweigerde sessie wist `AuthModel.forgetLocally()` de cookie, beëindigt de `SessionEpoch` (elke store laat zijn dossierinhoud vallen, en de badge gaat naar 0), wist de widget-snapshot en laadt de widgets opnieuw. Een verversing die nog onderweg is wanneer de sessie eindigt, schrijft niets terug, omdat de epoch-controle vóór elke schrijfactie draait. De telefoon intrekken in `/settings/security` beëindigt zijn sessie; de volgende aanroep antwoordt 401, en `notify()` stopt met pushen naar het toestel. (De lijst op schijf uit functie 38 moet hierbij aansluiten wanneer die gebouwd wordt.)
+
+**Status:** Gebouwd — `Inbox/InboxStore.swift`, `Auth/AuthModel.swift`, `apps/worker/src/notify/notify.ts`.
+
+## Regels waaraan dit scherm zich houdt
+
+- **Er wordt niets verstuurd zonder dat Martin de definitieve tekst goedkeurt,** achter een verse Face ID, en alleen op `ProposalScreen`. Geen lijstrij, veeg, menu of meldingsactie verstuurt. Er is geen bulkverzending. Het bulkgoedkeuren in het ontwerp is alleen voor suggesties.
+- **Amber alleen voor wat op Martin wacht.** "Door verder gedaan" is nooit amber.
+- **Eén definitie van wachten,** op de server. De telefoon telt, filtert of herschikt nooit.
+- **AI-uitvoer is een suggestie.** Het wordt pas bewijs bij "Klopt zo" (of het "Goedkeuren" van de lijst, dat dezelfde route aanroept). Het voorstel van het model, het oordeel en de bewerkingsdiff worden allemaal vastgelegd.
+- **Het opbergamendement.** verder mag een document alleen zelf opbergen wanneer de gemeten drempel wordt gehaald. Dat staat vandaag uit. Elke zulke wijziging staat hier vermeld en is in één tik ongedaan te maken. Auto-name-hernoemingen staan er ook, maar worden op de server teruggedraaid.
+- **Wat de telefoon niet mag:**
+  - een taakovergang forceren;
+  - een registry-item goedkeuren;
+  - beslissen of een actie van verder ongedaan kan worden gemaakt.
+
+## Meldingen, badge en haptiek
+
+Voor jou maakt zelf geen meldingen. Het is waar ze naartoe leiden.
+
+#### 52. De badge is het aantal van de server
+
+`badge.sync` (worker, elke 5 minuten) pusht alleen wanneer het aantal verandert. Het stuurt twee pushes, omdat Apple een badge op een achtergrondpush verbiedt: een alert-type `{aps:{badge:N}}`, die ook een geforceerd gesloten app bereikt; en een achtergrondpush met `content-available`, naar beste vermogen. `notify()` zet de badge ook bij elke melding en leest het aantal daarbij zelf. De app zet de badge na elke geslaagde verversing op de `count` van de server; een mislukte verversing laat hem met rust ("a badge zeroed by a dead network is a badge that lies").
+
+**Status:** Gebouwd — `apps/worker/src/badge-sync.ts`, `apps/worker/src/notify/notify.ts`, `Inbox/InboxStore.swift`.
+
+#### 53. Een stille push ververst de lijst
+
+De achtergrondpush met `content-available` wekt `AppDelegate`, die dezelfde `InboxStore.refresh()` aanroept. Die verversing werkt de lijst, de badge en de widget tegelijk bij.
+
+**Status:** Gebouwd — `App/AppDelegate.swift`, `Inbox/InboxStore.swift`.
+
+#### 54. De dagelijkse samenvatting
+
+`autofile.digest` (19:00 Amsterdamse tijd) stuurt één passieve `FILING`-push met alleen aantallen, en alleen op dagen waarop verder iets heeft gedaan. Een tik opent "Door verder gedaan".
+
+**Status:** Gebouwd — `apps/worker/src/autofile-digest.ts`, `Push/NotificationRouter.swift`.
+
+#### 55. Haptiek
+
+Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg) `.success`; een afwijzing `.impact(.soft)`, omdat afwijzen geen mislukking is; een veeg die zijn drempel passeert `.selection`; een undo in "Door verder gedaan" `.impact(.light)`; een mislukte beslissing `.error`, met het opnieuw proberen in de rij. Allemaal overgeslagen wanneer systeemhaptiek uit staat; niets hangt ervan af.
+
+**Status:** Nog te bouwen — deze schermen hebben geen `.sensoryFeedback` (de enige in de app staan op Overzicht, Scan, de wachtrij en het scherm voor een verlopen sessie). Nodig: één trigger per moment op de lijst, de detailschermen en de undo in "Door verder gedaan".
+
+## Offline gedrag en synchronisatie
+
+- Er is geen offline wachtrij voor beslissingen, en er is er ook geen ontworpen: goedkeuren, afwijzen, een taakstatus en een undo hebben allemaal de server nodig op het moment van de tik. Offline zegt het detailscherm "Geen verbinding met verder. Probeer het opnieuw." en wordt er niets vastgelegd. De ontworpen offlinestaat (functie 40) maakt dit zichtbaar door de acties uit te schakelen met de reden erbij; "Niet opgeslagen" (functie 26) dekt een beslissing die na de tik mislukte.
+- De lijst op het scherm is de laatste geslaagde ophaalactie in dit proces. Hij wordt niet over herstarts heen bewaard totdat functie 38 gebouwd is. Het zakdossier (tabblad Dossier) is de offline opslag. Voor jou is dat niet.
+
+## Bekende beperkingen en wat niet gemeten is
+
+- **Niet gemeten:** de vertraging van de badge na een echte beslissing, en of die badgepush een geforceerd gesloten app bereikt (Plan 3 Task 9 stap 2). Dat wacht op een suggestie die Martin echt wil beslissen; er wordt niets goedgekeurd voor een test.
+- **Gemeten:** het badgeaantal kwam overeen met Voor jou, het web en het icoon (498, 2026-10-31). Een vraagpush toonde "Ja / Nee" bij lang drukken op iOS 27.2, dus een categorie die binnen de service-extensie wordt geregistreerd, werkt voor diezelfde melding. Een tik op een vraag waarvan het voorstel niet bestaat, opende "Dit voorstel bestaat niet (meer).".
+- Automatisch opbergen staat uit, dus het undo-pad voor auto-file heeft unit- en routetests maar nog geen gebruik in productie.
+- Registry-items kunnen op de telefoon niet worden goedgekeurd (alleen afgewezen).
+- De suggestieroute geeft `retrievedRefs` terug, maar het suggestiescherm op de telefoon toont ze niet.
+- Het taakscherm haalt de hele takenlijst op om één taak te tonen.
+- `/settings/security` toont de telefoon als "Onbekend apparaat", omdat de apparaatnaamparser van het web zijn user agent niet herkent.
+
+## Waar in de code
+
+**iOS (`apps/ios/Verder/`):**
+
+- `Inbox/VoorJouTab.swift`: het tabblad, `InboxRoute`, `VoorJouList` (rijen, amber, lege tekst) en de foutteksten.
+- `Inbox/InboxStore.swift`: de ene ophaalactie (`/inbox` plus `/dashboard/summary`), `fetchedAt`/`attemptedAt`, de widget-snapshot, de badge, en het vergeten bij een 401 of het einde van de sessie.
+- `Inbox/InboxModels.swift`: `WaitingItem`, `WaitingKind` (een onbekende soort decodeert als `.other`), `VerderAction`, `InboxDTO` (met `lastClearedAt`, dat de server nog niet stuurt), `SuggestionDTO`, `TaskDTO` en `DashboardSummaryDTO`.
+- `Inbox/SuggestionDetailView.swift`: `SuggestionDetailModel` en de kaart per soort.
+- `Inbox/TaskRowView.swift`: `TaskModel` en `TaskScreen`.
+- `Inbox/DoneByVerderSection.swift`: `DoneByVerderCopy`, `DoneByVerderModel` (undo), de sectie, het scherm en de rij.
+- `Proposals/ProposalScreen.swift`, `Proposals/ProposalModel.swift` en `Proposals/ApprovalGate.swift`: het voorstel- en vraagscherm, en de verse Face ID bij versturen.
+- `App/RootView.swift` (het tabblad, `inboxPath`, afhandeling van deep links), `App/AppDelegate.swift` (verversen bij een stille push), `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Push/NotificationCategories.swift`, `Push/QuestionCategories.swift`, en `Auth/AppLock.swift` plus `Auth/LockView.swift` (`lockGated`).
+- `Shared/WidgetSnapshot.swift` (het App Group-bestand, zijn beschermingsklasse, wissen) en `Widget/WidgetContent.swift` (wat elke variant tekent, privacygevoelige titels).
+- `Fixtures/` en `FixtureData/{voorjou-few,voorjou-long,voorjou-many,empty,loading,offline,offline-cached,server-error,server-error-cached,unauthorized,one-item}`: de synthetische datasets waaruit de frames zijn getekend, voor simulatorcaptures van elke staat hierboven.
+
+**Server:**
+
+- `apps/web/src/app/api/mobile/v1/inbox/route.ts`
+- `apps/web/src/app/api/mobile/v1/suggestions/[id]/route.ts`, `…/approve/route.ts` en `…/reject/route.ts`
+- `apps/web/src/app/api/mobile/v1/tasks/route.ts` en `tasks/[id]/status/route.ts`
+- `apps/web/src/app/api/mobile/v1/verder-actions/[changeId]/undo/route.ts`
+- `apps/web/src/app/api/mobile/v1/proposals/[id]/{route,approve,reject,answer,task}`
+- `apps/web/src/lib/mobile-dto.ts` (`toInboxDTO`)
+- `packages/api/src/waiting.ts` (`waitingOnMartin`, `loadWaiting`, `WAITING_TASK_STATUSES`)
+- `packages/api/src/routers/verder-actions.ts` (lijst, ongedaan-maakbaarheid, undo)
+- `packages/api/src/routers/suggestions.ts`, `packages/api/src/routers/tasks.ts` en `packages/api/src/task-status.ts` (de overgangsmatrix)
+- `apps/worker/src/badge-sync.ts`, `apps/worker/src/autofile-digest.ts`, `apps/worker/src/auto-file.ts` en `apps/worker/src/notify/notify.ts`
+
+**Tests:**
+
+- iOS:
+  - `VerderTests/InboxRankingTests.swift`: volgorde van de server, nooit-amberen gedaan-rijen, routes per soort, lege tekst;
+  - `VerderTests/InboxStoreTests.swift`: snapshot, badge, mislukte verversing behoudt beide, 401 wist, onbekende soort;
+  - `VerderTests/SuggestionDetailTests.swift`: alleen veranderde velden, gewiste soort als null, registry-item, reden bij afwijzen, 409, taak-`validNext`;
+  - `VerderTests/DoneByVerderTests.swift`: undo met lege body, een niet-ongedaan-te-maken rij wordt nooit gepost, conflict ververst;
+  - `DeepLinkTests`, `LinkDestinationTests`, `NotificationRouterTests`, `NotificationCategoriesTests`, `WidgetSnapshotTests` en `WidgetEntryTests`.
+- Server:
+  - `packages/api/src/waiting.test.ts` en `waiting-load.test.ts`;
+  - `packages/api/src/routers/verder-actions.test.ts`;
+  - de `route.test.ts` naast elke route hierboven;
+  - `apps/worker/src/badge-sync.test.ts`, `autofile-digest.test.ts` en `auto-file.test.ts`.
+
+## Frames
+
+Alle 26 frames uit `voorjou · final` (`339:12478`), opnieuw geëxporteerd op 2026-11-03. De kolom "Functie" koppelt elk frame aan de functies hierboven; "Code vandaag" zegt hoe ver de huidige build ermee overeenkomt.
+
+| Frame | Wat het toont | Functie | Code vandaag |
+|---|---|---|---|
+| ![](frames/Voor_jou_laden.jpg) `Voor_jou_laden.jpg` | Laden, vóór de eerste ophaalactie | 37 | Titel en een spinner |
+| ![](frames/Voor_jou_leeg.jpg) `Voor_jou_leeg.jpg` | Leeg: niets wacht, laatst afgehandeld, samenvatting "Door verder gedaan" | 39 | "Niets wacht op je." |
+| ![](frames/Voor_jou_n_item.jpg) `Voor_jou_n_item.jpg` | Eén item, enkelvoud "wacht op jou" | 11 | Eén rij, geen hoofdgetal |
+| ![](frames/Voor_jou_veel_498.jpg) `Voor_jou_veel_498.jpg` | 498 wachtend: Nu / Kan wachten, 20 getoond | 11, 13, 14, 15 | Platte lijst van alle rijen, geen secties of limiet |
+| ![](frames/Voor_jou_veel_gescrold.jpg) `Voor_jou_veel_gescrold.jpg` | Dezelfde lijst gescrold, compacte titel met aantal | 12 | Niet gebouwd |
+| ![](frames/Voor_jou_lange_titels.jpg) `Voor_jou_lange_titels.jpg` | Lange titels, twee regels en een staart | 9 | De code laat volledig doorlopen, geen afkapping |
+| ![](frames/Voor_jou_swipe_goedkeuren.jpg) `Voor_jou_swipe_goedkeuren.jpg` | Veeg vanaf de voorkant "Goedkeuren" op een suggestie | 16 | Niet gebouwd (goedkeuren op het detailscherm) |
+| ![](frames/Voor_jou_swipe_gedaan.jpg) `Voor_jou_swipe_gedaan.jpg` | Veeg "Gedaan" op een taak | 17 | Niet gebouwd (status op het taakscherm) |
+| ![](frames/Voor_jou_swipe_niet_relevant.jpg) `Voor_jou_swipe_niet_relevant.jpg` | Veeg vanaf de achterkant "Niet relevant" | 18 | Niet gebouwd (afwijzen op het detailscherm) |
+| ![](frames/Voor_jou_contextmenu_taak.jpg) `Voor_jou_contextmenu_taak.jpg` | Contextmenu op een taak | 19 | Niet gebouwd |
+| ![](frames/Voor_jou_contextmenu_suggestie.jpg) `Voor_jou_contextmenu_suggestie.jpg` | Contextmenu op een suggestie | 19 | Niet gebouwd |
+| ![](frames/Voor_jou_contextmenu_voorstel.jpg) `Voor_jou_contextmenu_voorstel.jpg` | Contextmenu op een voorstel: alleen "Bekijken", niet versturen | 19 | Niet gebouwd; de verzendregel geldt hoe dan ook |
+| ![](frames/Voor_jou_undo-toast.jpg) `Voor_jou_undo-toast.jpg` | Undo-toast van 5 s na een beslissing | 22, 24 | Niet gebouwd |
+| ![](frames/Voor_jou_undo-toast_twee_beslissingen.jpg) `Voor_jou_undo-toast_twee_beslissingen.jpg` | Undo-toast na twee beslissingen | 25 | Niet gebouwd |
+| ![](frames/Voor_jou_niet_opgeslagen.jpg) `Voor_jou_niet_opgeslagen.jpg` | Een beslissing niet opgeslagen, opnieuw proberen of intrekken in de rij | 26 | Niet gebouwd; het detailscherm toont de fout |
+| ![](frames/Voor_jou_selecteren.jpg) `Voor_jou_selecteren.jpg` | Selectiemodus voor bulkbeslissingen over suggesties | 21 | Niet gebouwd |
+| ![](frames/Voor_jou_selecteren_bevestigen.jpg) `Voor_jou_selecteren_bevestigen.jpg` | Bevestiging "3 suggesties goedkeuren?" | 21 | Niet gebouwd |
+| ![](frames/Voor_jou_door_verder_gedaan_ongedaan.jpg) `Voor_jou_door_verder_gedaan_ongedaan.jpg` | "Door verder gedaan" uitgeklapt, een undo met zijn toast | 27, 30, 32 | Sectie en undo gebouwd; geen toast |
+| ![](frames/Voor_jou_offline.jpg) `Voor_jou_offline.jpg` | Offline met de laatste lijst en zijn leeftijd | 38, 40 | Eén regel "Geen verbinding met verder…" boven de lijst in het geheugen |
+| ![](frames/Voor_jou_storing_met_cache.jpg) `Voor_jou_storing_met_cache.jpg` | Serverstoring, kaart "STORING" boven de laatste lijst | 38, 41 | Eén regel "Dat lukte niet…" boven de lijst in het geheugen |
+| ![](frames/Voor_jou_fout_geen_cache.jpg) `Voor_jou_fout_geen_cache.jpg` | Mislukken zonder cache, "Opnieuw proberen" | 42 | Alleen de melding; trekken om te verversen |
+| ![](frames/Voor_jou_sessie_verlopen.jpg) `Voor_jou_sessie_verlopen.jpg` | Sessie verlopen, één weg terug naar inloggen | 43 | Gebouwd (`SessionExpiredView`) |
+| ![](frames/Voor_jou_iPhone_SE.jpg) `Voor_jou_iPhone_SE.jpg` | De lijst op een iPhone SE (375 × 667) | 46 | Zelfde layout als die van de code |
+| ![](frames/Voor_jou_AX5.jpg) `Voor_jou_AX5.jpg` | Grootste toegankelijkheidstekstgrootte | 45 | Dynamic Type schaalt; geen hoofdgetal, meta stapelt niet |
+| ![](frames/Voor_jou_AX5_gescrold.jpg) `Voor_jou_AX5_gescrold.jpg` | AX5 gescrold, met een toast | 24, 45 | Niet gebouwd (toast) |
+| ![](frames/Voor_jou_AX5_door_verder_gedaan.jpg) `Voor_jou_AX5_door_verder_gedaan.jpg` | AX5 met "Door verder gedaan" | 27, 45 | Sectie gebouwd |
