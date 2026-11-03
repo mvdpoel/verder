@@ -367,6 +367,21 @@ from.
   produce. Likewise the frame titles a one-off credit by its kind
   ("Teruggave"), which no field holds; the build titles it by counterparty.
   Both need a server decision first, not a fixture.
+- **Meldingen per soort needs a server half that does not exist yet**
+  (2026-11-03, "meer · final"). The phone reads and writes `GET`/`POST
+  /api/mobile/v1/push/preferences` (`{"muted": [category…]}`, per iPhone);
+  no such route, column or `notify()` filter exists, so production answers
+  404 and Meldingen shows every kind as "aan" with no switch — honest, since
+  every kind IS sent. Building it is a migration (a `muted` list on
+  `push_devices`), the route, and `notify()` skipping a muted kind for that
+  device; `VERDER_MAIL` stays unmutable. The level words follow the worker,
+  not the frame where they differ: Termijn is "tijdgevoelig", and the
+  footnotes say proposals/reminders/follow-ups about Verder's post and a
+  failed send are time-sensitive.
+- **Account offers "Toegangssleutel toevoegen" only while the account has
+  none** (frame "Account / normaal" draws AAN with no add row). Before
+  2026-11-03 the button stayed for any count, so a second device could add
+  its own; now that is "andere apparaten via de website".
 - **The Geld captions under the headline numbers** (2026-11-03) come from the
   server (`apps/web/src/lib/mobile-money-meta.ts`: `outRows`, `inSources`),
   NOT YET DEPLOYED. Until the web image is rebuilt the phone draws none of

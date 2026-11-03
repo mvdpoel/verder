@@ -1,113 +1,252 @@
 import SwiftUI
 import UIKit
 
-/// The screens behind Meer's rows. Thin: every word is `AccountCopy`,
-/// `NotificationsCopy`, `WidgetGuide` or `AboutInfo`, so they can be aligned
-/// to the Figma frames without touching what they say.
-private struct MorePage<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ZStack {
-            Color.void.ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    MoreText.title(title)
-                    content
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 26)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-}
-
-private struct Panel<Content: View>: View {
-    let label: String?
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let label { MoreText.label(label) }
-            VStack(alignment: .leading, spacing: 12) { content }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassPanel()
-        }
-    }
-}
+/// The screens behind Meer's rows (Figma "meer · final"). Thin: every word
+/// is `AccountCopy`, `SignOutSheet`, `NotificationsCopy`, `WidgetGuide`,
+/// `AboutInfo` or `DeveloperCopy`.
 
 // MARK: - Account
 
 struct AccountScreen: View {
     let auth: AuthModel
     let account: AccountModel
+    let center: UploadCenter
+    let now: @Sendable () -> Date
     let signOut: () async -> Void
 
     @State private var confirmSignOut = false
+    @State private var retries = 0
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var offline: Bool { center.isOffline }
+    private var failed: Bool { if case .unavailable = account.display { return true }; return false }
+    private var passkey: AccountCopy.PasskeyState { AccountCopy.passkeyState(account.passkeys, failed: failed) }
 
     var body: some View {
         MorePage(title: MoreMenu.title(.account)) {
-            Panel(label: AccountCopy.emailLabel) {
-                switch account.display {
-                case .loading:
-                    MoreText.body(AccountCopy.unknownEmail, color: .inkBright)
-                case .shown(let dto):
-                    MoreText.body(dto.email, color: .inkBright)
-                case .unavailable(let why):
-                    MoreText.body(why, color: .inkBright)
-                    AuthButton(title: AccountCopy.retry, weight: .secondary, enabled: true) {
-                        Task { await account.refresh() }
-                    }
+            if offline { MoreOfflineStrip(stamp: MoreMenu.offlineStamp(account.fetchedAt, now: now())) }
+            whoCard
+            MoreGroup(label: AccountCopy.passkeyLabel) { passkeyCard }.id(MorePageAnchor.middle)
+            MoreGroup(label: AccountCopy.devicesLabel) { devicesCard }
+            VStack(alignment: .leading, spacing: 8) {
+                MoreButton(title: AccountCopy.signOutConfirm, tint: .inkBright, enabled: !auth.isBusy) {
+                    confirmSignOut = true
                 }
+                MoreText.footnote(offline ? AccountCopy.signOutNoteOffline : AccountCopy.signOutNote)
             }
-            Panel(label: AccountCopy.passkeyLabel) {
-                if case .unavailable = account.display {
-                    MoreText.body(AccountCopy.passkeyUnknown)
-                } else {
-                    MoreText.body(AccountCopy.passkeyLine(account.passkeys))
-                }
-                if let message = auth.passkeyMessage { MoreText.body(message) }
-                if AccountCopy.offersPasskey(account.passkeys) {
-                    AuthButton(title: "Passkey toevoegen", weight: .secondary, enabled: !auth.isBusy) {
-                        Task { await auth.addPasskey() }
-                    }
-                }
-            }
-            Panel(label: nil) {
-                Button {
-                    openURL(AccountCopy.devicesURL(base: auth.client.base))
-                } label: {
-                    HStack {
-                        Text(AccountCopy.devicesLink)
-                            .font(.display(17, relativeTo: .body, weight: .regular))
-                            .foregroundStyle(Color.signalLink)
-                        Spacer(minLength: 8)
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.inkFaint)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                MoreText.body(AccountCopy.devicesNote, color: .inkSoft)
-            }
-            AuthButton(title: AccountCopy.signOutConfirm, weight: .secondary, enabled: !auth.isBusy) {
+            .padding(.top, 8)
+        }
+        // iOS 26 leaves a sheet at a custom detent undimmed; the frames dim
+        // the page behind it (as Scan does).
+        .overlay {
+            Color.black.opacity(confirmSignOut ? 0.6 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .animation(.easeInOut(duration: 0.25), value: confirmSignOut)
+        }
+        .sheet(isPresented: $confirmSignOut) {
+            SignOutSheetView(center: center, offline: offline,
+                             stand: account.fetchedAt.map { HomeSummary.stamp($0, now: now()) },
+                             signOut: { confirmSignOut = false; Task { await signOut() } },
+                             cancel: { confirmSignOut = false })
+        }
+        .sensoryFeedback(.success, trigger: auth.passkeyAddedCount)
+        .sensoryFeedback(.error, trigger: retries) { _, _ in failed }
+        .task { await account.refresh() }
+        #if DEBUG
+        .task {
+            if FixtureLaunch.current?.more == .signOut {
+                // After `offlineAfter` (2 s), so an offline sheet opens offline.
+                try? await Task.sleep(for: .seconds(3))
                 confirmSignOut = true
             }
         }
-        .confirmationDialog(AccountCopy.signOutQuestion, isPresented: $confirmSignOut, titleVisibility: .visible) {
-            Button(AccountCopy.signOutConfirm, role: .destructive) { Task { await signOut() } }
-            Button(AccountCopy.cancel, role: .cancel) {}
-        } message: {
-            Text(AccountCopy.signOutMessage)
+        #endif
+    }
+
+    @ViewBuilder private var whoCard: some View {
+        switch account.display {
+        case .unavailable:
+            MoreCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    labelled(AccountCopy.failedLabel, symbol: "exclamationmark.circle") {
+                        Text(AccountCopy.failedTitle)
+                            .font(MoreType.rowTitle)
+                            .foregroundStyle(Color.inkBright)
+                            .fixedSize(horizontal: false, vertical: true)
+                        MoreText.readout(AccountCopy.failureCause(failure, at: account.failedAt, now: now()))
+                    }
+                    MoreButton(title: AccountCopy.retry) {
+                        retries += 1
+                        Task { await account.refresh() }
+                    }
+                }
+                .padding(16)
+            }
+        case .loading:
+            MoreCard {
+                labelled(AccountCopy.emailLabel, symbol: "person.crop.circle") {
+                    MoreSkeleton(fraction: 0.7).padding(.vertical, 6)
+                    MoreSkeleton(fraction: 0.5).padding(.vertical, 4)
+                }
+                .padding(16)
+            }
+        case .shown(let dto):
+            MoreCard {
+                labelled(AccountCopy.emailLabel, symbol: "person.crop.circle") {
+                    Text(typeSize.isAccessibilitySize ? MoreText.breakableAddress(dto.email) : dto.email)
+                        .font(MoreType.rowTitle)
+                        .foregroundStyle(Color.inkBright)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    MoreText.readout(AccountCopy.sessionLine(dto.sessionExpiresAt))
+                }
+                .padding(16)
+            }
+            .accessibilityElement(children: .combine)
         }
-        .task { await account.refresh() }
+    }
+
+    private var failure: APIError? {
+        if case .failed(let e) = account.state { return e }
+        return nil
+    }
+
+    /// The label inside the card, then glyph and text (Figma "INGELOGD ALS").
+    private func labelled<C: View>(_ label: String, symbol: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(MoreType.label)
+                .tracking(1)
+                .foregroundStyle(Color.inkLabel)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .padding(.leading, typeSize.isAccessibilitySize ? 0 : 32)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if !typeSize.isAccessibilitySize {
+                    Image(systemName: symbol)
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.inkMute)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 2) { content() }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var passkeyCard: some View {
+        MoreCard {
+            let badge = AccountCopy.passkeyBadge(passkey)
+            MoreRowView(symbol: "key.horizontal", title: AccountCopy.passkeyTitle,
+                        lines: AccountCopy.passkeyLines(passkey).map { .phrases([$0]) }) {
+                if let badge { MoreBadge(text: badge, tone: passkey == .on ? .okay : .mute) }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(([AccountCopy.passkeyTitle, badge].compactMap { $0 }
+                                 + AccountCopy.passkeyLines(passkey)).joined(separator: ", "))
+            if AccountCopy.offersPasskey(passkey) {
+                MoreDivider()
+                Button { Task { await auth.addPasskey() } } label: {
+                    MoreRowView(symbol: "plus", title: AccountCopy.addPasskey,
+                                titleColor: offline ? .ink : .signal,
+                                lines: [.phrases([AccountCopy.addPasskeyLine(offline: offline)])], dimmed: offline)
+                }
+                .buttonStyle(.plain)
+                .disabled(offline || auth.isBusy)
+            }
+            if let message = auth.passkeyMessage {
+                MoreText.body(message).padding(.horizontal, 16).padding(.bottom, 12)
+            }
+        }
+    }
+
+    private var devicesCard: some View {
+        MoreCard {
+            Button { openURL(AccountCopy.devicesURL(base: auth.client.base)) } label: {
+                MoreRowView(symbol: "laptopcomputer", title: AccountCopy.devicesLink,
+                            lines: [.phrases([AccountCopy.devicesLine(account.account?.devices, offline: offline)])],
+                            chevron: .external, dimmed: offline)
+            }
+            .buttonStyle(.plain)
+            .disabled(offline)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([AccountCopy.devicesLink,
+                                 AccountCopy.devicesLine(account.account?.devices, offline: offline),
+                                 "opent de website"].joined(separator: ", "))
+            .accessibilityAddTraits(.isLink)
+        }
+    }
+}
+
+/// The confirm sheet behind Uitloggen. Its bottom sits at the screen's
+/// bottom and a longer body grows it upward (Figma final), so the sheet is
+/// sized to its content.
+struct SignOutSheetView: View {
+    let center: UploadCenter
+    let offline: Bool
+    let stand: String?
+    let signOut: () -> Void
+    let cancel: () -> Void
+
+    @State private var height: CGFloat = 300
+    @State private var uploading = false
+    @State private var drained = 0
+
+    private var queued: Int { center.summary.underway }
+    private var sheet: SignOutSheet { SignOutSheet.make(offline: offline, queued: queued, stand: stand) }
+
+    var body: some View {
+        let s = sheet
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(s.title)
+                    .font(MoreType.rowTitle)
+                    .foregroundStyle(Color.inkBright)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(s.leads, id: \.text) { lead in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Image(systemName: lead.symbol)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.ink)
+                            .frame(width: 20)
+                            .accessibilityHidden(true)
+                        Text(MoreText.mixed(lead.text, color: .ink))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                MoreText.body(s.body, color: .ink)
+                VStack(spacing: 12) {
+                    if let first = s.uploadFirst {
+                        MoreButton(title: first, weight: .primary, busy: uploading) {
+                            uploading = true
+                            Task {
+                                await center.drain()
+                                uploading = false
+                                if center.summary.underway == 0 { drained += 1 }
+                            }
+                        }
+                    }
+                    MoreButton(title: s.confirm, tint: .inkBright, action: signOut)
+                    MoreButton(title: AccountCopy.cancel, weight: .plain, action: cancel)
+                }
+                .padding(.top, 4)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 24)
+            .padding(.bottom, 8)
+            .lineHeight(.multiple(factor: MoreType.lineFactor))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .presentationDetents([.height(height)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color.plate)
+        .sensoryFeedback(.success, trigger: drained)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -115,47 +254,164 @@ struct AccountScreen: View {
 
 struct NotificationsScreen: View {
     let push: PushRegistrar
+    let prefs: NotificationPrefsModel
+    let offline: Bool
+    let stand: Date?
+    let now: @Sendable () -> Date
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Switches only when iOS lets pushes through, the server stores choices
+    /// and the phone is online; otherwise each kind says "aan"/"uit"/"altijd".
+    private var switchable: Bool {
+        push.permission == .allowed && prefs.availability == .available && !offline
+    }
 
     var body: some View {
         MorePage(title: MoreMenu.title(.notifications)) {
-            Panel(label: nil) {
-                MoreText.body(NotificationsCopy.permissionLine(push.permission), color: .inkBright)
-                if let error = push.lastError { MoreText.readout(error) }
+            if offline {
+                MoreOfflineStrip(stamp: MoreMenu.offlineStamp(stand, now: now()), hint: NotificationsCopy.offlineHint)
+            }
+            header
+            ForEach(NotificationsCopy.groups, id: \.label) { group in
+                VStack(alignment: .leading, spacing: 8) {
+                    MoreGroup(label: group.label) {
+                        MoreCard {
+                            ForEach(Array(group.kinds.enumerated()), id: \.element.category) { i, kind in
+                                // The capture anchor of "Meldingen / AX5 · onderaan".
+                                if i > 0 { MoreDivider().id(kind.category == "CREDITOR_MAIL" ? MorePageAnchor.middle : kind.category) }
+                                row(kind)
+                            }
+                        }
+                    }
+                    if push.permission != .denied || group.label != "Post" {
+                        MoreText.footnote(group.footnote)
+                    }
+                }
+            }
+        }
+        .sensoryFeedback(.error, trigger: prefs.saveFailures)
+        .task { await push.refresh() }
+        .task { await prefs.refresh() }
+        #if DEBUG
+        .task {
+            // `-fixtures-more savefail`: the switch moved, the save failed.
+            guard FixtureLaunch.current?.more == .saveFail else { return }
+            try? await Task.sleep(for: .seconds(1))
+            await prefs.set("CREDITOR_MAIL", on: true)
+        }
+        #endif
+    }
+
+    private var header: some View {
+        MoreCard {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(NotificationsCopy.headerLabel.uppercased())
+                    .font(MoreType.label)
+                    .tracking(1)
+                    .foregroundStyle(Color.inkLabel)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .padding(.leading, typeSize.isAccessibilitySize ? 0 : 32)
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    if !typeSize.isAccessibilitySize {
+                        Image(systemName: push.permission == .allowed ? "bell" : "bell.slash")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.inkMute)
+                            .frame(width: 20)
+                            .accessibilityHidden(true)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(NotificationsCopy.permissionLine(push.permission))
+                            .font(MoreType.rowTitle)
+                            .foregroundStyle(Color.inkBright)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let detail = NotificationsCopy.permissionDetail(push.permission) {
+                            MoreText.body(detail, color: .ink)
+                        } else if let c = prefs.count {
+                            MoreText.readout(NotificationsCopy.countLine(c.on, of: c.of))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .combine)
+                if let error = push.lastError { MoreText.readout(error).padding(.top, 4) }
                 switch NotificationsCopy.action(push.permission) {
                 case .ask?:
-                    AuthButton(title: PushRegistrar.Copy.allow, weight: .secondary, enabled: true) {
-                        Task { await push.acceptPrePrompt() }
-                    }
+                    MoreButton(title: PushRegistrar.Copy.allow) { Task { await push.acceptPrePrompt() } }
+                        .padding(.top, 12)
                 case .openSettings?:
-                    AuthButton(title: NotificationsCopy.openSettings, weight: .secondary, enabled: true) {
+                    MoreButton(title: NotificationsCopy.openSettings) {
                         if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
                             UIApplication.shared.open(url)
                         }
                     }
+                    .padding(.top, 12)
                 case nil:
                     EmptyView()
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                MoreText.label(NotificationsCopy.kindsLabel)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(NotificationsCopy.kinds.enumerated()), id: \.element.category) { i, kind in
-                        if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(kind.name)
-                                .font(.display(17, relativeTo: .body, weight: .regular))
-                                .foregroundStyle(Color.inkBright)
-                            MoreText.body(kind.explanation, color: .inkSoft)
-                        }
-                        .padding(.vertical, 12)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .glassPanel()
-                MoreText.body(NotificationsCopy.quietNote, color: .inkDim)
-            }
+            .padding(16)
         }
-        .task { await push.refresh() }
+    }
+
+    @ViewBuilder private func row(_ kind: NotificationsCopy.Kind) -> some View {
+        let always = NotificationsCopy.always.contains(kind.category)
+        let on = prefs.isOn(kind.category)
+        let explanation = push.permission == .denied && always
+            ? [NotificationsCopy.verderMailWhileDenied] : kind.explanation
+        let line = MoreMenu.Line.kind(level: kind.level, explanation)
+        let spoken = ([kind.name, kind.level] + explanation).joined(separator: ", ")
+        VStack(alignment: .leading, spacing: 0) {
+            if always {
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) {
+                    if switchable { MoreBadge(text: NotificationsCopy.alwaysWord) } else { word(NotificationsCopy.alwaysWord) }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(spoken), altijd aan")
+            } else if switchable {
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) {
+                    Toggle(kind.name, isOn: Binding(get: { on },
+                                                    set: { new in Task { await prefs.set(kind.category, on: new) } }))
+                        .labelsHidden()
+                        .tint(.signal)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(spoken)
+            } else {
+                MoreRowView(symbol: kind.symbol, title: kind.name, lines: [line]) { word(on ? "aan" : "uit") }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(spoken), \(on ? "aan" : "uit")")
+            }
+            if prefs.failed == kind.category { saveFailure }
+        }
+    }
+
+    private func word(_ text: String) -> some View {
+        Text(text)
+            .font(MoreType.value)
+            .foregroundStyle(Color.inkBright)
+            .fixedSize()
+    }
+
+    private var saveFailure: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.ink)
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                MoreText.body(NotificationsCopy.saveFailed(offline: offline), color: .ink)
+            }
+            Button(AccountCopy.retry) { Task { await prefs.retry() } }
+                .font(MoreType.rowTitle)
+                .foregroundStyle(Color.signal)
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+                .padding(.leading, typeSize.isAccessibilitySize ? 0 : 32)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
     }
 }
 
@@ -164,34 +420,137 @@ struct NotificationsScreen: View {
 struct WidgetGuideScreen: View {
     var body: some View {
         MorePage(title: MoreMenu.title(.widgets)) {
-            Panel(label: WidgetGuide.homeLabel) { steps(WidgetGuide.homeSteps) }
-            Panel(label: WidgetGuide.lockLabel) { steps(WidgetGuide.lockSteps) }
-            Panel(label: WidgetGuide.sizesLabel) {
-                ForEach(WidgetGuide.sizes, id: \.name) { size in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(size.name)
-                            .font(.display(17, relativeTo: .body, weight: .regular))
-                            .foregroundStyle(Color.inkBright)
-                        MoreText.body(size.shows, color: .inkSoft)
-                    }
+            MoreCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(WidgetGuide.previewLabel.uppercased())
+                        .font(MoreType.label)
+                        .tracking(1)
+                        .foregroundStyle(Color.inkLabel)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    homeMock
+                    lockMock
+                    MoreText.body(WidgetGuide.privacy)
                 }
+                .padding(16)
             }
-            MoreText.body(WidgetGuide.privacy, color: .inkDim)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Voorbeeld: verder op je beginscherm, 4 wachten op jou, en op je toegangsscherm, 4 wachten, oudste 2 dagen. \(WidgetGuide.privacy)")
+            MoreGroup(label: WidgetGuide.homeLabel) { steps(WidgetGuide.homeSteps) }
+            MoreGroup(label: WidgetGuide.lockLabel) { steps(WidgetGuide.lockSteps) }
         }
     }
 
-    private func steps(_ lines: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("\(i + 1)")
-                        .font(.mono(12, relativeTo: .footnote, weight: .medium))
-                        .foregroundStyle(Color.signal)
-                        .frame(width: 16, alignment: .leading)
-                    MoreText.body(line)
-                }
+    private static let mockShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
+    /// A home screen: verder's small widget beside its icon and three
+    /// neighbouring apps (ghost tiles).
+    private var homeMock: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("verder").font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.inkMute)
+                Spacer(minLength: 4)
+                Text(WidgetGuide.sampleCount)
+                    .font(.display(40, relativeTo: .largeTitle, weight: .light))
+                    .foregroundStyle(Color.inkBright)
+                Text(WidgetGuide.sampleWords).font(MoreType.body).foregroundStyle(Color.ink)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+            .background(Color.glassA, in: Self.mockShape)
+            .overlay(Self.mockShape.strokeBorder(Color.edgeStrong, lineWidth: 1))
+            Grid(horizontalSpacing: 18, verticalSpacing: 18) {
+                GridRow { AppIconTile(); GhostTile() }
+                GridRow { GhostTile(); GhostTile() }
             }
         }
+        .padding(14)
+        .background(Color.void.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.edge, lineWidth: 1))
+    }
+
+    /// A lock screen: the date, the clock and verder's rectangular widget.
+    private var lockMock: some View {
+        VStack(spacing: 4) {
+            Text(WidgetGuide.sampleDate).font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.ink)
+            Text("9:41").font(.display(64, relativeTo: .largeTitle, weight: .light)).foregroundStyle(Color.inkBright)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("verder").font(MoreType.rowTitle).foregroundStyle(Color.inkBright)
+                Text(WidgetGuide.sampleLock).font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.ink)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.glassA.opacity(3), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.top, 4)
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .background(Color.void.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.edge, lineWidth: 1))
+    }
+
+    private func steps(_ lines: [String]) -> some View {
+        MoreCard {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 16) {
+                        Text("\(i + 1)")
+                            .font(MoreType.value)
+                            .foregroundStyle(Color.inkMute)
+                            .frame(minWidth: 16, alignment: .leading)
+                        Text(Self.step(line))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    /// `**Wijzig**` in bold ink-bright, the rest Saira in ink.
+    static func step(_ line: String) -> AttributedString {
+        var out = AttributedString()
+        for (i, part) in line.components(separatedBy: "**").enumerated() {
+            var piece = AttributedString(part)
+            piece.font = i % 2 == 1 ? Font.display(17, relativeTo: .body, weight: .semibold)
+                                    : Font.display(17, relativeTo: .body)
+            piece.foregroundColor = i % 2 == 1 ? Color.inkBright : Color.ink
+            out += piece
+        }
+        return out
+    }
+}
+
+/// verder's own icon in the home-screen mock: the app's AppIcon.
+private struct AppIconTile: View {
+    var body: some View {
+        Group {
+            if let icon = Self.image {
+                Image(uiImage: icon).resizable().scaledToFill()
+            } else {
+                Color.plate
+            }
+        }
+        .frame(width: 58, height: 58)
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    static let image: UIImage? = {
+        let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any]
+        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
+        let files = primary?["CFBundleIconFiles"] as? [String]
+        return files?.last.flatMap(UIImage.init(named:)) ?? UIImage(named: "AppIcon")
+    }()
+}
+
+private struct GhostTile: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 13, style: .continuous)
+            .fill(Color.steelDim.opacity(0.14))
+            .frame(width: 58, height: 58)
+            .accessibilityHidden(true)
     }
 }
 
@@ -199,24 +558,55 @@ struct WidgetGuideScreen: View {
 
 struct AboutScreen: View {
     let server: URL
+    let about: AboutInfo
+    let connection: AboutInfo.Connection
+    let openDeveloper: () -> Void
 
     var body: some View {
-        let about = AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: server)
         MorePage(title: MoreMenu.title(.about)) {
-            Panel(label: nil) {
-                ForEach(about.lines, id: \.self) { line in
-                    HStack {
-                        MoreText.body(line.label, color: .inkSoft)
-                        Spacer(minLength: 8)
-                        Text(line.value)
-                            .font(.mono(12, relativeTo: .footnote))
-                            .foregroundStyle(Color.inkBright)
-                            .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 8) {
+                MoreGroup(label: AboutInfo.label) {
+                    MoreCard {
+                        ForEach(Array(about.lines.enumerated()), id: \.element) { i, line in
+                            if i > 0 { MoreDivider() }
+                            MoreRowView(symbol: line.symbol, title: line.label) { valueText(line.value) }
+                                .accessibilityElement(children: .combine)
+                                .contextMenu {
+                                    Button("Kopieer") { UIPasteboard.general.string = line.value }
+                                }
+                        }
+                        MoreDivider()
+                        MoreRowView(symbol: "wifi", title: AboutInfo.connectionLabel) {
+                            MoreBadge(text: AboutInfo.badge(connection), tone: connection == .reachable ? .okay : .mute)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(AboutInfo.connectionLabel), \(AboutInfo.badge(connection))")
                     }
                 }
+                MoreText.footnote(AboutInfo.note)
             }
-            MoreText.body(AboutInfo.note, color: .inkDim)
+            MoreGroup(label: AboutInfo.extraLabel) {
+                MoreCard {
+                    let row = MoreMenu.row(.developer, MoreMenu.State())
+                    Button(action: openDeveloper) {
+                        MoreRowView(symbol: row.symbol, title: row.title, lines: row.lines, chevron: .push)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row.accessibilityLabel)
+                    .accessibilityAddTraits(.isButton)
+                }
+            }
         }
+    }
+
+    private func valueText(_ value: String) -> some View {
+        Text(value)
+            .font(MoreType.value)
+            .foregroundStyle(Color.inkBright)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
     }
 }
 
@@ -229,32 +619,49 @@ struct AboutScreen: View {
 struct DeveloperScreen: View {
     let center: UploadCenter
     let push: PushRegistrar
+    let now: @Sendable () -> Date
 
     @State private var confirmResend = false
 
     var body: some View {
         MorePage(title: MoreMenu.title(.developer)) {
-            Panel(label: "Meldingen") {
-                MoreText.readout("omgeving: \(push.registeredEnvironment ?? "nog niet aangemeld")")
+            MoreGroup(label: DeveloperCopy.pushLabel) {
+                MoreCard {
+                    pair("bell", "APNs-omgeving", push.registeredEnvironment ?? DeveloperCopy.notRegistered)
+                    MoreDivider()
+                    pair("iphone", "Apparaat-token", DeveloperCopy.token(tail: push.registeredTokenTail,
+                                                                        at: push.registeredAt))
+                    MoreDivider()
+                    pair("exclamationmark.circle", "Laatste fout", push.lastError ?? "geen")
+                }
             }
             // Send the newest sent scan AGAIN with its own clientId; the
             // server must answer `duplicate: true` and store nothing. Behind a
             // confirmation, because it is a real upload to the real dossier.
-            Panel(label: "Scans") {
-                if let item = center.lastSent { MoreText.readout(item.fileName) }
-                AuthButton(title: "Opnieuw versturen (zelfde clientId)", weight: .secondary,
-                           enabled: center.lastSent != nil && !center.isResending) {
-                    confirmResend = true
-                }
-                if let result = center.resendResult {
-                    Text(result)
-                        .font(.mono(12, relativeTo: .footnote))
-                        .foregroundStyle(Color.ink)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+            MoreGroup(label: DeveloperCopy.uploadLabel) {
+                MoreCard {
+                    MoreRowView(symbol: "doc.text", title: "Laatste scan",
+                                lines: [.mono(center.lastSent?.fileName ?? "nog geen scan verstuurd")])
+                        .accessibilityElement(children: .combine)
+                    MoreDivider()
+                    MoreRowView(symbol: "checkmark.square", title: "Laatste antwoord",
+                                titleColor: .inkBright,
+                                lines: [.mono(DeveloperCopy.answer(center.resendAnswer,
+                                                                   failure: center.resendAnswer == nil ? center.resendResult : nil,
+                                                                   now: now()))])
+                        .accessibilityElement(children: .combine)
                 }
             }
+            VStack(alignment: .leading, spacing: 8) {
+                MoreButton(title: DeveloperCopy.resend, tint: .inkBright,
+                           enabled: center.lastSent != nil, busy: center.isResending) {
+                    confirmResend = true
+                }
+                MoreText.footnote(DeveloperCopy.note)
+            }
+            .padding(.top, 8)
         }
+        .sensoryFeedback(.success, trigger: center.resendAnswer) { _, new in new?.duplicate == true }
         .confirmationDialog("Laatste scan opnieuw versturen met dezelfde clientId?",
                             isPresented: $confirmResend, titleVisibility: .visible) {
             Button("Opnieuw versturen") { Task { await center.resendLastSent() } }
@@ -262,5 +669,17 @@ struct DeveloperScreen: View {
         } message: {
             Text("verder hoort te antwoorden met duplicate: true, zonder een nieuw document.")
         }
+    }
+
+    private func pair(_ symbol: String, _ label: String, _ value: String) -> some View {
+        MoreRowView(symbol: symbol, title: label) {
+            Text(value)
+                .font(MoreType.value)
+                .foregroundStyle(Color.inkBright)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

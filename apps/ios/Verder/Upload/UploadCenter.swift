@@ -31,6 +31,9 @@ final class UploadCenter {
     private(set) var message: String?
     /// The answer of the last same-clientId resend (Meer → Ontwikkelaar).
     private(set) var resendResult: String?
+    /// The resend's answer as Ontwikkelaar draws it: whether the server said
+    /// `duplicate: true`, and when it answered. Nil until a resend answered.
+    private(set) var resendAnswer: ResendAnswer?
     private(set) var isResending = false
     /// Whether this phone ever queued anything ("Nog geen scans" until then).
     private(set) var everEnqueued = false
@@ -194,6 +197,11 @@ final class UploadCenter {
     }
 
     /// Task 12 step 3. Reports the server's answer as plain text.
+    struct ResendAnswer: Equatable, Sendable {
+        let duplicate: Bool
+        let at: Date
+    }
+
     func resendLastSent() async {
         guard let item = lastSent, !isResending else { return }
         isResending = true
@@ -201,6 +209,7 @@ final class UploadCenter {
         do {
             let answer = try await ResendProbe.resend(item, client: client)
             resendResult = "duplicate: \(answer.duplicate) · id \(answer.id) · clientId \(item.clientId)"
+            resendAnswer = ResendAnswer(duplicate: answer.duplicate, at: now())
         } catch {
             resendResult = "Mislukt: \(error)"
         }

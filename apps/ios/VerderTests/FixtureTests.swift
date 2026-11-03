@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "dossier", "empty", "loading", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "calm", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "unauthorized", "voice", "voorjou-few",
         "voorjou-long", "voorjou-many", "weekly",
@@ -47,6 +47,17 @@ struct FixtureTests {
 
     @Test func everyFixtureTheDataDocNamesIsBundled() {
         #expect(FixtureServer.names(in: Self.root) == Self.expectedNames)
+    }
+
+    /// `"POST push/preferences": 503`: the save fails, the read still answers.
+    @Test func aStatusCanFailOneMethodOnly() throws {
+        let s = try Self.server("meer-save-fails")
+        #expect(s.reply(method: "POST", path: FixtureServer.apiPrefix + "push/preferences").isError)
+        #expect(!s.reply(method: "GET", path: FixtureServer.apiPrefix + "push/preferences").isError)
+        let dto = try Self.decode(PushPreferencesDTO.self, "meer-save-fails", "push/preferences")
+        #expect(dto.muted == ["CREDITOR_MAIL", "FILING"])
+        #expect(try Self.decode(AccountDTO.self, "meer-no-passkey", "me").passkeys == 0)
+        #expect(try Self.server("meer-offline").manifest.offlineAfter == 2)
     }
 
     @Test func sharedIsNotAFixtureAndPathsCannotEscape() throws {
@@ -121,7 +132,8 @@ struct FixtureTests {
         _ = try Self.decode(Ignored.self, name, "push/register", method: "POST")
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
         _ = try Self.decode([PartyDTO].self, name, "parties")
-        _ = try Self.decode(AccountDTO.self, name, "me")
+        // meer-account-fails answers /me with its 503 by design.
+        if name != "meer-account-fails" { _ = try Self.decode(AccountDTO.self, name, "me") }
         _ = try Self.decode(CaseMapDTO.self, name, "case-map")
         _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
         // Every fixture but `empty` (404: no Sunday yet) holds a summary.
@@ -540,8 +552,18 @@ struct FixtureTests {
         #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-faceid", "ja")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-faceid", "ja"])
         }
-        #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end"],
+        #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end", "middle"],
                 "capture.sh's --scroll grammar")
+        let meer = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "meer-offline", "-route", "meer:developer",
+                                                         "-fixtures-push", "denied", "-fixtures-more", "signout"]))
+        #expect(meer.route == .meer([.about, .developer]))
+        #expect(meer.push == .denied && meer.more == .signOut)
+        #expect(try FixtureLaunch.parseRoute("meer:account") == .meer([.account]))
+        #expect(FixtureLaunch.MoreState.allCases.map(\.rawValue) == ["signout", "savefail"], "capture.sh's --more grammar")
+        #expect(throws: FixtureLaunch.ParseError.unknownRoute("meer:geheim")) { try FixtureLaunch.parseRoute("meer:geheim") }
+        #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-push", "ja")) {
+            try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-push", "ja"])
+        }
         #expect(throws: FixtureLaunch.ParseError.unknownScroll("top")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-scroll", "top"])
         }

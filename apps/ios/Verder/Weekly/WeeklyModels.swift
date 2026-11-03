@@ -181,8 +181,11 @@ struct WeeklyScreen: Equatable, Sendable {
     let windowLine: String
     let counts: [Count]
     let waiting: Waiting
+    /// Meer's Weekoverzicht row: "week 44 · 3 verstuurd · 5 opgeborgen".
+    let meer: MoreMenu.State.WeeklyLine
 
     init(_ d: WeeklyDTO) {
+        meer = MoreMenu.weekly(d)
         windowLine = "\(WeeklyFormat.weekLabel(d.week)) · \(WeeklyFormat.window(from: d.from, to: d.to))"
         let filed = d.filedByMartin + d.filedByVerder
         counts = [

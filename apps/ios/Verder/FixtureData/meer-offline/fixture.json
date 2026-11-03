@@ -1,0 +1,6 @@
+{
+  "description": "The base case once, fetched at 14:02 (keptAt), then the phone loses its network: Meer and its screens keep the stand and say 'offline · bijgewerkt 14:02'. The account has no toegangssleutel, as the offline Account frame draws it.",
+  "thenFail": "offline",
+  "keptAt": "2026-11-01T13:02:00Z",
+  "offlineAfter": 2
+}

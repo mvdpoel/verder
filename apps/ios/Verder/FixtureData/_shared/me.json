@@ -1,5 +1,7 @@
 {
   "email": "jij@thuis.example",
   "name": null,
-  "passkeys": 1
+  "passkeys": 1,
+  "sessionExpiresAt": "2026-12-01T09:00:00.000Z",
+  "devices": 3
 }

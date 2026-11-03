@@ -17,8 +17,12 @@ import Foundation
 ///                              the "maand gekozen" months selected, or with the beheerrekening's sheet up
 ///     -fixtures-faceid asking  with -fixtures-locked: the automatic Face ID prompt never answers,
 ///                              so Overzicht holds its "vraagt" state (no button)
+///     -fixtures-push <denied|notDetermined>  the notification permission (default: allowed)
+///     -fixtures-more <signout|savefail>  a Meer screen in a state only a gesture reaches: the
+///                              Uitloggen sheet up (Account), or a Meldingen switch whose save failed
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
-///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice>
+///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
+///             |meer:<account|notifications|widgets|about|developer>>
 ///
 /// Without `-fixtures` none of the others does anything: a DEBUG build on the
 /// real server never jumps tabs because of a stale scheme argument.
@@ -43,6 +47,14 @@ struct FixtureLaunch: Equatable, Sendable {
         /// A screen a link cannot show in its capture state: the voice log
         /// already recorded and transcribed (`FixtureScreen`).
         case screen(Screen)
+        /// A Meer screen, pushed onto the Meer stack as its row's tap does.
+        case meer([MoreRoute])
+    }
+
+    /// Meer states only a gesture reaches (`-fixtures-more`).
+    enum MoreState: String, CaseIterable, Sendable {
+        case signOut = "signout"
+        case saveFail = "savefail"
     }
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
@@ -79,7 +91,8 @@ struct FixtureLaunch: Equatable, Sendable {
     enum FaceIDState: String, CaseIterable, Sendable { case asking }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
-    enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end }
+    /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
+    enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end, middle }
 
     enum ParseError: Error, Equatable {
         case unknownScroll(String)
@@ -101,6 +114,8 @@ struct FixtureLaunch: Equatable, Sendable {
     var scanState: ScanState? = nil
     var geld: GeldState? = nil
     var faceID: FaceIDState? = nil
+    var push: PushPermission? = nil
+    var more: MoreState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -148,6 +163,18 @@ struct FixtureLaunch: Equatable, Sendable {
                              faceID: try value(after: "-fixtures-faceid").map { (raw: String) throws(ParseError) -> FaceIDState in
                                  guard let s = FaceIDState(rawValue: raw) else { throw .unknownValue("-fixtures-faceid", raw) }
                                  return s
+                             },
+                             push: try value(after: "-fixtures-push").map { (raw: String) throws(ParseError) -> PushPermission in
+                                 switch raw {
+                                 case "denied": return .denied
+                                 case "notDetermined": return .notDetermined
+                                 case "allowed": return .allowed
+                                 default: throw .unknownValue("-fixtures-push", raw)
+                                 }
+                             },
+                             more: try value(after: "-fixtures-more").map { (raw: String) throws(ParseError) -> MoreState in
+                                 guard let s = MoreState(rawValue: raw) else { throw .unknownValue("-fixtures-more", raw) }
+                                 return s
                              })
     }
 
@@ -161,6 +188,16 @@ struct FixtureLaunch: Equatable, Sendable {
         if raw == "weekly" { return .link(.weekly) }
         if raw == "geld" { return .link(.money) }
         if raw == "timeline" { return .link(.timeline) }
+        if raw.hasPrefix("meer:") {
+            switch raw.dropFirst("meer:".count) {
+            case "account": return .meer([.account])
+            case "notifications": return .meer([.notifications])
+            case "widgets": return .meer([.widgets])
+            case "about": return .meer([.about])
+            case "developer": return .meer([.about, .developer])
+            default: throw .unknownRoute(raw)
+            }
+        }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)

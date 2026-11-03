@@ -40,7 +40,8 @@ struct VerderApp: App {
     }
 
     private init(services s: AppServices) {
-        let auth = AuthModel(client: s.client, store: s.store, defaults: s.defaults, widgetSnapshotDir: s.snapshotDir)
+        let auth = AuthModel(client: s.client, store: s.store, defaults: s.defaults, widgetSnapshotDir: s.snapshotDir,
+                             pendingSignOut: s.pendingSignOut)
         _auth = State(initialValue: auth)
         _lock = State(initialValue: s.lock)
         _uploads = State(initialValue: s.uploads)

@@ -3,6 +3,7 @@
 #   scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled]
 #                      [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>]
 #                      [--press <text>] [--geld <state>] [--faceid asking]
+#                      [--push <denied|notDetermined>] [--more <signout|savefail>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -11,14 +12,23 @@
 #            money-no-budget, money-overspent, dossier, timeline, weekly, voice)
 #   tab      overzicht | voorjou | scan | dossier | meer
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
+#            | meer:account | meer:notifications | meer:widgets | meer:about | meer:developer
+#            (a Meer screen pushed onto the Meer stack, as its row's tap does)
 #   --locked keep the app lock closed (Overzicht's counts-only glance)
 #   --scans  the phone's upload queue holds today's scans (2 sent, 1 waiting)
 #   --scrolled  open Overzicht scrolled to its end (the lower half of a
 #            "hele pagina" frame); --scroll <waiting|leefgeld|rest|end> to a card
-#            (waiting: the end of Wacht op jou, at the bottom of the screen)
+#            (waiting: the end of Wacht op jou, at the bottom of the screen).
+#            On Meer and its screens: end (the column's end) or middle (the
+#            screen's middle anchor: Account's Toegangssleutel group at the top)
+#   --push   the notification permission: denied | notDetermined (default: allowed)
+#   --more   a Meer state only a gesture reaches: signout (Account's Uitloggen
+#            sheet up) | savefail (a Meldingen switch moved and its save failed;
+#            fixture meer-save-fails)
 #   --text-size  the simulator's Dynamic Type size for this shot, as simctl
 #            spells it (e.g. accessibility-extra-extra-extra-large for AX5,
-#            large for the default); the previous size is put back afterwards
+#            large for the default); the previous size is put back afterwards.
+#            "ax5" is accepted for accessibility-extra-extra-extra-large
 #   --queue  the Scan tab's upload queue as a "scan · final" frame draws it:
 #            first underway done offline failed failed-recent signin signin-recent
 #   --camera the camera permission: notDetermined | denied (default: allowed)
@@ -54,10 +64,10 @@
 # shot: FixtureLaunch.current fatalErrors on a launch argument it cannot read,
 # and a dead app leaves the simulator home screen to be screenshotted.
 set -euo pipefail
-usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>] [--faceid asking]" >&2; exit 2; }
+usage() { echo "usage: scripts/capture.sh <fixture> <tab|route> <out.png> [--locked] [--scans] [--scrolled | --scroll <card>] [--text-size <size>] [--queue <preset>] [--camera <state>] [--scan <state>] [--press <text>] [--geld <state>] [--faceid asking] [--push <state>] [--more <state>]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
-LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""
+LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -66,10 +76,11 @@ while [ $# -gt 0 ]; do
     --scrolled) SCROLLED=end ;;
     --scroll)
       [ $# -ge 2 ] || usage
-      case "$2" in waiting|leefgeld|rest|end) SCROLLED="$2" ;; *) echo "capture.sh: --scroll takes waiting, leefgeld, rest or end" >&2; exit 2 ;; esac
+      case "$2" in waiting|leefgeld|rest|end|middle) SCROLLED="$2" ;; *) echo "capture.sh: --scroll takes waiting, leefgeld, rest, end or middle" >&2; exit 2 ;; esac
       shift ;;
     --text-size)
       [ $# -ge 2 ] || usage
+      [ "$2" != ax5 ] || set -- "$1" accessibility-extra-extra-extra-large "${@:3}"
       case " $TEXT_SIZES " in *" $2 "*) TEXT_SIZE="$2" ;; *) echo "capture.sh: unknown text size '$2'; known: $TEXT_SIZES" >&2; exit 2 ;; esac
       shift ;;
     --queue)
@@ -92,6 +103,14 @@ while [ $# -gt 0 ]; do
     --faceid)
       [ $# -ge 2 ] || usage
       case "$2" in asking) FACEID="$2" ;; *) echo "capture.sh: --faceid takes asking" >&2; exit 2 ;; esac
+      shift ;;
+    --push)
+      [ $# -ge 2 ] || usage
+      case "$2" in denied|notDetermined) PUSH="$2" ;; *) echo "capture.sh: --push takes denied or notDetermined" >&2; exit 2 ;; esac
+      shift ;;
+    --more)
+      [ $# -ge 2 ] || usage
+      case "$2" in signout|savefail) MORE="$2" ;; *) echo "capture.sh: --more takes signout or savefail" >&2; exit 2 ;; esac
       shift ;;
     --press)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
@@ -116,6 +135,7 @@ UUID_RE="^$HEX{8}-$HEX{4}-$HEX{4}-$HEX{4}-$HEX{12}\$"
 case "$TARGET" in
   overzicht|voorjou|scan|dossier|meer) ARGS=(-tab "$TARGET") ;;
   geld|weekly|timeline|voice) ARGS=(-route "$TARGET") ;;
+  meer:account|meer:notifications|meer:widgets|meer:about|meer:developer) ARGS=(-route "$TARGET") ;;
   proposal:*|suggestion:*|task:*|document:*)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
       echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2
@@ -124,7 +144,8 @@ case "$TARGET" in
   *)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ]; then
       echo "capture.sh: unknown target '$TARGET'; tabs: overzicht voorjou scan dossier meer;" \
-        "routes: geld weekly timeline voice proposal:<uuid> suggestion:<uuid> task:<uuid> document:<uuid>" >&2; exit 2
+        "routes: geld weekly timeline voice proposal:<uuid> suggestion:<uuid> task:<uuid> document:<uuid>" \
+        "meer:account meer:notifications meer:widgets meer:about meer:developer" >&2; exit 2
     fi
     ARGS=(-route "$TARGET") ;;
 esac
@@ -135,6 +156,8 @@ esac
 [ -z "$CAMERA" ] || ARGS+=(-fixtures-camera "$CAMERA")
 [ -z "$SCAN_STATE" ] || ARGS+=(-fixtures-scan "$SCAN_STATE")
 [ -z "$GELD" ] || ARGS+=(-fixtures-geld "$GELD")
+[ -z "$PUSH" ] || ARGS+=(-fixtures-push "$PUSH")
+[ -z "$MORE" ] || ARGS+=(-fixtures-more "$MORE")
 if [ -n "$FACEID" ]; then
   [ -n "$LOCKED" ] || { echo "capture.sh: --faceid needs --locked" >&2; exit 2; }
   ARGS+=(-fixtures-faceid "$FACEID")

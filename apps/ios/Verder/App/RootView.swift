@@ -77,6 +77,7 @@ struct RootView: View {
             case .active:
                 lock.sceneDidBecomeActive()
                 if auth.isSignedIn { Task { await uploads.start() } }
+                if auth.signOutPending { Task { await auth.retryPendingSignOut() } }
                 promptOnOpen()
             default: break
             }
@@ -120,6 +121,12 @@ struct RootView: View {
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.
         .onOpenURL { url in links.deliver(DeepLink.parse(url.absoluteString)) }
+        // An offline sign-out is revoked at the next launch, the next time the
+        // app comes to the front, and the moment the network returns.
+        .task { if auth.signOutPending { await auth.retryPendingSignOut() } }
+        .onChange(of: uploads.isOffline) { _, offline in
+            if !offline && auth.signOutPending { Task { await auth.retryPendingSignOut() } }
+        }
         // Never stacked on the passkey offer: that one waits in Meer first.
         .alert(PushRegistrar.Copy.prePromptTitle, isPresented: Binding(
             get: { push.prePromptPending && auth.isSignedIn && !auth.passkeyOfferPending },
@@ -203,7 +210,7 @@ struct RootView: View {
                         openVoorJou: {
                             inboxPath = []
                             tab = .voorJou
-                        }).lockGated(by: lock)
+                        }, now: now).lockGated(by: lock)
             }
         }
         .tint(Color.signal)
@@ -240,6 +247,9 @@ struct RootView: View {
         switch launch.route {
         case .link(let link)?: links.deliver(link)
         case .screen(let screen)?: fixtureScreen = screen
+        case .meer(let path)?:
+            tab = .meer
+            meerPath = path
         case nil: break
         }
     }

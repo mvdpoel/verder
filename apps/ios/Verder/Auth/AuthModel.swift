@@ -11,12 +11,13 @@ final class AuthModel {
         static let wrongCredentials = "Dat werkte niet — controleer je e-mailadres en wachtwoord en probeer het nog eens."
         static let offline = "Geen verbinding met verder. Controleer je internet en probeer het opnieuw."
         static let generic = "Inloggen lukte niet. Probeer het over een moment opnieuw."
-        static let passkeyFailed = "Inloggen met passkey lukte niet. Probeer het opnieuw, of log in met je wachtwoord."
-        static let passkeyAlreadyOnDevice = "Er staat al een passkey voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
-        static let passkeyAdded = "Passkey toegevoegd. Voortaan log je in met Face ID."
-        static let passkeyAddFailed = "Passkey toevoegen lukte niet. Probeer het over een moment opnieuw."
+        // The UI says "toegangssleutel", never the English "passkey" (design brief).
+        static let passkeyFailed = "Inloggen met toegangssleutel lukte niet. Probeer het opnieuw, of log in met je wachtwoord."
+        static let passkeyAlreadyOnDevice = "Er staat al een toegangssleutel voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
+        static let passkeyAdded = "Toegangssleutel toegevoegd. Voortaan log je in met Face ID."
+        static let passkeyAddFailed = "Toegangssleutel toevoegen lukte niet. Probeer het over een moment opnieuw."
         /// better-auth registers a passkey only on a session younger than a day.
-        static let passkeyNeedsFreshSignIn = "Log eerst opnieuw in; daarna kun je een passkey toevoegen."
+        static let passkeyNeedsFreshSignIn = "Log eerst opnieuw in; daarna kun je een toegangssleutel toevoegen."
     }
 
     /// Default label for a passkey registered on the phone, as
@@ -42,6 +43,12 @@ final class AuthModel {
     private(set) var passkeyOfferPending = false
     /// The outcome of adding a passkey, for the signed-in screen.
     private(set) var passkeyMessage: String?
+    /// Bumped when a toegangssleutel was registered: the `.success` haptic.
+    private(set) var passkeyAddedCount = 0
+    /// A sign-out that reached no server: its session is still alive there
+    /// and is revoked the moment the phone reaches verder again
+    /// (`retryPendingSignOut`). Meer's offline sheet promises exactly that.
+    private(set) var signOutPending: Bool
 
     @ObservationIgnored let client: APIClient
     @ObservationIgnored let store: any SessionStore
@@ -54,12 +61,18 @@ final class AuthModel {
     /// and the map headline). Erased on sign-out and on a rejected session.
     @ObservationIgnored private let widgetSnapshotDir: URL?
     @ObservationIgnored private let reloadWidgets: @MainActor () -> Void
+    /// Where the cookie of an offline sign-out waits to be revoked. Its own
+    /// Keychain item in the live app, so a new sign-in never overwrites it.
+    @ObservationIgnored let pendingSignOut: any SessionStore
 
     init(client: APIClient, store: any SessionStore, passkeys: PasskeyAuth? = nil, defaults: UserDefaults = .standard,
          widgetSnapshotDir: URL? = nil,
          reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() },
-         epoch: SessionEpoch = SessionEpoch()) {
+         epoch: SessionEpoch = SessionEpoch(),
+         pendingSignOut: any SessionStore = InMemorySessionStore()) {
         self.client = client
+        self.pendingSignOut = pendingSignOut
+        self.signOutPending = pendingSignOut.load() != nil
         self.epoch = epoch
         self.store = store
         self.passkeys = passkeys ?? PasskeyAuth(client: client, store: store, authenticator: PlatformPasskeyAuthenticator())
@@ -140,6 +153,7 @@ final class AuthModel {
             try await passkeys.register(name: Self.passkeyName)
             passkeyOfferPending = false
             passkeyMessage = Copy.passkeyAdded
+            passkeyAddedCount += 1
         } catch PasskeyError.cancelled {
             // Martin closed the sheet; nothing to say.
         } catch PasskeyError.alreadyOnDevice {
@@ -178,11 +192,48 @@ final class AuthModel {
     /// a phone that could not reach verder must still drop what Martin asked
     /// it to drop. A session left alive server-side expires on its own and
     /// can be revoked from /settings/security.
+    ///
+    /// When NO HTTP answer came back (offline), the cookie is kept aside in
+    /// `pendingSignOut` and the sign-out is sent again by
+    /// `retryPendingSignOut` once verder answers — until then the session
+    /// lives on the server and its pushes still arrive, which is what the
+    /// offline sheet says. Any HTTP answer (even an error) ends the wait: the
+    /// server either revoked it or never knew it.
     func signOut() async {
+        let cookie = store.load()
         let req = client.request("/api/auth/sign-out", method: "POST", body: Data("{}".utf8), contentType: "application/json")
-        _ = try? await client.send(req)
+        do {
+            _ = try await client.send(req)
+        } catch APIError.transport {
+            if let cookie {
+                try? pendingSignOut.save(cookie)
+                signOutPending = true
+            }
+        } catch {}
         sessionExpired = false
         forgetLocally()
+    }
+
+    /// The offline sign-out's second half: revoke the kept session with its
+    /// own cookie. Called when the app comes to the front and when the network
+    /// returns; a repeat while one is running is harmless (sign-out is
+    /// idempotent on the server).
+    func retryPendingSignOut() async {
+        guard let cookie = pendingSignOut.load() else { signOutPending = false; return }
+        let revoker = APIClient(base: client.base, session: client.session, store: InMemorySessionStore(cookie))
+        let req = revoker.request("/api/auth/sign-out", method: "POST", body: Data("{}".utf8),
+                                  contentType: "application/json")
+        do {
+            _ = try await revoker.send(req)
+        } catch APIError.transport {
+            return
+        } catch {}
+        // Only the cookie this attempt sent: a newer offline sign-out that
+        // landed meanwhile keeps waiting.
+        if pendingSignOut.load() == cookie {
+            pendingSignOut.clear()
+            signOutPending = false
+        }
     }
 
     /// The server answered 401 to a call that needs the session (the push

@@ -24,7 +24,7 @@ struct SignInView: View {
                             .font(.display(26, relativeTo: .title, weight: .ultraLight))
                             .foregroundStyle(Color.inkBright)
 
-                        AuthButton(title: "Inloggen met passkey", enabled: !auth.isBusy) {
+                        AuthButton(title: "Inloggen met toegangssleutel", enabled: !auth.isBusy) {
                             Task { await auth.signInWithPasskey() }
                         }
 

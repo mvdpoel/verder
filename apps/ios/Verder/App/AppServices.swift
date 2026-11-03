@@ -32,11 +32,13 @@ struct AppServices {
     var now: @Sendable () -> Date = { Date() }
     /// The camera permission behind Scan's pre-prompt and its "staat uit" state.
     var camera: any CameraAccess = LiveCameraAccess()
+    /// Where an offline sign-out's cookie waits to be revoked (`AuthModel.signOut`).
+    var pendingSignOut: any SessionStore = InMemorySessionStore()
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()
         let client = APIClient(session: APIClient.makeSession(), store: store)
-        return AppServices(client: client, store: store, lock: AppLock(),
+        var services = AppServices(client: client, store: store, lock: AppLock(),
                            // Made at launch, not lazily: a relaunch for
                            // background-upload events must find the background
                            // session (one per identifier per process) already
@@ -51,5 +53,7 @@ struct AppServices {
                            timelineDir: TimelineCache.live.dir,
                            makeRecorder: { AudioRecorder() },
                            transcriber: OnDeviceTranscriber())
+        services.pendingSignOut = KeychainSessionStore(service: KeychainSessionStore.defaultService + ".revoke")
+        return services
     }
 }

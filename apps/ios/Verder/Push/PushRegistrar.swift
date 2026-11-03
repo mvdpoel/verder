@@ -83,6 +83,10 @@ final class PushRegistrar {
     private(set) var permission: PushPermission?
     /// The environment verder last accepted for this phone's token.
     private(set) var registeredEnvironment: String?
+    /// The last four hex digits of the token verder stored, and when: enough
+    /// to tell two registrations apart in Ontwikkelaar, never the token.
+    private(set) var registeredTokenTail: String?
+    private(set) var registeredAt: Date?
     private(set) var prePromptPending = false
     private(set) var lastError: String?
 
@@ -170,6 +174,8 @@ final class PushRegistrar {
                                      contentType: "application/json")
             _ = try await client.send(req)
             registeredEnvironment = environment
+            registeredTokenTail = String(body.token.suffix(4))
+            registeredAt = Date()
             lastError = nil
         } catch APIError.unauthorized {
             // The server no longer knows this session (revoked in

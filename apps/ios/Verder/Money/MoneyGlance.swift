@@ -201,6 +201,8 @@ struct MoneyGlance: Equatable, Sendable {
     let overview: [String]
     /// The Geld screen's cards, one per account, never merged.
     let geld: [GeldAccount]
+    /// Meer's Geld row (Figma "meer · final", "Geld-rij varianten").
+    let meer: MeerGeld
 
     /// Overzicht's rows when no weekly amount is set (Figma "Money glance /
     /// no-budget"): one per account, "Beheerrekening" / "··6789 · nieuwste
@@ -242,6 +244,7 @@ struct MoneyGlance: Equatable, Sendable {
     init(_ dto: MoneySummaryDTO, now: Date = Date()) {
         let leefgeldDeposits: [DisclosedRow] = if case .figure(let f) = dto.leefgeld { f.depositRows } else { [] }
         geld = GeldAccount.make(dto.accounts, leefgeldDeposits: leefgeldDeposits)
+        meer = MeerGeld.make(dto.leefgeld, newestBooking: dto.newestBooking, accounts: dto.accounts.count)
         leefgeld = LeefgeldCard.make(dto.leefgeld, newestBooking: dto.newestBooking)
         leefgeldGlance = LeefgeldGlance.make(dto.leefgeld, newestBooking: dto.newestBooking,
                                              currentWeek: LeefgeldGlance.week(containing: now),

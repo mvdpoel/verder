@@ -17,17 +17,28 @@ check() { CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few "$1" "$TMP/x.png";
 
 for good in overzicht voorjou scan dossier meer geld weekly timeline voice \
   proposal:00000000-f1c5-4000-8000-000000000002 suggestion:00000000-F1C5-4000-8000-000000000003 \
-  task:00000000-f1c5-4000-8000-000000000004 document:00000000-f1c5-4000-8000-200000000311; do
+  task:00000000-f1c5-4000-8000-000000000004 document:00000000-f1c5-4000-8000-200000000311 \
+  meer:account meer:notifications meer:widgets meer:about meer:developer; do
   expect 0 "accepts $good" check "$good"
 done
 for bad in proposal:nope suggestion:123 task: task:00000000-f1c5-4000-8000-00000000000 \
   proposal:00000000-f1c5-4000-8000-000000000002/x document:nope inbox:00000000-f1c5-4000-8000-000000000002 \
-  Overzicht bogus inbox; do
+  Overzicht bogus inbox meer:geheim meer:; do
   expect 2 "refuses $bad" check "$bad"
 done
 for g in open nov sep sheet; do
   expect 0 "accepts --geld $g" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh money-partial overzicht "$TMP/x.png" --geld "$g"
 done
+for m in signout savefail; do
+  expect 0 "accepts --more $m" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer:account "$TMP/x.png" --more "$m"
+done
+expect 2 "refuses --more uitloggen" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer:account "$TMP/x.png" --more uitloggen
+for p in denied notDetermined; do
+  expect 0 "accepts --push $p" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer "$TMP/x.png" --push "$p"
+done
+expect 2 "refuses --push aan" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer "$TMP/x.png" --push aan
+expect 0 "accepts --text-size ax5" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer "$TMP/x.png" --text-size ax5
+expect 0 "accepts --scroll middle" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh voorjou-few meer:account "$TMP/x.png" --scroll middle
 expect 2 "refuses --geld okt" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh money-partial overzicht "$TMP/x.png" --geld okt
 expect 2 "refuses an unknown fixture" env CAPTURE_CHECK_ONLY=1 scripts/capture.sh nope overzicht "$TMP/x.png"
 

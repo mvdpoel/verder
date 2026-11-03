@@ -145,7 +145,15 @@ loading (skeleton) · empty · one item · many (498) · long Dutch titles · er
 
 ## Account (`me`, all fixtures)
 
-Meer → Account reads `GET /api/mobile/v1/me`: `{"email": "jij@thuis.example", "name": null, "passkeys": 1}`. The person stays unnamed.
+Meer → Account reads `GET /api/mobile/v1/me`: `{"email": "jij@thuis.example", "name": null, "passkeys": 1, "sessionExpiresAt": "2026-12-01T09:00:00.000Z", "devices": 3}` ("sessie tot 1 dec", "3 ingelogd"; the two later fields added 2026-11-03 for the "meer · final" frames). The person stays unnamed.
+
+## Meer (added 2026-11-03, the "meer · final" frames)
+
+- Meldingen reads `GET /api/mobile/v1/push/preferences`: `{"muted": ["FILING"]}` in every fixture — "8 van 9 soorten aan", Opgeborgen off. A POST answers `{}`.
+- `meer-no-passkey`: the account holds no toegangssleutel (`passkeys: 0`), so Account offers to add one.
+- `meer-offline`: the base case fetched at 14:02 (`keptAt`), then no network from two seconds in (`offlineAfter`): every Meer screen keeps its stand and says "offline · bijgewerkt 14:02". No toegangssleutel, as the offline Account frame draws it.
+- `meer-account-fails`: `/me` answers 503 from the start — "Account niet opgehaald. · verder was niet bereikbaar".
+- `meer-save-fails`: Opgeborgen and Post van een schuldeiser muted; every save answers 503 ("Niet opgeslagen · verder niet bereikbaar.").
 
 ## Tijdlijn / de zaak (fixture `timeline`, added 2026-11-03)
 

@@ -66,7 +66,8 @@ struct FixtureServer: Sendable {
         let description: String
         let behavior: Behavior?
         /// A status for a path instead of its file, e.g. `{"weekly": 404}` —
-        /// the route's own answer before the first Sunday.
+        /// the route's own answer before the first Sunday; `"POST <path>"`
+        /// for one method only.
         let statuses: [String: Int]?
         /// A generated variant of the shared data (`voorjou-many`).
         let generate: String?
@@ -80,8 +81,13 @@ struct FixtureServer: Sendable {
         /// capture's own minute. The clock reads it until the first failure,
         /// then the case's today (`FixtureEnvironment.clock(keptAt:)`).
         let keptAt: Date?
+        /// Seconds after launch at which the phone reports no network
+        /// (`UploadCenter.isOffline`), with `thenFail: "offline"`.
+        let offlineAfter: Double?
 
-        private enum Key: String, CodingKey { case description, behavior, statuses, generate, transcript, thenFail, keptAt }
+        private enum Key: String, CodingKey {
+            case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter
+        }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: Key.self)
@@ -91,6 +97,7 @@ struct FixtureServer: Sendable {
             generate = try c.decodeIfPresent(String.self, forKey: .generate)
             transcript = try c.decodeIfPresent(String.self, forKey: .transcript)
             thenFail = try c.decodeIfPresent(ThenFail.self, forKey: .thenFail)
+            offlineAfter = try c.decodeIfPresent(Double.self, forKey: .offlineAfter)
             keptAt = try c.decodeIfPresent(String.self, forKey: .keptAt).map { (raw: String) throws -> Date in
                 guard let d = ISO8601DateFormatter().date(from: raw) else {
                     throw DecodingError.dataCorruptedError(forKey: .keptAt, in: c, debugDescription: "keptAt is ISO 8601")
@@ -150,7 +157,11 @@ struct FixtureServer: Sendable {
         guard !path.isEmpty, segments.allSatisfy({ !$0.isEmpty && $0 != ".." && $0 != "." }) else {
             return Self.error(404, "not found")
         }
-        if let status = manifest.statuses?[path] { return Self.error(status, "fixture status") }
+        // `"POST push/preferences": 503` fails one method only (a save that
+        // fails over a read that works).
+        if let status = manifest.statuses?["\(method.uppercased()) \(path)"] ?? manifest.statuses?[path] {
+            return Self.error(status, "fixture status")
+        }
 
         if method.uppercased() == "GET" {
             // A query names a file only when it cannot leave the folder.

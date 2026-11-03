@@ -1,0 +1,6 @@
+{
+  "description": "Meldingen reads its switches, but every save fails (503): 'Niet opgeslagen · verder niet bereikbaar.' under the switch that moved.",
+  "statuses": {
+    "POST push/preferences": 503
+  }
+}

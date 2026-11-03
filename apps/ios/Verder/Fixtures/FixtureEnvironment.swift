@@ -82,6 +82,14 @@ enum FixtureEnvironment {
         let uploads = UploadCenter(queue: queue, uploader: uploader, client: client,
                                    now: launch.queue.map(queueClock) ?? clock)
         if launch.queue == .offline || server.manifest.behavior == .offline { uploads.setOffline(true) }
+        // `offlineAfter`: the network goes once the first answers are in, as
+        // NWPathMonitor would report it (Meer's kept stand).
+        if let after = server.manifest.offlineAfter {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(after))
+                uploads.setOffline(true)
+            }
+        }
 
         // A fresh, temporary dossier per launch: synthetic documents never
         // land in the real Application Support folder, and every capture
@@ -92,7 +100,7 @@ enum FixtureEnvironment {
         try? FileManager.default.removeItem(at: timelineDir)
 
         var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
-                           permission: FixturePermission(), registerRemote: {},
+                           permission: FixturePermission(state: launch.push ?? .allowed), registerRemote: {},
                            snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
                            timelineDir: timelineDir,
                            // No microphone and no speech model: a "recording"
@@ -269,7 +277,8 @@ final class FixtureCamera: CameraAccess {
 }
 
 struct FixturePermission: NotificationPermission {
-    func status() async -> PushPermission { .allowed }
+    var state: PushPermission = .allowed
+    func status() async -> PushPermission { state }
     func request() async -> Bool { true }
 }
 
