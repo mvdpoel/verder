@@ -62,10 +62,17 @@ enum TimelineCopy {
 ///
 /// Connectors are a curve in ONE row. A branch leaves the parent's dot at the
 /// branch stop and rises into the spoor's lane; the spoor's rail then runs up
-/// to its oldest stop. When the branch stop is newer than the spoor's oldest
+/// to its oldest stop. When the branch stop is newer than the spoor's newest
 /// stop, the curve goes DOWN into the spoor's lane instead and the rail runs
-/// up to meet it. A merge comes down the spoor's lane and curves into the
-/// parent's dot at the merge stop.
+/// up to meet it; when it sits INSIDE the spoor's span, the rail stays whole
+/// and the curve leaves beside it. A merge comes down the spoor's lane and
+/// curves into the parent's dot at the merge stop.
+///
+/// A rail is stretched to its connector ONLY through rows its lane holds for
+/// nobody else: `buildTrackMap` packs lanes on stop spans alone, so another
+/// spoor may sit in the same lane between a spoor and its trigger. Then the
+/// connector is ROUTED instead — a curve at each end and a DETOUR half a lane
+/// to the left through the rows between — so two sporen never share a line.
 struct TimelineLayout: Equatable {
     /// Lane x positions in the gutter left of the labels. Up to four lanes sit
     /// at a fixed spacing; more squeeze into the same four-lane width, so the
@@ -86,6 +93,10 @@ struct TimelineLayout: Equatable {
         }
 
         func x(_ lane: Int) -> CGFloat { Self.inset + CGFloat(lane) * spacing }
+
+        /// Where a routed connector runs: half a lane left of the spoor it
+        /// serves, so it never lies on any lane's rail.
+        func detourX(_ lane: Int) -> CGFloat { x(lane) - spacing / 2 }
 
         var width: CGFloat {
             let visible = min(max(count, 1), Self.maxVisible)
@@ -120,6 +131,15 @@ struct TimelineLayout: Equatable {
         /// The spoor's lane, at the edge of the row.
         let edgeLane: Int
         let edge: CurveEdge
+        /// The edge end sits on the DETOUR (`Lanes.detourX(edgeLane)`), not on the lane.
+        var via: Bool = false
+    }
+
+    /// A routed connector passing through a row beside a lane another spoor
+    /// holds there: drawn full height at `Lanes.detourX(lane)`.
+    struct Detour: Equatable, Hashable, Sendable {
+        let lane: Int
+        let trackId: String
     }
 
     /// The cap at a spoor's newest stop: afgerond and geëindigd are different
@@ -148,6 +168,7 @@ struct TimelineLayout: Equatable {
         let label: String
         let empty: Bool
         let rails: [Rail]
+        var detours: [Detour] = []
         var id: String { "band:" + key }
     }
 
@@ -160,6 +181,7 @@ struct TimelineLayout: Equatable {
         let rails: [Rail]
         let curves: [Curve]
         let caps: [Cap]
+        var detours: [Detour] = []
         var id: String { stop.id }
     }
 
@@ -195,73 +217,151 @@ struct TimelineLayout: Equatable {
         var bottom: Int
     }
 
+    /// A routed connector between two curve rows, `top < bottom`; it passes
+    /// through every row strictly between them.
+    private struct DetourSpan {
+        let trackId: String
+        let lane: Int
+        let top: Int
+        let bottom: Int
+    }
+
+    private struct Slice: Hashable {
+        let row: Int
+        let trackId: String
+    }
+
     init(_ map: CaseMapDTO) {
         lanes = Lanes(count: map.laneCount)
         let trackById = Dictionary(map.tracks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let tracksWithStops = Set(map.stops.map(\.trackId))
+        let drawn = map.tracks.filter { tracksWithStops.contains($0.id) }
 
-        var extents: [Extent] = []
+        // `buildTrackMap` reserves a lane for a spoor's STOP span only — never
+        // for the row it branches from or merges into — so two sporen that never
+        // ran at the same time can share a lane with one's connector having to
+        // pass the other. Every extent starts as that span; a connector may
+        // stretch it only through rows its lane holds for nobody else.
+        var extents = drawn.map { Extent(trackId: $0.id, lane: $0.lane, isRoot: $0.isRoot,
+                                         top: $0.firstRow, bottom: $0.lastRow) }
         var curvesAt: [Int: [Curve]] = [:]
-        for t in map.tracks where tracksWithStops.contains(t.id) {
-            var e = Extent(trackId: t.id, lane: t.lane, isRoot: t.isRoot, top: t.firstRow, bottom: t.lastRow)
+        var detourSpans: [DetourSpan] = []
+        // Where a connector replaces the spoor's own slice of rail.
+        var cutTop: Set<Slice> = [], cutBottom: Set<Slice> = []
+
+        /// Can a rail in `lane` run from row `edge` (the spoor's end) to the
+        /// connector row `at`? Not if another spoor holds the lane in any row
+        /// between them, or passes straight through the connector row. Ending
+        /// AT the connector row is fine: that is an interchange — one spoor
+        /// merging into the stop another branches from — and both slices there
+        /// are already replaced by their curves.
+        func laneIsFree(_ lane: Int, from edge: Int, to at: Int, except id: String) -> Bool {
+            let lo = min(edge, at) + 1, hi = max(edge, at) - 1
+            return !extents.contains { e in
+                e.trackId != id && e.lane == lane
+                    && ((lo <= hi && e.top <= hi && lo <= e.bottom) || (e.top < at && at < e.bottom))
+            }
+        }
+        func curve(_ row: Int, _ c: Curve) { curvesAt[row, default: []].append(c) }
+
+        for (i, t) in drawn.enumerated() {
+            let span = (top: t.firstRow, bottom: t.lastRow)
             for edge in map.edges where edge.trackId == t.id {
+                let lane = t.lane
                 switch edge.kind {
                 case "branch":
-                    if edge.fromRow > e.bottom {
-                        e.bottom = edge.fromRow
-                        curvesAt[edge.fromRow, default: []].append(Curve(
-                            kind: .branch, trackId: t.id, centerLane: edge.fromLane, edgeLane: edge.toLane, edge: .top))
+                    if edge.fromRow > span.bottom {
+                        // The trigger is OLDER than the spoor: the line rises from it.
+                        if laneIsFree(lane, from: extents[i].bottom, to: edge.fromRow, except: t.id) {
+                            extents[i].bottom = edge.fromRow
+                            cutTop.insert(Slice(row: edge.fromRow, trackId: t.id))
+                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                      edgeLane: lane, edge: .top))
+                        } else {
+                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                      edgeLane: lane, edge: .top, via: true))
+                            curve(span.bottom, Curve(kind: .branch, trackId: t.id, centerLane: lane,
+                                                     edgeLane: lane, edge: .bottom, via: true))
+                            detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: span.bottom,
+                                                          bottom: edge.fromRow))
+                        }
                     } else if edge.fromRow == edge.toRow && edge.fromLane != edge.toLane {
-                        curvesAt[edge.fromRow, default: []].append(Curve(
-                            kind: .branch, trackId: t.id, centerLane: edge.fromLane, edgeLane: edge.toLane, edge: .level))
-                    } else if edge.fromRow < e.bottom && edge.fromLane != edge.toLane {
-                        // The branch stop is NEWER than the spoor's oldest stop — a
-                        // trigger logged after the spoor's first step. `buildTrackMap`
-                        // still emits the edge and rings the junction, so the line
-                        // leaves the ring DOWNWARD into the spoor's lane, and the
-                        // spoor's rail reaches up to it. A ring with no line out of
-                        // it is the one thing the map must never draw.
-                        e.top = min(e.top, edge.fromRow)
-                        curvesAt[edge.fromRow, default: []].append(Curve(
-                            kind: .branch, trackId: t.id, centerLane: edge.fromLane, edgeLane: edge.toLane, edge: .bottom))
+                        curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                  edgeLane: lane, edge: .level))
+                    } else if edge.fromRow < span.top {
+                        // The trigger is NEWER than all of the spoor (logged after its
+                        // first step). `buildTrackMap` still rings the junction, so the
+                        // line leaves the ring DOWNWARD and reaches the spoor's newest stop.
+                        if laneIsFree(lane, from: extents[i].top, to: edge.fromRow, except: t.id) {
+                            extents[i].top = min(extents[i].top, edge.fromRow)
+                            cutBottom.insert(Slice(row: edge.fromRow, trackId: t.id))
+                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                      edgeLane: lane, edge: .bottom))
+                        } else {
+                            curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                      edgeLane: lane, edge: .bottom, via: true))
+                            curve(span.top, Curve(kind: .branch, trackId: t.id, centerLane: lane,
+                                                  edgeLane: lane, edge: .top, via: true))
+                            detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.fromRow,
+                                                          bottom: span.top))
+                        }
+                    } else if edge.fromRow > span.top && edge.fromRow < span.bottom && edge.fromLane != lane {
+                        // The trigger sits INSIDE the spoor's span: the spoor really
+                        // passes this row, so its rail stays whole and the line
+                        // leaves the ring beside it, down into the spoor's lane.
+                        curve(edge.fromRow, Curve(kind: .branch, trackId: t.id, centerLane: edge.fromLane,
+                                                  edgeLane: lane, edge: .bottom))
                     }
                 case "merge":
-                    if edge.toRow < e.top {
-                        e.top = edge.toRow
-                        curvesAt[edge.toRow, default: []].append(Curve(
-                            kind: .merge, trackId: t.id, centerLane: edge.toLane, edgeLane: edge.fromLane, edge: .bottom))
+                    guard edge.toRow < span.top else { break }
+                    if laneIsFree(lane, from: extents[i].top, to: edge.toRow, except: t.id) {
+                        extents[i].top = min(extents[i].top, edge.toRow)
+                        cutBottom.insert(Slice(row: edge.toRow, trackId: t.id))
+                        curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
+                                                edgeLane: lane, edge: .bottom))
+                    } else {
+                        curve(span.top, Curve(kind: .merge, trackId: t.id, centerLane: lane,
+                                              edgeLane: lane, edge: .top, via: true))
+                        curve(edge.toRow, Curve(kind: .merge, trackId: t.id, centerLane: edge.toLane,
+                                                edgeLane: lane, edge: .bottom, via: true))
+                        detourSpans.append(DetourSpan(trackId: t.id, lane: lane, top: edge.toRow, bottom: span.top))
                     }
                 default: break
                 }
             }
-            extents.append(e)
         }
 
+        func sorted(_ rails: [Rail]) -> [Rail] { rails.sorted { ($0.lane, $0.trackId) < ($1.lane, $1.trackId) } }
+        func sorted(_ ds: [Detour]) -> [Detour] { ds.sorted { ($0.lane, $0.trackId) < ($1.lane, $1.trackId) } }
+
         func rails(atRow r: Int) -> [Rail] {
-            let curves = curvesAt[r] ?? []
-            return extents.compactMap { e -> Rail? in
-                var top = r > e.top && r <= e.bottom
-                var bottom = r >= e.top && r < e.bottom
-                // A connector in this row replaces the spoor's own slice there.
-                if curves.contains(where: { $0.trackId == e.trackId && $0.edge == .top }) { top = false }
-                if curves.contains(where: { $0.trackId == e.trackId && $0.edge == .bottom }) { bottom = false }
+            sorted(extents.compactMap { e -> Rail? in
+                let top = r > e.top && r <= e.bottom && !cutTop.contains(Slice(row: r, trackId: e.trackId))
+                let bottom = r >= e.top && r < e.bottom && !cutBottom.contains(Slice(row: r, trackId: e.trackId))
                 guard top || bottom else { return nil }
                 return Rail(lane: e.lane, trackId: e.trackId, isRoot: e.isRoot, top: top, bottom: bottom)
-            }.sorted { ($0.lane, $0.trackId) < ($1.lane, $1.trackId) }
+            })
         }
 
         /// The rails crossing the boundary just above row `r`.
         func rails(above r: Int) -> [Rail] {
-            extents.filter { $0.top < r && r <= $0.bottom }
-                .map { Rail(lane: $0.lane, trackId: $0.trackId, isRoot: $0.isRoot, top: true, bottom: true) }
-                .sorted { ($0.lane, $0.trackId) < ($1.lane, $1.trackId) }
+            sorted(extents.filter { $0.top < r && r <= $0.bottom }
+                .map { Rail(lane: $0.lane, trackId: $0.trackId, isRoot: $0.isRoot, top: true, bottom: true) })
+        }
+
+        func detours(atRow r: Int) -> [Detour] {
+            sorted(detourSpans.filter { $0.top < r && r < $0.bottom }.map { Detour(lane: $0.lane, trackId: $0.trackId) })
+        }
+
+        func detours(above r: Int) -> [Detour] {
+            sorted(detourSpans.filter { $0.top < r && r <= $0.bottom }.map { Detour(lane: $0.lane, trackId: $0.trackId) })
         }
 
         let byRow = map.stops.sorted { $0.row < $1.row }
         var items: [Item] = []
         for band in map.bands {
             items.append(.band(BandRow(key: band.key, label: band.label, empty: band.empty,
-                                       rails: rails(above: band.fromRow))))
+                                       rails: rails(above: band.fromRow), detours: detours(above: band.fromRow))))
             for s in byRow where s.row >= band.fromRow && s.row < band.toRow {
                 let track = trackById[s.trackId]
                 let spoor = (track?.isRoot ?? true) ? "hoofdlijn" : (track?.title ?? "hoofdlijn")
@@ -275,7 +375,8 @@ struct TimelineLayout: Equatable {
                     }
                 }
                 items.append(.stop(StopRow(stop: s, track: track, mark: mark, meta: Self.meta(s, spoor: spoor),
-                                           rails: rails(atRow: s.row), curves: curvesAt[s.row] ?? [], caps: caps)))
+                                           rails: rails(atRow: s.row), curves: curvesAt[s.row] ?? [], caps: caps,
+                                           detours: detours(atRow: s.row))))
             }
         }
         self.items = items

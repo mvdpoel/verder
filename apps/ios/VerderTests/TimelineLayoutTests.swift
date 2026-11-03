@@ -207,9 +207,96 @@ struct TimelineLayoutTests {
         let layout = TimelineLayout(m)
         let trigger = Self.stopRows(layout).first { $0.stop.id == "trigger" }!
         #expect(trigger.curves == [.init(kind: .branch, trackId: "kvk", centerLane: 0, edgeLane: 1, edge: .bottom)])
-        // Above the curve the spoor's rail still comes down to the row.
+        // The spoor really passes through this row: its rail runs on, unbroken,
+        // and the curve leaves it beside the rail rather than replacing it.
         #expect(trigger.rails.first { $0.lane == 1 }
-            == .init(lane: 1, trackId: "kvk", isRoot: false, top: true, bottom: false))
+            == .init(lane: 1, trackId: "kvk", isRoot: false, top: true, bottom: true))
+    }
+
+    // MARK: - Lane sharing (real buildTrackMap output)
+
+    /// `buildTrackMap` packs lanes on each spoor's STOP span alone, so two sporen
+    /// that never ran at the same time share a lane even when one's connector
+    /// has to travel past the other. These maps come from the real builder via
+    /// `mobile-case-map.fixture.test.ts`.
+    static func laneShared(_ name: String) throws -> CaseMapDTO {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appending(path: "Fixtures/case-map-lane-shared-\(name).json")
+        return try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: Data(contentsOf: url))
+    }
+
+    static func railsByItem(_ layout: TimelineLayout) -> [(id: String, rails: [TimelineLayout.Rail])] {
+        layout.items.map {
+            switch $0 {
+            case .band(let b): (b.id, b.rails)
+            case .stop(let s): (s.id, s.rails)
+            }
+        }
+    }
+
+    @Test(arguments: ["below", "above", "merge"])
+    func twoSporenOnOneLaneNeverShareARail(_ name: String) throws {
+        let map = try Self.laneShared(name)
+        let a = try #require(map.tracks.first { $0.title == "Spoor A" })
+        let b = try #require(map.tracks.first { $0.title == "Spoor B" })
+        try #require(a.lane == b.lane) // the premise, from the real builder
+        let layout = TimelineLayout(map)
+        for (id, rails) in Self.railsByItem(layout) {
+            let lane = rails.filter { $0.lane == a.lane }
+            #expect(Set(lane.map(\.trackId)).count <= 1, "\(name) \(id): two sporen on one rail")
+        }
+        // B's own rows carry B's rail only, so its ended cap closes a line that stops.
+        for row in Self.stopRows(layout) where row.stop.trackId == b.id {
+            #expect(!row.rails.contains { $0.trackId == a.id }, "\(name) \(row.stop.title)")
+        }
+    }
+
+    @Test(arguments: ["below", "above", "merge"])
+    func aConnectorPastAnotherSporenIsRoutedBesideItUnbroken(_ name: String) throws {
+        let map = try Self.laneShared(name)
+        let a = try #require(map.tracks.first { $0.title == "Spoor A" })
+        let layout = TimelineLayout(map)
+        let rows = Self.stopRows(layout)
+        // The connector whose path crosses B: in "merge" A's own branch is clear.
+        let kind = name == "merge" ? "merge" : "branch"
+        for edge in map.edges where edge.trackId == a.id && edge.kind == kind {
+            let far = edge.kind == "merge" ? edge.toRow : edge.fromRow
+            let spoorEdge = edge.kind == "merge" ? a.firstRow : (far > a.lastRow ? a.lastRow : a.firstRow)
+            // Both ends are curves on the detour; nothing at either end is left as a bare ring.
+            let atFar = rows.first { $0.stop.row == far }!.curves.filter { $0.trackId == a.id }
+            let atSpoor = rows.first { $0.stop.row == spoorEdge }!.curves.filter { $0.trackId == a.id }
+            #expect(atFar.count == 1 && atFar.allSatisfy(\.via), "\(name) \(edge.kind) far end")
+            #expect(atSpoor.count == 1 && atSpoor.allSatisfy(\.via), "\(name) \(edge.kind) spoor end")
+            #expect(atSpoor.first?.centerLane == a.lane)
+            // Every row and band between the two ends carries the detour.
+            let lo = min(far, spoorEdge), hi = max(far, spoorEdge)
+            for row in rows where row.stop.row > lo && row.stop.row < hi {
+                #expect(row.detours == [.init(lane: a.lane, trackId: a.id)], "\(name) \(row.stop.title)")
+            }
+        }
+    }
+
+    @Test func theFindingsShapeIsDrawnRowByRow() throws {
+        let map = try Self.laneShared("below")
+        let a = try #require(map.tracks.first { $0.title == "Spoor A" })
+        let rows = Self.stopRows(TimelineLayout(map))
+        // Row 4: the trunk's ring sends the connector up toward the detour.
+        #expect(rows[4].curves.contains(.init(kind: .branch, trackId: a.id, centerLane: 0, edgeLane: 1,
+                                              edge: .top, via: true)))
+        // Rows 2–3 are B's: the detour runs beside B's rail, not on it.
+        #expect(rows[2].detours == [.init(lane: 1, trackId: a.id)])
+        #expect(rows[3].detours == [.init(lane: 1, trackId: a.id)])
+        // Row 1, A's oldest stop: the detour curves into A's dot; A's rail stops there.
+        #expect(rows[1].curves == [.init(kind: .branch, trackId: a.id, centerLane: 1, edgeLane: 1,
+                                         edge: .bottom, via: true)])
+        #expect(rows[1].rails.first { $0.lane == 1 } == .init(lane: 1, trackId: a.id, isRoot: false,
+                                                               top: true, bottom: false))
+    }
+
+    @Test func aDetourSitsHalfALaneLeftOfItsSpoor() {
+        let lanes = TimelineLayout.Lanes(count: 3)
+        #expect(lanes.detourX(1) == lanes.x(1) - lanes.spacing / 2)
+        #expect(lanes.detourX(1) > lanes.x(0) && lanes.detourX(1) < lanes.x(1))
     }
 
     @Test func aTrackWithNoStopsDrawsNothing() {
@@ -297,5 +384,11 @@ struct TimelineLayoutTests {
         #expect(Self.stopRows(layout).map(\.stop.row) == Array(0..<map.rowCount))
         #expect(Self.stopRows(layout).first?.mark == .current)
         #expect(layout.lanes.count == map.laneCount)
+        // The fixture shares lane 1 only at an interchange (Aanvraag merges into
+        // the stop Opstart branches from): no lane is held twice, so nothing is routed.
+        #expect(Self.stopRows(layout).allSatisfy { $0.detours.isEmpty && !$0.curves.contains(where: \.via) })
+        for (id, rails) in Self.railsByItem(layout) {
+            #expect(Dictionary(grouping: rails, by: \.lane).values.allSatisfy { Set($0.map(\.trackId)).count == 1 }, "\(id)")
+        }
     }
 }

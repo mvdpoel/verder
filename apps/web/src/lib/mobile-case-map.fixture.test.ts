@@ -20,6 +20,7 @@ const FIXTURES = fileURLToPath(new URL("../../../ios/Verder/FixtureData/", impor
 const SHOWN = `${FIXTURES}_shared/case-map.json`;
 const HIDDEN = `${FIXTURES}_shared/case-map~schuldeisers=verborgen.json`;
 const EMPTY = `${FIXTURES}empty/case-map.json`;
+const LAYOUT = fileURLToPath(new URL("../../../ios/VerderTests/Fixtures/", import.meta.url));
 
 const id = (prefix: string, n: number) =>
   `00000000-f1c5-4000-8000-${prefix}${String(n).padStart(12 - prefix.length, "0")}`;
@@ -113,17 +114,73 @@ const emptyDTO = () => toCaseMapDTO({
 
 const text = (v: unknown) => `${JSON.stringify(v, null, 2)}\n`;
 
+/**
+ * LANE SHARING. `buildTrackMap` packs lanes on each spoor's STOP span alone,
+ * never on the row it branches from or merges into, so two sporen that never
+ * ran at the same time share a lane even when one's connector has to travel
+ * past the other. These three maps are that shape from the real builder, for
+ * the phone's layout tests (TimelineLayoutTests): a rail stretched to its
+ * connector would run straight through the other spoor.
+ */
+const LA = T(10), LB = T(11);
+const shared = (o: { aBranch?: string; aMerge?: string; root: StopRow[]; a: string[]; b: string[] }) => {
+  const ts: TrackRow[] = [
+    track({ id: ROOT, title: "Bewindvoering", parentTrackId: null }),
+    track({ id: LA, title: "Spoor A", branchesAtStopId: o.aBranch ?? null, mergesAtStopId: o.aMerge ?? null }),
+    track({ id: LB, title: "Spoor B", status: "ended" }),
+  ];
+  const ss: StopRow[] = [
+    ...o.root,
+    ...o.a.map((d, i) => stop({ id: S(60 + i), trackId: LA, orderIndex: i, title: `A ${d}`, happenedAt: day(d) })),
+    ...o.b.map((d, i) => stop({ id: S(70 + i), trackId: LB, orderIndex: i, title: `B ${d}`, happenedAt: day(d) })),
+  ];
+  return toCaseMapDTO({ map: buildTrackMap({ tracks: ts, stops: ss }), evidence: {},
+    hiddenDebtTrackCount: 0, debtEpisodesHidden: false });
+};
+const rootStop = (n: number, d: string) =>
+  stop({ id: S(n), trackId: ROOT, orderIndex: n, title: `Hoofdlijn ${d}`, happenedAt: day(d) });
+const laneShared = {
+  // A branches at a trunk stop OLDER than B, which sits between them in lane 1.
+  below: () => shared({ aBranch: S(50), root: [rootStop(50, "2026-10-01")],
+    a: ["2026-10-10", "2026-10-12"], b: ["2026-10-03", "2026-10-04"] }),
+  // A branches at a trunk stop NEWER than all of A, with B between them.
+  above: () => shared({ aBranch: S(50), root: [rootStop(50, "2026-10-20")],
+    a: ["2026-10-05", "2026-10-06"], b: ["2026-10-15", "2026-10-16"] }),
+  // A merges into a trunk stop newer than B, which sits between them.
+  merge: () => shared({ aBranch: S(51), aMerge: S(50),
+    root: [rootStop(50, "2026-10-20"), rootStop(51, "2026-10-01")],
+    a: ["2026-10-05", "2026-10-06"], b: ["2026-10-15", "2026-10-16"] }),
+};
+const layoutFile = (k: string) => `${LAYOUT}case-map-lane-shared-${k}.json`;
+
 describe("the phone's timeline fixture", () => {
   if (process.env.WRITE_FIXTURES === "1") {
     writeFileSync(SHOWN, text(dto(false)));
     writeFileSync(HIDDEN, text(dto(true)));
     writeFileSync(EMPTY, text(emptyDTO()));
+    for (const [k, f] of Object.entries(laneShared)) writeFileSync(layoutFile(k), text(f()));
   }
 
   it("is the DTO over the synthetic case", () => {
     expect(readFileSync(SHOWN, "utf8")).toBe(text(dto(false)));
     expect(readFileSync(HIDDEN, "utf8")).toBe(text(dto(true)));
     expect(readFileSync(EMPTY, "utf8")).toBe(text(emptyDTO()));
+    for (const [k, f] of Object.entries(laneShared)) {
+      expect(readFileSync(layoutFile(k), "utf8")).toBe(text(f()));
+    }
+  });
+
+  it("puts two sporen that never overlap on ONE lane, whatever their connectors span", () => {
+    for (const f of Object.values(laneShared)) {
+      const m = f();
+      const a = m.tracks.find((t) => t.id === LA)!;
+      const b = m.tracks.find((t) => t.id === LB)!;
+      expect(a.lane).toBe(1);
+      expect(b.lane).toBe(1);
+    }
+    const below = laneShared.below();
+    const branch = below.edges.find((e) => e.kind === "branch" && e.trackId === LA)!;
+    expect([branch.fromRow, branch.toRow]).toEqual([4, 1]);
   });
 
   it("draws the case the data doc describes", () => {

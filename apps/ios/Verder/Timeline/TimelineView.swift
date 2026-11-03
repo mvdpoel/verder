@@ -211,7 +211,7 @@ struct TimelineMap: View {
 
     private func bandRow(_ band: TimelineLayout.BandRow) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            RailGutter(lanes: layout.lanes, rails: band.rails)
+            RailGutter(lanes: layout.lanes, rails: band.rails, detours: band.detours)
                 .frame(width: layout.lanes.width)
                 .frame(maxHeight: .infinity)
             HStack(spacing: 6) {
@@ -234,6 +234,7 @@ struct TimelineMap: View {
         Button { select(row.stop) } label: {
             HStack(alignment: .top, spacing: 0) {
                 RailGutter(lanes: layout.lanes, rails: row.rails, curves: row.curves, caps: row.caps,
+                           detours: row.detours,
                            dot: .init(lane: row.stop.lane, mark: row.mark, junction: row.stop.isJunction))
                     .frame(width: layout.lanes.width)
                     .frame(maxHeight: .infinity)
@@ -287,6 +288,8 @@ struct RailGutter: View {
     let rails: [TimelineLayout.Rail]
     var curves: [TimelineLayout.Curve] = []
     var caps: [TimelineLayout.Cap] = []
+    /// Routed connectors passing this row beside a lane another spoor holds.
+    var detours: [TimelineLayout.Detour] = []
     var dot: Dot? = nil
     /// Level with the title's first line (the row's top padding plus half a line).
     @ScaledMetric(relativeTo: .body) private var dotY: CGFloat = 21
@@ -302,9 +305,15 @@ struct RailGutter: View {
                 ctx.stroke(p, with: .color(rail.isRoot ? Color.steel.opacity(0.6) : Color.steelDim.opacity(0.7)),
                            lineWidth: rail.isRoot ? 3 : 2)
             }
+            for d in detours {
+                let x = lanes.detourX(d.lane)
+                var p = Path()
+                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                ctx.stroke(p, with: .color(Color.steelDim.opacity(0.7)), lineWidth: 2)
+            }
             for c in curves {
                 let xc = lanes.x(c.centerLane)
-                let xe = lanes.x(c.edgeLane)
+                let xe = c.via ? lanes.detourX(c.edgeLane) : lanes.x(c.edgeLane)
                 var p = Path()
                 switch c.edge {
                 case .top:
