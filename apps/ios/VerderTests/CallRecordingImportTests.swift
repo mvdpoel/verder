@@ -227,6 +227,65 @@ struct CallRecordingImportTests {
         #expect(IncomingDrop.pendingAudio(groupDir: group).count == 1)
     }
 
+    // MARK: - Waiting behind the call sheet (review finding, 2026-11-03)
+
+    /// The case a recording is built for: the call sheet comes back after the
+    /// call ("Niet nu" keeps it up), Martin shares the recording from Notes and
+    /// returns to verder. Nothing opens over the call sheet — two sheets cannot
+    /// show at once — and the recording opens the moment that sheet goes, not
+    /// at the next return to the foreground.
+    @Test func aRecordingWaitingBehindTheCallSheetOpensWhenItGoes() async throws {
+        let group = try group()
+        let drop = try audioDrop(group)
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server()) }, groupDir: group)
+        let r = try CallPrepTests().rig()
+        await r.session.open(partyId: CallPrepTests.noordkust, name: nil)
+        r.session.startActivity()
+        r.observer.send(.ended(UUID()))
+        r.session.dismissEnded() // "Niet nu": the sheet stays
+        #expect(r.session.isPresented)
+
+        // Back in verder with the call sheet up: nothing opens.
+        #expect(SharedRecordingGate.open(signedIn: true, call: r.session, voice: session) == nil)
+        #expect(session.model == nil)
+
+        // The call sheet goes (swiped or closed): the recording opens now.
+        r.session.close()
+        await SharedRecordingGate.callSheetDismissed(signedIn: true, call: r.session, voice: session)?.value
+        let m = try #require(session.model)
+        #expect(session.isPresented)
+        #expect(m.mode == .importRecording)
+        #expect(m.importedDrop == drop.id)
+    }
+
+    /// "Gesprek vastleggen" hands the call's points to the voice log as the
+    /// sheet goes; that hand-off wins and the recording waits (it is never
+    /// opened over a log being started — and the log can pick it itself).
+    @Test func theCallsOwnHandOffWinsOverAWaitingRecording() async throws {
+        let group = try group()
+        _ = try audioDrop(group)
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server()) }, groupDir: group)
+        let r = try CallPrepTests().rig()
+        await r.session.open(partyId: CallPrepTests.noordkust, name: nil)
+        r.session.logCall()
+
+        #expect(SharedRecordingGate.callSheetDismissed(signedIn: true, call: r.session, voice: session) == nil)
+        #expect(r.voice.value.count == 1)
+        #expect(session.model == nil)
+        #expect(IncomingDrop.pendingAudio(groupDir: group).count == 1)
+    }
+
+    /// Without a session nothing opens: the log sends to the server.
+    @Test func noSessionOpensNoRecording() async throws {
+        let group = try group()
+        _ = try audioDrop(group)
+        let session = VoiceLogSession(factory: VoiceLogFactory { try! model(server()) }, groupDir: group)
+        let r = try CallPrepTests().rig()
+        #expect(SharedRecordingGate.open(signedIn: false, call: r.session, voice: session) == nil)
+        #expect(SharedRecordingGate.callSheetDismissed(signedIn: false, call: r.session, voice: session) == nil)
+        #expect(session.model == nil)
+    }
+
     // MARK: - A drop that cannot be written out (review finding, 2026-11-03)
 
     /// A copy that throws (a full disk; here a voice folder that is a file)

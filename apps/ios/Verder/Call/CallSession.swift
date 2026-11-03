@@ -300,11 +300,15 @@ final class CallSession {
         finish()
     }
 
-    /// The sheet's `onDismiss`.
-    func sheetDismissed() {
-        guard let prefill = pendingVoice else { return }
+    /// The sheet's `onDismiss`. True when it handed the call to the voice
+    /// log ("Gesprek vastleggen"), so nothing else opens in its place
+    /// (`SharedRecordingGate`).
+    @discardableResult
+    func sheetDismissed() -> Bool {
+        guard let prefill = pendingVoice else { return false }
         pendingVoice = nil
         openVoice(prefill)
+        return true
     }
 
     // MARK: - Dossier's party list

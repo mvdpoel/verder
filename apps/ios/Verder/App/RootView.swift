@@ -165,13 +165,11 @@ struct RootView: View {
     /// shows its counts behind the sheet meanwhile. The one exception stays the
     /// camera: on Scan nothing prompts, so the shutter is never covered.
     /// A call recording shared from Notes (the share extension's audio drop,
-    /// Added 2026-11-03) opens the voice log in "opname uitschrijven" mode.
-    /// Not over the call sheet (two sheets cannot show at once; the drop
-    /// waits for the next return), and only with a session, since the log
-    /// sends to the server.
+    /// Added 2026-11-03) opens the voice log in "opname uitschrijven" mode —
+    /// never over the call sheet; it opens when that sheet goes
+    /// (`SharedRecordingGate`, tested).
     private func openSharedRecording() {
-        guard auth.isSignedIn, !call.isPresented else { return }
-        voice.openPendingRecording()
+        SharedRecordingGate.open(signedIn: auth.isSignedIn, call: call, voice: voice)
     }
 
     private func promptOnOpen() {
@@ -239,9 +237,12 @@ struct RootView: View {
         }
         // Lock-gated: it names the party and the points. The Live Activity
         // outside it shows counts only. "Gesprek vastleggen" opens the voice
-        // log once this sheet has gone (`sheetDismissed`).
+        // log once this sheet has gone (`sheetDismissed`); otherwise a call
+        // recording waiting behind it opens then.
         .sheet(isPresented: Binding(get: { call.isPresented }, set: { call.presentationChanged($0) }),
-               onDismiss: { call.sheetDismissed() }) {
+               onDismiss: {
+                   SharedRecordingGate.callSheetDismissed(signedIn: auth.isSignedIn, call: call, voice: voice)
+               }) {
             CallPrepSheet(session: call, open: { link in
                 call.close()
                 links.deliver(DeepLink.parse(link))
