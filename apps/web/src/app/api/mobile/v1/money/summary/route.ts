@@ -16,7 +16,22 @@ import type { MonthSeries } from "@verder/api/src/money-series";
  */
 
 interface MoneySummaryDTO {
-  accounts: { accountIban: string | null; months: MonthSeries[] }[];
+  accounts: {
+    accountIban: string | null;
+    months: MonthSeries[];
+    /**
+     * This account's own newest readable booking (Amsterdam day), or null.
+     * Two statements of two accounts end on different days, so the phone's
+     * per-account card must not borrow the table-wide `newestBooking`.
+     */
+    newestBooking: string | null;
+    /**
+     * Whether this is the leefgeldrekening: LEEFGELD_IBAN, else the account
+     * the leefgeld week recognised. Read even with no weekly amount set, so
+     * the phone can name the account without guessing.
+     */
+    isLeefgeldAccount: boolean;
+  }[];
   leefgeld: LeefgeldWeek;
   previousWeek: LeefgeldWeek;
   /** Newest readable booking (Amsterdam day): "deze week" is only as fresh as the last import. */
@@ -48,6 +63,15 @@ export const GET = mobileGet(async (caller): Promise<MoneySummaryDTO> => {
   const configuredIban = process.env.LEEFGELD_IBAN?.trim() || null;
   const weekStartsOn = weekStartFromEnv(process.env.LEEFGELD_WEEK_START);
 
+  // Each account's own newest readable booking: a parse-error row carries a
+  // borrowed date (the import's earliest booking), never one the bank wrote.
+  const newestByAccount = new Map<string | null, Date>();
+  for (const t of txs) {
+    if (t.parseError) continue;
+    const prev = newestByAccount.get(t.accountIban);
+    if (!prev || t.bookedAt > prev) newestByAccount.set(t.accountIban, t.bookedAt);
+  }
+
   const today = dayKey(new Date());
   // The previous week is judged WHOLE: its "today" is its own last day, the
   // day before this week starts. "Today minus seven" would cut it at the
@@ -56,14 +80,24 @@ export const GET = mobileGet(async (caller): Promise<MoneySummaryDTO> => {
   const week = (day: string) =>
     leefgeldWeek({ txs, series, weeklyCents, configuredIban, today: day, weekStartsOn });
 
+  const leefgeld = week(today);
+  const recognised = leefgeld.state === "complete" || leefgeld.state === "partial" || leefgeld.state === "geen-data"
+    ? leefgeld.accountIban : null;
+  const leefgeldIban = configuredIban ?? recognised;
+
   return {
-    accounts: series.map((s) => ({
-      accountIban: s.accountIban,
-      // dashboardMoneySlice on ONE account is just its six newest months; it
-      // never chooses between accounts here.
-      months: dashboardMoneySlice([s])?.months ?? [],
-    })),
-    leefgeld: week(today),
+    accounts: series.map((s) => {
+      const newest = newestByAccount.get(s.accountIban);
+      return {
+        accountIban: s.accountIban,
+        // dashboardMoneySlice on ONE account is just its six newest months; it
+        // never chooses between accounts here.
+        months: dashboardMoneySlice([s])?.months ?? [],
+        newestBooking: newest ? dayKey(newest) : null,
+        isLeefgeldAccount: s.accountIban !== null && s.accountIban === leefgeldIban,
+      };
+    }),
+    leefgeld,
     previousWeek: week(lastDayOfPreviousWeek),
     newestBooking,
   };

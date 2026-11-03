@@ -56,7 +56,9 @@ type MonthJson = {
   month: string; outCents: number; incidentalCents: number;
   incidentalRows: unknown[]; internalRows: unknown[];
 };
-type Body = { accounts: { accountIban: string | null; months: MonthJson[] }[] };
+type Body = {
+  accounts: { accountIban: string | null; months: MonthJson[]; newestBooking: string | null; isLeefgeldAccount: boolean }[];
+};
 const accountOf = (body: Body, iban: string) => {
   const a = body.accounts.find((x) => x.accountIban === iban);
   if (!a) throw new Error(`no account ${iban}`);
@@ -132,6 +134,11 @@ describe("GET /api/mobile/v1/money/summary", () => {
       coveredThrough: "2026-10-25", spentCents: 4_000, depositCents: 10_000,
     });
     expect(body.newestBooking).toBe("2026-10-30");
+    // Each account carries its OWN newest booking and whether it is the
+    // leefgeldrekening (here recognised by its weekly income).
+    expect(Object.keys(beheer).sort()).toEqual(["accountIban", "isLeefgeldAccount", "months", "newestBooking"]);
+    expect(beheer).toMatchObject({ newestBooking: "2026-10-30", isLeefgeldAccount: false });
+    expect(accountOf(body, LEEFGELD)).toMatchObject({ newestBooking: "2026-10-30", isLeefgeldAccount: true });
     expect(mocks.glance).toHaveBeenCalledTimes(1);
   });
 
@@ -143,6 +150,12 @@ describe("GET /api/mobile/v1/money/summary", () => {
     expect(body.previousWeek).toEqual({ state: "no-budget" });
     // The accounts are still there: the budget gates the figure, not the page.
     expect(body.accounts).toHaveLength(2);
+    // With no budget and no LEEFGELD_IBAN nothing recognises the leefgeldrekening.
+    expect(body.accounts.map((a: { isLeefgeldAccount: boolean }) => a.isLeefgeldAccount)).toEqual([false, false]);
+    // LEEFGELD_IBAN names it even without a weekly amount.
+    vi.stubEnv("LEEFGELD_IBAN", LEEFGELD);
+    expect(accountOf(await (await GET(req(), ctx)).json(), LEEFGELD).isLeefgeldAccount).toBe(true);
+    vi.stubEnv("LEEFGELD_IBAN", "");
 
     // A value that is not a whole number of cents is no budget either, never 0.
     for (const bad of ["", "100,00", "-5", "1e4", "abc"]) {
