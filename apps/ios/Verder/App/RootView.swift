@@ -27,6 +27,8 @@ struct RootView: View {
     /// A `verder://scan` (quick action, control, Action button) waiting for
     /// Scan to open its camera. ScanTab clears it once it has.
     @State private var cameraRequested = false
+    /// Scan's page-into-the-queue flight, drawn above the TabView.
+    @State private var scanHandoff = ScanHandoff()
 
     enum TabID: Hashable { case home, scan, voorJou, dossier, meer }
     @State private var tab: TabID = .home
@@ -179,13 +181,14 @@ struct RootView: View {
                            onUnauthorized: { auth.sessionRejected() })
                     .lockGated(by: lock)
             }
-            Tab("Scan", systemImage: "doc.viewfinder", value: TabID.scan) {
+            Tab("Scan", image: ScanGlyph.tabAsset, value: TabID.scan) {
                 // NOT gated: plan Task 7 step 3.
                 ScanTab(center: uploads, auth: auth, camera: camera, cameraRequested: $cameraRequested,
                         openDocument: { id in
                             dossierPath = [.document(id: id, title: nil)]
                             tab = .dossier
-                        })
+                        },
+                        handoff: scanHandoff)
             }
             Tab("Dossier", systemImage: "folder", value: TabID.dossier) {
                 DossierTab(model: dossier, inbox: inbox, timeline: timeline, lock: lock, client: auth.client,
@@ -204,6 +207,8 @@ struct RootView: View {
             }
         }
         .tint(Color.signal)
+        // Above the tab bar: the handoff dims it too (frame "Scan · overdracht").
+        .overlay { ScanHandoffOverlay(handoff: scanHandoff) }
         .preferredColorScheme(.dark)
         // Lock-gated: it names parties. From the quick action on a cold
         // launch the lock asks Face ID by itself (`promptOnOpen`).

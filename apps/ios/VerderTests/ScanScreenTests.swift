@@ -250,4 +250,23 @@ struct ScanLinkTests {
             try FixtureLaunch.parse(["-fixtures", "calm", "-fixtures-scan", "x"])
         }
     }
+
+    @Test func theWaitingBadgesAreDiscsTheOutcomesRinged() {
+        typealias B = QueueSheet.Row.Badge
+        let ringed = [B.failed, .sending, .offline, .signIn, .sent].filter { $0.ringed }
+        #expect(ringed == [.failed, .sending, .sent])
+        let drawable = [B.failed, .sending, .offline, .signIn, .sent].filter { UIImage(systemName: $0.rawValue) != nil }
+        #expect(drawable.count == 5)
+    }
+
+    @Test func theHandoffDimFadesAsThePageLands() {
+        #expect(ScanHandoff.dimOpacity(progress: 0) == 0.55)
+        #expect(ScanHandoff.dimOpacity(progress: 1) == 0)
+        #expect(ScanHandoff.dimOpacity(progress: 0.5) > 0.4)
+    }
+
+    @Test func theScanGlyphAssetsShip() {
+        #expect(UIImage(named: ScanGlyph.asset) != nil)
+        #expect(UIImage(named: ScanGlyph.tabAsset) != nil)
+    }
 }

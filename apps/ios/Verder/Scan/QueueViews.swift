@@ -170,8 +170,7 @@ struct QueueSheetView: View {
                 }
             }
             .frame(minHeight: section.kind == .signIn ? 48 : 0)
-            .padding(.top, 20)
-            .padding(.bottom, 4)
+            .padding(.top, 18)
             ForEach(section.rows) { row in
                 rowView(row)
                 Rectangle().fill(Color.hairline).frame(height: 1)
@@ -188,7 +187,7 @@ struct QueueSheetView: View {
                             .foregroundStyle(Color.signalLink)
                     }
                     .padding(.leading, 48)
-                    .frame(minHeight: 46)
+                    .frame(minHeight: 56)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -294,8 +293,8 @@ struct QueueRowContent: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.top, 12)
-        .padding(.bottom, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 26)
         .accessibilityElement(children: row.canRetry ? .contain : .combine)
         .accessibilityLabel(row.canRetry ? "" : row.accessibilityLabel)
     }
@@ -350,12 +349,22 @@ struct BadgeDot: View {
     let badge: QueueSheet.Row.Badge
 
     var body: some View {
-        Image(systemName: badge.rawValue)
-            .font(.system(size: 7, weight: .bold))
-            .foregroundStyle(Color.ink)
-            .frame(width: 15, height: 15)
-            .background(Circle().fill(Color.void))
-            .overlay(Circle().strokeBorder(Color.ink, lineWidth: 1.2))
+        if badge.ringed {
+            Image(systemName: badge.rawValue)
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(Color.ink)
+                .frame(width: 15, height: 15)
+                .background(Circle().fill(Color.void))
+                .overlay(Circle().strokeBorder(Color.ink, lineWidth: 1.2))
+        } else {
+            // Same centre as the ringed 15 pt badge, a 21 pt disc.
+            Image(systemName: badge.rawValue)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Color.ink)
+                .frame(width: 21, height: 21)
+                .background(Circle().fill(Color.plate))
+                .frame(width: 15, height: 15)
+        }
     }
 }
 

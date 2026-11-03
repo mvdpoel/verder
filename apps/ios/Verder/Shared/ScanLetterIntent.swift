@@ -14,8 +14,10 @@ struct ScanLetterIntent: AppIntent {
 
     /// The words and glyph all three ways in share (frame "Scan · snelstart"):
     /// the Control Center control, the Action button's App Shortcut and the
-    /// home-screen quick action (Info.plist, pinned by ScanLinkTests). The
-    /// glyph is the disc's own, the page with lines in its viewfinder.
+    /// home-screen quick action (Info.plist, pinned by ScanLinkTests). Those
+    /// three take only an SF Symbol name; the disc and the Scan tab draw the
+    /// `ScanGlyph` asset instead, because since SF Symbols 7 this name draws
+    /// a folded-corner page with no lines (identical to `doc.viewfinder`).
     static let label = "Scan een brief"
     static let symbol = "doc.text.viewfinder"
 

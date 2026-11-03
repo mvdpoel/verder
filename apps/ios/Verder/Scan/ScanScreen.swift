@@ -190,8 +190,19 @@ struct QueueSheet: Equatable {
             case failed = "exclamationmark"
             case sending = "arrow.up"
             case offline = "wifi.slash"
-            case signIn = "lock.fill"
+            case signIn = "lock"
             case sent = "checkmark"
+
+            /// The frames ring the outcome badges (sent, sending, failed) and
+            /// draw the two WAITING ones (offline, sign-in) as a larger glyph
+            /// on a filled disc: wifi.slash and the lock are unreadable shrunk
+            /// into a 15 pt ring.
+            var ringed: Bool {
+                switch self {
+                case .failed, .sending, .sent: true
+                case .offline, .signIn: false
+                }
+            }
         }
 
         let id: UUID

@@ -22,6 +22,9 @@ struct ScanTab: View {
     @Binding var cameraRequested: Bool
     /// A sent row's chevron: the document on Dossier.
     var openDocument: (String) -> Void = { _ in }
+    /// The flight's host above the TabView (RootView). Nil: Scan draws the
+    /// flight itself (the sign-in screen's full-screen Scan, no tab bar).
+    var handoff: ScanHandoff?
 
     @State private var cameraOpen = false
     @State private var prePrompt = false
@@ -30,8 +33,7 @@ struct ScanTab: View {
     @State private var showAllSent = false
     @State private var noteTarget: NoteTarget?
     @State private var showSignIn = false
-    @State private var flight: Flight?
-    @State private var accessoryFrame: CGRect = .zero
+    @State private var ownHandoff = ScanHandoff()
     @State private var compactHeight = false
     @State private var unsupported = false
     @State private var failures = 0
@@ -40,6 +42,11 @@ struct ScanTab: View {
     @Environment(\.openURL) private var openURL
 
     private var ax: Bool { typeSize.isAccessibilitySize }
+    private var flights: ScanHandoff { handoff ?? ownHandoff }
+    /// A sheet over Scan: the page behind it dims as the frames draw it
+    /// ("Scan · iets bijzonders", "Wachtrij · …"). iOS 26 leaves a sheet at a
+    /// custom detent undimmed, so the dim is Scan's own.
+    private var sheetOpen: Bool { showQueue || noteTarget != nil }
 
     private var input: ScanScreen.Input {
         ScanScreen.Input(items: center.items, signInRequired: center.signInRequired, offline: center.isOffline,
@@ -150,7 +157,7 @@ struct ScanTab: View {
                 QueueAccessoryView(accessory: accessory, ax: ax,
                                    open: { showQueue = true },
                                    act: { act(accessory.action) })
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { accessoryFrame = $0 }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { flights.accessoryFrame = $0 }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 8)
@@ -158,7 +165,16 @@ struct ScanTab: View {
                     .transition(.opacity)
             }
         }
-        .overlay { flightOverlay }
+        .overlay {
+            Color.black.opacity(sheetOpen ? 0.7 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .animation(.easeInOut(duration: 0.25), value: sheetOpen)
+        }
+        .overlay {
+            if handoff == nil { ScanHandoffOverlay(handoff: ownHandoff) }
+        }
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.9),
                    value: screen.accessory)
     }
@@ -172,7 +188,7 @@ struct ScanTab: View {
                 .font(HomeType.mono)
                 .lineHeight(.normal)
                 .foregroundStyle(Color.inkLabel)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                .fixedSize(horizontal: false, vertical: true)
             Text("Scan")
                 .font(HomeType.title)
                 .foregroundStyle(Color.inkBright)
@@ -206,9 +222,8 @@ struct ScanTab: View {
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-        // AX4 is already two lines across the width; AX5 would break
-        // "Volgende brief" itself (Figma AX5 · 1).
-        .dynamicTypeSize(...DynamicTypeSize.accessibility4)
+        // Uncapped (frames "AX5 · …"): at AX5 the caption runs two lines and
+        // its last one scrolls under the accessory's fade, never clipped.
         .padding(.top, 16)
         .accessibilityHidden(true)
         if unsupported {
@@ -284,18 +299,12 @@ struct ScanTab: View {
 
     // MARK: - Scan → queue (CapWords)
 
-    private struct Flight: Equatable {
-        let id = UUID()
-        let image: UIImage?
-        var progress: CGFloat = 0
-    }
-
     private func launchFlight(page: UIImage?) {
-        flight = Flight(image: page.map(Self.thumbnail))
+        flights.flight = ScanHandoff.Flight(image: page.map(Self.thumbnail))
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4, bounce: 0.15)) {
-            flight?.progress = 1
+            flights.flight?.progress = 1
         } completion: {
-            flight = nil
+            flights.flight = nil
         }
     }
 
@@ -303,40 +312,6 @@ struct ScanTab: View {
         let width: CGFloat = 240
         let size = CGSize(width: width, height: width * page.size.height / max(page.size.width, 1))
         return UIGraphicsImageRenderer(size: size).image { _ in page.draw(in: CGRect(origin: .zero, size: size)) }
-    }
-
-    @ViewBuilder private var flightOverlay: some View {
-        if let flight {
-            GeometryReader { geo in
-                let origin = geo.frame(in: .global).origin
-                let start = CGPoint(x: geo.size.width / 2, y: geo.size.height * 0.45)
-                let end = accessoryFrame == .zero
-                    ? CGPoint(x: geo.size.width / 2, y: geo.size.height)
-                    : CGPoint(x: accessoryFrame.minX - origin.x + 30, y: accessoryFrame.midY - origin.y)
-                let p = flight.progress
-                // Down first, then in: y follows p, x and the shrink follow
-                // later, so the page reads as dropping into the queue.
-                let q = p * p
-                ZStack {
-                    Color.black.opacity(0.55 * (1 - p * q)).ignoresSafeArea()
-                    if reduceMotion {
-                        PageThumb(image: flight.image)
-                            .frame(width: 120, height: 152)
-                            .position(start)
-                            .opacity(1 - p)
-                    } else {
-                        PageThumb(image: flight.image)
-                            .frame(width: 120, height: 152)
-                            .scaleEffect(1 - 0.8 * p * q)
-                            .rotationEffect(.degrees(8 * (1 - q)))
-                            .position(x: start.x + (end.x - start.x) * q, y: start.y + (end.y - start.y) * p)
-                            .opacity(p > 0.9 ? Double((1 - p) * 10) : 1)
-                    }
-                }
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
     }
 
     #if DEBUG
@@ -347,9 +322,9 @@ struct ScanTab: View {
         try? await Task.sleep(for: .seconds(0.8))
         switch state {
         case .handoff:
-            var f = Flight(image: nil)
+            var f = ScanHandoff.Flight(image: nil)
             f.progress = 0.5
-            flight = f
+            flights.flight = f
         case .queue:
             showAllSent = false
             showQueue = true
@@ -421,9 +396,7 @@ struct ScanDisc: View {
                     .strokeBorder(Color.signal, lineWidth: 1.5)
                     .padding(size * 0.083)
                     .glow(Glow.action)
-                Image(systemName: "doc.text.viewfinder")
-                    .font(.system(size: size * 0.29, weight: .thin))
-                    .foregroundStyle(Color.signal)
+                ScanGlyph(size: size)
             }
             .frame(width: size, height: size)
             .contentShape(Circle())
@@ -439,6 +412,26 @@ struct ScanDisc: View {
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
                 .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
         }
+    }
+}
+
+/// The disc's glyph: a page with lines in a viewfinder, as the frames draw it.
+/// A vector asset, not `doc.text.viewfinder`: since SF Symbols 7 that name
+/// draws the same folded-corner page with no lines as `doc.viewfinder`.
+struct ScanGlyph: View {
+    /// The disc's diameter; the glyph's viewfinder spans 30 % of it.
+    let size: CGFloat
+    static let asset = "ScanGlyph"
+    /// The Scan tab's item: the same drawing at tab size, heavier stroke.
+    static let tabAsset = "ScanGlyphTab"
+
+    var body: some View {
+        Image(Self.asset)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size * 0.3, height: size * 0.3)
+            .foregroundStyle(Color.signal)
+            .accessibilityHidden(true)
     }
 }
 

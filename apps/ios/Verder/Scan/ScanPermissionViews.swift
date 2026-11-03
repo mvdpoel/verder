@@ -82,9 +82,7 @@ struct ScanDiscArt: View {
                 .strokeBorder(Color.signal, lineWidth: 1.5)
                 .padding(size * 0.083)
                 .glow(Glow.action)
-            Image(systemName: "doc.text.viewfinder")
-                .font(.system(size: size * 0.29, weight: .ultraLight))
-                .foregroundStyle(Color.signal)
+            ScanGlyph(size: size)
         }
         .frame(width: size, height: size)
     }
