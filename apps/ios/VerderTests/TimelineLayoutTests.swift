@@ -351,14 +351,16 @@ struct TimelineLayoutTests {
 
     // MARK: - Marks, caps and words
 
-    @Test func amberOnlyOnTheCurrentStopOtherOpenStopsRunInSignal() {
+    /// Every open stop waits on Martin (the case map's rule): the current one
+    /// is the hero, any other is a hollow amber ring with "wacht op jou".
+    @Test func everyOpenStopIsAmberAndWaitsOnMartin() {
         let layout = TimelineLayout(Self.mergingCase)
         let marks = Dictionary(uniqueKeysWithValues: Self.stopRows(layout).map { ($0.stop.id, $0.mark) })
         #expect(marks["s0"] == .current)
         #expect(marks["s1"] == .done)
         #expect(TimelineLayout.Mark.current.isAmber)
-        #expect(!TimelineLayout.Mark.open.isAmber && !TimelineLayout.Mark.done.isAmber)
-        // A second open stop: a hollow signal ring, as /timeline draws it — never amber.
+        #expect(TimelineLayout.Mark.open.isAmber && !TimelineLayout.Mark.done.isAmber)
+        // A second open stop: amber too, and it says it waits on Martin.
         let m = Self.map(bands: [Self.band("nu", "Nu", 0, 2)],
                          tracks: [Self.track("root", "Bewindvoering", lane: 0, rows: 0...1, root: true)],
                          stops: [Self.stop("a", track: "root", row: 0, lane: 0, band: "nu", state: "open", at: nil),
@@ -366,7 +368,10 @@ struct TimelineLayoutTests {
                          current: "a")
         let rows = Self.stopRows(TimelineLayout(m))
         #expect(rows.map(\.mark) == [.current, .open])
-        #expect(rows[1].readouts.first == .init(text: "loopt nog", tone: .signal))
+        #expect(rows[1].readouts.first == .init(text: "wacht op jou", tone: .attn))
+        #expect(rows[1].sentences.contains("Wacht op jou."))
+        #expect(TimelineCopy.stateBadge(isCurrent: false, state: "open") == "wacht op jou")
+        #expect(TimelineCopy.stateBadge(isCurrent: false, state: "done") == "gebeurd")
     }
 
     @Test func anEndedSpoorIsACleanCapNeverAFailure() {
@@ -415,11 +420,36 @@ struct TimelineLayoutTests {
         #expect(top?.bottom == true && top?.dashedBottom == true)
         let newest = rows.first { $0.stop.row == opstart.firstRow }!.rails.first { $0.trackId == opstart.id }
         #expect(newest?.dashedTop == true && newest?.dashedBottom == false)
-        // The hero says so in words.
-        #expect(rows[0].readouts.map(\.text) == ["spoor Opstart en stukken loopt nog"])
+        // The hero says so in words: the spoor runs into it.
+        #expect(rows[0].readouts.map(\.text) == ["spoor Opstart en stukken\nloopt hierheen"])
+        #expect(TimelineCopy.runningSentence(["Opstart en stukken"], intoHere: true)
+                == "Het spoor Opstart en stukken loopt nog en komt hier uit.")
+        #expect(TimelineCopy.runningSentence(["Opstart en stukken"]) == "Het spoor Opstart en stukken loopt nog.")
         // A spoor with an open stop is not extended.
         let kade = try #require(map.tracks.first { $0.title == "Vordering Kade & Partners" })
         #expect(!rows[0].rails.contains { $0.trackId == kade.id })
+    }
+
+    /// The spoor's note (Martin's words) is woven into the outcome sentence;
+    /// the merge names its stop in prose with the day in full.
+    @Test func theOutcomeSentenceCarriesTheSpoorsOwnNote() throws {
+        let data = try #require(try FixtureTests.body("timeline", "case-map"))
+        let map = try APIClient.jsonDecoder.decode(CaseMapDTO.self, from: data)
+        let words = TimelineLayout.Words(map)
+        let huur = try #require(map.tracks.first { $0.title == "Huurachterstand Lindehof" })
+        #expect(TimelineCopy.outcomeSentence(huur, mergedAt: nil) == "Dit spoor is afgehandeld: de huurachterstand is "
+                + "geregeld en hoefde niet terug naar de hoofdlijn. Goed gedaan.")
+        let aanvraag = try #require(map.tracks.first { $0.title == "Aanvraag bewindvoering" })
+        #expect(TimelineCopy.outcomeSentence(aanvraag, mergedAt: words.mergeStop(aanvraag))
+                == "Dit spoor kwam terug op de hoofdlijn bij de beschikking van 3 juni. Het was nodig om onder bewind te komen.")
+        // A free title cannot take an article: it is quoted whole.
+        #expect(TimelineCopy.stopPhrase("Verzoek naar de rechtbank") == "\u{201E}Verzoek naar de rechtbank\u{201D}")
+        #expect(TimelineCopy.clause("KvK stuurde een aanmaning.") == "KvK stuurde een aanmaning")
+    }
+
+    @Test func theLegendSaysWachtOpJouAndHasNoSecondOpenMark() {
+        #expect(TimelineCopy.LegendMark.allCases.map(TimelineCopy.legend)
+                == ["gebeurd", "wacht op jou", "splitst af of komt samen", "spoor loopt nog", "begin of einde van een lijn"])
     }
 
     @Test func anOpenSpoorNeverReadsAsEndingOnItsOwn() {

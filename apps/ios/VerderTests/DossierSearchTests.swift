@@ -130,4 +130,24 @@ struct DossierSearchTests {
         let all = [t("a", "waiting"), t("b", "open"), t("c", "done"), t("d", "in-progress"), t("e", "dropped")]
         #expect(DossierCopy.openTasks(all).map(\.id) == ["b", "d"])
     }
+
+    /// A task's due date, said relative to now in Amsterdam time.
+    @Test func aTaskLineSaysTheDueDateRelativeToNow() throws {
+        let iso = ISO8601DateFormatter()
+        let now = try #require(iso.date(from: "2026-11-02T13:02:00Z")) // 14:02 in Amsterdam
+        func rest(_ s: String) -> String? { DossierCopy.taskLine(dueAt: iso.date(from: s), now: now).rest }
+        #expect(rest("2026-11-03T16:00:00Z") == "morgen 17:00")
+        #expect(rest("2026-11-02T16:00:00Z") == "vandaag 17:00")
+        #expect(rest("2026-10-30T16:00:00Z") == "te laat sinds 30 okt")
+        #expect(rest("2026-11-06T16:00:00Z") == "uiterlijk 6 nov")
+        #expect(DossierCopy.taskLine(dueAt: nil, now: now).rest == nil)
+        #expect(DossierCopy.taskLine(dueAt: nil, now: now).lead == "voor jou")
+    }
+
+    @Test func theEyebrowCountsTheDocumentsAndSaysTheirAge() {
+        #expect(DossierCopy.eyebrow(docCount: 12, freshness: "bijgewerkt 14:02") == "12 documenten · bijgewerkt 14:02")
+        #expect(DossierCopy.eyebrow(docCount: 1, freshness: nil) == "1 document")
+        #expect(DossierCopy.eyebrow(docCount: nil, freshness: nil) == nil)
+        #expect(DossierCopy.seeAllTasks(6) == "Alles bekijken (6)")
+    }
 }

@@ -95,6 +95,33 @@ enum DossierCopy {
         return "\(prefix)bijgewerkt \(when)"
     }
 
+    /// "12 documenten · bijgewerkt 14:02": the eyebrow above the title. The
+    /// count only once the phone's copy is read; nil when there is nothing.
+    static func eyebrow(docCount: Int?, freshness: String?) -> String? {
+        let parts = [docCount.map { "\($0) \($0 == 1 ? "document" : "documenten")" }, freshness].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// How many open tasks the tab lists before "Alles bekijken".
+    static let tasksShown = 2
+    static func seeAllTasks(_ n: Int) -> String { "Alles bekijken (\(n))" }
+    static let seeAllTasksLine = "open voor jou · taken"
+
+    /// A task's caption, as two parts: the amber lead "voor jou" and the due
+    /// date said relative to now — "morgen 17:00", "vandaag 17:00", "te laat
+    /// sinds 30 okt", else "uiterlijk 6 nov" — in Amsterdam time.
+    static func taskLine(dueAt: Date?, now: Date) -> (lead: String, rest: String?) {
+        guard let due = dueAt else { return ("voor jou", nil) }
+        let cal = amsterdam
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
+        let rest: String
+        if due < now { rest = "te laat sinds \(MoneyFormat.day(due))" }
+        else if days == 0 { rest = "vandaag \(HomeSummary.clock(due))" }
+        else if days == 1 { rest = "morgen \(HomeSummary.clock(due))" }
+        else { rest = "uiterlijk \(MoneyFormat.day(due))" }
+        return ("voor jou", rest)
+    }
+
     /// Waiting on Martin by the one definition (`WAITING_TASK_STATUSES` in
     /// waiting.ts), in the server's order.
     static func openTasks(_ tasks: [TaskDTO]) -> [TaskDTO] {

@@ -90,15 +90,19 @@ struct DossierTab: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
+            // "12 DOCUMENTEN · BIJGEWERKT 14:02" above the title (the frame).
+            if let line = DossierCopy.eyebrow(docCount: model.loaded ? model.docs.count : nil,
+                                              freshness: model.freshness) {
+                Text(ax ? HomeSummary.sentence(line) : line.uppercased())
+                    .font(.mono(12, relativeTo: .caption))
+                    .tracking(ax ? 0 : 1)
+                    .foregroundStyle(Color.inkLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(DossierCopy.title)
                 .font(.display(28, relativeTo: .title))
                 .foregroundStyle(Color.inkBright)
                 .accessibilityAddTraits(.isHeader)
-            if let line = model.freshness {
-                Text(line)
-                    .font(.mono(12, relativeTo: .caption))
-                    .foregroundStyle(Color.inkLabel)
-            }
             if let message = model.message {
                 Text(message)
                     .font(.display(15, relativeTo: .subheadline))
@@ -200,31 +204,111 @@ struct DossierTab: View {
         .buttonStyle(.plain)
     }
 
+    private var ax: Bool { typeSize.isAccessibilitySize }
+
+    /// OPEN TAKEN as the frame draws it: a grey section header OUTSIDE the
+    /// card with the count at its end, the first two tasks (hollow amber
+    /// ring, amber "voor jou" lead, the due date relative to now), then
+    /// "Alles bekijken (N)", which opens Voor jou.
     @ViewBuilder private var tasksCard: some View {
-        DossierCard(label: DossierCopy.tasksLabel, count: model.tasks?.count, amber: !(model.tasks ?? []).isEmpty) {
-            if let tasks = model.tasks {
-                if tasks.isEmpty {
-                    muted(DossierCopy.noTasks)
-                } else {
-                    ForEach(Array(tasks.enumerated()), id: \.element.id) { i, task in
-                        if i > 0 { Hairline() }
-                        Button { path.append(.task(task.id)) } label: {
-                            DossierRow(title: task.title, line: taskLine(task), amber: true)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            } else if model.offline {
-                muted(DossierCopy.tasksOffline)
-            } else {
-                SkeletonLines(count: 3)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(ax ? HomeSummary.sentence(DossierCopy.tasksLabel.lowercased()) : DossierCopy.tasksLabel)
+                    .tracking(ax ? 0 : 1)
+                Spacer(minLength: 8)
+                if let n = model.tasks?.count { Text("\(n)").monospacedDigit() }
             }
+            .font(.mono(12, relativeTo: .caption, weight: .medium))
+            .foregroundStyle(Color.inkLabel)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 12) {
+                if let tasks = model.tasks {
+                    if tasks.isEmpty {
+                        muted(DossierCopy.noTasks)
+                    } else {
+                        let shown = tasks.prefix(DossierCopy.tasksShown)
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { i, task in
+                            if i > 0 { Hairline() }
+                            Button { path.append(.task(task.id)) } label: { taskRow(task) }
+                                .buttonStyle(.plain)
+                        }
+                        Hairline()
+                        Button(action: openVoorJou) { seeAllRow(tasks.count) }
+                            .buttonStyle(.plain)
+                    }
+                } else if model.offline {
+                    muted(DossierCopy.tasksOffline)
+                } else {
+                    SkeletonLines(count: 3)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassPanel()
         }
     }
 
-    private func taskLine(_ t: TaskDTO) -> String {
-        (["wacht op jou", TaskModel.label(t.status)] + [t.dueAt.map { "uiterlijk \(HomeSummary.day($0))" }])
-            .compactMap { $0 }.joined(separator: " · ")
+    private func taskRow(_ t: TaskDTO) -> some View {
+        let line = DossierCopy.taskLine(dueAt: t.dueAt, now: Date())
+        return HStack(alignment: .center, spacing: 12) {
+            Circle().strokeBorder(Color.attn, lineWidth: 2).frame(width: 9, height: 9)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(t.title)
+                    .font(.display(17, relativeTo: .body))
+                    .foregroundStyle(Color.inkBright)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(Self.leadThenRest(line.lead, line.rest, ax: ax))
+                    .font(.mono(12, relativeTo: .caption))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            chevron
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private func seeAllRow(_ n: Int) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(DossierCopy.seeAllTasks(n))
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.signal)
+                Text(ax ? HomeSummary.sentence(DossierCopy.seeAllTasksLine) : DossierCopy.seeAllTasksLine.uppercased())
+                    .font(.mono(12, relativeTo: .caption))
+                    .tracking(ax ? 0 : 1)
+                    .foregroundStyle(Color.inkLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            chevron
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.inkFaint)
+            .accessibilityHidden(true)
+    }
+
+    /// "VOOR JOU" in amber, " · MORGEN 17:00" in the label colour; sentence
+    /// case at the accessibility sizes.
+    static func leadThenRest(_ lead: String, _ rest: String?, ax: Bool) -> AttributedString {
+        func cased(_ s: String) -> String { ax ? s : s.uppercased() }
+        var a = AttributedString(cased(ax ? HomeSummary.sentence(lead) : lead))
+        a.foregroundColor = Color.attn
+        guard let rest else { return a }
+        var b = AttributedString(" · " + cased(rest))
+        b.foregroundColor = Color.inkLabel
+        return a + b
     }
 
     @ViewBuilder private var documentsCard: some View {

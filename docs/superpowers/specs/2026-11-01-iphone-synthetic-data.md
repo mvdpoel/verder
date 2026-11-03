@@ -61,7 +61,7 @@ Overzicht's own fixtures (added 2026-11-03, the Figma "overzicht · final" state
 - Launch flags: `-fixtures-scans` seeds the phone's queue with today's "2 verstuurd · 1 in de wachtrij"; `-fixtures-scroll <waiting|leefgeld|rest|end>` opens Overzicht scrolled for the lower parts of a "hele pagina" frame.
 - The case's clock in every fixture run is Sun 1 nov 2026 09:41 Amsterdam, running on from launch.
 
-- Headline ("waar het nu op wacht"): stop "Stukken aanleveren bij Team Startdossier" on track "Opstart bewind", 28 okt, note "Loonstroken en polissen nog sturen."
+- Headline ("waar het nu op wacht"): stop "Stukken aanleveren bij Team Startdossier" on track "Opstart en stukken" (the spoor that runs into it — the name the map uses), 28 okt, note "Loonstroken en polissen nog sturen."
 - Tasks: 6 open · 1 te laat · 2 wacht op een ander.
 - Scans today: "2 verstuurd · 1 in de wachtrij".
 
@@ -187,10 +187,10 @@ Hoofdlijn "Bewindvoering" (stops, newest first):
 - 12 mei · done — "Aanmelding bij Bewindkantoor Noordkust"
 
 Sporen:
-- "Aanvraag bewindvoering" · done · branches at Aanmelding, MERGES at Beschikking — stops: "Intake" (19 mei), "Verzoek naar de rechtbank" (26 mei)
+- "Aanvraag bewindvoering" · done · branches at Aanmelding, MERGES at Beschikking · note "Het was nodig om onder bewind te komen." — stops: "Intake" (19 mei), "Verzoek naar de rechtbank" (26 mei)
 - "Opstart en stukken" · open · branches at Beschikking — stops: "Team Startdossier vraagt stukken" (5 jun), "Loonstroken gestuurd" (20 jun), "Stukken aanleveren bij Team Startdossier" is the open stop on the hoofdlijn it feeds
 - "Vordering Kade & Partners" · open · branches at the sommatie — stops: "Kade & Partners — verwerkt als vordering" (done, 15 okt), "Kade & Partners — melden bij Noordkust" (open, undated)
-- "Huurachterstand Lindehof" · ended (clean) · stops: "Betalingsregeling afgesproken" (done, 8 sep), "Regeling loopt" (done, 1 okt)
+- "Huurachterstand Lindehof" · ended (clean) · note "De huurachterstand is geregeld." · stops: "Betalingsregeling afgesproken" (done, 8 sep), "Regeling loopt" (done, 1 okt)
 
 Filter: "Schuldeisers verbergen" hides the Kade & Partners spoor AND its trigger on the hoofdlijn (structurally, via the spoor's branch pointer — never by title).
 

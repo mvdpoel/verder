@@ -14,9 +14,8 @@ enum TimelineCopy {
     static let filterLabel = "Filter"
     static let allTracks = "Alle sporen"
     static let hideDebts = "Schuldeisers verbergen"
-    /// Short on purpose: a menu item truncates after three lines, and the
-    /// header line already says what waits in what is hidden.
-    static let filterFooter = "Verbergt vorderingen en de brieven waarmee ze begonnen."
+    static let filterFooter = "Verbergt de vorderingen en de brieven waarmee ze begonnen. "
+        + "Wacht daar iets op jou, dan zie je dat bovenaan."
     static let showAll = "Toon alle sporen"
     static let emptyTitle = "Nog geen sporen op je tijdlijn"
     static let emptyBody = "Hier zie je straks je zaak van nu naar vroeger: wat er gebeurde en wat er op je wacht. "
@@ -49,14 +48,14 @@ enum TimelineCopy {
     static let openTask = "Open taak"
     static let openDocument = "Open document"
 
-    /// The legend under the map, one mark per line.
-    enum LegendMark: CaseIterable { case done, current, open, junction, running, end }
+    /// The legend under the map, one mark per line. Every open stop waits on
+    /// Martin (the project's rule for the case map), so one amber ring says it.
+    enum LegendMark: CaseIterable { case done, waiting, junction, running, end }
 
     static func legend(_ mark: LegendMark) -> String {
         switch mark {
         case .done: "gebeurd"
-        case .current: "waar het nu op wacht"
-        case .open: "open · loopt nog"
+        case .waiting: "wacht op jou"
         case .junction: "splitst af of komt samen"
         case .running: "spoor loopt nog"
         case .end: "begin of einde van een lijn"
@@ -142,29 +141,72 @@ enum TimelineCopy {
         }
     }
 
-    /// The sentence under the outcome badge. Nothing here is invented: the
-    /// merge stop and its date are the map's own; an open spoor only runs.
+    /// The sentence under the outcome badge, with the spoor's own note (what
+    /// the episode was about — Martin's words, from the web) woven in. Nothing
+    /// here is invented: the merge stop and its date are the map's own; an
+    /// open spoor only runs.
     static func outcomeSentence(_ track: CaseMapDTO.Track, mergedAt: CaseMapDTO.Stop?) -> String {
+        let note = track.note.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        let tail = note.map { " " + sentenceEnded($0) } ?? ""
         switch track.terminus {
         case "merge":
-            if let stop = mergedAt {
-                let when = stop.happenedAt.map { " op \(MoneyFormat.day($0))" } ?? ""
-                return "Dit spoor kwam\(when) terug op de hoofdlijn, bij \u{201E}\(stop.title)\u{201D}."
-            }
-            return "Dit spoor kwam terug op de hoofdlijn."
-        case "ended": return "Dit spoor is afgehandeld en hoefde niet terug naar de hoofdlijn. Goed gedaan."
-        case "done": return "Dit spoor is afgerond. Goed gedaan."
-        default: return "Dit spoor loopt nog."
+            guard let stop = mergedAt else { return "Dit spoor kwam terug op de hoofdlijn." + tail }
+            let when = stop.happenedAt.map { " van \(longDay($0))" } ?? ""
+            return "Dit spoor kwam terug op de hoofdlijn bij \(stopPhrase(stop.title))\(when)." + tail
+        case "ended":
+            // "afgehandeld: de huurachterstand is geregeld en hoefde niet terug…"
+            if let note { return "Dit spoor is afgehandeld: \(clause(note)) en hoefde niet terug naar de hoofdlijn. Goed gedaan." }
+            return "Dit spoor is afgehandeld en hoefde niet terug naar de hoofdlijn. Goed gedaan."
+        case "done": return "Dit spoor is afgerond. Goed gedaan." + tail
+        default: return "Dit spoor loopt nog." + tail
         }
     }
 
-    /// For a stop on the hoofdlijn: the sporen still running beside it.
-    static func runningSentence(_ titles: [String]) -> String? {
+    /// A stop named in running prose. A title of the form "Beschikking: onder
+    /// bewind gesteld" reads as "de beschikking"; any other title is quoted
+    /// whole, because an article cannot be derived from a free title.
+    static func stopPhrase(_ title: String) -> String {
+        if let colon = title.firstIndex(of: ":") {
+            let head = title[..<colon].trimmingCharacters(in: .whitespaces)
+            if !head.isEmpty, !head.contains(" ") { return "de \(head.lowercased())" }
+        }
+        return "\u{201E}\(title)\u{201D}"
+    }
+
+    /// "3 juni": the day in full, for a sentence.
+    static func longDay(_ d: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let c = cal.dateComponents([.day, .month], from: d)
+        return "\(c.day ?? 1) \(MoneyFormat.monthsLong[(c.month ?? 1) - 1])"
+    }
+
+    /// A note as a clause inside a sentence: first letter lower-cased (unless
+    /// the first word carries another capital — "KvK", "CAK"), trailing full
+    /// stop dropped.
+    static func clause(_ note: String) -> String {
+        var s = note
+        while let last = s.last, ".!".contains(last) { s.removeLast() }
+        let first = s.prefix(while: { !$0.isWhitespace })
+        guard first.count > 1, !first.dropFirst().contains(where: \.isUppercase) else { return s }
+        return s.prefix(1).lowercased() + s.dropFirst()
+    }
+
+    static func sentenceEnded(_ s: String) -> String {
+        guard let last = s.last, !".!?".contains(last) else { return s }
+        return s + "."
+    }
+
+    /// For a stop on the hoofdlijn: the sporen still running beside it. At
+    /// the current stop they run INTO it — the dashed line ends there.
+    static func runningSentence(_ titles: [String], intoHere: Bool = false) -> String? {
+        let tail = intoHere ? " en komt hier uit." : "."
         switch titles.count {
         case 0: return nil
-        case 1: return "Het spoor \(titles[0]) loopt nog."
+        case 1: return "Het spoor \(titles[0]) loopt nog\(tail)"
         default:
-            return "De sporen \(titles.dropLast().joined(separator: ", ")) en \(titles.last!) lopen nog."
+            let tails = intoHere ? " en komen hier uit." : "."
+            return "De sporen \(titles.dropLast().joined(separator: ", ")) en \(titles.last!) lopen nog\(tails)"
         }
     }
 
@@ -178,10 +220,10 @@ enum TimelineCopy {
         return parts.joined(separator: " · ")
     }
 
-    /// The stop's state badge: amber ONLY for the current stop (what the map
-    /// answers with), the signal for any other open stop, steel for done.
+    /// The stop's state badge: every open stop waits on Martin (amber), steel
+    /// for done.
     static func stateBadge(isCurrent: Bool, state: String) -> String {
-        isCurrent ? "wacht op jou" : state == "open" ? "loopt nog" : "gebeurd"
+        isCurrent || state == "open" ? "wacht op jou" : "gebeurd"
     }
 
     /// "nu · zonder datum", "26 mei".
@@ -207,6 +249,8 @@ enum TimelineCopy {
     /// "document · loonstrook · opent in dossier" — or, offline, whether the
     /// phone holds it.
     static func documentLine(docType: String?, held: Bool, offline: Bool) -> String {
+        // Offline and not on the phone, the line says only what it waits for.
+        if offline && !held { return "opent met verbinding" }
         var parts = ["document"]
         if let t = DossierCopy.docTypeLabel(docType), !offline { parts.append(t) }
         parts.append(offline ? (held ? "op je telefoon" : "opent met verbinding") : "opent in dossier")
@@ -373,19 +417,19 @@ struct TimelineLayout: Equatable {
     enum Mark: Equatable, Sendable {
         /// The one stop the map answers with: what is waiting on Martin now.
         case current
-        /// Another open stop: a hollow signal ring, as the web draws it.
+        /// Another open stop: also work waiting on Martin (every open stop is,
+        /// by the case map's rule), a smaller hollow amber ring.
         case open
         /// It happened.
         case done
 
-        /// Amber is for the current stop only — the web's rule: there is one
-        /// of it, and it is the answer to the question the page is opened with.
-        var isAmber: Bool { self == .current }
+        /// Amber is for what waits on Martin: every open stop.
+        var isAmber: Bool { self != .done }
     }
 
     /// One readout line under a title.
     struct Readout: Equatable, Sendable {
-        enum Tone: Equatable, Sendable { case label, signal }
+        enum Tone: Equatable, Sendable { case label, signal, attn }
         let text: String
         var tone: Tone = .label
     }
@@ -755,9 +799,11 @@ struct TimelineLayout: Equatable {
             switch mark {
             case .current:
                 if let spoor { return [Readout(text: "spoor \(spoor)")] }
-                return running.map { Readout(text: "spoor \($0.title) loopt nog") }
+                // The spoor runs dashed up INTO the hero: "loopt hierheen", on
+                // its own line, as the frame sets it.
+                return running.map { Readout(text: "spoor \($0.title)\nloopt hierheen") }
             case .open:
-                return [Readout(text: (["loopt nog", when(s)].compactMap { $0 }).joined(separator: " · "), tone: .signal)]
+                return [Readout(text: (["wacht op jou", when(s)].compactMap { $0 }).joined(separator: " · "), tone: .attn)]
                     + (spoor.map { [Readout(text: $0)] } ?? [])
             case .done:
                 var prefix: String?
@@ -783,10 +829,10 @@ struct TimelineLayout: Equatable {
             let side = (t?.isRoot ?? true) ? nil : t
             if let at = s.happenedAt { out.append(day(at)) }
             else { out.append(s.bandKey == "nu" ? "Nu · zonder datum" : "Zonder datum") }
-            if mark == .open { out.append("Loopt nog.") }
+            if mark == .open { out.append("Wacht op jou.") }
             if let side { out.append("Spoor \(side.title)") }
             if mark == .current, side == nil {
-                out += running.map { "Spoor \($0.title) loopt nog." }
+                out += running.map { "Spoor \($0.title) loopt hierheen." }
             }
             if let t, t.isRoot, isOldest(s, of: t) { out.append("De hoofdlijn begint hier.") }
             if let side, isOldest(s, of: side), branchStop(side) == nil { out.append("Hier begint dit spoor.") }

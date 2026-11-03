@@ -7,9 +7,10 @@ import SwiftUI
 ///
 /// It opens on what is waiting (the hero, ON the map at its own stop), and
 /// once that scrolls away a strip under the bar keeps saying it. Amber marks
-/// ONLY the current stop — the web's rule, there is exactly one; any other open
-/// stop is a hollow signal ring. Steel is "it happened"; a finished spoor gets
-/// a plain cap and is never drawn in a failure colour.
+/// what waits on Martin — every open stop, the current one as the hero, any
+/// other as a smaller hollow amber ring with "wacht op jou". Steel is "it
+/// happened"; a finished spoor gets a plain cap and is never drawn in a
+/// failure colour.
 ///
 /// Lives on the Dossier stack (and on Overzicht's, from its headline card), so
 /// it is lock-gated with them.
@@ -37,6 +38,7 @@ struct TimelineScreen: View {
     @State private var flash: String?
     @State private var flashOn = false
     @State private var raised = false
+    @State private var filterOpen = false
     @AccessibilityFocusState private var focusedStop: String?
     @Namespace private var rotor
     @Environment(\.scenePhase) private var scenePhase
@@ -221,12 +223,13 @@ struct TimelineScreen: View {
             if ax {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(HomeSummary.sentence(count)).foregroundStyle(Color.inkLabel)
-                    if let open { Text(HomeSummary.sentence(open)).foregroundStyle(Color.signal) }
+                    // Amber: something in what is hidden waits on Martin.
+                    if let open { Text(HomeSummary.sentence(open)).foregroundStyle(Color.attn) }
                 }
                 .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text(Self.twoTone(count.uppercased(), open.map { " · " + $0.uppercased() }, .signal))
+                Text(Self.twoTone(count.uppercased(), open.map { " · " + $0.uppercased() }, .attn))
                     .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
                     .tracking(1)
                     .fixedSize(horizontal: false, vertical: true)
@@ -276,25 +279,33 @@ struct TimelineScreen: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// The filter as a popover rather than a system Menu: a menu cuts its
+    /// footer after three lines, and the footer's second sentence — that
+    /// anything waiting in what is hidden still shows at the top — is the
+    /// one that lets Martin hide the vorderingen without worry.
     private var filterMenu: some View {
-        Menu {
-            Picker(selection: Binding(get: { store.hideDebts },
-                                      set: { hide in Task { await store.setHideDebts(hide) } })) {
-                Text(TimelineCopy.allTracks).tag(false)
-                Label(TimelineCopy.hideDebts, systemImage: "eye.slash").tag(true)
-            } label: { EmptyView() }
-                .pickerStyle(.inline)
-            Section {
-                Text(TimelineCopy.filterFooter)
-            }
-        } label: {
+        Button { filterOpen = true } label: {
             Image(systemName: store.hideDebts ? "line.3.horizontal.decrease.circle.fill"
                   : "line.3.horizontal.decrease.circle")
-                .foregroundStyle(store.map == nil ? Color.inkLabel : Color.signal)
+                .foregroundStyle(filterOff ? Color.inkLabel : Color.signal)
         }
         .accessibilityLabel(TimelineCopy.filterLabel)
         .accessibilityValue(store.hideDebts ? TimelineCopy.hideDebts : TimelineCopy.allTracks)
-        .disabled(store.map == nil)
+        .disabled(filterOff)
+        .popover(isPresented: $filterOpen, arrowEdge: .top) {
+            TimelineFilterPopover(hideDebts: store.hideDebts) { hide in
+                filterOpen = false
+                Task { await store.setHideDebts(hide) }
+            }
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// Nothing to filter: no map yet, or a map with no sporen (unless the
+    /// filter itself hid them — then it must stay reachable to undo).
+    private var filterOff: Bool {
+        guard let map = store.map else { return true }
+        return !store.hideDebts && !map.tracks.contains { !$0.isRoot }
     }
 
     // MARK: - Content
@@ -422,7 +433,8 @@ struct TimelineScreen: View {
             switch state {
             case .scroll(let id):
                 // A stop sits just under its pinned band; a band at the top.
-                proxy.scrollTo(id, anchor: id.hasPrefix("band:") ? .top : UnitPoint(x: 0, y: 0.16))
+                // At AX the pinned strip and band are taller, so a stop sits lower.
+                proxy.scrollTo(id, anchor: id.hasPrefix("band:") ? .top : UnitPoint(x: 0, y: ax ? 0.24 : 0.16))
             case .stop(let id):
                 proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.35))
                 try? await Task.sleep(for: .seconds(0.4))
@@ -492,6 +504,7 @@ struct TimelineMap: View {
                         rows(group.rows)
                     } header: {
                         TimelineBandHeader(band: group.band, layout: layout, ax: ax).id(group.band.id)
+                            .zIndex(1)
                     }
                 }
             }
@@ -527,13 +540,18 @@ struct TimelineBandRule: View {
     }
 }
 
-/// A month band: rule → 12 → label → 4. Pinned under the strip it hides its
-/// own rule, so the strip's hairline is the only line there.
+/// A month band: rule → 12 → label → 4 (more at the accessibility sizes, so
+/// the label never sits against a 40 pt title). Pinned under the strip it
+/// hides its own rule, so the strip's hairline is the only line there, and
+/// it is OPAQUE with a short fade below: a row scrolling under it disappears
+/// behind the band instead of showing half a line beneath it.
 struct TimelineBandHeader: View {
     let band: TimelineLayout.BandRow
     let layout: TimelineLayout
     let ax: Bool
     @State private var pinnedTop = false
+    /// The gap under the label at the accessibility sizes (~26 pt at AX5).
+    @ScaledMetric(relativeTo: .caption) private var axGap: CGFloat = 8
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -544,12 +562,21 @@ struct TimelineBandHeader: View {
                 Rectangle().fill(Color.hairline).frame(height: 1).opacity(pinnedTop ? 0 : 1)
                 label
                     .padding(.top, 12)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, ax ? axGap : 6)
             }
             .padding(.trailing, 16)
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.void)
+        .overlay(alignment: .bottom) {
+            // Pinned, the band closes with a hairline: a row scrolling under
+            // it meets an edge instead of reading as text on top of the band.
+            Rectangle().fill(Color.hairline).frame(height: 1)
+                .padding(.leading, layout.lanes.width + 16)
+                .padding(.trailing, 16)
+                .opacity(pinnedTop ? 1 : 0)
+                .accessibilityHidden(true)
+        }
         .onGeometryChange(for: Bool.self) { $0.frame(in: .scrollView).minY <= 0.5 } action: { pinnedTop = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -657,7 +684,7 @@ struct TimelineStopRowView: View {
                     Text(r.text.uppercased())
                         .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
                         .tracking(1)
-                        .foregroundStyle(r.tone == .signal ? Color.signal : Color.inkLabel)
+                        .foregroundStyle(r.tone == .signal ? Color.signal : r.tone == .attn ? Color.attn : Color.inkLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if row.stop.datesOutOfOrder {
@@ -771,7 +798,7 @@ struct RailGutter: View {
                     ctx.stroke(circle(M.currentRadius), with: .color(Color.attn), lineWidth: M.currentStroke)
                 case .open:
                     ctx.fill(circle(M.dotRadius), with: .color(Color.void))
-                    ctx.stroke(circle(M.dotRadius), with: .color(Color.signal), lineWidth: M.dotStroke)
+                    ctx.stroke(circle(M.dotRadius), with: .color(Color.attn), lineWidth: M.dotStroke)
                 case .done:
                     ctx.fill(circle(M.dotRadius), with: .color(Color.steel))
                 }
@@ -782,6 +809,63 @@ struct RailGutter: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - The filter
+
+/// "Alle sporen" / "Schuldeisers verbergen" and what hiding does, in full.
+struct TimelineFilterPopover: View {
+    let hideDebts: Bool
+    let choose: (Bool) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                option(TimelineCopy.allTracks, icon: nil, selected: !hideDebts) { choose(false) }
+                option(TimelineCopy.hideDebts, icon: "eye.slash", selected: hideDebts) { choose(true) }
+                Hairline().padding(.vertical, 4)
+                Text(TimelineCopy.filterFooter)
+                    .font(.display(13, relativeTo: .footnote))
+                    .foregroundStyle(Color.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+            }
+            .padding(.vertical, 6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: typeSize.isAccessibilitySize ? 340 : 320)
+        .frame(maxHeight: 560)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color.plate)
+        .preferredColorScheme(.dark)
+    }
+
+    private func option(_ title: String, icon: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .opacity(selected ? 1 : 0)
+                    .frame(width: 18)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.display(17, relativeTo: .body))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 15)).accessibilityHidden(true)
+                }
+            }
+            .foregroundStyle(Color.inkBright)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -867,7 +951,7 @@ struct TimelineLegend: View {
                         Text(ax ? HomeSummary.sentence(TimelineCopy.legend(mark)) : TimelineCopy.legend(mark).uppercased())
                             .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
                             .tracking(ax ? 0 : 1)
-                            .foregroundStyle(mark == .current ? Color.attn : Color.inkLabel)
+                            .foregroundStyle(mark == .waiting ? Color.attn : Color.inkLabel)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -896,8 +980,7 @@ private struct LegendGlyph: View {
             func circle(_ r: CGFloat) -> Path { Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)) }
             switch mark {
             case .done: ctx.fill(circle(M.dotRadius), with: .color(.steel))
-            case .current: ctx.stroke(circle(M.currentRadius), with: .color(.attn), lineWidth: M.currentStroke)
-            case .open: ctx.stroke(circle(M.dotRadius), with: .color(.signal), lineWidth: M.dotStroke)
+            case .waiting: ctx.stroke(circle(M.currentRadius), with: .color(.attn), lineWidth: M.currentStroke)
             case .junction:
                 ctx.fill(circle(M.dotRadius - 0.5), with: .color(.steel))
                 ctx.stroke(circle(M.ringRadius), with: .color(.steel), lineWidth: 1.5)
@@ -924,13 +1007,24 @@ struct TimelineSkeleton: View {
                     ctx.stroke(p, with: .color(faint),
                                style: dashed ? StrokeStyle(lineWidth: 1.5, dash: [2, 4]) : StrokeStyle(lineWidth: 2))
                 }
+                func dot(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat = 5) {
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)), with: .color(faint))
+                }
                 line(24, 50, size.height)
                 line(40, 62, size.height, dashed: true)
-                line(56, 200, 400)
-                for y in [50.0, 305, 445, 525] {
-                    ctx.fill(Path(ellipseIn: CGRect(x: 24 - 5, y: y - 5, width: 10, height: 10)), with: .color(faint))
-                }
-                ctx.fill(Path(ellipseIn: CGRect(x: 56 - 5, y: 195, width: 10, height: 10)), with: .color(faint))
+                // A spoor in the frame's shape: down its lane, then curving
+                // back into the hoofdlijn at a junction.
+                line(56, 197, 420)
+                var merge = Path()
+                merge.move(to: CGPoint(x: 56, y: 420))
+                merge.addCurve(to: CGPoint(x: 24, y: 447), control1: CGPoint(x: 56, y: 440),
+                               control2: CGPoint(x: 40, y: 440))
+                ctx.stroke(merge, with: .color(faint), lineWidth: 2)
+                dot(24, 50, 7)
+                for y in [306.0, 526] { dot(24, y) }
+                dot(24, 447, 8)
+                dot(56, 197)
+                dot(56, 386)
             }
             .frame(width: TimelineLayout.Lanes.standardWidth + 16)
             VStack(alignment: .leading, spacing: 0) {
@@ -965,7 +1059,9 @@ struct TimelineSkeleton: View {
 
     @ViewBuilder private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {
         if width == .infinity {
+            // The frame's full-width bars stop 22 pt short of the rule.
             RoundedRectangle(cornerRadius: Radius.chip).fill(Color.edge).frame(height: height)
+                .padding(.trailing, 22)
         } else {
             RoundedRectangle(cornerRadius: Radius.chip).fill(Color.edge).frame(width: width, height: height)
         }
@@ -1082,7 +1178,6 @@ struct TimelineStopSheet: View {
     let showTrack: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var notOnPhone: String?
     @State private var detent: PresentationDetent = .fraction(0.66)
 
     private var ax: Bool { typeSize.isAccessibilitySize }
@@ -1129,7 +1224,9 @@ struct TimelineStopSheet: View {
         .presentationDetents([.fraction(0.66), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.plate)
-        .onAppear { if ax { detent = .large } }
+        // Offline the sheet opens tall, so the note on a file the phone does
+        // not hold and the website footer are in view.
+        .onAppear { if ax || offline { detent = .large } }
     }
 
     private var top: some View {
@@ -1168,12 +1265,13 @@ struct TimelineStopSheet: View {
     }
 
     private var stateBadge: some View {
-        let tone: TimelineBadge.Tone = isCurrent ? .attn : stop.state == "open" ? .signal : .steel
+        let tone: TimelineBadge.Tone = isCurrent || stop.state == "open" ? .attn : .steel
         return TimelineBadge(text: TimelineCopy.stateBadge(isCurrent: isCurrent, state: stop.state), tone: tone)
     }
 
+    /// The sheet's mono captions stay in capitals at every size (the AX5 frame).
     private func dateText(_ s: String) -> some View {
-        Text(ax ? HomeSummary.sentence(s) : s.uppercased())
+        Text(s.uppercased())
             .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
             .tracking(ax ? 0 : 1)
             .foregroundStyle(Color.inkLabel)
@@ -1182,7 +1280,7 @@ struct TimelineStopSheet: View {
 
     private func label(_ text: String, count: Int? = nil) -> some View {
         HStack {
-            Text(ax ? text : text.uppercased())
+            Text(text.uppercased())
                 .font(.mono(12, relativeTo: .caption)).dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 .tracking(ax ? 0 : 1.9)
                 .foregroundStyle(Color.inkLabel)
@@ -1212,14 +1310,13 @@ struct TimelineStopSheet: View {
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
             if track.isRoot {
-                if let line = TimelineCopy.runningSentence(words?.running.map(\.title) ?? []) {
+                if let line = TimelineCopy.runningSentence(words?.running.map(\.title) ?? [], intoHere: isCurrent) {
                     sentence(line)
                 }
             } else {
                 TimelineBadge(text: TimelineCopy.outcome(track), tone: track.terminus == "open" ? .signal : .okay)
                     .padding(.vertical, 2)
-                sentence(TimelineCopy.outcomeSentence(track, mergedAt: words?.mergeStop(track))
-                         + (track.note.map { " " + $0 } ?? ""))
+                sentence(TimelineCopy.outcomeSentence(track, mergedAt: words?.mergeStop(track)))
                 let stops = map?.stops.filter { $0.trackId == track.id } ?? []
                 let from = words?.branchStop(track)?.happenedAt ?? stops.compactMap(\.happenedAt).min()
                 let to = words?.mergeStop(track)?.happenedAt ?? stops.compactMap(\.happenedAt).max()
@@ -1298,9 +1395,11 @@ struct TimelineStopSheet: View {
                     .padding(16)
                     .accessibilityElement(children: .combine)
                 }
+                // The dot column only when a row in the card has a dot.
+                let dots = rows.contains { $0.amberLead != nil }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     if i > 0 { Hairline().padding(.horizontal, 16) }
-                    evidenceRow(row)
+                    evidenceRow(row, dotColumn: dots)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1308,13 +1407,16 @@ struct TimelineStopSheet: View {
         }
     }
 
-    @ViewBuilder private func evidenceRow(_ row: Row) -> some View {
-        let content = HStack(alignment: .center, spacing: 8) {
-            // One dot column for every row, so every title starts at one x.
-            Circle().strokeBorder(Color.attn, lineWidth: 2).frame(width: 9, height: 9)
-                .opacity(row.amberLead == nil ? 0 : 1)
-                .frame(width: ax ? 0 : 12)
-                .accessibilityHidden(true)
+    @ViewBuilder private func evidenceRow(_ row: Row, dotColumn: Bool) -> some View {
+        let content = HStack(alignment: .center, spacing: dotColumn && !ax ? 8 : 0) {
+            // One dot column for every row when any has a dot, so every title
+            // starts at one x; none at all when no row has one.
+            if dotColumn {
+                Circle().strokeBorder(Color.attn, lineWidth: 2).frame(width: 9, height: 9)
+                    .opacity(row.amberLead == nil ? 0 : 1)
+                    .frame(width: ax ? 0 : 12)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.title)
                     .font(.display(15, relativeTo: .subheadline))
@@ -1322,7 +1424,7 @@ struct TimelineStopSheet: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 lineText(row)
-                if notOnPhone == row.id {
+                if row.unavailable {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: "wifi.slash").font(.system(size: 13)).foregroundStyle(Color.inkSoft)
                             .accessibilityHidden(true)
@@ -1342,15 +1444,13 @@ struct TimelineStopSheet: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.leading, ax ? 8 : 16)
+        .padding(.leading, ax && dotColumn ? 8 : 16)
         .padding(.trailing, 16)
         .padding(.vertical, 12)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        if let route = row.route {
-            Button {
-                if row.unavailable { notOnPhone = row.id } else { open(route) }
-            } label: { content }
+        if let route = row.route, !row.unavailable {
+            Button { open(route) } label: { content }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
         } else {

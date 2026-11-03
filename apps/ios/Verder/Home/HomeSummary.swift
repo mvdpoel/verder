@@ -319,7 +319,7 @@ enum HomeSummary {
 
     // MARK: - The map headline
 
-    /// "Opstart bewind · 28 okt".
+    /// "Opstart en stukken · 28 okt".
     static func headlineMeta(_ h: DashboardSummaryDTO.Headline) -> [String] {
         [h.trackTitle, h.happenedAt.map(day)].compactMap { $0 }
     }

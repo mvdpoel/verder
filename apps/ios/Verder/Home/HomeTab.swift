@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The tab the app opens on: the current state of the case at a glance, in
 /// the board's order (brief §3, Mercury's now → soon → later): what waits on
-/// Martin, the leefgeld week, then tasks · scans · Door verder gedaan, and the
-/// map's headline last. Read-only: every action lives one tap further, on the
+/// Martin and the map's headline (both now), the leefgeld week, then tasks ·
+/// scans · Door verder gedaan. Read-only: every action lives one tap further, on the
 /// screen that owns it. Every word and number comes from `HomeSummary` and
 /// `LeefgeldGlance` (tested); this file only lays them out (Figma
 /// "overzicht · final").
@@ -184,9 +184,11 @@ struct HomeTab: View {
                 strip(notice)
             }
             waitingCard(inbox)
+            // "Waar het nu op wacht" is NOW too, so it sits right under what
+            // waits (the "Overzicht · naar de tijdlijn" frames).
+            headlineCard
             leefgeldCard.id("leefgeld")
             restCard(inbox).id("rest")
-            headlineCard
         } else if let notice {
             errorCard(notice)
             card { scansRow }
