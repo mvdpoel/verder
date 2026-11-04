@@ -25,7 +25,9 @@ export const PROPOSAL_STATUSES = [
 ] as const;
 export type ProposalStatus = typeof PROPOSAL_STATUSES[number];
 
-export const PROPOSAL_KINDS = ["reply", "question", "follow-up"] as const;
+/** `compose` (0044, Vraag Grip): a NEW mail a request's answer proposed, not a
+ *  reply. It walks exactly the reply's path: pending → approved → sending → sent. */
+export const PROPOSAL_KINDS = ["reply", "question", "follow-up", "compose"] as const;
 export type ProposalKind = typeof PROPOSAL_KINDS[number];
 
 export const PROPOSAL_TRANSITIONS: Record<ProposalStatus, readonly ProposalStatus[]> = {

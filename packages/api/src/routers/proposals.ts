@@ -251,6 +251,13 @@ async function triggerView(db: Db, p: ProposalRow, partyName: string | null): Pr
     return { type: "external", id: e.gmailId, from: e.from, subject: e.subject, date: parseDate(e.date),
       excerpt: clip(e.body) };
   }
+  if (p.triggerRequestId) {
+    // Vraag Grip: a compose proposal's only trigger is Martin's own question.
+    const [r] = await db.select({ text: schema.requests.text, createdAt: schema.requests.createdAt })
+      .from(schema.requests).where(eq(schema.requests.id, p.triggerRequestId));
+    return { type: "request", id: p.triggerRequestId, from: "Martin", subject: clip(r?.text) ?? null,
+      date: r?.createdAt ?? null, excerpt: null };
+  }
   const [parent] = p.parentProposalId
     ? await db.select().from(schema.proposals).where(eq(schema.proposals.id, p.parentProposalId))
     : [];

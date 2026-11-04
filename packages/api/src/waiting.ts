@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Db } from "@grip/db";
 import { buildTrackMap, type StopRow } from "./track-map";
 import { effectiveTaskStatuses } from "./task-decide";
@@ -24,7 +24,9 @@ import { loadTrackMapRows } from "./routers/tracks";
  */
 export const WAITING_TASK_STATUSES = ["open", "in-progress"] as const;
 
-export type WaitingKind = "proposal" | "question" | "suggestion" | "task" | "stop";
+/** `request` (Vraag Grip): an ANSWERED request Martin has not opened yet. A
+ *  queued or working one waits on Grip, not on him, and is not listed here. */
+export type WaitingKind = "proposal" | "question" | "request" | "suggestion" | "task" | "stop";
 
 export interface WaitingItem {
   kind: WaitingKind;
@@ -56,6 +58,13 @@ export interface ProposalRow {
   /** `proposals.party_id`; optional so a caller that never reads it need not select it. */
   partyId?: string | null;
   senderGuess: unknown;
+}
+
+/** An answered request Martin has not opened (Vraag Grip). */
+export interface RequestRow {
+  id: string;
+  text: string;
+  answeredAt: Date;
 }
 
 /** A pending or needs-manual suggestion on a live (or no) document. */
@@ -127,8 +136,12 @@ function suggestionTitle(s: SuggestionRow): string {
   return fromProposal ?? s.documentTitle ?? s.emailSubject ?? SUGGESTION_LABEL[s.kind] ?? "Suggestie";
 }
 
+const REQUEST_TITLE_MAX = 120;
+
 export function waitingOnMartin(input: {
   proposals: ProposalRow[];
+  /** Optional so older hand-built inputs still check; absent means none. */
+  requests?: RequestRow[];
   suggestions: SuggestionRow[];
   tasks: TaskRow[];
   currentStop: StopRow | null;
@@ -143,6 +156,19 @@ export function waitingOnMartin(input: {
     ...proposals.filter((p) => p.priority === "verder"),
     ...proposals.filter((p) => p.priority !== "verder"),
   ].map(proposalItem);
+
+  // 2: answered requests he has not opened — his own question, answered.
+  const requests = [...(input.requests ?? [])]
+    .sort((a, b) => newestFirst({ at: a.answeredAt, id: a.id }, { at: b.answeredAt, id: b.id }))
+    .map((r): WaitingItem => {
+      const t = r.text.trim().replace(/\s+/g, " ");
+      return {
+        kind: "request", id: r.id,
+        title: t.length > REQUEST_TITLE_MAX ? `${t.slice(0, REQUEST_TITLE_MAX - 1)}…` : t,
+        subtitle: "Grip heeft het uitgezocht", priority: 2,
+        at: r.answeredAt.toISOString(), dueAt: null, verder: false, partyId: null,
+      };
+    });
 
   // 3: suggestions.
   const suggestions = byAt(input.suggestions).map((s): WaitingItem => ({
@@ -178,12 +204,16 @@ export function waitingOnMartin(input: {
           dueAt: null, verder: false, partyId: null }]
       : [];
 
-  return [...verderFirst, ...suggestions, ...tasks, ...stopItems];
+  return [...verderFirst, ...requests, ...suggestions, ...tasks, ...stopItems];
 }
 
 /**
  * The one loader. Every membership rule that needs the database lives here:
  *
+ * - Requests (Vraag Grip): answered and not yet opened. Queued and working
+ *   requests wait on Grip; a failed one is shown on the phone's request list
+ *   ("Lukte niet · Opnieuw") but does not count, because nothing he can decide
+ *   is in it.
  * - Proposals: `status = 'pending'` only. drafting, draft-failed, approved and
  *   sending wait on Grip, not on Martin; the verdict column is never read.
  * - Suggestions: pending or needs-manual, and NOT on a discarded or purged
@@ -196,7 +226,7 @@ export function waitingOnMartin(input: {
  * - The current stop: what the map itself draws as current.
  */
 export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem[]> {
-  const [proposals, suggestions, taskRows, mapRows] = await Promise.all([
+  const [proposals, requests, suggestions, taskRows, mapRows] = await Promise.all([
     db.select({
       id: schema.proposals.id, kind: schema.proposals.kind, priority: schema.proposals.priority,
       createdAt: schema.proposals.createdAt, payload: schema.proposals.payload,
@@ -205,6 +235,9 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
     }).from(schema.proposals)
       .leftJoin(schema.parties, eq(schema.parties.id, schema.proposals.partyId))
       .where(eq(schema.proposals.status, "pending")),
+    db.select({ id: schema.requests.id, text: schema.requests.text, answeredAt: schema.requests.answeredAt })
+      .from(schema.requests)
+      .where(and(eq(schema.requests.status, "answered"), isNull(schema.requests.openedAt))),
     // `documents` unaliased, because the shared expressions assume it.
     db.execute(sql`
       SELECT s.id, s.kind, s.created_at, s.proposed,
@@ -232,6 +265,8 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
     document_title: string | null; email_subject: string | null };
   return waitingOnMartin({
     proposals,
+    // answered_at is NOT NULL whenever status = 'answered' (requests_answered_ck).
+    requests: requests.map((r) => ({ id: r.id, text: r.text, answeredAt: r.answeredAt ?? new Date(0) })),
     suggestions: (suggestions.rows as RawSuggestion[]).map((r) => ({
       id: r.id, kind: r.kind, createdAt: new Date(r.created_at), proposed: r.proposed,
       documentTitle: r.document_title, emailSubject: r.email_subject,

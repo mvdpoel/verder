@@ -186,3 +186,14 @@ export const WEEKLY_SUMMARY_WORKER_NAME = "weekly-summary";
  * as an on-demand worker: a brief is drafted only when a party writes.
  */
 export const PARTY_BRIEF_WORKER_NAME = "party-brief";
+
+/**
+ * Written by apps/worker/src/ops/requests-store.ts — one row per run of the
+ * host runner ops/request-runner.sh (cron every minute): a stored answer, a
+ * refused one, a runner failure, or an empty run (`--heartbeat`) — and read
+ * back by the `watcher` declaration in worker-health.ts (silence means the host
+ * cron died) AND by `rateLimitedUntil` in apps/worker/src/gmail.ts: grip-tools
+ * calls Gmail on Martin's account during a request, and a 429 it hits is
+ * recorded on this name with `detail.retryAfter`, an account-wide deadline.
+ */
+export const REQUEST_RUNNER_WORKER_NAME = "request-runner";

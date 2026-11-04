@@ -17,6 +17,7 @@ import { proposalsRouter } from "./routers/proposals";
 import { inboxRouter } from "./routers/inbox";
 import { gripActionsRouter } from "./routers/grip-actions";
 import { dossierSyncRouter } from "./routers/dossier-sync";
+import { requestsRouter } from "./routers/requests";
 
 export const appRouter = router({
   parties: partiesRouter,
@@ -38,6 +39,7 @@ export const appRouter = router({
   inbox: inboxRouter,
   gripActions: gripActionsRouter,
   dossierSync: dossierSyncRouter,
+  requests: requestsRouter,
 });
 export type AppRouter = typeof appRouter;
 export { createContext, type Context } from "./trpc";

@@ -45,6 +45,7 @@ import {
   PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
   RERANK_WORKER_NAME, WATCHDOG_WORKER_NAME, BADGE_SYNC_WORKER_NAME, AUTO_FILE_WORKER_NAME,
   AUTOFILE_DIGEST_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME, PARTY_BRIEF_WORKER_NAME,
+  REQUEST_RUNNER_WORKER_NAME,
 } from "./worker-names";
 
 export type WorkerKind =
@@ -216,6 +217,12 @@ const DECLS: Record<string, WorkerDecl> = {
   // rate-limited skip included, so silence means the send job is dead — and an
   // approved reply would then sit unsent with nothing else to say so.
   [PROPOSAL_SEND_WORKER_NAME]: { kind: "watcher", everyMs: MINUTE },
+  // Vraag Grip: ops/request-runner.sh, host cron every minute, writes one row
+  // per run — a heartbeat when nothing is queued, and a `busy` heartbeat from
+  // the tick that finds the flock held by a request still being researched
+  // (up to 600 s), so a long request never reads as a dead cron. Silence means
+  // the cron died.
+  [REQUEST_RUNNER_WORKER_NAME]: { kind: "watcher", everyMs: MINUTE },
   // `boss.schedule("proposals.clock", "*/15 * * * *")`: one row per tick, so
   // silence means no reminder, no follow-up and no deadline alert will come.
   [PROPOSAL_CLOCK_WORKER_NAME]: { kind: "watcher", everyMs: 15 * MINUTE },
