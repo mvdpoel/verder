@@ -83,4 +83,14 @@ describe("requests (0044)", () => {
       throw ROLLBACK;
     })).rejects.toBe(ROLLBACK);
   });
+
+  it("0045: title, headline, steps_done and dismissed_at are additive, with the app's UPDATE unchanged", async () => {
+    const cols = (await db.execute(sql`SELECT column_name, is_nullable, column_default FROM information_schema.columns
+      WHERE table_name = 'requests' AND column_name IN ('title', 'headline', 'steps_done', 'dismissed_at')
+      ORDER BY column_name`)).rows as { column_name: string; is_nullable: string; column_default: string | null }[];
+    expect(cols.map((c) => [c.column_name, c.is_nullable])).toEqual([
+      ["dismissed_at", "YES"], ["headline", "YES"], ["steps_done", "NO"], ["title", "YES"]]);
+    expect(cols.find((c) => c.column_name === "steps_done")?.column_default).toMatch(/'\{\}'::jsonb/);
+    for (const p of ["DELETE", "TRUNCATE"]) expect(await can("grip_app", "requests", p)).toBe(false);
+  });
 });

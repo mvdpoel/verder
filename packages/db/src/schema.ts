@@ -736,6 +736,13 @@ export const requests = pgTable("requests", {
   toolLog: jsonb("tool_log").$type<RequestToolCall[]>().notNull().default([]),
   error: text("error"),
   openedAt: timestamp("opened_at", { withTimezone: true }),
+  // 0045: the answer's short subject and its one-line outcome (both written by
+  // requests-store from the model's answer), Martin's ticks on his steps
+  // ({"<index>": iso}) and "Laat maar".
+  title: text("title"),
+  headline: text("headline"),
+  stepsDone: jsonb("steps_done").$type<Record<string, string>>().notNull().default({}),
+  dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   claimedAt: timestamp("claimed_at", { withTimezone: true }),
   answeredAt: timestamp("answered_at", { withTimezone: true }),
