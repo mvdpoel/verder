@@ -96,9 +96,11 @@ enum ShareHostData {
         let group = dir("group")
         func make(signedOut: Bool = false, sourceApp: String? = nil, now: Date = clock,
                   writeDrop: @escaping ShareModel.DropWriter = ShareModel.writeDrop,
-                  answer: ShareSendResult = .sent, hang: Bool = false) -> ShareModel {
+                  answer: ShareSendResult = .sent, hang: Bool = false,
+                  pace: @escaping @MainActor (Int) async -> Void = { _ in await Task.yield() }) -> ShareModel {
             ShareModel(groupDir: group, signedOut: signedOut, sourceApp: sourceApp,
-                       sendBound: hang ? .seconds(100_000) : .seconds(20), now: { now }, writeDrop: writeDrop) { _, _ in
+                       sendBound: hang ? .seconds(100_000) : .seconds(20), now: { now }, writeDrop: writeDrop,
+                       pace: pace) { _, _ in
                 if hang { try? await Task.sleep(for: .seconds(100_000)) }
                 return answer
             }
@@ -129,7 +131,11 @@ enum ShareHostData {
             m.loaded(photos(10))
             return m
         case .versturen:
-            let m = loaded(make(hang: true), photos(3))
+            // Versturen tapped while the photo PDF is made, held on photo 2
+            // ("PDF maken · foto 2 van 3").
+            let m = loaded(make(hang: true, pace: { index in
+                if index >= 1 { try? await Task.sleep(for: .seconds(100_000)) }
+            }), photos(3))
             Task { await m.commit() }
             return m
         case .versturenFout:

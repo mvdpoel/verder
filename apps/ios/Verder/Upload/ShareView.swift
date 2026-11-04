@@ -259,6 +259,16 @@ private struct ShareReadyView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The photo stack's three pages: the PDF's own, or, while the PDF is
+    /// still being made, the photos it is made of (decoded small by ImageIO).
+    static func stackPages(_ file: PreparedShare, combining: ShareModel.Combining?) -> [UIImage?] {
+        (0..<3).map { index in
+            guard let combining else { return PageThumbnail.image(file, page: index, width: 120) }
+            return combining.photos.indices.contains(index)
+                ? PhotoPage.page(at: combining.photos[index], maxPixelSize: 320) : nil
+        }
+    }
+
     @ViewBuilder private var single: some View {
         if let file = model.prepared.first {
             VStack(alignment: .leading, spacing: 0) {
@@ -266,7 +276,7 @@ private struct ShareReadyView: View {
                     if large, let badge = model.photoBadge {
                         PhotoBadge(text: badge).padding(.bottom, 24)
                     }
-                    PhotoStack(file: file)
+                    PhotoStack(pages: Self.stackPages(file, combining: model.combining))
                     if !large, let badge = model.photoBadge {
                         PhotoBadge(text: badge).padding(.top, 8)
                     }
@@ -705,12 +715,12 @@ private struct TooLargeThumbnail: View {
 /// The photo PDF as the photos it was made of: up to three of its pages,
 /// fanned, the first on top.
 private struct PhotoStack: View {
-    let file: PreparedShare
+    /// Three pages, first on top; nil draws an empty sheet.
+    let pages: [UIImage?]
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let scale: CGFloat = typeSize.isAccessibilitySize ? 0.95 : 1
-        let pages = (0..<3).map { PageThumbnail.image(file, page: $0, width: 120) }
         ZStack(alignment: .topLeading) {
             // Back right: the third photo, as an outline over the sheet.
             page(pages[2])

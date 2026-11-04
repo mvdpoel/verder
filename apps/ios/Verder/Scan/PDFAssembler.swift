@@ -38,24 +38,46 @@ enum PDFAssembler {
     /// around 120 MB). A page the closure cannot give is left out and not counted.
     static func assemble(pageCount: Int, maxLongEdge: CGFloat = 2200, jpegQuality: CGFloat = 0.6,
                          page: (Int) -> UIImage?) -> (data: Data, pageCount: Int) {
-        guard pageCount > 0 else { return (Data(), 0) }
-        let out = NSMutableData()
-        guard let consumer = CGDataConsumer(data: out as CFMutableData),
-              let pdf = CGContext(consumer: consumer, mediaBox: nil, nil)
+        guard pageCount > 0, let builder = Builder(maxLongEdge: maxLongEdge, jpegQuality: jpegQuality)
         else { return (Data(), 0) }
-        var written = 0
-        for index in 0..<pageCount {
+        for index in 0..<pageCount { builder.add { page(index) } }
+        return builder.finish()
+    }
+
+    /// `assemble`, one page per call, so a caller can say which page it is on
+    /// and give the run loop back between pages (the share extension's
+    /// "PDF maken · foto 2 van 3"). Not Sendable: one owner, one thread.
+    final class Builder {
+        private let out = NSMutableData()
+        private let pdf: CGContext
+        private let maxLongEdge: CGFloat
+        private let jpegQuality: CGFloat
+        private(set) var written = 0
+
+        init?(maxLongEdge: CGFloat = 2200, jpegQuality: CGFloat = 0.6) {
+            guard let consumer = CGDataConsumer(data: out as CFMutableData),
+                  let pdf = CGContext(consumer: consumer, mediaBox: nil, nil)
+            else { return nil }
+            self.pdf = pdf
+            self.maxLongEdge = maxLongEdge
+            self.jpegQuality = jpegQuality
+        }
+
+        /// Adds the page `page` gives; false (and nothing written) when it
+        /// gives none or the page cannot be encoded.
+        @discardableResult
+        func add(_ page: () -> UIImage?) -> Bool {
             // The pool drains Core Image's and ImageIO's autoreleased
             // intermediates per page, not once at the end.
             let jpeg: Data? = autoreleasepool {
-                guard let image = page(index) else { return nil }
+                guard let image = page() else { return nil }
                 return encodePage(image, maxLongEdge: maxLongEdge, jpegQuality: jpegQuality)
             }
             guard let jpeg,
                   let provider = CGDataProvider(data: jpeg as CFData),
                   let image = CGImage(jpegDataProviderSource: provider, decode: nil,
                                       shouldInterpolate: true, intent: .defaultIntent)
-            else { continue }
+            else { return false }
             var box = CGRect(x: 0, y: 0, width: pageWidthPoints,
                              height: pageWidthPoints * CGFloat(image.height) / CGFloat(image.width))
             let info = [kCGPDFContextMediaBox as String: Data(bytes: &box, count: MemoryLayout<CGRect>.size)]
@@ -63,9 +85,14 @@ enum PDFAssembler {
             pdf.draw(image, in: box)
             pdf.endPDFPage()
             written += 1
+            return true
         }
-        pdf.closePDF()
-        return written == 0 ? (Data(), 0) : (out as Data, written)
+
+        /// Closes the PDF. No page at all gives empty data, never a zero-page PDF.
+        func finish() -> (data: Data, pageCount: Int) {
+            pdf.closePDF()
+            return written == 0 ? (Data(), 0) : (out as Data, written)
+        }
     }
 
     /// Downscale + orientation + colour decision + JPEG, in one Core Image pass.

@@ -218,6 +218,7 @@ struct ShareModelTests {
         let m = model()
         #expect(m.handedOver(count: 14) == ShareModel.maxItems)
         m.loaded(Array(repeating: .photo(url: Fixture.letterPageURL), count: ShareModel.maxItems))
+        await m.photosCombined()
 
         #expect(m.phase == .ready)
         #expect(m.photoPages == 10)
@@ -267,10 +268,11 @@ struct ShareModelTests {
         #expect(ShareModel.autoCloseDelay >= .seconds(3))
     }
 
-    @Test func anImageThePDFCannotEncodeIsCountedOut() throws {
+    @Test func anImageThePDFCannotEncodeIsCountedOut() async throws {
         let m = model()
         let broken = try notAnImage()
         m.loaded([.photo(url: Fixture.letterPageURL), .photo(url: broken), .photo(url: Fixture.letterPageURL)])
+        await m.photosCombined()
 
         #expect(m.photoPages == 2)
         #expect(m.detail(of: 0).prefix(2) == ["PDF van 2\u{00A0}foto's", "2\u{00A0}pagina's"])
@@ -279,10 +281,11 @@ struct ShareModelTests {
         #expect(PDFDocument(data: pdfData)?.pageCount == 2)
     }
 
-    @Test func noEncodablePhotoLeavesOnlyTheFiles() throws {
+    @Test func noEncodablePhotoLeavesOnlyTheFiles() async throws {
         let m = model()
         let broken = try notAnImage()
         m.loaded([.photo(url: broken), .photo(url: broken), pdf])
+        await m.photosCombined()
 
         #expect(m.prepared.map(\.fileName) == ["Brief.pdf"])
         #expect(m.photoPages == 0)
@@ -328,9 +331,10 @@ struct ShareModelTests {
                 + "staan de suggesties in Voor jou.")
     }
 
-    @Test func photosNameTheirOrderAndTheTemporaryName() {
+    @Test func photosNameTheirOrderAndTheTemporaryName() async {
         let m = model()
         m.loaded(Array(repeating: .photo(url: Fixture.letterPageURL), count: 3))
+        await m.photosCombined()
         #expect(m.title == "Gedeeld 15 jan 09.00.pdf")
         #expect(m.photoBadge == "3\u{00A0}foto's")
         #expect(m.orderNote == "Pagina's in de volgorde waarin je ze koos.")
@@ -438,6 +442,95 @@ struct ShareModelTests {
         let p = ShareModel.Progress(current: 2, total: 3, finished: 1)
         #expect(p.label == "Versturen · bestand 2 van 3")
         #expect(abs(p.fraction - 0.5) < 0.001)
+    }
+
+    @Test func progressWhileCombiningNamesThePhoto() {
+        let p = ShareModel.Progress(current: 2, total: 3, finished: 1, stage: .combining)
+        #expect(p.label == "PDF maken · foto 2 van 3")
+    }
+
+    // MARK: - The photo PDF, a page at a time
+
+    /// A gate the combine loop waits at before photo `index`; `open` lets it on.
+    @MainActor final class Gate {
+        var held: Int
+        init(holding index: Int) { held = index }
+        func wait(_ index: Int) async {
+            while index >= held { try? await Task.sleep(for: .milliseconds(5)) }
+        }
+    }
+
+    func gatedModel(_ group: URL? = nil, gate: Gate,
+                    sender: @escaping ShareModel.Sender = { _, _ in .sent }) -> ShareModel {
+        let t = t0
+        return ShareModel(groupDir: group, sendBound: .seconds(5), now: { t }, pace: { await gate.wait($0) },
+                          sender: sender)
+    }
+
+    /// The screen is up while the photos are combined, and states only what
+    /// is known: how many photos, no pages and no size until the PDF exists.
+    @Test func photosAreCombinedAfterTheScreenIsUp() async {
+        let gate = Gate(holding: 1)
+        let m = gatedModel(gate: gate)
+        m.loaded(Array(repeating: .photo(url: Fixture.letterPageURL), count: 3))
+        #expect(m.phase == .ready)
+        #expect(m.title == "Gedeeld 15 jan 09.00.pdf")
+        #expect(m.photoBadge == "3\u{00A0}foto's")
+        while m.combining?.photo != 2 { await Task.yield() }
+        #expect(m.detail == ["PDF van 3\u{00A0}foto's"])
+        #expect(m.progress == nil)            // nothing on screen before Versturen
+
+        gate.held = .max
+        await m.photosCombined()
+        #expect(m.combining == nil)
+        #expect(m.photoPages == 3)
+        #expect(m.detail.prefix(2) == ["PDF van 3\u{00A0}foto's", "3\u{00A0}pagina's"])
+        #expect(m.detail.count == 3)          // and its size
+    }
+
+    /// Versturen while the PDF is still being made: the caption says which
+    /// photo it is on, then Versturen, and the drop written is the whole PDF.
+    @Test func versturenDuringCombiningShowsThePhotoThenSends() async throws {
+        let group = try scratchDir()
+        let gate = Gate(holding: 1)
+        let m = gatedModel(group, gate: gate) { _, _ in
+            try? await Task.sleep(for: .milliseconds(200))
+            return .sent
+        }
+        m.loaded(Array(repeating: .photo(url: Fixture.letterPageURL), count: 3))
+        let commit = Task { await m.commit() }
+        while m.progress?.stage != .combining || m.combining?.photo != 2 { await Task.yield() }
+        #expect(m.phase == .saving)
+        #expect(m.progress?.label == "PDF maken · foto 2 van 3")
+        #expect(m.leading == .cancel(enabled: false))
+        #expect(files(group).isEmpty)         // nothing written before the PDF exists
+
+        gate.held = .max
+        while m.progress?.stage != .sending { await Task.yield() }
+        #expect(m.progress?.label == "Versturen")
+        await commit.value
+
+        #expect(m.phase == .done(.delivered))
+        let bin = try #require(files(group).first { $0.hasSuffix(".bin") })
+        let data = try Data(contentsOf: IncomingDrop.directory(groupDir: group).appending(path: bin))
+        #expect(PDFDocument(data: data)?.pageCount == 3)
+    }
+
+    /// Versturen on photos none of which could be made a page ends where
+    /// the screen would have: nothing to send, said so.
+    @Test func versturenOnPhotosThatAllFailEndsUnreadable() async throws {
+        let group = try scratchDir()
+        let broken = try notAnImage()
+        let gate = Gate(holding: 0)
+        let m = gatedModel(group, gate: gate)
+        m.loaded([.photo(url: broken), .photo(url: broken)])
+        let commit = Task { await m.commit() }
+        while m.phase != .saving { await Task.yield() }
+        gate.held = .max
+        await commit.value
+        #expect(m.phase == .refused(.unreadable))
+        #expect(m.progress == nil)
+        #expect(files(group).isEmpty)
     }
 
     // MARK: - A failed save

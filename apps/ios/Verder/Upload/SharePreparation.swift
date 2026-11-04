@@ -89,6 +89,9 @@ enum SharePreparation {
         var links: [String] = []
         /// Photos handed over (decodable or not), for "foto 11–14".
         var photosHandedOver = 0
+        /// The photos still to combine, when `prepare` was told not to
+        /// (`combinePhotos: false`); `combined(_:into:capturedAt:)` adds the PDF.
+        var pendingPhotos: [URL] = []
 
         var tooLarge: Int { tooLargeFiles.count }
     }
@@ -121,7 +124,10 @@ enum SharePreparation {
     /// by one at a time.
     static func photoPageLoader(_ url: URL) -> UIImage? { PhotoPage.page(at: url) }
 
-    static func prepare(_ inputs: [SharedInput], capturedAt: Date,
+    /// `combinePhotos: false` leaves the photos in `pendingPhotos` for the
+    /// caller to combine a page at a time (`ShareModel`, which says which
+    /// photo it is on); `true` combines them here, in one go.
+    static func prepare(_ inputs: [SharedInput], capturedAt: Date, combinePhotos: Bool = true,
                         photoPage: (URL) -> UIImage? = photoPageLoader(_:)) -> Result {
         var photos: [URL] = []
         var result = Result()
@@ -141,8 +147,22 @@ enum SharePreparation {
         }
         result.photosHandedOver = photos.count
         guard !photos.isEmpty else { return result }
+        guard combinePhotos else {
+            result.pendingPhotos = photos
+            return result
+        }
         let pdf = PDFAssembler.assemble(pageCount: photos.count) { photoPage(photos[$0]) }
-        result.leftOut += photos.count - pdf.pageCount
+        return combined(pdf, into: result, photos: photos.count, capturedAt: capturedAt)
+    }
+
+    /// `result` with the photo PDF of `photos` photos in it: first in the
+    /// list, every too-large file one place down, the photos the PDF could
+    /// not encode counted out. A PDF with no page adds nothing.
+    static func combined(_ pdf: (data: Data, pageCount: Int), into result: Result, photos: Int,
+                         capturedAt: Date) -> Result {
+        var result = result
+        result.pendingPhotos = []
+        result.leftOut += photos - pdf.pageCount
         guard pdf.pageCount > 0 else { return result }
         result.photoPages = pdf.pageCount
         result.files.insert(PreparedShare(data: pdf.data, fileName: photosTitle(capturedAt: capturedAt),

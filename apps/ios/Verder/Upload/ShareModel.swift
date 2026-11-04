@@ -102,12 +102,27 @@ final class ShareModel {
     }
 
     struct Progress: Equatable {
-        /// The file now being sent, from 1.
+        enum Stage: Equatable {
+            /// The photos are being combined into the one PDF: `current` is
+            /// the photo under way, `total` the photos.
+            case combining
+            /// The files are being sent: `current` is the file under way.
+            case sending
+        }
+
+        /// The file (or, combining, the photo) now under way, from 1.
         let current: Int
         let total: Int
         let finished: Int
+        var stage: Stage = .sending
 
-        var label: String { total == 1 ? Copy.sending : "\(Copy.sending) · bestand \(current) van \(total)" }
+        /// `PDF maken · foto 2 van 3`, then `Versturen` (`· bestand 2 van 3` for several).
+        var label: String {
+            switch stage {
+            case .combining: "\(Copy.combining) · foto \(current) van \(total)"
+            case .sending: total == 1 ? Copy.sending : "\(Copy.sending) · bestand \(current) van \(total)"
+            }
+        }
         /// Half a file for the one under way, so the bar moves while it goes.
         var fraction: Double { total == 0 ? 0 : min(1, (Double(finished) + 0.5) / Double(total)) }
     }
@@ -121,6 +136,7 @@ final class ShareModel {
         static let done = "Klaar"
         static let retry = "Opnieuw proberen"
         static let sending = "Versturen"
+        static let combining = "PDF maken"
         static let explanationLabel = "Waar het heen gaat"
         static let signedOutLabel = "Na het inloggen"
         static let linkLabel = "Wat je deelde · link"
@@ -200,6 +216,20 @@ final class ShareModel {
     private(set) var tooLargeFiles: [SharePreparation.TooLargeFile] = []
     private(set) var links: [String] = []
     private(set) var progress: Progress?
+    /// The photos being combined into the one PDF, a page at a time after
+    /// the share loaded; nil once the PDF is made (or there are no photos).
+    /// Until then the photo PDF in `prepared` is a placeholder with no bytes:
+    /// its pages and size are not stated, because they are not known yet.
+    private(set) var combining: Combining?
+
+    struct Combining: Equatable {
+        /// The photo under way, from 1.
+        let photo: Int
+        let total: Int
+        /// The staged photos the PDF is made of, in order: the photo stack
+        /// draws these until the PDF's own pages exist.
+        let photos: [URL]
+    }
     /// Pages of each prepared PDF, read lazily by PDFKit (nil for other files).
     private var pageCounts: [Int?] = []
     private var loadedCount = 0
@@ -213,6 +243,11 @@ final class ShareModel {
     @ObservationIgnored let sendBound: Duration
     @ObservationIgnored let now: () -> Date
     @ObservationIgnored let writeDrop: DropWriter
+    /// How a staged photo becomes a page (`PhotoPage`).
+    @ObservationIgnored let photoPage: (URL) -> UIImage?
+    /// Awaited before each photo is combined (given its index): gives the run
+    /// loop back so the screen moves and Annuleren answers between pages.
+    @ObservationIgnored let pace: @MainActor (Int) async -> Void
     /// No session in the shared Keychain when the sheet opened: Versturen
     /// reads "Bewaar", writes the drops and makes no attempt.
     let signedOut: Bool
@@ -221,6 +256,8 @@ final class ShareModel {
 
     init(groupDir: URL?, signedOut: Bool = false, sourceApp: String? = nil, sendBound: Duration = .seconds(20),
          now: @escaping () -> Date = { Date() }, writeDrop: @escaping DropWriter = ShareModel.writeDrop,
+         photoPage: @escaping (URL) -> UIImage? = SharePreparation.photoPageLoader(_:),
+         pace: @escaping @MainActor (Int) async -> Void = { _ in await Task.yield() },
          sender: @escaping Sender) {
         self.groupDir = groupDir
         self.signedOut = signedOut
@@ -228,6 +265,8 @@ final class ShareModel {
         self.sendBound = sendBound
         self.now = now
         self.writeDrop = writeDrop
+        self.photoPage = photoPage
+        self.pace = pace
         self.sender = sender
     }
 
@@ -290,12 +329,70 @@ final class ShareModel {
 
     /// The share sheet's items, loaded: one input per item loaded, an item
     /// that could not be read included as `.unreadable`. More than
-    /// `maxItems` keeps the first ten.
+    /// `maxItems` keeps the first ten. Photos are combined into their PDF
+    /// afterwards, a page at a time (`combining`), so the screen is up and
+    /// Annuleren answers while a ten-photo share is still being made.
     func loaded(_ inputs: [SharedInput]) {
         if handedOver < inputs.count { handedOver = inputs.count }
         let kept = Array(inputs.prefix(Self.maxItems))
         loadedCount = kept.count
-        let result = SharePreparation.prepare(kept, capturedAt: now())
+        let capturedAt = now()
+        let result = SharePreparation.prepare(kept, capturedAt: capturedAt, combinePhotos: false, photoPage: photoPage)
+        combineGeneration += 1
+        combining = nil
+        let photos = result.pendingPhotos
+        guard !photos.isEmpty else {
+            apply(result)
+            phase = restingPhase
+            return
+        }
+        combining = Combining(photo: 1, total: photos.count, photos: photos)
+        var placeholder = SharePreparation.combined((Data(), photos.count), into: result, photos: photos.count,
+                                                    capturedAt: capturedAt)
+        placeholder.photoPages = 0
+        apply(placeholder)
+        phase = restingPhase
+        let generation = combineGeneration
+        combineTask = Task { @MainActor in
+            guard let builder = PDFAssembler.Builder() else {
+                self.combined((Data(), 0), into: result, photos: photos.count, capturedAt: capturedAt)
+                return
+            }
+            for (index, url) in photos.enumerated() {
+                guard generation == self.combineGeneration else { return }
+                self.combining = Combining(photo: index + 1, total: photos.count, photos: photos)
+                if self.phase == .saving { self.progress = self.combiningProgress }
+                await self.pace(index)
+                guard generation == self.combineGeneration else { return }
+                builder.add { self.photoPage(url) }
+            }
+            guard generation == self.combineGeneration else { return }
+            self.combined(builder.finish(), into: result, photos: photos.count, capturedAt: capturedAt)
+        }
+    }
+
+    @ObservationIgnored private var combineTask: Task<Void, Never>?
+    @ObservationIgnored private var combineGeneration = 0
+
+    /// Waits until the photo PDF is made (at once when there is none).
+    func photosCombined() async {
+        await combineTask?.value
+    }
+
+    private func combined(_ pdf: (data: Data, pageCount: Int), into base: SharePreparation.Result, photos: Int,
+                          capturedAt: Date) {
+        combining = nil
+        apply(SharePreparation.combined(pdf, into: base, photos: photos, capturedAt: capturedAt))
+        // Waiting for Versturen, the screen follows; once it runs, `commit` decides.
+        if phase == .ready { phase = restingPhase }
+    }
+
+    private var combiningProgress: Progress? {
+        combining.map { Progress(current: $0.photo, total: $0.total, finished: $0.photo - 1, stage: .combining) }
+    }
+
+    /// Takes `result` as what the share is (the phase is the caller's).
+    private func apply(_ result: SharePreparation.Result) {
         // A file that grew past the limit while it was copied is left out too.
         var files: [PreparedShare] = []
         var tooLarge = result.tooLargeFiles
@@ -317,15 +414,14 @@ final class ShareModel {
             if index == 0, result.photoPages > 0 { return result.photoPages }
             return Self.pageCount(file)
         }
-        if !prepared.isEmpty {
-            phase = .ready
-        } else if !tooLargeFiles.isEmpty {
-            phase = .refused(.tooLarge)
-        } else if let link = links.first, leftOut == 0 {
-            phase = .refused(.link(Self.displayLink(link)))
-        } else {
-            phase = .refused(kept.isEmpty ? .nothing : .unreadable)
-        }
+    }
+
+    /// The phase the share's content calls for before Versturen.
+    private var restingPhase: Phase {
+        if !prepared.isEmpty { return .ready }
+        if !tooLargeFiles.isEmpty { return .refused(.tooLarge) }
+        if let link = links.first, leftOut == 0 { return .refused(.link(Self.displayLink(link))) }
+        return .refused(loadedCount == 0 ? .nothing : .unreadable)
     }
 
     static func pageCount(_ file: PreparedShare) -> Int? {
@@ -350,7 +446,11 @@ final class ShareModel {
     // MARK: - What the screen says
 
     /// The photo PDF, when the share made one: always the first file.
-    var hasPhotoPDF: Bool { photoPages > 0 && !prepared.isEmpty }
+    var hasPhotoPDF: Bool { photoCount > 0 && !prepared.isEmpty }
+
+    /// The photos in the photo PDF: while it is being made, the photos it is
+    /// made of; after, the pages actually in it.
+    private var photoCount: Int { combining?.total ?? photoPages }
 
     var title: String {
         prepared.count == 1 ? prepared[0].fileName : "\(prepared.count) bestanden"
@@ -363,14 +463,15 @@ final class ShareModel {
         let file = prepared[index]
         var parts: [String] = []
         if index == 0, hasPhotoPDF {
-            parts.append("PDF van \(Copy.photos(photoPages))")
+            parts.append("PDF van \(Copy.photos(photoCount))")
         } else {
             parts.append(Self.kind(file.fileName))
         }
         if let pages = pageCounts.indices.contains(index) ? pageCounts[index] : nil {
             parts.append(Copy.pages(pages))
         }
-        parts.append(Self.size(file.byteCount))
+        // A photo PDF still being made has no size yet; none is invented.
+        if !(index == 0 && hasPhotoPDF && combining != nil) { parts.append(Self.size(file.byteCount)) }
         return parts
     }
 
@@ -383,6 +484,8 @@ final class ShareModel {
             let kind = index == 0 && hasPhotoPDF ? "PDF" : Self.kind(file.fileName)
             if !kinds.contains(kind) { kinds.append(kind) }
         }
+        // No total while the photo PDF is being made: it would leave it out.
+        guard combining == nil else { return kinds }
         return kinds + ["samen \(Self.size(prepared.reduce(0) { $0 + $1.byteCount }))"]
     }
 
@@ -435,7 +538,7 @@ final class ShareModel {
     var photoBadge: String? {
         guard hasPhotoPDF else { return nil }
         if isCut { return "foto 1–\(loadedCount) van \(handedOver)" }
-        return Copy.photos(photoPages)
+        return Copy.photos(photoCount)
     }
 
     /// More was handed over than `maxItems`.
@@ -522,7 +625,7 @@ final class ShareModel {
     /// "Pagina's in de volgorde waarin je ze koos." under a photo PDF of
     /// more than one page (not when the share was cut: the notice speaks).
     var orderNote: String? {
-        hasPhotoPDF && photoPages > 1 && !isCut && phase != .saving ? "Pagina's in de volgorde waarin je ze koos." : nil
+        hasPhotoPDF && photoCount > 1 && !isCut && phase != .saving ? "Pagina's in de volgorde waarin je ze koos." : nil
     }
 
     var canSend: Bool { phase == .ready }
@@ -578,6 +681,18 @@ final class ShareModel {
         }
         guard let groupDir else { phase = .refused(.noGroup); return }
         phase = .saving
+        if combining != nil, let task = combineTask {
+            // Versturen during the photo PDF: it is finished first, and the
+            // caption says which photo it is on.
+            progress = combiningProgress
+            await task.value
+            guard !prepared.isEmpty else {
+                // No photo could be made into a page, and nothing else came.
+                progress = nil
+                phase = restingPhase
+                return
+            }
+        }
         progress = Progress(current: 1, total: prepared.count, finished: 0)
         var ids: [UUID] = []
         do {
