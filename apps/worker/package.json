@@ -38,7 +38,11 @@
     "briefs-store": "tsx src/ops/briefs-store.ts",
     "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts",
     "export-docmeta-samples": "tsx src/ops/export-docmeta-samples.ts",
-    "weekly-summary": "tsx src/ops/weekly-summary.ts"
+    "weekly-summary": "tsx src/ops/weekly-summary.ts",
+    "grip-tools": "tsx src/ops/grip-tools.ts",
+    "requests-pending": "tsx src/ops/requests-pending.ts",
+    "requests-store": "tsx src/ops/requests-store.ts",
+    "requests-dry-run": "tsx src/ops/requests-dry-run.ts"
   },
   "dependencies": {
     "pg-boss": "^10.1.5",

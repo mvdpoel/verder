@@ -3,7 +3,7 @@ import { schema, type Db } from "@grip/db";
 import { ingestDocument } from "@grip/api/src/routers/documents";
 import { storeFile } from "@grip/api/src/storage";
 import { markBriefPending } from "./briefs/mark";
-import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@grip/api/src/worker-names";
+import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME, REQUEST_RUNNER_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";
@@ -284,7 +284,11 @@ export function retryAfterFrom(err: unknown): Date | null {
  * every path that calls the Gmail API on Martin's account. One account, one
  * user-rate limit — a 429 hit by ANY of them is a deadline for ALL of them.
  */
-export const GMAIL_RATE_LIMIT_WORKERS = ["gmail", PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME] as const;
+export const GMAIL_RATE_LIMIT_WORKERS = [
+  "gmail", PROPOSAL_SEND_WORKER_NAME, MAIL_AGENT_WORKER_NAME,
+  // Vraag Grip: grip-tools' live Gmail search/read records a 429 on this name.
+  REQUEST_RUNNER_WORKER_NAME,
+] as const;
 
 /**
  * The latest still-future retry instant any Gmail path recorded, or null.

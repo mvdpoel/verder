@@ -25,7 +25,9 @@ import {
 export type NotifyLevel = "time-sensitive" | "active" | "passive";
 export type NotifyKind =
   | "verder-mail" | "creditor-mail" | "proposal" | "reminder" | "follow-up"
-  | "task-due" | "filing" | "system" | "weekly";
+  | "task-due" | "filing" | "system" | "weekly"
+  // Vraag Grip: an answered request. Fixed text only — never the question.
+  | "request";
 
 export interface NotifyInput {
   kind: NotifyKind; level: NotifyLevel; title: string; body: string;
@@ -84,6 +86,7 @@ export const CATEGORY: Record<NotifyKind, string> = {
   filing: "FILING",
   system: "SYSTEM",
   weekly: "WEEKLY",
+  request: "REQUEST",
 };
 
 /**
