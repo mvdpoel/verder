@@ -1,0 +1,351 @@
+import Foundation
+
+/// The words of the Voor jou tab (Figma "voorjou · final").
+enum VoorJouCopy {
+    static let title = "Voor jou"
+    static let select = "Selecteer"
+    static let cancel = "Annuleer"
+    static let nuNote = "Alleen suggesties kun je samen afhandelen. Voorstellen, vragen en taken beslis je één voor één."
+    static let emptyHeadline = "Niets wacht op je"
+    static let emptyLater = "Komt er iets nieuws binnen, dan krijg je een melding."
+    static let onlyOne = "Meer wacht er nu niet op je."
+    static let retry = "Opnieuw proberen"
+    static let readOnly = "alleen lezen · offline"
+    static let offlineLabel = "offline"
+    static let offlineBody = "Je ziet je laatste stand. Goedkeuren en afronden kan weer zodra je verbinding hebt."
+    static let failureLabel = "storing"
+    static let failureBody = "De server van verder heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan."
+    static let failedHeadline = "Voor jou laadt nu niet"
+    static let failedServer = "De server van verder heeft een storing. Er is niets verloren gegaan."
+    static let failedOffline = "Er is geen verbinding. Zodra die er weer is, haalt verder je lijst op. Er is niets verloren gegaan."
+    static let sendOnlyInProposal = "Versturen kan alleen in het voorstel zelf, met Face\u{00A0}ID."
+    static let offlineMenu = "Offline: beslissen kan weer zodra je verbinding hebt."
+    static let view = "Bekijken"
+    static let undo = "Ongedaan maken"
+    static let notSaved = "niet opgeslagen"
+}
+
+/// What the list draws, decided outside the view so it is testable.
+///
+/// THE PHONE NEVER RE-RANKS: rows come in exactly the server's order
+/// (`waitingOnMartin` in packages/api/src/waiting.ts), and the split into Nu
+/// and Kan wachten moves nothing, because that order already puts every
+/// proposal and question before every suggestion, task and stop.
+///
+/// AMBER MEANS WAITING ON MARTIN NOW: the dot sits on the Nu rows (proposals
+/// and questions) and beside the header's count, never on its own without
+/// words. "Door verder gedaan" is what verder already did: never amber.
+enum VoorJouList {
+    static let emptyText = "Niets wacht op je."
+    /// A long section shows this many rows, then "Toon alle N" (brief §3).
+    static let sectionLimit = 20
+
+    enum SectionKind: String, Sendable { case nu, kanWachten }
+
+    struct Row: Identifiable, Equatable {
+        let item: WaitingItem
+        let route: InboxRoute?
+        let amber: Bool
+        var id: String { VoorJouList.key(item) }
+        var section: SectionKind { VoorJouList.section(item.kind) }
+        /// A suggestion the server says can be approved unchanged.
+        var approvable: Bool { item.kind == .suggestion && item.approvable == true }
+        /// The statuses a task may move to from here (the server's `validNext`).
+        var taskNext: [String] { item.kind == .task ? (item.validNext ?? []) : [] }
+        var canDone: Bool { taskNext.contains("done") }
+        /// Suggestions only: proposals, questions and tasks are decided one at a time.
+        var selectable: Bool { item.kind == .suggestion }
+    }
+
+    struct Section: Identifiable, Equatable {
+        let kind: SectionKind
+        /// The rows drawn: the first `sectionLimit` unless expanded.
+        let rows: [Row]
+        /// Every row of this section on the list.
+        let total: Int
+        var id: SectionKind { kind }
+        var truncated: Bool { rows.count < total }
+        var label: String { kind == .nu ? "nu" : "kan wachten" }
+    }
+
+    struct DoneRow: Identifiable, Equatable {
+        let action: VerderAction
+        let amber: Bool
+        var id: String { action.id }
+    }
+
+    /// The row's identity, also the key a held decision hides it by.
+    static func key(_ item: WaitingItem) -> String { "\(item.kind.rawValue):\(item.id)" }
+
+    static func section(_ kind: WaitingKind) -> SectionKind {
+        switch kind {
+        case .proposal, .question: .nu
+        case .suggestion, .task, .stop, .other: .kanWachten
+        }
+    }
+
+    static func rows(_ inbox: InboxDTO, hiding hidden: Set<String> = []) -> [Row] {
+        inbox.items
+            .filter { !hidden.contains(key($0)) }
+            .map { Row(item: $0, route: InboxRoute($0), amber: section($0.kind) == .nu) }
+    }
+
+    /// Nu, then Kan wachten, each in the server's order; an empty section is
+    /// not drawn. ONLY Kan wachten is ever cut short: a limit never hides
+    /// something that waits on Martin now.
+    static func sections(_ inbox: InboxDTO, hiding hidden: Set<String> = [], expanded: Bool = false) -> [Section] {
+        let all = rows(inbox, hiding: hidden)
+        return [SectionKind.nu, .kanWachten].compactMap { kind in
+            let mine = all.filter { $0.section == kind }
+            guard !mine.isEmpty else { return nil }
+            let shown = kind == .nu || expanded ? mine : Array(mine.prefix(sectionLimit))
+            return Section(kind: kind, rows: shown, total: mine.count)
+        }
+    }
+
+    /// The header's number: the SERVER's count, less only the decisions the
+    /// phone is holding in their undo window (they are gone from the list,
+    /// and the count follows them down; an undo puts both back).
+    static func count(_ inbox: InboxDTO, hidden: Int) -> Int { max(0, inbox.count - hidden) }
+
+    static func doneRows(_ inbox: InboxDTO) -> [DoneRow] {
+        inbox.doneByVerder.map { DoneRow(action: $0, amber: false) }
+    }
+
+    static func kindLabel(_ kind: WaitingKind) -> String {
+        KindLabel.dutch(kind.rawValue)
+    }
+
+    /// The list's own word for a kind: the frames call the map's stop a "halte".
+    static func rowKindLabel(_ kind: WaitingKind) -> String {
+        kind == .stop ? "halte" : kindLabel(kind)
+    }
+
+    // MARK: - Header
+
+    /// "wacht op jou" for one, "wachten op jou" for the rest (zero included).
+    static func countCaption(_ n: Int) -> String { n == 1 ? "wacht op jou" : "wachten op jou" }
+    static func countLine(_ n: Int) -> String { "\(n) \(countCaption(n))" }
+
+    /// "MAANDAG 2 NOV".
+    static func eyebrow(_ now: Date) -> String { HomeSummary.longDay(now).uppercased() }
+
+    /// How fresh the list is: "bijgewerkt 14:02"; offline "offline ·
+    /// bijgewerkt 14:02"; after a server failure "laatste stand 14:02" (the
+    /// stand on screen is the last good one, not a current one).
+    static func freshness(now: Date, fetchedAt: Date?, error: APIError?) -> String? {
+        guard let fetchedAt else { return nil }
+        let stand = HomeSummary.stamp(fetchedAt, now: now)
+        switch error {
+        case nil, .unauthorized?: return "bijgewerkt \(stand)"
+        case .transport?: return "offline · bijgewerkt \(stand)"
+        default: return "laatste stand \(stand)"
+        }
+    }
+
+    /// The card above a kept list; nil when the list is current.
+    enum Notice: Equatable { case offline, failure }
+
+    static func notice(_ error: APIError?, hasList: Bool) -> Notice? {
+        guard hasList, let error, error != .unauthorized else { return nil }
+        if case .transport = error { return .offline }
+        return .failure
+    }
+
+    /// "laatste poging 14:02 · serverfout 502" under the no-list failure.
+    static func lastAttempt(_ error: APIError, attemptedAt: Date?, now: Date) -> String {
+        let cause: String = switch error {
+        case .transport: "offline"
+        case .server(let code), .rejected(let code): "serverfout \(code)"
+        case .rateLimited: "te veel verzoeken"
+        case .unauthorized: "niet ingelogd"
+        }
+        guard let attemptedAt else { return cause }
+        return "laatste poging \(HomeSummary.stamp(attemptedAt, now: now)) · \(cause)"
+    }
+
+    /// "Goed bezig. Je rondde zaterdag 31 okt het laatste af. Komt er …"; the
+    /// middle sentence only when the server said when.
+    static func emptyBody(lastClearedAt: Date?, now: Date) -> String {
+        guard let at = lastClearedAt else { return "Goed bezig. \(VoorJouCopy.emptyLater)" }
+        let when: String
+        switch age(at, now: now) {
+        case "vandaag": when = "vandaag"
+        case "gisteren": when = "gisteren"
+        default:
+            let wd = HomeSummary.calendar.component(.weekday, from: at)
+            when = "\(HomeSummary.weekdaysLong[wd - 1]) \(HomeSummary.day(at))"
+        }
+        return "Goed bezig. Je rondde \(when) het laatste af. \(VoorJouCopy.emptyLater)"
+    }
+
+    /// "0 wachten · bijgewerkt 14:02".
+    static func emptyReadout(_ freshness: String?) -> String {
+        ["0 wachten", freshness].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    // MARK: - Rows
+
+    /// The age column: "vandaag", "gisteren", else "31 okt" — the item's
+    /// `at` on Amsterdam's calendar, worked out against `now` on display.
+    static func age(_ date: Date, now: Date) -> String {
+        let cal = HomeSummary.calendar
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: date), to: cal.startOfDay(for: now)).day ?? 0
+        switch days {
+        case 0: return "vandaag"
+        case 1: return "gisteren"
+        default: return HomeSummary.day(date)
+        }
+    }
+
+    /// A `dueAt` as an Amsterdam day: a plain "2026-11-07" or an ISO instant.
+    static func dueDay(_ s: String) -> Date? {
+        let cal = HomeSummary.calendar
+        let plain = s.split(separator: "-", omittingEmptySubsequences: false)
+        if plain.count == 3, plain[0].count == 4, plain[1].count == 2, plain[2].count == 2,
+           let y = Int(plain[0]), let m = Int(plain[1]), let d = Int(plain[2]) {
+            return cal.date(from: DateComponents(year: y, month: m, day: d))
+        }
+        return parseISODate(s).map { cal.startOfDay(for: $0) }
+    }
+
+    /// "uiterlijk vandaag", "uiterlijk morgen", else "uiterlijk 7 nov".
+    static func deadline(_ dueAt: String?, now: Date) -> String? {
+        guard let dueAt, let due = dueDay(dueAt) else { return nil }
+        let cal = HomeSummary.calendar
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: due).day ?? 0
+        switch days {
+        case 0: return "uiterlijk vandaag"
+        case 1: return "uiterlijk morgen"
+        default: return "uiterlijk \(HomeSummary.day(due))"
+        }
+    }
+
+    /// The meta line's parts before the age: kind, then who (the server's
+    /// subtitle) or, for a task, its deadline; a stop says how many tasks
+    /// hang off it when the server says so.
+    static func meta(_ item: WaitingItem, now: Date) -> [String] {
+        var parts = [rowKindLabel(item.kind)]
+        switch item.kind {
+        case .stop:
+            if let n = item.taskCount, n > 0 { parts.append(n == 1 ? "1 taak" : "\(n) taken") }
+        default:
+            if let who = item.subtitle, !who.isEmpty { parts.append(who) }
+            if let due = deadline(item.dueAt, now: now) { parts.append(due) }
+        }
+        return parts
+    }
+
+    /// The symbol in the row's gutter, by kind (and, for a suggestion, by the
+    /// server's subtitle, which names what it suggests).
+    static func symbol(_ item: WaitingItem) -> String {
+        switch item.kind {
+        case .proposal: "arrowshape.turn.up.left"
+        case .question: "questionmark.bubble"
+        case .task: "checkmark.circle"
+        case .stop: "smallcircle.filled.circle"
+        case .other: "circle.dashed"
+        case .suggestion:
+            switch item.subtitle {
+            case "Document"?: "doc.text"
+            case "Vaste last"?: "repeat"
+            case "Vordering"?: "eurosign.circle"
+            case "Taak"?: "checklist"
+            default: "book.closed"
+            }
+        }
+    }
+
+    /// A title that is a file name ("Loonstrook.2026-10.….pdf") is cut in the
+    /// middle, so its date and extension stay; prose is cut at its end.
+    static func looksLikeFileName(_ title: String) -> Bool {
+        title.range(of: #"^\S+\.[A-Za-z0-9]{2,4}$"#, options: .regularExpression) != nil
+    }
+
+    /// One row, read whole: kind, title, who, "wacht op jou", age.
+    static func accessibilityLabel(_ item: WaitingItem, now: Date) -> String {
+        var parts = [HomeSummary.sentence(rowKindLabel(item.kind)), item.title]
+        parts += meta(item, now: now).dropFirst()
+        parts += ["wacht op jou", age(item.at, now: now)]
+        return parts.joined(separator: ", ")
+    }
+
+    // MARK: - Selection
+
+    /// "a, b en c".
+    static func listing(_ titles: [String]) -> String {
+        guard titles.count > 1 else { return titles.first ?? "" }
+        return titles.dropLast().joined(separator: ", ") + " en " + (titles.last ?? "")
+    }
+
+    static func confirmTitle(_ n: Int) -> String { n == 1 ? "1 suggestie goedkeuren?" : "\(n) suggesties goedkeuren?" }
+
+    /// Names EVERY item it will approve, and says how long the undo lasts.
+    static func confirmMessage(_ titles: [String], window: TimeInterval) -> String {
+        "\(listing(titles)). Daarna heb je \(Int(window)) seconden om het ongedaan te maken."
+    }
+
+    static func selectedLine(_ n: Int) -> String { "\(n) geselecteerd" }
+    static func allHere(_ n: Int) -> String { "Alle \(n) hier" }
+    static func approveMany(_ n: Int) -> String { "Keur \(n) goed" }
+    static func rejectMany(_ n: Int) -> String { "Niet relevant (\(n))" }
+    static func suggestionsCount(_ n: Int) -> String { n == 1 ? "1 suggestie" : "\(n) suggesties" }
+}
+
+/// "Door verder gedaan" as the list draws it (Figma "voorjou · final"):
+/// a sentence per action, its soort or "hernoemd" and the day underneath.
+enum DoneByVerderList {
+    /// The model's English soort vocabulary in the app's Dutch; a soort
+    /// Martin typed himself is already Dutch and passes through.
+    static func soort(_ docType: String?) -> String? {
+        guard let t = docType?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil }
+        switch t {
+        case "bank-statement": return "bankafschrift"
+        case "letter": return "brief"
+        case "payslip": return "loonstrook"
+        case "invoice": return "factuur"
+        case "contract": return "contract"
+        case "id-document": return "identiteitsbewijs"
+        case "other": return "overig"
+        default: return t.lowercased()
+        }
+    }
+
+    /// "Opgeborgen als bankafschrift: Afschrift september",
+    /// "Hernoemd: Scan 2026-10-30 → Brief Gemeente Westerlaan 30 okt".
+    static func title(_ a: VerderAction) -> String {
+        let doc = a.documentTitle ?? a.after.title ?? "Document"
+        switch a.kind {
+        case "auto-file":
+            if let s = soort(a.after.docType) { return "Opgeborgen als \(s): \(doc)" }
+            return "Opgeborgen: \(doc)"
+        case "auto-name":
+            if let before = a.before.title, let after = a.after.title, before != after {
+                return "Hernoemd: \(before) → \(after)"
+            }
+            return "Hernoemd: \(doc)"
+        default:
+            return "\(DoneByVerderCopy.headline(a)): \(doc)"
+        }
+    }
+
+    /// "BANKAFSCHRIFT · 30 OKT" / "HERNOEMD · 30 OKT".
+    static func meta(_ a: VerderAction) -> [String] {
+        let what = a.kind == "auto-name" ? "hernoemd" : (soort(a.after.docType) ?? "opgeborgen")
+        return [what, HomeSummary.day(a.at)]
+    }
+
+    /// Why there is no undo button, in the list's words.
+    static func note(_ a: VerderAction) -> String? {
+        if !a.undone, a.notUndoableReason == "naam staat ook op de NAS" {
+            return "Hier niet terug te draaien: de naam staat ook op de NAS. Terugdraaien gaat op de server."
+        }
+        return DoneByVerderCopy.note(a)
+    }
+
+    /// The collapsed section's sentence (and the empty list's).
+    static func summary(_ n: Int) -> String {
+        let what = n == 1 ? "1 ding deed verder deze week zelf." : "\(n) dingen deed verder deze week zelf."
+        return "\(what) Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
+    }
+}

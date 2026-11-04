@@ -16,8 +16,8 @@ struct FixtureTests {
         "calm", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
-        "timeline-vier", "unauthorized", "voice", "voorjou-few",
-        "voorjou-long", "voorjou-many", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
+        "timeline-vier", "unauthorized", "voice", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-lang",
+        "voorjou-leeg", "voorjou-long", "voorjou-many", "voorjou-offline", "voorjou-storing", "voorjou-veel", "voorjou-vijf", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
         "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
@@ -43,7 +43,8 @@ struct FixtureTests {
 
     nonisolated static var fileFixtures: [String] {
         expectedNames.filter { !["offline", "unauthorized", "loading", "server-error", "weekly-loading",
-                                "timeline-fout", "timeline-offline"].contains($0) }
+                                "timeline-fout", "timeline-offline", "voorjou-fout", "voorjou-offline",
+                                "voorjou-storing"].contains($0) }
     }
 
     // MARK: - The set

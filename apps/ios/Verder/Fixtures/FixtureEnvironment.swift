@@ -129,6 +129,12 @@ enum FixtureEnvironment {
         }
         let weeklyDir = URL.temporaryDirectory.appending(path: "verder-fixture-weekly", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: weeklyDir)
+        let inboxDir = URL.temporaryDirectory.appending(path: "verder-fixture-inbox", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: inboxDir)
+        if let at = server.manifest.inboxCachedAt, let data = server.body("inbox"),
+           let inbox = try? APIClient.jsonDecoder.decode(InboxDTO.self, from: data) {
+            try? InboxCache(dir: inboxDir).save(.init(savedAt: at, inbox: inbox))
+        }
 
         var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(state: launch.pushPrePrompt ? .notDetermined : launch.push ?? .allowed), registerRemote: {},
@@ -141,6 +147,7 @@ enum FixtureEnvironment {
                            transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
                            now: clock(keptAt: server.manifest.keptAt, today: server.manifest.today))
         services.weeklyDir = weeklyDir
+        services.inboxDir = inboxDir
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
         return services
     }

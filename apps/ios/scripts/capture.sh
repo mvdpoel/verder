@@ -6,6 +6,7 @@
 #                      [--push <denied|notDetermined>] [--more <signout|savefail>]
 #                      [--timeline <state[,state…]>] [--tap <label>]
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
+#                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
@@ -62,6 +63,12 @@
 #            or tab overzicht with "overzicht"): verborgen | sheet | end |
 #            overzicht | dicht (the raised sheet closed again) |
 #            scroll:<stop id> | stop:<stop id>, comma-separated
+#   --voorjou  Voor jou in a state only a gesture reaches (tab voorjou):
+#            toast | twee | nietopgeslagen | selecteren | bevestigen | gedaan |
+#            ongedaan | scroll:<row key|done|more>, comma-separated
+#   --swipe  drag the row whose text reads exactly <text> part-way to the
+#            right (its leading action) or left (its trailing one) and shoot
+#            it held open; runs through the VerderCapture UI test, as --press does
 #   --tap    tap the BUTTON whose accessibility label is exactly <label> and
 #            shoot what it opens (the Tijdlijn's filter menu: --tap Filter);
 #            runs through the VerderCapture UI test, as --press does
@@ -94,7 +101,7 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -156,6 +163,18 @@ while [ $# -gt 0 ]; do
     --tap)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
       TAP="$2"
+      shift ;;
+    --voorjou)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      for v in ${2//,/ }; do
+        case "$v" in toast|twee|nietopgeslagen|selecteren|bevestigen|gedaan|ongedaan|scroll:?*) ;;
+          *) echo "capture.sh: --voorjou takes toast, twee, nietopgeslagen, selecteren, bevestigen, gedaan, ongedaan or scroll:<key>" >&2; exit 2 ;; esac
+      done
+      VOORJOU="$2"
+      shift ;;
+    --swipe)
+      [ $# -ge 2 ] || usage
+      case "$2" in ?*:left|?*:right) SWIPE="$2" ;; *) echo "capture.sh: --swipe takes <text>:left or <text>:right" >&2; exit 2 ;; esac
       shift ;;
     --timeline)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
@@ -221,11 +240,14 @@ fi
 [ -z "$PUSH" ] || ARGS+=(-fixtures-push "$PUSH")
 [ -z "$MORE" ] || ARGS+=(-fixtures-more "$MORE")
 [ -z "$TIMELINE" ] || ARGS+=(-fixtures-timeline "$TIMELINE")
+[ -z "$VOORJOU" ] || ARGS+=(-fixtures-voorjou "$VOORJOU")
 [ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
 [ -z "$COVER" ] || ARGS+=(-fixtures-cover)
 [ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)
 [ -z "$MIC" ] || ARGS+=(-fixtures-mic "$MIC")
-[ -z "$PRESS" ] || [ -z "$TAP" ] || { echo "capture.sh: --press and --tap are one gesture each; pick one" >&2; exit 2; }
+GESTURES=0
+for g in "$PRESS" "$TAP" "$SWIPE"; do [ -z "$g" ] || GESTURES=$((GESTURES + 1)); done
+[ "$GESTURES" -le 1 ] || { echo "capture.sh: --press, --tap and --swipe are one gesture each; pick one" >&2; exit 2; }
 if [ -n "$FACEID" ]; then
   [ -n "$LOCKED" ] || { echo "capture.sh: --faceid needs --locked" >&2; exit 2; }
   ARGS+=(-fixtures-faceid "$FACEID")
@@ -258,18 +280,18 @@ fi
 restore_size() { [ -z "$TEXT_SIZE" ] || xcrun simctl ui "$UDID" content_size "${PREV_SIZE:-large}" 2>/dev/null || true; }
 trap restore_size EXIT
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
-if [ -n "$PRESS" ] || [ -n "$TAP" ]; then
+if [ -n "$PRESS" ] || [ -n "$TAP" ] || [ -n "$SWIPE" ]; then
   # The UI test launches the app with these arguments, presses, and writes
   # the PNG itself; it fails (and writes nothing) if the text is not on screen.
   ALL_ARGS=(-fixtures "$FIXTURE" "${ARGS[@]}")
   mkdir -p "$(dirname "$OUT")"
   rm -f "$OUT.partial.png"
   TEST_RUNNER_CAPTURE_ARGS="$(printf '%s\n' "${ALL_ARGS[@]}")" TEST_RUNNER_CAPTURE_PRESS="$PRESS" \
-    TEST_RUNNER_CAPTURE_TAP="$TAP" \
+    TEST_RUNNER_CAPTURE_TAP="$TAP" TEST_RUNNER_CAPTURE_SWIPE="$SWIPE" \
     TEST_RUNNER_CAPTURE_OUT="$OUT.partial.png" \
     env -u NODE_ENV xcodebuild test -scheme VerderCapture -destination "id=$UDID" \
     -derivedDataPath build/DD -quiet >/dev/null \
-    || { echo "capture.sh: the --press/--tap capture failed — not writing $OUT." >&2; rm -f "$OUT.partial.png"; exit 1; }
+    || { echo "capture.sh: the --press/--tap/--swipe capture failed — not writing $OUT." >&2; rm -f "$OUT.partial.png"; exit 1; }
   [ -s "$OUT.partial.png" ] || { echo "capture.sh: the --press capture wrote no PNG." >&2; exit 1; }
   mv -f "$OUT.partial.png" "$OUT"
   echo "$OUT"

@@ -115,27 +115,154 @@ final class DoneByVerderModel {
     }
 }
 
-/// "Door verder gedaan" under Voor jou: collapsed, never amber. What verder
-/// already did is there to check, not waiting on Martin.
-struct DoneByVerderSection: View {
+/// "Door verder gedaan" at the end of Voor jou: a header that opens it in
+/// place ("BEKIJKEN ›" / "INKLAPPEN ⌄"), and — open — the explanation and
+/// one row per action with its one-tap undo. NEVER AMBER: what verder already
+/// did is there to check, not waiting on Martin. On the empty list the
+/// closed section says in a sentence what is behind it.
+///
+/// The list's undo is HELD like every other decision on it (`InboxDecisions`,
+/// a toast with its own "Ongedaan maken"); the screen of its own posts at once.
+struct DoneByVerderListSection: View {
     let actions: [VerderAction]
-    let model: DoneByVerderModel
-
-    @State private var expanded = false
+    let total: Int
+    @Binding var open: Bool
+    /// The empty list: the closed section says what is behind it.
+    let summary: Bool
+    let ax: Bool
+    let undo: (VerderAction) -> Void
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(actions) { DoneByVerderRow(action: $0, model: model) }
+        Section {
+            Button { open.toggle() } label: { header }
+                .buttonStyle(.plain)
+                .voorJouRow()
+                .accessibilityLabel("\(DoneByVerderCopy.title), \(total)")
+                .accessibilityHint(open ? "Klapt in" : "Klapt open")
+            // At the accessibility sizes the explanation would fill a screen
+            // above the rows it explains; the frame goes straight to them.
+            if (open && !ax) || (summary && !open) {
+                Text(open ? DoneByVerderCopy.explanation : DoneByVerderList.summary(total))
+                    .font(VoorJouMetrics.body)
+                    .foregroundStyle(Color.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 14)
+                    .voorJouRow()
             }
-            .padding(.top, 10)
-        } label: {
-            Text("\(DoneByVerderCopy.title.uppercased()) · \(actions.count)")
-                .font(.mono(11, relativeTo: .caption2, weight: .medium))
-                .foregroundStyle(Color.inkLabel)
+            if open {
+                ForEach(actions) { a in
+                    DoneByVerderListRow(action: a, ax: ax, undo: { undo(a) })
+                        .voorJouRow()
+                        .id(ListDecision.key(verder: a.changeId))
+                }
+            }
         }
-        .tint(Color.inkDim)
-        .padding(.top, 10)
+        .id("done")
+    }
+
+    private var header: some View {
+        let label = HStack(spacing: 8) {
+            Image(systemName: "checkmark.seal").font(.system(size: 12))
+            Text(DoneByVerderCopy.title.uppercased())
+            Text("\(total)").padding(.leading, 4)
+        }
+        .foregroundStyle(Color.inkSoft)
+        let action = HStack(spacing: 4) {
+            Text((open ? "Inklappen" : "Bekijken").uppercased())
+            Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(Color.signal)
+        return Group {
+            if ax {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(DoneByVerderCopy.title.uppercased())\u{00A0}\u{00A0}\(total)").foregroundStyle(Color.inkSoft)
+                    action
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline) { label; Spacer(minLength: 12); action }
+            }
+        }
+        .font(VoorJouMetrics.label)
+        .tracking(VoorJouMetrics.labelTracking)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+}
+
+/// One thing verder did, as the list draws it: the sentence, its soort (or
+/// "hernoemd") and day, and "Ongedaan maken" where the server allows it —
+/// otherwise the server's reason why not.
+struct DoneByVerderListRow: View {
+    let action: VerderAction
+    let ax: Bool
+    let undo: () -> Void
+
+    var body: some View {
+        let a = action
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                if !ax {
+                    Image(systemName: "checkmark.seal")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.inkSoft)
+                        .frame(width: VoorJouMetrics.gutter, alignment: .leading)
+                        .padding(.top, 3)
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(DoneByVerderList.title(a))
+                        .wholeWords(DoneByVerderList.title(a), font: VoorJouMetrics.title)
+                        .lineHeight(.multiple(factor: ax ? 1.15 : VoorJouMetrics.lineFactor))
+                        .foregroundStyle(Color.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if ax {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(DoneByVerderList.meta(a), id: \.self) { Text($0.uppercased()) }
+                        }
+                        .font(VoorJouMetrics.label)
+                        .foregroundStyle(Color.inkLabel)
+                        if a.undoable && !a.undone { undoButton }
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(HomeSummary.metaLine(DoneByVerderList.meta(a).map { $0.uppercased() }))
+                                .font(VoorJouMetrics.label)
+                                .tracking(VoorJouMetrics.metaTracking)
+                                .foregroundStyle(Color.inkLabel)
+                            Spacer(minLength: 0)
+                            if a.undoable && !a.undone { undoButton }
+                        }
+                    }
+                    if !(a.undoable && !a.undone), let note = DoneByVerderList.note(a) {
+                        Text(note)
+                            .font(VoorJouMetrics.body)
+                            .foregroundStyle(Color.inkMute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    }
+                }
+            }
+            .padding(.vertical, 14)
+            RowHairlineShape(leading: ax ? 0 : VoorJouMetrics.gutter)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var undoButton: some View {
+        Button(VoorJouCopy.undo, action: undo)
+            .font(.display(ax ? 17 : 16, relativeTo: .body))
+            .foregroundStyle(Color.signal)
+            .buttonStyle(.borderless)
+    }
+}
+
+/// A hairline from the text's leading edge to the screen's right edge.
+struct RowHairlineShape: View {
+    var leading: CGFloat
+    var body: some View {
+        Rectangle().fill(Color.hairline).frame(height: 1)
+            .padding(.leading, leading)
+            .padding(.trailing, -VoorJouMetrics.margin)
+            .accessibilityHidden(true)
     }
 }
 

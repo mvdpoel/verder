@@ -7,12 +7,23 @@ import XCTest
 /// the one every other capture reaches. Lives in its own scheme
 /// (VerderCapture), never in `Verder`'s test action: it writes a file.
 final class PressCapture: XCTestCase {
+    /// The text itself, or — where a row reads as ONE element (Voor jou's
+    /// rows combine kind, title and age into one sentence) — the element
+    /// whose label holds it.
+    @MainActor
+    private func element(_ app: XCUIApplication, reading text: String) -> XCUIElement {
+        let exact = app.staticTexts[text].firstMatch
+        if exact.waitForExistence(timeout: 6) { return exact }
+        return app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
     @MainActor
     func testPressAndCapture() throws {
         let env = ProcessInfo.processInfo.environment
         let tap = env["CAPTURE_TAP"].flatMap { $0.isEmpty ? nil : $0 }
         let text = env["CAPTURE_PRESS"] ?? ""
-        XCTAssertTrue(tap != nil || !text.isEmpty, "CAPTURE_PRESS or CAPTURE_TAP: the gesture")
+        let swipe = env["CAPTURE_SWIPE"].flatMap { $0.isEmpty ? nil : $0 }
+        XCTAssertTrue(tap != nil || swipe != nil || !text.isEmpty, "CAPTURE_PRESS, CAPTURE_TAP or CAPTURE_SWIPE: the gesture")
         let out = try XCTUnwrap(env["CAPTURE_OUT"], "CAPTURE_OUT: where the PNG goes")
         let args = try XCTUnwrap(env["CAPTURE_ARGS"], "CAPTURE_ARGS: the app's launch arguments")
         let app = XCUIApplication()
@@ -28,7 +39,22 @@ final class PressCapture: XCTestCase {
             try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: out))
             return
         }
-        let target = app.staticTexts[text].firstMatch
+        if let swipe, let colon = swipe.lastIndex(of: ":") {
+            // `--swipe <text>:<left|right>`: drag the row part-way, slowly, so
+            // it stays open on its action instead of completing a full swipe.
+            let label = String(swipe[..<colon])
+            let right = swipe[swipe.index(after: colon)...] == "right"
+            let row = element(app, reading: label)
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "nothing on screen reads '\(label)'")
+            Thread.sleep(forTimeInterval: 2)
+            let start = row.coordinate(withNormalizedOffset: CGVector(dx: right ? 0.1 : 0.8, dy: 0.5))
+            let end = start.withOffset(CGVector(dx: right ? 170 : -200, dy: 0))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 200, thenHoldForDuration: 0.3)
+            Thread.sleep(forTimeInterval: 1.2)
+            try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: out))
+            return
+        }
+        let target = element(app, reading: text)
         XCTAssertTrue(target.waitForExistence(timeout: 10), "nothing on screen reads '\(text)'")
         target.press(forDuration: 1.0)
         // The menu's lift and spring settle well inside a second.

@@ -1,0 +1,18 @@
+{
+  "id": "00000000-f1c5-4000-8000-000000000008",
+  "kind": "document-meta",
+  "status": "pending",
+  "createdAt": "2026-10-30T13:00:00.000Z",
+  "proposed": {
+    "title": "Brief Gemeente Westerlaan over de woonkostentoeslag",
+    "docType": "brief"
+  },
+  "trigger": null,
+  "document": {
+    "id": "00000000-f1c5-4000-8000-200000000408",
+    "title": "Scan 2026-10-30 2",
+    "docType": null,
+    "status": "inbox"
+  },
+  "retrievedRefs": []
+}

@@ -33,6 +33,11 @@ import Foundation
 ///                              verborgen (Schuldeisers verbergen on) · sheet (the NU sheet up) ·
 ///                              scroll:<stop id> (that stop at the top) · stop:<stop id> (its sheet up) ·
 ///                              end (the legend) · overzicht (pushed from Overzicht's headline card)
+///     -fixtures-voorjou <state[,state…]>  Voor jou in a state only a gesture reaches:
+///                              toast (one decision held, "nog 4 s") · twee (two held) ·
+///                              nietopgeslagen (a decision that failed to save) · selecteren ·
+///                              bevestigen ("3 suggesties goedkeuren?") · gedaan ("Door verder
+///                              gedaan" open) · ongedaan (open, an undo held) · scroll:<row key|done|more>
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
 ///             |meer:<account|notifications|widgets|about|developer>>
@@ -145,6 +150,30 @@ struct FixtureLaunch: Equatable, Sendable {
         }
     }
 
+    /// Voor jou's gesture-only states (`-fixtures-voorjou`).
+    enum VoorJouState: Equatable, Sendable {
+        case toast, twee, nietOpgeslagen, selecteren, bevestigen, gedaan, ongedaan
+        /// A row (`VoorJouList.key`, e.g. `task:<id>`), `done` or `more` ("Toon alle") at the top.
+        case scroll(String)
+
+        static let names = ["toast", "twee", "nietopgeslagen", "selecteren", "bevestigen", "gedaan", "ongedaan"]
+
+        static func parse(_ raw: String) -> VoorJouState? {
+            switch raw {
+            case "toast": return .toast
+            case "twee": return .twee
+            case "nietopgeslagen": return .nietOpgeslagen
+            case "selecteren": return .selecteren
+            case "bevestigen": return .bevestigen
+            case "gedaan": return .gedaan
+            case "ongedaan": return .ongedaan
+            default:
+                if raw.hasPrefix("scroll:"), raw.count > "scroll:".count { return .scroll(String(raw.dropFirst("scroll:".count))) }
+                return nil
+            }
+        }
+    }
+
     enum ParseError: Error, Equatable {
         case unknownScroll(String)
         case missingValue(String)
@@ -172,6 +201,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var cover = false
     var pushPrePrompt = false
     var mic: MicState? = nil
+    var voorJou: [VoorJouState] = []
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -248,7 +278,14 @@ struct FixtureLaunch: Equatable, Sendable {
                              mic: try value(after: "-fixtures-mic").map { (raw: String) throws(ParseError) -> MicState in
                                  guard let s = MicState(rawValue: raw) else { throw .unknownValue("-fixtures-mic", raw) }
                                  return s
-                             })
+                             },
+                             voorJou: try (value(after: "-fixtures-voorjou") ?? "").split(separator: ",")
+                                 .map { (raw: Substring) throws(ParseError) -> VoorJouState in
+                                     guard let s = VoorJouState.parse(String(raw)) else {
+                                         throw .unknownValue("-fixtures-voorjou", String(raw))
+                                     }
+                                     return s
+                                 })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

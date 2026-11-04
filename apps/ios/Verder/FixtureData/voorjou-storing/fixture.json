@@ -1,0 +1,9 @@
+{
+  "description": "The Voor jou list kept from Mon 2 nov 14:02 on the phone; the server answers 503 since (cold start).",
+  "statuses": {
+    "inbox": 503,
+    "dashboard/summary": 503
+  },
+  "inboxCachedAt": "2026-11-02T13:02:00Z",
+  "today": "2026-11-02T13:30:00Z"
+}

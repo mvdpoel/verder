@@ -1,0 +1,8 @@
+{
+  "description": "No list on the phone and the server answers 502 on Mon 2 nov 14:02: nothing to show but the failure.",
+  "statuses": {
+    "inbox": 502,
+    "dashboard/summary": 502
+  },
+  "today": "2026-11-02T13:02:00Z"
+}

@@ -94,10 +94,14 @@ struct FixtureServer: Sendable {
         /// Seeds the phone's copy of the case map, saved at this moment, before
         /// launch: the kept map an offline Tijdlijn shows with its age.
         let timelineCachedAt: Date?
+        /// Seeds the phone's copy of the Voor jou list, saved at this moment,
+        /// before launch: the kept list a cold start shows offline or through
+        /// a server failure, with its age.
+        let inboxCachedAt: Date?
 
         private enum Key: String, CodingKey {
             case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter, today
-            case offlinePaths, timelineCachedAt
+            case offlinePaths, timelineCachedAt, inboxCachedAt
         }
 
         init(from decoder: Decoder) throws {
@@ -126,6 +130,13 @@ struct FixtureServer: Sendable {
                 guard let d = ISO8601DateFormatter().date(from: raw) else {
                     throw DecodingError.dataCorruptedError(forKey: .timelineCachedAt, in: c,
                                                            debugDescription: "timelineCachedAt is ISO 8601")
+                }
+                return d
+            }
+            inboxCachedAt = try c.decodeIfPresent(String.self, forKey: .inboxCachedAt).map { (raw: String) throws -> Date in
+                guard let d = ISO8601DateFormatter().date(from: raw) else {
+                    throw DecodingError.dataCorruptedError(forKey: .inboxCachedAt, in: c,
+                                                           debugDescription: "inboxCachedAt is ISO 8601")
                 }
                 return d
             }
@@ -206,7 +217,7 @@ struct FixtureServer: Sendable {
 
     /// The fixture's own answer to a GET of `path` (no failure applied): what
     /// `timelineCachedAt` seeds the phone's copy from.
-    func body(_ path: String) -> Data? { file(path + ".json") }
+    func body(_ path: String) -> Data? { file(path + ".json").map { generated(path, $0) } }
 
     /// `<name>/<rel>`, else `_shared/<rel>`.
     private func file(_ rel: String) -> Data? {

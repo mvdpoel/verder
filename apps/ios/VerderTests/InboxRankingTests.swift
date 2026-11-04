@@ -38,9 +38,10 @@ struct InboxRankingTests {
         let done = VoorJouList.doneRows(inbox)
         #expect(done.count == 2)
         #expect(done.allSatisfy { !$0.amber })
-        // Everything in the list proper waits on Martin, so it is amber.
+        // Amber marks what waits on Martin NOW: the Nu rows (proposals and
+        // questions); Kan wachten carries its kind's symbol instead.
         let rows = VoorJouList.rows(inbox)
-        #expect(rows.allSatisfy { $0.amber })
+        #expect(rows.filter(\.amber).map(\.item.kind) == [.proposal, .question])
     }
 
     @Test func replyRowOpensPlan2ProposalScreen() throws {

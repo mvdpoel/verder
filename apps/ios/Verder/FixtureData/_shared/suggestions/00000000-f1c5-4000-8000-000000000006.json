@@ -1,0 +1,18 @@
+{
+  "id": "00000000-f1c5-4000-8000-000000000006",
+  "kind": "document-meta",
+  "status": "pending",
+  "createdAt": "2026-11-01T09:10:00.000Z",
+  "proposed": {
+    "title": "Loonstrook oktober 2026 Atelier Sterrenwacht",
+    "docType": "loonstrook"
+  },
+  "trigger": null,
+  "document": {
+    "id": "00000000-f1c5-4000-8000-200000000406",
+    "title": "Loonstrook.2026-10.Atelier-Sterrenwacht.definitief.Noordkust.pdf",
+    "docType": null,
+    "status": "inbox"
+  },
+  "retrievedRefs": []
+}

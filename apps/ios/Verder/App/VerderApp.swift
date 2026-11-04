@@ -66,7 +66,8 @@ struct VerderApp: App {
         // (`SessionEpoch`): signing out, or a 401 anywhere, clears all three,
         // and a refresh still in flight writes nothing back.
         let inbox = InboxStore(client: s.client, snapshotDir: s.snapshotDir, setBadge: s.setBadge,
-                               onUnauthorized: { auth.sessionRejected() }, now: s.now, epoch: auth.epoch)
+                               onUnauthorized: { auth.sessionRejected() }, now: s.now, epoch: auth.epoch,
+                               cache: InboxCache(dir: s.inboxDir))
         now = s.now
         camera = s.camera
         _inbox = State(initialValue: inbox)

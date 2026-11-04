@@ -23,99 +23,72 @@ enum InboxRoute: Hashable, Sendable {
     }
 }
 
-/// What the list draws, decided outside the view so it is testable.
+/// The Voor jou tab: one list of everything waiting on Martin, in the
+/// server's order, split into Nu and Kan wachten (Figma "voorjou · final").
+/// Read from the app's one `InboxStore`, so the list, the badge and the
+/// widget cannot disagree.
 ///
-/// THE PHONE NEVER RE-RANKS: rows come in exactly the server's order
-/// (`waitingOnMartin` in packages/api/src/waiting.ts). AMBER MEANS WAITING ON
-/// MARTIN, and everything in the list proper does by that one definition;
-/// "Door verder gedaan" is what verder already did, so it is never amber.
-enum VoorJouList {
-    static let emptyText = "Niets wacht op je."
-
-    struct Row: Identifiable, Equatable {
-        let item: WaitingItem
-        let route: InboxRoute?
-        let amber: Bool
-        var id: String { "\(item.kind.rawValue):\(item.id)" }
-    }
-
-    struct DoneRow: Identifiable, Equatable {
-        let action: VerderAction
-        let amber: Bool
-        var id: String { action.id }
-    }
-
-    static func rows(_ inbox: InboxDTO) -> [Row] {
-        inbox.items.map { Row(item: $0, route: InboxRoute($0), amber: true) }
-    }
-
-    static func doneRows(_ inbox: InboxDTO) -> [DoneRow] {
-        inbox.doneByVerder.map { DoneRow(action: $0, amber: false) }
-    }
-
-    static func kindLabel(_ kind: WaitingKind) -> String {
-        KindLabel.dutch(kind.rawValue)
-    }
-}
-
-/// The Voor jou tab: one ranked list of everything waiting on Martin, read
-/// from the app's one `InboxStore` (the same fetch feeds the badge and the
-/// widget, so the three cannot disagree).
-///
-/// Never here: an approve from a row, a send outside `ProposalScreen`'s
-/// `ApprovalGate`, or an auto-advance to the next item after a decision.
+/// Routine decisions happen ON THE LIST — a swipe or a menu approves an
+/// unchanged suggestion, finishes a task or calls something not relevant —
+/// and are HELD for their undo window (`InboxDecisions`) before they post.
+/// Never here: a send (only `ProposalScreen`, behind a fresh Face ID), a
+/// bulk send, or an approval of anything the server did not call approvable.
 struct VoorJouTab: View {
     let store: InboxStore
     let client: APIClient
     let gate: ApprovalGate
     @Binding var path: [InboxRoute]
     let onUnauthorized: @MainActor () -> Void
+    let now: @Sendable () -> Date
 
     @State private var done: DoneByVerderModel
+    @State private var decisions: InboxDecisions
+    @State private var showAll = false
+    @State private var doneOpen = false
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
+    @State private var confirming = false
+    @State private var reviewing = false
+    @State private var scrolled = false
+    @State private var verderUndos = 0
+    @State private var fixtureApplied = false
+    @Namespace private var zoom
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(store: InboxStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
-         onUnauthorized: @escaping @MainActor () -> Void) {
+         onUnauthorized: @escaping @MainActor () -> Void, now: @escaping @Sendable () -> Date = { Date() }) {
         self.store = store
         self.client = client
         self.gate = gate
         self._path = path
         self.onUnauthorized = onUnauthorized
+        self.now = now
         // An undo moves a document back into the inbox, and a refusal means
         // the row is stale: either way the one store refreshes.
         self._done = State(initialValue: DoneByVerderModel(
             client: client, onChanged: { await store.refresh() }, onUnauthorized: onUnauthorized))
+        self._decisions = State(initialValue: InboxDecisions(
+            client: client, now: now, onPosted: { await store.refresh() }, onUnauthorized: onUnauthorized))
     }
+
+    private var ax: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
         NavigationStack(path: $path) {
-            ZStack {
-                Color.void.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Voor jou")
-                            .font(.display(26, relativeTo: .title, weight: .ultraLight))
-                            .foregroundStyle(Color.inkBright)
-                        content
+            root
+                .navigationDestination(for: InboxRoute.self) { route in
+                    // A row zooms open from itself; with Reduce Motion the
+                    // system's own crossfade-like push (brief §2.6).
+                    if reduceMotion {
+                        destination(route)
+                    } else {
+                        destination(route).navigationTransition(.zoom(sourceID: route, in: zoom))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 26)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .refreshable { await store.refresh() }
-            }
-            .navigationDestination(for: InboxRoute.self) { route in
-                switch route {
-                case .proposal(let id):
-                    ProposalScreen(id: id, client: client, gate: gate, onUnauthorized: onUnauthorized)
-                case .suggestion(let id):
-                    SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized)
-                case .task(let id):
-                    TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
-                case .doneByVerder:
-                    DoneByVerderScreen(store: store, model: done)
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
+                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(selecting ? .hidden : .automatic, for: .tabBar)
         }
         .preferredColorScheme(.dark)
         .task { await store.refresh() }
@@ -123,76 +96,356 @@ struct VoorJouTab: View {
         .onChange(of: path) { _, now in
             if now.isEmpty { Task { await store.refresh() } }
         }
+        // Leaving the app posts what is held: a decision is never lost to a
+        // suspended timer.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { Task { await decisions.flush() } }
+        }
+        .onChange(of: typeSize, initial: true) { _, size in decisions.accessibilitySize = size.isAccessibilitySize }
+        .sensoryFeedback(.success, trigger: decisions.successes)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: decisions.softs)
+        .sensoryFeedback(.error, trigger: decisions.errors)
+        .sensoryFeedback(.impact(weight: .light), trigger: verderUndos)
+        .sensoryFeedback(.error, trigger: store.failures)
     }
 
-    @ViewBuilder private var content: some View {
-        if let error = store.lastError {
-            Text(Self.message(error))
-                .font(.display(14, relativeTo: .callout, weight: .light))
-                .foregroundStyle(Color.ink)
+    @ViewBuilder private func destination(_ route: InboxRoute) -> some View {
+        switch route {
+        case .proposal(let id):
+            ProposalScreen(id: id, client: client, gate: gate, onUnauthorized: onUnauthorized)
+        case .suggestion(let id):
+            SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized)
+        case .task(let id):
+            TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
+        case .doneByVerder:
+            DoneByVerderScreen(store: store, model: done)
         }
-        if let inbox = store.inbox {
-            let rows = VoorJouList.rows(inbox)
-            if rows.isEmpty {
-                Text(VoorJouList.emptyText)
-                    .font(.display(14, relativeTo: .callout, weight: .light))
-                    .foregroundStyle(Color.inkMute)
+    }
+
+    @ViewBuilder private var root: some View {
+        ZStack {
+            Color.void.ignoresSafeArea()
+            if let inbox = store.inbox {
+                list(inbox)
+            } else if let error = store.lastError, error != .unauthorized {
+                VoorJouFailurePage(eyebrow: VoorJouList.eyebrow(now()), error: error,
+                                   readout: VoorJouList.lastAttempt(error, attemptedAt: store.attemptedAt, now: now()),
+                                   retry: { Task { await store.refresh() } })
+            } else {
+                VoorJouLoadingPage(eyebrow: VoorJouList.eyebrow(now()))
             }
-            ForEach(rows) { row in
-                if let route = row.route {
-                    Button { path.append(route) } label: { rowView(row) }
-                        .buttonStyle(.plain)
-                } else {
-                    rowView(row)
+        }
+    }
+
+    // MARK: - The list
+
+    private func list(_ inbox: InboxDTO) -> some View {
+        let clock = now()
+        let sections = VoorJouList.sections(inbox, hiding: decisions.hiddenKeys, expanded: showAll)
+        let count = VoorJouList.count(inbox, hidden: decisions.hiddenCount)
+        let notice = VoorJouList.notice(store.lastError, hasList: true)
+        let readOnly = notice == .offline
+        let freshness = VoorJouList.freshness(now: clock, fetchedAt: store.fetchedAt, error: store.lastError)
+        let selectable = sections.flatMap(\.rows).filter(\.selectable)
+        let canSelect = selectable.count >= 2 && !readOnly
+        let doneActions = inbox.doneByVerder.filter { !decisions.hiddenKeys.contains(ListDecision.key(verder: $0.changeId)) }
+
+        return ScrollViewReader { proxy in
+            List {
+                if !ax && !selecting {
+                    VoorJouHeader(eyebrow: VoorJouList.eyebrow(clock), count: count, empty: sections.isEmpty,
+                                  freshness: freshness, canSelect: canSelect, select: startSelecting)
+                        .voorJouRow()
+                        .id("top")
+                }
+                if let notice {
+                    VoorJouNoticeCard(notice: notice, retry: { Task { await store.refresh() } })
+                        .padding(.bottom, 12)
+                        .voorJouRow()
+                }
+                if sections.isEmpty {
+                    VoorJouEmptyState(body: VoorJouList.emptyBody(lastClearedAt: inbox.lastClearedAt, now: clock),
+                                      readout: VoorJouList.emptyReadout(freshness))
+                        .voorJouRow()
+                }
+                ForEach(sections) { section in
+                    Section {
+                        if selecting && section.kind == .nu {
+                            Text(VoorJouCopy.nuNote)
+                                .font(.display(15, relativeTo: .subheadline))
+                                .foregroundStyle(Color.inkMute)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.bottom, 8)
+                                .voorJouRow()
+                        }
+                        ForEach(section.rows) { row in
+                            rowCell(row, readOnly: readOnly, now: clock)
+                            if let failure = decisions.failures[row.id] {
+                                VoorJouNotSavedNotice(failure: failure, ax: ax,
+                                                      retry: { Task { await decisions.retry(row.id) } },
+                                                      withdraw: { decisions.withdraw(row.id) })
+                                    .voorJouRow()
+                            }
+                        }
+                        if section.truncated {
+                            VoorJouShowAllRow(shown: section.rows.count, total: section.total, ax: ax) { showAll = true }
+                                .voorJouRow()
+                                .id("more")
+                        } else if section.kind == .nu, sections.count == 1, count == 1 {
+                            Text(VoorJouCopy.onlyOne)
+                                .font(.display(15, relativeTo: .subheadline))
+                                .foregroundStyle(Color.inkMute)
+                                .padding(.leading, ax ? 0 : VoorJouMetrics.gutter)
+                                .padding(.vertical, 14)
+                                .voorJouRow()
+                        }
+                        Color.clear.frame(height: 28).voorJouRow()
+                    } header: {
+                        VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
+                    }
+                }
+                if !inbox.doneByVerder.isEmpty {
+                    DoneByVerderListSection(actions: doneActions, total: inbox.doneByVerder.count,
+                                            open: $doneOpen, summary: sections.isEmpty, ax: ax,
+                                            undo: { action in
+                                                verderUndos += 1
+                                                decisions.decide(ListDecision(
+                                                    id: UUID(), key: ListDecision.key(verder: action.changeId),
+                                                    title: action.documentTitle ?? action.after.title ?? "Document",
+                                                    action: .undoVerder, target: action.changeId))
+                                            })
+                }
+                Color.clear.frame(height: 24).voorJouRow()
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+            .listSectionSpacing(0)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.25), value: decisions.hiddenKeys)
+            .refreshable { await store.refresh() }
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 132 } action: { _, past in
+                scrolled = past
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if selecting {
+                    VoorJouSelectionBar(count: selected.count, all: selectable.count,
+                                        cancel: stopSelecting,
+                                        selectAll: { selected = Set(selectable.map(\.id)) })
+                } else if ax || scrolled {
+                    VoorJouCompactHeader(count: count, canSelect: ax && canSelect, select: startSelecting)
+                        .transition(.opacity)
                 }
             }
-            if !inbox.doneByVerder.isEmpty {
-                DoneByVerderSection(actions: inbox.doneByVerder, model: done)
-            }
-        } else if store.lastError == nil {
-            ProgressView().tint(Color.signal)
-        }
-    }
-
-    private func rowView(_ row: VoorJouList.Row) -> some View {
-        let item = row.item
-        return HStack(alignment: .top, spacing: 12) {
-            dot(amber: row.amber)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.title)
-                    .font(.display(16, relativeTo: .body, weight: .regular))
-                    .foregroundStyle(Color.inkBright)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Text(VoorJouList.kindLabel(item.kind))
-                    if let subtitle = item.subtitle { Text(subtitle) }
-                    if let due = item.dueAt.flatMap(ProposalFormat.dayMonth) { Text("uiterlijk \(due)") }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if selecting {
+                    let chosen = selectable.filter { selected.contains($0.id) }
+                    VoorJouSelectionToolbar(count: chosen.count,
+                                            canApprove: !chosen.isEmpty && chosen.allSatisfy(\.approvable),
+                                            reject: { decideAll(chosen, .reject) },
+                                            approve: { confirming = true })
+                } else if let content = DecisionToast.content(decisions.held) {
+                    DecisionToastView(content: content, decisions: decisions, ax: ax,
+                                      undo: { decisions.undoLast() }, review: { reviewing = true })
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .font(.mono(11, relativeTo: .caption2))
-                .foregroundStyle(Color.inkDim)
             }
-            Spacer(minLength: 0)
-            if row.route != nil {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.inkFaint)
-                    .padding(.top, 5)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: scrolled)
+            .alert(VoorJouList.confirmTitle(selectedApprovable(selectable).count), isPresented: $confirming) {
+                Button("Annuleren", role: .cancel) {}
+                Button(VoorJouList.approveMany(selectedApprovable(selectable).count)) {
+                    decideAll(selectedApprovable(selectable), .approve)
+                }
+            } message: {
+                Text(VoorJouList.confirmMessage(selectedApprovable(selectable).map(\.item.title),
+                                                window: ax ? InboxDecisions.accessibilityWindow : InboxDecisions.window))
             }
+            .sheet(isPresented: $reviewing) {
+                DecisionReviewSheet(decisions: decisions)
+                    .presentationDetents([.medium, .large])
+            }
+            #if DEBUG
+            .task(id: inbox.count) { applyFixtureState(inbox, proxy: proxy) }
+            #endif
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel()
-        .contentShape(Rectangle())
     }
 
-    private func dot(amber: Bool) -> some View {
-        Circle()
-            .fill(amber ? Color.attn : Color.inkFaint)
-            .frame(width: 8, height: 8)
-            .glow(amber ? Glow.attn : Glow.Shadow(color: .clear, radius: 0, y: 0))
-            .padding(.top, 7)
+    private func sectionTrailing(_ section: VoorJouList.Section, readOnly: Bool) -> String? {
+        guard section.kind == .kanWachten else { return nil }
+        if selecting { return VoorJouList.suggestionsCount(section.rows.count { $0.selectable }) }
+        if readOnly { return VoorJouCopy.readOnly }
+        return section.truncated ? "\(section.rows.count) getoond" : nil
     }
+
+    private func selectedApprovable(_ selectable: [VoorJouList.Row]) -> [VoorJouList.Row] {
+        selectable.filter { selected.contains($0.id) && $0.approvable }
+    }
+
+    // MARK: - One row
+
+    @ViewBuilder
+    private func rowCell(_ row: VoorJouList.Row, readOnly: Bool, now: Date) -> some View {
+        let isSelected = selected.contains(row.id)
+        let view = VoorJouRowView(row: row, now: now, ax: ax, selecting: selecting, selected: isSelected,
+                                  failed: decisions.failures[row.id] != nil)
+        Group {
+            if selecting && row.selectable {
+                Button { toggle(row) } label: { view }
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+            } else if selecting {
+                view
+            } else if let route = row.route {
+                Button { path.append(route) } label: { view }
+                    .matchedTransitionSource(id: route, in: zoom)
+            } else {
+                view
+            }
+        }
+        .buttonStyle(.plain)
+        .voorJouRow()
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if !selecting && !readOnly { leadingAction(row) }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if !selecting && !readOnly { trailingAction(row) }
+        }
+        .contextMenu { if !selecting { menu(row, readOnly: readOnly) } }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(VoorJouList.accessibilityLabel(row.item, now: now))
+        .accessibilityActions { if !selecting && !readOnly { accessibilityActions(row) } }
+        .id(row.id)
+    }
+
+    @ViewBuilder private func leadingAction(_ row: VoorJouList.Row) -> some View {
+        if row.approvable {
+            Button { decide(row, .approve) } label: { Label("Goedkeuren", systemImage: "checkmark") }
+                .tint(Color.signal)
+        } else if row.canDone {
+            Button { decide(row, .task("done")) } label: { Label("Gedaan", systemImage: "checkmark") }
+                .tint(Color.okay)
+        }
+    }
+
+    @ViewBuilder private func trailingAction(_ row: VoorJouList.Row) -> some View {
+        if row.item.kind == .suggestion {
+            Button { decide(row, .reject) } label: { Label("Niet relevant", systemImage: "xmark.circle") }
+                .tint(Color.steelDim)
+        } else if row.taskNext.contains("dropped") {
+            Button { decide(row, .task("dropped")) } label: { Label("Niet relevant", systemImage: "xmark.circle") }
+                .tint(Color.steelDim)
+        }
+    }
+
+    @ViewBuilder private func menu(_ row: VoorJouList.Row, readOnly: Bool) -> some View {
+        if let route = row.route {
+            Button(VoorJouCopy.view, systemImage: "eye") { path.append(route) }
+        }
+        switch row.item.kind {
+        case .proposal, .question:
+            Divider()
+            Text(VoorJouCopy.sendOnlyInProposal)
+        case .suggestion where readOnly, .task where readOnly:
+            Divider()
+            Text(VoorJouCopy.offlineMenu)
+        case .suggestion:
+            Divider()
+            if row.approvable {
+                Button("Keur goed", systemImage: "checkmark") { decide(row, .approve) }
+            }
+            Divider()
+            Button("Markeer als niet relevant", systemImage: "xmark.circle") { decide(row, .reject) }
+        case .task:
+            Divider()
+            ForEach(VoorJouMenu.taskSteps(row.taskNext).filter { $0.status != "dropped" }, id: \.status) { step in
+                Button(step.label, systemImage: step.symbol) { decide(row, .task(step.status)) }
+            }
+            if row.taskNext.contains("dropped") {
+                Divider()
+                Button("Markeer als niet relevant", systemImage: "xmark.circle") { decide(row, .task("dropped")) }
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder private func accessibilityActions(_ row: VoorJouList.Row) -> some View {
+        if row.approvable { Button("Keur goed") { decide(row, .approve) } }
+        if row.item.kind == .suggestion { Button("Markeer als niet relevant") { decide(row, .reject) } }
+        ForEach(VoorJouMenu.taskSteps(row.taskNext), id: \.status) { step in
+            Button(step.label) { decide(row, .task(step.status)) }
+        }
+    }
+
+    private func decide(_ row: VoorJouList.Row, _ action: ListDecision.Action) {
+        decisions.decide(ListDecision(id: UUID(), key: row.id, title: row.item.title, action: action, target: row.item.id))
+    }
+
+    private func decideAll(_ rows: [VoorJouList.Row], _ action: ListDecision.Action) {
+        decisions.decide(rows.map {
+            ListDecision(id: UUID(), key: $0.id, title: $0.item.title, action: action, target: $0.item.id)
+        })
+        stopSelecting()
+    }
+
+    private func toggle(_ row: VoorJouList.Row) {
+        guard row.selectable else { return }
+        if selected.contains(row.id) { selected.remove(row.id) } else { selected.insert(row.id) }
+    }
+
+    private func startSelecting() {
+        selected = []
+        selecting = true
+    }
+
+    private func stopSelecting() {
+        selecting = false
+        selected = []
+    }
+
+    #if DEBUG
+    /// `-fixtures-voorjou`: a state only a gesture reaches, set up on the
+    /// list as it loaded. Nothing here posts: a held decision is frozen.
+    private func applyFixtureState(_ inbox: InboxDTO, proxy: ScrollViewProxy) {
+        guard !fixtureApplied, let states = FixtureLaunch.current?.voorJou, !states.isEmpty else { return }
+        fixtureApplied = true
+        let rows = VoorJouList.rows(inbox)
+        let suggestions = rows.filter { $0.item.kind == .suggestion }
+        let task = rows.first { $0.item.kind == .task }
+        func decision(_ row: VoorJouList.Row, _ action: ListDecision.Action) -> ListDecision {
+            ListDecision(id: UUID(), key: row.id, title: row.item.title, action: action, target: row.item.id)
+        }
+        for state in states {
+            switch state {
+            case .toast:
+                if let s = suggestions.first { decisions.fixtureHold([decision(s, .approve)], remaining: ax ? 8 : 4) }
+            case .twee:
+                if let s = suggestions.first, let t = task {
+                    decisions.fixtureHold([decision(s, .approve), decision(t, .task("done"))], remaining: 2)
+                }
+            case .nietOpgeslagen:
+                if let s = suggestions.first { decisions.fixtureFail(decision(s, .approve)) }
+            case .selecteren, .bevestigen:
+                selecting = true
+                selected = Set(suggestions.prefix(3).map(\.id))
+                if state == .bevestigen { confirming = true }
+            case .gedaan:
+                doneOpen = true
+            case .ongedaan:
+                doneOpen = true
+                if let a = inbox.doneByVerder.first(where: { $0.undoable && !$0.undone }) {
+                    decisions.fixtureHold([ListDecision(id: UUID(), key: ListDecision.key(verder: a.changeId),
+                                                        title: a.documentTitle ?? "Document",
+                                                        action: .undoVerder, target: a.changeId)],
+                                          remaining: 4)
+                }
+            case .scroll(let target):
+                Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    proxy.scrollTo(target, anchor: .top)
+                }
+            }
+        }
+    }
+    #endif
 
     static func message(_ error: APIError) -> String {
         switch error {
@@ -200,5 +453,27 @@ struct VoorJouTab: View {
         case .transport: ProposalModel.Copy.offline
         default: ProposalModel.Copy.failed
         }
+    }
+}
+
+/// A task's menu steps, in the frame's order, for the statuses the server allows.
+enum VoorJouMenu {
+    struct Step: Equatable {
+        let status: String
+        let label: String
+        let symbol: String
+    }
+
+    static let order: [Step] = [
+        Step(status: "done", label: "Markeer als gedaan", symbol: "checkmark.circle"),
+        Step(status: "in-progress", label: "Zet op bezig", symbol: "clock"),
+        Step(status: "waiting", label: "Zet op wacht op een ander", symbol: "person.badge.clock"),
+        Step(status: "open", label: "Zet weer open", symbol: "arrow.uturn.backward"),
+        Step(status: "dropped", label: "Markeer als niet relevant", symbol: "xmark.circle"),
+    ]
+
+    /// Only `validNext`: the phone never offers a step the matrix forbids.
+    static func taskSteps(_ validNext: [String]) -> [Step] {
+        order.filter { validNext.contains($0.status) }
     }
 }

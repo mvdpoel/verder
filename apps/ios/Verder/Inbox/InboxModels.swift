@@ -112,6 +112,16 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     let dueAt: String?
     /// A Verder-priority proposal.
     let verder: Bool
+    /// A suggestion that can be approved AS PROPOSED (not a registry item,
+    /// no required field empty): only then does the list offer "Goedkeuren".
+    /// The server does not serve it yet (`toInboxDTO`), and absent means no:
+    /// the phone never guesses that something may be approved unseen.
+    var approvable: Bool? = nil
+    /// A task's next statuses (`validNext`, the same matrix `tasks.setStatus`
+    /// enforces): the list offers only these. Absent means none offered.
+    var validNext: [String]? = nil
+    /// The map stop's open tasks ("halte · 1 taak"); absent, the row says only "halte".
+    var taskCount: Int? = nil
 }
 
 /// One thing verder did on its own (spec §6.6), as `verderActions.list` builds

@@ -2,19 +2,19 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03. Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.2, §6.6, §12.9) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §2.1, §2.4–2.7 en de flowtabel in §3) die vastleggen. Elke functie heeft één statusregel, bepaald door de code te lezen.
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-04. Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.2, §6.6, §12.9) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §2.1, §2.4–2.7 en de flowtabel in §3) die vastleggen. Elke functie heeft één statusregel, bepaald door de code te lezen.
 
 | Status | Aantal |
 |---|---|
-| **Gebouwd** | 25 |
-| **Deels gebouwd** | 8 |
-| **Nog te bouwen** | 22 |
+| **Gebouwd** | 49 |
+| **Deels gebouwd** | 5 |
+| **Nog te bouwen** | 1 |
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
-1. **Beslissen vanuit de lijst** (functies 16–19 en 24): veegacties, contextmenu's en de undo-toast van 5 seconden. Ze maken van "rij → detail → beslissen" (2–3 tikken) één veeg. Ze hebben geen nieuwe schrijfroute nodig, maar het inbox-item moet zeggen of een suggestie ongewijzigd kan worden goedgekeurd en welke taakstatussen zijn toegestaan (vandaag draagt `WaitingItem` geen van beide), en een echt undo-venster betekent dat de POST op de telefoon wordt vastgehouden.
-2. **Het aantal in de kop en de secties** (functies 11–14): "498 wachten op jou · bijgewerkt 14:02", Nu / Kan wachten met aantallen, en 20 rijen per sectie met "Toon alle". Zonder deze is een lange lijst helemaal niet te triëren.
-3. **Een lijst die een herstart overleeft, en eerlijke foutstaten** (functies 37–38 en 40–42): een skelet in plaats van een spinner, de laatste lijst van schijf binnen 300 ms, en offline-, storings- en geen-cache-kaarten met "Opnieuw proberen" en de leeftijd van de lijst. Vandaag toont een koude start zonder netwerk één regel tekst en verder niets.
+1. **De serverkant van beslissen vanuit de lijst** (functies 16–18 en 21): de telefoon leest `approvable` (suggestie), `validNext` (taak) en `taskCount` (halte) al per inbox-item en biedt een veeg of menu-actie alleen aan als het veld er is. `toInboxDTO` / `waiting.ts` sturen ze nog niet, dus in productie zie je die acties pas als de server ze meestuurt.
+2. **`lastClearedAt` in de inbox** (functie 39): de lege lijst zegt "Je rondde … het laatste af" zodra de server het stuurt.
+3. **De halte opent** (functie 10): een link naar één halte op de Tijdlijn; tot dan heeft de halterij geen chevron.
 
 ---
 
@@ -115,13 +115,13 @@ Elke rij leest als een vertrekbord (brief §1.1): wat het is, van wie het komt, 
 - **Amber:** de stip staat op de Nu-rijen (voorstellen en vragen); de Kan wachten-rijen dragen hun soortsymbool. Het aantal in de kop draagt "wachten op jou" met zijn amberen stip, zodat de kleur nooit zonder woorden staat.
 - Een chevron markeert een rij die opent.
 
-**Status:** Deels gebouwd — de rij toont een amberen stip op elke rij, de titel, het soortlabel, de ondertitel en "uiterlijk <dag maand>", plus de chevron (`Inbox/VoorJouTab.swift` `rowView`, `Shared/KindLabel.swift`). Ontbreekt: de soortsymbolen, de leeftijdskolom (`at` zit al in `WaitingItem` maar wordt niet getekend), de relatieve deadline, het label "halte · N taken" (de server stuurt geen takenaantal voor de halte) en de scheiding amber-alleen-op-Nu, die met de secties komt (functie 13).
+**Status:** Gebouwd — soortsymbool per soort (suggesties naar hun ondertitel), titel, metaregel soort · wie of deadline, leeftijdskolom rechts, relatieve deadline ("uiterlijk morgen"), amber alleen op de Nu-rijen, chevron (`Inbox/VoorJouViews.swift` `VoorJouRowView`, `Inbox/VoorJouModel.swift`). Het label "halte · N taken" verschijnt zodra de server `taskCount` stuurt; `toInboxDTO` doet dat nog niet.
 
 #### 9. Lange titels
 
 De frames beperken een titel tot twee regels met een staart ("…"), en korten een lange bestandsnaam in het midden in, zodat de datum en de extensie zichtbaar blijven ("Loonstrook.2026-10.Atelier-Sterrenwacht.defin…Noordkust.pdf"). Aantallen worden nooit afgekapt.
 
-**Status:** Nog te bouwen — de code laat elke titel volledig doorlopen (`fixedSize(vertical:)`). Nodig: een limiet van twee regels, afkappen in het midden voor bestandsnaamtitels (een titel die eruitziet als een bestandsnaam), en een controle dat VoiceOver nog steeds de hele titel voorleest.
+**Status:** Gebouwd — twee regels met staart; een titel die een bestandsnaam is, wordt in het midden afgekapt (`VoorJouList.looksLikeFileName`). VoiceOver leest de hele titel (`accessibilityLabel`). Bij AX-groottes nooit afgekapt.
 
 #### 10. De huidige halte van de kaart opent
 
@@ -135,31 +135,31 @@ In de frames heeft de halterij ("Stukken aanleveren bij Team Startdossier · hal
 
 "MAANDAG 2 NOV" als mono-bovenregel, de titel "Voor jou", dan het aantal als hoofdgetal met "wachten op jou" (enkelvoud "1 wacht op jou") en zijn amberen stip, en daaronder "bijgewerkt 14:02". Offline staat er "offline · bijgewerkt 14:02"; bij een serverstoring "laatste stand 14:02". Het getal telt mee wanneer een beslissing het verandert (functie 22).
 
-**Status:** Nog te bouwen — de code toont alleen de titel "Voor jou". De gegevens zijn er: `InboxDTO.count` en `InboxStore.fetchedAt`. Nodig: de kopweergave, Nederlands enkelvoud/meervoud, de formatter voor Amsterdamse tijd die Overzicht al gebruikt (bovenregel van `HomeSummary`), en een test dat het aantal de `count` van de server is, nooit een `items.count` die op de telefoon is uitgerekend.
+**Status:** Gebouwd — `VoorJouHeader`: bovenregel, titel, hoofdgetal (de `count` van de server min de beslissingen die in hun undo-venster staan), enkelvoud/meervoud, "bijgewerkt" / "offline · bijgewerkt" / "laatste stand" (`VoorJouList.freshness`).
 
 #### 12. Compacte titel tijdens het scrollen
 
 Bij scrollen maakt de grote kop plaats voor een gecentreerd "Voor jou" met "• 498 wachten op jou" eronder, zodat het aantal zichtbaar blijft verderop in de lijst.
 
-**Status:** Nog te bouwen — nodig: een compacte kop gestuurd door de scrollpositie (of een titel in de navigatiebalk met ondertitel). Komt met functie 11.
+**Status:** Gebouwd — `VoorJouCompactHeader` verschijnt zodra de grote kop wegscrolt, en bij AX-groottes altijd.
 
 #### 13. Secties: Nu en Kan wachten
 
 "NU 2" bevat voorstellen en vragen; "KAN WACHTEN 496" bevat suggesties, taken en de halte. Elke sectie heeft zijn aantal. De splitsing herschikt niets: de volgorde van de server zet al elk voorstel en elke vraag vóór elke suggestie.
 
-**Status:** Nog te bouwen — de code tekent één platte lijst. Nodig: de sectiesplitsing (bij voorkeur een veld `section` uit `waiting.ts`, zodat de definitie op de server blijft; een splitsing op soort op de telefoon zou de volgorde ook bewaren), sectiekoppen met aantallen, en een test dat de rijen binnen elke sectie de volgorde van de server houden.
+**Status:** Gebouwd — `VoorJouList.sections` splitst op soort zonder te herschikken; sectiekoppen met aantal, vastgepind tijdens het scrollen.
 
 #### 14. 20 per sectie, dan "Toon alle"
 
 Een lange sectie toont zijn eerste 20 rijen en zegt dat ("20 GETOOND"), met "Toon alle 496" om de rest te zien (brief §3: "most relevant first, offer view more").
 
-**Status:** Nog te bouwen — de code tekent elk item dat de server stuurt. Nodig: de limiet, het label "N getoond", het uitklappen met "Toon alle", en een controle dat een limiet nooit een Nu-item verbergt.
+**Status:** Gebouwd — alleen Kan wachten wordt afgekapt (20), met "20 GETOOND" en "Toon alle N"; Nu nooit.
 
 #### 15. Selecteer
 
 Een knop "Selecteer" in de kop opent de selectiemodus (functie 21).
 
-**Status:** Nog te bouwen — zie functie 21.
+**Status:** Gebouwd — getoond zodra er minstens twee suggesties zijn en de lijst niet offline is.
 
 ### Beslissen vanuit de lijst
 
@@ -169,19 +169,19 @@ Al deze acties roepen dezelfde routes aan als de detailschermen, dus een besliss
 
 Een veeg vanaf de voorkant op een suggestie keurt hem goed zoals voorgesteld ("Goedkeuren"). Alleen voor een suggestie die ongewijzigd kan worden goedgekeurd: geen registry-item (alleen op het web), geen needs-manual-suggestie waarvan een verplicht veld leeg is.
 
-**Status:** Nog te bouwen — nodig: `.swipeActions(edge: .leading)` op suggestierijen; een serverveld per item dat zegt of het ongewijzigd goed te keuren is (vandaag heeft `WaitingItem` geen suggestiesoort en geen goedkeurbaarheid, en de approve-route antwoordt 409 voor een registry-item); de bestaande `POST /api/mobile/v1/suggestions/:id/approve` met `{ edits: {} }`; de undo-toast (functie 24); tests dat een registry- of onvolledige suggestie geen veeg aanbiedt.
+**Status:** Deels gebouwd — de veeg bestaat (`.swipeActions`), wordt vastgehouden en daarna gepost met `{ edits: {} }`. Hij wordt alleen aangeboden als het item `approvable: true` draagt; de server stuurt dat veld nog niet (`toInboxDTO`), dus in productie verschijnt de veeg pas als dat erbij komt.
 
 #### 17. Naar rechts vegen: Gedaan (een taak)
 
 Een veeg vanaf de voorkant op een taak zet die op afgerond ("Gedaan"), **+1 `task.status`**.
 
-**Status:** Nog te bouwen — nodig: de veeg; de `validNext` van de taak (het inbox-item draagt die niet; voeg hem toe aan de taakitems in `toInboxDTO` of lees `GET /api/mobile/v1/tasks`), zodat de veeg alleen wordt aangeboden wanneer `done` is toegestaan; de bestaande `POST /api/mobile/v1/tasks/:id/status`; de undo-toast.
+**Status:** Deels gebouwd — de veeg "Gedaan" bestaat en wordt alleen aangeboden als `validNext` van het item `done` bevat; de server stuurt `validNext` nog niet in de inbox.
 
 #### 18. Naar links vegen: Niet relevant
 
 Een veeg vanaf de achterkant wijst een suggestie af ("Niet relevant"), zonder reden en **zonder ledger-event**. Op een taak betekent hetzelfde woord "laten vallen" (`dropped`, +1 `task.status`).
 
-**Status:** Nog te bouwen — nodig: de veeg vanaf de achterkant en de bestaande `POST …/suggestions/:id/reject` (reden optioneel) of `POST …/tasks/:id/status` met `dropped`.
+**Status:** Gebouwd voor suggesties (afwijzen zonder reden). Op een taak alleen met `validNext` ∋ `dropped` (serverveld nog niet gestuurd).
 
 #### 19. Contextmenu's
 
@@ -191,31 +191,31 @@ Lang drukken opent een menu met de acties van de rij en "Bekijken":
 - **taak:** Bekijken · Markeer als gedaan · Zet op bezig · Zet op wacht op een ander · Markeer als niet relevant — alleen de stappen die `validNext` toestaat (brief §3: `waiting` en `in-progress` bereikbaar vanuit het menu);
 - **voorstel of vraag:** alleen Bekijken, met de regel "Versturen kan alleen in het voorstel zelf, met Face ID."
 
-**Status:** Nog te bouwen — nodig: `.contextMenu` per soort op de rijen (de voorbeeldrijen van Overzicht hebben er al een, `Home/HomeTab.swift`), `validNext` voor taken (zoals bij functie 17), en een test dat het menu van een voorstel niets aanbiedt dat verstuurt.
+**Status:** Gebouwd — `.contextMenu` per soort; een voorstel of vraag toont alleen Bekijken en de regel over versturen. Taakstappen volgen `validNext` (`VoorJouMenu`).
 
 #### 20. Haptiek bij de veegdrempel
 
 Het passeren van de actiedrempel van een veeg geeft één `.selection`-tik, één keer per passage (brief §2.5).
 
-**Status:** Nog te bouwen — komt met functies 16–18.
+**Status:** Nog te bouwen — de systeemveeg van SwiftUI meldt het passeren van de drempel niet aan de app; een eigen `.selection`-tik kan er dus niet aan hangen.
 
 #### 21. Selectiemodus: meerdere suggesties tegelijk
 
 "Selecteer" maakt van de lijst een selectie: "Annuleer · 3 geselecteerd · Alle 18 hier". Alleen suggesties kunnen worden aangevinkt; de Nu-sectie zegt "Alleen suggesties kun je samen afhandelen. Voorstellen, vragen en taken beslis je één voor één." De balk onderaan biedt "Niet relevant (3)" en "Keur 3 goed". Goedkeuren vraagt eerst bevestiging en noemt elk item: "3 suggesties goedkeuren? Telefoongesprek met …, Afschrift oktober … en Brief …. Daarna heb je 5 seconden om het ongedaan te maken." **Er is nooit een bulkverzending** (brief §5.6).
 
-**Status:** Nog te bouwen — nodig: de UI van de selectiemodus en de balk onderaan, goedkeurbaarheid per item (zoals bij functie 16), de bevestiging die de items noemt, en ofwel één approve/reject-aanroep per item (geen nieuwe route; een gedeeltelijke mislukking toont zich dan per rij, functie 26) ofwel een bulkroute die elk item door zijn eigen procedure haalt. Tests: voorstellen, vragen en taken kunnen niet worden geselecteerd; de bevestiging noemt precies de geselecteerde titels.
+**Status:** Gebouwd — `VoorJouSelectionBar`, de Nu-uitleg, vinkjes alleen op suggesties, "Niet relevant (N)" / "Keur N goed" en een bevestiging die elke titel noemt; elke beslissing loopt via zijn eigen route, vastgehouden in één toast. Goedkeuren vraagt dat alle geselecteerde items `approvable` zijn.
 
 #### 22. Beslist items verlaten de lijst
 
 Na een beslissing schuift de rij weg en klapt in (0,25 s) en telt het aantal in de kop af (`.contentTransition(.numericText())`); met Beperk beweging vervaagt hij (brief §2.6).
 
-**Status:** Nog te bouwen — vandaag ververst de lijst gewoon wanneer Martin terugkomt van het detailscherm. Nodig: de verwijderovergang en het aantal in de kop (functie 11).
+**Status:** Gebouwd — een vastgehouden beslissing verbergt de rij met een animatie (crossfade bij Beperk beweging) en het aantal telt af (`.numericText()`).
 
 #### 23. Overgang van rij naar detail
 
 Een rij openen zoomt vanaf de titel van de rij in naar het detailscherm (veer 0,35 s, demping 0,86), met de lijst gedimd erachter; Beperk beweging geeft een crossfade van 0,2 s (brief §2.6).
 
-**Status:** Nog te bouwen — de code gebruikt de standaard navigatie-push. Nodig: `.navigationTransition(.zoom(…))` met een gekoppelde bron per rij.
+**Status:** Gebouwd — `.navigationTransition(.zoom)` vanaf de rij; met Beperk beweging de standaard push.
 
 ### Ongedaan maken en mislukken
 
@@ -223,19 +223,19 @@ Een rij openen zoomt vanaf de titel van de rij in naar het detailscherm (veer 0,
 
 Na een beslissing vanuit de lijst zegt een toast wat er gebeurde en biedt "Ongedaan maken" met een aftelling ("Goedgekeurd · Telefoongesprek met Woonstichting Lindehof … · nog 4 s"). Bij toegankelijkheidstekstgroottes groeit de toast en geeft het frame hem langer ("nog 8 s"). Een undo, geen waarschuwing (brief §3, R24).
 
-**Status:** Nog te bouwen — er bestaat geen toast. Nodig: een toastcomponent, en een besluit over het mechanisme. Ofwel HOUDT de telefoon de POST vast gedurende het venster en verstuurt hem wanneer de toast eindigt (er wordt niets vastgelegd als Martin het ongedaan maakt; de beslissing moet nog steeds worden verstuurd als de app naar de achtergrond gaat), ofwel post hij meteen en roept ongedaan maken een omgekeerde actie per soort aan (er bestaat vandaag geen omkeerroute voor een goedgekeurde of een afgewezen suggestie). De POST vasthouden is de variant die de ledger schoon houdt.
+**Status:** Gebouwd — `InboxDecisions` HOUDT de POST vast gedurende 5 s (8 s bij AX), "Ongedaan maken" verstuurt dus niets; naar de achtergrond gaan verstuurt meteen. `DecisionToastView` met aftelling en balk.
 
 #### 25. Eén toast voor meerdere beslissingen
 
 Twee beslissingen binnen één venster smelten samen tot één toast: "2 beslissingen · Laatste: Gedaan — Formulier bijzondere bijstand ondertekenen. Ook 1 goedgekeurd." met "Ongedaan maken" (de laatste) en "Bekijk beide".
 
-**Status:** Nog te bouwen — komt met functie 24; nodig: een kleine wachtrij van openstaande beslissingen en een sheet "Bekijk beide".
+**Status:** Gebouwd — beslissingen binnen één venster smelten samen ("2 beslissingen · Laatste: … Ook 1 goedgekeurd.") met "Bekijk beide" (`DecisionReviewSheet`).
 
 #### 26. "NIET OPGESLAGEN": een mislukte beslissing, ter plekke bewaard
 
 Wanneer een beslissing vanuit de lijst niet kan worden opgeslagen, blijft de rij staan waar hij stond, met een melding in de rij: "NIET OPGESLAGEN · Je goedkeuring is nog niet opgeslagen: de server van verder heeft een storing. Probeer het opnieuw zodra verder weer werkt." met "Opnieuw proberen" en "Goedkeuring intrekken". Haptiek bij mislukken `.error`.
 
-**Status:** Nog te bouwen — vandaag toont een mislukte beslissing zijn melding op het detailscherm en wordt hij niet bewaard. Nodig: een toestand per rij voor een openstaande beslissing (dezelfde wachtrij als bij functie 24), opnieuw proberen en intrekken, en de foutoorzaak uit `APIError` (`server(Int)` / `transport`).
+**Status:** Gebouwd — een mislukte post zet de rij terug met `VoorJouNotSavedNotice`: oorzaak, "Opnieuw proberen" en "… intrekken"; haptiek `.error`.
 
 ### "Door verder gedaan"
 
@@ -245,7 +245,7 @@ Onder het opbergamendement (CLAUDE.md, Project laws; spec §6.6) mag verder zelf
 
 Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByVerderIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByVerder` — `listVerderActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
 
-**Status:** Gebouwd — `Inbox/DoneByVerderSection.swift`, `packages/api/src/routers/verder-actions.ts`.
+**Status:** Gebouwd — `DoneByVerderListSection`: kop met "BEKIJKEN ›" / "INKLAPPEN ⌄", in de lege lijst met samenvattingszin; nooit amber.
 
 #### 28. Een eigen scherm
 
@@ -257,7 +257,7 @@ Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, al
 
 "Opgeborgen door verder" of "Hernoemd door verder" met de datum en tijd; de documenttitel; één regel per veld dat veranderde, afgeleid uit voor en na: "inbox → opgeborgen", "soort zonder soort → Brief", "naam … → …".
 
-**Status:** Gebouwd — `DoneByVerderCopy` in `Inbox/DoneByVerderSection.swift`.
+**Status:** Gebouwd — in de lijst als zin ("Opgeborgen als bankafschrift: …", "Hernoemd: … → …") met soort of "hernoemd" en de dag (`DoneByVerderList`); het eigen scherm houdt `DoneByVerderCopy`.
 
 #### 30. Ongedaan maken in één tik
 
@@ -286,7 +286,7 @@ Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server bes
 
 Na "Ongedaan maken" toont het frame een toast "Terug in Kan wachten · Afschrift september" met "Ongedaan maken" en een aftelling, en verschijnt de suggestie van het document weer in Kan wachten. Haptiek `.impact(.light)` (brief §2.5).
 
-**Status:** Nog te bouwen — vandaag is de undo definitief zodra de server antwoordt, en is het resultaat een regel tekst. Nodig: de toast (functie 24) en, voor zijn "Ongedaan maken", ofwel een vastgehouden POST ofwel een route om opnieuw toe te passen; geen van beide bestaat.
+**Status:** Deels gebouwd — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Dat de suggestie al tijdens de toast terug in Kan wachten staat (zoals het frame toont) kan niet: er wordt pas iets teruggezet als de POST na het venster is verstuurd. Haptiek `.impact(.light)`.
 
 ### Een item openen
 
@@ -345,37 +345,37 @@ Brief §2.4: elke staat heeft een volgende stap, en geen frame is een doodlopend
 
 Vóór de eerste ophaalactie tekent de lijst grijze plaatshouderrijen in de vorm van de echte secties, zodat het eerste betekenisvolle frame binnen 100 ms op het scherm staat (brief §2.1: geen kale spinner waar een lijst zal verschijnen).
 
-**Status:** Nog te bouwen — de code toont de titel en een `ProgressView`. Nodig: een skeletrijweergave (met `.redacted(reason: .placeholder)` of getekende balken) en de capture van de `loading`-fixture.
+**Status:** Gebouwd — `VoorJouLoadingPage`: kop en grijze rijen in de vorm van de secties.
 
 #### 38. De laatste lijst, bewaard over herstarts heen
 
 De telefoon toont de laatst bekende lijst van schijf binnen 300 ms nadat het tabblad verschijnt, en ververst daarna ter plekke (brief §2.1, §1.5: offline is een ontworpen staat). Dit is wat de offline- en storingsframes na een koude start mogelijk maakt.
 
-**Status:** Nog te bouwen — `InboxStore` houdt de lijst alleen in het geheugen; de widget-snapshot op schijf bevat alleen de bovenste vijf. Nodig: een cache op schijf van de hele `InboxDTO` met dezelfde beschermingsklasse als de widget-snapshot (of `.completeFileProtection`, zoals `TimelineStore` doet) en uitgesloten van de back-up, gewist door dezelfde `SessionEpoch` bij uitloggen of een geweigerde sessie, en tests voor beide (`TimelineStore` is het patroon).
+**Status:** Gebouwd — `InboxCache` (Application Support, `.completeFileProtection`, uitgesloten van back-up), geladen bij het maken van `InboxStore`, gewist door `SessionEpoch` en bij een 401. Fixtures `voorjou-offline` / `voorjou-storing` zaaien hem (`inboxCachedAt`).
 
 #### 39. Leeg: niets wacht
 
 "Niets wacht op je" als grote regel met een vinkzegel, dan "Goed bezig. Je rondde zaterdag 31 okt het laatste af. Komt er iets nieuws binnen, dan krijg je een melding." en "0 wachten · bijgewerkt 14:02". "Door verder gedaan" blijft bereikbaar, als samenvattingsregel ("3 dingen deed verder deze week zelf. …") met "Bekijken".
 
-**Status:** Deels gebouwd — de code zegt "Niets wacht op je." in gedempte inkt en toont nog steeds de sectie "Door verder gedaan" (`VoorJouList.emptyText`). Ontbreekt: de regel "wanneer werd het laatste afgehandeld" — de telefoon decodeert `InboxDTO.lastClearedAt` al (Overzicht gebruikt het), maar `toInboxDTO` stuurt het nooit, dus de server moet het berekenen (de nieuwste beslissing die de lijst leegmaakte) — plus de actualiteitsregel en de vorm van de sectie als samenvatting met Bekijken.
+**Status:** Deels gebouwd — `VoorJouEmptyState` met zegel, kop, "Goed bezig…", "0 wachten · bijgewerkt" en de samenvatting van Door verder gedaan. De zin "Je rondde … het laatste af" verschijnt alleen als de server `lastClearedAt` stuurt; `toInboxDTO` doet dat nog niet.
 
 #### 40. Offline over de laatste lijst
 
 Een kaart "OFFLINE · Je ziet je laatste stand. Goedkeuren en afronden kan weer zodra je verbinding hebt.", de kop met "offline · bijgewerkt 14:02", en de Kan wachten-sectie gemarkeerd als "ALLEEN LEZEN · OFFLINE": acties die de server nodig hebben, zijn uitgeschakeld met de reden erbij, nooit stilzwijgend (brief §2.4).
 
-**Status:** Deels gebouwd — de code toont "Geen verbinding met verder. Probeer het opnieuw." boven een lijst die in dit proces is opgehaald, en rijen openen nog steeds (`VoorJouTab.message`). Ontbreekt: de kaart, de leeftijd, de alleen-lezen-markering met uitgeschakelde vegen en menu's, en — na een koude start — überhaupt een lijst (functie 38).
+**Status:** Gebouwd — kaart "OFFLINE", "offline · bijgewerkt", "ALLEEN LEZEN · OFFLINE" op Kan wachten; vegen uit, menu's zeggen waarom.
 
 #### 41. Storing over de laatste lijst
 
 Een kaart "STORING · De server van verder heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan." met "Opnieuw proberen", en de kop met "laatste stand 14:02".
 
-**Status:** Deels gebouwd — de code toont "Dat lukte niet. Probeer het over een moment opnieuw." boven een eventuele lijst in het geheugen; opnieuw proberen kan alleen door te trekken om te verversen. Ontbreekt: de kaart, de knop om opnieuw te proberen, de leeftijd.
+**Status:** Gebouwd — kaart "STORING" met "Opnieuw proberen", kop "laatste stand".
 
 #### 42. Mislukken zonder iets om te tonen
 
 "Voor jou laadt nu niet · De server van verder heeft een storing. Er is niets verloren gegaan." met "Opnieuw proberen" en "laatste poging 14:02 · serverfout 502".
 
-**Status:** Deels gebouwd — de code toont alleen de melding; trekken om te verversen probeert opnieuw. Ontbreekt: de knop en de regel met de laatste poging. De gegevens zijn er: `InboxStore.attemptedAt` en `APIError.server(Int)`.
+**Status:** Gebouwd — `VoorJouFailurePage` met knop en "laatste poging 14:02 · serverfout 502".
 
 #### 43. Sessie verlopen
 
@@ -393,7 +393,7 @@ Het vergrendelscherm (`LockGate`) in plaats van het tabblad; Face ID of de toega
 
 Elk lettertype schaalt mee met Dynamic Type en titels worden bij toegankelijkheidsgroottes nooit afgekapt. Bij AX5 stapelt de metaregel verticaal (soort, wie, deadline, leeftijd elk op een eigen regel) en worden aantallen nooit afgekapt (brief §2.7).
 
-**Status:** Deels gebouwd — elk lettertype is ingesteld met `relativeTo:` en titels lopen door (`Inbox/VoorJouTab.swift`). Ontbreekt: de metaregel is één `HStack` en stapelt niet bij toegankelijkheidsgroottes (nodig: een `ViewThatFits` of een schakeling op `dynamicTypeSize.isAccessibilitySize`).
+**Status:** Gebouwd — bij AX staat de metaregel per feit op een eigen regel, valt de goot weg, breekt geen woord midden in (`wholeWords`) en staat de compacte kop altijd bovenaan.
 
 #### 46. Kleine telefoon (iPhone SE, 375 × 667)
 
@@ -407,13 +407,13 @@ Dezelfde lijst in één kolom, niets afgesneden.
 
 Eén element per rij, voorgelezen in de volgorde soort, titel, wie, "wacht op jou", leeftijd — bijvoorbeeld "Voorstel, antwoord aan Regio 3, wacht op jou, 2 dagen". De schermtitel is een kop.
 
-**Status:** Deels gebouwd — een rij die opent is een `Button`, dus VoiceOver leest hem als één element, maar in weergavevolgorde (titel eerst, geen "wacht op jou", geen leeftijd), en de halterij is helemaal niet samengevoegd. Overzicht bouwt deze zin al (`HomeSummary`-regel "One row, read whole"); Voor jou heeft hetzelfde `accessibilityLabel` nodig en `.accessibilityAddTraits(.isHeader)` op de titel.
+**Status:** Gebouwd — één element per rij met `VoorJouList.accessibilityLabel` (soort, titel, wie, "wacht op jou", leeftijd); titel en sectiekoppen zijn koppen.
 
 #### 48. Veegacties als VoiceOver-acties
 
 Elke veeg- en contextmenuactie is ook een aangepaste VoiceOver-actie op de rij (brief §2.7), zodat niets van een gebaar afhangt.
 
-**Status:** Nog te bouwen — komt met functies 16–19 (`.accessibilityActions`, zoals `Scan/QueueViews.swift` al doet).
+**Status:** Gebouwd — elke veeg- en menuactie is ook een `.accessibilityActions`-actie; de toast heeft "Ongedaan maken" als actie.
 
 ## Privacy en beveiliging
 
@@ -476,7 +476,7 @@ De achtergrondpush met `content-available` wekt `AppDelegate`, die dezelfde `Inb
 
 Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg) `.success`; een afwijzing `.impact(.soft)`, omdat afwijzen geen mislukking is; een veeg die zijn drempel passeert `.selection`; een undo in "Door verder gedaan" `.impact(.light)`; een mislukte beslissing `.error`, met het opnieuw proberen in de rij. Allemaal overgeslagen wanneer systeemhaptiek uit staat; niets hangt ervan af.
 
-**Status:** Nog te bouwen — deze schermen hebben geen `.sensoryFeedback` (de enige in de app staan op Overzicht, Scan, de wachtrij en het scherm voor een verlopen sessie). Nodig: één trigger per moment op de lijst, de detailschermen en de undo in "Door verder gedaan".
+**Status:** Gebouwd voor de lijst — `.success`, `.impact(.soft)` (afwijzen), `.error` (mislukt, en een mislukte verversing), `.impact(.light)` (undo in Door verder gedaan). Nog te bouwen: de drempeltik `.selection` (zie 20) en de detailschermen.
 
 ## Offline gedrag en synchronisatie
 

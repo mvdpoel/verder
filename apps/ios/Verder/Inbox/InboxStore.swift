@@ -3,6 +3,52 @@ import Observation
 import UserNotifications
 import WidgetKit
 
+/// The phone's copy of the last good Voor jou list, so a cold start shows it
+/// (offline included, with its age) within a frame instead of a spinner, and
+/// the offline and storing states have something to stand over.
+///
+/// It names the case, so it lives in Application Support (never the App
+/// Group the widget reads), with complete file protection, excluded from
+/// backup, and is wiped by the same `SessionEpoch` that ends the session —
+/// and by a 401 — exactly like `TimelineCache`.
+struct InboxCache: Sendable {
+    typealias Writer = @Sendable (Data, URL, Data.WritingOptions) throws -> Void
+    static let writeOptions: Data.WritingOptions = [.atomic, .completeFileProtection]
+    static let defaultWriter: Writer = { try $0.write(to: $1, options: $2) }
+
+    struct Entry: Codable, Equatable, Sendable {
+        let savedAt: Date
+        let inbox: InboxDTO
+    }
+
+    let dir: URL
+    var write: Writer = Self.defaultWriter
+
+    static var live: InboxCache {
+        InboxCache(dir: URL.applicationSupportDirectory.appending(path: "inbox", directoryHint: .isDirectory))
+    }
+
+    var url: URL { dir.appending(path: "inbox.json") }
+
+    func load() -> Entry? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? APIClient.jsonDecoder.decode(Entry.self, from: data)
+    }
+
+    func save(_ entry: Entry) throws {
+        var folder = dir
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? folder.setResourceValues(values)
+        try write(try APIClient.jsonEncoder.encode(entry), url, Self.writeOptions)
+    }
+
+    func wipe() {
+        try? FileManager.default.removeItem(at: dir)
+    }
+}
+
 /// Voor jou's data: everything waiting on Martin, as the server ranks it.
 ///
 /// Made ONCE, in `VerderApp`, beside `PushRegistrar`: the tab reads it, and the
@@ -29,6 +75,8 @@ final class InboxStore {
     private(set) var fetchedAt: Date?
     /// When the last refresh finished, good or bad: "volgende poging" counts on it.
     private(set) var attemptedAt: Date?
+    /// Failed refreshes, counted: Voor jou's `.error` haptic fires once per failure.
+    private(set) var failures = 0
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let snapshotDir: URL?
@@ -38,6 +86,7 @@ final class InboxStore {
     @ObservationIgnored private let writer: WidgetSnapshot.Writer
     @ObservationIgnored private let reloadWidgets: @MainActor () -> Void
     @ObservationIgnored private let epoch: SessionEpoch
+    @ObservationIgnored private let cache: InboxCache?
 
     init(client: APIClient,
          snapshotDir: URL? = AppGroup.containerURL,
@@ -46,8 +95,10 @@ final class InboxStore {
          now: @escaping @Sendable () -> Date = Date.init,
          writer: @escaping WidgetSnapshot.Writer = { try $0.write(to: $1, options: $2) },
          reloadWidgets: @escaping @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() },
-         epoch: SessionEpoch = SessionEpoch()) {
+         epoch: SessionEpoch = SessionEpoch(),
+         cache: InboxCache? = nil) {
         self.client = client
+        self.cache = cache
         self.epoch = epoch
         self.snapshotDir = snapshotDir
         self.setBadge = setBadge
@@ -56,6 +107,11 @@ final class InboxStore {
         self.writer = writer
         self.reloadWidgets = reloadWidgets
         epoch.whenEnded { [weak self] in self?.sessionEnded() }
+        // The last good list, shown at once; the first refresh replaces it.
+        if let kept = cache?.load() {
+            inbox = kept.inbox
+            fetchedAt = kept.savedAt
+        }
     }
 
     static let systemBadge: @Sendable (Int) async -> Void = { count in
@@ -84,7 +140,11 @@ final class InboxStore {
         switch i {
         case .success(let value): dto = value
         case .failure(let error):
+            // The caller stopped waiting (a view's task was cancelled): that
+            // says nothing about the network, so the list keeps its state.
+            if APIError.isCancellation(error) { return }
             lastError = error
+            failures += 1
             if error == .unauthorized {
                 forgetCaseContent()
                 onUnauthorized()
@@ -94,6 +154,7 @@ final class InboxStore {
         inbox = dto
         lastError = nil
         fetchedAt = attemptedAt
+        if let cache, let fetchedAt { try? cache.save(.init(savedAt: fetchedAt, inbox: dto)) }
 
         if let snapshotDir {
             let top = dto.items.first
@@ -135,6 +196,7 @@ final class InboxStore {
     private func forgetCaseContent() {
         inbox = nil
         summary = nil
+        cache?.wipe()
         if let snapshotDir {
             WidgetSnapshot.erase(in: snapshotDir)
             reloadWidgets()

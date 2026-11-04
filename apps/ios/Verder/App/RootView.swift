@@ -243,7 +243,7 @@ struct RootView: View {
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
                 VoorJouTab(store: inbox, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
-                           onUnauthorized: { auth.sessionRejected() })
+                           onUnauthorized: { auth.sessionRejected() }, now: now)
                     .lockGated(by: lock)
                     .environment(\.lockedTarget, lockedTarget?.tab == .voorJou ? lockedTarget : nil)
             }
