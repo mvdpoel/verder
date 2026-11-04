@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Host watchdog: puts back what a reboot, a maintenance stop or an NFS outage
 # left down. Host crontab (CRON_TZ=UTC is irrelevant, it runs every 5 minutes):
-#   */5 * * * * /home/<user>/apps/verder/ops/watchdog.sh >> /home/<user>/.local/state/verder-watchdog/cron.log 2>&1
+#   */5 * * * * /home/<user>/apps/grip/ops/watchdog.sh >> /home/<user>/.local/state/grip-watchdog/cron.log 2>&1
 #
 # It deliberately has no `set -e`: one failing check must not stop the others.
 #
-# STATE LIVES OUTSIDE THE REPO. ~/apps/verder is rsynced with --delete, and any
+# STATE LIVES OUTSIDE THE REPO. ~/apps/grip is rsynced with --delete, and any
 # file the host writes in there that is not in the exclude list is erased on the
 # next deploy. The strike counters would silently reset; the log would vanish.
 set -uo pipefail
@@ -17,7 +17,7 @@ source ./.env.prod
 set +a
 
 COMPOSE=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
-STATE_DIR=${WATCHDOG_STATE_DIR:-$HOME/.local/state/verder-watchdog}
+STATE_DIR=${WATCHDOG_STATE_DIR:-$HOME/.local/state/grip-watchdog}
 LOG="$STATE_DIR/watchdog.log"
 SERVICES="postgres web worker stalwart"
 SCAN_DIR=${NAS_SCAN_HOST_DIR:-/mnt/nas-workspace}

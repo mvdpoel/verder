@@ -2,7 +2,7 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03 (`apps/ios/Verder/Money/`, `apps/ios/Verder/Home/`, `apps/web/src/app/api/mobile/v1/money/summary/route.ts`, `packages/api/src/leefgeld-week.ts`, `packages/api/src/money-series.ts`). Dit document beschrijft de **volledige** set functies van de twee geldschermen, zoals de definitieve frames, de spec (§7.6) en de brief (§2.5–2.7 en de flowtabel in §3) die vastleggen. Elke functie, F1 tot en met F31, heeft precies één statusregel. Martin, 2026-11-03: niet elke functie hoeft al gebouwd te zijn; het bouwen ervan is de volgende stap.
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03 (`apps/ios/Grip/Money/`, `apps/ios/Grip/Home/`, `apps/web/src/app/api/mobile/v1/money/summary/route.ts`, `packages/api/src/leefgeld-week.ts`, `packages/api/src/money-series.ts`). Dit document beschrijft de **volledige** set functies van de twee geldschermen, zoals de definitieve frames, de spec (§7.6) en de brief (§2.5–2.7 en de flowtabel in §3) die vastleggen. Elke functie, F1 tot en met F31, heeft precies één statusregel. Martin, 2026-11-03: niet elke functie hoeft al gebouwd te zijn; het bouwen ervan is de volgende stap.
 
 | Status | Aantal |
 |---|---|
@@ -29,7 +29,7 @@ Beide zijn **alleen-lezen**. Niets erop schrijft naar de server of maakt een led
 
 Dit document beschrijft wat de schermen doen. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectie `money · final`, node `309:2639`. De frames in `frames/` zijn op 2026-11-03 opnieuw uit die sectie geëxporteerd, nadat de tabbalk centraal was gerepareerd. Elke schermafbeelding gebruikt de synthetische fixture-dataset (een beheerrekening eindigend op 6789, een leefgeldrekening eindigend op 3210, een werkgever genaamd Atelier Sterrenwacht), geen echte dossiergegevens. UI-teksten zijn in het Nederlands geciteerd, precies zoals de app ze toont.
 
-> **Het ontwerp loopt voor op de code, het meest bij Geld.** De frames voegen functies toe die de code nog niet heeft: rekeningen met een naam, een maandgrafiek waarop je een maand kunt kiezen door te tikken, een sheet "Niet in de balken", het tijdstip van het laatste ophalen, een offlinemelding en een diagnostische regel bij een fout. Op branch `feat/iphone-app` (`apps/ios/Verder/Money/MoneyGlanceView.swift`) is `GeldScreen` een eenvoudige lijst: een actualiteitsregel, een paneel "LEEFGELD OVER DEZE WEEK", en per rekening een titel ("Rekening NL00 …"), een kleine legenda "in"/"uit" en één regel per maand met twee horizontale balken en de toelichtingen eronder uitgeschreven. Plan 3 Taak 19 legt vast dat dit bewust is: "Swift Charts and the disclosure sheet the brief mentions are left for the Figma pass." Het overzicht op Overzicht zit veel dichter bij de frames; de tekstverschillen staan hieronder. **Dit document beschrijft de volledige set functies.** Het behandelt wat de code nu doet en, met de status "Nog te bouwen", wat de frames en de spec toevoegen. De [frametabel](#frames) aan het eind zegt per frame hoe dicht de code erbij zit.
+> **Het ontwerp loopt voor op de code, het meest bij Geld.** De frames voegen functies toe die de code nog niet heeft: rekeningen met een naam, een maandgrafiek waarop je een maand kunt kiezen door te tikken, een sheet "Niet in de balken", het tijdstip van het laatste ophalen, een offlinemelding en een diagnostische regel bij een fout. Op branch `feat/iphone-app` (`apps/ios/Grip/Money/MoneyGlanceView.swift`) is `GeldScreen` een eenvoudige lijst: een actualiteitsregel, een paneel "LEEFGELD OVER DEZE WEEK", en per rekening een titel ("Rekening NL00 …"), een kleine legenda "in"/"uit" en één regel per maand met twee horizontale balken en de toelichtingen eronder uitgeschreven. Plan 3 Taak 19 legt vast dat dit bewust is: "Swift Charts and the disclosure sheet the brief mentions are left for the Figma pass." Het overzicht op Overzicht zit veel dichter bij de frames; de tekstverschillen staan hieronder. **Dit document beschrijft de volledige set functies.** Het behandelt wat de code nu doet en, met de status "Nog te bouwen", wat de frames en de spec toevoegen. De [frametabel](#frames) aan het eind zegt per frame hoe dicht de code erbij zit.
 
 ![Geldoverzicht, volledige week (ontwerp)](frames/Money_glance_complete.jpg)
 
@@ -42,19 +42,19 @@ Dit document beschrijft wat de schermen doen. Het visuele ontwerp valt erbuiten;
 
 ## Hoe je er komt, en waar het heen leidt
 
-### F24. Ingangen: de Overzicht-kaart, Meer en `verder://money`
+### F24. Ingangen: de Overzicht-kaart, Meer en `grip://money`
 
-**Status:** Gebouwd (`Verder/Home/HomeTab.swift` `showGeld`, `Verder/More/MoreMenu.swift`, `Verder/More/MoreTab.swift`, `Verder/Push/DeepLink.swift`)
+**Status:** Gebouwd (`Grip/Home/HomeTab.swift` `showGeld`, `Grip/More/MoreMenu.swift`, `Grip/More/MoreTab.swift`, `Grip/Push/DeepLink.swift`)
 
 | Ingang | Wat er gebeurt |
 |---|---|
 | Overzicht, de Leefgeld-kaart | Een tik zet `GeldScreen` op Overzichts eigen stack, verpakt in `.lockGated(by:)` (`HomeTab.showGeld`). Toegankelijkheidshint "Opent Geld". |
 | Overzicht, de kaart "Geld" (geen weekbedrag ingesteld) | Dezelfde push. Deze kaart bestaat alleen zolang de app ontgrendeld is (zie [Toestanden](#toestanden)). |
 | Meer → sectie "Dossier" → "Geld" (icoon `eurosign`) | Zet `MoreRoute.money` op de Meer-stack (`MoreMenu`, `MoreTab`). Het hele Meer-tabblad is vergrendelbeveiligd. |
-| Deep link `verder://money` | Opent het Meer-tabblad met `[.money]` op de stack (`DeepLink.money`, `LinkDestination(tab: .meer, stack: .meer([.money]))`). Alleen de kale link wordt herkend: `verder://money#a` wordt geweigerd (`LinkDestinationTests`). **Geen enkele servercode stuurt deze link op dit moment**: elke worker-push linkt naar `verder://inbox` of `verder://proposal/<id>`. Ook geen widget of snelle actie gebruikt hem. |
+| Deep link `grip://money` | Opent het Meer-tabblad met `[.money]` op de stack (`DeepLink.money`, `LinkDestination(tab: .meer, stack: .meer([.money]))`). Alleen de kale link wordt herkend: `grip://money#a` wordt geweigerd (`LinkDestinationTests`). **Geen enkele servercode stuurt deze link op dit moment**: elke worker-push linkt naar `grip://inbox` of `grip://proposal/<id>`. Ook geen widget of snelle actie gebruikt hem. |
 | Fixture-opnames | `-route geld` (`FixtureLaunch.parseRoute("geld") == .link(.money)`), en de fixture-sets `money-*` (`apps/ios/scripts/capture.sh`). |
 
-- **Terugknoplabel.** De frames tonen "‹ Overzicht" op elk Geld-frame. Dat klopt wanneer Geld vanuit Overzicht wordt geopend. Wordt het geopend vanuit Meer of via `verder://money`, dan keert de terugknop terug naar Meer.
+- **Terugknoplabel.** De frames tonen "‹ Overzicht" op elk Geld-frame. Dat klopt wanneer Geld vanuit Overzicht wordt geopend. Wordt het geopend vanuit Meer of via `grip://money`, dan keert de terugknop terug naar Meer.
 
 ### F25. Landen op een rekening
 
@@ -64,18 +64,18 @@ Het ontwerp zegt dat een tik op de Leefgeld-kaart op Geld landt, gescrold naar d
 
 ### F26. Naar de website
 
-**Status:** Gebouwd (`Verder/Home/LeefgeldGlance.swift` `websitePath`)
+**Status:** Gebouwd (`Grip/Home/LeefgeldGlance.swift` `websitePath`)
 
-- **"Open op de website" / "Kies hem op de website"** (bij de meldingstoestanden van het overzicht) openen `https://verder.vanderpoel.pro/money` buiten de app. De app claimt geen universal links, dus de link opent in Safari.
+- **"Open op de website" / "Kies hem op de website"** (bij de meldingstoestanden van het overzicht) openen `https://grip.vanderpoel.pro/money` buiten de app. De app claimt geen universal links, dus de link opent in Safari.
 - **Geld heeft geen uitgaande links.** De regels zijn niet aantikbaar.
 
 ## Functies
 
 ### F1. Het ene verzoek
 
-**Status:** Gebouwd (`apps/web/src/app/api/mobile/v1/money/summary/route.ts`, `packages/api/src/routers/money.ts`, `Verder/Money/MoneyGlance.swift` `MoneyStore`)
+**Status:** Gebouwd (`apps/web/src/app/api/mobile/v1/money/summary/route.ts`, `packages/api/src/routers/money.ts`, `Grip/Money/MoneyGlance.swift` `MoneyStore`)
 
-- **Route:** `GET /api/mobile/v1/money/summary`, opgehaald door `MoneyStore.refresh()`. De app heeft één `MoneyStore` (`VerderApp`), gedeeld door Overzicht en Geld, zodat beide altijd hetzelfde antwoord tonen.
+- **Route:** `GET /api/mobile/v1/money/summary`, opgehaald door `MoneyStore.refresh()`. De app heeft één `MoneyStore` (`GripApp`), gedeeld door Overzicht en Geld, zodat beide altijd hetzelfde antwoord tonen.
 - **Het is een `mobileGet`.** De sessie wordt gecontroleerd voordat er een router draait. Een verzoek zonder sessie krijgt JSON `401 unauthorized`. Elk antwoord draagt `cache-control: no-store`.
 - **Aan de serverkant, in volgorde:**
   1. `caller.money.glance()` leest elke transactie en elk registeritem **één keer**, bouwt de reeks met `buildMoneySeries`, en geeft `{ series, txs, newestBooking }` terug. `newestBooking` is de nieuwste **leesbare** boeking als Amsterdamse dagsleutel. Regels met een parse-fout worden overgeslagen, omdat hun datum van de import is geleend.
@@ -106,7 +106,7 @@ Uit `leefgeld-week.ts`, ongewijzigd door de telefoon:
 
 ### F3. Het geldoverzicht op Overzicht: de weektoestanden
 
-**Status:** Gebouwd (`Verder/Home/LeefgeldGlance.swift`, `Verder/Home/HomeTab.swift`; getest in `LeefgeldGlanceTests`). De teksten wijken af van de frames; zie F4.
+**Status:** Gebouwd (`Grip/Home/LeefgeldGlance.swift`, `Grip/Home/HomeTab.swift`; getest in `LeefgeldGlanceTests`). De teksten wijken af van de frames; zie F4.
 
 Het volledige gedrag van de kaart staat in [`02-overzicht/FEATURES.md`](../02-overzicht/FEATURES.md#leefgeld). Kort gezegd maakt `LeefgeldGlance.make` van de week een van deze toestanden:
 
@@ -145,9 +145,9 @@ Het volledige gedrag van de kaart staat in [`02-overzicht/FEATURES.md`](../02-ov
 
 ### F6. Geld: het paneel met de leefgeldweek
 
-**Status:** Gebouwd (`Verder/Money/MoneyGlance.swift` `LeefgeldCard`, `Verder/Money/MoneyGlanceView.swift` `GeldScreen.leefgeldCard`; getest in `LeefgeldCardTests`). **De definitieve frames hebben zo'n paneel op Geld niet**: ze tonen de week alleen op Overzicht en beginnen Geld met de rekeningkaarten. Of het paneel blijft, is een open ontwerpbeslissing.
+**Status:** Gebouwd (`Grip/Money/MoneyGlance.swift` `LeefgeldCard`, `Grip/Money/MoneyGlanceView.swift` `GeldScreen.leefgeldCard`; getest in `LeefgeldCardTests`). **De definitieve frames hebben zo'n paneel op Geld niet**: ze tonen de week alleen op Overzicht en beginnen Geld met de rekeningkaarten. Of het paneel blijft, is een open ontwerpbeslissing.
 
-`GeldScreen` toont, van boven naar beneden. Elk woord komt uit `MoneyGlance` (`Verder/Money/MoneyGlance.swift`, met unittests); de view schikt het alleen.
+`GeldScreen` toont, van boven naar beneden. Elk woord komt uit `MoneyGlance` (`Grip/Money/MoneyGlance.swift`, met unittests); de view schikt het alleen.
 
 1. **Titel** "Geld" (een kop voor VoiceOver).
 2. **Actualiteit:** "laatste afschrift t/m do 29 okt", of "nog geen afschriften ingelezen". Dit is de leeftijd van de **afschriften**, niet van het ophalen: "deze week" is maar zo actueel als de laatste import. (Het tijdstip van ophalen is F14.)
@@ -163,7 +163,7 @@ Het volledige gedrag van de kaart staat in [`02-overzicht/FEATURES.md`](../02-ov
 
 ### F7. Geld: één kaart per rekening, zes maanden, toelichtingen direct eronder
 
-**Status:** Gebouwd (`Verder/Money/MoneyGlance.swift` `AccountCard`, `MonthBar`; `GeldScreen.accountCard`; getest in `LeefgeldCardTests`: `cardsAreNeverSummed`, `barsScalePerAccount`, `disclosuresTravelWithTheirMonth`). Het is gebouwd als lijst; de frames vervangen die door een grafiek (F8), een uitlezing (F9) en een sheet (F13).
+**Status:** Gebouwd (`Grip/Money/MoneyGlance.swift` `AccountCard`, `MonthBar`; `GeldScreen.accountCard`; getest in `LeefgeldCardTests`: `cardsAreNeverSummed`, `barsScalePerAccount`, `disclosuresTravelWithTheirMonth`). Het is gebouwd als lijst; de frames vervangen die door een grafiek (F8), een uitlezing (F9) en een sheet (F13).
 
 **Eén kaart per rekening** (`AccountCard`), in de volgorde van de server (gesorteerd op IBAN, dus de reeks "onbekende rekening", met een lege IBAN als sleutel, komt eerst), nooit opgeteld:
 
@@ -252,7 +252,7 @@ Deze regel staat los van de leeftijd van de afschriften in F6: de een zegt wanne
 
 ### F16. Einde van de sessie: late antwoorden negeren, het geld wissen
 
-**Status:** Gebouwd (`Verder/Auth/SessionEpoch.swift`, `MoneyStore.init`; getest in `SessionEpochTests.aStaleEpochMoneyRefreshDoesNotRepopulate`)
+**Status:** Gebouwd (`Grip/Auth/SessionEpoch.swift`, `MoneyStore.init`; getest in `SessionEpochTests.aStaleEpochMoneyRefreshDoesNotRepopulate`)
 
 - **Een antwoord dat binnenkomt nadat de sessie is beëindigd, wordt genegeerd** (`SessionEpoch`), ook een 401.
 - **Uitloggen en een 401 wissen het geld.** Het beëindigen van de `SessionEpoch` leegt `glance` en `lastError`, en een ophaalactie die nog loopt schrijft niets terug.
@@ -304,7 +304,7 @@ Het frame "Geld / nog geen afschriften" toont één kaart: de omtrek van een leg
 
 ### F21. Vergrendeld: Face ID voordat Geld opent
 
-**Status:** Deels gebouwd — in vergrendelde toestand wordt Geld nooit opgebouwd en verschijnt het vergrendelscherm op zijn plek (`Verder/Auth/LockView.swift` `.lockGated(by:)`), dat per vergrendeling één keer uit zichzelf vraagt. Nog ontbrekend: het systeemsheet van Face ID over Overzicht oproepen wanneer de kaart in vergrendelde toestand wordt aangetikt, en Geld pas bij succes openen; dat is een wijziging in `HomeTab.showGeld` (eerst authenticeren, dan pushen) en een UI-test voor het geannuleerde geval.
+**Status:** Deels gebouwd — in vergrendelde toestand wordt Geld nooit opgebouwd en verschijnt het vergrendelscherm op zijn plek (`Grip/Auth/LockView.swift` `.lockGated(by:)`), dat per vergrendeling één keer uit zichzelf vraagt. Nog ontbrekend: het systeemsheet van Face ID over Overzicht oproepen wanneer de kaart in vergrendelde toestand wordt aangetikt, en Geld pas bij succes openen; dat is een wijziging in `HomeTab.showGeld` (eerst authenticeren, dan pushen) en een UI-test voor het geannuleerde geval.
 
 De frames "vergrendeld · Face ID vraagt" en "· geannuleerd" tonen het Face ID-sheet over Overzicht met het leefgeldbedrag nog zichtbaar erachter, en na annuleren Overzicht met "Face ID is geannuleerd. Titels zie je na ontgrendelen." en "Toon details", met de bedragen nog in beeld.
 
@@ -318,7 +318,7 @@ Het frame "Geld / complete · AX5" stapelt elk label, zet elke maand in een eige
 
 ### F23. Kleine telefoon en het overzicht bij grote groottes
 
-**Status:** Gebouwd (`Verder/Home/HomeTab.swift` `LeefgeldGlanceView`; getest in `LeefgeldGlanceTests`)
+**Status:** Gebouwd (`Grip/Home/HomeTab.swift` `LeefgeldGlanceView`; getest in `LeefgeldGlanceTests`)
 
 Op de iPhone SE stapelen het hoofdbedrag en het bijschrift van het overzicht als ze niet met 24 pt marge passen, en wordt de lijst van Geld smaller. Bij toegankelijkheidsgroottes gebruikt het overzicht labels in zinsnaamvorm, stapelt het kop en kolommen, en begrenst het de monotekst op AX3.
 
@@ -329,9 +329,9 @@ Op de iPhone SE stapelen het hoofdbedrag en het bijschrift van het overzicht als
 **Status:** Gebouwd (`MoneyGlance.summary(revealed:)`, `LeefgeldGlance.accessibilityLabel`, `LeefgeldCard.glanceText`, `.lockGated(by:)`; getest in `LeefgeldCardTests`: `revealedSummaryShowsTheAccountLines`, `revealedFigureStillLeavesTheAccountToGeld`, en de gevallen met een vergrendelde samenvatting)
 
 - **Het overzicht op Overzicht is open in vergrendelde toestand, en toont alleen bedragen.** Het toont nooit een rekening, een IBAN-staart of een tegenpartij. Ook het VoiceOver-label bevat die niet. Op Geld laat ook de VoiceOver-tekst van het bedrag de rekeningregel weg; die wordt als eigen element voorgelezen. In vergrendelde toestand laat `MoneyGlance.summary(revealed: false)` de regels per rekening weg, zodat de kaart "Geld" zonder budget verdwijnt. De Leefgeld-kaart noemt het *soort* rekening ("Alleen je leefgeldrekening."), nooit welke.
-- **Geld is vergrendelbeveiligd, omdat het tegenpartijen en IBAN's noemt.** Vanuit Overzicht is het verpakt in `.lockGated(by:)`; vanuit Meer en `verder://money` is het hele Meer-tabblad beveiligd. In vergrendelde toestand wordt de beveiligde inhoud **helemaal niet opgebouwd** (het is geen overlay), zodat die niets kan laden of aan VoiceOver kan melden.
+- **Geld is vergrendelbeveiligd, omdat het tegenpartijen en IBAN's noemt.** Vanuit Overzicht is het verpakt in `.lockGated(by:)`; vanuit Meer en `grip://money` is het hele Meer-tabblad beveiligd. In vergrendelde toestand wordt de beveiligde inhoud **helemaal niet opgebouwd** (het is geen overlay), zodat die niets kan laden of aan VoiceOver kan melden.
 - **Face ID één keer, bij openen en bij heropenen.** De app vraagt er uit zichzelf om bij een koude start en na meer dan 5 minuten op de achtergrond, met `.deviceOwnerAuthentication` (de toegangscode werkt als Face ID niet werkt). Zie `01-inloggen-en-vergrendeling`.
-- **Niets over geld verschijnt op het toegangsscherm of in een widget.** De widget-snapshot bevat alleen het aantal dat wacht op jou, titels en de kopregel; `VerderWidget` heeft geen geldcode. Geen push bevat geld.
+- **Niets over geld verschijnt op het toegangsscherm of in een widget.** De widget-snapshot bevat alleen het aantal dat wacht op jou, titels en de kopregel; `GripWidget` heeft geen geldcode. Geen push bevat geld.
 - **Er wordt niets over geld op de telefoon opgeslagen.** Het overzicht leeft in `MoneyStore`, alleen in het geheugen. De sessiecookie staat in de Keychain (`AfterFirstUnlockThisDeviceOnly`), zoals voor elke route.
 
 ## Toegankelijkheid
@@ -350,7 +350,7 @@ Op de iPhone SE stapelen het hoofdbedrag en het bijschrift van het overzicht als
 
 ## Meldingen, haptiek en beweging
 
-- **Geen meldingen.** Geen worker-taak stuurt een geldpush, en niets stuurt `verder://money`. Dat is zo ontworpen: de spec geeft geld geen push.
+- **Geen meldingen.** Geen worker-taak stuurt een geldpush, en niets stuurt `grip://money`. Dat is zo ontworpen: de spec geeft geld geen push.
 
 ### F29. Haptiek
 
@@ -360,7 +360,7 @@ De brief (§2.5) geeft de geldgrafiek `.selection` één keer per maand die je b
 
 ### F30. Het bedrag op het overzicht animeert bij een wijziging
 
-**Status:** Gebouwd (`Verder/Home/HomeTab.swift`, `.contentTransition(.numericText())`)
+**Status:** Gebouwd (`Grip/Home/HomeTab.swift`, `.contentTransition(.numericText())`)
 
 Het hoofdbedrag van het overzicht gebruikt `.contentTransition(.numericText())`, zodat een nieuw bedrag doortelt in plaats van verspringt.
 
@@ -386,15 +386,15 @@ Het hoofdbedrag van het overzicht gebruikt `.contentTransition(.numericText())`,
 
 **iOS (`apps/ios/`):**
 
-- `Verder/Money/MoneyGlance.swift`: `LeefgeldCard`, `MonthBar`, `AccountCard`, `MoneyGlance` (inclusief `summary(revealed:)`, de vergrendelregel), `MoneyStore`.
-- `Verder/Money/MoneyGlanceView.swift`: `GeldScreen`, `LeefgeldFigure`, `Hatch`, en `MoneyGlanceSummary`, dat niets meer weergeeft (Overzicht tekent zijn eigen kaart in `HomeTab.swift`; alleen `MoneyGlance.summary(revealed:)` wordt nog gebruikt).
-- `Verder/Money/MoneyModels.swift`: `MoneySummaryDTO`, `MonthSeries`, `DisclosedRow`, `LeefgeldWeek` (strikt decoderen).
-- `Verder/Money/MoneyFormat.swift`: euro-opmaak in hele centen, Nederlandse dag- en maandsleutels, groeperen van IBAN's en hun staarten.
-- `Verder/Home/LeefgeldGlance.swift`: het kaartmodel van Overzicht. `Verder/Home/HomeTab.swift`: `leefgeldCard`, `LeefgeldGlanceView`, `LeefgeldBar`, `LeefgeldSkeleton`, de push naar Geld.
-- `Verder/More/MoreMenu.swift`, `Verder/More/MoreTab.swift`: de regel en route "Geld".
-- `Verder/Push/DeepLink.swift`: `verder://money`.
-- `Verder/Auth/LockView.swift`: `.lockGated(by:)`. `Verder/Auth/SessionEpoch.swift`, `Verder/Auth/AuthModel.swift`: het wissen bij uitloggen.
-- Fixtures: `Verder/FixtureData/money-{complete,partial,overspent,geen-data,empty,no-account,unrecognised,no-budget}`, `Verder/FixtureData/_shared/money`, `Verder/FixtureData/offline-cached/money`; `scripts/capture.sh` (`-route geld`).
+- `Grip/Money/MoneyGlance.swift`: `LeefgeldCard`, `MonthBar`, `AccountCard`, `MoneyGlance` (inclusief `summary(revealed:)`, de vergrendelregel), `MoneyStore`.
+- `Grip/Money/MoneyGlanceView.swift`: `GeldScreen`, `LeefgeldFigure`, `Hatch`, en `MoneyGlanceSummary`, dat niets meer weergeeft (Overzicht tekent zijn eigen kaart in `HomeTab.swift`; alleen `MoneyGlance.summary(revealed:)` wordt nog gebruikt).
+- `Grip/Money/MoneyModels.swift`: `MoneySummaryDTO`, `MonthSeries`, `DisclosedRow`, `LeefgeldWeek` (strikt decoderen).
+- `Grip/Money/MoneyFormat.swift`: euro-opmaak in hele centen, Nederlandse dag- en maandsleutels, groeperen van IBAN's en hun staarten.
+- `Grip/Home/LeefgeldGlance.swift`: het kaartmodel van Overzicht. `Grip/Home/HomeTab.swift`: `leefgeldCard`, `LeefgeldGlanceView`, `LeefgeldBar`, `LeefgeldSkeleton`, de push naar Geld.
+- `Grip/More/MoreMenu.swift`, `Grip/More/MoreTab.swift`: de regel en route "Geld".
+- `Grip/Push/DeepLink.swift`: `grip://money`.
+- `Grip/Auth/LockView.swift`: `.lockGated(by:)`. `Grip/Auth/SessionEpoch.swift`, `Grip/Auth/AuthModel.swift`: het wissen bij uitloggen.
+- Fixtures: `Grip/FixtureData/money-{complete,partial,overspent,geen-data,empty,no-account,unrecognised,no-budget}`, `Grip/FixtureData/_shared/money`, `Grip/FixtureData/offline-cached/money`; `scripts/capture.sh` (`-route geld`).
 
 **Server:**
 
@@ -405,7 +405,7 @@ Het hoofdbedrag van het overzicht gebruikt `.contentTransition(.numericText())`,
 
 **Tests:**
 
-- iOS: `VerderTests/LeefgeldCardTests.swift` (Geld-model, de vergrendelregel, de store, fixtures), `VerderTests/LeefgeldGlanceTests.swift` (Overzicht-kaart), `VerderTests/MoneyFormatTests.swift`, `VerderTests/SessionEpochTests.swift` (wissen van het geld), `VerderTests/LinkDestinationTests.swift` (`verder://money`, `-route geld`), `VerderTests/MoreMenuTests.swift`, `VerderTests/FixtureTests.swift`.
+- iOS: `GripTests/LeefgeldCardTests.swift` (Geld-model, de vergrendelregel, de store, fixtures), `GripTests/LeefgeldGlanceTests.swift` (Overzicht-kaart), `GripTests/MoneyFormatTests.swift`, `GripTests/SessionEpochTests.swift` (wissen van het geld), `GripTests/LinkDestinationTests.swift` (`grip://money`, `-route geld`), `GripTests/MoreMenuTests.swift`, `GripTests/FixtureTests.swift`.
 - Server: `apps/web/src/app/api/mobile/v1/money/summary/route.test.ts`, `packages/api/src/leefgeld-week.test.ts`, `packages/api/src/amsterdam.test.ts`, `packages/api/src/routers/money.test.ts`, en `packages/api/src/money-series.real.test.ts` (het geldorakel: geen enkele inkomensregel verandert zonder ertegen te meten — dat telt voor F9, dat de inkomensregels leest).
 
 **Documentatie:** spec `docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.6 en §13; brief `docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §2.5 (haptiek), §2.6 (beweging), §2.7 (toegankelijkheid), §3 (de regel Money glance) en §5 (de kaart zonder budget); plan `docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md` Taken 17–19; `docs/deploy.md` (de drie `LEEFGELD_*`-variabelen).

@@ -51,7 +51,7 @@ Spec: §6.3 (push via APNs), §6.4 (mail van Verder), §7.2 (een vraag beantwoor
 3. **Het leest de badge zelf**, als de lengte van `loadWaiting(db)` (`packages/api/src/waiting.ts`). Een aanroeper kan nooit een verouderd getal meegeven. Mislukt het tellen, dan blijft de badgesleutel weg (het icoon houdt zijn laatste waarde) en gaat de melding toch.
 4. **Het verspreidt de melding** naar elke `push_devices`-rij waarvan de sessie nog leeft (APNs), en naar elk web-push-abonnement. Elke bestemming krijgt één `notification_attempts`-rij met de uitkomst (`delivered`, `rejected`, `error`, `skipped`), statuscode, reden en `apns_id`. Een apparaat waarvan de sessie is beëindigd wordt ingetrokken (`session-ended`) en krijgt niets. Een APNs-`410` of `400 BadDeviceToken`/`Unregistered` trekt het apparaat ook in; de app registreert zich opnieuw bij de volgende start.
 5. **De APNs-host wordt per apparaat gekozen**, op basis van de omgeving die de app uit haar eigen provisioning profile las (`ProvisioningEnvironment`). De huidige development-ondertekende build is alleen bereikbaar via `api.sandbox.push.apple.com`.
-6. **Op de telefoon** ziet de notification service extension (`VerderNotify`) elke push voordat hij getoond wordt. Hij past alleen een vraag-push aan (zie hieronder); al het andere wordt precies afgeleverd zoals het binnenkwam.
+6. **Op de telefoon** ziet de notification service extension (`GripNotify`) elke push voordat hij getoond wordt. Hij past alleen een vraag-push aan (zie hieronder); al het andere wordt precies afgeleverd zoals het binnenkwam.
 7. **Een tik of een actie** gaat naar `NotificationRouter`, die een plek in de app opent of een vraag beantwoordt.
 
 **Niets hiervan is bewijs.** `notify()` voegt geen ledger-event toe; het legt per melding één `notify`-worker-run vast (`ok` wanneer minstens één bestemming afleverde). Een dubbele `dedup_key` verstuurt niets en legt geen run vast. `notify()` gooit nooit een fout: een kapot meldingspad mag de job waarover het meldt niet laten mislukken.
@@ -60,7 +60,7 @@ Spec: §6.3 (push via APNs), §6.4 (mail van Verder), §7.2 (een vraag beantwoor
 **Status:** Gebouwd — `apps/worker/src/notify/notify.ts`, tabellen in migratie 0037.
 
 **De APNs-host per apparaat** (stap 5).
-**Status:** Gebouwd — `apps/worker/src/notify/apns.ts`, `apps/ios/Verder/Push/ProvisioningEnvironment.swift`.
+**Status:** Gebouwd — `apps/worker/src/notify/apns.ts`, `apps/ios/Grip/Push/ProvisioningEnvironment.swift`.
 
 ## Elke soort, zoals de code hem verstuurt
 
@@ -68,23 +68,23 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 
 | Soort (categorie) | Verstuurd door | Niveau | Titel / tekst (code) | Link |
 |---|---|---|---|---|
-| `verder-mail` (`VERDER_MAIL`) | `mail/priority-notify.ts`, na `suggest.entry` | tijdgevoelig | "Verder: ‹sender›" / de samenvatting van één regel uit de logboeksuggestie, anders het onderwerp | `verder://inbox` |
-| `verder-mail`, gescande brief | `proposals/letters.ts` | tijdgevoelig | "Brief lijkt van Verder" / de documenttitel | `verder://inbox` |
-| `creditor-mail` (`CREDITOR_MAIL`) | `mail/priority-notify.ts` | actief | "Mail van een schuldeiser" / "Tik om hem te bekijken. Hij staat al in je dossier." (geen afzender, onderwerp of samenvatting: het vergrendelscherm noemt nooit een schuldeiser of een bedrag) | `verder://inbox` |
-| `creditor-mail`, gescande brief | `proposals/letters.ts` | actief | "Brief van een schuldeiser" / "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier." (de gok staat in de tekst, want "Brief lijkt van een schuldeiser" als titel werd afgekapt naast de tijd; de documenttitel niet: auto-name zet de afzender erin) | `verder://inbox` |
-| `proposal` (`PROPOSAL`), een antwoord | `ops/proposals-store.ts`, wanneer een concept is opgeslagen | tijdgevoelig als de aanleiding Verder was, anders actief | "Voorstel klaar om te lezen" / "Tik om het na te lezen en te versturen. Het is een antwoord aan ‹wie›." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) | `verder://proposal/<id>` |
-| `proposal` (`PROPOSAL`), een vraag | idem | idem | "Voorstel: ‹ask›" / "Een vraag over ‹wie›. Kies een antwoord." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) plus `options` en `revision` | `verder://proposal/<id>` |
-| `reminder` (`REMINDER`) | `proposals/clocks.ts`, een voorstel dat langer dan 24 u openstaat, één keer ooit | volgt de prioriteit van het voorstel | "Wacht nog: ‹ask›" / "Dit voorstel wacht al een dag op je." | `verder://proposal/<id>` |
-| `follow-up` (`FOLLOW_UP`) | `proposals/clocks.ts`, 7 dagen stilte na een uitgaand bericht (`PROPOSAL_FOLLOWUP_DAYS`), niet meer na 30 | volgt de prioriteit van de thread | "Herinneringsmail klaar" / "Tik om hem na te lezen en te versturen. ‹Naam› heeft sinds ‹d mmm› niet gereageerd." (bij een schuldeiser: "De schuldeiser") | `verder://proposal/<id>` (het navraagconcept) |
-| `task-due` (`TASK_DUE`) | `proposals/clocks.ts`, een taak `open` of `in-progress` met een deadline binnen 24 u, verlopen inbegrepen; één keer per taak per deadline (`due:<taskId>:<dueAt>`) | tijdgevoelig | "Te laat: ‹taak›", "Vandaag: ‹taak›" of "Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding." (een deadline met alleen een datum telt als het einde van die dag in Amsterdam) | `verder://task/<id>` (de actie Gedaan; een tik opent de taak bovenaan Voor jou) |
-| `filing` (`FILING`), dagelijks overzicht | `autofile-digest.ts`, 19:00 Amsterdam, alleen op dagen met acties van verder | passief | "Door verder gedaan" / bijvoorbeeld "2 documenten opgeborgen · 1 hernoemd" (alleen aantallen) | `verder://inbox` (de router stuurt het naar Door verder gedaan) |
+| `verder-mail` (`VERDER_MAIL`) | `mail/priority-notify.ts`, na `suggest.entry` | tijdgevoelig | "Verder: ‹sender›" / de samenvatting van één regel uit de logboeksuggestie, anders het onderwerp | `grip://inbox` |
+| `verder-mail`, gescande brief | `proposals/letters.ts` | tijdgevoelig | "Brief lijkt van Verder" / de documenttitel | `grip://inbox` |
+| `creditor-mail` (`CREDITOR_MAIL`) | `mail/priority-notify.ts` | actief | "Mail van een schuldeiser" / "Tik om hem te bekijken. Hij staat al in je dossier." (geen afzender, onderwerp of samenvatting: het vergrendelscherm noemt nooit een schuldeiser of een bedrag) | `grip://inbox` |
+| `creditor-mail`, gescande brief | `proposals/letters.ts` | actief | "Brief van een schuldeiser" / "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier." (de gok staat in de tekst, want "Brief lijkt van een schuldeiser" als titel werd afgekapt naast de tijd; de documenttitel niet: auto-name zet de afzender erin) | `grip://inbox` |
+| `proposal` (`PROPOSAL`), een antwoord | `ops/proposals-store.ts`, wanneer een concept is opgeslagen | tijdgevoelig als de aanleiding Verder was, anders actief | "Voorstel klaar om te lezen" / "Tik om het na te lezen en te versturen. Het is een antwoord aan ‹wie›." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) | `grip://proposal/<id>` |
+| `proposal` (`PROPOSAL`), een vraag | idem | idem | "Voorstel: ‹ask›" / "Een vraag over ‹wie›. Kies een antwoord." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) plus `options` en `revision` | `grip://proposal/<id>` |
+| `reminder` (`REMINDER`) | `proposals/clocks.ts`, een voorstel dat langer dan 24 u openstaat, één keer ooit | volgt de prioriteit van het voorstel | "Wacht nog: ‹ask›" / "Dit voorstel wacht al een dag op je." | `grip://proposal/<id>` |
+| `follow-up` (`FOLLOW_UP`) | `proposals/clocks.ts`, 7 dagen stilte na een uitgaand bericht (`PROPOSAL_FOLLOWUP_DAYS`), niet meer na 30 | volgt de prioriteit van de thread | "Herinneringsmail klaar" / "Tik om hem na te lezen en te versturen. ‹Naam› heeft sinds ‹d mmm› niet gereageerd." (bij een schuldeiser: "De schuldeiser") | `grip://proposal/<id>` (het navraagconcept) |
+| `task-due` (`TASK_DUE`) | `proposals/clocks.ts`, een taak `open` of `in-progress` met een deadline binnen 24 u, verlopen inbegrepen; één keer per taak per deadline (`due:<taskId>:<dueAt>`) | tijdgevoelig | "Te laat: ‹taak›", "Vandaag: ‹taak›" of "Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding." (een deadline met alleen een datum telt als het einde van die dag in Amsterdam) | `grip://task/<id>` (de actie Gedaan; een tik opent de taak bovenaan Voor jou) |
+| `filing` (`FILING`), dagelijks overzicht | `autofile-digest.ts`, 19:00 Amsterdam, alleen op dagen met acties van verder | passief | "Door verder gedaan" / bijvoorbeeld "2 documenten opgeborgen · 1 hernoemd" (alleen aantallen) | `grip://inbox` (de router stuurt het naar Door verder gedaan) |
 | `filing`, dubbelzijdig samengevoegd | `duplex.ts` | passief | "Dubbelzijdige scan samengevoegd" / "scanN.pdf + scanM.pdf → één document, …" | geen (opent Dossier) |
 | `filing`, loonstrook | `loondossier.ts` | passief | "Nieuwe loonstrook" / de documenttitel | geen (opent Dossier) |
-| `system` (`SYSTEM`), versturen mislukt | `proposals/send.ts` | tijdgevoelig | "Niet verstuurd: ‹ask›" / "‹reden›. Er is niets verzonden." | `verder://proposal/<id>` |
-| `system`, verstuurd maar niet gelogd | `proposals/send.ts`, na de derde mislukte poging | tijdgevoelig | "Mail VERSTUURD, logboek ontbreekt" / … | `verder://proposal/<id>` |
+| `system` (`SYSTEM`), versturen mislukt | `proposals/send.ts` | tijdgevoelig | "Niet verstuurd: ‹ask›" / "‹reden›. Er is niets verzonden." | `grip://proposal/<id>` |
+| `system`, verstuurd maar niet gelogd | `proposals/send.ts`, na de derde mislukte poging | tijdgevoelig | "Mail VERSTUURD, logboek ontbreekt" / … | `grip://proposal/<id>` |
 | `system`, herstel door de watchdog | `ops/watchdog-run.ts` | actief | "verder hersteld" / "Automatisch hersteld: ‹diensten›." | geen (opent Overzicht) |
 | `system`, hersteltest | `ops/mail-restore-drill.ts` | actief | "Hersteltest mail MISLUKT" / de eigen redenen van de test (technische tekst, niet vertaald) | geen (opent Overzicht) |
-| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week in verder" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `verder://inbox` (de router opent het Weekoverzicht) |
+| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week in verder" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `grip://inbox` (de router opent het Weekoverzicht) |
 
 **Status per soort.**
 
@@ -135,20 +135,20 @@ Er valt niets naartoe te navigeren: meldingen komen binnen. Wat een melding **op
 
 | Wat werd aangetikt | Waar het landt |
 |---|---|
-| Een push waarvan de `link` te parsen is (`DeepLink.parse`) | De bestemming van die link: `verder://proposal/<id>`, `…/suggestion/<id>` en `…/task/<id>` openen Voor jou met dat item bovenaan; `verder://inbox` opent de lijst Voor jou; `verder://document/<id>` opent het document in Dossier. De parser kent ook `done-by-verder`, `dossier`, `timeline`, `overzicht`, `weekly`, `money` en `voice`; de pushes van de worker gebruiken nu alleen `proposal/<id>` en `inbox`. |
+| Een push waarvan de `link` te parsen is (`DeepLink.parse`) | De bestemming van die link: `grip://proposal/<id>`, `…/suggestion/<id>` en `…/task/<id>` openen Voor jou met dat item bovenaan; `grip://inbox` opent de lijst Voor jou; `grip://document/<id>` opent het document in Dossier. De parser kent ook `done-by-grip`, `dossier`, `timeline`, `overzicht`, `weekly`, `money` en `voice`; de pushes van de worker gebruiken nu alleen `proposal/<id>` en `inbox`. |
 | `WEEKLY` (tik of "Bekijken") | Altijd het Weekoverzicht (Meer → Weekoverzicht), wat de link ook zegt. |
-| `FILING` met `verder://inbox` (het dagelijkse overzicht) | Door verder gedaan, op Voor jou. |
+| `FILING` met `grip://inbox` (het dagelijkse overzicht) | Door verder gedaan, op Voor jou. |
 | Een push zonder bruikbare link | De plek van zijn categorie (`fallback`): mail, voorstel, herinnering, navraag en deadline → Voor jou; opbergen → Dossier; systeem → Overzicht; weekoverzicht → Weekoverzicht. Geen tik landt nergens. |
 | Wegvegen | Niets. |
 
-Het parsen van de link is strikt: precies het schema `verder`, een bekende host, geen gebruiker, poort, query of fragment, en precies één UUID waar er één verwacht wordt. Al het andere is `.none`. De app registreert **geen** `verder://`-URL-schema, dus geen webpagina of andere app kan deze links afvuren. Ze komen alleen binnen in een push, vanuit verders eigen widget, of vanuit de snelle actie op het beginscherm (`verder://voice`).
+Het parsen van de link is strikt: precies het schema `verder`, een bekende host, geen gebruiker, poort, query of fragment, en precies één UUID waar er één verwacht wordt. Al het andere is `.none`. De app registreert **geen** `grip://`-URL-schema, dus geen webpagina of andere app kan deze links afvuren. Ze komen alleen binnen in een push, vanuit verders eigen widget, of vanuit de snelle actie op het beginscherm (`grip://voice`).
 
-**Status:** Gebouwd — `apps/ios/Verder/Push/NotificationRouter.swift`, `apps/ios/Verder/Push/DeepLink.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Push/NotificationRouter.swift`, `apps/ios/Grip/Push/DeepLink.swift`.
 
 Een tik die de app koud start, gaat niet verloren. De delegate wordt gezet voordat de start terugkeert, en de link wacht in `DeepLinkInbox` tot `RootView` hem oppakt.
-**Status:** Gebouwd — `apps/ios/Verder/App/AppDelegate.swift`, `DeepLinkInbox` in `DeepLink.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/App/AppDelegate.swift`, `DeepLinkInbox` in `DeepLink.swift`.
 
-**Frame vs code.** De frames "verder-mail · na tik" tonen een eigen mailscherm ("Mail van Ilse", terug naar "Voor jou") met een statuskaart. De code heeft zo'n scherm niet. De mail-push draagt `verder://inbox`, omdat hij **voordat** er een voorstel bestaat verstuurd wordt en `notifications`-rijen niet bijgewerkt kunnen worden; hij landt dus op de lijst Voor jou. Een voorstel dat nog wordt opgesteld staat niet in de lijst (`proposals.list` toont `pending`, plus `approved`/`sending`/`failed` van de laatste 7 dagen), dus niets in de app zegt "voorstel in voorbereiding". Zodra het concept klaar is, vervangt de push "Voorstel" de mail-push en opent hij het voorstel zelf. "Opnieuw proberen" en "Zelf antwoorden" bestaan op de telefoon niet.
+**Frame vs code.** De frames "verder-mail · na tik" tonen een eigen mailscherm ("Mail van Ilse", terug naar "Voor jou") met een statuskaart. De code heeft zo'n scherm niet. De mail-push draagt `grip://inbox`, omdat hij **voordat** er een voorstel bestaat verstuurd wordt en `notifications`-rijen niet bijgewerkt kunnen worden; hij landt dus op de lijst Voor jou. Een voorstel dat nog wordt opgesteld staat niet in de lijst (`proposals.list` toont `pending`, plus `approved`/`sending`/`failed` van de laatste 7 dagen), dus niets in de app zegt "voorstel in voorbereiding". Zodra het concept klaar is, vervangt de push "Voorstel" de mail-push en opent hij het voorstel zelf. "Opnieuw proberen" en "Zelf antwoorden" bestaan op de telefoon niet.
 
 ![Na een tik: voorstel in voorbereiding (Figma final, niet gebouwd)](frames/Meldingen_verder-mail_na_tik_voorstel_in_voorbereiding.jpg)
 
@@ -159,13 +159,13 @@ iOS legt de knoppen van een categorie vast wanneer de categorie geregistreerd wo
 ### "Bekijken" bij voorstel, herinnering en navraag
 
 `PROPOSAL`, `REMINDER` en `FOLLOW_UP` hebben één actie, `OPEN` ("Bekijken"), met `.foreground` en `.authenticationRequired`. Die doet precies wat een tik doet: hij opent het concept. Hij **verstuurt nooit**. Versturen vereist dat het concept in de app openstaat, dat Martin de definitieve tekst goedkeurt, en een verse Face ID (zie 04-voorstel). `TASK_DUE` heeft "Gedaan" (zie hieronder); de andere vijf vaste categorieën hebben helemaal geen actie.
-**Status:** Gebouwd — `apps/ios/Verder/Push/NotificationCategories.swift` (`withOpenAction`). De brief wil deze actie weghalen; zie "Ontworpen, nog niet gebouwd".
+**Status:** Gebouwd — `apps/ios/Grip/Push/NotificationCategories.swift` (`withOpenAction`). De brief wil deze actie weghalen; zie "Ontworpen, nog niet gebouwd".
 
 ### Een vraag beantwoorden vanuit de melding
 
-Een vraag is een `proposal` van soort `question`. De push ervan draagt op het hoogste niveau een array `options` (hoogstens 4 labels van hoogstens 40 tekens, op de server afgekapt per code point), een geheel getal `revision`, de link `verder://proposal/<id>` en `mutable-content: 1`.
+Een vraag is een `proposal` van soort `question`. De push ervan draagt op het hoogste niveau een array `options` (hoogstens 4 labels van hoogstens 40 tekens, op de server afgekapt per code point), een geheel getal `revision`, de link `grip://proposal/<id>` en `mutable-content: 1`.
 
-1. **De service extension** (`VerderNotify/NotificationService.swift`) leest de push, bouwt een categorie `q.<proposal id>` met één actie per optie (`answer.0` … `answer.3`, elk `.authenticationRequired` en **niet** `.foreground`, met het symbool uit het frame wanneer het label erom vraagt: een schakel bij "Ja, koppel …", een kruis bij "Nee", een vraagteken bij "Weet ik niet", een vinkje bij een ander "Ja"; elk ander label geen symbool, `QuestionCategories.iconName`), en laat de melding daarnaar verwijzen. Omdat `setNotificationCategories` de hele set vervangt, registreert hij de **vereniging**: elke vaste categorie, plus hoogstens de 20 nieuwste `q.*`-categorieën, geordend via een kleine lijst in de App Group (`push/q-order.json`, alleen voorstel-id's). De extension doet geen netwerkaanroep en verandert nooit wat de melding zegt. Raakt hij door zijn tijd heen, dan wordt de oorspronkelijke melding ongewijzigd afgeleverd en kan de vraag nog steeds met een tik geopend worden.
+1. **De service extension** (`GripNotify/NotificationService.swift`) leest de push, bouwt een categorie `q.<proposal id>` met één actie per optie (`answer.0` … `answer.3`, elk `.authenticationRequired` en **niet** `.foreground`, met het symbool uit het frame wanneer het label erom vraagt: een schakel bij "Ja, koppel …", een kruis bij "Nee", een vraagteken bij "Weet ik niet", een vinkje bij een ander "Ja"; elk ander label geen symbool, `QuestionCategories.iconName`), en laat de melding daarnaar verwijzen. Omdat `setNotificationCategories` de hele set vervangt, registreert hij de **vereniging**: elke vaste categorie, plus hoogstens de 20 nieuwste `q.*`-categorieën, geordend via een kleine lijst in de App Group (`push/q-order.json`, alleen voorstel-id's). De extension doet geen netwerkaanroep en verandert nooit wat de melding zegt. Raakt hij door zijn tijd heen, dan wordt de oorspronkelijke melding ongewijzigd afgeleverd en kan de vraag nog steeds met een tik geopend worden.
 2. **Martin drukt lang en kiest een optie.** iOS vraagt hem eerst de telefoon te ontgrendelen (`.authenticationRequired`). De app draait op de achtergrond; ze komt niet naar voren.
 3. **`NotificationRouter`** controleert dat de categorie en de link hetzelfde voorstel noemen, en roept dan `POST /api/mobile/v1/proposals/<id>/answer` aan met `{ revision, option }`.
 4. **De server**: de route antwoordt `401` zonder sessie, nog voordat de body gelezen wordt; daarna vergrendelt `proposals.answer` (`packages/api/src/routers/proposals.ts`) het openstaande voorstel op die revisie, weigert alles wat geen vraag is, valideert de optie opnieuw en voert haar uit via de bestaande procedure op Martins eigen caller, binnen één transactie:
@@ -177,9 +177,9 @@ Een vraag is een `proposal` van soort `question`. De push ervan draagt op het ho
    Het voorstel gaat daarna van `pending → sent` met `final_payload.answer`, `verdict = approved`, `decided_by` Martin, en `revision + 1`. Een vraag verlaat het huis nooit, dus "sent" betekent hier "afgesloten". (Dezelfde route accepteert vanuit de app ook `{ revision, freeText }`, vastgelegd als `verdict = edited`; een melding stuurt altijd alleen een optie.) Elke weigering draait de hele transactie terug, dus de schrijfactie van de procedure blijft nooit achter.
 5. **Bij succes** ververst de app de inbox, wat de lijst, de widget-snapshot en de badge bijwerkt.
 
-**Status:** Gebouwd — `apps/ios/VerderNotify/NotificationService.swift`, `apps/ios/Verder/Push/QuestionCategories.swift`, `NotificationRouter.swift`, `apps/web/src/app/api/mobile/v1/proposals/[id]/answer/route.ts`, `proposals.answer` in `packages/api/src/routers/proposals.ts`. Gemeten op de telefoon (zie hieronder).
+**Status:** Gebouwd — `apps/ios/GripNotify/NotificationService.swift`, `apps/ios/Grip/Push/QuestionCategories.swift`, `NotificationRouter.swift`, `apps/web/src/app/api/mobile/v1/proposals/[id]/answer/route.ts`, `proposals.answer` in `packages/api/src/routers/proposals.ts`. Gemeten op de telefoon (zie hieronder).
 
-**Als het antwoord niet doorkomt**, verandert er niets op de server en wordt het antwoord **nooit opnieuw geprobeerd**. Dat geldt voor: geen revisie in de push, geen sessie, `409` (intussen op het web beantwoord, of een nieuwere revisie), `400`, en een netwerkfout. In elk geval zet de router `verder://proposal/<id>` in de wachtrij, zodat verder bij de volgende keer openen het voorstel toont en hoe het ervoor staat. Bij een netwerkfout en bij `409` zegt een lokale melding het ook: "Keuze kwam niet door" (met de categorie `q.<id>` en de payload van de vraag, zodat lang indrukken dezelfde opties weer aanbiedt) en "Vraag al afgehandeld" (opent Voor jou). Geen sessie, `400` en `5xx` blijven stil. Een vraag die zonder revisie binnenkomt wordt niet herschreven: hij houdt de vaste categorie `PROPOSAL`, toont dus alleen "Bekijken", en een tik opent hem.
+**Als het antwoord niet doorkomt**, verandert er niets op de server en wordt het antwoord **nooit opnieuw geprobeerd**. Dat geldt voor: geen revisie in de push, geen sessie, `409` (intussen op het web beantwoord, of een nieuwere revisie), `400`, en een netwerkfout. In elk geval zet de router `grip://proposal/<id>` in de wachtrij, zodat verder bij de volgende keer openen het voorstel toont en hoe het ervoor staat. Bij een netwerkfout en bij `409` zegt een lokale melding het ook: "Keuze kwam niet door" (met de categorie `q.<id>` en de payload van de vraag, zodat lang indrukken dezelfde opties weer aanbiedt) en "Vraag al afgehandeld" (opent Voor jou). Geen sessie, `400` en `5xx` blijven stil. Een vraag die zonder revisie binnenkomt wordt niet herschreven: hij houdt de vaste categorie `PROPOSAL`, toont dus alleen "Bekijken", en een tik opent hem.
 
 **Gemeten op iOS 27.2 (2026-11-01):** een test-vraagpush toonde **Ja / Nee** bij lang indrukken, dus iOS gebruikt wel degelijk een categorie die binnen de extension geregistreerd is voor diezelfde melding. Een gewone tik erop opende Voor jou op "Dit voorstel bestaat niet (meer)." (de test verwees naar een voorstel dat niet bestaat).
 
@@ -191,7 +191,7 @@ Een vraag is een `proposal` van soort `question`. De push ervan draagt op het ho
 
 ### "Gedaan" bij een deadline
 
-Druk lang op een deadline-push en kies **Gedaan** (met een vinkje): de taak gaat op gedaan zonder dat de app naar voren komt. De actie is `DONE` op `TASK_DUE`, `.authenticationRequired` en **niet** `.foreground`. De router leest de taak uit de link (`verder://task/<id>`) en roept `POST /api/mobile/v1/tasks/<id>/status` aan met `{ status: "done" }`, dezelfde route en body als het taakscherm. De route leest de status onder slot opnieuw en voegt het **`task.status`-ledger-event** toe; de taakstatus is van Martin, dus zijn lang indrukken is zijn besluit. Bij succes ververst de app de inbox (lijst, widget, badge).
+Druk lang op een deadline-push en kies **Gedaan** (met een vinkje): de taak gaat op gedaan zonder dat de app naar voren komt. De actie is `DONE` op `TASK_DUE`, `.authenticationRequired` en **niet** `.foreground`. De router leest de taak uit de link (`grip://task/<id>`) en roept `POST /api/mobile/v1/tasks/<id>/status` aan met `{ status: "done" }`, dezelfde route en body als het taakscherm. De route leest de status onder slot opnieuw en voegt het **`task.status`-ledger-event** toe; de taakstatus is van Martin, dus zijn lang indrukken is zijn besluit. Bij succes ververst de app de inbox (lijst, widget, badge).
 
 Als Gedaan niet doorkomt, wordt het **nooit vanzelf opnieuw geprobeerd** en zet de router de taak in de wachtrij voor de volgende keer openen. Een lokale melding zegt wat er gebeurde (`NotificationFeedback`):
 
@@ -203,7 +203,7 @@ Als Gedaan niet doorkomt, wordt het **nooit vanzelf opnieuw geprobeerd** en zet 
 | `400`, en de takenlijst zegt `done` | "Taak al afgerond" / "‹Taak› stond al op klaar. Tik om je taken te openen." (opent Voor jou) | geen |
 | `400` met een andere status, `404` | geen melding; de taak opent de volgende keer | — |
 
-De taaknaam komt uit de titel van de push ("Morgen: bijstand tekenen" → "bijstand tekenen"), of uit `taskTitle` op een melding die verder zelf plaatste. Een deadline-push zonder taaklink (een oudere push met `verder://inbox`) heeft niets om af te vinken en opent Voor jou.
+De taaknaam komt uit de titel van de push ("Morgen: bijstand tekenen" → "bijstand tekenen"), of uit `taskTitle` op een melding die verder zelf plaatste. Een deadline-push zonder taaklink (een oudere push met `grip://inbox`) heeft niets om af te vinken en opent Voor jou.
 **Status:** Gebouwd — `NotificationCategories.swift` (`doneAction`), `NotificationRouter.swift` (`markDone`), `NotificationFeedback.swift`, de link in `apps/worker/src/proposals/clocks.ts`; tests in `NotificationRouterTests`, `NotificationCategoriesTests.onlyQuestionAndDoneActionsWorkInBackground` (precies één statische achtergrondactie: `TASK_DUE.DONE`) en `clocks.test.ts`. Op de simulator vastgelegd, met de echte router en een fixture die de route laat falen.
 
 ![Deadline met een actie "Gedaan" (Figma final)](frames/Meldingen_task-due_lang_ingedrukt_Gedaan.jpg)
@@ -220,7 +220,7 @@ Het aantal blijft op drie manieren kloppen:
 
 Gemeten 2026-10-31: 18:10 `sent: true, count 498, delivered 2`, 18:15 `sent: false`, en Martin bevestigde 498 op Voor jou, op het web en op het icoon.
 
-**Status:** Gebouwd — `packages/api/src/waiting.ts`, `apps/worker/src/badge-sync.ts`, `apps/ios/Verder/Inbox/InboxStore.swift`; de stille verversing wordt afgehandeld in `apps/ios/Verder/App/AppDelegate.swift`. Of het juist is het aantal dat wacht (in plaats van ongelezen meldingen) op de badge te houden, is een open besluit in de brief ("Icon badge semantics").
+**Status:** Gebouwd — `packages/api/src/waiting.ts`, `apps/worker/src/badge-sync.ts`, `apps/ios/Grip/Inbox/InboxStore.swift`; de stille verversing wordt afgehandeld in `apps/ios/Grip/App/AppDelegate.swift`. Of het juist is het aantal dat wacht (in plaats van ongelezen meldingen) op de badge te houden, is een open besluit in de brief ("Icon badge semantics").
 
 ![App-icoon met badge (Figma final)](frames/Meldingen_app-icoon_badge.jpg)
 
@@ -245,16 +245,16 @@ Gemeten 2026-10-31: 18:10 `sent: true, count 498, delivered 2`, 18:15 `sent: fal
 De toestanden hierboven komen neer op deze functies:
 
 **Toestemming vragen** (niet gevraagd, geweigerd, toegestaan). De brief (§3, "Permission pre-prompts") ontwerpt per toestemming één scherm bij het eerste gebruik, met ÉÉN knop ("Ga verder") en zonder sluiten, gevolgd door de systeemmelding.
-**Status:** Deels gebouwd — `apps/ios/Verder/Push/PushRegistrar.swift` vraagt na de eerste keer inloggen of ontgrendelen, niet bij het eerste gebruik, en biedt twee knoppen ("Meldingen aanzetten" en "Niet nu"); de voorvraag met één knop die het tabblad Scan al gebruikt (`ScanPermissionViews.swift`) wordt hier niet gebruikt.
+**Status:** Deels gebouwd — `apps/ios/Grip/Push/PushRegistrar.swift` vraagt na de eerste keer inloggen of ontgrendelen, niet bij het eerste gebruik, en biedt twee knoppen ("Meldingen aanzetten" en "Niet nu"); de voorvraag met één knop die het tabblad Scan al gebruikt (`ScanPermissionViews.swift`) wordt hier niet gebruikt.
 
 **Deze iPhone bij elke start registreren voor pushes.**
 **Status:** Gebouwd — `PushRegistrar.swift`, `apps/web/src/app/api/mobile/v1/push/register/route.ts`, `packages/api/src/routers/push.ts`.
 
 **Niets uit het dossier op een vergrendelde telefoon met verborgen voorvertoning.**
-**Status:** Gebouwd — `hiddenPreviewsBodyPlaceholder` in `apps/ios/Verder/Push/NotificationCategories.swift`.
+**Status:** Gebouwd — `hiddenPreviewsBodyPlaceholder` in `apps/ios/Grip/Push/NotificationCategories.swift`.
 
 **Een banner, ook terwijl verder op de voorgrond staat.**
-**Status:** Gebouwd — `willPresent` in `apps/ios/Verder/App/AppDelegate.swift`.
+**Status:** Gebouwd — `willPresent` in `apps/ios/Grip/App/AppDelegate.swift`.
 
 **Een ingetrokken of verlopen sessie stopt de pushes.**
 **Status:** Gebouwd — de controle op een levende sessie in `apps/worker/src/notify/notify.ts`.
@@ -272,7 +272,7 @@ Het instellingenscherm voor meldingen (`NotificationsScreen` in `MoreScreens.swi
 
 Er zijn in verder geen schakelaars per soort. Een soort uitzetten gebeurt in de iOS-instellingen.
 
-**Status:** Gebouwd — `NotificationsScreen` in `apps/ios/Verder/More/MoreScreens.swift`, teksten in `NotificationsCopy` (`apps/ios/Verder/More/MoreMenu.swift`). De schakelaars per soort die de brief ontwerpt, staan onder "Ontworpen, nog niet gebouwd".
+**Status:** Gebouwd — `NotificationsScreen` in `apps/ios/Grip/More/MoreScreens.swift`, teksten in `NotificationsCopy` (`apps/ios/Grip/More/MoreMenu.swift`). De schakelaars per soort die de brief ontwerpt, staan onder "Ontworpen, nog niet gebouwd".
 
 ## Privacy en beveiliging
 
@@ -318,7 +318,7 @@ Het frame creditor-mail: "Tik om te kiezen bij welke vordering hij hoort. Hij st
 ### Het mailscherm achter een mail-push
 
 De drie frames "verder-mail · na tik": een tik op een push voor mail van Verder opent die mail ("Mail van Ilse", terug naar "Voor jou"), met de mail zelf en bovenaan één statuskaart die zegt hoe verder ervoor staat: **Voorstel in voorbereiding** (er wordt een concept geschreven), **Geen antwoord nodig** (ter informatie, niets gevraagd, het staat in het dossier) of **Geen voorstel gemaakt** (opstellen mislukt).
-**Status:** Nog te bouwen — de server houdt de statussen al bij (`proposals.status` `drafting` en `draft-failed`, `packages/db/src/schema.ts`; `draft-failed` geschreven door `ops/proposals-store.ts`), maar er is geen status "geen antwoord nodig", `proposals.list` verbergt `drafting`, en geen route geeft één mail terug met de status van zijn voorstel. Nodig: een mobiele route (`GET /api/mobile/v1/mail/<id>` of iets vergelijkbaars, met sessiecontrole), een manier om "niets gevraagd" vast te leggen, een maillink in de push (`verder://mail/<id>` in `DeepLink.parse` en `LinkDestinationTests`; de mail-push wordt verstuurd voordat er een voorstel bestaat, dus hij kan alleen naar de mail wijzen), het scherm, en tests.
+**Status:** Nog te bouwen — de server houdt de statussen al bij (`proposals.status` `drafting` en `draft-failed`, `packages/db/src/schema.ts`; `draft-failed` geschreven door `ops/proposals-store.ts`), maar er is geen status "geen antwoord nodig", `proposals.list` verbergt `drafting`, en geen route geeft één mail terug met de status van zijn voorstel. Nodig: een mobiele route (`GET /api/mobile/v1/mail/<id>` of iets vergelijkbaars, met sessiecontrole), een manier om "niets gevraagd" vast te leggen, een maillink in de push (`grip://mail/<id>` in `DeepLink.parse` en `LinkDestinationTests`; de mail-push wordt verstuurd voordat er een voorstel bestaat, dus hij kan alleen naar de mail wijzen), het scherm, en tests.
 
 ### "Opnieuw proberen" en "Zelf antwoorden"
 
@@ -366,17 +366,17 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 ## Waar in de code
 
 **iOS**
-- `apps/ios/Verder/Push/NotificationCategories.swift`: de negen categorieën, "Bekijken", de plaatsvervanger voor verborgen voorvertoning, registratie van de vereniging
-- `apps/ios/Verder/Push/QuestionCategories.swift`: `q.<id>`-categorieën, limieten op opties, het samenvoegen van de 20 nieuwste, `push/q-order.json`
-- `apps/ios/VerderNotify/NotificationService.swift`: de notification service extension
-- `apps/ios/Verder/Push/NotificationRouter.swift`: afhandeling van tik, "Bekijken", antwoord en Gedaan; terugvalplekken per categorie
-- `apps/ios/Verder/Push/NotificationFeedback.swift`: de vervolgmeldingen als een actie niet doorkomt
-- `apps/ios/Verder/Push/DeepLink.swift`: het strikte parsen van `verder://` en elke bestemming; `DeepLinkInbox`
-- `apps/ios/Verder/Push/PushRegistrar.swift`: toestemming, de voorvraag, registratie van het token
-- `apps/ios/Verder/Push/ProvisioningEnvironment.swift`: leest `aps-environment` uit het ondertekende profiel
-- `apps/ios/Verder/App/AppDelegate.swift`: token-callbacks, de notification delegate op de main actor, stille verversing, weergave op de voorgrond
-- `apps/ios/Verder/Inbox/InboxStore.swift`: zet de badge; 0 bij het einde van de sessie
-- `apps/ios/Verder/More/MoreMenu.swift` (`NotificationsCopy`), `apps/ios/Verder/More/MoreScreens.swift` (`NotificationsScreen`)
+- `apps/ios/Grip/Push/NotificationCategories.swift`: de negen categorieën, "Bekijken", de plaatsvervanger voor verborgen voorvertoning, registratie van de vereniging
+- `apps/ios/Grip/Push/QuestionCategories.swift`: `q.<id>`-categorieën, limieten op opties, het samenvoegen van de 20 nieuwste, `push/q-order.json`
+- `apps/ios/GripNotify/NotificationService.swift`: de notification service extension
+- `apps/ios/Grip/Push/NotificationRouter.swift`: afhandeling van tik, "Bekijken", antwoord en Gedaan; terugvalplekken per categorie
+- `apps/ios/Grip/Push/NotificationFeedback.swift`: de vervolgmeldingen als een actie niet doorkomt
+- `apps/ios/Grip/Push/DeepLink.swift`: het strikte parsen van `grip://` en elke bestemming; `DeepLinkInbox`
+- `apps/ios/Grip/Push/PushRegistrar.swift`: toestemming, de voorvraag, registratie van het token
+- `apps/ios/Grip/Push/ProvisioningEnvironment.swift`: leest `aps-environment` uit het ondertekende profiel
+- `apps/ios/Grip/App/AppDelegate.swift`: token-callbacks, de notification delegate op de main actor, stille verversing, weergave op de voorgrond
+- `apps/ios/Grip/Inbox/InboxStore.swift`: zet de badge; 0 bij het einde van de sessie
+- `apps/ios/Grip/More/MoreMenu.swift` (`NotificationsCopy`), `apps/ios/Grip/More/MoreScreens.swift` (`NotificationsScreen`)
 
 **Serverroutes** (`apps/web/src/app/api/mobile/v1/`)
 - `push/register/route.ts`: `POST`, sessie gecontroleerd voordat de body gelezen wordt, body begrensd, het sessie-id uit de cookie → `push.registerDevice` (`packages/api/src/routers/push.ts`)
@@ -389,7 +389,7 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 - Aanroepers: `mail/priority-notify.ts`, `proposals/letters.ts`, `ops/proposals-store.ts`, `proposals/clocks.ts`, `proposals/send.ts`, `autofile-digest.ts`, `duplex.ts`, `loondossier.ts`, `weekly-summary.ts`, `ops/watchdog-run.ts`, `ops/mail-restore-drill.ts`
 
 **Tests**
-- iOS: `NotificationCategoriesTests`, `QuestionCategoriesTests`, `NotificationRouterTests` (ook Gedaan en de vervolgmeldingen), `FixtureTests.notificationFixturesFailOnlyTheirAction`, `DeepLinkTests`, `LinkDestinationTests` (elke `verder://`-letterlijke waarde in worker en web parset naar een bestemming), `PushRegistrarTests`, `ProvisioningEnvironmentTests`, `MoreMenuTests`
+- iOS: `NotificationCategoriesTests`, `QuestionCategoriesTests`, `NotificationRouterTests` (ook Gedaan en de vervolgmeldingen), `FixtureTests.notificationFixturesFailOnlyTheirAction`, `DeepLinkTests`, `LinkDestinationTests` (elke `grip://`-letterlijke waarde in worker en web parset naar een bestemming), `PushRegistrarTests`, `ProvisioningEnvironmentTests`, `MoreMenuTests`
 - Worker: `notify/notify.test.ts`, `notify/apns.test.ts`, `push.test.ts`, `badge-sync.test.ts`, `mail/priority-notify.test.ts`, `proposals/letters.test.ts`, `proposals/clocks.test.ts`, `proposals/send.test.ts`, `ops/proposals-store.test.ts`, `autofile-digest.test.ts`, `weekly-summary.test.ts`, `duplex.test.ts`, `loondossier.test.ts`, `ops/mail-restore-drill.test.ts`
 - Web: `push/register/route.test.ts`, `proposals/[id]/answer/route.test.ts`
 

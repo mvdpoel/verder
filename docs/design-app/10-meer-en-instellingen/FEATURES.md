@@ -2,7 +2,7 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03 (`apps/ios/Verder/More/`, `apps/web/src/app/api/mobile/v1/`, `apps/worker/src/notify/`). Dit document beschrijft **47 functies**:
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03 (`apps/ios/Grip/More/`, `apps/web/src/app/api/mobile/v1/`, `apps/worker/src/notify/`). Dit document beschrijft **47 functies**:
 
 | Status | Aantal |
 |---|---|
@@ -20,7 +20,7 @@ De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 Meer is het vijfde tabblad van de iPhone-app. Het is een lijst met instellingen: als wie de telefoon is ingelogd, hoe verder Martin bereikt, een paar extra's van de zaak (Geld, het snel inspreken van een gesprek, het Weekoverzicht) en feiten over de app zelf. Daarachter zitten de schermen Account, Meldingen, Widgets toevoegen, Over verder en Ontwikkelaar. Alleen Martin gebruikt de app.
 
-Dit document beschrijft de **volledige functieset** van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md`) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md`, §2.5 haptiek, §2.7 toegankelijkheid en de §3-rij "Meer + settings") die vastleggen. Elke functie heeft een statusregel die zegt hoe ver de code is. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectienode `329:8524` ("meer · final"). De 29 frames in `frames/` zijn exports van die sectie. De frames gebruiken synthetische gegevens (het account `jij@thuis.example`, hetzelfde adres waarmee de DEBUG-fixture van de app antwoordt vanuit `apps/ios/Verder/FixtureData/_shared/me.json`), geen echte gegevens uit de zaak. UI-teksten staan tussen aanhalingstekens in het Nederlands, precies zoals de app ze toont of het frame ze tekent.
+Dit document beschrijft de **volledige functieset** van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md`) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md`, §2.5 haptiek, §2.7 toegankelijkheid en de §3-rij "Meer + settings") die vastleggen. Elke functie heeft een statusregel die zegt hoe ver de code is. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectienode `329:8524` ("meer · final"). De 29 frames in `frames/` zijn exports van die sectie. De frames gebruiken synthetische gegevens (het account `jij@thuis.example`, hetzelfde adres waarmee de DEBUG-fixture van de app antwoordt vanuit `apps/ios/Grip/FixtureData/_shared/me.json`), geen echte gegevens uit de zaak. UI-teksten staan tussen aanhalingstekens in het Nederlands, precies zoals de app ze toont of het frame ze tekent.
 
 > **Het ontwerp loopt voor op de code.** Op branch `feat/iphone-app` zijn de schermen soberder dan de frames, en een aantal dingen die de frames tonen bestaat helemaal niet. Waar een status "Deels" of "Nog te bouwen" zegt, beschrijft de tekst wat de code vandaag doet en wat ontbreekt. Een doorlopend verschil in woordkeus: het ontwerp zegt overal "Toegangssleutel" (de brief en commit `e2b2b0f` verbieden het Engelse woord in de UI), terwijl Meer en Account in de code nog "Passkey" zeggen (`AccountCopy.passkeyLabel`, `AccountCopy.passkeyLine`, de knopteksten in `MoreScreens.swift` en `MoreTab.swift`, `AuthModel.Copy.passkeyAdded` / `passkeyAddFailed`). De inlogschermen en het scherm voor een verlopen sessie zeggen al "toegangssleutel" (`SessionExpiredView.swift`).
 
@@ -38,7 +38,7 @@ Dit document beschrijft de **volledige functieset** van het scherm zoals de defi
 **In:**
 
 - **Het tabblad Meer** (`RootView`, tab `ellipsis`, label "Meer").
-- **Deep link `verder://weekly`** opent Meer met `[.weekly]` op de stack, en **`verder://money`** opent Meer met `[.money]` (`DeepLink.destination`). De zondagse melding draagt `verder://inbox`, maar `NotificationRouter` stuurt een gewone tik of `OPEN` op de categorie `WEEKLY` toch naar het Weekoverzicht. Links komen alleen binnen via een melding of via verders eigen widget. De app registreert geen `verder://`-URL-schema, dus geen webpagina of andere app kan er een afvuren.
+- **Deep link `grip://weekly`** opent Meer met `[.weekly]` op de stack, en **`grip://money`** opent Meer met `[.money]` (`DeepLink.destination`). De zondagse melding draagt `grip://inbox`, maar `NotificationRouter` stuurt een gewone tik of `OPEN` op de categorie `WEEKLY` toch naar het Weekoverzicht. Links komen alleen binnen via een melding of via verders eigen widget. De app registreert geen `grip://`-URL-schema, dus geen webpagina of andere app kan er een afvuren.
 - **Het eenmalige aanbod voor een toegangssleutel.** Na een interactieve inlog met wachtwoord op een account zonder enige passkey zet `AuthModel` `passkeyOfferPending`, en `RootView` springt naar het tabblad Meer, waar de aanbodkaart boven de lijst staat (zie [Aanbod toegangssleutel](#aanbod-toegangssleutel)).
 - **Fixture-opnames:** `-fixtures <name> -tab meer`, en `-route geld` / `-route weekly` (alleen DEBUG).
 
@@ -52,13 +52,13 @@ Dit document beschrijft de **volledige functieset** van het scherm zoals de defi
 
 Het tabblad is vergrendeld (`.lockGated(by: lock)`), dus wie het opent terwijl de app vergrendeld is, ziet eerst het Face ID-vergrendelscherm. De Meer-stack (`meerPath`) wordt vastgehouden door `RootView`, niet door het tabblad, omdat de inhoud van een vergrendeld tabblad niet bestaat zolang de app vergrendeld is. Een link die op het vergrendelscherm binnenkomt, wacht daar en opent zodra de app ontgrendeld is.
 
-**Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift` (`meerPath`, `.lockGated(by: lock)`), `apps/ios/Verder/Auth/AppLock.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift` (`meerPath`, `.lockGated(by: lock)`), `apps/ios/Grip/Auth/AppLock.swift`.
 
 #### Links naar Meer
 
-`verder://weekly` en `verder://money` openen het Weekoverzicht en Geld op de Meer-stack. De zondagse melding opent het Weekoverzicht, welke link ze ook draagt.
+`grip://weekly` en `grip://money` openen het Weekoverzicht en Geld op de Meer-stack. De zondagse melding opent het Weekoverzicht, welke link ze ook draagt.
 
-**Status:** Gebouwd — `apps/ios/Verder/Push/DeepLink.swift`, `apps/ios/Verder/Push/NotificationRouter.swift` (`weeklyCategory`); tests `DeepLinkTests`, `aWeeklyLinkOpensMeer`, `aTapOnTheWeeklyPushOpensTheSummary`.
+**Status:** Gebouwd — `apps/ios/Grip/Push/DeepLink.swift`, `apps/ios/Grip/Push/NotificationRouter.swift` (`weeklyCategory`); tests `DeepLinkTests`, `aWeeklyLinkOpensMeer`, `aTapOnTheWeeklyPushOpensTheSummary`.
 
 #### De rijen en waar ze heen leiden
 
@@ -77,7 +77,7 @@ Het tabblad is vergrendeld (`.lockGated(by: lock)`), dus wie het opent terwijl d
 
 Het openen van Meer ververst twee dingen: het account (`GET /api/mobile/v1/me`) en de toestemming voor meldingen (`PushRegistrar.refresh()`, een lokale vraag aan iOS). Niets in de lijst schrijft iets.
 
-**Status:** Gebouwd — `apps/ios/Verder/More/MoreMenu.swift`, `apps/ios/Verder/More/MoreTab.swift`; tests `everyRowLeadsSomewhere`, `theMenuIsInTheBriefsOrder`.
+**Status:** Gebouwd — `apps/ios/Grip/More/MoreMenu.swift`, `apps/ios/Grip/More/MoreTab.swift`; tests `everyRowLeadsSomewhere`, `theMenuIsInTheBriefsOrder`.
 
 #### Indeling: accountkaart, Snel naar, Instellingen, Over
 
@@ -94,7 +94,7 @@ Elke rij zegt onder de titel wat de huidige toestand is, en sommige tonen een wa
 | Accountkaart | e-mailadres, dan "ingelogd tot 1 dec" | alleen het e-mailadres; het einde van de sessie heeft de server nodig (zie [Einde van de sessie](#einde-van-de-sessie)) |
 | Geld | "leefgeld ··3210 · deze week", rechts "€ 37,60 / over" | geen; het bedrag staat al in `MoneyStore` (de Leefgeld-kaart op Overzicht), dus hiervoor is een ondertitel nodig die daaruit gevoed wordt en de regels van Geld volgt: geen bedrag voor een week die niet gedekt is, nooit amber |
 | Gesprek vastleggen | "inspreken · komt in Voor jou" | geen (vaste tekst) |
-| Weekoverzicht | "week 44 · 3 verstuurd · 5 opgeborgen" | geen; `GET /api/mobile/v1/weekly` geeft al `week`, `sent`, `filedByMartin` en `filedByVerder` terug (`WeeklyModels.swift`), dus Meer moet bij het openen het opgeslagen overzicht lezen; niets vóór de eerste zondag |
+| Weekoverzicht | "week 44 · 3 verstuurd · 5 opgeborgen" | geen; `GET /api/mobile/v1/weekly` geeft al `week`, `sent`, `filedByMartin` en `filedByGrip` terug (`WeeklyModels.swift`), dus Meer moet bij het openen het opgeslagen overzicht lezen; niets vóór de eerste zondag |
 | Meldingen | "8 van 9 soorten", rechts "aan"; als meldingen in iOS uit staan: "uit in iOS · zet ze aan via Instellingen" met rechts "uit" | "Aan", "Uit" of "Nog niet aangezet", niets zolang het onbekend is; de telling heeft [de schakelaars](#een-schakelaar-per-soort) nodig |
 | Widgets toevoegen | "beginscherm en toegangsscherm" | geen (vaste tekst) |
 | Over verder | "versie 1.0 · build 31", offline "versie 1.0 · server offline" | geen; de versie wordt al gelezen door `AboutInfo` |
@@ -115,15 +115,15 @@ Staat bovenaan de Meer-lijst, hoogstens één keer per installatie, en alleen na
 
 #### Gesprek vastleggen
 
-De rij opent het vel voor het snel inspreken van een gesprek, hetzelfde vel dat de snelle actie op het beginscherm (`pro.vanderpoel.verder.voice`, `verder://voice`) opent. Martin spreekt een gesprek in, de telefoon zet het om naar tekst, en `POST /api/mobile/v1/entries/voice` slaat het op als een **openstaande suggestie voor een logboekregel** (idempotent op de `clientId`). Het schrijft nooit een regel: Martin keurt die goed in Voor jou. Zonder opname voegt het geen ledger-event toe. Met "bewaar opname" wordt de audio opgeslagen als een `phone-voice`-document (`sourceRef = phone:<clientId>`, eerst opgezocht zodat een nieuwe poging het één keer opslaat). Dat IS één geledgerde `document.ingested`, en die kan nooit worden teruggedraaid, dus de route controleert de partij voordat hij opslaat. Het vel zelf is vergrendeld en is eigendom van `VoiceLogSession` boven de vergrendeling, dus een nieuwe vergrendeling of een 401 behoudt de tekst. Uitloggen vanuit Meer gooit het bewust weg (`forgetVoice`). De ingang via de Actieknop die de brief vraagt, hoort bij het snel inspreken en staat beschreven in `../11-gesprek-vastleggen/FEATURES.md`.
+De rij opent het vel voor het snel inspreken van een gesprek, hetzelfde vel dat de snelle actie op het beginscherm (`pro.vanderpoel.grip.voice`, `grip://voice`) opent. Martin spreekt een gesprek in, de telefoon zet het om naar tekst, en `POST /api/mobile/v1/entries/voice` slaat het op als een **openstaande suggestie voor een logboekregel** (idempotent op de `clientId`). Het schrijft nooit een regel: Martin keurt die goed in Voor jou. Zonder opname voegt het geen ledger-event toe. Met "bewaar opname" wordt de audio opgeslagen als een `phone-voice`-document (`sourceRef = phone:<clientId>`, eerst opgezocht zodat een nieuwe poging het één keer opslaat). Dat IS één geledgerde `document.ingested`, en die kan nooit worden teruggedraaid, dus de route controleert de partij voordat hij opslaat. Het vel zelf is vergrendeld en is eigendom van `VoiceLogSession` boven de vergrendeling, dus een nieuwe vergrendeling of een 401 behoudt de tekst. Uitloggen vanuit Meer gooit het bewust weg (`forgetVoice`). De ingang via de Actieknop die de brief vraagt, hoort bij het snel inspreken en staat beschreven in `../11-gesprek-vastleggen/FEATURES.md`.
 
-**Status:** Gebouwd — `apps/ios/Verder/More/MoreTab.swift` (`openVoice`), `apps/ios/Verder/Voice/`, `apps/web/src/app/api/mobile/v1/entries/voice/route.ts`.
+**Status:** Gebouwd — `apps/ios/Grip/More/MoreTab.swift` (`openVoice`), `apps/ios/Grip/Voice/`, `apps/web/src/app/api/mobile/v1/entries/voice/route.ts`.
 
 #### Weekoverzicht
 
 `WeeklyView` leest `GET /api/mobile/v1/weekly`: het nieuwste overzicht dat de worker opsloeg bij zijn `weekly-summary`-run, of 404 vóór de eerste zondag. Het toont wat er gebeurde in de week die zondag 18:00 Amsterdamse tijd eindigt, wat verder zelf deed, wat er op zondag wachtte, en één volgende stap naar Voor jou. Het is geschiedenis en nooit amber, behalve de volgende stap, die alleen amber wordt op het actuele aantal dat wacht. Het schrijft niets.
 
-**Status:** Gebouwd — `apps/ios/Verder/Weekly/`, `apps/web/src/app/api/mobile/v1/weekly/route.ts` (zie `../12-weekoverzicht/FEATURES.md`).
+**Status:** Gebouwd — `apps/ios/Grip/Weekly/`, `apps/web/src/app/api/mobile/v1/weekly/route.ts` (zie `../12-weekoverzicht/FEATURES.md`).
 
 #### Geld
 
@@ -139,7 +139,7 @@ Opent hetzelfde `GeldScreen` als de kaart op Overzicht. Beschreven in `../09-gel
 
 "INGELOGD ALS" toont het e-mailadres uit `GET /api/mobile/v1/me` (`apps/web/src/lib/mobile-account.ts`). De route leest de gevalideerde better-auth-sessie, nooit het verzoek, en antwoordt `{ email, name|null, passkeys }`. `passkeys` is een telling op dezelfde `passkey`-tabel die `/settings/security` toont. De route schrijft niets en voegt geen ledger-event toe. De telefoon heeft hem nodig omdat een inlog met passkey de telefoon nooit het e-mailadres vertelt. De telefoon decodeert strikt: een antwoord zonder e-mailadres telt als geen antwoord. Zolang er niets bekend is, zegt het paneel "Account wordt opgehaald…".
 
-**Status:** Gebouwd — `apps/ios/Verder/More/AccountModel.swift`, `apps/web/src/app/api/mobile/v1/me/route.ts`; tests `readsTheAccount`, `refusesAnAnswerWithoutAnEmail`, `me/route.test.ts`, `mobile-account.test.ts`.
+**Status:** Gebouwd — `apps/ios/Grip/More/AccountModel.swift`, `apps/web/src/app/api/mobile/v1/me/route.ts`; tests `readsTheAccount`, `refusesAnAnswerWithoutAnEmail`, `me/route.test.ts`, `mobile-account.test.ts`.
 
 #### Einde van de sessie
 
@@ -194,13 +194,13 @@ Opent `<server>/settings/security` in Safari. Die pagina toont elke iPhone en br
 
 Niets aan de zaak op de server verandert, en er wordt geen ledger-event geschreven.
 
-**Status:** Gebouwd — `apps/ios/Verder/More/MoreTab.swift` (`signOut`), `apps/ios/Verder/Auth/AuthModel.swift` (`signOut`, `forgetLocally`); tests `signingOutIsConfirmed`, `signOutErasesTheWidgetSnapshot`. De dialoogtekst in de code is korter dan het vel in het ontwerp ("Het dossier op deze iPhone wordt gewist. Daarna log je opnieuw in met Face ID of je wachtwoord.").
+**Status:** Gebouwd — `apps/ios/Grip/More/MoreTab.swift` (`signOut`), `apps/ios/Grip/Auth/AuthModel.swift` (`signOut`, `forgetLocally`); tests `signingOutIsConfirmed`, `signOutErasesTheWidgetSnapshot`. De dialoogtekst in de code is korter dan het vel in het ontwerp ("Het dossier op deze iPhone wordt gewist. Daarna log je opnieuw in met Face ID of je wachtwoord.").
 
 #### Scans overleven het uitloggen
 
 De uploadwachtrij blijft bewust bewaard. Scans die nog niet verstuurd zijn, blijven in de App Group-container en gaan na de volgende inlog alsnog weg, dus uitloggen kan geen scan kwijtraken.
 
-**Status:** Gebouwd — `apps/ios/Verder/Upload/UploadCenter.swift` (`sessionRenewed` → `drain()`).
+**Status:** Gebouwd — `apps/ios/Grip/Upload/UploadCenter.swift` (`sessionRenewed` → `drain()`).
 
 #### Zeggen wat uitloggen doet, vóór de tik
 
@@ -243,7 +243,7 @@ Een uitlog die de server niet kon bereiken, wordt later afgemaakt: de telefoon h
 
 Als de laatste aanmelding in deze sessie van de app mislukte, staat de reden in mono onder de regel. Dat is ofwel "Aanmelden voor meldingen lukte niet. verder probeert het bij de volgende start opnieuw." (verder accepteerde het token niet) ofwel "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." gevolgd door het foutdomein en de foutcode van iOS (APNs weigerde). Een tik op "Meldingen aanzetten" hier telt ook als het tonen van de voorvraag.
 
-**Status:** Gebouwd — `NotificationsCopy.permissionLine` / `action`, `NotificationsScreen`, `apps/ios/Verder/Push/PushRegistrar.swift`; test `permissionStatesSayWhatToDo`. De tekst voor geweigerd uit het ontwerp ("verder kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan.") hangt af van de schakelaars en komt met ze mee.
+**Status:** Gebouwd — `NotificationsCopy.permissionLine` / `action`, `NotificationsScreen`, `apps/ios/Grip/Push/PushRegistrar.swift`; test `permissionStatesSayWhatToDo`. De tekst voor geweigerd uit het ontwerp ("verder kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan.") hangt af van de schakelaars en komt met ze mee.
 
 #### Deze iPhone aanmelden voor meldingen
 
@@ -320,7 +320,7 @@ Een uitleg in de app. "OP JE BEGINSCHERM" heeft genummerde stappen, "OP JE TOEGA
 
 "ZO ZIET HIJ ERUIT" toont de widget zoals hij er vandaag uit zou zien: een widget op het beginscherm met de telling ("4 wachten op jou · oudste 2 dagen") tussen app-iconen, en het toegangsscherm met de rechthoek onder de klok ("4 wachten · oudste 2 d"). Daaronder: "Op je toegangsscherm staan nooit titels: alleen hoeveel er wacht en hoe lang al." Martin ziet wat hij toevoegt voordat hij de app verlaat om het toe te voegen.
 
-**Status:** Nog te bouwen — hiervoor moeten de eigen views van de widget (`VerderWidget`, `WidgetContent`) in de app worden getekend vanuit de huidige snapshot van de widget, zodat het voorbeeld niet kan afwijken van de echte widget. Het moet dezelfde regels volgen: geen titels in de familie van het toegangsscherm, amber alleen met de bijbehorende woorden. Nodig is een test dat de tekst van het voorbeeld gelijk is aan wat `WidgetContent` voor die familie tekent.
+**Status:** Nog te bouwen — hiervoor moeten de eigen views van de widget (`GripWidget`, `WidgetContent`) in de app worden getekend vanuit de huidige snapshot van de widget, zodat het voorbeeld niet kan afwijken van de echte widget. Het moet dezelfde regels volgen: geen titels in de familie van het toegangsscherm, amber alleen met de bijbehorende woorden. Nodig is een test dat de tekst van het voorbeeld gelijk is aan wat `WidgetContent` voor die familie tekent.
 
 ### Over verder
 
@@ -404,7 +404,7 @@ Schermtitels zijn koppen. Elke rij is één element, voorgelezen als titel en da
 
 Brief §2.5: een mislukte actie geeft `.error`, samen met de nieuwe poging ter plekke. Op deze schermen is dat een mislukte "Toegangssleutel toevoegen" en een wijziging van een schakelaar die niet is opgeslagen. Verder trilt hier niets. De haptiek wordt overgeslagen als de systeeminstelling uit staat, en niets hangt ervan af.
 
-**Status:** Nog te bouwen — niets onder `apps/ios/Verder/More/` gebruikt `.sensoryFeedback` (alleen Overzicht, Scan en het scherm voor een verlopen sessie doen dat). Nodig: `.sensoryFeedback(.error, trigger:)` op het foutbericht bij de passkey en op de mislukte opslag van een voorkeur.
+**Status:** Nog te bouwen — niets onder `apps/ios/Grip/More/` gebruikt `.sensoryFeedback` (alleen Overzicht, Scan en het scherm voor een verlopen sessie doen dat). Nodig: `.sensoryFeedback(.error, trigger:)` op het foutbericht bij de passkey en op de mislukte opslag van een voorkeur.
 
 #### Geen schakelaar voor weergave, geen schakelaar voor Face ID
 
@@ -459,7 +459,7 @@ Meer heeft geen eigen gegevens en synchroniseert niet. `/me` wordt gelezen bij e
 
 ## Bekende grenzen en wat niet gemeten is
 
-- `/settings/security` toont deze telefoon als "Onbekend apparaat": zijn user agent (`Verder/1 CFNetwork/… Darwin/…`) wordt niet herkend door de parser van het web. De telling "N ingelogd" telt hem onder die naam mee.
+- `/settings/security` toont deze telefoon als "Onbekend apparaat": zijn user agent (`Grip/1 CFNetwork/… Darwin/…`) wordt niet herkend door de parser van het web. De telling "N ingelogd" telt hem onder die naam mee.
 - Of een tijdgevoelige melding door een focus heen komt, is op Martins eigen keuze niet gemeten, en de tekst belooft niets.
 - Het ontwikkelaarscertificaat en het profiel verlopen op 2027-10-31. Over verder toont die datum niet.
 - Open voor Martin: of "Toegangssleutel toevoegen" aangeboden blijft als het account er al een heeft (code: ja; ontwerp: nee), en of "Systeem" echt uitgezet mag kunnen worden, omdat systeemmeldingen de manier zijn waarop verder meldt dat het kapot is (het ontwerp tekent er een schakelaar voor).
@@ -468,14 +468,14 @@ Meer heeft geen eigen gegevens en synchroniseert niet. `/me` wordt gelezen bij e
 
 **iOS (`apps/ios/`):**
 
-- `Verder/More/MoreMenu.swift`: `MoreRoute`, `MoreMenu` (secties, titels, symbolen, ondertitels), `AccountCopy`, `NotificationsCopy`, `WidgetGuide`, `AboutInfo`. Elk woord op deze schermen.
-- `Verder/More/MoreTab.swift`: de Meer-lijst, het aanbod voor de toegangssleutel, de navigatiebestemmingen, `signOut()`.
-- `Verder/More/MoreScreens.swift`: `AccountScreen`, `NotificationsScreen`, `WidgetGuideScreen`, `AboutScreen`, `DeveloperScreen`.
-- `Verder/More/AccountModel.swift`: `GET /api/mobile/v1/me`, de cache die een mislukking overleeft, afhandeling van 401.
-- `Verder/Auth/AuthModel.swift` (`signOut`, `forgetLocally`, `addPasskey`), `Verder/Auth/SessionStore.swift`, `Verder/Auth/SessionEpoch.swift`, `Verder/Auth/AppLock.swift`.
-- `Verder/Push/PushRegistrar.swift` (toestemming, aanmelding, `registeredEnvironment`, `lastError`), `Verder/Push/DeepLink.swift`, `Verder/Push/NotificationRouter.swift`.
-- `Verder/Upload/UploadCenter.swift` (`lastSent`, `resendLastSent`, `isOffline`, `items`, `drain`).
-- `Verder/App/RootView.swift` (het tabblad, `meerPath`, de overstap voor het aanbod van de toegangssleutel, afhandeling van links).
+- `Grip/More/MoreMenu.swift`: `MoreRoute`, `MoreMenu` (secties, titels, symbolen, ondertitels), `AccountCopy`, `NotificationsCopy`, `WidgetGuide`, `AboutInfo`. Elk woord op deze schermen.
+- `Grip/More/MoreTab.swift`: de Meer-lijst, het aanbod voor de toegangssleutel, de navigatiebestemmingen, `signOut()`.
+- `Grip/More/MoreScreens.swift`: `AccountScreen`, `NotificationsScreen`, `WidgetGuideScreen`, `AboutScreen`, `DeveloperScreen`.
+- `Grip/More/AccountModel.swift`: `GET /api/mobile/v1/me`, de cache die een mislukking overleeft, afhandeling van 401.
+- `Grip/Auth/AuthModel.swift` (`signOut`, `forgetLocally`, `addPasskey`), `Grip/Auth/SessionStore.swift`, `Grip/Auth/SessionEpoch.swift`, `Grip/Auth/AppLock.swift`.
+- `Grip/Push/PushRegistrar.swift` (toestemming, aanmelding, `registeredEnvironment`, `lastError`), `Grip/Push/DeepLink.swift`, `Grip/Push/NotificationRouter.swift`.
+- `Grip/Upload/UploadCenter.swift` (`lastSent`, `resendLastSent`, `isOffline`, `items`, `drain`).
+- `Grip/App/RootView.swift` (het tabblad, `meerPath`, de overstap voor het aanbod van de toegangssleutel, afhandeling van links).
 
 **Server:**
 
@@ -487,7 +487,7 @@ Meer heeft geen eigen gegevens en synchroniseert niet. `/me` wordt gelezen bij e
 
 **Tests:**
 
-- `apps/ios/VerderTests/MoreMenuTests.swift`: `theMenuIsInTheBriefsOrder`, `everyRowLeadsSomewhere`, `developerIsLastAndOneLevelDown`, `rowSubtitlesSayTheState`, `passkeyStatusIsTheServersCount`, `aSecondDeviceCanStillAddAPasskey`, `devicesLiveOnTheWeb`, `signingOutIsConfirmed`, `everyKindTheWorkerSendsIsExplained`, `verderMailClaimsNoFocusBreakthrough`, `permissionStatesSayWhatToDo`, `theWidgetGuideNamesEveryPlaceAWidgetGoes`, `theWidgetGuideIsTruePerFamily`, `aboutReadsTheBundleAndTheServer`, `noWordInMeerIsAPromise`, en de `AccountModel`-tests (`readsTheAccount`, `refusesAnAnswerWithoutAnEmail`, `unauthorizedEndsTheSession`, `aFailedRefreshKeepsWhatIsShown`, `aFailureWithNothingCachedSaysSoAndRetries`, `aFailureOverACachedAccountKeepsIt`, `theFixtureAnswersTheAccount`).
+- `apps/ios/GripTests/MoreMenuTests.swift`: `theMenuIsInTheBriefsOrder`, `everyRowLeadsSomewhere`, `developerIsLastAndOneLevelDown`, `rowSubtitlesSayTheState`, `passkeyStatusIsTheServersCount`, `aSecondDeviceCanStillAddAPasskey`, `devicesLiveOnTheWeb`, `signingOutIsConfirmed`, `everyKindTheWorkerSendsIsExplained`, `verderMailClaimsNoFocusBreakthrough`, `permissionStatesSayWhatToDo`, `theWidgetGuideNamesEveryPlaceAWidgetGoes`, `theWidgetGuideIsTruePerFamily`, `aboutReadsTheBundleAndTheServer`, `noWordInMeerIsAPromise`, en de `AccountModel`-tests (`readsTheAccount`, `refusesAnAnswerWithoutAnEmail`, `unauthorizedEndsTheSession`, `aFailedRefreshKeepsWhatIsShown`, `aFailureWithNothingCachedSaysSoAndRetries`, `aFailureOverACachedAccountKeepsIt`, `theFixtureAnswersTheAccount`).
 - `AuthModelPasskeyTests` in `PasskeyAuthTests.swift` (`signOutErasesTheWidgetSnapshot`, `sessionRejectedErasesTheWidgetSnapshot`), `SessionStoreTests`, `SessionEpochTests`, `AppLockTests`, `LinkDestinationTests`, `DeepLinkTests`, `NothingPromisedTests`, `PasskeyErrorMappingTests`.
 - `apps/web/src/app/api/mobile/v1/me/route.test.ts`, `apps/web/src/lib/mobile-account.test.ts`, `apps/web/src/app/api/mobile/v1/push/register/route.test.ts`.
 

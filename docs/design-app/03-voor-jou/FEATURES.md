@@ -36,16 +36,16 @@ Het visuele ontwerp valt hier buiten; dat staat in Figma (bestand `QDRL5zHNEOjPz
 - **De tabbalk:** het tweede tabblad, "Voor jou" (`TabID.voorJou`), na Overzicht, waarop de app opent.
 - **Overzicht:** de kop "Wacht op jou", "Alle N bekijken" en de takenrij openen Voor jou op het hoofdniveau. Een voorbeeldrij opent dat item. "Door verder gedaan · N" opent het scherm "Door verder gedaan". Zie `../02-overzicht/FEATURES.md`.
 - **Meldingen.** Een tik of "Bekijken" levert de `link` van de push af (`NotificationRouter`, `DeepLink`):
-  - `verder://inbox` opent Voor jou op het hoofdniveau;
-  - `verder://proposal/<uuid>`, `verder://suggestion/<uuid>` en `verder://task/<uuid>` openen Voor jou met het scherm van dat item erbovenop;
-  - `verder://done-by-verder` opent het scherm "Door verder gedaan".
+  - `grip://inbox` opent Voor jou op het hoofdniveau;
+  - `grip://proposal/<uuid>`, `grip://suggestion/<uuid>` en `grip://task/<uuid>` openen Voor jou met het scherm van dat item erbovenop;
+  - `grip://done-by-grip` opent het scherm "Door verder gedaan".
 
-  Een push zonder link valt terug op zijn categorie: `VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP` en `TASK_DUE` openen Voor jou. Een `FILING`-push met als link `verder://inbox` (de auto-file-samenvatting van 19:00) wordt in plaats daarvan naar "Door verder gedaan" geleid.
-- **Widgets.** Een tik op de widget opent zijn `widgetURL` (`verder://inbox`); bij de varianten die items tonen is elke rij een `Link` naar de `verder://`-link van dat item. Beide komen uit bij `RootView.onOpenURL`, dat dezelfde strikte `DeepLink.parse` toepast.
+  Een push zonder link valt terug op zijn categorie: `VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP` en `TASK_DUE` openen Voor jou. Een `FILING`-push met als link `grip://inbox` (de auto-file-samenvatting van 19:00) wordt in plaats daarvan naar "Door verder gedaan" geleid.
+- **Widgets.** Een tik op de widget opent zijn `widgetURL` (`grip://inbox`); bij de varianten die items tonen is elke rij een `Link` naar de `grip://`-link van dat item. Beide komen uit bij `RootView.onOpenURL`, dat dezelfde strikte `DeepLink.parse` toepast.
 - **Het Weekoverzicht** (Meer) eindigt met "Naar Voor jou", dat de actuele lijst opent.
-- **Er is geen URL-schema geregistreerd.** `verder://`-links werken alleen binnen een push of vanuit verders eigen widget. Geen webpagina of andere app kan er een afvuren.
+- **Er is geen URL-schema geregistreerd.** `grip://`-links werken alleen binnen een push of vanuit verders eigen widget. Geen webpagina of andere app kan er een afvuren.
 
-**Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift`, `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Widget/WidgetContent.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift`, `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Widget/WidgetContent.swift`.
 
 ### 2. Een deep link overleeft de vergrendeling
 
@@ -71,9 +71,9 @@ De Voor jou-stack (`inboxPath: [InboxRoute]`) wordt in `RootView` bewaard, niet 
 
 #### 3. Eén ophaalactie voedt de lijst
 
-`GET /api/mobile/v1/inbox`. De route roept `caller.inbox.list()` (→ `loadWaiting`) en `caller.verderActions.list({ sinceDays: 7 })` samen aan, en antwoordt met `{ count, items, doneByVerder }`. `count` is de lengte van `items` op de server. Dezelfde ophaalactie, in de ene `InboxStore`, voedt ook de badge en de widget-snapshot.
+`GET /api/mobile/v1/inbox`. De route roept `caller.inbox.list()` (→ `loadWaiting`) en `caller.verderActions.list({ sinceDays: 7 })` samen aan, en antwoordt met `{ count, items, doneByGrip }`. `count` is de lengte van `items` op de server. Dezelfde ophaalactie, in de ene `InboxStore`, voedt ook de badge en de widget-snapshot.
 
-**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/inbox/route.ts`, `apps/ios/Verder/Inbox/InboxStore.swift`.
+**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/inbox/route.ts`, `apps/ios/Grip/Inbox/InboxStore.swift`.
 
 #### 4. Eén definitie van "wacht op Martin"
 
@@ -127,7 +127,7 @@ De frames beperken een titel tot twee regels met een staart ("…"), en korten e
 
 In de frames heeft de halterij ("Stukken aanleveren bij Team Startdossier · halte · 1 taak") een chevron en opent die halte op de Tijdlijn, waar de status, notitie en bewijsstukken staan.
 
-**Status:** Deels gebouwd — de halte wordt getoond en geteld (`waiting.ts`), en de Tijdlijn met zijn haltesheet bestaat (`Timeline/TimelineScreen.swift`, `verder://timeline`). Ontbreekt: `InboxRoute` geeft nil terug voor `.stop`, en er is geen link naar ÉÉN halte (`DeepLink` kent alleen `verder://timeline`). Nodig: een link `verder://stop/<uuid>` (of een `InboxRoute.stop`) die de Tijdlijn opent met de sheet van die halte, en een `LinkDestinationTests`-geval.
+**Status:** Deels gebouwd — de halte wordt getoond en geteld (`waiting.ts`), en de Tijdlijn met zijn haltesheet bestaat (`Timeline/TimelineScreen.swift`, `grip://timeline`). Ontbreekt: `InboxRoute` geeft nil terug voor `.stop`, en er is geen link naar ÉÉN halte (`DeepLink` kent alleen `grip://timeline`). Nodig: een link `grip://stop/<uuid>` (of een `InboxRoute.stop`) die de Tijdlijn opent met de sheet van die halte, en een `LinkDestinationTests`-geval.
 
 ### De kop
 
@@ -243,25 +243,25 @@ Onder het opbergamendement (CLAUDE.md, Project laws; spec §6.6) mag verder zelf
 
 #### 27. De sectie onderaan de lijst
 
-Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByVerderIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByVerder` — `listVerderActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
+Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByGripIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByGrip` — `listGripActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
 
-**Status:** Gebouwd — `DoneByVerderListSection`: kop met "BEKIJKEN ›" / "INKLAPPEN ⌄", in de lege lijst met samenvattingszin; nooit amber.
+**Status:** Gebouwd — `DoneByGripListSection`: kop met "BEKIJKEN ›" / "INKLAPPEN ⌄", in de lege lijst met samenvattingszin; nooit amber.
 
 #### 28. Een eigen scherm
 
-`InboxRoute.doneByVerder` (`DoneByVerderScreen`), geopend vanuit Overzicht, vanuit `verder://done-by-verder` en vanuit de samenvattingspush van 19:00. Het draagt de uitleg "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan." Als er niets is gedaan, staat er "verder deed niets zelf."
+`InboxRoute.doneByGrip` (`DoneByGripScreen`), geopend vanuit Overzicht, vanuit `grip://done-by-grip` en vanuit de samenvattingspush van 19:00. Het draagt de uitleg "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan." Als er niets is gedaan, staat er "verder deed niets zelf."
 
-**Status:** Gebouwd — `Inbox/DoneByVerderSection.swift`, `Inbox/VoorJouTab.swift`.
+**Status:** Gebouwd — `Inbox/DoneByGripSection.swift`, `Inbox/VoorJouTab.swift`.
 
 #### 29. Wat elke rij zegt
 
 "Opgeborgen door verder" of "Hernoemd door verder" met de datum en tijd; de documenttitel; één regel per veld dat veranderde, afgeleid uit voor en na: "inbox → opgeborgen", "soort zonder soort → Brief", "naam … → …".
 
-**Status:** Gebouwd — in de lijst als zin ("Opgeborgen als bankafschrift: …", "Hernoemd: … → …") met soort of "hernoemd" en de dag (`DoneByVerderList`); het eigen scherm houdt `DoneByVerderCopy`.
+**Status:** Gebouwd — in de lijst als zin ("Opgeborgen als bankafschrift: …", "Hernoemd: … → …") met soort of "hernoemd" en de dag (`DoneByGripList`); het eigen scherm houdt `DoneByGripCopy`.
 
 #### 30. Ongedaan maken in één tik
 
-"Ongedaan maken" verschijnt alleen wanneer de server zegt dat de rij `undoable` is en hij nog niet ongedaan is gemaakt. Een tik roept `POST /api/mobile/v1/verder-actions/:changeId/undo` aan met een lege body, en de route weigert elk veld daarin. **Geen Face ID**, met opzet: een undo onthult niets en verstuurt niets. In één transactie, onder de vergrendeling per document, doet de server het volgende:
+"Ongedaan maken" verschijnt alleen wanneer de server zegt dat de rij `undoable` is en hij nog niet ongedaan is gemaakt. Een tik roept `POST /api/mobile/v1/grip-actions/:changeId/undo` aan met een lege body, en de route weigert elk veld daarin. **Geen Face ID**, met opzet: een undo onthult niets en verstuurt niets. In één transactie, onder de vergrendeling per document, doet de server het volgende:
 
 - hij voegt een Martin-rij (actor NULL) toe aan `document_status_changes`, die de status, titel en soort van vóór de wijziging van verder herstelt;
 - hij voegt **+1 `document.updated`** ledger-event toe in de brede payloadvorm;
@@ -269,7 +269,7 @@ Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, al
 
 Er wordt niets verwijderd of bijgewerkt in de bewijstabellen. Twee keer tikken is onschadelijk: de rij van de eerste undo is nieuwer, dus de tweede wordt geweigerd met "al aangepast" en voegt niets toe. Na een geslaagde undo of een 409 ververst de inbox. Meldingen: "Ongedaan gemaakt.", "Al aangepast of vernietigd — de lijst is bijgewerkt." (409), "Dit kan hier niet ongedaan worden gemaakt." (400) en "Log opnieuw in.".
 
-**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/verder-actions/[changeId]/undo/route.ts`, `DoneByVerderModel` in `Inbox/DoneByVerderSection.swift`.
+**Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/grip-actions/[changeId]/undo/route.ts`, `DoneByGripModel` in `Inbox/DoneByGripSection.swift`.
 
 #### 31. Waarom er geen knop is
 
@@ -280,7 +280,7 @@ Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server bes
 - "Vernietigd", als het document definitief is verwijderd;
 - "De naam staat ook op de NAS; terugdraaien gaat op de server", voor **elke auto-name**. De naam staat ook op de NAS-share, die de webcontainer niet koppelt, dus een undo alleen in de database zou de share en het dossier met elkaar laten verschillen. Een hernoeming wordt teruggedraaid met `pnpm --filter worker normalize-names --undo`.
 
-**Status:** Gebouwd — `DoneByVerderCopy.note`, `packages/api/src/routers/verder-actions.ts`.
+**Status:** Gebouwd — `DoneByGripCopy.note`, `packages/api/src/routers/grip-actions.ts`.
 
 #### 32. Een toast na een undo, met een eigen undo
 
@@ -495,14 +495,14 @@ Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg)
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`):**
+**iOS (`apps/ios/Grip/`):**
 
 - `Inbox/VoorJouTab.swift`: het tabblad, `InboxRoute`, `VoorJouList` (rijen, amber, lege tekst) en de foutteksten.
 - `Inbox/InboxStore.swift`: de ene ophaalactie (`/inbox` plus `/dashboard/summary`), `fetchedAt`/`attemptedAt`, de widget-snapshot, de badge, en het vergeten bij een 401 of het einde van de sessie.
-- `Inbox/InboxModels.swift`: `WaitingItem`, `WaitingKind` (een onbekende soort decodeert als `.other`), `VerderAction`, `InboxDTO` (met `lastClearedAt`, dat de server nog niet stuurt), `SuggestionDTO`, `TaskDTO` en `DashboardSummaryDTO`.
+- `Inbox/InboxModels.swift`: `WaitingItem`, `WaitingKind` (een onbekende soort decodeert als `.other`), `GripAction`, `InboxDTO` (met `lastClearedAt`, dat de server nog niet stuurt), `SuggestionDTO`, `TaskDTO` en `DashboardSummaryDTO`.
 - `Inbox/SuggestionDetailView.swift`: `SuggestionDetailModel` en de kaart per soort.
 - `Inbox/TaskRowView.swift`: `TaskModel` en `TaskScreen`.
-- `Inbox/DoneByVerderSection.swift`: `DoneByVerderCopy`, `DoneByVerderModel` (undo), de sectie, het scherm en de rij.
+- `Inbox/DoneByGripSection.swift`: `DoneByGripCopy`, `DoneByGripModel` (undo), de sectie, het scherm en de rij.
 - `Proposals/ProposalScreen.swift`, `Proposals/ProposalModel.swift` en `Proposals/ApprovalGate.swift`: het voorstel- en vraagscherm, en de verse Face ID bij versturen.
 - `App/RootView.swift` (het tabblad, `inboxPath`, afhandeling van deep links), `App/AppDelegate.swift` (verversen bij een stille push), `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Push/NotificationCategories.swift`, `Push/QuestionCategories.swift`, en `Auth/AppLock.swift` plus `Auth/LockView.swift` (`lockGated`).
 - `Shared/WidgetSnapshot.swift` (het App Group-bestand, zijn beschermingsklasse, wissen) en `Widget/WidgetContent.swift` (wat elke variant tekent, privacygevoelige titels).
@@ -513,25 +513,25 @@ Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg)
 - `apps/web/src/app/api/mobile/v1/inbox/route.ts`
 - `apps/web/src/app/api/mobile/v1/suggestions/[id]/route.ts`, `…/approve/route.ts` en `…/reject/route.ts`
 - `apps/web/src/app/api/mobile/v1/tasks/route.ts` en `tasks/[id]/status/route.ts`
-- `apps/web/src/app/api/mobile/v1/verder-actions/[changeId]/undo/route.ts`
+- `apps/web/src/app/api/mobile/v1/grip-actions/[changeId]/undo/route.ts`
 - `apps/web/src/app/api/mobile/v1/proposals/[id]/{route,approve,reject,answer,task}`
 - `apps/web/src/lib/mobile-dto.ts` (`toInboxDTO`)
 - `packages/api/src/waiting.ts` (`waitingOnMartin`, `loadWaiting`, `WAITING_TASK_STATUSES`)
-- `packages/api/src/routers/verder-actions.ts` (lijst, ongedaan-maakbaarheid, undo)
+- `packages/api/src/routers/grip-actions.ts` (lijst, ongedaan-maakbaarheid, undo)
 - `packages/api/src/routers/suggestions.ts`, `packages/api/src/routers/tasks.ts` en `packages/api/src/task-status.ts` (de overgangsmatrix)
 - `apps/worker/src/badge-sync.ts`, `apps/worker/src/autofile-digest.ts`, `apps/worker/src/auto-file.ts` en `apps/worker/src/notify/notify.ts`
 
 **Tests:**
 
 - iOS:
-  - `VerderTests/InboxRankingTests.swift`: volgorde van de server, nooit-amberen gedaan-rijen, routes per soort, lege tekst;
-  - `VerderTests/InboxStoreTests.swift`: snapshot, badge, mislukte verversing behoudt beide, 401 wist, onbekende soort;
-  - `VerderTests/SuggestionDetailTests.swift`: alleen veranderde velden, gewiste soort als null, registry-item, reden bij afwijzen, 409, taak-`validNext`;
-  - `VerderTests/DoneByVerderTests.swift`: undo met lege body, een niet-ongedaan-te-maken rij wordt nooit gepost, conflict ververst;
+  - `GripTests/InboxRankingTests.swift`: volgorde van de server, nooit-amberen gedaan-rijen, routes per soort, lege tekst;
+  - `GripTests/InboxStoreTests.swift`: snapshot, badge, mislukte verversing behoudt beide, 401 wist, onbekende soort;
+  - `GripTests/SuggestionDetailTests.swift`: alleen veranderde velden, gewiste soort als null, registry-item, reden bij afwijzen, 409, taak-`validNext`;
+  - `GripTests/DoneByGripTests.swift`: undo met lege body, een niet-ongedaan-te-maken rij wordt nooit gepost, conflict ververst;
   - `DeepLinkTests`, `LinkDestinationTests`, `NotificationRouterTests`, `NotificationCategoriesTests`, `WidgetSnapshotTests` en `WidgetEntryTests`.
 - Server:
   - `packages/api/src/waiting.test.ts` en `waiting-load.test.ts`;
-  - `packages/api/src/routers/verder-actions.test.ts`;
+  - `packages/api/src/routers/grip-actions.test.ts`;
   - de `route.test.ts` naast elke route hierboven;
   - `apps/worker/src/badge-sync.test.ts`, `autofile-digest.test.ts` en `auto-file.test.ts`.
 

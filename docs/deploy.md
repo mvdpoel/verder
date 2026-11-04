@@ -14,14 +14,14 @@ checkout for migrations/seeding, and a nightly cron job.
   `ollama pull qwen3.5:9b` (or whatever `OLLAMA_MODEL` you set).
 - An existing cloudflared tunnel you can point at `http://localhost:3000`.
 - A Google Cloud OAuth "Desktop app" client JSON for the Gmail watcher.
-- Host directories: the vault dir (e.g. `/srv/verder/vault`), the NAS scan
+- Host directories: the vault dir (e.g. `/srv/grip/vault`), the NAS scan
   mount (e.g. `/mnt/nas/scans`), and the backup target
-  (e.g. `/mnt/nas/verder-backups`).
+  (e.g. `/mnt/nas/grip-backups`).
 
 ## 1. Checkout + `.env.prod`
 
 ```bash
-git clone <repo-url> verder && cd verder
+git clone <repo-url> grip && cd grip
 corepack enable
 pnpm install
 cp .env.example .env.prod
@@ -32,8 +32,8 @@ look like:
 
 | Variable | Production value |
 | --- | --- |
-| `DATABASE_URL` | `postgres://verder_app:<app-pw>@postgres:5432/verder` — the web container connects with the restricted `verder_app` role (INSERT+SELECT only on evidence tables) |
-| `WORKER_DATABASE_URL` | `postgres://verder_worker:<worker-pw>@postgres:5432/verder` |
+| `DATABASE_URL` | `postgres://grip_app:<app-pw>@postgres:5432/grip` — the web container connects with the restricted `grip_app` role (INSERT+SELECT only on evidence tables) |
+| `WORKER_DATABASE_URL` | `postgres://grip_worker:<worker-pw>@postgres:5432/grip` |
 | `VAULT_DIR` | `/vault` (container mount of `VAULT_HOST_DIR`) |
 | `NAS_SCAN_DIR` | `/scans` (container mount of `NAS_SCAN_HOST_DIR`) |
 | `OLLAMA_URL` | `http://<homelab-lan-ip>:11434` — the container cannot reach `localhost` on the host |
@@ -47,10 +47,10 @@ look like:
 | `SEED_EMAIL` / `SEED_PASSWORD` | your login; only needed while running the seed step |
 | `ALLOW_SIGNUP` | leave unset — sign-up stays disabled; the seed script flips it internally |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys` |
-| `POSTGRES_PASSWORD` | password for the `verder` superuser inside the postgres container |
-| `VAULT_HOST_DIR` | host path mounted as `/vault`, e.g. `/srv/verder/vault` |
+| `POSTGRES_PASSWORD` | password for the `grip` superuser inside the postgres container |
+| `VAULT_HOST_DIR` | host path mounted as `/vault`, e.g. `/srv/grip/vault` |
 | `NAS_SCAN_HOST_DIR` | host NAS mount, mounted read-only as `/scans`; must contain `.verder-nas` (see Resilience guards) |
-| `BACKUP_DIR` | nightly backup target, default `/mnt/nas/verder-backups` |
+| `BACKUP_DIR` | nightly backup target, default `/mnt/nas/grip-backups` |
 
 Also drop the OAuth client JSON in place:
 
@@ -68,21 +68,21 @@ come from the same file.
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d postgres
-DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
-  pnpm --filter @verder/db migrate
+DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
+  pnpm --filter @grip/db migrate
 ```
 
-Migrations run from the host checkout as the admin role (`verder`), never
+Migrations run from the host checkout as the admin role (`grip`), never
 from the containers. The drizzle journal currently contains thirty
 migrations — `0000` (schema) through `0029` — and covers everything
 in one pass:
 
 - `0000_noisy_the_initiative` — full schema (evidence + operational tables)
-- `0001_grants` — creates `verder_app` (insert-only on evidence tables)
+- `0001_grants` — creates `grip_app` (insert-only on evidence tables)
 - `0002_auth_tables` / `0003_auth_grants` — better-auth tables (`user`,
   `account`, `session`, `verification`) + grants. There is **no separate
   better-auth migrate step**; these drizzle migrations are it.
-- `0004_worker_role` — creates `verder_worker` (+ `CREATE ON DATABASE` so
+- `0004_worker_role` — creates `grip_worker` (+ `CREATE ON DATABASE` so
   pg-boss can own its own schema)
 - `0005_black_calypso` — `raw_emails.suggest_queued_at` outbox marker
   (backfills existing rows, column-level UPDATE grant for the worker)
@@ -113,7 +113,7 @@ in one pass:
   DELETE: the index is DERIVED, not evidence — fully rebuildable by `reindex`,
   it appends no ledger events, and index health is surfaced on `/verify`.
   Neither role gets INSERT on `search_outbox`; rows arrive only through the
-  SECURITY DEFINER trigger function owned by `verder`
+  SECURITY DEFINER trigger function owned by `grip`
 - `0017_search_triggers` — `search_enqueue()` plus fourteen
   `AFTER INSERT OR UPDATE` triggers: nine entity tables and five
   parent-refresh tables (`document_status_changes`, `task_status_changes`,
@@ -144,24 +144,24 @@ in one pass:
 
 ### 2.2 Change the role passwords from the dev defaults
 
-`0001`/`0004` create the roles with dev passwords (`verder_app` /
-`verder_worker`). Replace them, and use the new values in
+`0001`/`0004` create the roles with dev passwords (`grip_app` /
+`grip_worker`). Replace them, and use the new values in
 `DATABASE_URL`/`WORKER_DATABASE_URL` in `.env.prod`:
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml exec postgres \
-  psql -U verder -d verder \
-  -c "ALTER ROLE verder_app PASSWORD '<app-pw>';" \
-  -c "ALTER ROLE verder_worker PASSWORD '<worker-pw>';"
+  psql -U grip -d grip \
+  -c "ALTER ROLE grip_app PASSWORD '<app-pw>';" \
+  -c "ALTER ROLE grip_worker PASSWORD '<worker-pw>';"
 ```
 
 ### 2.3 Seed the single user
 
 ```bash
-DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
+DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
 AUTH_SECRET="<same-as-.env.prod>" APP_URL="https://<your-tunnel-hostname>" \
 SEED_EMAIL="you@example.com" SEED_PASSWORD="<your-login-password>" \
-  pnpm --filter @verder/auth seed
+  pnpm --filter @grip/auth seed
 ```
 
 This creates the better-auth credential account and the app-level `users`
@@ -233,11 +233,11 @@ Two environment variables in `.env.prod` drive the passkey:
 | Variable | Value |
 | --- | --- |
 | `PASSKEY_RP_ID` | `<your-tunnel-hostname>` (no scheme, no path) |
-| `PASSKEY_RP_NAME` | `Verder` |
+| `PASSKEY_RP_NAME` | `Grip` |
 | `APPLE_TEAM_ID` | the Apple developer team id that signs the iPhone app (10 characters) |
 
 `APPLE_TEAM_ID` feeds `GET /.well-known/apple-app-site-association`, which
-returns `{"webcredentials":{"apps":["<APPLE_TEAM_ID>.pro.vanderpoel.verder"]}}`
+returns `{"webcredentials":{"apps":["<APPLE_TEAM_ID>.pro.vanderpoel.grip"]}}`
 so the iPhone app can use passkeys for this hostname. Unset, the route answers
 404 rather than publish a wrong app id. The path is public (no session, no
 redirect); verify from outside with
@@ -249,7 +249,7 @@ iPhone push (APNs) reads three more, used by the worker's `notify()`:
 | --- | --- |
 | `APNS_KEY_ID` | the 10-character Key ID of the `.p8` auth key (Apple Developer → Keys) |
 | `APNS_KEY_PATH` | `/repo/secrets/apns-<KEY_ID>.p8` — the key file lives in `secrets/` (mode 600, never committed, in the rsync exclude list) |
-| `APNS_TOPIC` | `pro.vanderpoel.verder` (the app's bundle id) |
+| `APNS_TOPIC` | `pro.vanderpoel.grip` (the app's bundle id) |
 
 The team comes from `APPLE_TEAM_ID` (or `APNS_TEAM_ID` if set). Unset or
 unreadable, `notify()` records each APNs attempt as skipped (`no-apns-key`)
@@ -282,7 +282,7 @@ door is the password, under a policy that has just changed.
 `ops/nightly.sh` sources `.env.prod` itself, so the crontab line stays bare:
 
 ```
-30 3 * * * /path/to/verder/ops/nightly.sh >> /var/log/verder-nightly.log 2>&1
+30 3 * * * /path/to/grip/ops/nightly.sh >> /var/log/grip-nightly.log 2>&1
 ```
 
 Each night it: dumps postgres to `$BACKUP_DIR/db-YYYY-MM-DD.sql.gz` (30-day
@@ -312,7 +312,7 @@ Every runbook below says "sync the checkout" and this is what that means. There
 is no GitHub key on the homelab, so the tree is pushed from the Mac with rsync.
 
 **The exclude list is the entire safety mechanism.** `--delete` is required —
-without it a file deleted in the repo lives on in `~/apps/verder` and the Docker
+without it a file deleted in the repo lives on in `~/apps/grip` and the Docker
 `next build` fails on a stale file importing something that no longer exists.
 But rsync does **not** read `.gitignore`: a path being git-ignored protects it
 from nothing here. Use this command, and only ever add to the list:
@@ -328,7 +328,7 @@ rsync -avn --delete --info=del \
   --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' \
   --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' \
   --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' \
-  ./ homelab:~/apps/verder/
+  ./ homelab:~/apps/grip/
 
 # Then the real run: same flags, drop the -n.
 rsync -av --delete \
@@ -338,7 +338,7 @@ rsync -av --delete \
   --exclude '.env' --exclude '.env.local' --exclude '*.traineddata' \
   --exclude '.superpowers' --exclude '.gstack' --exclude '.claude' \
   --exclude 'next-env.d.ts' --exclude '*.tsbuildinfo' \
-  ./ homelab:~/apps/verder/
+  ./ homelab:~/apps/grip/
 ```
 
 Why each of the three dangerous ones is there, measured 2026-08-27 — a dry run
@@ -353,7 +353,7 @@ deleting .env.prod
 
 That is the Gmail integration and every database role password, destroyed by one
 command. `vault-files/` is the dev vault and must never be shipped over the
-production one. `nightly.log` is written into `~/apps/verder/` itself and exists
+production one. `nightly.log` is written into `~/apps/grip/` itself and exists
 on the homelab only, so `--delete` without it erases the whole history of
 nightly backup and verify runs — on 2026-08-22 the dry run printed exactly one
 line, `deleting nightly.log`, which is the only warning there is.
@@ -394,14 +394,14 @@ optional.
 Afterwards, confirm the secrets survived:
 
 ```bash
-ssh homelab 'ls ~/apps/verder/secrets/ && ls -l ~/apps/verder/.env.prod'
+ssh homelab 'ls ~/apps/grip/secrets/ && ls -l ~/apps/grip/.env.prod'
 ```
 
 **Note this is NOT the Syncthing folder.** Syncthing keeps `~/Workspace` in step
 bidirectionally across MacbookPro, aios and homelab (excluding `.git` and
 `node_modules` via `~/Workspace/.stignore`), so `homelab:~/Workspace/mp/verder`
 is usually current on its own. Production deliberately does not run from there:
-`.env.prod`, `secrets/` and the vault live under `~/apps/verder`, and a
+`.env.prod`, `secrets/` and the vault live under `~/apps/grip`, and a
 bidirectionally-synced production directory would replicate those secrets to
 three machines and let a half-saved edit on any of them reach a build.
 
@@ -411,8 +411,8 @@ Order matters: migrate first, then rebuild, then backfill.
 
 ```bash
 # 1. Sync the checkout (see 7.0), then migrate from the HOST as the admin role
-DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
-  pnpm --filter @verder/db migrate
+DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
+  pnpm --filter @grip/db migrate
 
 # 2. Rebuild the app containers
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build web worker
@@ -455,16 +455,16 @@ ahead of the migration takes down the landing page too.
 
 ```bash
 # 1. migration FIRST, from the homelab HOST
-ssh homelab 'cd ~/apps/verder && set -a && source ./.env.prod && set +a && \
-  DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
-  pnpm --filter @verder/db migrate'   # bare, without DATABASE_URL, dies on 28P01
+ssh homelab 'cd ~/apps/grip && set -a && source ./.env.prod && set +a && \
+  DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
+  pnpm --filter @grip/db migrate'   # bare, without DATABASE_URL, dies on 28P01
 # 2. then rsync the tree and rebuild web + worker
 # 3. index the two new entity kinds (track, stop)
-ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+ssh homelab 'cd ~/apps/grip && docker compose --env-file .env.prod \
   -f docker-compose.prod.yml exec -T worker pnpm --filter worker reindex'
 # 4. verify — this sub-project appends NO ledger events, so the event count
 #    must not move at all. If it does, something wrote evidence that should not.
-ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+ssh homelab 'cd ~/apps/grip && docker compose --env-file .env.prod \
   -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
 ```
 
@@ -481,7 +481,7 @@ removes.
 
 If a dev database ever loses its map (the test suite truncates evidence tables
 and the cascade reaches `stops`), restore it with
-`pnpm --filter @verder/db seed-map` — idempotent, and safe to run against a
+`pnpm --filter @grip/db seed-map` — idempotent, and safe to run against a
 database that already has one.
 
 ### Migration 0026 — the vertical case map
@@ -493,7 +493,7 @@ every `expected` stop go, the Aanvraag and Opstart stops move onto the spine,
 and every child track's `branches_at_stop_id` / `merges_at_stop_id` is nulled
 (branch geometry is date-driven from here on; the pointer is semantic only and
 the spoor editor is where Martin records one when he knows it). It runs as the
-`verder` admin role — the app and worker grants are untouched and still carry no
+`grip` admin role — the app and worker grants are untouched and still carry no
 DELETE.
 
 Same ordering trap as 0020–0023, and the same reason: `/timeline`, the dashboard
@@ -502,13 +502,13 @@ columns and rows the old schema does not have.
 
 ```bash
 # 1. migration FIRST, from the homelab HOST
-ssh homelab 'cd ~/apps/verder && set -a && source ./.env.prod && set +a && \
-  DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
-  pnpm --filter @verder/db migrate'   # bare, without DATABASE_URL, dies on 28P01
+ssh homelab 'cd ~/apps/grip && set -a && source ./.env.prod && set +a && \
+  DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
+  pnpm --filter @grip/db migrate'   # bare, without DATABASE_URL, dies on 28P01
 # 2. then rsync the tree (with the full --exclude list) and rebuild web + worker
 # 3. verify — 0026 appends NO ledger events, so the event count and the chain
 #    HEAD must both be unchanged. A moved head means something wrote evidence.
-ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+ssh homelab 'cd ~/apps/grip && docker compose --env-file .env.prod \
   -f docker-compose.prod.yml exec -T worker pnpm --filter worker nightly-verify'
 ```
 
@@ -566,10 +566,10 @@ that the main line stayed bare — four stops, nothing else.
 
 ```bash
 # 1. rsync + rebuild the worker image (no migration; nothing schema-side moved)
-ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+ssh homelab 'cd ~/apps/grip && docker compose --env-file .env.prod \
   -f docker-compose.prod.yml up -d --build worker'
 # 2. the reconstruction — creates the parties the backfill then needs
-ssh homelab 'cd ~/apps/verder && docker compose --env-file .env.prod \
+ssh homelab 'cd ~/apps/grip && docker compose --env-file .env.prod \
   -f docker-compose.prod.yml exec -T worker pnpm --filter worker case-history'
 # 3. the mail, INCLUDING Martin's own sent mail — see the trap below
 # 4. run case-history again to link the newly ingested attachments
@@ -811,7 +811,7 @@ deploy nothing in this section had ever met a running Stalwart. These four have:
 - **The nested blob mount leaves a root-owned stub.** `STALWART_BLOB_DIR` targets
   `/var/lib/stalwart/blobs`, which is *inside* `STALWART_DATA_DIR`'s target, so
   Docker creates the mountpoint inside the outer bind and it lands `root:root`
-  (`/mnt/data/verder/stalwart/data/blobs`). It is inert — real writes go to the
+  (`/mnt/data/grip/stalwart/data/blobs`). It is inert — real writes go to the
   outer `blobs` bind, which is `2000:2000` — but if the wizard's Storage screen
   is ever pointed at a Filesystem blob store, check ownership first.
 
@@ -934,9 +934,9 @@ NFS-backed mail database is how a mail store corrupts, and keeping the whole
 store local means that line is never approached rather than merely respected.
 
 ```bash
-ssh homelab 'sudo mkdir -p /mnt/data/verder/stalwart/{etc,data,blobs} && \
-  sudo chown -R 2000:2000 /mnt/data/verder/stalwart && \
-  sudo chmod 750 /mnt/data/verder/stalwart/etc'
+ssh homelab 'sudo mkdir -p /mnt/data/grip/stalwart/{etc,data,blobs} && \
+  sudo chown -R 2000:2000 /mnt/data/grip/stalwart && \
+  sudo chmod 750 /mnt/data/grip/stalwart/etc'
 ```
 
 Run it before anything starts `stalwart`. If those directories are missing the
@@ -952,9 +952,9 @@ in it.
 
 | Variable | Production value |
 | --- | --- |
-| `STALWART_ETC_DIR` | `/mnt/data/verder/stalwart/etc` → `/etc/stalwart`. **New in 0.16 and load-bearing.** Stalwart writes `config.json` here itself when the wizard finishes (`crates/store/src/registry/local.rs:91-105`). Lose it and the server starts in bootstrap mode offering to build a second store beside the good one. It is a writable *directory*, never a read-only file mount |
-| `STALWART_DATA_DIR` | `/mnt/data/verder/stalwart/data` → `/var/lib/stalwart`. The RocksDB holding the registry (all configuration) and all mail metadata |
-| `STALWART_BLOB_DIR` | `/mnt/data/verder/stalwart/blobs` → `/var/lib/stalwart/blobs`. Used **only** if you point the wizard's Storage screen at a Filesystem blob store on exactly that path; leave it on "Use data store" and blobs go into the RocksDB above, which is still on `/mnt/data` and still correct. Kept separately settable because phase 2 may want the split |
+| `STALWART_ETC_DIR` | `/mnt/data/grip/stalwart/etc` → `/etc/stalwart`. **New in 0.16 and load-bearing.** Stalwart writes `config.json` here itself when the wizard finishes (`crates/store/src/registry/local.rs:91-105`). Lose it and the server starts in bootstrap mode offering to build a second store beside the good one. It is a writable *directory*, never a read-only file mount |
+| `STALWART_DATA_DIR` | `/mnt/data/grip/stalwart/data` → `/var/lib/stalwart`. The RocksDB holding the registry (all configuration) and all mail metadata |
+| `STALWART_BLOB_DIR` | `/mnt/data/grip/stalwart/blobs` → `/var/lib/stalwart/blobs`. Used **only** if you point the wizard's Storage screen at a Filesystem blob store on exactly that path; leave it on "Use data store" and blobs go into the RocksDB above, which is still on `/mnt/data` and still correct. Kept separately settable because phase 2 may want the split |
 | `STALWART_RECOVERY_ADMIN` | `admin:<plaintext password>`, e.g. `admin:$(openssl rand -hex 24)`. Honoured on **every** start and not only during setup (`crates/common/src/auth/authentication.rs:85-89`), compared as plaintext when it carries no hash prefix (`crates/directory/src/core/secret.rs:240-243`), and an empty secret can never authenticate. **Leaving it unset is safe** (§8.4) |
 | `JMAP_BASE_URL` | `http://stalwart:8080` — the worker reaches it over the compose network |
 | `JMAP_USER` / `JMAP_APP_PASSWORD` | the mailbox address and its app password, minted in §8.6. These two legitimately arrive late: they cannot exist before the account does |
@@ -1009,14 +1009,14 @@ code. Do not reorder these three.
 #    packages/db/drizzle/0028_*.sql / 0029_*.sql on the homelab.
 
 # 3. Migrations, from the homelab HOST, as the admin role — exactly the
-#    spelling in §7.1. The bare `pnpm --filter @verder/db migrate` falls back
+#    spelling in §7.1. The bare `pnpm --filter @grip/db migrate` falls back
 #    to the dev default and dies on 28P01 auth_failed, so DATABASE_URL is not
 #    optional and $POSTGRES_PASSWORD has to come out of .env.prod:
 ssh homelab                       # steps 3-5 all run inside this session
-cd ~/apps/verder
+cd ~/apps/grip
 set -a; source ./.env.prod; set +a
-DATABASE_URL="postgres://verder:$POSTGRES_PASSWORD@127.0.0.1:5432/verder" \
-  pnpm --filter @verder/db migrate     # applies 0028 then 0029, each once
+DATABASE_URL="postgres://grip:$POSTGRES_PASSWORD@127.0.0.1:5432/grip" \
+  pnpm --filter @grip/db migrate     # applies 0028 then 0029, each once
 
 # 4. Only now the app containers:
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build web worker
@@ -1066,7 +1066,7 @@ that it is down (§8.10).
 **Do not reach for a bare `up -d` anywhere in this section.** It would start
 `stalwart` ahead of the mkdir/chown, and the three bind mounts now carry
 `create_host_path: false` precisely so that fails loudly — `bind source path does
-not exist: /mnt/data/verder/stalwart/etc` — instead of leaving three root-owned
+not exist: /mnt/data/grip/stalwart/etc` — instead of leaving three root-owned
 directories that uid 2000 cannot write. Measured locally, both with and without
 the flag; the reasoning is on the mounts in `docker-compose.prod.yml`. The flag
 says nothing about ownership: a path that exists but is root-owned still passes,
@@ -1198,14 +1198,14 @@ This is read from source; §8.9 item 4 is the two-minute confirmation, and if it
 comes back 401 the credential decision has to be re-made rather than quietly
 swapped for OAuth.
 
-Add to `~/apps/verder/.env.prod` (mode 600, never committed):
+Add to `~/apps/grip/.env.prod` (mode 600, never committed):
 
 ```
 # written in §8.3, before the rsync
 STALWART_RECOVERY_ADMIN=admin:<the administrator password>
-STALWART_ETC_DIR=/mnt/data/verder/stalwart/etc
-STALWART_DATA_DIR=/mnt/data/verder/stalwart/data
-STALWART_BLOB_DIR=/mnt/data/verder/stalwart/blobs
+STALWART_ETC_DIR=/mnt/data/grip/stalwart/etc
+STALWART_DATA_DIR=/mnt/data/grip/stalwart/data
+STALWART_BLOB_DIR=/mnt/data/grip/stalwart/blobs
 JMAP_BASE_URL=http://stalwart:8080
 # added here, after the account exists
 JMAP_USER=martin@vanderpoel.pro
@@ -1342,12 +1342,12 @@ Every item is cheap, and every one of them is currently an assumption.
    from the container id (§8.2).
 6. **The blob mount is the one being written.** If you chose the Filesystem blob
    store, write a message and confirm bytes land in
-   `/mnt/data/verder/stalwart/blobs` on the host; `docker compose exec stalwart
+   `/mnt/data/grip/stalwart/blobs` on the host; `docker compose exec stalwart
    df -h /var/lib/stalwart /var/lib/stalwart/blobs` should show two distinct
    mounts. The nested bind mount is expected to work — Docker orders mounts by
    destination depth — but expected is not observed.
 7. **`config.json` exists on the host** at
-   `/mnt/data/verder/stalwart/etc/config.json` after the wizard, and matches
+   `/mnt/data/grip/stalwart/etc/config.json` after the wizard, and matches
    `ops/stalwart/config.json.example`. If it differs, update the example — it is
    the disaster-recovery copy.
 8. **The unwanted listeners.** `/admin` › Network › Listeners shows smtp/25 and
@@ -1360,7 +1360,7 @@ Every item is cheap, and every one of them is currently an assumption.
 
    ```bash
    ssh homelab 'docker inspect --format "{{.State.Health.Status}}" $(docker compose \
-     --env-file ~/apps/verder/.env.prod -f ~/apps/verder/docker-compose.prod.yml \
+     --env-file ~/apps/grip/.env.prod -f ~/apps/grip/docker-compose.prod.yml \
      ps -q stalwart)'
    ssh homelab 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/healthz/live'
    ```
@@ -1374,7 +1374,7 @@ Every item is cheap, and every one of them is currently an assumption.
 `ops/nightly.sh` backs up postgres and the vault. Measured by reading it: its
 steps are `pg_dump`, an additive `rsync` of `$VAULT_HOST_DIR`, and
 `nightly-verify` / `model-check` inside the worker container. **None of them
-touches the Stalwart store**, so `/mnt/data/verder/stalwart` is unbacked — the
+touches the Stalwart store**, so `/mnt/data/grip/stalwart` is unbacked — the
 Takeout `.mbox` is the only second copy of the archive until that changes. Keep
 the export. A future backup step must cover `etc/` as well as the store:
 `config.json` is small and losing it is worse than it looks (§8.3).
@@ -1469,11 +1469,11 @@ the 03:30 nightly, so the archive it drills is the one written a couple of hours
 earlier:
 
 ```
-30 5 1 * * /home/homelab/apps/verder/ops/mail-restore-drill.sh >> /home/homelab/apps/verder/nightly.log 2>&1
+30 5 1 * * /home/homelab/apps/grip/ops/mail-restore-drill.sh >> /home/homelab/apps/grip/nightly.log 2>&1
 ```
 
 **It logs into `nightly.log`, beside the 03:30 run, and that is deliberate.** A
-`drill.log` of its own would sit in `~/apps/verder/` and is NOT in the canonical
+`drill.log` of its own would sit in `~/apps/grip/` and is NOT in the canonical
 rsync exclude list, so `--delete` would erase it on the next deploy — the exact
 accident CLAUDE.md records for `nightly.log`, whose whole history exists only on
 the homelab and is protected by one `--exclude` line. Adding a second protected
@@ -1491,7 +1491,7 @@ drill takes ~10–20 minutes and holds ~20 GB of `/mnt/data` while it runs:
 
 ```bash
 ssh homelab
-cd ~/apps/verder
+cd ~/apps/grip
 ./ops/mail-restore-drill.sh          # prints PASS, or FAIL and the reasons
 crontab -l | grep mail-restore-drill # the line is actually installed
 ```
@@ -1547,7 +1547,7 @@ row back — **do not wait for 03:30**:
 
 ```bash
 ssh homelab
-cd ~/apps/verder
+cd ~/apps/grip
 ./ops/mail-backup.sh                 # ~8 minutes; stops and restarts stalwart
 ```
 
@@ -1626,19 +1626,19 @@ Install on the homelab (`crontab -e`; this host's crontab is `CRON_TZ=UTC`, whic
 does not matter for a 5-minute line):
 
 ```cron
-*/5 * * * * /home/martin/apps/verder/ops/watchdog.sh >> /home/martin/.local/state/verder-watchdog/cron.log 2>&1
+*/5 * * * * /home/martin/apps/grip/ops/watchdog.sh >> /home/martin/.local/state/grip-watchdog/cron.log 2>&1
 ```
 
-`mkdir -p ~/.local/state/verder-watchdog` first. Add to sudoers (`visudo -f
+`mkdir -p ~/.local/state/grip-watchdog` first. Add to sudoers (`visudo -f
 /etc/sudoers.d/verder-watchdog`) so the mount attempts work without a password:
 
 ```
 martin ALL=(root) NOPASSWD: /usr/bin/mount /mnt/nas-workspace, /usr/bin/mount /mnt/nas-download
 ```
 
-State lives in `~/.local/state/verder-watchdog/` (`bad.<service>` strike counters,
+State lives in `~/.local/state/grip-watchdog/` (`bad.<service>` strike counters,
 `watchdog.log` with one line per action, `pending-restarted`), **outside the repo
-dir** on purpose: `~/apps/verder` is rsynced with `--delete`, and the exclude
+dir** on purpose: `~/apps/grip` is rsynced with `--delete`, and the exclude
 list is not the place to depend on for host state.
 
 **Maintenance.** `docker compose stop <service>` will be undone by the watchdog
@@ -1661,10 +1661,10 @@ provider, which is worse than failing.
 2. Restore the database dump:
    ```bash
    docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres \
-     psql -U verder -c "DROP DATABASE verder;" -c "CREATE DATABASE verder;" postgres
+     psql -U grip -c "DROP DATABASE grip;" -c "CREATE DATABASE grip;" postgres
    gunzip < "$BACKUP_DIR/db-<DATE>.sql.gz" | \
      docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres \
-     psql -U verder verder
+     psql -U grip grip
    ```
 3. Restore the vault files:
    ```bash
@@ -1717,7 +1717,7 @@ provider, which is worse than failing.
    **`stalwart` is deliberately not in that list, and this is the step where it
    matters most.** Nothing in this backup contains the mail store (§8.10): the
    dump is postgres, the mirror is the vault. If the disk that held
-   `/mnt/data/verder/stalwart` is the disk that failed, starting `stalwart` here
+   `/mnt/data/grip/stalwart` is the disk that failed, starting `stalwart` here
    would find an empty `/etc/stalwart`, come up in bootstrap mode and offer to
    build a brand-new mailbox — which is not what you want to discover at 02:00.
 
@@ -1725,14 +1725,14 @@ provider, which is worse than failing.
 
    ```bash
    # Does the store still exist, and is it still owned by uid 2000?
-   ssh homelab 'ls -la /mnt/data/verder/stalwart/ /mnt/data/verder/stalwart/etc/'
+   ssh homelab 'ls -la /mnt/data/grip/stalwart/ /mnt/data/grip/stalwart/etc/'
    ```
 
    - **`etc/config.json` and `data/` are both there** → start it and check
      §8.7: `up -d stalwart`.
    - **`data/` survived but `etc/config.json` is gone** → copy
      `ops/stalwart/config.json.example` to
-     `/mnt/data/verder/stalwart/etc/config.json`, `chown 2000:2000` it, then
+     `/mnt/data/grip/stalwart/etc/config.json`, `chown 2000:2000` it, then
      start. Do **not** run the wizard: it would build a second store beside the
      good one.
    - **The store is gone** → this is a rebuild, not a restore. Re-run §8 from

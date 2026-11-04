@@ -12,6 +12,13 @@
 # The three stalwart bind mounts carry `create_host_path: false` so a bare
 # `up -d` fails loudly instead of leaving root-owned directories behind — the
 # reasoning is on the mounts themselves.
+# The project name is pinned, not derived from the folder: it names the volume
+# (`grip_pgdata`), the network (`grip_default`, which ops/mail-drill.compose.yml
+# joins) and the containers (`grip-postgres-1`, …). Before the rename to Grip
+# the project was the folder name `verder`, so the cutover copies the old
+# `verder_pgdata` volume into `grip_pgdata` (docs/superpowers/plans/
+# 2026-11-04-rename-to-grip.md, Phase B).
+name: grip
 services:
   postgres:
     # -trixie, not the bare :pg17 tag — same PostgreSQL build (17.11-1.pgdg13+2)
@@ -23,13 +30,13 @@ services:
     image: pgvector/pgvector:pg17-trixie
     restart: unless-stopped
     environment:
-      POSTGRES_USER: verder
+      POSTGRES_USER: grip
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.prod}
-      POSTGRES_DB: verder
+      POSTGRES_DB: grip
     ports: ["127.0.0.1:5432:5432"] # host-only, for migrations/seed from the checkout
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U verder -d verder"]
+      test: ["CMD-SHELL", "pg_isready -U grip -d grip"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -55,7 +62,7 @@ services:
       # auto-name only renames -- so the archive can be reorganised but not
       # lost. The journal is a separate mount so an undo survives the container.
       - "${NAS_SCAN_HOST_DIR:?set in .env.prod}:/scans"
-      - "${NAME_JOURNAL_DIR:-/srv/verder/normalize-journal}:/journal"
+      - "${NAME_JOURNAL_DIR:-/srv/grip/normalize-journal}:/journal"
       - "./secrets:/repo/secrets"
       # The gmail.send token for approved proposals, READ-ONLY: this nested bind
       # shadows the read-write ./secrets one at that path (Plan 2 Task 21).
@@ -195,12 +202,12 @@ services:
       # good one. It must be a WRITABLE DIRECTORY — never a read-only file
       # mount, which is what phase 1's first draft did against 0.11.
       - type: bind
-        source: "${STALWART_ETC_DIR:-/mnt/data/verder/stalwart/etc}"
+        source: "${STALWART_ETC_DIR:-/mnt/data/grip/stalwart/etc}"
         target: /etc/stalwart
         bind: { create_host_path: false }
       # The data store: the registry (all configuration) and all mail metadata.
       - type: bind
-        source: "${STALWART_DATA_DIR:-/mnt/data/verder/stalwart/data}"
+        source: "${STALWART_DATA_DIR:-/mnt/data/grip/stalwart/data}"
         target: /var/lib/stalwart
         bind: { create_host_path: false }
       # Blobs, kept separately settable because phase 2 may want to split them.
@@ -211,7 +218,7 @@ services:
       # above, which is still on /mnt/data and still correct. Verify which you
       # got before importing 11.49 GB, not after (docs/deploy.md §8.9).
       - type: bind
-        source: "${STALWART_BLOB_DIR:-/mnt/data/verder/stalwart/blobs}"
+        source: "${STALWART_BLOB_DIR:-/mnt/data/grip/stalwart/blobs}"
         target: /var/lib/stalwart/blobs
         bind: { create_host_path: false }
     ports:

@@ -1,3 +1,6 @@
+# Project name pinned so the volume is `grip_pgdata` and the network
+# `grip_default` whatever the checkout folder is called.
+name: grip
 services:
   postgres:
     # -trixie, not the bare :pg17 tag. The bare tag is Debian 12 (glibc 2.36);
@@ -9,9 +12,9 @@ services:
     # pgvector. Keep dev and prod on the same tag.
     image: pgvector/pgvector:pg17-trixie
     environment:
-      POSTGRES_USER: verder
-      POSTGRES_PASSWORD: verder
-      POSTGRES_DB: verder
+      POSTGRES_USER: grip
+      POSTGRES_PASSWORD: grip
+      POSTGRES_DB: grip
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
 volumes:

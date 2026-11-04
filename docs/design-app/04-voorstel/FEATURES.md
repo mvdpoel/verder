@@ -46,8 +46,8 @@ Dit document beschrijft wat het scherm doet. Het visuele ontwerp staat er niet i
 |---|---|
 | Voor jou | Een rij van soort `proposal` of `question` zet `InboxRoute.proposal(id)` op de stapel van Voor jou (`VoorJouTab`). Vragen openen hetzelfde scherm. |
 | Overzicht | Als de app ontgrendeld is, schakelt een voorbeeldrij in "Wacht op jou" naar Voor jou met `[.proposal(id)]` als stapel, zodat het voorstel direct opent. Als de app vergrendeld is, toont Overzicht alleen het aantal en geen rijen. |
-| Push, gewone tik of "Bekijken" | Elke push over een voorstel draagt `link: verder://proposal/<uuid>`. `DeepLink.proposal` komt uit op het tabblad Voor jou met `[.proposal(id)]` als stapel. Dat geldt voor de categorieën `PROPOSAL`, `REMINDER` en `FOLLOW_UP`, plus de `SYSTEM`-pushes over een mislukte of onzekere verzending. De actie "Bekijken" (`.foreground, .authenticationRequired`) bestaat alleen op `PROPOSAL`, `REMINDER` en `FOLLOW_UP`. |
-| Rij in de beginschermwidget | Een item `proposal` of `question` linkt naar `verder://proposal/<uuid>` (`WidgetContent.url(for:)`). |
+| Push, gewone tik of "Bekijken" | Elke push over een voorstel draagt `link: grip://proposal/<uuid>`. `DeepLink.proposal` komt uit op het tabblad Voor jou met `[.proposal(id)]` als stapel. Dat geldt voor de categorieën `PROPOSAL`, `REMINDER` en `FOLLOW_UP`, plus de `SYSTEM`-pushes over een mislukte of onzekere verzending. De actie "Bekijken" (`.foreground, .authenticationRequired`) bestaat alleen op `PROPOSAL`, `REMINDER` en `FOLLOW_UP`. |
+| Rij in de beginschermwidget | Een item `proposal` of `question` linkt naar `grip://proposal/<uuid>` (`WidgetContent.url(for:)`). |
 | Debugstart | `-route proposal:<id>` (`RootView.applyFixtureStart`, alleen `#if DEBUG`), afgeleverd via dezelfde `DeepLinkInbox` die een aangetikte push gebruikt. |
 
 Het tabblad Voor jou is `.lockGated(by: lock)`. De stapel (`inboxPath`) wordt in `RootView` bewaard, dus een link die binnenkomt terwijl de app vergrendeld is, wacht daar en opent zodra Face ID de app heeft ontgrendeld.
@@ -369,9 +369,9 @@ De klokken (`proposals.clock`, elke 15 minuten) pushen alleen van 08:00 tot 22:0
 
 **F-21 · De zes voorstelpushes, het klokvenster van 08:00–22:00, en een push wanneer een concept klaar is.** **Status:** Gebouwd (`apps/worker/src/ops/proposals-store.ts` `proposalPush`, `apps/worker/src/proposals/clocks.ts`, `apps/worker/src/proposals/send.ts`, allemaal via `apps/worker/src/notify/notify.ts`).
 
-**Beantwoorden vanuit de melding.** Een vraagpush draagt `options` (hooguit 4, elk afgekapt op 40 tekens) en `revision`. De service-extensie `VerderNotify` registreert per voorstel een categorie `q.<id>`. Ze voegt die categorie samen met de vaste negen en houdt de 20 nieuwste vraagcategorieën aan. Lang drukken op de push toont dan de optielabels. `NotificationRouter` post `{ revision, option }` naar `…/answer`, en alleen als het id van de categorie en de link van de push hetzelfde voorstel noemen (bij een verschil wordt het genegeerd, niet beantwoord en niet geopend). Een geslaagd antwoord ververst Voor jou en de badge. Een mislukt antwoord (geen sessie, een 409 omdat het op het web al beantwoord is, een 400, het netwerk) verandert niets, wordt **nooit opnieuw geprobeerd**, en opent in plaats daarvan het voorstel. Gemeten op iOS 27.2, 2026-11-01: een testpush toonde "Ja / Nee" bij lang drukken. Een antwoord of opvolging kan nooit op deze manier worden beantwoord. De server weigert dat met 400 ("only a question can be answered"), en de enige actie op die categorieën is "Bekijken", die het voorstel opent.
+**Beantwoorden vanuit de melding.** Een vraagpush draagt `options` (hooguit 4, elk afgekapt op 40 tekens) en `revision`. De service-extensie `GripNotify` registreert per voorstel een categorie `q.<id>`. Ze voegt die categorie samen met de vaste negen en houdt de 20 nieuwste vraagcategorieën aan. Lang drukken op de push toont dan de optielabels. `NotificationRouter` post `{ revision, option }` naar `…/answer`, en alleen als het id van de categorie en de link van de push hetzelfde voorstel noemen (bij een verschil wordt het genegeerd, niet beantwoord en niet geopend). Een geslaagd antwoord ververst Voor jou en de badge. Een mislukt antwoord (geen sessie, een 409 omdat het op het web al beantwoord is, een 400, het netwerk) verandert niets, wordt **nooit opnieuw geprobeerd**, en opent in plaats daarvan het voorstel. Gemeten op iOS 27.2, 2026-11-01: een testpush toonde "Ja / Nee" bij lang drukken. Een antwoord of opvolging kan nooit op deze manier worden beantwoord. De server weigert dat met 400 ("only a question can be answered"), en de enige actie op die categorieën is "Bekijken", die het voorstel opent.
 
-**F-22 · Een vraag beantwoorden vanuit de melding.** **Status:** Gebouwd (`apps/ios/VerderNotify/NotificationService.swift`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`; gemeten op iOS 27.2, 2026-11-01). "Bekijken" weghalen bij de antwoordcategorieën is F-54.
+**F-22 · Een vraag beantwoorden vanuit de melding.** **Status:** Gebouwd (`apps/ios/GripNotify/NotificationService.swift`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`; gemeten op iOS 27.2, 2026-11-01). "Bekijken" weghalen bij de antwoordcategorieën is F-54.
 
 **Haptiek:** zie F-48 — `.success` bij een geaccepteerde goedkeuring en bij `sent` terwijl het scherm openstaat, `.impact(.soft)` bij afwijzen, `.error` bij een mislukte actie, en drie oplopende tikken tijdens het vasthouden.
 
@@ -392,13 +392,13 @@ De klokken (`proposals.clock`, elke 15 minuten) pushen alleen van 08:00 tot 22:0
 ## Waar in de code
 
 **iOS**
-- `apps/ios/Verder/Proposals/ProposalScreen.swift`: het scherm, de editor ter plekke, de afwijssheet en de vraagsectie
-- `apps/ios/Verder/Proposals/ProposalModel.swift`: laden, bewerken, `approve` / `reject` / `answer` / `createTask`, `followSend`, en de Nederlandse teksten
-- `apps/ios/Verder/Proposals/ProposalDTO.swift`: `ProposalDetail`, `ReplyDraft`, de request-bodies, `ProposalFormat`
-- `apps/ios/Verder/Proposals/ApprovalGate.swift`: de verse Face ID bij elke verzending
-- `apps/ios/Verder/Inbox/VoorJouTab.swift`: de route naar het scherm
-- `apps/ios/Verder/Push/DeepLink.swift`, `NotificationRouter.swift`, `NotificationCategories.swift`, `QuestionCategories.swift`; `apps/ios/VerderNotify/NotificationService.swift`
-- `apps/ios/Verder/Auth/AppLock.swift` (`LockPolicy`), `AuthModel.swift` (wissen bij uitloggen)
+- `apps/ios/Grip/Proposals/ProposalScreen.swift`: het scherm, de editor ter plekke, de afwijssheet en de vraagsectie
+- `apps/ios/Grip/Proposals/ProposalModel.swift`: laden, bewerken, `approve` / `reject` / `answer` / `createTask`, `followSend`, en de Nederlandse teksten
+- `apps/ios/Grip/Proposals/ProposalDTO.swift`: `ProposalDetail`, `ReplyDraft`, de request-bodies, `ProposalFormat`
+- `apps/ios/Grip/Proposals/ApprovalGate.swift`: de verse Face ID bij elke verzending
+- `apps/ios/Grip/Inbox/VoorJouTab.swift`: de route naar het scherm
+- `apps/ios/Grip/Push/DeepLink.swift`, `NotificationRouter.swift`, `NotificationCategories.swift`, `QuestionCategories.swift`; `apps/ios/GripNotify/NotificationService.swift`
+- `apps/ios/Grip/Auth/AppLock.swift` (`LockPolicy`), `AuthModel.swift` (wissen bij uitloggen)
 
 **Serverroutes** (`apps/web/src/app/api/mobile/v1/proposals/`)
 - `[id]/route.ts`: GET detail
@@ -414,8 +414,8 @@ De klokken (`proposals.clock`, elke 15 minuten) pushen alleen van 08:00 tot 22:0
 - `apps/worker/src/proposals/create.ts`, `context.ts`, `validate-draft.ts`; `apps/worker/src/ops/proposals-store.ts`; `ops/proposal-drafter.sh`
 
 **Tests**
-- `apps/ios/VerderTests/ProposalModelTests.swift`: exacte payload en revisie, momentopname vóór Face ID, een geannuleerde Face ID verstuurt niets, herladen bij 409, definitief verwijderde bijlage, alleen aangeboden bijlagen, taak alleen na een tik, servertarget op opties, `followSend`
-- `apps/ios/VerderTests/ApprovalGateTests.swift`, `NotificationRouterTests.swift`, `QuestionCategoriesTests.swift`, `DeepLinkTests.swift`, `NotificationCategoriesTests.swift`
+- `apps/ios/GripTests/ProposalModelTests.swift`: exacte payload en revisie, momentopname vóór Face ID, een geannuleerde Face ID verstuurt niets, herladen bij 409, definitief verwijderde bijlage, alleen aangeboden bijlagen, taak alleen na een tik, servertarget op opties, `followSend`
+- `apps/ios/GripTests/ApprovalGateTests.swift`, `NotificationRouterTests.swift`, `QuestionCategoriesTests.swift`, `DeepLinkTests.swift`, `NotificationCategoriesTests.swift`
 - `apps/web/src/app/api/mobile/v1/proposals/**/route.test.ts`
 - `packages/api/src/routers/proposals.test.ts`, `packages/api/src/proposal-state.test.ts`
 - `apps/worker/src/proposals/send.test.ts`, `clocks.test.ts`, `create.test.ts`, `validate-draft.test.ts`, `apps/worker/src/ops/proposals-store.test.ts`

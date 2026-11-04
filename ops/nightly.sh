@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nightly backup + verification + model check. Run from the homelab crontab:
-#   30 3 * * * /path/to/verder/ops/nightly.sh >> /var/log/verder-nightly.log 2>&1
+#   30 3 * * * /path/to/grip/ops/nightly.sh >> /var/log/grip-nightly.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,7 +12,7 @@ set +a
 
 COMPOSE=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
 STAMP=$(date +%F)
-BACKUP_DIR=${BACKUP_DIR:-/mnt/nas/verder-backups}
+BACKUP_DIR=${BACKUP_DIR:-/mnt/nas/grip-backups}
 
 # --- db-backup row -----------------------------------------------------------
 # One `worker_runs` row per run, shaped exactly like record_backup in
@@ -63,7 +63,7 @@ if backup_target_ok; then
   #    replaces a good same-day dump.
   dump="$BACKUP_DIR/db-$STAMP.sql.gz"
   if "${COMPOSE[@]}" exec -T postgres \
-       pg_dump -U verder --exclude-table-data=public.search_chunks verder \
+       pg_dump -U grip --exclude-table-data=public.search_chunks grip \
        | gzip > "$dump.partial" && dump_is_complete "$dump.partial"; then
     mv -f "$dump.partial" "$dump"
     find "$BACKUP_DIR" -name 'db-*.sql.gz' -mtime +30 -delete

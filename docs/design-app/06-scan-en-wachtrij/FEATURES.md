@@ -66,13 +66,13 @@ Het derde tabblad, "Scan" (`TabID.scan`, SF Symbol `doc.viewfinder`). De volgord
 
 Druk lang op het app-icoon, kies "Scan een brief", en de camera opent meteen, zonder Face ID. Na Bewaar staat Martin op Scan met de brief in de wachtrij (frame `Scan_snelstart`). De actie staat boven "Gesprek vastleggen".
 
-**Status:** Deels gebouwd — alleen in de working tree. De onderdelen zijn `project.yml` (`pro.vanderpoel.verder.scan`), `App/QuickAction.swift` (`scanType` → `DeepLink.scan`), `Push/DeepLink.swift` (`verder://scan` → `LinkDestination(tab: .scan, opensCamera: true)`) en `RootView.cameraRequested`. Er is geen test (`QuickActionTests`, `DeepLinkTests` en `LinkDestinationTests` hebben geen scangeval), en het is niet op de telefoon geprobeerd.
+**Status:** Deels gebouwd — alleen in de working tree. De onderdelen zijn `project.yml` (`pro.vanderpoel.grip.scan`), `App/QuickAction.swift` (`scanType` → `DeepLink.scan`), `Push/DeepLink.swift` (`grip://scan` → `LinkDestination(tab: .scan, opensCamera: true)`) en `RootView.cameraRequested`. Er is geen test (`QuickActionTests`, `DeepLinkTests` en `LinkDestinationTests` hebben geen scangeval), en het is niet op de telefoon geprobeerd.
 
 #### Bediening in het Bedieningspaneel "Scan een brief"
 
 Een bediening in het Bedieningspaneel die de camera op Scan direct opent, zonder Face ID (brief §3 Scan-rij, R20; frame `Scan_snelstart`, sectie "Bedieningspaneel").
 
-**Status:** Nog te bouwen — nodig zijn een App Intent die de app op `.scan` met de camera opent (een `OpenIntent` of een intent die `DeepLink.scan` binnen het proces aflevert, want verder registreert geen URL-schema), een `ControlWidget` in de `VerderWidget`-extensie, en een test dat de intent op de cameralink uitkomt. Het commentaar bij `DeepLink.scan` in de working tree noemt deze bediening al, maar er staat nergens in `apps/ios` een `AppIntent` of `ControlWidget`.
+**Status:** Nog te bouwen — nodig zijn een App Intent die de app op `.scan` met de camera opent (een `OpenIntent` of een intent die `DeepLink.scan` binnen het proces aflevert, want verder registreert geen URL-schema), een `ControlWidget` in de `GripWidget`-extensie, en een test dat de intent op de cameralink uitkomt. Het commentaar bij `DeepLink.scan` in de working tree noemt deze bediening al, maar er staat nergens in `apps/ios` een `AppIntent` of `ControlWidget`.
 
 #### Actieknop "verder: Scan een brief"
 
@@ -257,7 +257,7 @@ De telefoon houdt het netwerkpad in de gaten (`NWPathMonitor`). Zonder pad toont
 
 Zolang er 3 of meer scans onderweg zijn, toont een Live Activity op het toegangsscherm en in het Dynamic Island de telling die afloopt, en eindigt die wanneer de wachtrij leeg is (brief §3 Uploadwachtrij-rij, R18; alleen systeemanimaties, ≤ 2 s).
 
-**Status:** Nog te bouwen — nodig zijn ActivityKit (`NSSupportsLiveActivities` in `project.yml`, een `ActivityAttributes`-type gedeeld met `VerderWidget`, een `ActivityConfiguration` met weergaven voor het toegangsscherm en het Dynamic Island), start/update/end-aanroepen vanuit `UploadCenter` naarmate items verschuiven, en een besluit over hoe hij bijwerkt terwijl de app gepauzeerd is (de achtergrondsessie start de app opnieuw per afgeronde taak, wat genoeg kan zijn; bijwerken via push zou de server nodig hebben). Hij mag alleen tellingen tonen, nooit een titel. Er bestaat nog geen frame voor.
+**Status:** Nog te bouwen — nodig zijn ActivityKit (`NSSupportsLiveActivities` in `project.yml`, een `ActivityAttributes`-type gedeeld met `GripWidget`, een `ActivityConfiguration` met weergaven voor het toegangsscherm en het Dynamic Island), start/update/end-aanroepen vanuit `UploadCenter` naarmate items verschuiven, en een besluit over hoe hij bijwerkt terwijl de app gepauzeerd is (de achtergrondsessie start de app opnieuw per afgeronde taak, wat genoeg kan zijn; bijwerken via push zou de server nodig hebben). Hij mag alleen tellingen tonen, nooit een titel. Er bestaat nog geen frame voor.
 
 ### Het Wachtrij-sheet
 
@@ -349,7 +349,7 @@ Bij het opstarten (na herstel), na elke opname, telkens wanneer de app naar de v
 
 #### De achtergrond-uploadsessie
 
-Een achtergrond-`URLSession` (`pro.vanderpoel.verder.upload`, `sessionSendsLaunchEvents`, niet discretionary) draagt elke upload. Die loopt door terwijl de app gepauzeerd is, wacht zelf op een netwerk, en start de app opnieuw om het resultaat te melden (`.backgroundTask(.urlSession(…))` in `VerderApp.swift`). Een achtergrondupload moet vanuit een bestand komen, dus de multipart-body van elk item wordt zolang ernaast geschreven en daarna verwijderd.
+Een achtergrond-`URLSession` (`pro.vanderpoel.grip.upload`, `sessionSendsLaunchEvents`, niet discretionary) draagt elke upload. Die loopt door terwijl de app gepauzeerd is, wacht zelf op een netwerk, en start de app opnieuw om het resultaat te melden (`.backgroundTask(.urlSession(…))` in `GripApp.swift`). Een achtergrondupload moet vanuit een bestand komen, dus de multipart-body van elk item wordt zolang ernaast geschreven en daarna verwijderd.
 
 **Status:** Gebouwd (`Upload/BackgroundUploader.swift`, `BackgroundUploaderTests`).
 
@@ -418,7 +418,7 @@ Er verschijnt een document-meta-**suggestie** (soort en titel) in Voor jou. Het 
 
 #### Brieven van Verder of een schuldeiser
 
-`apps/worker/src/proposals/letters.ts` (`phone-scan` en `phone-share` zijn allebei briefbronnen) draait binnen dezelfde `suggest.docmeta`-job, op dezelfde tekst. Als de OCR-tekst een domein of adres van Verder als heel token bevat (het losse woord "verder" telt nooit), wordt een **time-sensitive** push "Brief lijkt van Verder" verstuurd (tekst: de titel van het document, link `verder://inbox`) en wordt er een voorstel aangemaakt, dat de host-cron `ops/proposal-drafter.sh` daarna uitwerkt. Een schuldeiser wordt **alleen aan het e-mailadres** herkend, wat een `active` push "Brief lijkt van <naam>" geeft. Dezelfde controle geldt voor `nas-scan`- en `upload`-documenten; ze voegt geen ledger-event toe. De afzender is een gok op basis van OCR, dus de push zegt "lijkt van" en de gok wordt op het voorstel bewaard, nooit op het document. **Er wordt niets verstuurd** zonder dat Martin de definitieve tekst op het voorstelscherm goedkeurt.
+`apps/worker/src/proposals/letters.ts` (`phone-scan` en `phone-share` zijn allebei briefbronnen) draait binnen dezelfde `suggest.docmeta`-job, op dezelfde tekst. Als de OCR-tekst een domein of adres van Verder als heel token bevat (het losse woord "verder" telt nooit), wordt een **time-sensitive** push "Brief lijkt van Verder" verstuurd (tekst: de titel van het document, link `grip://inbox`) en wordt er een voorstel aangemaakt, dat de host-cron `ops/proposal-drafter.sh` daarna uitwerkt. Een schuldeiser wordt **alleen aan het e-mailadres** herkend, wat een `active` push "Brief lijkt van <naam>" geeft. Dezelfde controle geldt voor `nas-scan`- en `upload`-documenten; ze voegt geen ledger-event toe. De afzender is een gok op basis van OCR, dus de push zegt "lijkt van" en de gok wordt op het voorstel bewaard, nooit op het document. **Er wordt niets verstuurd** zonder dat Martin de definitieve tekst op het voorstelscherm goedkeurt.
 
 **Status:** Gebouwd (`letters.ts`, `letters.test.ts`, `apps/worker/src/mail/priority.ts` `letterSender`). Nog niet gezien op een echte gescande brief van Verder. Schuldeisers zonder bekend e-mailadres (KvK, CAK, PLM, CZ) worden op papier niet herkend.
 
@@ -454,7 +454,7 @@ Scan en de wachtrij zijn bereikbaar terwijl de app vergrendeld is, bewust (plan 
 
 ### De deelextensie: dezelfde wachtrij vanuit andere apps
 
-`apps/ios/VerderShare/ShareViewController.swift` (spec §7.8, plan 3 Task 22). PDF's, foto's en andere bestanden die vanuit een willekeurige app gedeeld worden, gaan naar hetzelfde endpoint met bron `phone-share`. In het kort:
+`apps/ios/GripShare/ShareViewController.swift` (spec §7.8, plan 3 Task 22). PDF's, foto's en andere bestanden die vanuit een willekeurige app gedeeld worden, gaan naar hetzelfde endpoint met bron `phone-share`. In het kort:
 
 - één scherm "Naar verder" met "Annuleren" en "Versturen"; tot 10 items, maximaal 48 MB per bestand ("Dit is te groot voor verder (max. 48 MB per bestand).");
 - foto's worden één verkleinde PDF, pagina voor pagina gebouwd zodat de extensie onder haar geheugengrens van ~120 MB blijft;
@@ -462,7 +462,7 @@ Scan en de wachtrij zijn bereikbaar terwijl de app vergrendeld is, bewust (plan 
 - uitkomsten: "Staat in je dossier." of "Bewaard. Het gaat mee zodra je verder opent.";
 - gedeelde items verschijnen in de Wachtrij onder hun eigen bestandsnaam.
 
-**Status:** Gebouwd (`VerderShare/`, `Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, tests `IncomingDropTests`, `ShareModelTests`, `PhotoPageTests`). De optionele notitie van één regel is **uitgesteld** om dezelfde reden als de scannotitie. Volledige beschrijving: `../15-delen-naar-verder/FEATURES.md`.
+**Status:** Gebouwd (`GripShare/`, `Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, tests `IncomingDropTests`, `ShareModelTests`, `PhotoPageTests`). De optionele notitie van één regel is **uitgesteld** om dezelfde reden als de scannotitie. Volledige beschrijving: `../15-delen-naar-verder/FEATURES.md`.
 
 ### Opnieuw versturen voor ontwikkelaars (Meer → Ontwikkelaar)
 
@@ -527,7 +527,7 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 
 - **Niet achter Face ID**, bewust (zie [Vergrendeld](#vergrendeld-scan-werkt-al-voor-face-id)).
 - **Niets op het toegangsscherm of in widgets.** De scanflow maakt geen eigen melding, en geen widget toont de wachtrij. De pushes die op een scan kunnen volgen (een brief die van Verder of een schuldeiser lijkt) komen uit de pijplijn van de server; zie `../03-voor-jou/FEATURES.md` en `../04-voorstel/FEATURES.md`. Een toekomstige Live Activity mag alleen tellingen tonen, nooit een titel.
-- **Op de telefoon:** bestanden in de wachtrij, `queue.json`, de multipart-bodies per upload en de drops van de deelextensie staan in de App Group-container (`group.pro.vanderpoel.verder`, `uploads/`), allemaal geschreven met `.completeFileProtectionUntilFirstUserAuthentication`: versleuteld tot de eerste ontgrendeling na een herstart, wat een achtergrondupload mogelijk maakt terwijl de telefoon vergrendeld is. De PDF van een scan wordt verwijderd zodra de server hem bevestigt; de vermelding in de wachtrij (bestandsnaam, tijden, aantal pagina's, grootte, document-id en notitie, geen inhoud) blijft 7 dagen staan. In de working tree wordt een notitie in `queue.json` bewaard in dezelfde beschermingsklasse.
+- **Op de telefoon:** bestanden in de wachtrij, `queue.json`, de multipart-bodies per upload en de drops van de deelextensie staan in de App Group-container (`group.pro.vanderpoel.grip`, `uploads/`), allemaal geschreven met `.completeFileProtectionUntilFirstUserAuthentication`: versleuteld tot de eerste ontgrendeling na een herstart, wat een achtergrondupload mogelijk maakt terwijl de telefoon vergrendeld is. De PDF van een scan wordt verwijderd zodra de server hem bevestigt; de vermelding in de wachtrij (bestandsnaam, tijden, aantal pagina's, grootte, document-id en notitie, geen inhoud) blijft 7 dagen staan. In de working tree wordt een notitie in `queue.json` bewaard in dezelfde beschermingsklasse.
 - **De sessie** is de cookie van better-auth in de Keychain (`AfterFirstUnlockThisDeviceOnly`), per verzoek meegegeven. De achtergrondsessie heeft cookie-opslag uit.
 - **Bij uitloggen:** de wachtrij wordt **niet** gewist (zie hierboven). Al het andere dat het dossier op de telefoon achterlaat wel.
 - **Aan de serverkant:** de sessie wordt bewezen voordat er bytes gelezen worden; de grootte wordt bewaakt vóór het parsen; `clientId`, `source` en `capturedAt` worden gevalideerd; een mediatype van een part dat geen eenvoudig `type/subtype`-token is, wordt als `application/octet-stream` verstuurd, en headerwaarden tussen aanhalingstekens worden percent-gecodeerd, zodat een bestandsnaam geen multipart-headers kan injecteren. Wanneer de route `note` gaat lezen, moet die de lengte op dezelfde manier begrenzen.
@@ -556,7 +556,7 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`):**
+**iOS (`apps/ios/Grip/`):**
 
 - `Scan/ScanTab.swift`: het tabblad, de schijf, de cameracover, de overdracht, de haptiek (working tree; op HEAD de wissel tussen camera en rust, de strip en de inlogbanner).
 - `Scan/ScanScreen.swift` (working tree): elk woord dat het tabblad en de Wachtrij tonen — `ScanScreen`, `QueueAccessory`, `QueueSheet`.
@@ -569,8 +569,8 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 - `Upload/UploadQueue.swift`: de duurzame wachtrij, backoff, `QueueSummary`; in de working tree ook `everEnqueued`, `setNote`, `remove`, redenen van mislukking.
 - `Upload/BackgroundUploader.swift`: de achtergrond-`URLSession`, herstel, `ResendProbe`.
 - `Upload/UploadItem.swift`, `Upload/UploadRequest.swift` (`UploadOutcome.judge`), `Upload/Multipart.swift`.
-- `Upload/IncomingDrop.swift`, `Upload/IncomingImport.swift`, `Upload/ShareModel.swift`, `Upload/SharePreparation.swift`, `Upload/ShareSender.swift` en `apps/ios/VerderShare/ShareViewController.swift`: de deelextensie.
-- `App/RootView.swift` (Scan zonder vergrendeling, geen prompt op Scan, leeglopen bij activering en nieuwe sessie, `cameraRequested`), `App/QuickAction.swift`, `Push/DeepLink.swift` (`verder://scan`), `App/VerderApp.swift` (events van de achtergrondsessie), `Auth/SessionExpiredView.swift`, `Home/HomeSummary.swift` (`scansRow`), `More/MoreScreens.swift` (`DeveloperScreen`).
+- `Upload/IncomingDrop.swift`, `Upload/IncomingImport.swift`, `Upload/ShareModel.swift`, `Upload/SharePreparation.swift`, `Upload/ShareSender.swift` en `apps/ios/GripShare/ShareViewController.swift`: de deelextensie.
+- `App/RootView.swift` (Scan zonder vergrendeling, geen prompt op Scan, leeglopen bij activering en nieuwe sessie, `cameraRequested`), `App/QuickAction.swift`, `Push/DeepLink.swift` (`grip://scan`), `App/GripApp.swift` (events van de achtergrondsessie), `Auth/SessionExpiredView.swift`, `Home/HomeSummary.swift` (`scansRow`), `More/MoreScreens.swift` (`DeveloperScreen`).
 - `project.yml`: `NSCameraUsageDescription`, snelle acties.
 - Bestaat nog niet: een App Intent en `ControlWidget` (Bedieningspaneel, Actieknop), een `ActivityAttributes` / `ActivityConfiguration` (Live Activity).
 
@@ -583,9 +583,9 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 
 **Tests:**
 
-- `apps/ios/VerderTests/UploadQueueTests.swift` (persistentie, 401, backoff, vijfde mislukking, 4xx, verwijderde PDF, claim, herstel, ontbrekend bestand, opruimen, striptekst, Amsterdamse dag), `BackgroundUploaderTests.swift`, `PageCleanerTests.swift`, `PDFAssemblerTests.swift`, `ScanNamingTests.swift`, `MultipartTests.swift`, `IncomingDropTests.swift`, `ShareModelTests.swift`, `PhotoPageTests.swift`, `HomeSummaryTests.swift` (scanregel).
+- `apps/ios/GripTests/UploadQueueTests.swift` (persistentie, 401, backoff, vijfde mislukking, 4xx, verwijderde PDF, claim, herstel, ontbrekend bestand, opruimen, striptekst, Amsterdamse dag), `BackgroundUploaderTests.swift`, `PageCleanerTests.swift`, `PDFAssemblerTests.swift`, `ScanNamingTests.swift`, `MultipartTests.swift`, `IncomingDropTests.swift`, `ShareModelTests.swift`, `PhotoPageTests.swift`, `HomeSummaryTests.swift` (scanregel).
 - `apps/web/src/app/api/mobile/v1/documents/route.test.ts`, `packages/api/src/routers/documents.test.ts`, `apps/worker/src/proposals/letters.test.ts`, `apps/worker/src/docmeta-sweep.test.ts`, `apps/worker/src/auto-name.test.ts`.
-- Ontbreekt: tests voor `ScanScreen`, `QueueAccessory`, `QueueSheet`, `UploadQueue.setNote`, `UploadQueue.remove`, redenen van mislukking, `everEnqueued`, en de snelle scanactie / de link `verder://scan`.
+- Ontbreekt: tests voor `ScanScreen`, `QueueAccessory`, `QueueSheet`, `UploadQueue.setNote`, `UploadQueue.remove`, redenen van mislukking, `everEnqueued`, en de snelle scanactie / de link `grip://scan`.
 
 ## Frames
 

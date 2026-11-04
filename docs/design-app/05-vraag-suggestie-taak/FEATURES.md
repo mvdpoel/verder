@@ -2,7 +2,7 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-04 (iOS in `apps/ios/Verder/`, mobiele routes in `apps/web/src/app/api/mobile/v1/`, routers in `packages/api/src/routers/`, worker in `apps/worker/src/`). Elke functie hieronder heeft precies één statusregel.
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-04 (iOS in `apps/ios/Grip/`, mobiele routes in `apps/web/src/app/api/mobile/v1/`, routers in `packages/api/src/routers/`, worker in `apps/worker/src/`). Elke functie hieronder heeft precies één statusregel.
 
 | Status | Aantal |
 |---|---|
@@ -41,31 +41,31 @@ Bronnen voor de ontworpen functies: de definitieve frames; de spec `docs/superpo
 
 Een vraagrij opent `ProposalScreen` (`InboxRoute.proposal`), een suggestierij opent `SuggestionDetailView` (`InboxRoute.suggestion`), en een taakrij opent `TaskScreen` (`InboxRoute.task`).
 
-**Status:** Gebouwd — `apps/ios/Verder/Inbox/VoorJouTab.swift` (`navigationDestination(for: InboxRoute.self)`).
+**Status:** Gebouwd — `apps/ios/Grip/Inbox/VoorJouTab.swift` (`navigationDestination(for: InboxRoute.self)`).
 
 #### Een taak openen vanuit Dossier
 
 De takenkaart van Dossier, of een taak die aan een Tijdlijn-halte is gekoppeld, zet `TaskScreen` op de Dossier-stack (`DossierRoute.task`).
 
-**Status:** Gebouwd — `apps/ios/Verder/Dossier/DossierTab.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Dossier/DossierTab.swift`.
 
 #### Een vraag openen vanuit de push
 
-Een tik op een vraagpush, of "Bekijken" op een push die de extensie niet in een `q.*`-categorie heeft omgezet, levert `verder://proposal/<uuid>` op. Dat selecteert Voor jou en zet `ProposalScreen` erop.
+Een tik op een vraagpush, of "Bekijken" op een push die de extensie niet in een `q.*`-categorie heeft omgezet, levert `grip://proposal/<uuid>` op. Dat selecteert Voor jou en zet `ProposalScreen` erop.
 
-**Status:** Gebouwd — `apps/ios/Verder/Push/NotificationRouter.swift`, `Push/DeepLink.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Push/NotificationRouter.swift`, `Push/DeepLink.swift`.
 
 #### Een suggestie of taak openen vanuit een link
 
-`verder://suggestion/<uuid>` en `verder://task/<uuid>` openen Voor jou met dat scherm erop (`DeepLink.destination`). De spec wil "categories per kind, deep-linking to the item" (§7.3).
+`grip://suggestion/<uuid>` en `grip://task/<uuid>` openen Voor jou met dat scherm erop (`DeepLink.destination`). De spec wil "categories per kind, deep-linking to the item" (§7.3).
 
-**Status:** Deels gebouwd — de app leest en routeert beide links (`Push/DeepLink.swift`), maar geen enkele push van de worker bevat er een. Deadlinepushes van taken linken naar `verder://inbox` (`apps/worker/src/proposals/clocks.ts`), dus een tik komt uit op de lijst en niet op de taak, en een suggestiepush bestaat niet. Nog nodig: de deadlinepush van de worker die naar `verder://task/<id>` linkt.
+**Status:** Deels gebouwd — de app leest en routeert beide links (`Push/DeepLink.swift`), maar geen enkele push van de worker bevat er een. Deadlinepushes van taken linken naar `grip://inbox` (`apps/worker/src/proposals/clocks.ts`), dus een tik komt uit op de lijst en niet op de taak, en een suggestiepush bestaat niet. Nog nodig: de deadlinepush van de worker die naar `grip://task/<id>` linkt.
 
 #### Een link die binnenkomt terwijl de app vergrendeld is, wacht
 
-`verder://` is geen geregistreerd URL-schema, dus deze links komen alleen van een push of van verders eigen widget. Voor jou en Dossier zijn allebei `.lockGated(by: lock)`, dus geen van deze schermen bestaat zolang de app vergrendeld is. Een link die binnenkomt op een vergrendelde app wacht in `RootView` en opent zodra Face ID slaagt.
+`grip://` is geen geregistreerd URL-schema, dus deze links komen alleen van een push of van verders eigen widget. Voor jou en Dossier zijn allebei `.lockGated(by: lock)`, dus geen van deze schermen bestaat zolang de app vergrendeld is. Een link die binnenkomt op een vergrendelde app wacht in `RootView` en opent zodra Face ID slaagt.
 
-**Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift`.
 
 #### Terug naar de lijst, ververst
 
@@ -102,7 +102,7 @@ Een vraag is een voorstel met `kind = 'question'`. De voorstelschrijver (`ops/pr
 
 "WACHT OP JOU" zolang het voorstel `pending` is. Daarna de afzender (`trigger.from`, anders de naam van de partij, anders "Onbekend"), de opmerking "lijkt van Verder — afzender niet bevestigd" wanneer de afzender van een brief nog een gok is (spec §12.5), het soort ("vraag") met datum en tijd van de aanleiding, en het onderwerp van de aanleiding plus een uittreksel (hoogstens 300 tekens) als die er zijn.
 
-**Status:** Gebouwd — `apps/ios/Verder/Proposals/ProposalScreen.swift`, uit `GET /api/mobile/v1/proposals/:id` (`proposals.get`).
+**Status:** Gebouwd — `apps/ios/Grip/Proposals/ProposalScreen.swift`, uit `GET /api/mobile/v1/proposals/:id` (`proposals.get`).
 
 #### Hoe lang het al wacht ("sinds 1 dag")
 
@@ -192,13 +192,13 @@ Na "Ja, koppel hem" biedt het beantwoorde scherm "Brief losmaken" ("Verkeerd gek
 
 Een vraagpush (`kind: "proposal"`) heeft de titel "Voorstel: <ask>" en de tekst "Een vraag over <wie>. Kies een antwoord." (`proposalPush` in `apps/worker/src/ops/proposals-store.ts`). Hij is `time-sensitive` als de aanleiding van Verder kwam en anders `active`. Hij bevat de optielabels (hoogstens 4, elk hoogstens 40 tekens) en de `revision` van het voorstel.
 
-- De meldingsdienst-extensie (`VerderNotify`) maakt van de labels een categorie per vraag, `q.<proposal id>`, en laat de melding daarnaar wijzen. Elke optie krijgt één actie (`answer.<n>`), `.authenticationRequired` en **niet** `.foreground`. De categorie wordt samengevoegd met de negen vaste categorieën en de 20 nieuwste `q.*`. De `q.*`-categorie heeft **geen "Bekijken"-actie**, wat overeenkomt met de brief ("Drop 'Bekijken'"). Die knop bestaat alleen op de vaste categorie `PROPOSAL`, die een vraagpush alleen houdt als de extensie hem niet herschreef (geen opties, geen gehele `revision`, of een link die niet precies `verder://proposal/<uuid>` is).
+- De meldingsdienst-extensie (`GripNotify`) maakt van de labels een categorie per vraag, `q.<proposal id>`, en laat de melding daarnaar wijzen. Elke optie krijgt één actie (`answer.<n>`), `.authenticationRequired` en **niet** `.foreground`. De categorie wordt samengevoegd met de negen vaste categorieën en de 20 nieuwste `q.*`. De `q.*`-categorie heeft **geen "Bekijken"-actie**, wat overeenkomt met de brief ("Drop 'Bekijken'"). Die knop bestaat alleen op de vaste categorie `PROPOSAL`, die een vraagpush alleen houdt als de extensie hem niet herschreef (geen opties, geen gehele `revision`, of een link die niet precies `grip://proposal/<uuid>` is).
 - Voor het indrukken van een antwoord moet het **toestel** ontgrendeld zijn (iOS vraagt Face ID of de toegangscode). De app opent niet en de app-vergrendeling speelt geen rol. `NotificationRouter` post dezelfde `POST …/answer { revision, option }` en ververst daarna de inbox en de badge.
 - **Er is geen bevestigingsstap** vanuit de melding, dus "Ja, koppel hem" koppelt het document op het moment dat het wordt ingedrukt. De hervalidatie van de server geldt nog steeds.
 - Een antwoord dat mislukt verandert niets en wordt **nooit opnieuw geprobeerd**: een push zonder revisie, geen sessie, een 409 (intussen op het web beantwoord, of een nieuwere revisie), een 400, geen netwerk. Het voorstel wordt dan als link afgeleverd, zodat de volgende keer openen laat zien hoe het ervoor staat.
 - Met verborgen voorvertoningen toont het vergrendelscherm alleen "Nieuw bericht van verder".
 
-**Status:** Gebouwd — `apps/ios/VerderNotify/`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`, `App/AppDelegate.swift`. Gemeten op iOS 27.2 met één testpush op 2026-11-01. Er is nog geen echte vraag vanuit een melding beantwoord.
+**Status:** Gebouwd — `apps/ios/GripNotify/`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`, `App/AppDelegate.swift`. Gemeten op iOS 27.2 met één testpush op 2026-11-01. Er is nog geen echte vraag vanuit een melding beantwoord.
 
 ![Vraag, offline (ontwerp)](frames/Vraag_offline.jpg)
 
@@ -414,7 +414,7 @@ De gekoppelde items van de taak als rijen die ze openen ("Formulier bijzondere b
 
 Brief §3 (meldingen): "TASK_DUE gains **Gedaan** (`authenticationRequired`, Martin's own action)." De deadlinepush zelf luidt "<Te laat | Vandaag | Morgen>: <task title>" / "Deadline <dd-mm>." en wordt alleen tussen 08:00 en 22:00 Amsterdamse tijd verstuurd.
 
-**Status:** Deels gebouwd — de push bestaat (`apps/worker/src/proposals/clocks.ts`, categorie `TASK_DUE`), maar hij heeft geen actie en linkt naar `verder://inbox`. Nog nodig: een actie "Gedaan" op `TASK_DUE` in `Push/NotificationCategories.swift`, het taak-id in de payload, een tak in `NotificationRouter` die `tasks/:id/status { status: "done" }` post alleen als `done` in `validNext` staat, en tests.
+**Status:** Deels gebouwd — de push bestaat (`apps/worker/src/proposals/clocks.ts`, categorie `TASK_DUE`), maar hij heeft geen actie en linkt naar `grip://inbox`. Nog nodig: een actie "Gedaan" op `TASK_DUE` in `Push/NotificationCategories.swift`, het taak-id in de payload, een tak in `NotificationRouter` die `tasks/:id/status { status: "done" }` post alleen als `done` in `validNext` staat, en tests.
 
 ## Voor alle drie de schermen
 
@@ -555,7 +555,7 @@ Dit zijn de plekken waar de definitieve frames **serverwerk** of een besluit van
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`)**
+**iOS (`apps/ios/Grip/`)**
 
 - `Proposals/ProposalScreen.swift`: het vraaggedeelte, de bevestigingsdialoog voor opties en "Iets anders…".
 - `Proposals/ProposalModel.swift`: `answer(option:)`, `answer(freeText:)`, `reject`, de foutteksten.
@@ -563,8 +563,8 @@ Dit zijn de plekken waar de definitieve frames **serverwerk** of een besluit van
 - `Inbox/SuggestionDetailView.swift`: `SuggestionDetailModel` (velden per soort, de `edits`-diff, goedkeuren en afwijzen), `SuggestionFormat` (soortlabels, Amsterdamse dagen, euro uit hele centen).
 - `Inbox/TaskRowView.swift`: `TaskModel` en `TaskScreen` (statuslabels, `validNext`-knoppen, bevestiging).
 - `Inbox/VoorJouTab.swift`: `InboxRoute` en de navigatiebestemmingen. `Dossier/DossierTab.swift`: de tweede weg naar `TaskScreen`.
-- `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`, `Push/NotificationCategories.swift`, `App/AppDelegate.swift`, `../VerderNotify/`: antwoorden vanuit de melding.
-- `Push/DeepLink.swift`: `verder://proposal|suggestion|task/<uuid>`.
+- `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`, `Push/NotificationCategories.swift`, `App/AppDelegate.swift`, `../GripNotify/`: antwoorden vanuit de melding.
+- `Push/DeepLink.swift`: `grip://proposal|suggestion|task/<uuid>`.
 
 **Server (`apps/web/src/app/api/mobile/v1/`)**
 
@@ -586,9 +586,9 @@ Dit zijn de plekken waar de definitieve frames **serverwerk** of een besluit van
 
 **Tests**
 
-- `apps/ios/VerderTests/SuggestionDetailTests.swift`: alleen veranderde velden verstuurd, onaangeroerd verstuurt geen aanpassingen, gewiste soort als null, velden per soort, vaste last → alleen website, reden bij afwijzen, 409. Ook de taaktests: alleen `validNext` aangeboden, body met alleen status, een niet-aangeboden status nooit verstuurd.
-- `apps/ios/VerderTests/ProposalModelTests.swift`: `optionButtonShowsServerTarget`, `freeTextPostsFreeTextAndRevision`, herladen bij conflict.
-- `apps/ios/VerderTests/QuestionCategoriesTests.swift`, `NotificationRouterTests.swift`, `NotificationCategoriesTests.swift`, `DeepLinkTests.swift`.
+- `apps/ios/GripTests/SuggestionDetailTests.swift`: alleen veranderde velden verstuurd, onaangeroerd verstuurt geen aanpassingen, gewiste soort als null, velden per soort, vaste last → alleen website, reden bij afwijzen, 409. Ook de taaktests: alleen `validNext` aangeboden, body met alleen status, een niet-aangeboden status nooit verstuurd.
+- `apps/ios/GripTests/ProposalModelTests.swift`: `optionButtonShowsServerTarget`, `freeTextPostsFreeTextAndRevision`, herladen bij conflict.
+- `apps/ios/GripTests/QuestionCategoriesTests.swift`, `NotificationRouterTests.swift`, `NotificationCategoriesTests.swift`, `DeepLinkTests.swift`.
 - `route.test.ts` naast elke mobiele route hierboven. `packages/api/src/routers/proposals.test.ts`, `suggestions.test.ts`, `tasks.test.ts`.
 
 ## Frames

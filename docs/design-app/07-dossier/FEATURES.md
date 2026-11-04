@@ -54,15 +54,15 @@ Het vierde tabblad, "Dossier" (`TabID.dossier`, SF Symbol `folder`). De volgorde
 
 #### 2. Deep links
 Geparseerd door `DeepLink.swift` en toegepast in `RootView`, dat `dossierPath` bewaart. Omdat het pad in `RootView` leeft, opent een link die binnenkomt terwijl de app vergrendeld is zodra die ontgrendeld wordt.
-- `verder://dossier` opent het tabblad in de basisweergave.
-- `verder://document/<uuid>` opent de viewer voor dat document op de Dossier-stack.
-- `verder://timeline` opent de Tijdlijn op de Dossier-stack.
+- `grip://dossier` opent het tabblad in de basisweergave.
+- `grip://document/<uuid>` opent de viewer voor dat document op de Dossier-stack.
+- `grip://timeline` opent de Tijdlijn op de Dossier-stack.
 - Captures (debug-builds): het fixture-startargument `-route document:<id>` opent de viewer, en `-route timeline` opent de Tijdlijn.
 
 **Status:** Gebouwd (`Push/DeepLink.swift`, `App/RootView.swift`).
 
 #### 3. Meldingen komen hier uit
-Een `FILING`-push zonder bruikbare link komt uit op de basisweergave van Dossier (`NotificationRouter.fallback`). Nu geldt dat voor twee pushes: de samengevoegde duplexscan (`apps/worker/src/duplex.ts`) en "Nieuwe loonstrook" (`apps/worker/src/loondossier.ts`). Het nachtelijke overzicht "Door verder gedaan" is ook `FILING`, maar draagt `verder://inbox` en opent daarom "Door verder gedaan". Geen enkele worker-push linkt nu naar `verder://document/<id>`. De links die in gebruik zijn, zijn `verder://proposal/<id>` en `verder://inbox`.
+Een `FILING`-push zonder bruikbare link komt uit op de basisweergave van Dossier (`NotificationRouter.fallback`). Nu geldt dat voor twee pushes: de samengevoegde duplexscan (`apps/worker/src/duplex.ts`) en "Nieuwe loonstrook" (`apps/worker/src/loondossier.ts`). Het nachtelijke overzicht "Door verder gedaan" is ook `FILING`, maar draagt `grip://inbox` en opent daarom "Door verder gedaan". Geen enkele worker-push linkt nu naar `grip://document/<id>`. De links die in gebruik zijn, zijn `grip://proposal/<id>` en `grip://inbox`.
 
 **Status:** Gebouwd (`Push/NotificationRouter.swift`).
 
@@ -72,11 +72,11 @@ Een tik op de kopkaart opent de Tijdlijn op de Dossier-stack (`openTimeline`). D
 **Status:** Gebouwd (`Home/HomeTab.swift`, `App/RootView.swift`).
 
 #### 5. Vanuit de Tijdlijn
-Het sheet van een halte toont het bijbehorende bewijs. Een gekoppeld bestand opent de viewer en een gekoppelde taak opent `TaskScreen`, beide op de Dossier-stack (`open` van `TimelineScreen`, met links `verder://document/<id>` en `verder://task/<id>` uit `GET /api/mobile/v1/case-map`).
+Het sheet van een halte toont het bijbehorende bewijs. Een gekoppeld bestand opent de viewer en een gekoppelde taak opent `TaskScreen`, beide op de Dossier-stack (`open` van `TimelineScreen`, met links `grip://document/<id>` en `grip://task/<id>` uit `GET /api/mobile/v1/case-map`).
 
 **Status:** Gebouwd (`Timeline/TimelineView.swift`).
 
-**Wat hier niet heen leidt:** geen widget en geen snelle actie leidt naar Dossier. De rijen van de widget openen `verder://proposal|suggestion|task/<id>`, en al het andere (de kop inbegrepen) opent `verder://inbox` (`WidgetContent.url(for:)`). De snelle acties op het beginscherm ("Scan een brief", "Gesprek vastleggen") en de App Shortcut voor de Actieknop (`App/VerderShortcuts.swift`, "Scan een brief") leiden naar Scan en naar de spraaknotitie. verder registreert geen URL-schema voor andere apps. Noch de spec noch de frames vragen hier om een ingang naar Dossier.
+**Wat hier niet heen leidt:** geen widget en geen snelle actie leidt naar Dossier. De rijen van de widget openen `grip://proposal|suggestion|task/<id>`, en al het andere (de kop inbegrepen) opent `grip://inbox` (`WidgetContent.url(for:)`). De snelle acties op het beginscherm ("Scan een brief", "Gesprek vastleggen") en de App Shortcut voor de Actieknop (`App/GripShortcuts.swift`, "Scan een brief") leiden naar Scan en naar de spraaknotitie. verder registreert geen URL-schema voor andere apps. Noch de spec noch de frames vragen hier om een ingang naar Dossier.
 
 **Naar buiten:**
 
@@ -503,7 +503,7 @@ Brief §2.2: een lange titel wordt aan het eind afgekapt als het lopende tekst i
 
 ### Geen onderdeel van dit scherm
 
-De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthouden om te bevestigen (Versturen bij een voorstel), de "Scan"-bediening in het Bedieningspaneel en op de Actieknop, en de Live Activity voor een upload-wachtrij die leegloopt (Scan) horen bij andere schermen. Geen daarvan is ontworpen voor het Dossier of de viewer. Noch de haptiekkaart van de brief (§2.5) noch de frames noemen een Dossier-moment, en `Verder/Dossier/` heeft geen haptiek, wat klopt.
+De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthouden om te bevestigen (Versturen bij een voorstel), de "Scan"-bediening in het Bedieningspaneel en op de Actieknop, en de Live Activity voor een upload-wachtrij die leegloopt (Scan) horen bij andere schermen. Geen daarvan is ontworpen voor het Dossier of de viewer. Noch de haptiekkaart van de brief (§2.5) noch de frames noemen een Dossier-moment, en `Grip/Dossier/` heeft geen haptiek, wat klopt.
 
 ## Elke toestand
 
@@ -534,7 +534,7 @@ De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthoude
 ## Meldingen, haptiek, offline
 
 - **Meldingen:** het tabblad maakt er geen. Het is de landingsplek voor `FILING`-pushes zonder link (#3).
-- **Haptiek:** geen in `Verder/Dossier/`, en geen ontworpen (zie "Geen onderdeel van dit scherm").
+- **Haptiek:** geen in `Grip/Dossier/`, en geen ontworpen (zie "Geen onderdeel van dit scherm").
 - **Offline:** alles wat de kopie op de telefoon leest, werkt, inclusief de viewer voor aanwezige documenten en lokaal zoeken. Wat de server nodig heeft, zegt waarom het niet beschikbaar is. Dit tabblad zet de taken noch de kop in de cache: de kop komt uit de samenvatting van `InboxStore`, en de taken staan alleen in het geheugen (#15, #17).
 
 ## Bekende grenzen en wat niet gemeten is
@@ -550,7 +550,7 @@ De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthoude
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`):**
+**iOS (`apps/ios/Grip/`):**
 
 - `Dossier/DossierTab.swift`: het tabblad, de kaarten, rijen en het skelet.
 - `Dossier/DossierModel.swift`: `DossierModel` (toestand, synchronisatie, taken, zoeken op de server, wissen), `DossierCopy` (elke tekst), `DossierRoute`.
@@ -573,7 +573,7 @@ De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthoude
 
 **Tests:**
 
-- iOS: `VerderTests/DossierStoreTests.swift`, `DossierModelTests.swift`, `DossierSearchTests.swift`, `ImageZoomTests.swift`, `SessionEpochTests.swift`, `DeepLinkTests.swift`, `LinkDestinationTests.swift`, `FixtureTests.swift` (inclusief `fixturesHoldNoRealCaseDate`).
+- iOS: `GripTests/DossierStoreTests.swift`, `DossierModelTests.swift`, `DossierSearchTests.swift`, `ImageZoomTests.swift`, `SessionEpochTests.swift`, `DeepLinkTests.swift`, `LinkDestinationTests.swift`, `FixtureTests.swift` (inclusief `fixturesHoldNoRealCaseDate`).
 - Server: `packages/api/src/routers/dossier-sync.test.ts`; een `route.test.ts` naast elk van de routes hierboven.
 
 **Spec en plan:** `docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.5 en §9; `docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §2 en §3 (de Dossier-rij); `docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md` Tasks 20 en 21.

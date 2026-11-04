@@ -43,20 +43,20 @@ set +a
 COMPOSE=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
 STAMP=$(date +%F)
 WEEK=$(date +%G-W%V)
-OUT="${BACKUP_DIR:-/mnt/nas/verder-backups}/mail"
+OUT="${BACKUP_DIR:-/mnt/nas/grip-backups}/mail"
 
 # The three bind mounts, defaulted EXACTLY as docker-compose.prod.yml defaults
 # them. etc/ is 8 KB and is the difference between a restore and a bootstrap.
-ETC_DIR="${STALWART_ETC_DIR:-/mnt/data/verder/stalwart/etc}"
-DATA_DIR="${STALWART_DATA_DIR:-/mnt/data/verder/stalwart/data}"
-BLOB_DIR="${STALWART_BLOB_DIR:-/mnt/data/verder/stalwart/blobs}"
+ETC_DIR="${STALWART_ETC_DIR:-/mnt/data/grip/stalwart/etc}"
+DATA_DIR="${STALWART_DATA_DIR:-/mnt/data/grip/stalwart/data}"
+BLOB_DIR="${STALWART_BLOB_DIR:-/mnt/data/grip/stalwart/blobs}"
 STORE_ROOT=$(dirname "$DATA_DIR")
 
 # Scratch for the weekly pull. NOT mktemp's default: /tmp is on `/`, which has
 # ~40 GB free, and the archive is ~12.5 GB before compression. Filling root on
 # the machine that holds the ledger is a worse outcome than no backup.
-SCRATCH_ROOT="${MAIL_BACKUP_SCRATCH:-/mnt/data/verder/mail-backup-tmp}"
-VANDELAY="${VANDELAY_BIN:-/mnt/data/verder/mail-import/vandelay-x86_64-unknown-linux-musl/vandelay}"
+SCRATCH_ROOT="${MAIL_BACKUP_SCRATCH:-/mnt/data/grip/mail-backup-tmp}"
+VANDELAY="${VANDELAY_BIN:-/mnt/data/grip/mail-import/vandelay-x86_64-unknown-linux-musl/vandelay}"
 
 # ---------------------------------------------------------------------------
 # THE ROW THIS SCRIPT WRITES ABOUT ITSELF.
@@ -475,9 +475,9 @@ if [ ! -f "$OUT/archive-$WEEK.sqlite.zst" ] && [ ! -f "$OUT/archive-$WEEK.sqlite
     echo "mail-backup.sh: (tonight's native snapshot) succeeded and is in place." >&2
     backup_fail "$LINENO"
   else
-    # Self-healing, because /mnt/data/verder is root-owned 0755 and the cron
+    # Self-healing, because /mnt/data/grip is root-owned 0755 and the cron
     # user cannot mkdir inside it — measured: `mkdir: cannot create directory
-    # '/mnt/data/verder/mail-backup-tmp': Permission denied`, AFTER tier 1 had
+    # '/mnt/data/grip/mail-backup-tmp': Permission denied`, AFTER tier 1 had
     # already succeeded. A backup script that needs a manual mkdir before it
     # works is one that silently does half its job on a rebuilt machine, which
     # is exactly the machine a backup script is for. sudo creates it, then hands

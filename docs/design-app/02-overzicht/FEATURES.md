@@ -37,14 +37,14 @@ Elke functie heeft precies één statusregel: **Gebouwd** (bestaat en werkt in d
 **Erheen:**
 
 - **Opstarten.** `RootView` begint op `TabID.home`, de eerste tab, met het label "Overzicht".
-  **Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift` (`@State private var tab: TabID = .home`).
+  **Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift` (`@State private var tab: TabID = .home`).
 - **De tabbalk.** De tabs zijn Overzicht · Voor jou · Scan · Dossier · Meer. Alle vijf passen met hun labels op een iPhone SE (balk van 343 pt) en op 402 pt (frame `Overzicht_tab_bar_4_SE_en_402.jpg`).
   **Status:** Gebouwd — `RootView.swift` (systeem-`TabView` met vijf `Tab`s).
-- **`verder://overzicht`.** `DeepLink.overzicht` verwijst naar de starttab, zonder stack. verder registreert geen URL-schema, dus deze link komt alleen binnen via de eigen kanalen van de app (de link van een push of de terugval hieronder), nooit vanuit een andere app.
-  **Status:** Gebouwd — `apps/ios/Verder/Push/DeepLink.swift`.
+- **`grip://overzicht`.** `DeepLink.overzicht` verwijst naar de starttab, zonder stack. verder registreert geen URL-schema, dus deze link komt alleen binnen via de eigen kanalen van de app (de link van een push of de terugval hieronder), nooit vanuit een andere app.
+  **Status:** Gebouwd — `apps/ios/Grip/Push/DeepLink.swift`.
 - **Meldingen.** Een tik (of "Bekijken") op een push in categorie `SYSTEM` zonder link (bijvoorbeeld "verder hersteld" van de watchdog) valt terug op Overzicht (`NotificationRouter.fallback`).
-  **Status:** Gebouwd — `apps/ios/Verder/Push/NotificationRouter.swift`.
-- **Geen widget of snelactie opent Overzicht rechtstreeks.** De widgets openen `verder://inbox` of één item. De gecommitte snelactie ("Gesprek vastleggen") opent het spraakvenster. De werkkopie voegt een tweede toe, "Scan een brief", die Scan opent (zie "Gedeeld met de rest van de app").
+  **Status:** Gebouwd — `apps/ios/Grip/Push/NotificationRouter.swift`.
+- **Geen widget of snelactie opent Overzicht rechtstreeks.** De widgets openen `grip://inbox` of één item. De gecommitte snelactie ("Gesprek vastleggen") opent het spraakvenster. De werkkopie voegt een tweede toe, "Scan een brief", die Scan opent (zie "Gedeeld met de rest van de app").
 
 **Eruit (elke tik):**
 
@@ -54,13 +54,13 @@ Elke functie heeft precies één statusregel: **Gebouwd** (bestaat en werkt in d
 | Een voorbeeldrij | Voor jou, geopend op dat item (`InboxRoute(item)`). Lang indrukken biedt "Bekijken" (contextmenu), dat hetzelfde doet. |
 | "Alle N bekijken" | Voor jou, op het beginscherm |
 | De Leefgeld-kaart (of de "Geld"-kaart) | Geld (`GeldScreen`), op de eigen stack van Overzicht gezet achter `.lockGated(by:)` |
-| Een berichtlink op de Leefgeld-kaart ("Open op de website", "Kies hem op de website") | `/money` van de webapp (`https://verder.vanderpoel.pro/money`), geopend buiten de app: de app claimt geen universal links (het associated domain is alleen `webcredentials:`) |
+| Een berichtlink op de Leefgeld-kaart ("Open op de website", "Kies hem op de website") | `/money` van de webapp (`https://grip.vanderpoel.pro/money`), geopend buiten de app: de app claimt geen universal links (het associated domain is alleen `webcredentials:`) |
 | De takenrij | Voor jou, op het beginscherm. De rij ontbreekt tot `/dashboard/summary` één keer heeft geantwoord. |
 | De scansrij | De Scan-tab |
-| "Door verder gedaan · N" | Voor jou → het scherm "Door verder gedaan" (`InboxRoute.doneByVerder`). Als er niets gedaan is, is de rij geen knop. |
+| "Door verder gedaan · N" | Voor jou → het scherm "Door verder gedaan" (`InboxRoute.doneByGrip`). Als er niets gedaan is, is de rij geen knop. |
 | "Waar het nu op wacht" | De Tijdlijn onder Dossier (`dossierPath = [.timeline]`). Alleen zichtbaar als de app ontgrendeld is. |
 
-**Status:** Gebouwd — `apps/ios/Verder/Home/HomeTab.swift` (de tikken, het contextmenu) en `RootView.swift` (`openInbox`, `openScan`, `openTimeline`).
+**Status:** Gebouwd — `apps/ios/Grip/Home/HomeTab.swift` (de tikken, het contextmenu) en `RootView.swift` (`openInbox`, `openScan`, `openTimeline`).
 
 Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een tik die op een vergrendeld scherm uitkomt terwijl de app vergrendeld is, komt eerst bij het vergrendelscherm. Het pad wordt in `RootView` vastgehouden, dus de bestemming opent zodra de app ontgrendeld is. Dit sluit aan bij het doel uit §3 van de brief: één tik van Overzicht naar het bovenste wachtende item (Face ID als de app vergrendeld is).
 
@@ -71,13 +71,13 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 ### Kop
 
 - **De datum.** De eyebrow toont de Amsterdamse dag in lange Nederlandse vorm ("zondag 1 nov"). De titel is "Overzicht" en is een VoiceOver-kop.
-  **Status:** Gebouwd — `apps/ios/Verder/Home/HomeSummary.swift` (`eyebrow`), `HomeTab.swift` (`header`).
+  **Status:** Gebouwd — `apps/ios/Grip/Home/HomeSummary.swift` (`eyebrow`), `HomeTab.swift` (`header`).
 - **De leeftijd van het overzicht.** Als het overzicht op het scherm ouder is dan de laatste poging, zegt de eyebrow hoe oud het is:
   - na een serverfout: "zondag 1 nov · bijgewerkt 13:58";
   - offline: een `wifi.slash`-symbool en "offline · bijgewerkt gisteren 22:14".
 
   De leeftijd wordt bij weergave berekend tegen de klok van het dossier (`HomeSummary.age`/`stamp`), dus een overzicht dat sinds gisteren bewaard is, leest als dat van gisteren.
-  **Status:** Gebouwd — `HomeSummary.swift` (`eyebrow`, `age`, `stamp`); tests in `VerderTests/HomeSummaryTests.swift`.
+  **Status:** Gebouwd — `HomeSummary.swift` (`eyebrow`, `age`, `stamp`); tests in `GripTests/HomeSummaryTests.swift`.
 
 ### "Wacht op jou"
 
@@ -133,12 +133,12 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 | geen rekening, niets geïmporteerd (ook geen data zonder leesbare boeking op de leefgeldrekening) | "Nog geen afschriften", "Importeer je eerste afschrift op de website. Daarna zie je hier wat er deze week over is." en "Open op de website". Dit wordt niet als fout getoond: er is nog niets om te herkennen. |
 | geen rekening, wel afschriften (`LEEFGELD_IBAN` niet gezet en niet precies één rekening met bekend IBAN en een wekelijkse inkomstenlijn) | "Leefgeldrekening niet herkend" en hoeveel rekeningen wekelijks geld ontvangen ("Geen rekening krijgt wekelijks geld binnen.", "1 rekening …" of "2 rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een.") plus "Kies hem op de website". |
 
-  **Status:** Gebouwd — `apps/ios/Verder/Home/LeefgeldGlance.swift`, `HomeTab.swift` (`LeefgeldGlanceView`, `LeefgeldBar`); tests in `VerderTests/LeefgeldGlanceTests.swift`.
+  **Status:** Gebouwd — `apps/ios/Grip/Home/LeefgeldGlance.swift`, `HomeTab.swift` (`LeefgeldGlanceView`, `LeefgeldBar`); tests in `GripTests/LeefgeldGlanceTests.swift`.
 
 ![Varianten van de Leefgeld-kaart](frames/Overzicht_leefgeld-kaart_varianten.jpg)
 
 - **De "Geld"-kaart als er geen weekbudget is ingesteld.** Geen Leefgeld-kaart. Ontgrendeld toont een "Geld"-kaart per rekening één regel voor de nieuwste maand met rijen ("…6789 · okt '26 · in € … · uit € …", met "deels" achter de maand als die maar gedeeltelijk gedekt is). Een maand zonder rijen wordt overgeslagen, nooit getoond als "€ 0,00". Vergrendeld vallen die regels (die een IBAN-staart bevatten) weg, dus verdwijnt de kaart. De brief noemt deze opmaak een open beslissing: er is geen Figma-frame voor, en er is een frame of Martins akkoord nodig.
-  **Status:** Gebouwd — `LeefgeldGlance.swift`, `apps/ios/Verder/Money/MoneyGlance.swift`, `apps/web/src/lib/dashboard-money-slice.ts`.
+  **Status:** Gebouwd — `LeefgeldGlance.swift`, `apps/ios/Grip/Money/MoneyGlance.swift`, `apps/web/src/lib/dashboard-money-slice.ts`.
 - **"compleet" betekent gedekt tot en met vandaag**, of tot en met de laatste dag van de week zodra die voorbij is, dus een complete kaart kan midden in de week verschijnen. De vorige week (`previousWeek`, als geheel beoordeeld) zit in het antwoord, maar wordt op Geld getoond, niet op Overzicht.
   **Status:** Gebouwd — `packages/api/src/leefgeld-week.ts`.
 - **De kaart houdt haar eigen dekking aan.** Een offline of verouderde eyebrow maakt een gedeeltelijke week nooit compleet.
@@ -158,15 +158,15 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
   - "N mislukt" als uploads mislukt zijn;
   - "Vandaag nog niets gescand" als er niets te melden is.
 
-  **Status:** Gebouwd — `HomeSummary.swift` (`scansRow`), `apps/ios/Verder/Upload/UploadQueue.swift` (`QueueSummary`).
-- **Door verder gedaan.** `doneByVerder` van de inbox-route omvat de laatste 7 dagen van wat verder zelf deed (`verderActions.list({ sinceDays: 7 })`).
+  **Status:** Gebouwd — `HomeSummary.swift` (`scansRow`), `apps/ios/Grip/Upload/UploadQueue.swift` (`QueueSummary`).
+- **Door verder gedaan.** `doneByGrip` van de inbox-route omvat de laatste 7 dagen van wat verder zelf deed (`verderActions.list({ sinceDays: 7 })`).
   - Het toont alleen aantallen, dus is zichtbaar als de app vergrendeld is: "Door verder gedaan · 3" en "2 opgeborgen · 1 hernoemd" ("overig" voor elke andere soort).
   - Het is nooit amber.
   - Als er de laatste 7 dagen niets gedaan is, leest de rij "Door verder gedaan" met "verder deed niets zelf", en is ze geen knop.
 
-  **Status:** Gebouwd — `HomeSummary.swift` (`doneCard`), `packages/api/src/routers/verder-actions.ts`.
-- **Een verkeerde automatische archivering in twee tikken terugdraaien.** Het doel uit §3 van de brief is "Overzicht count → item → Ongedaan maken": de rij opent het scherm "Door verder gedaan", en elk item daar heeft een eigen "Ongedaan maken" (`POST /api/mobile/v1/verder-actions/[changeId]/undo`), alleen bij een automatische archivering. Een automatische naamgeving is daar nooit terug te draaien, omdat de naam ook op de NAS-share staat (`normalize-names --undo`). De brief vraagt daarnaast om een undo-toast van 5 s in plaats van een melding, en een `.impact(.light)`-haptic bij het terugdraaien.
-  **Status:** Deels gebouwd — het pad van twee tikken en het terugdraaien bestaan (`apps/ios/Verder/Inbox/DoneByVerderSection.swift`, de undo-route). Ontbreekt: de undo-toast van 5 s (R24), want het scherm toont in plaats daarvan inline "Ongedaan gemaakt.", en de `.impact(.light)`-haptic. Beide horen bij het scherm "Door verder gedaan", niet bij Overzicht.
+  **Status:** Gebouwd — `HomeSummary.swift` (`doneCard`), `packages/api/src/routers/grip-actions.ts`.
+- **Een verkeerde automatische archivering in twee tikken terugdraaien.** Het doel uit §3 van de brief is "Overzicht count → item → Ongedaan maken": de rij opent het scherm "Door verder gedaan", en elk item daar heeft een eigen "Ongedaan maken" (`POST /api/mobile/v1/grip-actions/[changeId]/undo`), alleen bij een automatische archivering. Een automatische naamgeving is daar nooit terug te draaien, omdat de naam ook op de NAS-share staat (`normalize-names --undo`). De brief vraagt daarnaast om een undo-toast van 5 s in plaats van een melding, en een `.impact(.light)`-haptic bij het terugdraaien.
+  **Status:** Deels gebouwd — het pad van twee tikken en het terugdraaien bestaan (`apps/ios/Grip/Inbox/DoneByGripSection.swift`, de undo-route). Ontbreekt: de undo-toast van 5 s (R24), want het scherm toont in plaats daarvan inline "Ongedaan gemaakt.", en de `.impact(.light)`-haptic. Beide horen bij het scherm "Door verder gedaan", niet bij Overzicht.
 
 ### "Waar het nu op wacht" (de kop van de kaart)
 
@@ -184,9 +184,9 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
   - de badge op het icoon op het aantal van de server zetten.
 
   Een mislukte verversing verandert geen van beide. Een badge die door een dood netwerk op nul komt, zou liegen.
-  **Status:** Gebouwd — `apps/ios/Verder/Inbox/InboxStore.swift`; tests in `VerderTests/InboxStoreTests.swift`.
+  **Status:** Gebouwd — `apps/ios/Grip/Inbox/InboxStore.swift`; tests in `GripTests/InboxStoreTests.swift`.
 - **Ververst door een stille push.** Als het badge-aantal op de server verandert, stuurt `badge.sync` een stille `content-available`-push. De app ververst dezelfde inbox-store die Overzicht leest, zodat het overzicht, de badge en de widget al actueel zijn als Martin de app opent (spec §7.3). Niets hangt ervan af: iOS knijpt deze pushes af en wekt een geforceerd gesloten app nooit.
-  **Status:** Gebouwd — `apps/ios/Verder/App/AppDelegate.swift` (`didReceiveRemoteNotification`), `apps/worker` `badge.sync`. Niet gemeten op de telefoon (zie "Bekende grenzen").
+  **Status:** Gebouwd — `apps/ios/Grip/App/AppDelegate.swift` (`didReceiveRemoteNotification`), `apps/worker` `badge.sync`. Niet gemeten op de telefoon (zie "Bekende grenzen").
 
 ### Laatst bekende overzicht na een koude start
 
@@ -290,14 +290,14 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 
 - **Het opstartscherm.** De brief (§3, Lock) vraagt om een effen `void`-opstartscherm zonder logo, zodat het eerste frame zonder flits overgaat in Overzicht.
   **Status:** Deels gebouwd — `project.yml` declareert `UILaunchScreen` zonder logo en met `UIUserInterfaceStyle: Dark`, maar `UIColorName` is leeg, dus het opstartscherm is het zwart van het systeem in plaats van `void` (#04070d). Nodig: een `void`-kleurset in `Resources/Assets.xcassets` (uit `Theme/Tokens.swift`) en `UIColorName` die ernaar verwijst.
-- **Snelactie "Scan een brief".** Het app-icoon lang indrukken → "Scan een brief" opent Scan met de camera al actief, zonder Face ID (Scan zit niet achter de vergrendeling), via `verder://scan` (brief §3, Scan, R20).
-  **Status:** Deels gebouwd — aanwezig in de niet-gecommitte werkkopie (`App/QuickAction.swift` `scanType`, `Push/DeepLink.swift` `.scan` met `opensCamera`, `project.yml` `UIApplicationShortcutItems`, `RootView.swift` `cameraRequested`). Ontbreekt: het committen, een `DeepLink`-test voor `verder://scan`, en een controle op de telefoon dat een koude start vanuit de snelactie de camera opent en dat er geen Face ID-prompt overheen komt.
+- **Snelactie "Scan een brief".** Het app-icoon lang indrukken → "Scan een brief" opent Scan met de camera al actief, zonder Face ID (Scan zit niet achter de vergrendeling), via `grip://scan` (brief §3, Scan, R20).
+  **Status:** Deels gebouwd — aanwezig in de niet-gecommitte werkkopie (`App/QuickAction.swift` `scanType`, `Push/DeepLink.swift` `.scan` met `opensCamera`, `project.yml` `UIApplicationShortcutItems`, `RootView.swift` `cameraRequested`). Ontbreekt: het committen, een `DeepLink`-test voor `grip://scan`, en een controle op de telefoon dat een koude start vanuit de snelactie de camera opent en dat er geen Face ID-prompt overheen komt.
 - **"Scan"-bediening in het Bedieningspaneel en op de Actieknop.** Een bediening in het Bedieningspaneel (en toe te wijzen aan de Actieknop) die de camera rechtstreeks opent vanaf een vergrendelde telefoon: één handeling plus de pagina's (doel uit §3 van de brief: "1 + pages").
-  **Status:** Nog te bouwen — er is nergens in `apps/ios` een `ControlWidget` of `AppIntent`. Nodig: een `ControlWidgetButton` met een `OpenIntent` in de `VerderWidget`-extensie die `verder://scan` opent (de link en het cameraverzoek staan in de werkkopie, zie hierboven), en een test dat de link van de intent als `.scan` wordt geparsed.
+  **Status:** Nog te bouwen — er is nergens in `apps/ios` een `ControlWidget` of `AppIntent`. Nodig: een `ControlWidgetButton` met een `OpenIntent` in de `GripWidget`-extensie die `grip://scan` opent (de link en het cameraverzoek staan in de werkkopie, zie hierboven), en een test dat de link van de intent als `.scan` wordt geparsed.
 - **Uploadwachtrij in de onderste accessoire van de tabbalk.** Zolang de wachtrij niet leeg is, toont een compacte strook boven de tabbalk (zichtbaar op elke tab, ook Overzicht) wat er wordt geüpload, wacht of mislukt is, met een pulssymbool tijdens het uploaden (brief §3, Upload queue, R4). De scansrij van Overzicht zou dan niet langer de enige plek buiten Scan zijn waar de wachtrij zichtbaar is.
   **Status:** Nog te bouwen — geen `.tabViewBottomAccessory` in `RootView.swift`. Nodig: de accessoire op de `TabView`, gevoed door `QueueSummary` van `UploadCenter`, alleen getoond als de wachtrij niet leeg is, met een tik naar Scan; een test van de toon/verberg-regel. Geen serverwijziging.
 - **Live Activity terwijl 3 of meer scans worden verwerkt.** Als er drie of meer uploads onderweg zijn, toont een Live Activity op het vergrendelscherm en in het Dynamic Island hoe de wachtrij leegloopt, en eindigt die als de wachtrij leeg is (brief §3, Upload queue, R18). Alleen de update-animaties van het systeem.
-  **Status:** Nog te bouwen — geen ActivityKit-code in `apps/ios`. Nodig: `ActivityAttributes` gedeeld tussen de app en `VerderWidget`, een `ActivityConfiguration` in de widgetextensie, `NSSupportsLiveActivities` in de Info.plist van de app (`project.yml`), starten/bijwerken/beëindigen vanuit `UploadCenter` bij de drempel van 3+, en tests van de drempelregel. Geen serverwijziging.
+  **Status:** Nog te bouwen — geen ActivityKit-code in `apps/ios`. Nodig: `ActivityAttributes` gedeeld tussen de app en `GripWidget`, een `ActivityConfiguration` in de widgetextensie, `NSSupportsLiveActivities` in de Info.plist van de app (`project.yml`), starten/bijwerken/beëindigen vanuit `UploadCenter` bij de drempel van 3+, en tests van de drempelregel. Geen serverwijziging.
 
 ## Bekende grenzen en wat niet gemeten is
 
@@ -316,7 +316,7 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`):**
+**iOS (`apps/ios/Grip/`):**
 
 - `Home/HomeTab.swift`: opmaak, verversingslus, skeletons, `LeefgeldGlanceView`, `LeefgeldBar`
 - `Home/HomeSummary.swift`: elk woord, elke datum, elke telregel, de amberregel, de foutmelding en het afbreken
@@ -324,7 +324,7 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 - `Money/MoneyGlance.swift`: `MoneyStore`, `MoneyGlance`, `LeefgeldCard`. `Money/MoneyGlanceView.swift` bevat `GeldScreen`. `Money/MoneyModels.swift` en `Money/MoneyFormat.swift` bevatten de DTO's en de opmaak.
 - `Inbox/InboxStore.swift`: ophalen van inbox en samenvatting, badge, widgetsnapshot
 - `Inbox/InboxModels.swift`, `Shared/KindLabel.swift`
-- `Inbox/DoneByVerderSection.swift`: het scherm "Door verder gedaan" en het terugdraaien daarop
+- `Inbox/DoneByGripSection.swift`: het scherm "Door verder gedaan" en het terugdraaien daarop
 - `Upload/UploadQueue.swift`: `QueueSummary`
 - `Auth/AppLock.swift`: `Area.glance`, `LockPolicy`
 - `Auth/AuthModel.swift`, `Auth/SessionEpoch.swift`, `Auth/SessionExpiredView.swift`
@@ -340,15 +340,15 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 - `apps/web/src/app/api/mobile/v1/inbox/route.ts`
 - `apps/web/src/app/api/mobile/v1/dashboard/summary/route.ts`
 - `apps/web/src/app/api/mobile/v1/money/summary/route.ts`
-- `apps/web/src/app/api/mobile/v1/verder-actions/[changeId]/undo/route.ts`
+- `apps/web/src/app/api/mobile/v1/grip-actions/[changeId]/undo/route.ts`
 - `apps/web/src/lib/mobile-route.ts` (`mobileGet`), `apps/web/src/lib/mobile-dto.ts` (`toInboxDTO`, `toDashboardSummaryDTO`)
 - `apps/web/src/lib/dashboard-money-slice.ts` (zes nieuwste maanden per rekening)
-- `packages/api/src/waiting.ts`, `packages/api/src/routers/inbox.ts`, `packages/api/src/routers/tasks.ts` (`stats`), `packages/api/src/routers/verder-actions.ts`, `packages/api/src/leefgeld-week.ts`, `packages/api/src/money-series.ts`, `packages/api/src/amsterdam.ts`
+- `packages/api/src/waiting.ts`, `packages/api/src/routers/inbox.ts`, `packages/api/src/routers/tasks.ts` (`stats`), `packages/api/src/routers/grip-actions.ts`, `packages/api/src/leefgeld-week.ts`, `packages/api/src/money-series.ts`, `packages/api/src/amsterdam.ts`
 - `apps/worker`: `badge.sync`, dat de stille push stuurt die het overzicht ververst
 
 **Tests:**
 
-- iOS: `VerderTests/HomeSummaryTests.swift`, `VerderTests/LeefgeldGlanceTests.swift`, `VerderTests/InboxStoreTests.swift`, `VerderTests/AppLockTests.swift`, `VerderTests/SessionEpochTests.swift`, `VerderTests/NotificationRouterTests.swift`, `VerderTests/LeefgeldCardTests.swift`, `VerderTests/MoneyFormatTests.swift`, `VerderTests/FixtureTests.swift`, `VerderTests/LinkDestinationTests.swift`, `VerderTests/PasskeyAuthTests.swift`
+- iOS: `GripTests/HomeSummaryTests.swift`, `GripTests/LeefgeldGlanceTests.swift`, `GripTests/InboxStoreTests.swift`, `GripTests/AppLockTests.swift`, `GripTests/SessionEpochTests.swift`, `GripTests/NotificationRouterTests.swift`, `GripTests/LeefgeldCardTests.swift`, `GripTests/MoneyFormatTests.swift`, `GripTests/FixtureTests.swift`, `GripTests/LinkDestinationTests.swift`, `GripTests/PasskeyAuthTests.swift`
 - Server: `packages/api/src/waiting.test.ts`, `packages/api/src/waiting-load.test.ts`, `apps/web/src/lib/mobile-dto.test.ts`, `packages/api/src/leefgeld-week.test.ts`, `packages/api/src/money-series.real.test.ts` (het geldorakel), en de routetests naast elke `route.ts`
 
 ## Frames

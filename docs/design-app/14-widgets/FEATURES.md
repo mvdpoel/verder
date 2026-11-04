@@ -49,10 +49,10 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `packages/api/src/waiting.ts`, `apps/web/src/app/api/mobile/v1/inbox/route.ts`, `toInboxDTO` in `apps/web/src/lib/mobile-dto.ts`.
 
 **F2. De widget leest één App Group-bestand en nooit het netwerk.** De widget heeft geen sessie. Het enige wat hij kent is `<group>/widget/snapshot.json`.
-**Status:** Gebouwd — `apps/ios/Verder/Shared/WidgetSnapshot.swift`, `VerderProvider` in `apps/ios/VerderWidget/VerderWidget.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Shared/WidgetSnapshot.swift`, `GripProvider` in `apps/ios/GripWidget/GripWidget.swift`.
 
 **F3. De app schrijft de snapshot bij elke verversing en herlaadt de widget.** De app haalt inbox en samenvatting naast elkaar op en bewaart het aantal, de bovenste vijf items, de oudste datum, de headline en het schrijftijdstip.
-**Status:** Gebouwd — `InboxStore.refresh()` in `apps/ios/Verder/Inbox/InboxStore.swift`.
+**Status:** Gebouwd — `InboxStore.refresh()` in `apps/ios/Grip/Inbox/InboxStore.swift`.
 
 **F4. Een mislukte verversing schrijft niets.** Als alleen de samenvatting mislukt, gaat het aantal toch door, met de laatste headline die de app kende.
 **Status:** Gebouwd — `InboxStore.refresh()`, getest door `aWrittenSnapshotReloadsTheWidgetAndAFailedRefreshDoesNot`.
@@ -61,7 +61,7 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `apps/worker/src/badge-sync.ts`, de planning ervan in `apps/worker/src/index.ts`, en `AppDelegate.application(_:didReceiveRemoteNotification:…)`. Hoe lang de widget erover doet om na een echte beslissing bij te werken, is niet gemeten (plan 3 Task 23 Step 3).
 
 **F6. De tijdlijn leest het bestand elke 30 minuten opnieuw en wordt op precies 24 uur verouderd.**
-**Status:** Gebouwd — `VerderTimeline` in `apps/ios/Verder/Widget/WidgetContent.swift`.
+**Status:** Gebouwd — `GripTimeline` in `apps/ios/Grip/Widget/WidgetContent.swift`.
 
 **F7. De badge op het icoon wordt bij elke verversing gezet en bij afmelden gewist.**
 **Status:** Gebouwd — `InboxStore` (`setBadgeCount`).
@@ -72,10 +72,10 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 ### Families en wat ze tonen
 
 **F9. Eén widget, "Voor jou", in zes families.** De galerij toont hem met de beschrijving "Hoeveel er op je wacht. Op het toegangsscherm nooit titels."
-**Status:** Gebouwd — `VerderWidget.swift`, `WidgetContent.families`.
+**Status:** Gebouwd — `GripWidget.swift`, `WidgetContent.families`.
 
 **F10. Klein: het aantal met zijn woorden. Middel: het aantal en de bovenste twee items. Groot: het aantal, vijf rijen en de headline van de kaart als vaste voettekst.**
-**Status:** Gebouwd — `WidgetContent.make`, `WidgetSmall`/`WidgetMedium`/`WidgetLarge` in `apps/ios/Verder/Widget/WidgetViews.swift`. Het ontwerp voegt de onderdelen uit F11–F13 toe.
+**Status:** Gebouwd — `WidgetContent.make`, `WidgetSmall`/`WidgetMedium`/`WidgetLarge` in `apps/ios/Grip/Widget/WidgetViews.swift`. Het ontwerp voegt de onderdelen uit F11–F13 toe.
 
 **F11. "en nog N".** Middel en groot zeggen hoeveel items er wachten buiten de getoonde rijen ("en nog 2", "en nog 493"), zodat het aantal en de zichtbare rijen met elkaar kloppen.
 **Status:** Gebouwd — `WidgetContent.more(showing:)` / `largeReadout(showing:)`; middel toont "en nog N" onder de woorden, groot in de kopregel ("en nog 493 · oudste 6 wk"), en telt precies wat de `ViewThatFits` verbergt. Test `enNogCountsExactlyWhatIsHidden`.
@@ -100,14 +100,14 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 
 ### Tikken
 
-**F18. Een rij opent zijn eigen item.** Voorstellen en vragen gaan naar `verder://proposal/<uuid>`, suggesties naar `verder://suggestion/<uuid>`, taken naar `verder://task/<uuid>`. Een kaarthalte, een onbekende soort of een id die geen UUID is, opent Voor jou.
-**Status:** Gebouwd — `WidgetContent.url(for:)`, `apps/ios/Verder/Push/DeepLink.swift`, `RootView.onOpenURL`. Of de tik de app bereikt zonder geregistreerd scheme, is niet op het toestel vastgelegd (plan 3 Task 23 Step 3).
+**F18. Een rij opent zijn eigen item.** Voorstellen en vragen gaan naar `grip://proposal/<uuid>`, suggesties naar `grip://suggestion/<uuid>`, taken naar `grip://task/<uuid>`. Een kaarthalte, een onbekende soort of een id die geen UUID is, opent Voor jou.
+**Status:** Gebouwd — `WidgetContent.url(for:)`, `apps/ios/Grip/Push/DeepLink.swift`, `RootView.onOpenURL`. Of de tik de app bereikt zonder geregistreerd scheme, is niet op het toestel vastgelegd (plan 3 Task 23 Step 3).
 
 **F19. Tikken op de widget buiten een rij, of op een willekeurige toegangsschermfamilie, opent Voor jou.**
 **Status:** Gebouwd — `WidgetContent.inboxURL`.
 
 **F20. De voettekst "waar het nu op wacht" van de grote widget opent de dossierkaart.** Het ontwerp annoteert die als "footer link → Dossier".
-**Status:** Gebouwd — `LargeFooter` is een `Link` naar `WidgetContent.mapURL` (`verder://timeline`); test `theLargeFooterOpensTheMap`.
+**Status:** Gebouwd — `LargeFooter` is een `Link` naar `WidgetContent.mapURL` (`grip://timeline`); test `theLargeFooterOpensTheMap`.
 
 **F21. De app-vergrendeling geldt ook na een tik.** Het item waar een link naar wijst, verschijnt pas na Face ID.
 **Status:** Gebouwd — `RootView.swift`.
@@ -139,13 +139,13 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `AuthModel.forgetLocally()`, `InboxStore.forgetCaseContent()`; tests `signOutErasesTheWidgetSnapshot`, `sessionRejectedErasesTheWidgetSnapshot`, `unauthorizedErasesTheWidgetSnapshotAndReloads`.
 
 **F30. Een late verversing kan niet meer schrijven nadat de sessie is beëindigd.**
-**Status:** Gebouwd — `apps/ios/Verder/Auth/SessionEpoch.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Auth/SessionEpoch.swift`.
 
 **F31. Snapshots van oudere builds worden nog gelezen** als een aantal zonder rijen.
 **Status:** Gebouwd — `WidgetSnapshot.init(from:)`; test `aSnapshotWithoutItemsStillReads`.
 
 **F32. De placeholder in de galerij verzint nooit een aantal.** Het is een verse "er wacht niets"-snapshot, afgeschermd getekend.
-**Status:** Gebouwd — `VerderProvider.placeholder`.
+**Status:** Gebouwd — `GripProvider.placeholder`.
 
 **F33. Offline.** De widget houdt de laatste snapshot vast en wordt na 24 uur verouderd. Hij heeft geen eigen wachtrij.
 **Status:** Gebouwd — volgt uit F2, F4 en F6.
@@ -186,7 +186,7 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 ### Uitleg en beweging
 
 **F43. Uitleg in de app, Meer → "Widgets toevoegen".** Die behandelt het beginscherm, het toegangsscherm, de formaten en de privacyregel.
-**Status:** Gebouwd — `WidgetGuide` in `apps/ios/Verder/More/MoreMenu.swift`, `WidgetGuideScreen` in `apps/ios/Verder/More/MoreScreens.swift`. Zodra F41 bestaat, is er een StandBy-regel nodig.
+**Status:** Gebouwd — `WidgetGuide` in `apps/ios/Grip/More/MoreMenu.swift`, `WidgetGuideScreen` in `apps/ios/Grip/More/MoreScreens.swift`. Zodra F41 bestaat, is er een StandBy-regel nodig.
 
 **F44. Alleen systeemanimaties bij bijwerken; geen haptiek en geen meldingen vanuit de widget.** Het aantal verandert met `.contentTransition(.numericText())`. De regel uit de brief is ≤ 2 s, alleen systeem.
 **Status:** Gebouwd — `CountBlock`.
@@ -199,39 +199,39 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 
 ### Extensie-oppervlakken uit de brief die naast de widget leven
 
-De brief plaatst deze twee op andere schermen (Scan en Upload-wachtrij). Ze staan hier omdat ze in dezelfde widgetextensie (`VerderWidgetBundle`) worden gebouwd, die vandaag alleen `VerderWidget` bevat.
+De brief plaatst deze twee op andere schermen (Scan en Upload-wachtrij). Ze staan hier omdat ze in dezelfde widgetextensie (`GripWidgetBundle`) worden gebouwd, die vandaag alleen `GripWidget` bevat.
 
 **F47. Een "Scan"-bediening voor het Bedieningspaneel en de Actieknop** (brief R20). Die opent direct de camera, zonder Face ID: één tik plus de pagina's, vanaf een vergrendelde telefoon.
-**Status:** Deels gebouwd — de werkboom (nog niet gecommit) heeft `DeepLink.scan` (`verder://scan` → Scan met `opensCamera`) en de snelle actie "Scan een brief" op het beginscherm (`QuickAction.scanType`). Ontbreekt: een `ControlWidget` in `VerderWidgetBundle` met een `OpenIntent`/AppIntent die de app op Scan opent, de Actieknop-optie die daarbij hoort, en een test dat de intent naar `.scan` leidt.
+**Status:** Deels gebouwd — de werkboom (nog niet gecommit) heeft `DeepLink.scan` (`grip://scan` → Scan met `opensCamera`) en de snelle actie "Scan een brief" op het beginscherm (`QuickAction.scanType`). Ontbreekt: een `ControlWidget` in `GripWidgetBundle` met een `OpenIntent`/AppIntent die de app op Scan opent, de Actieknop-optie die daarbij hoort, en een test dat de intent naar `.scan` leidt.
 
 **F48. Een Live Activity zolang er drie of meer uploads worden afgewerkt** (brief R18). De wachtrij is zichtbaar op het toegangsscherm en in het Dynamic Island tot hij klaar is.
-**Status:** Nog te bouwen — er bestaat geen ActivityKit-code. Nodig: `NSSupportsLiveActivities` in `project.yml`, een `ActivityAttributes`-type dat met de app wordt gedeeld, start-, update- en eindaanroepen vanuit `UploadCenter`/`UploadQueue` bij de drempel van 3+, een `ActivityConfiguration` in `VerderWidgetBundle` zonder documenttitels op het toegangsscherm, en tests op de start/stop-regel.
+**Status:** Nog te bouwen — er bestaat geen ActivityKit-code. Nodig: `NSSupportsLiveActivities` in `project.yml`, een `ActivityAttributes`-type dat met de app wordt gedeeld, start-, update- en eindaanroepen vanuit `UploadCenter`/`UploadQueue` bij de drempel van 3+, een `ActivityConfiguration` in `GripWidgetBundle` zonder documenttitels op het toegangsscherm, en tests op de start/stop-regel.
 
 ---
 
 ## Hoe je er komt, en waar het naartoe leidt
 
-**De widget toevoegen.** iOS voegt widgets toe; de app kan dat niet. De app legt uit hoe in **Meer → "Widgets toevoegen"** (`WidgetGuideScreen`, tekst in `WidgetGuide` in `Verder/More/MoreMenu.swift`):
+**De widget toevoegen.** iOS voegt widgets toe; de app kan dat niet. De app legt uit hoe in **Meer → "Widgets toevoegen"** (`WidgetGuideScreen`, tekst in `WidgetGuide` in `Grip/More/MoreMenu.swift`):
 
 - **"Op je beginscherm"**: "Houd je vinger op een lege plek van je beginscherm tot de apps bewegen." → "Tik op Wijzig en kies Voeg widget toe." → "Zoek verder en kies een formaat." → "Tik op Voeg widget toe en zet hem waar je wilt."
 - **"Op je toegangsscherm"**: "Houd je vinger op je toegangsscherm en tik op Pas aan." → "Kies Toegangsscherm en tik op het vak onder de klok." → "Kies verder."
 - **"Formaten"**: één regel per formaat (Klein, Middel, Groot, Rond, Rechthoek, Regel). Deze uitleg is de samenvatting in de app van de familietabel hieronder.
 - De privacyregel: "Op je toegangsscherm toont verder nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is."
 
-De widgetgalerij toont hem als **"Voor jou"**, met de beschrijving "Hoeveel er op je wacht. Op het toegangsscherm nooit titels." (`VerderWidget.swift`, kind `pro.vanderpoel.verder.waiting`).
+De widgetgalerij toont hem als **"Voor jou"**, met de beschrijving "Hoeveel er op je wacht. Op het toegangsscherm nooit titels." (`GripWidget.swift`, kind `pro.vanderpoel.grip.waiting`).
 
 **Tikken.** De beslissing wordt genomen in `WidgetContent` en strikt geparseerd door `DeepLink.parse`.
 
 | Tik op | Opent |
 |---|---|
-| De widget ergens buiten een rij, en elke toegangsschermfamilie | `verder://inbox` → Voor jou |
-| Een rij met een voorstel of vraag | `verder://proposal/<uuid>` |
-| Een rij met een suggestie | `verder://suggestion/<uuid>` |
-| Een rij met een taak | `verder://task/<uuid>` |
-| Een rij voor een kaarthalte, een onbekende soort, of een id die geen UUID is | `verder://inbox`. Een link zonder UUID zou anders een tik zijn die niets doet. |
+| De widget ergens buiten een rij, en elke toegangsschermfamilie | `grip://inbox` → Voor jou |
+| Een rij met een voorstel of vraag | `grip://proposal/<uuid>` |
+| Een rij met een suggestie | `grip://suggestion/<uuid>` |
+| Een rij met een taak | `grip://task/<uuid>` |
+| Een rij voor een kaarthalte, een onbekende soort, of een id die geen UUID is | `grip://inbox`. Een link zonder UUID zou anders een tik zijn die niets doet. |
 | De voettekst "waar het nu op wacht" van de grote widget | Voor jou. De voettekst is geen eigen `Link`, dus de URL van de hele widget geldt. |
 
-- **Er is geen URL-scheme geregistreerd.** verder registreert geen `verder://`-scheme, dus geen webpagina of andere app kan een van deze links activeren. De `widgetURL` en `Link`s van de widget bereiken `RootView.onOpenURL` omdat een widget altijd zijn eigen bovenliggende app kan openen. Plan 3 Task 23 Step 3 vroeg om die aflevering op het toestel te controleren. Die stap staat in het plan nog open, dus dit document beweert niet dat het gemeten is.
+- **Er is geen URL-scheme geregistreerd.** verder registreert geen `grip://`-scheme, dus geen webpagina of andere app kan een van deze links activeren. De `widgetURL` en `Link`s van de widget bereiken `RootView.onOpenURL` omdat een widget altijd zijn eigen bovenliggende app kan openen. Plan 3 Task 23 Step 3 vroeg om die aflevering op het toestel te controleren. Die stap staat in het plan nog open, dus dit document beweert niet dat het gemeten is.
 - **De app-vergrendeling blijft gelden.** De doeltabbladen staan achter de vergrendeling, dus het item waar een link naar wijst, verschijnt pas na Face ID (`RootView.swift`: "what the link points at shows only after unlock"). De widget omzeilt de app-vergrendeling nooit.
 
 **Ontwerp versus code:** het ontwerp annoteert de voettekst van de grote widget als "footer link → Dossier". In de code opent die Voor jou.
@@ -242,7 +242,7 @@ De widgetgalerij toont hem als **"Voor jou"**, met de beschrijving "Hoeveel er o
 
 ## Wat elke familie toont (code)
 
-Al deze beslissingen zitten in `WidgetContent.make` in `Verder/Widget/WidgetContent.swift`. De views in `WidgetViews.swift` schilderen alleen wat daar besloten wordt.
+Al deze beslissingen zitten in `WidgetContent.make` in `Grip/Widget/WidgetContent.swift`. De views in `WidgetViews.swift` schilderen alleen wat daar besloten wordt.
 
 | Familie | Toont | Rijen | Headline | Leeftijd van het oudste |
 |---|---|---|---|---|
@@ -266,7 +266,7 @@ Details die voor alle families gelden:
 
 ## Waar de gegevens vandaan komen
 
-**De widget gebruikt nooit het netwerk.** Hij heeft geen sessie en geen cookie. Zijn enige invoer is één bestand in de App Group, `group.pro.vanderpoel.verder`: `<group>/widget/snapshot.json`, een `WidgetSnapshot`.
+**De widget gebruikt nooit het netwerk.** Hij heeft geen sessie en geen cookie. Zijn enige invoer is één bestand in de App Group, `group.pro.vanderpoel.grip`: `<group>/widget/snapshot.json`, een `WidgetSnapshot`.
 
 **Wat de snapshot schrijft.** Alleen de app schrijft hem, in `InboxStore.refresh()`:
 
@@ -291,7 +291,7 @@ Details die voor alle families gelden:
   - een `content-available`-verversing op de achtergrond, die `AppDelegate.application(_:didReceiveRemoteNotification:…)` wekt, die op zijn beurt `inbox.refresh()` aanroept.
 
   iOS remt achtergrondpushes af en wekt nooit een geforceerd afgesloten app, dus de tweede push is een poging zonder garantie.
-- **De tijdlijn zelf** (`VerderTimeline`). Die leest het bestand elke 30 minuten opnieuw. Als de snapshot vóór de volgende herlaadbeurt de 24 uur zal passeren, voegt de tijdlijn op precies dat moment een entry toe, zodat een verouderd aantal nooit na zijn limiet wordt getoond.
+- **De tijdlijn zelf** (`GripTimeline`). Die leest het bestand elke 30 minuten opnieuw. Als de snapshot vóór de volgende herlaadbeurt de 24 uur zal passeren, voegt de tijdlijn op precies dat moment een entry toe, zodat een verouderd aantal nooit na zijn limiet wordt getoond.
 
 **Niets in deze functie schrijft bewijs.** De telefoonkant leest alleen (twee GET's). Ze maakt geen ledger-event aan en schrijft geen `document_status_changes`-rij, geen `notifications`-rij en geen suggestie. De enige schrijfactie aan de serverkant is operationeel: `badge.sync` legt per tick één `worker_runs`-rij vast (count, sent, delivered/failed/skipped), veranderd of niet, omdat het een watcher is (`badge-sync` in `worker-health.ts`, cadans van 5 minuten) en zijn stilte storing moet betekenen. Een tick waarvan de badge-push geen enkel toestel bereikte, legt `error` vast, zodat de volgende tick het opnieuw probeert.
 
@@ -458,28 +458,28 @@ Geen. De placeholder in de galerij is een verse "er wacht niets"-snapshot (aanta
 
 ## Waar in de code
 
-**Widgetextensie (`pro.vanderpoel.verder.widget`)**
-- `apps/ios/VerderWidget/VerderWidget.swift`: de provider, `VerderEntryView`, de configuratie van de widget en de bundle.
-- `apps/ios/VerderWidget/WidgetPreviews.swift`: `#Preview`s opgebouwd uit de synthetische dataset (alleen DEBUG).
-- `apps/ios/VerderWidget/Info.plist`: `UIAppFonts`.
-- `apps/ios/VerderWidget/VerderWidget.entitlements`: de App Group.
+**Widgetextensie (`pro.vanderpoel.grip.widget`)**
+- `apps/ios/GripWidget/GripWidget.swift`: de provider, `GripEntryView`, de configuratie van de widget en de bundle.
+- `apps/ios/GripWidget/WidgetPreviews.swift`: `#Preview`s opgebouwd uit de synthetische dataset (alleen DEBUG).
+- `apps/ios/GripWidget/Info.plist`: `UIAppFonts`.
+- `apps/ios/GripWidget/GripWidget.entitlements`: de App Group.
 
 **Gedeeld met de app** (in beide targets gecompileerd, zodat de tests van de app ze afdekken)
-- `apps/ios/Verder/Widget/WidgetContent.swift`: `VerderEntry`, `VerderTimeline` en `WidgetContent`, die elke beslissing bevatten.
-- `apps/ios/Verder/Widget/WidgetViews.swift`: de zes weergaven.
-- `apps/ios/Verder/Shared/WidgetSnapshot.swift`: het bestandsformaat, de beschermingsklasse, `write`, `read`, `erase` en `reportProtectionIfAsked`.
-- `apps/ios/Verder/Shared/KindLabel.swift` en `apps/ios/Verder/Shared/AppGroup.swift`.
-- `apps/ios/Verder/Theme/Tokens.swift`, `apps/ios/Verder/Theme/Fonts.swift` en de meegeleverde lettertypen.
+- `apps/ios/Grip/Widget/WidgetContent.swift`: `GripEntry`, `GripTimeline` en `WidgetContent`, die elke beslissing bevatten.
+- `apps/ios/Grip/Widget/WidgetViews.swift`: de zes weergaven.
+- `apps/ios/Grip/Shared/WidgetSnapshot.swift`: het bestandsformaat, de beschermingsklasse, `write`, `read`, `erase` en `reportProtectionIfAsked`.
+- `apps/ios/Grip/Shared/KindLabel.swift` en `apps/ios/Grip/Shared/AppGroup.swift`.
+- `apps/ios/Grip/Theme/Tokens.swift`, `apps/ios/Grip/Theme/Fonts.swift` en de meegeleverde lettertypen.
 
 **App-kant**
-- `apps/ios/Verder/Inbox/InboxStore.swift`: `refresh()` schrijft de snapshot, herlaadt de tijdlijnen en zet de badge; `forgetCaseContent()` wist hem.
-- `apps/ios/Verder/Auth/AuthModel.swift`: `forgetLocally()` wist de snapshot bij afmelden en bij een geweigerde sessie.
-- `apps/ios/Verder/Auth/SessionEpoch.swift`: voorkomt dat een late verversing schrijft nadat de sessie is beëindigd.
-- `apps/ios/Verder/App/AppDelegate.swift`: de stille push → `inbox.refresh()`.
-- `apps/ios/Verder/App/RootView.swift`: `.onOpenURL` → `DeepLink.parse`.
-- `apps/ios/Verder/Push/DeepLink.swift`: de strikte linkparser.
-- `apps/ios/Verder/More/MoreMenu.swift` (`WidgetGuide`) en `apps/ios/Verder/More/MoreScreens.swift` (`WidgetGuideScreen`): Meer → "Widgets toevoegen".
-- `apps/ios/project.yml`: het `VerderWidget`-target.
+- `apps/ios/Grip/Inbox/InboxStore.swift`: `refresh()` schrijft de snapshot, herlaadt de tijdlijnen en zet de badge; `forgetCaseContent()` wist hem.
+- `apps/ios/Grip/Auth/AuthModel.swift`: `forgetLocally()` wist de snapshot bij afmelden en bij een geweigerde sessie.
+- `apps/ios/Grip/Auth/SessionEpoch.swift`: voorkomt dat een late verversing schrijft nadat de sessie is beëindigd.
+- `apps/ios/Grip/App/AppDelegate.swift`: de stille push → `inbox.refresh()`.
+- `apps/ios/Grip/App/RootView.swift`: `.onOpenURL` → `DeepLink.parse`.
+- `apps/ios/Grip/Push/DeepLink.swift`: de strikte linkparser.
+- `apps/ios/Grip/More/MoreMenu.swift` (`WidgetGuide`) en `apps/ios/Grip/More/MoreScreens.swift` (`WidgetGuideScreen`): Meer → "Widgets toevoegen".
+- `apps/ios/project.yml`: het `GripWidget`-target.
 
 **Server**
 - `apps/web/src/app/api/mobile/v1/inbox/route.ts` (+ `route.test.ts`): aantal en items.
@@ -490,14 +490,14 @@ Geen. De placeholder in de galerij is een verse "er wacht niets"-snapshot (aanta
 - `packages/api/src/worker-health.ts`: daar is `badge-sync` als watcher gedeclareerd.
 
 **Tests**
-- `apps/ios/VerderTests/WidgetEntryTests.swift`: titels op het toegangsscherm, rijen per familie, de privacymarkeringen, amber alleen in volle kleur, woorden in elke familie, verouderd en vers rond 24 uur, deep links, Amsterdamse dagen, oudere snapshots, de herlaadbeurt van de tijdlijn en de omslag naar verouderd, het passen bij Dynamic Type, de headline die blijft bij vijf rijen, en de afgeschermde middelgrote render.
-- `apps/ios/VerderTests/WidgetSnapshotTests.swift`: de heen-en-terugreis, corrupte en ontbrekende bestanden, en de schrijfopties (atomisch, tot de eerste gebruikersauthenticatie).
-- `InboxStoreTests` (`VerderTests/InboxStoreTests.swift`):
+- `apps/ios/GripTests/WidgetEntryTests.swift`: titels op het toegangsscherm, rijen per familie, de privacymarkeringen, amber alleen in volle kleur, woorden in elke familie, verouderd en vers rond 24 uur, deep links, Amsterdamse dagen, oudere snapshots, de herlaadbeurt van de tijdlijn en de omslag naar verouderd, het passen bij Dynamic Type, de headline die blijft bij vijf rijen, en de afgeschermde middelgrote render.
+- `apps/ios/GripTests/WidgetSnapshotTests.swift`: de heen-en-terugreis, corrupte en ontbrekende bestanden, en de schrijfopties (atomisch, tot de eerste gebruikersauthenticatie).
+- `InboxStoreTests` (`GripTests/InboxStoreTests.swift`):
   - `refreshWritesTheItemsAndTheOldestForTheWidget`;
   - `refreshKeepsAtMostFiveItems`;
   - `aWrittenSnapshotReloadsTheWidgetAndAFailedRefreshDoesNot`;
   - `unauthorizedErasesTheWidgetSnapshotAndReloads`.
-- `AuthModelPasskeyTests` (in `VerderTests/PasskeyAuthTests.swift`): `signOutErasesTheWidgetSnapshot` en `sessionRejectedErasesTheWidgetSnapshot`.
+- `AuthModelPasskeyTests` (in `GripTests/PasskeyAuthTests.swift`): `signOutErasesTheWidgetSnapshot` en `sessionRejectedErasesTheWidgetSnapshot`.
 
 ---
 

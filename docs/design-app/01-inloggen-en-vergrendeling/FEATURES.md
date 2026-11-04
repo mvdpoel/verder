@@ -43,7 +43,7 @@ De enige gebruiker is Martin. Er is één account, en de app kent geen wisselen 
 | Meer → Account → "Uitloggen" (na een bevestigingsvenster) | `AuthModel.signOut()`, daarna terug naar `SignInView`. |
 | Koude start met een sessie | Overzicht opent met alleen aantallen en bedragen. Het Face ID-venster verschijnt **vanzelf, één keer** (`RootView.promptOnOpen` → `AppLock.autoPromptIfNeeded`), tenzij het tabblad Scan zichtbaar is. |
 | Terugkomen uit de achtergrond na **meer dan 5 minuten** | De app is weer vergrendeld en vraagt op dezelfde manier één keer vanzelf (`LockPolicy.graceSeconds = 300`). |
-| Een aangetikte melding of een tik op een widget (`verder://…` via `DeepLink`) | `RootView` wisselt van tabblad en zet de navigatiestapel. De doeltabbladen zitten achter de vergrendeling, dus het item verschijnt pas na ontgrendelen. De stapels worden in `RootView` bewaard, zodat een link die op het vergrendelscherm binnenkomt dat overleeft. |
+| Een aangetikte melding of een tik op een widget (`grip://…` via `DeepLink`) | `RootView` wisselt van tabblad en zet de navigatiestapel. De doeltabbladen zitten achter de vergrendeling, dus het item verschijnt pas na ontgrendelen. De stapels worden in `RootView` bewaard, zodat een link die op het vergrendelscherm binnenkomt dat overleeft. |
 | Snelle actie op het beginscherm "Gesprek vastleggen" | Opent het spraakvenster, dat zelf achter de vergrendeling zit (`VoiceLogSheet(...).lockGated(by:)`). Bij een koude start vraagt de vergrendeling vanzelf. |
 | Tabblad Scan | Vraagt nooit en wordt nooit afgedekt. De ontspanknop is altijd bereikbaar. |
 
@@ -57,28 +57,28 @@ Na een geslaagde inlog gaat de app naar de tabbalk. Bij een verse start is dat *
 
 ### 3.1 Inloggen met een toegangssleutel (passkey)
 
-**Status:** Gebouwd — `apps/ios/Verder/Auth/PasskeyAuth.swift`, `AuthModel.signInWithPasskey()` in `Verder/Auth/AuthModel.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Auth/PasskeyAuth.swift`, `AuthModel.signInWithPasskey()` in `Grip/Auth/AuthModel.swift`.
 
 1. `GET /api/auth/passkey/generate-authenticate-options`, verstuurd **zonder** opgeslagen cookie. De server antwoordt met de WebAuthn-opties en zet een ondertekende challenge-cookie voor eenmalig gebruik (`__Secure-better-auth.better-auth-passkey`, 300 s geldig).
-2. iOS toont het passkey-venster van het systeem (`ASAuthorizationPlatformPublicKeyCredentialProvider`, relying party `verder.vanderpoel.pro`). Zonder sessie is de allow-list leeg, dus iOS biedt elke passkey aan die het voor verder heeft. Daar hoort ook een passkey bij die op de Mac is gemaakt en via de iCloud-sleutelhanger is gesynchroniseerd.
+2. iOS toont het passkey-venster van het systeem (`ASAuthorizationPlatformPublicKeyCredentialProvider`, relying party `grip.vanderpoel.pro`). Zonder sessie is de allow-list leeg, dus iOS biedt elke passkey aan die het voor verder heeft. Daar hoort ook een passkey bij die op de Mac is gemaakt en via de iCloud-sleutelhanger is gesynchroniseerd.
 3. `POST /api/auth/passkey/verify-authentication` met de assertion. De challenge-cookie uit stap 1 wordt **met de hand** meegestuurd, omdat de URLSession van de app helemaal geen cookies bewaart.
 4. De sessiecookie uit de `Set-Cookie` van het antwoord wordt in de Keychain opgeslagen. `isSignedIn` wordt true en `sessionGeneration` wordt opgehoogd. Die ophoging hervat de uploadwachtrij en start de controle voor de toestemmingsvraag voor meldingen.
 
-Wat er wordt geschreven: een better-auth-rij in `session` op de server. Dat is geen bewijs, dus er wordt **geen ledger-event** toegevoegd. Omdat de client altijd `x-verder-trust-device: 1` meestuurt, geeft de hook `databaseHooks.session.create` deze sessie **30 dagen**, niet 12 uur (`packages/auth/src/session-trust.ts`). Dit is op de telefoon gemeten: aangemaakt om 12:33, verloopt op 30-11 om 12:33.
+Wat er wordt geschreven: een better-auth-rij in `session` op de server. Dat is geen bewijs, dus er wordt **geen ledger-event** toegevoegd. Omdat de client altijd `x-grip-trust-device: 1` meestuurt, geeft de hook `databaseHooks.session.create` deze sessie **30 dagen**, niet 12 uur (`packages/auth/src/session-trust.ts`). Dit is op de telefoon gemeten: aangemaakt om 12:33, verloopt op 30-11 om 12:33.
 
 Limiet: better-auth staat 10 per minuut toe op `/passkey/verify-authentication`, en de Cloudflare-WAF staat 10 per minuut per IP toe op `/api/auth/*`. De app stuurt **één poging per tik en probeert nooit opnieuw**, omdat elke herhaling de limiet opnieuw laat ingaan.
 
 ### 3.2 Inloggen met een wachtwoord
 
-**Status:** Gebouwd — `AuthModel.signInWithPassword(email:password:)` in `Verder/Auth/AuthModel.swift`, velden in `Verder/Auth/SignInView.swift`.
+**Status:** Gebouwd — `AuthModel.signInWithPassword(email:password:)` in `Grip/Auth/AuthModel.swift`, velden in `Grip/Auth/SignInView.swift`.
 
 `POST /api/auth/sign-in/email` met `{ email, password, rememberMe: true }`. Eén poging per tik, nooit herhaald. better-auth beperkt dit pad tot 5 per minuut. Bij succes gaat de sessiecookie naar de Keychain, precies zoals in 3.1. De velden gebruiken `textContentType` `.username` / `.password`, zodat iOS AutoFill en de sleutelhanger ze kunnen invullen. "Inloggen met wachtwoord" blijft uitgeschakeld tot beide velden zijn ingevuld.
 
 ### 3.3 Een toegangssleutel toevoegen (het eenmalige aanbod, en Meer → Account)
 
-**Status (de handeling zelf, vanuit Meer → Account):** Gebouwd — `AuthModel.addPasskey()` in `Verder/Auth/AuthModel.swift`, `PasskeyAuth.swift`, knop in `Verder/More/MoreScreens.swift`.
+**Status (de handeling zelf, vanuit Meer → Account):** Gebouwd — `AuthModel.addPasskey()` in `Grip/Auth/AuthModel.swift`, `PasskeyAuth.swift`, knop in `Grip/More/MoreScreens.swift`.
 
-**Status (het eenmalige aanbod):** Gebouwd (2026-11-04) — een volledige stap na een inlog met wachtwoord, `Verder/Auth/PasskeyOfferView.swift` ("Voortaan met Face ID inloggen?", "Zet toegangssleutel aan", "Sla over", "Later kan het in Meer → Account."), getoond door `RootView` zolang `AuthModel.passkeyOffer` staat; de kaart in Meer is weg. Na "deze toegangssleutel hoort niet meer bij je account" (3.12) wordt hij ook aangeboden als het account nog andere toegangssleutels heeft. Een 1006 toont "Je toegangssleutel werkt al" met "Ga naar Overzicht".
+**Status (het eenmalige aanbod):** Gebouwd (2026-11-04) — een volledige stap na een inlog met wachtwoord, `Grip/Auth/PasskeyOfferView.swift` ("Voortaan met Face ID inloggen?", "Zet toegangssleutel aan", "Sla over", "Later kan het in Meer → Account."), getoond door `RootView` zolang `AuthModel.passkeyOffer` staat; de kaart in Meer is weg. Na "deze toegangssleutel hoort niet meer bij je account" (3.12) wordt hij ook aangeboden als het account nog andere toegangssleutels heeft. Een 1006 toont "Je toegangssleutel werkt al" met "Ga naar Overzicht".
 
 - **Wanneer het wordt aangeboden:** direct na een inlog met **wachtwoord**, hoogstens **één keer per installatie** (UserDefaults `passkeyOfferShown`), en alleen wanneer `GET /api/auth/passkey/list-user-passkeys` een lege lijst teruggeeft. Een mislukte opvraging biedt niets aan: een aanbod is nooit een foutmelding waard. Het aanbod verschijnt als kaart bovenaan **Meer**, en de app wisselt naar dat tabblad. Het wordt nooit gestapeld op de toestemmingsvraag voor meldingen.
 - **Meer → Account** toont altijd "Passkey toevoegen" zodra `GET /api/mobile/v1/me` het aantal passkeys heeft teruggegeven. Dat aantal komt uit de tabel `passkey`, dezelfde die `/settings/security` toont.
@@ -111,7 +111,7 @@ Er zijn drie handelingen:
 
 Zolang een passkey-poging loopt, leest de knop "Bezig…" en is hij uitgeschakeld. Een mislukking toont haar tekst onder de hoofdtekst en speelt een `.error`-haptiek.
 
-**De uploadwachtrij vraagt om inloggen.** **Status:** Gebouwd — `UploadCenter.signInRequired` (`Verder/Upload/UploadCenter.swift`), banner en inlogvenster in `Verder/Scan/ScanTab.swift`, hervatten in `RootView` op `sessionGeneration`.
+**De uploadwachtrij vraagt om inloggen.** **Status:** Gebouwd — `UploadCenter.signInRequired` (`Grip/Upload/UploadCenter.swift`), banner en inlogvenster in `Grip/Scan/ScanTab.swift`, hervatten in `RootView` op `sessionGeneration`.
 
 De uploadwachtrij heeft een eigen versie van deze regel. Een 401 op een upload zet `signInRequired`, waardoor **al** het versturen stopt. Het tabblad Scan toont dan de banner "Log opnieuw in om je scans te versturen", die inloggen als venster opent. De volgende geslaagde inlog (`sessionGeneration` verandert) haalt de banner weg en hervat het versturen.
 
@@ -119,7 +119,7 @@ De uploadwachtrij heeft een eigen versie van deze regel. Een 401 op een upload z
 
 ### 3.5 Uitloggen
 
-**Status:** Gebouwd — `AuthModel.signOut()` / `forgetLocally()` in `Verder/Auth/AuthModel.swift`, `SessionEpoch.swift`, bevestiging in `Verder/More/MoreScreens.swift`.
+**Status:** Gebouwd — `AuthModel.signOut()` / `forgetLocally()` in `Grip/Auth/AuthModel.swift`, `SessionEpoch.swift`, bevestiging in `Grip/More/MoreScreens.swift`.
 
 Meer → Account → "Uitloggen" vraagt eerst: "Uitloggen op deze iPhone?" / "Het dossier op deze iPhone wordt gewist. Daarna log je opnieuw in met Face ID of je wachtwoord." Daarna volgen deze stappen, in deze volgorde:
 
@@ -134,7 +134,7 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 
 ### 3.6 App-vergrendeling (Face ID)
 
-**Status (vergrendeling bij koude start en na de respijttijd van 5 minuten, Face ID of toegangscode van het toestel, één automatische vraag per vergrendelperiode):** Gebouwd — `LockPolicy`, `PlatformOwnerAuthenticator` en `AppLock.autoPromptIfNeeded()` in `Verder/Auth/AppLock.swift`; `RootView.promptOnOpen()`; `VerderTests/AppLockTests.swift`.
+**Status (vergrendeling bij koude start en na de respijttijd van 5 minuten, Face ID of toegangscode van het toestel, één automatische vraag per vergrendelperiode):** Gebouwd — `LockPolicy`, `PlatformOwnerAuthenticator` en `AppLock.autoPromptIfNeeded()` in `Grip/Auth/AppLock.swift`; `RootView.promptOnOpen()`; `GripTests/AppLockTests.swift`.
 
 - **Beleid (`LockPolicy`):** de app vergrendelt bij een koude start, en na **meer dan** 300 s in de achtergrond. Als de klok terugliep terwijl de app weg was, vergrendelt hij ook, omdat hij bij twijfel dichtgaat. Het Face ID-venster, het bedieningspaneel en een oproepbanner maken de scene alleen inactief, en worden niet als een keer weg beoordeeld. Anders zou ontgrendelen de app opnieuw vergrendelen.
 - **Authenticatie:** `LAPolicy.deviceOwnerAuthentication`, dus de **toegangscode van het toestel** werkt wanneer Face ID mislukt of niet beschikbaar is. Per poging wordt een nieuwe `LAContext` gemaakt. De redentekst is "Ontgrendel verder om je dossier te zien."
@@ -145,17 +145,17 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
   - `dossier` dekt Voor jou, Dossier, Meer, het scherm Geld en het spraakvenster af. Die tonen `LockView`, het verder-woordmerk met "Ontgrendel met Face ID". De afgeschermde inhoud wordt achter de vergrendeling **helemaal niet getekend** (het is geen overlay), dus hij kan niets laden en niets aan VoiceOver melden.
   - Een nieuw gebied is standaard afgeschermd. Open is de uitzondering, en die moet worden beargumenteerd.
 
-  **Status (gebieden, en afgeschermde inhoud helemaal niet getekend):** Gebouwd — `AppLock.Area` / `isGated` in `Verder/Auth/AppLock.swift`, `.lockGated(by:)` in `Verder/Auth/LockView.swift`.
+  **Status (gebieden, en afgeschermde inhoud helemaal niet getekend):** Gebouwd — `AppLock.Area` / `isGated` in `Grip/Auth/AppLock.swift`, `.lockGated(by:)` in `Grip/Auth/LockView.swift`.
 
-  **Status (het vergrendelde Overzicht, alleen getallen en bedragen):** Gebouwd — `Verder/Home/HomeTab.swift`, `Verder/Home/HomeSummary.swift` (`reveal`, `lockedFootnote`). De formulering van het frame ("Ontgrendel met Face ID" / "Scan werkt altijd · titels na ontgrendelen") is een tekstwijziging, vermeld in sectie 10.
-- **Een link overleeft de vergrendeling:** een aangetikte melding, widget of snelle actie die naar een afgeschermd tabblad wijst, zet dat tabblad en zijn navigatiestapel meteen; het item zelf verschijnt na ontgrendelen, en daarvoor wordt er niets van getekend. **Status:** Gebouwd — de handler `links.pending` in `Verder/App/RootView.swift`, `DeepLink.destination` in `Verder/Push/DeepLink.swift`, `VerderTests/DeepLinkTests.swift`, `LinkDestinationTests.swift`.
+  **Status (het vergrendelde Overzicht, alleen getallen en bedragen):** Gebouwd — `Grip/Home/HomeTab.swift`, `Grip/Home/HomeSummary.swift` (`reveal`, `lockedFootnote`). De formulering van het frame ("Ontgrendel met Face ID" / "Scan werkt altijd · titels na ontgrendelen") is een tekstwijziging, vermeld in sectie 10.
+- **Een link overleeft de vergrendeling:** een aangetikte melding, widget of snelle actie die naar een afgeschermd tabblad wijst, zet dat tabblad en zijn navigatiestapel meteen; het item zelf verschijnt na ontgrendelen, en daarvoor wordt er niets van getekend. **Status:** Gebouwd — de handler `links.pending` in `Grip/App/RootView.swift`, `DeepLink.destination` in `Grip/Push/DeepLink.swift`, `GripTests/DeepLinkTests.swift`, `LinkDestinationTests.swift`.
 - **Inloggen ontgrendelt:** een inlog met wachtwoord of passkey heeft net bewezen wie de telefoon vasthoudt, dus `didSignIn()` ontgrendelt zonder tweede Face ID. **Status:** Gebouwd — `AppLock.didSignIn()`, aangeroepen vanuit `onChange(of: auth.isSignedIn)` in `RootView`.
 - **Uitkomsten** — **Status:** Gebouwd — `AppLock.Copy` en `LockView.swift`; de haptiek in `HomeTab.swift` (`failedUnlocks`). De ontworpen vensters die de kale teksten vervangen na een annulering en wanneer er geen toegangscode is ingesteld, zijn aparte functies (3.18, 3.20).
   - Annuleren toont niets.
   - Een mislukking toont "Ontgrendelen lukte niet. Probeer het nog eens."
   - Geen toegangscode ingesteld toont "Stel een toegangscode in op je iPhone; daarna kun je verder ontgrendelen."
   - Een ontgrendeling vanuit "Toon details" op Overzicht die de app vergrendeld laat, speelt een `.error`-haptiek. Dat geldt ook voor een **geannuleerd** venster, omdat de controle alleen is "daarna nog steeds vergrendeld". De foutteksten hierboven verschijnen alleen op `LockView`, niet op Overzicht.
-- **Los van versturen:** het goedkeuren van een voorstel vraagt via `ApprovalGate` een **verse** Face ID, ook als de app ontgrendeld is. Die poort hoort bij het voorstelscherm (een andere schermgroep) en wordt niet door deze vergrendeling beïnvloed. **Status:** Gebouwd — `Verder/Proposals/ApprovalGate.swift`, `VerderTests/ApprovalGateTests.swift`.
+- **Los van versturen:** het goedkeuren van een voorstel vraagt via `ApprovalGate` een **verse** Face ID, ook als de app ontgrendeld is. Die poort hoort bij het voorstelscherm (een andere schermgroep) en wordt niet door deze vergrendeling beïnvloed. **Status:** Gebouwd — `Grip/Proposals/ApprovalGate.swift`, `GripTests/ApprovalGateTests.swift`.
 
 <img src="frames/Lock_Face_ID_vraagt.jpg" width="260" alt="Face ID asks"> <img src="frames/Lock_Koude_start_via_melding.jpg" width="260" alt="Cold start from a notification">
 
@@ -164,19 +164,19 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 | Toestemming | Wanneer het wordt gevraagd (code) | Wat de app eerst toont |
 |---|---|---|
 | **Meldingen** | Na een inlog (`sessionGeneration` verandert) of na een ontgrendeling met een sessie. **Nooit bij een koude start.** | Een melding in de app, "Meldingen aanzetten?" / "verder laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen.", met "Meldingen aanzetten" of "Niet nu". Het wordt **één keer per installatie** aangeboden (`pushPrePromptShown`). Alleen een ja toont het systeemvenster (`.alert, .sound, .badge`). "Niet nu" kost niets, omdat Meer → Meldingen het opnieuw aanbiedt. |
-| **Camera** | De eerste tik op de schijf van Scan (of de eerste `verder://scan`) terwijl de status `notDetermined` is. | Een schermvullende vraag vooraf in de app, "Brieven scannen" / "verder gebruikt de camera om brieven voor je dossier te scannen.", twee beloften ("De camera gaat alleen aan als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding."), één knop "Ga verder" en "Daarna vraagt iOS om toestemming.", zonder sluitknop. Pas daarna de systeemvraag, waarvan de doeltekst in `project.yml` nu luidt "verder gebruikt de camera om brieven voor je dossier te scannen." Bij toestemming gaat de camera meteen open. |
+| **Camera** | De eerste tik op de schijf van Scan (of de eerste `grip://scan`) terwijl de status `notDetermined` is. | Een schermvullende vraag vooraf in de app, "Brieven scannen" / "verder gebruikt de camera om brieven voor je dossier te scannen.", twee beloften ("De camera gaat alleen aan als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding."), één knop "Ga verder" en "Daarna vraagt iOS om toestemming.", zonder sluitknop. Pas daarna de systeemvraag, waarvan de doeltekst in `project.yml` nu luidt "verder gebruikt de camera om brieven voor je dossier te scannen." Bij toestemming gaat de camera meteen open. |
 | **Microfoon** | Wanneer een spraakopname begint (`AVAudioApplication.requestRecordPermission`). | De systeemvraag, "verder neemt je stem op om een gesprek vast te leggen." Bij weigering zegt het spraakvenster "verder mag de microfoon niet gebruiken. Zet het aan in Instellingen." en toont het "Open Instellingen". |
 | **Spraakherkenning** | Niet gevraagd met een eigen aanroep. Transcriptie gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon, en de code controleert de *beschikbaarheid* (ready / needsDownload / unsupported) in plaats van een autorisatiestatus. | De plist bevat "verder zet je opname op je telefoon om in tekst." |
 | **Face ID** | De eerste `evaluatePolicy`. | "verder vraagt Face ID zodat alleen jij je dossier opent." |
 
 - **Toestemmingsvraag vooraf voor meldingen.** **Status:** Gebouwd (2026-11-04) — `NotificationPrePrompt` (volledig scherm, één "Ga verder", geen sluitknop) vervangt de `.alert`, op dezelfde momenten; de schakelaars per soort bestaan in Meer → Meldingen (`NotificationPrefs`), dus beide beloften kloppen. Eerder: gevraagd als melding in systeemstijl. Het ontwerp maakt er een volledig scherm van, gevraagd op hetzelfde moment: een voorbeeldmelding ("Voorstel klaar om te keuren"), twee beloften ("Geen schuldeisers of bedragen op je vergrendelscherm." / "Per soort uit te zetten in Meer → Meldingen.") en één "Ga verder" met "Daarna vraagt iOS om toestemming.", zonder sluitknop. De tweede belofte hangt af van 3.28; tot die gebouwd is, mag het scherm haar niet doen.
-- **Toestemmingsvraag vooraf voor de camera.** **Status:** Gebouwd — `CameraPrePrompt` in `Verder/Scan/ScanPermissionViews.swift`, `LiveCameraAccess` in `Verder/Scan/CameraAccess.swift`, aangesloten in `ScanTab.tapDisc()` / `openCamera()`. Niet gecommit in de working tree op 2026-11-03; nog geen unittest dekt de beslissing over de vraag vooraf.
+- **Toestemmingsvraag vooraf voor de camera.** **Status:** Gebouwd — `CameraPrePrompt` in `Grip/Scan/ScanPermissionViews.swift`, `LiveCameraAccess` in `Grip/Scan/CameraAccess.swift`, aangesloten in `ScanTab.tapDisc()` / `openCamera()`. Niet gecommit in de working tree op 2026-11-03; nog geen unittest dekt de beslissing over de vraag vooraf.
 - **Toestemmingsvragen vooraf voor microfoon en spraakherkenning:** zie 3.25–3.27.
 - **Doeltekst voor Face ID.** **Status:** Gebouwd — `NSFaceIDUsageDescription` in `apps/ios/project.yml`.
 
 Zodra er toestemming is, roept elke start met een sessie `registerForRemoteNotifications()` aan, omdat APNs-tokens veranderen. Het token gaat dan naar `POST /api/mobile/v1/push/register` met `{ token, environment, bundleId, appVersion }`.
 
-**Status (registratie van het APNs-token):** Gebouwd — `Verder/Push/PushRegistrar.swift`, `ProvisioningEnvironment.swift`, `apps/web/src/app/api/mobile/v1/push/register/route.ts` met zijn `route.test.ts`.
+**Status (registratie van het APNs-token):** Gebouwd — `Grip/Push/PushRegistrar.swift`, `ProvisioningEnvironment.swift`, `apps/web/src/app/api/mobile/v1/push/register/route.ts` met zijn `route.test.ts`.
 
 - De route valideert de sessie **voordat** hij de body leest. De body is beperkt tot `MAX_REGISTER_BODY_BYTES`.
 - Hij koppelt het apparaat aan de sessie-id uit de **gevalideerde cookie** en negeert een eventuele `sessionId` in de body.
@@ -187,7 +187,7 @@ Zodra er toestemming is, roept elke start met een sessie `registerForRemoteNotif
 
 **Meer → Meldingen** toont de huidige stand: "Meldingen staan aan." / "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." / "Meldingen zijn nog niet aangezet.". Daarna biedt het naar gelang "Meldingen aanzetten" of "Open Instellingen" aan, en somt het de negen soorten meldingen op, elk met één regel uitleg.
 
-**Status (Meer → Meldingen, toestemmingsstand en de manier om die te herstellen):** Gebouwd — `Verder/More/MoreMenu.swift` (standregels), `Verder/More/MoreScreens.swift`. De schakelaars per soort zijn een aparte functie (3.28).
+**Status (Meer → Meldingen, toestemmingsstand en de manier om die te herstellen):** Gebouwd — `Grip/More/MoreMenu.swift` (standregels), `Grip/More/MoreScreens.swift`. De schakelaars per soort zijn een aparte functie (3.28).
 
 <img src="frames/Pre-prompt_Meldingen.jpg" width="260" alt="Notifications pre-prompt"> <img src="frames/Pre-prompt_Meldingen_uit.jpg" width="260" alt="Notifications off">
 
@@ -195,7 +195,7 @@ Zodra er toestemming is, roept elke start met een sessie `registerForRemoteNotif
 
 Het eerste scherm biedt **één** hoofdhandeling, "Inloggen met toegangssleutel", met daaronder "Face ID bevestigt dat jij het bent.". Het wachtwoord is een link, "Inloggen met wachtwoord", die de velden voor e-mail en wachtwoord als tweede stap opent; vandaar gaat een link terug naar "Inloggen met toegangssleutel". Elk inlogscherm zegt wat inloggen oplevert: "Deze iPhone blijft 30 dagen ingelogd." (de sessie van 30 dagen uit 3.1 is echt, de regel wordt nog niet getoond). Dit is het doel uit §3 van de brief: 1 tik plus Face ID bij elke latere installatie.
 
-**Status:** Gebouwd (2026-11-04) — `Verder/Auth/SignInView.swift`: stap één is de toegangssleutel met "Face ID bevestigt dat jij het bent.", het wachtwoord is een tweede stap achter een link, en elke stap toont "Deze iPhone blijft 30 dagen ingelogd.".
+**Status:** Gebouwd (2026-11-04) — `Grip/Auth/SignInView.swift`: stap één is de toegangssleutel met "Face ID bevestigt dat jij het bent.", het wachtwoord is een tweede stap achter een link, en elke stap toont "Deze iPhone blijft 30 dagen ingelogd.".
 
 ### 3.9 "Toegangssleutel", nooit "passkey", in de UI
 
@@ -207,7 +207,7 @@ Elk label, elke melding en elke bevestiging zegt "toegangssleutel" (brief §3, c
 
 Elke mislukte inlog verschijnt als één melding bovenaan het scherm, met een label voor de soort en het tijdstip van de poging ("WACHTWOORD · 14:02", "TOEGANGSSLEUTEL · 14:02", "SERVER · 14:02", "NETWERK · 14:02", "BEVEILIGING · 14:02"), een titel van één regel die de oorzaak noemt, en één regel die zegt wat je daarna doet. Het tijdstip doet ertoe omdat er minuten later opnieuw naar het scherm gekeken kan worden, en een "lukte niet" zonder tijd leest als actueel.
 
-**Status:** Gebouwd (2026-11-04) — `Verder/Auth/SignInNotice.swift` (soort, tijd, titel, tekst, en welke knoppen het scherm daarbij biedt), `AuthNoticeCard` in `AuthButton.swift`, `AuthModel.cause(for:)`; `VerderTests/SignInNoticeTests.swift`.
+**Status:** Gebouwd (2026-11-04) — `Grip/Auth/SignInNotice.swift` (soort, tijd, titel, tekst, en welke knoppen het scherm daarbij biedt), `AuthNoticeCard` in `AuthButton.swift`, `AuthModel.cause(for:)`; `GripTests/SignInNoticeTests.swift`.
 
 ### 3.11 Geen toegangssleutel op deze telefoon
 
@@ -249,7 +249,7 @@ Zolang de handeling met de toegangssleutel loopt, leest de knop "Wacht op Face I
 
 Zolang de app niet op de voorgrond staat (scene `.inactive` of `.background`) en de vergrendeling geldt, is de momentopname van de app in de app-kiezer een effen afdekking met het verder-teken. Er verschijnt geen titel, geen aantal en geen bedrag.
 
-**Status:** Gebouwd (2026-11-04) — `PrivacyCover` in `Verder/Auth/LockView.swift`, over de hele app zodra de scene niet actief is (ook ontgrendeld: de veiligere lezing), behalve achter de eigen systeemvensters van de app (Face ID, toegangssleutel, toestemmingen; `SystemPrompts`). Fixture `--cover`. Hoe hij in de app-kiezer zelf staat, is niet vanuit de simulator vast te leggen.
+**Status:** Gebouwd (2026-11-04) — `PrivacyCover` in `Grip/Auth/LockView.swift`, over de hele app zodra de scene niet actief is (ook ontgrendeld: de veiligere lezing), behalve achter de eigen systeemvensters van de app (Face ID, toegangssleutel, toestemmingen; `SystemPrompts`). Fixture `--cover`. Hoe hij in de app-kiezer zelf staat, is niet vanuit de simulator vast te leggen.
 
 ### 3.18 Na een geannuleerde Face ID: drie manieren verder
 
@@ -285,15 +285,15 @@ De camera, de wachtrij en de ontspanknop werken vóór Face ID; op Scan wordt no
 
 Een brief scannen kost één handeling plus de pagina's, zonder eerst verder te openen en zonder Face ID (brief §3 Scan, R20): het pictogram lang indrukken → "Scan een brief", een bediening in het bedieningspaneel, of de Actieknop. Elk daarvan opent meteen de camera van Scan.
 
-**Status (snelle actie op het beginscherm "Scan een brief"):** Gebouwd — `QuickAction.scanType` in `Verder/App/QuickAction.swift`, `DeepLink.scan` → `LinkDestination(opensCamera:)` in `Verder/Push/DeepLink.swift`, `cameraRequested` in `RootView` en `ScanTab`, het shortcut-item in `project.yml`. Niet gecommit in de working tree op 2026-11-03.
+**Status (snelle actie op het beginscherm "Scan een brief"):** Gebouwd — `QuickAction.scanType` in `Grip/App/QuickAction.swift`, `DeepLink.scan` → `LinkDestination(opensCamera:)` in `Grip/Push/DeepLink.swift`, `cameraRequested` in `RootView` en `ScanTab`, het shortcut-item in `project.yml`. Niet gecommit in de working tree op 2026-11-03.
 
-**Status (bediening in het bedieningspaneel en Actieknop):** Nog te bouwen — er bestaat geen `ControlWidget` of `AppIntent`. `project.yml` noemt `Verder/Shared/ScanLetterIntent.swift` al in het widget-target, maar het bestand bestaat niet, dus dat target wordt pas gegenereerd als het er is. Nodig: een `OpenIntent`/`AppIntent` die `DeepLink.scan` aflevert (verder registreert geen URL-schema, dus het kan geen gewone URL-opening zijn), een `ControlWidgetButton` in `VerderWidget`, het beschikbaar maken voor de Actieknop via dezelfde intent, en een test dat de intent naar `.scan` vertaalt.
+**Status (bediening in het bedieningspaneel en Actieknop):** Nog te bouwen — er bestaat geen `ControlWidget` of `AppIntent`. `project.yml` noemt `Grip/Shared/ScanLetterIntent.swift` al in het widget-target, maar het bestand bestaat niet, dus dat target wordt pas gegenereerd als het er is. Nodig: een `OpenIntent`/`AppIntent` die `DeepLink.scan` aflevert (verder registreert geen URL-schema, dus het kan geen gewone URL-opening zijn), een `ControlWidgetButton` in `GripWidget`, het beschikbaar maken voor de Actieknop via dezelfde intent, en een test dat de intent naar `.scan` vertaalt.
 
 ### 3.24 Camera geweigerd: zeggen waar je hem aanzet
 
 Wanneer de camera voor verder uit staat, vervangt Scan de schijf door "Scannen kan nu niet" / "De camera staat uit in Instellingen → verder → Camera. Zet hem aan, dan kun je meteen scannen." en één "Open Instellingen". De tabbalk blijft staan, dus het is geen doodlopende straat.
 
-**Status:** Gebouwd — `CameraDenied` in `Verder/Scan/ScanPermissionViews.swift`, met de titel en het doorgestreepte vel van het frame ("Scannen kan nu niet").
+**Status:** Gebouwd — `CameraDenied` in `Grip/Scan/ScanPermissionViews.swift`, met de titel en het doorgestreepte vel van het frame ("Scannen kan nu niet").
 
 ### 3.25 Toestemmingsvraag vooraf voor de microfoon
 
@@ -311,7 +311,7 @@ Wanneer de microfoon voor verder uit staat, zegt het spraakvenster dat ("verder 
 
 Vóór de eerste transcriptie legt de app op één scherm uit dat iOS de opname omzet in tekst zodat Martin die kan lezen voordat hij opslaat ("Je stem omzetten in tekst"), met "Ga verder"; bij weigering zegt het spraakvenster "verder mag spraakherkenning niet gebruiken.", waar je het aanzet, en biedt het "Open Instellingen" aan.
 
-**Status:** Vervalt (beslist 2026-11-04, zie §10) — er is geen toestemming om te vragen. Eerder: nog te bouwen — en eerst een **meting**. De code gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon en controleert alleen de beschikbaarheid van het model, nooit een autorisatiestatus (`Verder/Voice/Transcriber.swift`). Of iOS 27 op dat pad überhaupt om toestemming voor spraakherkenning vraagt, is niet gemeten. Zo niet, dan zijn beide frames zinloos en moeten ze vervallen; zo ja, dan volgen de vraag vooraf en de weigeringsmelding de vorm van de microfoon. Let op: de belofte in het frame "De omzetting kan via de servers van Apple gaan." spreekt de transcriptie op het toestel tegen; de tekst moet overeenkomen met wat er gemeten wordt. **Gemeten in de SDK (2026-11-04):** de Swift-interface van `Speech` in de iOS 27.2-SDK geeft `SpeechAnalyzer` en `SpeechTranscriber` géén autorisatie-API; alleen `SFSpeechRecognizer` heeft er een, en die gebruikt de app niet. Er is dus niets om vooraf om te vragen of om te weigeren, en beide frames zijn daarom niet gebouwd en niet vast te leggen. Op het toestel is dit nog niet gemeten.
+**Status:** Vervalt (beslist 2026-11-04, zie §10) — er is geen toestemming om te vragen. Eerder: nog te bouwen — en eerst een **meting**. De code gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon en controleert alleen de beschikbaarheid van het model, nooit een autorisatiestatus (`Grip/Voice/Transcriber.swift`). Of iOS 27 op dat pad überhaupt om toestemming voor spraakherkenning vraagt, is niet gemeten. Zo niet, dan zijn beide frames zinloos en moeten ze vervallen; zo ja, dan volgen de vraag vooraf en de weigeringsmelding de vorm van de microfoon. Let op: de belofte in het frame "De omzetting kan via de servers van Apple gaan." spreekt de transcriptie op het toestel tegen; de tekst moet overeenkomen met wat er gemeten wordt. **Gemeten in de SDK (2026-11-04):** de Swift-interface van `Speech` in de iOS 27.2-SDK geeft `SpeechAnalyzer` en `SpeechTranscriber` géén autorisatie-API; alleen `SFSpeechRecognizer` heeft er een, en die gebruikt de app niet. Er is dus niets om vooraf om te vragen of om te weigeren, en beide frames zijn daarom niet gebouwd en niet vast te leggen. Op het toestel is dit nog niet gemeten.
 
 ### 3.28 Meldingen per soort, aan of uit
 
@@ -327,7 +327,7 @@ In Meer → Meldingen kan Martin elke soort melding aan- of uitzetten ("Voorstel
 
 `/settings/security` noemt de telefoon ("verder op iPhone") in plaats van "Onbekend apparaat", zodat Martin kan zien welke sessie hij moet intrekken.
 
-**Status:** Nog te bouwen — de apparaatnaam-parser van het web herkent de user agent `Verder/1 CFNetwork/… Darwin/…` niet (CLAUDE.md, bekend en uitgesteld). Nodig is één geval in die parser en een test; geen iOS-wijziging.
+**Status:** Nog te bouwen — de apparaatnaam-parser van het web herkent de user agent `Grip/1 CFNetwork/… Darwin/…` niet (CLAUDE.md, bekend en uitgesteld). Nodig is één geval in die parser en een test; geen iOS-wijziging.
 
 ### 3.30 De telefoon houdt zijn sessie in leven, en een verlopen sessie leest altijd als zodanig
 
@@ -374,11 +374,11 @@ Een sessie die de server verlengt, blijft op de telefoon verlengd, zodat "Deze i
 
 ## 5. Privacy en beveiliging
 
-- **De sessie is een cookie, geen bearer-token.** Het is de sessiecookie van better-auth, opgeslagen in het Keychain-item `pro.vanderpoel.verder.session` met toegang `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Daardoor blijft hij leesbaar terwijl de telefoon vergrendeld is, zodat uploads op de achtergrond werken, en wordt hij nooit gesynchroniseerd of op een ander toestel teruggezet. De share-extensie leest hem via de gedeelde keychain access group.
+- **De sessie is een cookie, geen bearer-token.** Het is de sessiecookie van better-auth, opgeslagen in het Keychain-item `pro.vanderpoel.grip.session` met toegang `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Daardoor blijft hij leesbaar terwijl de telefoon vergrendeld is, zodat uploads op de achtergrond werken, en wordt hij nooit gesynchroniseerd of op een ander toestel teruggezet. De share-extensie leest hem via de gedeelde keychain access group.
 - **De Keychain is de enige plek waar een sessie leeft.** De URLSession is ephemeral, zonder cookie-opslag, zonder URL-cache, en met `httpShouldSetCookies = false`. Een `Set-Cookie` wordt alleen een sessie door via `sessionCookie(from:url:)` in de store te komen.
 - **Redirects worden nooit gevolgd.** Elke 3xx wordt vertaald naar `.unauthorized`. Een gevolgde 307 naar `/login` zou lezen als een 200 en een scan als verstuurd markeren. Om hierbij aan te sluiten, antwoordt de web-middleware op `/api/mobile/*` met een JSON-401 in plaats van door te sturen.
 - **Origin:** elk verzoek draagt `Origin`, omdat better-auth auth-aanroepen die iets veranderen zonder die header weigert.
-- **Passkeys zijn aan de hostnaam gebonden.** Het associated domain is `webcredentials:verder.vanderpoel.pro?mode=developer` (development-build; zie sectie 9). `/.well-known/apple-app-site-association` is openbaar (uitgezonderd van de middleware), wordt per verzoek gelezen, en antwoordt 404 wanneer `APPLE_TEAM_ID` niet is gezet, in plaats van een verkeerde app-id te publiceren.
+- **Passkeys zijn aan de hostnaam gebonden.** Het associated domain is `webcredentials:grip.vanderpoel.pro?mode=developer` (development-build; zie sectie 9). `/.well-known/apple-app-site-association` is openbaar (uitgezonderd van de middleware), wordt per verzoek gelezen, en antwoordt 404 wanneer `APPLE_TEAM_ID` niet is gezet, in plaats van een verkeerde app-id te publiceren.
 - **Wat zonder Face ID zichtbaar is:**
   - Op Overzicht: alleen aantallen en bedragen.
   - In widgets: titels en de kop van de kaart zijn `.privacySensitive()`, dus iOS verbergt ze zolang het toestel vergrendeld is, bijvoorbeeld in StandBy.
@@ -412,7 +412,7 @@ Een sessie die de server verlengt, blijft op de telefoon verlengd, zodat "Deze i
   - `.error` wanneer een ontgrendeling vanuit "Toon details" op Overzicht de app vergrendeld laat (een annulering inbegrepen).
   - `SignInView` en `LockView` spelen geen eigen haptiek.
 
-  **Status:** Gebouwd — `.sensoryFeedback(.error, …)` in `Verder/Auth/SessionExpiredView.swift` en in `Verder/Home/HomeTab.swift` (`failedUnlocks`). De haptiekkaart van de brief (§2.5) noemt geen ander moment in deze groep, dus hier is verder niets verschuldigd.
+  **Status:** Gebouwd — `.sensoryFeedback(.error, …)` in `Grip/Auth/SessionExpiredView.swift` en in `Grip/Home/HomeTab.swift` (`failedUnlocks`). De haptiekkaart van de brief (§2.5) noemt geen ander moment in deze groep, dus hier is verder niets verschuldigd.
 
 ---
 
@@ -428,7 +428,7 @@ Een sessie die de server verlengt, blijft op de telefoon verlengd, zodat "Deze i
 ## 9. Bekende beperkingen en wat niet gemeten is
 
 - **De telefoon slaat nooit een vernieuwde cookie op.** De server verlengt de vervaldatum van een sessie hoogstens één keer per dag (`updateAge`), maar de app slaat alleen bij het inloggen een cookie op. Na 30 dagen leest de opgeslagen cookie bij het starten als verlopen, en toont de telefoon het **gewone** inlogscherm, niet "Je sessie is verlopen.". `sessionExpired` wordt alleen door een 401 van de server gezet.
-- **`/settings/security` noemt de telefoon "Onbekend apparaat"**, omdat de user agent `Verder/1 CFNetwork/… Darwin/…` niet wordt herkend (CLAUDE.md, bekend en uitgesteld).
+- **`/settings/security` noemt de telefoon "Onbekend apparaat"**, omdat de user agent `Grip/1 CFNetwork/… Darwin/…` niet wordt herkend (CLAUDE.md, bekend en uitgesteld).
 - **Valkuilen bij het instellen van het toestel,** gemeten op de telefoon (CLAUDE.md):
   - Met het associated domain `?mode=developer` mislukken passkeys met `ASAuthorizationError 1004`, tenzij Instellingen → Ontwikkelaar → Associated Domains Development bij het installeren aan staat.
   - Een niet-geaccepteerde Apple Program License Agreement breekt elke ondertekende build.
@@ -474,23 +474,23 @@ Waar de frames van deze groep een scherm tekenen dat **een andere groep bezit**,
 
 **iOS (`apps/ios/`)**
 
-- `Verder/Auth/AuthModel.swift`: inloggen (wachtwoord, passkey), het passkey-aanbod en toevoegen, uitloggen, `sessionRejected`, `forgetLocally`, en alle inlogteksten.
-- `Verder/Auth/PasskeyAuth.swift`: de vier passkey-endpoints van better-auth, de met de hand meegestuurde challenge-cookie, en de brug naar AuthenticationServices met de foutvertaling.
-- `Verder/Auth/WebAuthnJSON.swift`: het decoderen van WebAuthn-opties en de JSON van het antwoord.
-- `Verder/Auth/SessionStore.swift`: `SessionCookie` en `KeychainSessionStore`.
-- `Verder/Auth/SessionEpoch.swift`: de ene uitlog-epoch waaraan elke store gehoorzaamt.
-- `Verder/Auth/AppLock.swift`: `LockPolicy`, `PlatformOwnerAuthenticator`, `AppLock` en de gebieden.
-- `Verder/Auth/LockView.swift`: het vergrendelscherm en `.lockGated(by:)`.
-- `Verder/Auth/SignInView.swift`, `Verder/Auth/SessionExpiredView.swift`, `Verder/Auth/AuthButton.swift`.
-- `Verder/App/RootView.swift`: inloggen tegenover tabbladen, het doorgeven van de scenefase, `promptOnOpen`, de melding met de toestemmingsvraag voor pushes, de stapels voor deep links.
-- `Verder/App/VerderApp.swift` en `Verder/App/AppServices.swift`: de bedrading, en de gedeelde epoch.
-- `Verder/Net/APIClient.swift` en `Verder/Net/APIError.swift`: cookieafhandeling, de vertrouwensheader, geen redirects, de statusvertaling.
-- `Verder/Push/PushRegistrar.swift` en `Verder/Push/ProvisioningEnvironment.swift`: toestemming, de vraag vooraf, tokenregistratie.
-- `Verder/More/MoreTab.swift`, `Verder/More/MoreScreens.swift`, `Verder/More/MoreMenu.swift` en `Verder/More/AccountModel.swift`: de aanbodkaart, Account (e-mail, aantal passkeys, Uitloggen, "Apparaten op het web"), Meldingen.
-- `Verder/Home/HomeTab.swift` en `Verder/Home/HomeSummary.swift`: de vergrendelde beknopte weergave ("Toon details").
-- `Verder/Voice/VoiceRecorder.swift`, `Verder/Voice/VoiceLogModel.swift` en `Verder/Voice/Transcriber.swift`: microfoontoestemming en beschikbaarheid van spraakherkenning.
-- `Verder/Scan/ScanTab.swift` en `Verder/Scan/DocumentCamera.swift`: de niet-afgeschermde camera en de banner dat inloggen nodig is.
-- `project.yml` / `Verder/Info.plist`: doelteksten, entitlements (associated domains, keychain group, App Group).
+- `Grip/Auth/AuthModel.swift`: inloggen (wachtwoord, passkey), het passkey-aanbod en toevoegen, uitloggen, `sessionRejected`, `forgetLocally`, en alle inlogteksten.
+- `Grip/Auth/PasskeyAuth.swift`: de vier passkey-endpoints van better-auth, de met de hand meegestuurde challenge-cookie, en de brug naar AuthenticationServices met de foutvertaling.
+- `Grip/Auth/WebAuthnJSON.swift`: het decoderen van WebAuthn-opties en de JSON van het antwoord.
+- `Grip/Auth/SessionStore.swift`: `SessionCookie` en `KeychainSessionStore`.
+- `Grip/Auth/SessionEpoch.swift`: de ene uitlog-epoch waaraan elke store gehoorzaamt.
+- `Grip/Auth/AppLock.swift`: `LockPolicy`, `PlatformOwnerAuthenticator`, `AppLock` en de gebieden.
+- `Grip/Auth/LockView.swift`: het vergrendelscherm en `.lockGated(by:)`.
+- `Grip/Auth/SignInView.swift`, `Grip/Auth/SessionExpiredView.swift`, `Grip/Auth/AuthButton.swift`.
+- `Grip/App/RootView.swift`: inloggen tegenover tabbladen, het doorgeven van de scenefase, `promptOnOpen`, de melding met de toestemmingsvraag voor pushes, de stapels voor deep links.
+- `Grip/App/GripApp.swift` en `Grip/App/AppServices.swift`: de bedrading, en de gedeelde epoch.
+- `Grip/Net/APIClient.swift` en `Grip/Net/APIError.swift`: cookieafhandeling, de vertrouwensheader, geen redirects, de statusvertaling.
+- `Grip/Push/PushRegistrar.swift` en `Grip/Push/ProvisioningEnvironment.swift`: toestemming, de vraag vooraf, tokenregistratie.
+- `Grip/More/MoreTab.swift`, `Grip/More/MoreScreens.swift`, `Grip/More/MoreMenu.swift` en `Grip/More/AccountModel.swift`: de aanbodkaart, Account (e-mail, aantal passkeys, Uitloggen, "Apparaten op het web"), Meldingen.
+- `Grip/Home/HomeTab.swift` en `Grip/Home/HomeSummary.swift`: de vergrendelde beknopte weergave ("Toon details").
+- `Grip/Voice/VoiceRecorder.swift`, `Grip/Voice/VoiceLogModel.swift` en `Grip/Voice/Transcriber.swift`: microfoontoestemming en beschikbaarheid van spraakherkenning.
+- `Grip/Scan/ScanTab.swift` en `Grip/Scan/DocumentCamera.swift`: de niet-afgeschermde camera en de banner dat inloggen nodig is.
+- `project.yml` / `Grip/Info.plist`: doelteksten, entitlements (associated domains, keychain group, App Group).
 
 **Server**
 
@@ -505,7 +505,7 @@ Waar de frames van deze groep een scherm tekenen dat **een andere groep bezit**,
 **Tests**
 
 - iOS:
-  - `VerderTests/AppLockTests.swift`, `AuthModelTests.swift`, `PasskeyAuthTests.swift`, `PasskeyErrorMappingTests.swift`, `WebAuthnJSONTests.swift`.
+  - `GripTests/AppLockTests.swift`, `AuthModelTests.swift`, `PasskeyAuthTests.swift`, `PasskeyErrorMappingTests.swift`, `WebAuthnJSONTests.swift`.
   - `SessionStoreTests.swift`, `SessionEpochTests.swift`, `APIClientTests.swift`, `PushRegistrarTests.swift`, `ProvisioningEnvironmentTests.swift`, `MoreMenuTests.swift`.
   - `FixtureTests.swift`, waaronder de fixture `unauthorized`.
 - Web:

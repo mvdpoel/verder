@@ -22,7 +22,7 @@
 # with a plausible name and no etc/ in it. This is the replacement.
 #
 # Run by hand, or monthly from cron (the crontab is CRON_TZ=UTC):
-#   30 5 1 * * /home/homelab/apps/verder/ops/mail-restore-drill.sh >> /home/homelab/apps/verder/nightly.log 2>&1
+#   30 5 1 * * /home/homelab/apps/grip/ops/mail-restore-drill.sh >> /home/homelab/apps/grip/nightly.log 2>&1
 # It shares nightly.log because that name is in the rsync exclude list and a new
 # one would not be: `--delete` erases an unexcluded log on the next deploy.
 # THAT LINE IS SPELLED IN THREE PLACES — here, in docs/deploy.md §8.12 (which is
@@ -49,7 +49,7 @@ set +a
 #
 # COMPOSE is production alone. It is what runs the worker for the assertions.
 # DRILL is production PLUS the overlay, which is the only way `stalwart-drill`
-# exists at all and the only way it joins `verder_default` so the worker can
+# exists at all and the only way it joins `grip_default` so the worker can
 # resolve it by name.
 #
 # ============================ THE OVERLAY TRAP ============================
@@ -68,8 +68,8 @@ set +a
 COMPOSE=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
 DRILL=(docker compose --env-file .env.prod -f docker-compose.prod.yml -f ops/mail-drill.compose.yml)
 
-OUT="${BACKUP_DIR:-/mnt/nas/verder-backups}/mail"
-VANDELAY="${VANDELAY_BIN:-/mnt/data/verder/mail-import/vandelay-x86_64-unknown-linux-musl/vandelay}"
+OUT="${BACKUP_DIR:-/mnt/nas/grip-backups}/mail"
+VANDELAY="${VANDELAY_BIN:-/mnt/data/grip/mail-import/vandelay-x86_64-unknown-linux-musl/vandelay}"
 
 # Named as early as possible so `drill_fail` can always report WHICH archive was
 # being drilled, including on the paths that die before one is chosen.
@@ -119,14 +119,14 @@ drill_fail() {
 # with ~40 GB free, the extracted store is ~7.3 GB and the decompressed weekly
 # archive another ~12.5 GB. Filling root on the machine that holds the ledger is
 # a worse outcome than a missed drill. /mnt/data has ~340 GB free.
-SCRATCH_ROOT="${MAIL_DRILL_SCRATCH:-/mnt/data/verder/mail-drill-tmp}"
+SCRATCH_ROOT="${MAIL_DRILL_SCRATCH:-/mnt/data/grip/mail-drill-tmp}"
 
 # The production store, named here ONLY so the guard below can refuse to point
 # the drill at it. Defaulted exactly as docker-compose.prod.yml and
 # mail-backup.sh default them — three copies that must move together.
-PROD_ETC="${STALWART_ETC_DIR:-/mnt/data/verder/stalwart/etc}"
-PROD_DATA="${STALWART_DATA_DIR:-/mnt/data/verder/stalwart/data}"
-PROD_BLOB="${STALWART_BLOB_DIR:-/mnt/data/verder/stalwart/blobs}"
+PROD_ETC="${STALWART_ETC_DIR:-/mnt/data/grip/stalwart/etc}"
+PROD_DATA="${STALWART_DATA_DIR:-/mnt/data/grip/stalwart/data}"
+PROD_BLOB="${STALWART_BLOB_DIR:-/mnt/data/grip/stalwart/blobs}"
 PROD_ROOT=$(dirname "$PROD_DATA")
 
 # THE GUARD THAT MAKES EVERY `rm -rf` BELOW SAFE TO READ. This script extracts
@@ -135,7 +135,7 @@ PROD_ROOT=$(dirname "$PROD_DATA")
 # would restore a month-old snapshot OVER the live mail store and then delete
 # it. Refuse before anything is created.
 #
-# `dirname "$PROD_ROOT"` (/mnt/data/verder) is in the list for a reason that is
+# `dirname "$PROD_ROOT"` (/mnt/data/grip) is in the list for a reason that is
 # not obvious: it is the parent of the live store AND of both scratch roots this
 # repo uses, which makes it the plausible fat-finger. Naming it there would make
 # the `sudo chown` below hand ownership of the directory holding the mail store
@@ -163,7 +163,7 @@ esac
 # written blind — nobody had ever run `inspect` — and the measurement is why the
 # separator handling below is not decoration:
 #
-#   Archive: /mnt/data/verder/.../archive.sqlite
+#   Archive: /mnt/data/grip/.../archive.sqlite
 #   Source:  jmap http://stalwart:8080 (account c / martin@vanderpoel.pro)
 #
 #     mailbox                   21
@@ -214,7 +214,7 @@ json_string() {
 # `set -e` then kills the script — `V=$(find /nonexistent … | sort -rn | head -1)`
 # printed nothing and exited 1, with the following line never reached. That is the
 # realistic case here and not a hypothetical: $OUT is
-# /mnt/nas-download/verder-backups/mail, an NFS mount, and a drill that runs at
+# /mnt/nas-download/grip-backups/mail, an NFS mount, and a drill that runs at
 # 05:30 on the 1st with the NAS not mounted is exactly when this fires. Unguarded
 # it dies at THIS line — above `trap cleanup EXIT`, above every `drill_fail` call
 # — so no `worker_runs` row, no push, nothing but a cron log, and the `mail-drill`
@@ -309,7 +309,7 @@ echo "mail-restore-drill.sh: drilling $ARCHIVE_NAME"
 # ---------------------------------------------------------------------------
 # 2. Scratch directory, self-healing.
 # ---------------------------------------------------------------------------
-# /mnt/data/verder is root-owned 0755, so the cron user cannot mkdir inside it —
+# /mnt/data/grip is root-owned 0755, so the cron user cannot mkdir inside it —
 # measured while building mail-backup.sh, and only AFTER its first tier had
 # already succeeded. A script that needs a manual mkdir before it works does half
 # its job in silence on a rebuilt machine, and a rebuilt machine is exactly the
@@ -364,7 +364,7 @@ mkdir -p "$STORE"
 #   * the container/service `stalwart-drill` (compose `rm -sf`, never `down`)
 #   * the directory $SCRATCH, which is a mktemp run-XXXXXX under $SCRATCH_ROOT
 # WHAT IT MUST NEVER TOUCH:
-#   * /mnt/data/verder/stalwart/{etc,data,blobs} — the live store
+#   * /mnt/data/grip/stalwart/{etc,data,blobs} — the live store
 #   * the `stalwart` service or 127.0.0.1:8080 — the live server
 #   * $BACKUP_DIR/mail/* — the backups themselves. This script only ever READS
 #     them; the NAS is bind-mounted read-only into the worker for the same
@@ -378,7 +378,7 @@ cleanup() {
   # fails whenever the merged config fails to render (a `${VAR:?}` somebody adds
   # to docker-compose.prod.yml, an .env.prod mid-edit, a renamed overlay) or the
   # daemon returns a transient error. Discarding its exit code left a FULL SECOND
-  # STALWART on `verder_default`, serving a month-old copy of the whole dossier,
+  # STALWART on `grip_default`, serving a month-old copy of the whole dossier,
   # with its etc/data/blobs deleted out from under it — open FDs keep it serving —
   # and the drill still printed PASS. `restart: "no"` bounds it to the next
   # reboot; nothing bounded it before that, and nothing said a word. It also

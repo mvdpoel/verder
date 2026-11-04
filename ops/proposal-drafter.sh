@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Host drafter for proposals (spec §6.5). Host crontab:
-#   */5 * * * * /home/<user>/apps/verder/ops/proposal-drafter.sh >> /home/<user>/.local/state/verder-drafter/cron.log 2>&1
+#   */5 * * * * /home/<user>/apps/grip/ops/proposal-drafter.sh >> /home/<user>/.local/state/grip-drafter/cron.log 2>&1
 #
 # The worker builds every prompt and validates every answer; this script only
 # carries text between them and `claude -p`, which runs HERE, on the host, with
@@ -18,7 +18,7 @@
 # included: a hung exec would otherwise hold the flock and silence the drafter
 # for good. `claude` itself gets 300 s.
 #
-# STATE LIVES OUTSIDE THE REPO (~/.local/state/verder-drafter): ~/apps/verder
+# STATE LIVES OUTSIDE THE REPO (~/.local/state/grip-drafter): ~/apps/grip
 # is rsynced with --delete, and a log written in there is erased on the next
 # deploy.
 #
@@ -36,7 +36,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-STATE_DIR=${DRAFTER_STATE_DIR:-$HOME/.local/state/verder-drafter}
+STATE_DIR=${DRAFTER_STATE_DIR:-$HOME/.local/state/grip-drafter}
 LOG="$STATE_DIR/drafter.log"
 TOKEN_FILE=${CLAUDE_TOKEN_FILE:-$HOME/.config/claude-agent/oauth-token}
 UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'

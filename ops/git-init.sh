@@ -11,7 +11,7 @@
 # existing repo it only fetches and adds the branches that are new on origin.
 set -euo pipefail
 
-REMOTE_URL="${VERDER_REMOTE:-git@github.com:mvdpoel/verder.git}"
+REMOTE_URL="${GRIP_REMOTE:-git@github.com:mvdpoel/grip.git}"
 BRANCH="${1:-main}"
 cd "$(dirname "$0")/.."
 
@@ -19,7 +19,7 @@ say() { printf 'git-init.sh: %s\n' "$*"; }
 
 fresh=0
 if [ ! -d .git ]; then
-  [ -f package.json ] && [ -f CLAUDE.md ] || { say "not the verder root: $PWD"; exit 1; }
+  [ -f package.json ] && [ -f CLAUDE.md ] || { say "not the grip root: $PWD"; exit 1; }
   git init -q -b "$BRANCH"
   git remote add origin "$REMOTE_URL"
   fresh=1

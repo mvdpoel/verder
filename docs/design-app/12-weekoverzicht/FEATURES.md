@@ -12,7 +12,7 @@ De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 1. **Een geschiedenis van eerdere weken.** `/weekly` levert alleen het nieuwste overzicht. Eén route die de laatste acht weken levert, één rij per week, maakt het totaal in de hero mogelijk, de grafiek van acht weken met het gemiddelde, de regel "vorige week: …" onder elke telling en het bemoedigende oordeel. De rij van elke zondag wordt al bewaard in `worker_runs` (niets ruimt die op), dus de gegevens stapelen zich op vanaf de eerste run op 8 november. Wat ontbreekt is de route, het ontdubbelen per week (een handmatige run voegt een tweede rij voor dezelfde week toe) en een besluit over wat "gemiddelde" betekent.
 2. **De offline kopie.** Het scherm bewaart niets tussen bezoeken, dus offline geopend toont het alleen een foutmelding. De frames bewaren het laatste overzicht, plus dat van vorige week, met een banner "geen verbinding · stand van …". Daarvoor is een beschermde kopie op de telefoon nodig, onder dezelfde regels als het zakdossier: bestandsbescherming, gewist bij afmelden en bij een 401.
-3. **"Door verder gedaan" voor de week, met de manier om het terug te draaien.** Het overzicht telt wat verder zelf heeft opgeborgen, maar niet de scans die het een naam gaf. Geen van beide tellingen linkt naar de lijst "Door verder gedaan", waar het terugdraaien zit. De lijst en de deep link (`verder://done-by-verder`) bestaan al. Nog te bouwen: een telling van hernoemingen in het contract, de kaart en de link.
+3. **"Door verder gedaan" voor de week, met de manier om het terug te draaien.** Het overzicht telt wat verder zelf heeft opgeborgen, maar niet de scans die het een naam gaf. Geen van beide tellingen linkt naar de lijst "Door verder gedaan", waar het terugdraaien zit. De lijst en de deep link (`grip://done-by-grip`) bestaan al. Nog te bouwen: een telling van hernoemingen in het contract, de kaart en de link.
 
 ---
 
@@ -34,7 +34,7 @@ De spec behandelt het in §7.9 (`docs/superpowers/specs/2026-10-28-iphone-app-de
 
 ## De volledige functieset
 
-Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. Paden zijn relatief aan `apps/ios/Verder/`, tenzij ze beginnen met `apps/` of `packages/`.
+Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. Paden zijn relatief aan `apps/ios/Grip/`, tenzij ze beginnen met `apps/` of `packages/`.
 
 ### Erheen en weer weg
 
@@ -50,7 +50,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **4. Meer → Weekoverzicht.** Een rij in de sectie Dossier van Meer opent het scherm op elk moment van de week.
 **Status:** Gebouwd — `More/MoreMenu.swift`, `More/MoreTab.swift`.
 
-**5. Deep link `verder://weekly`.** Opent Meer met het Weekoverzicht bovenop. Ze wacht achter het slot en opent na ontgrendelen.
+**5. Deep link `grip://weekly`.** Opent Meer met het Weekoverzicht bovenop. Ze wacht achter het slot en opent na ontgrendelen.
 **Status:** Gebouwd — `Push/DeepLink.swift`, `App/RootView.swift`.
 
 **6. Eén volgende stap naar Voor jou.** Elke toestand eindigt met één weg naar de live lijst van wat op Martin wacht. Die leegt de stapel van Voor jou en komt uit op de root.
@@ -60,7 +60,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **Status:** Nog te bouwen — vraagt een route of filter die documenten en mail toont binnen het `[from, to)`-venster van het overzicht (het Dossier op de telefoon heeft geen filter op datumvenster), een bestemmingsscherm, een link vanaf elke telling en een test dat de lengte van de lijst gelijk is aan de telling.
 
 **8. "Door verder gedaan" leidt naar terugdraaien.** Een tik op de rij "stukken opgeborgen" opent de lijst "Door verder gedaan", waar elk automatisch opgeborgen document met één tik terug te draaien is.
-**Status:** Deels gebouwd — de lijst, het terugdraaien met één tik en de deep link `verder://done-by-verder` bestaan (`Inbox/DoneByVerderSection.swift`, `packages/api/src/routers/verder-actions.ts`). Het Weekoverzicht linkt er niet naar. De lijst beslaat een doorlopende 7 dagen (`sinceDays: 7`), niet het venster van het overzicht.
+**Status:** Deels gebouwd — de lijst, het terugdraaien met één tik en de deep link `grip://done-by-grip` bestaan (`Inbox/DoneByGripSection.swift`, `packages/api/src/routers/grip-actions.ts`). Het Weekoverzicht linkt er niet naar. De lijst beslaat een doorlopende 7 dagen (`sinceDays: 7`), niet het venster van het overzicht.
 
 **9. Vernieuwen.** Omlaag trekken om te vernieuwen leest het opgeslagen overzicht opnieuw. In de frames doet "Opnieuw proberen" in de offline-banner hetzelfde.
 **Status:** Gebouwd — `WeeklyStore.refresh`, `.refreshable` in `Weekly/WeeklyView.swift`.
@@ -77,7 +77,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **Status:** Deels gebouwd — mail wordt geteld (`raw_emails`, Martins eigen adressen uitgezonderd). Scans niet. Vraagt een telling van documenten met een scanbron (`nas-scan`, `phone-scan`, `phone-share`) die binnen het venster binnenkomen, een contractveld of een herdefinieerde `received`, en een worker-test.
 
 **13. "opgeborgen", gesplitst naar wie.** Documenten die die week naar `filed` gingen, gesplitst in "door jou" en "door verder".
-**Status:** Gebouwd — `filedByMartin`/`filedByVerder` in `apps/worker/src/weekly-summary.ts`, getoond door `WeeklyScreen`.
+**Status:** Gebouwd — `filedByMartin`/`filedByGrip` in `apps/worker/src/weekly-summary.ts`, getoond door `WeeklyScreen`.
 
 **14. "taken klaar".** Taken die die week `done` bereikten.
 **Status:** Gebouwd — `tasksDone`.
@@ -101,7 +101,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **Status:** Nog te bouwen — vraagt het overzicht van vorige week uit de geschiedenisroute (functie 18) en de vergelijkingsregel in `WeeklyScreen`. De test `comparedWithNothingInvented` moet dan veranderen van "vergelijkt met niets" naar "vergelijkt alleen met een opgeslagen week".
 
 **21. "Door verder gedaan": stukken opgeborgen.** Een rij in een eigen kaart die zegt hoeveel documenten verder zelf opborg, met de herinnering dat één tik het terugdraait.
-**Status:** Deels gebouwd — het getal bestaat (`filedByVerder`). Het wordt alleen binnen "opgeborgen" getoond als "door verder zelf", niet als eigen kaart of rij. Automatisch opbergen staat bij oplevering uit, dus het getal is normaal 0.
+**Status:** Deels gebouwd — het getal bestaat (`filedByGrip`). Het wordt alleen binnen "opgeborgen" getoond als "door verder zelf", niet als eigen kaart of rij. Automatisch opbergen staat bij oplevering uit, dus het getal is normaal 0.
 
 **22. "Door verder gedaan": scans benoemd.** Een rij die zegt hoeveel scans auto-name die week hernoemde, en dat terugdraaien in de app niet kan omdat de naam ook op de NAS staat.
 **Status:** Nog te bouwen — vraagt een telling van auto-name-rijen met `actor = 'verder'` binnen het venster (`document_status_changes`; `verderActionKind` onderscheidt ze al), een contractveld in `packages/api/src/weekly-summary.ts` met de bijbehorende controles in `isWeeklySummary` en `WeeklyDTO`, de rij en tests.
@@ -167,8 +167,8 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 | Ingang | Wat er gebeurt |
 |---|---|
 | **Meer → Weekoverzicht** | De rij staat in de sectie "Dossier" van Meer naast Geld en Gesprek vastleggen, met het `calendar`-icoon (`MoreMenu.swift`). Ze zet `MoreRoute.weekly` op de stapel van Meer. |
-| **Tik op de zondagse push** (categorie `WEEKLY`) | De worker stuurt de push met `link: "verder://inbox"`. Bij een gewone tik of `OPEN` ("Bekijken") stuurt `NotificationRouter.target` een `WEEKLY`-melding naar `.weekly`, wat de link ook zegt, zodat ze nooit op Voor jou uitkomt. Elke andere actie opent hoogstens de link. |
-| **Deep link `verder://weekly`** | `DeepLink.weekly` wordt tab `.meer` met stapel `[.weekly]`. Een pad na `weekly` wordt geweigerd (`.none`). |
+| **Tik op de zondagse push** (categorie `WEEKLY`) | De worker stuurt de push met `link: "grip://inbox"`. Bij een gewone tik of `OPEN` ("Bekijken") stuurt `NotificationRouter.target` een `WEEKLY`-melding naar `.weekly`, wat de link ook zegt, zodat ze nooit op Voor jou uitkomt. Elke andere actie opent hoogstens de link. |
+| **Deep link `grip://weekly`** | `DeepLink.weekly` wordt tab `.meer` met stapel `[.weekly]`. Een pad na `weekly` wordt geweigerd (`.none`). |
 | **Debug-fixtures** | `-route weekly` neemt hetzelfde pad als een tik op de push (`.link(.weekly)`). `scripts/capture.sh weekly weekly <out.png>` legt de geladen toestand vast en `scripts/capture.sh empty weekly <out.png>` de nog-niet-toestand (de `empty`-fixture beantwoordt `/weekly` met 404). |
 
 Het Weekoverzicht is niet bereikbaar vanuit Overzicht, vanuit een widget of vanuit een snelle actie op het beginscherm.
@@ -217,7 +217,7 @@ pg-boss-queue `weekly.summary`, ingepland op `0 18 * * 0` met `tz: "Europe/Amste
 
 1. **Samenstellen.** `summaryWeek(now)` kiest het venster dat sluit op de nieuwste zondag 18:00 Amsterdam op of vóór `now`. `loadWeekly` leest de bronnen met een SQL-grens die aan beide kanten twee dagen is verruimd, en de pure `composeWeekly` beslist in JS.
 2. **Vastleggen.** Ze schrijft één `worker_runs`-rij, `weekly-summary` / `ok`, met `detail.summary`. Die rij is de opgeslagen kopie die het scherm leest. Er is geen nieuwe tabel.
-3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week in verder", body, link: "verder://inbox", dedupKey: "weekly:<ISO week>" })`.
+3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week in verder", body, link: "grip://inbox", dedupKey: "weekly:<ISO week>" })`.
 
 **Het venster** loopt van de vorige zondag 18:00 tot deze zondag 18:00 Amsterdam. Het is halfopen, `[from, to)`, en NIET maandag tot en met zondag. Opeenvolgende vensters raken elkaar op het moment dat de job draait, zodat activiteit op zondagavond precies één keer wordt geteld, in het volgende overzicht. Het venster hoort bij de week, niet bij het moment waarop de job draaide, dus een late run telt dezelfde rijen als een stipte.
 
@@ -227,7 +227,7 @@ Wat elke telling betekent:
 |---|---|
 | `sent` | Uitgaande `log_entries` die door geen andere entry worden vervangen. Elke wordt beoordeeld op de datums van de ROOT van haar keten (recursieve CTE over `supersedes_id`, dieptegrens 100), zodat een correctie die de week erna wordt vastgelegd niet nog eens wordt geteld. Een verstuurd voorstel heeft altijd zijn entry (`finishSent` schrijft beide in één transactie), dus het wordt via de entry geteld. Een vraag sluit zonder entry en is nooit "verstuurd". |
 | `received` | `raw_emails` waarvan de afzender niet een van Martins eigen adressen is (`ownMailboxAddresses()`). De afzender wordt GEPARSED met `senderAddress`, nooit op deeltekst vergeleken. Een header die `senderAddress` weigert, is niet aantoonbaar van hem en telt dus als ontvangen. |
-| `filedByMartin` / `filedByVerder` | Documenten die binnen het venster NAAR `filed` GINGEN: de vorige status van de `filed`-rij (de eerdere wijzigingsrij, of `documents.status` voor de eerste) was niet `filed`. Elk document telt één keer, toegeschreven aan de `actor` van zijn eerste zulke overgang. `actor = 'verder'` telt als verder; al het andere telt als Martin. Een hernoeming van een document dat al is opgeborgen, telt niet opnieuw. |
+| `filedByMartin` / `filedByGrip` | Documenten die binnen het venster NAAR `filed` GINGEN: de vorige status van de `filed`-rij (de eerdere wijzigingsrij, of `documents.status` voor de eerste) was niet `filed`. Elk document telt één keer, toegeschreven aan de `actor` van zijn eerste zulke overgang. `actor = 'verder'` telt als verder; al het andere telt als Martin. Een hernoeming van een document dat al is opgeborgen, telt niet opnieuw. |
 | `tasksDone` | Verschillende taken met een `task_status_changes`-rij naar `done` binnen het venster. |
 | `waiting` / `topWaiting` | `loadWaiting()` op het moment dat de job draait (`packages/api/src/waiting.ts`), dezelfde definitie die Voor jou, de badge en het dashboard aanstuurt: de lengte ervan, en de eerste drie items. |
 
@@ -302,7 +302,7 @@ De code handhaaft deze regels vandaag, en de hieronder genoemde tests controlere
 - **Amber alleen voor wat op Martin wacht, en alleen live.** Alles wat het opgeslagen overzicht zegt, is geschiedenis: de tellingen en de momentopname van zondag. Het scherm kan op elke dag van de week opengaan, en over een item dat zondag wachtte, kan sindsdien zijn beslist. De momentopname amber kleuren zou Voor jou, de badge en het dashboard tegenspreken, die één live definitie delen (`loadWaiting`). Het enige amber is de live telling van de volgende stap. De kleur wordt in het model bepaald (`WeeklyScreen.Tone`: `.history` / `.waitsOnMartin`), en tests lezen hem daar (`theSummaryIsHistoryAndNeverAmber`, `endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount`). De eerste bouw kleurde de momentopname amber, en dat is gecorrigeerd.
 - **Geen verzonnen cijfer.** Het scherm vergelijkt niet met eerdere weken die het nooit kreeg, en het toont geen telling als het offline is. Als de live telling onbekend is, zegt de volgende stap dat in woorden.
 - **Het scherm toont de getallen die de push noemde.** Het leest de opgeslagen kopie, nooit een hertelling, zodat het tikdoel niet afwijkt van de melding. De enige uitzondering is een niet-droge handmatige run in dezelfde week (zie **Eén push per week** hierboven), die de opgeslagen kopie vervangt zonder een nieuwe push te sturen.
-- **De opberg-amendering verschijnt hier alleen als telling.** Documenten die verder zelf opborg (`actor = 'verder'`) worden apart geteld als "door verder zelf", nooit bij die van Martin opgeteld. Terugdraaien daarvan zit in "Door verder gedaan" op Voor jou, niet hier. Automatisch opbergen staat bij oplevering uit (`DOCMETA_AUTO_APPLY` niet gezet), dus `filedByVerder` is normaal 0.
+- **De opberg-amendering verschijnt hier alleen als telling.** Documenten die verder zelf opborg (`actor = 'verder'`) worden apart geteld als "door verder zelf", nooit bij die van Martin opgeteld. Terugdraaien daarvan zit in "Door verder gedaan" op Voor jou, niet hier. Automatisch opbergen staat bij oplevering uit (`DOCMETA_AUTO_APPLY` niet gezet), dus `filedByGrip` is normaal 0.
 - **Hier wordt niets verstuurd en niets beslist.** Het scherm leest alleen.
 
 ## Meldingen en haptiek
@@ -335,13 +335,13 @@ Er is geen synchronisatie. Het scherm haalt `/weekly` op elke keer dat het opent
 
 ## Waar in de code
 
-**iOS (`apps/ios/Verder/`)**
+**iOS (`apps/ios/Grip/`)**
 - `Weekly/WeeklyModels.swift`: `WeeklyDTO` (strikte decode), `WeeklyFormat` (weeksleutel, Amsterdamse tijdstippen), `WeeklyScreen` (elk woord, toon, stappen).
 - `Weekly/WeeklyStore.swift`: `GET /api/mobile/v1/weekly`, met de toestanden loading / notYet / loaded / failed.
 - `Weekly/WeeklyView.swift`: de opmaak.
 - `More/MoreMenu.swift`, `More/MoreTab.swift`: de rij in Meer en de bestemming `MoreRoute.weekly`.
 - `App/RootView.swift`: `meerPath`, het slot, de live telling en de sprong naar Voor jou.
-- `Push/DeepLink.swift` (`verder://weekly`), `Push/NotificationRouter.swift` (een tik op `WEEKLY` gaat naar het overzicht), `Push/NotificationCategories.swift`.
+- `Push/DeepLink.swift` (`grip://weekly`), `Push/NotificationRouter.swift` (een tik op `WEEKLY` gaat naar het overzicht), `Push/NotificationCategories.swift`.
 - `Fixtures/FixtureLaunch.swift`, `FixtureData/_shared/weekly.json` (week 2026-W44), `FixtureData/weekly/fixture.json`, `FixtureData/empty/fixture.json` (weekly 404).
 
 **Server**
@@ -357,7 +357,7 @@ Er is geen synchronisatie. Het scherm haalt `/weekly` op elke keer dat het opent
 - `apps/worker/src/notify/notify.ts`: categorie `WEEKLY`.
 
 **Tests**
-- `apps/ios/VerderTests/WeeklyDTOTests.swift`: `decodesTheRouteContract`, `refusesWhatTheContractForbids`, `aMissingFieldIsRefusedNotDefaulted`, `theWindowReadsSundayToSundayInAmsterdam`, `theWindowAcrossTheClockChangeStillReads1800`, `countsAreTheStoredOnesWithSingularForms`, `whatVerderDidOnItsOwnIsStatedPlainly`, `comparedWithNothingInvented`, `theSummaryIsHistoryAndNeverAmber`, `waitingIsSundaysSnapshot`, `everyStateEndsInANextStepAFailureInTwo`, `topWaitingIsAtMostThree`, `endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount`, `theHeaderNamesTheWeekAndItsWindow`, `theStoreReadsTheWeeklyFixture`, `beforeTheFirstSundayItSaysWhenItComes`, `unauthorizedEndsTheSession`, `offlineFailsWithoutAFigure`, `aFailedRefreshKeepsWhatIsShown`, `aWeeklyLinkOpensMeer`, `aTapOnTheWeeklyPushOpensTheSummary`, `theFixtureRouteTakesTheTapsPath`.
+- `apps/ios/GripTests/WeeklyDTOTests.swift`: `decodesTheRouteContract`, `refusesWhatTheContractForbids`, `aMissingFieldIsRefusedNotDefaulted`, `theWindowReadsSundayToSundayInAmsterdam`, `theWindowAcrossTheClockChangeStillReads1800`, `countsAreTheStoredOnesWithSingularForms`, `whatGripDidOnItsOwnIsStatedPlainly`, `comparedWithNothingInvented`, `theSummaryIsHistoryAndNeverAmber`, `waitingIsSundaysSnapshot`, `everyStateEndsInANextStepAFailureInTwo`, `topWaitingIsAtMostThree`, `endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount`, `theHeaderNamesTheWeekAndItsWindow`, `theStoreReadsTheWeeklyFixture`, `beforeTheFirstSundayItSaysWhenItComes`, `unauthorizedEndsTheSession`, `offlineFailsWithoutAFigure`, `aFailedRefreshKeepsWhatIsShown`, `aWeeklyLinkOpensMeer`, `aTapOnTheWeeklyPushOpensTheSummary`, `theFixtureRouteTakesTheTapsPath`.
 - `LinkDestinationTests.swift`, `MoreMenuTests.swift`, `FixtureTests.swift`: routering, de rij in Meer en het fixture-contract.
 - `apps/worker/src/weekly-summary.test.ts`: vensters, laat vastleggen, ketenroots, herstelde verzendingen, opbergovergangen, ontdubbeling, droge run.
 - `packages/api/src/weekly-summary.test.ts`, `apps/web/src/app/api/mobile/v1/weekly/route.test.ts`, `packages/api/src/worker-health.test.ts`.

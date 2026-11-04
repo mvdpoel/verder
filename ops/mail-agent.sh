@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The mail agent, folded into verder (Plan 2 Task 20, spec §6.5). Host crontab,
 # at the OLD agent's cadence so Gmail sees no new load:
-#   7,22,37,52 * * * * /home/<user>/apps/verder/ops/mail-agent.sh >> /mnt/data/verder/mail-agent/cron.log 2>&1
+#   7,22,37,52 * * * * /home/<user>/apps/grip/ops/mail-agent.sh >> /mnt/data/grip/mail-agent/cron.log 2>&1
 #
-# It replaces /mnt/data/verder/mail-agent/run.sh (gwatch.mts + .md drafts).
+# It replaces /mnt/data/grip/mail-agent/run.sh (gwatch.mts + .md drafts).
 # ONE PRODUCER AT A TIME: comment out the old run.sh line when this one goes in.
 #
 # The watchlist senders (Statiegeld Nederland, Bungas, Tikkie, Hanneke) stay OUT
@@ -34,13 +34,13 @@
 # and under 60 s that timeout killed it silently every run. A timeout is written
 # to handled.log as `timed out`, so it is not only visible in agent.log.
 #
-# STATE LIVES OUTSIDE THE REPO (/mnt/data/verder/mail-agent): ~/apps/verder is
+# STATE LIVES OUTSIDE THE REPO (/mnt/data/grip/mail-agent): ~/apps/grip is
 # rsynced with --delete, and anything written in there is erased on the next
 # deploy. Nothing here sends anything, and nothing here reads a token.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-STATE_DIR=${MAIL_AGENT_DIR:-/mnt/data/verder/mail-agent}
+STATE_DIR=${MAIL_AGENT_DIR:-/mnt/data/grip/mail-agent}
 WATCHLIST=${MAIL_AGENT_WATCHLIST:-$STATE_DIR/watchlist.txt}
 SEEN="$STATE_DIR/seen.txt"
 HANDLED="$STATE_DIR/handled.log"

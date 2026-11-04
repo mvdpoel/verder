@@ -45,7 +45,7 @@ Het gebouwde scherm is nu eenvoudiger dan het ontwerp. Het heeft een kop met de 
 
 Een rij direct onder de kopkaart van Dossier. Een tik zet `.timeline` op de Dossier-stack (`DossierTab.timelineRow`). De rij in de code luidt "Tijdlijn" / "De zaak, het nieuwste bovenaan". De rij in het ontwerp zegt wat er op de kaart staat: "4 SPOREN · 14 HALTES · NIEUWSTE 30 OKT".
 
-**Status:** Deels gebouwd — de rij en de push bestaan (`apps/ios/Verder/Dossier/DossierTab.swift`); de tellingenregel ontbreekt. Daarvoor zijn nodig: de tellingen uit de gecachte zaakkaart (de cache van `TimelineStore`) of een telling in `GET /dashboard/summary`, de UI, en een test dat de regel met de kaart klopt.
+**Status:** Deels gebouwd — de rij en de push bestaan (`apps/ios/Grip/Dossier/DossierTab.swift`); de tellingenregel ontbreekt. Daarvoor zijn nodig: de tellingen uit de gecachte zaakkaart (de cache van `TimelineStore`) of een telling in `GET /dashboard/summary`, de UI, en een test dat de regel met de kaart klopt.
 
 #### De kopkaart van Dossier opent de Tijdlijn
 
@@ -59,7 +59,7 @@ In het ontwerp draagt de kaart "WAAR HET NU OP WACHT" op het Dossier-tabblad "OP
 
 Een tik op de kaart "Waar het nu op wacht" van Overzicht opent de Tijdlijn (`HomeTab.headlineCard`, toegankelijkheidshint "Opent de tijdlijn"). De kaart wordt alleen getekend zolang ontgrendeld (`lock.revealsCaseContent`), omdat een haltetitel zaakinhoud is. De halte komt uit `GET /api/mobile/v1/dashboard/summary`, dat de ongefilterde `tracks.map()` aanroept, niet uit de zaakkaartroute.
 
-**Status:** Deels gebouwd — de kaart en de tik bestaan (`apps/ios/Verder/Home/HomeTab.swift`, `apps/ios/Verder/App/RootView.swift`). Ontbreekt: het ontwerp zet de Tijdlijn op de **Overzicht**-stack (terugknop "Overzicht", Overzicht-tabblad blijft geselecteerd), terwijl de code de Dossier-stack op `[.timeline]` zet en naar het Dossier-tabblad wisselt. Zie ook de volgende functie.
+**Status:** Deels gebouwd — de kaart en de tik bestaan (`apps/ios/Grip/Home/HomeTab.swift`, `apps/ios/Grip/App/RootView.swift`). Ontbreekt: het ontwerp zet de Tijdlijn op de **Overzicht**-stack (terugknop "Overzicht", Overzicht-tabblad blijft geselecteerd), terwijl de code de Dossier-stack op `[.timeline]` zet en naar het Dossier-tabblad wisselt. Zie ook de volgende functie.
 
 #### Geopend vanaf Overzicht met het blad van de huidige halte open
 
@@ -77,17 +77,17 @@ Zolang vergrendeld toont Overzicht een teaser in plaats van de kopkaart: "Je vol
 
 ![Overzicht locked (design)](frames/Overzicht_naar_de_tijdlijn_vergrendeld.jpg)
 
-#### Deep link `verder://timeline`
+#### Deep link `grip://timeline`
 
-Opent het Dossier-tabblad met `[.timeline]` op de stack (`DeepLink.timeline`). Alleen de kale link wordt herkend: `verder://timeline/x` en `verder://timeline?schuldeisers=verborgen` worden afgewezen (`LinkDestinationTests`). Geen servercode verstuurt deze link nu, en geen push, widget of snelle actie draagt hem, dus in de praktijk wordt hij vanuit de app zelf bereikt. Niets in het ontwerp of de spec vraagt om een afzender.
+Opent het Dossier-tabblad met `[.timeline]` op de stack (`DeepLink.timeline`). Alleen de kale link wordt herkend: `grip://timeline/x` en `grip://timeline?schuldeisers=verborgen` worden afgewezen (`LinkDestinationTests`). Geen servercode verstuurt deze link nu, en geen push, widget of snelle actie draagt hem, dus in de praktijk wordt hij vanuit de app zelf bereikt. Niets in het ontwerp of de spec vraagt om een afzender.
 
-**Status:** Gebouwd — `apps/ios/Verder/Push/DeepLink.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Push/DeepLink.swift`.
 
 #### Fixture-opnames
 
 `-route timeline` opent het scherm in een fixture-opname (`FixtureLaunch`, `apps/ios/scripts/capture.sh`).
 
-**Status:** Gebouwd — `apps/ios/Verder/Fixtures/FixtureLaunch.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Fixtures/FixtureLaunch.swift`.
 
 ### Naar buiten
 
@@ -97,7 +97,7 @@ Opent het Dossier-tabblad met `[.timeline]` op de stack (`DeepLink.timeline`). A
 - **Een document van een halte** opent `DocumentViewer` op de Dossier-stack. De push gebeurt pas nadat het blad volledig is gesloten (`pending`-route, `onDismiss`).
 - **Terug** keert terug naar de wortel van Dossier.
 
-**Status:** Gebouwd — `apps/ios/Verder/Timeline/TimelineView.swift` (`TimelineScreen`, `TimelineStopSheet`).
+**Status:** Gebouwd — `apps/ios/Grip/Timeline/TimelineView.swift` (`TimelineScreen`, `TimelineStopSheet`).
 
 ## Functies
 
@@ -111,7 +111,7 @@ Opent het Dossier-tabblad met `[.timeline]` op de stack (`DeepLink.timeline`). A
   - bij omlaag trekken om te vernieuwen;
   - telkens wanneer de app naar de voorgrond terugkeert terwijl het scherm open is (`scenePhase == .active`).
 
-**Status:** Gebouwd — `apps/ios/Verder/Timeline/TimelineStore.swift`, `TimelineView.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Timeline/TimelineStore.swift`, `TimelineView.swift`.
 
 #### De serverroute
 
@@ -127,7 +127,7 @@ Opent het Dossier-tabblad met `[.timeline]` op de stack (`DeepLink.timeline`). A
   - `edges`, `rowCount`, `laneCount`, `currentStopId`;
   - `problems` (Nederlandse regels);
   - `hiddenDebtTrackCount` en `debtEpisodesHidden`.
-- **Bewijs reist als link of als tekst.** Bewijslinks zijn app-routes (`verder://task/<id>`, `verder://document/<id>`). Een logboekregel en een e-mail hebben geen scherm op de telefoon, dus die reizen als tekst. Het Gmail-bericht-id en het id van de raw-email-rij verlaten de server nooit.
+- **Bewijs reist als link of als tekst.** Bewijslinks zijn app-routes (`grip://task/<id>`, `grip://document/<id>`). Een logboekregel en een e-mail hebben geen scherm op de telefoon, dus die reizen als tekst. Het Gmail-bericht-id en het id van de raw-email-rij verlaten de server nooit.
 
 **Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/case-map/route.ts`, `apps/web/src/lib/mobile-case-map.ts`, `apps/web/src/lib/mobile-route.ts`.
 
@@ -143,7 +143,7 @@ Het ontwerp geeft het scherm de titel "Tijdlijn" (bovenregel "DE ZAAK") met éé
 
 Onder de titel, zolang er een kaart getoond wordt, de leeftijd van wat er op het scherm staat: "bijgewerkt 14:02" vandaag, of met de datum op een eerdere dag. Offline krijgt hij het voorvoegsel "offline · " (`DossierCopy.freshness`, Amsterdamse klok). Het ontwerp formuleert het als "OFFLINE · TIJDLIJN VAN 09:20", met het offline-symbool ervoor, en zet het op de plek van de tellingenregel.
 
-**Status:** Deels gebouwd — de leeftijd en het offline-voorvoegsel bestaan (`TimelineView.swift`, `apps/ios/Verder/Dossier/DossierModel.swift`). Ontbreekt: de formulering van het ontwerp ("tijdlijn van …") en het offline-symbool.
+**Status:** Deels gebouwd — de leeftijd en het offline-voorvoegsel bestaan (`TimelineView.swift`, `apps/ios/Grip/Dossier/DossierModel.swift`). Ontbreekt: de formulering van het ontwerp ("tijdlijn van …") en het offline-symbool.
 
 #### Inklappende titel
 
@@ -179,7 +179,7 @@ In het ontwerp is de huidige halte geen kaart boven de kaart: het is de eerste h
 
 `TimelineLayout` neemt de DTO en geeft rijen terug. De weergave tekent ze één op één en beslist niets.
 
-**Status:** Gebouwd — `apps/ios/Verder/Timeline/TimelineLayout.swift`.
+**Status:** Gebouwd — `apps/ios/Grip/Timeline/TimelineLayout.swift`.
 
 #### Maandbanden, stille maanden inbegrepen
 
@@ -393,7 +393,7 @@ Het ontwerp noemt wat een document is: "DOCUMENT · LOONSTROOK", "DOCUMENT · BR
 
 Elk document zegt waar het zal openen: "OPENT IN DOSSIER" online, "OP JE TELEFOON" wanneer het zakdossier het heeft, "OPENT MET VERBINDING" offline wanneer dat niet zo is. Een document dat niet kan openen is geen link, en eronder zegt het blad dat: "Polis Duinzorg 2026 staat niet op je telefoon. Hij opent zodra je weer verbinding hebt." Offline luidt de datumregel van het blad "OFFLINE · VAN 09:20". Nu opent een document dat de telefoon niet heeft offline de viewer en mislukt het pas daar met "Dit document staat nog niet op je telefoon, en er is geen verbinding."
 
-**Status:** Nog te bouwen — UI die `DossierStore.fileURL(_:)` leest (bestaat al, `apps/ios/Verder/Dossier/DossierStore.swift`) en de offline-staat van de store; de melding; een test dat een document dat de telefoon niet heeft offline niet aantikbaar is.
+**Status:** Nog te bouwen — UI die `DossierStore.fileURL(_:)` leest (bestaat al, `apps/ios/Grip/Dossier/DossierStore.swift`) en de offline-staat van de store; de melding; een test dat een document dat de telefoon niet heeft offline niet aantikbaar is.
 
 ![The same sheet offline (design)](frames/Tijdlijn_halte_geopend_offline.jpg)
 
@@ -475,7 +475,7 @@ De store roept `auth.sessionRejected()` aan. De sessie eindigt, het inlogscherm 
 
 De Tijdlijn staat op de Dossier-stack, die achter de vergrendeling zit. Zolang vergrendeld bestaat de inhoud helemaal niet. `LockView` vervangt haar, het is geen overlay, dus er laadt niets en er bereikt niets VoiceOver achter de vergrendeling.
 
-**Status:** Gebouwd — de vergrendelpoort van Dossier (`apps/ios/Verder/App/RootView.swift`). Als de Tijdlijn naar de Overzicht-stack verhuist (zie hierboven), moet hij daar achter dezelfde poort blijven, omdat Overzicht zelf open is zolang vergrendeld.
+**Status:** Gebouwd — de vergrendelpoort van Dossier (`apps/ios/Grip/App/RootView.swift`). Als de Tijdlijn naar de Overzicht-stack verhuist (zie hierboven), moet hij daar achter dezelfde poort blijven, omdat Overzicht zelf open is zolang vergrendeld.
 
 #### Grote tekst
 
@@ -509,7 +509,7 @@ De lat uit de brief: een eerste betekenisvol beeld (gecachte kaart of skelet) bi
 
 De Tijdlijn zit achter de vergrendeling van Dossier en opent pas na Face ID. Face ID wordt één keer gevraagd bij openen of heropenen, niet per scherm. Overzicht is open zolang vergrendeld, maar toont alleen tellingen en geld, dus de kopkaart, de ingang, wordt pas na ontgrendelen getekend. Niets op het vergrendelscherm of in widgets komt van dit scherm: de regel "waar het nu op wacht" van de widget komt uit de snapshot van de dashboardsamenvatting, niet uit de zaakkaart (zie `../02-overzicht/FEATURES.md`).
 
-**Status:** Gebouwd — `apps/ios/Verder/App/RootView.swift`, `HomeTab.headlineCard` (`lock.revealsCaseContent`).
+**Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift`, `HomeTab.headlineCard` (`lock.revealsCaseContent`).
 
 #### Wat er op de telefoon wordt bewaard
 
@@ -543,7 +543,7 @@ De haptiekkaart van de brief noemt geen moment op dit scherm: er wordt hier niet
 
 #### Geen melding opent het
 
-Geen push, widget of snelle actie verstuurt `verder://timeline`, en noch het ontwerp noch de spec vraagt erom. Een halte wordt bereikt via de tellingen die ernaar wijzen (Overzicht, Dossier, Voor jou).
+Geen push, widget of snelle actie verstuurt `grip://timeline`, en noch het ontwerp noch de spec vraagt erom. Een halte wordt bereikt via de tellingen die ernaar wijzen (Overzicht, Dossier, Voor jou).
 
 **Status:** Gebouwd — bewust zo; de link bestaat (`DeepLink.swift`) voor wanneer er een afzender gewenst is.
 
@@ -566,13 +566,13 @@ Geen push, widget of snelle actie verstuurt `verder://timeline`, en noch het ont
 
 **iOS (`apps/ios/`):**
 
-- `Verder/Timeline/TimelineView.swift`: `TimelineScreen` (kop, staten, kopkaart, legenda, problemen), `TimelineMap`, `RailGutter` (het tekenen) en `TimelineStopSheet`.
-- `Verder/Timeline/TimelineLayout.swift`: `TimelineCopy` (elke tekst) en de pure `TimelineLayout` (items, banen, rails, bogen, omwegen, kappen, markeringen).
-- `Verder/Timeline/TimelineStore.swift`: `TimelineStore` (ophalen, schermstaat, filter, sessie-epoch) en `TimelineCache`.
-- `Verder/Timeline/CaseMapDTO.swift`: het draadformaat.
-- `Verder/Dossier/DossierTab.swift` (de Tijdlijn-rij, de route `.timeline`, de kopkaart), `Verder/Dossier/DossierModel.swift` (`DossierRoute.timeline`, `DossierCopy.freshness`), `Verder/Dossier/DossierStore.swift` (`fileURL(_:)`, dat de offline beschikbaarheid per document gaat lezen).
-- `Verder/Home/HomeTab.swift` (kopkaart, `openTimeline`), `Verder/App/RootView.swift` (tabbladwissel), `Verder/App/VerderApp.swift`, `Verder/App/AppServices.swift` (store en cachemap).
-- `Verder/Push/DeepLink.swift` (`verder://timeline`), `Verder/Fixtures/FixtureLaunch.swift` (`-route timeline`), `Verder/FixtureData/timeline/fixture.json`, `Verder/FixtureData/_shared/case-map.json`, `Verder/FixtureData/_shared/case-map~schuldeisers=verborgen.json`, `Verder/FixtureData/empty/case-map.json`.
+- `Grip/Timeline/TimelineView.swift`: `TimelineScreen` (kop, staten, kopkaart, legenda, problemen), `TimelineMap`, `RailGutter` (het tekenen) en `TimelineStopSheet`.
+- `Grip/Timeline/TimelineLayout.swift`: `TimelineCopy` (elke tekst) en de pure `TimelineLayout` (items, banen, rails, bogen, omwegen, kappen, markeringen).
+- `Grip/Timeline/TimelineStore.swift`: `TimelineStore` (ophalen, schermstaat, filter, sessie-epoch) en `TimelineCache`.
+- `Grip/Timeline/CaseMapDTO.swift`: het draadformaat.
+- `Grip/Dossier/DossierTab.swift` (de Tijdlijn-rij, de route `.timeline`, de kopkaart), `Grip/Dossier/DossierModel.swift` (`DossierRoute.timeline`, `DossierCopy.freshness`), `Grip/Dossier/DossierStore.swift` (`fileURL(_:)`, dat de offline beschikbaarheid per document gaat lezen).
+- `Grip/Home/HomeTab.swift` (kopkaart, `openTimeline`), `Grip/App/RootView.swift` (tabbladwissel), `Grip/App/GripApp.swift`, `Grip/App/AppServices.swift` (store en cachemap).
+- `Grip/Push/DeepLink.swift` (`grip://timeline`), `Grip/Fixtures/FixtureLaunch.swift` (`-route timeline`), `Grip/FixtureData/timeline/fixture.json`, `Grip/FixtureData/_shared/case-map.json`, `Grip/FixtureData/_shared/case-map~schuldeisers=verborgen.json`, `Grip/FixtureData/empty/case-map.json`.
 
 **Server:**
 
@@ -584,9 +584,9 @@ Geen push, widget of snelle actie verstuurt `verder://timeline`, en noch het ont
 
 **Tests:**
 
-- `apps/ios/VerderTests/TimelineLayoutTests.swift` (bandvolgorde, baanafstand bij 4–8 banen, aftakkingen, samenkomsten, omgeleide omwegen, amber alleen op open haltes, kappen bij geëindigd, titels nooit afgekapt, de fixture wordt zonder gaten opgemaakt).
-- `apps/ios/VerderTests/TimelineStoreTests.swift` (cache met volledige bescherming, offline met leeftijd, niets gecacht, fouten, 401, het filter apart gecacht, het einde van de sessie wist kaart en cache, late antwoorden weggegooid).
-- `apps/ios/VerderTests/LinkDestinationTests.swift`, `apps/ios/VerderTests/FixtureTests.swift`, en de door de builder gemaakte opmaakfixtures `apps/ios/VerderTests/Fixtures/case-map-concurrent.json` en `case-map-lane-shared-*.json`.
+- `apps/ios/GripTests/TimelineLayoutTests.swift` (bandvolgorde, baanafstand bij 4–8 banen, aftakkingen, samenkomsten, omgeleide omwegen, amber alleen op open haltes, kappen bij geëindigd, titels nooit afgekapt, de fixture wordt zonder gaten opgemaakt).
+- `apps/ios/GripTests/TimelineStoreTests.swift` (cache met volledige bescherming, offline met leeftijd, niets gecacht, fouten, 401, het filter apart gecacht, het einde van de sessie wist kaart en cache, late antwoorden weggegooid).
+- `apps/ios/GripTests/LinkDestinationTests.swift`, `apps/ios/GripTests/FixtureTests.swift`, en de door de builder gemaakte opmaakfixtures `apps/ios/GripTests/Fixtures/case-map-concurrent.json` en `case-map-lane-shared-*.json`.
 - `apps/web/src/app/api/mobile/v1/case-map/route.test.ts` (401 vóór elke routeraanroep, `no-store`, het filter, met de hand gevormde DTO).
 - `apps/web/src/lib/mobile-case-map.test.ts`, `apps/web/src/lib/mobile-case-map.fixture.test.ts` (de fixture-JSON is de echte DTO over de synthetische zaak; gelijktijdige sporen en sporen die een baan delen).
 

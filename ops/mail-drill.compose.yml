@@ -8,7 +8,7 @@
 # It is an overlay for one reason. The drill's assertions run inside the WORKER
 # image (`compose run --rm worker pnpm --filter worker mail-drill`), so the
 # restored server has to be reachable by NAME from a container on the production
-# project's network — `verder_default`. A separate project would get its own
+# project's network — `grip_default`. A separate project would get its own
 # network, `stalwart-drill` would not resolve, and the drill would fail as a DNS
 # error rather than as a restore result. The same lesson ops/mail-backup.sh
 # already records for the weekly Vandelay pull: on the HOST the name does not
@@ -82,7 +82,7 @@ services:
       # fail (see the `:?` note above) and so that a hand-run `up -d
       # stalwart-drill` with nothing exported still cannot touch production.
       # They deliberately live under the drill scratch root and share NOTHING
-      # with /mnt/data/verder/stalwart/{etc,data,blobs}.
+      # with /mnt/data/grip/stalwart/{etc,data,blobs}.
       #
       # `create_host_path: false` on all three, exactly as production does, and
       # here it is the guard that matters most: without it a typo'd or unset
@@ -98,25 +98,25 @@ services:
       # because the image runs as uid 2000 and cannot read a store owned by the
       # cron user.
       - type: bind
-        source: "${MAIL_DRILL_ETC_DIR:-/mnt/data/verder/mail-drill-tmp/store/etc}"
+        source: "${MAIL_DRILL_ETC_DIR:-/mnt/data/grip/mail-drill-tmp/store/etc}"
         target: /etc/stalwart
         bind: { create_host_path: false }
       - type: bind
-        source: "${MAIL_DRILL_DATA_DIR:-/mnt/data/verder/mail-drill-tmp/store/data}"
+        source: "${MAIL_DRILL_DATA_DIR:-/mnt/data/grip/mail-drill-tmp/store/data}"
         target: /var/lib/stalwart
         bind: { create_host_path: false }
       # Nested inside the mount above; Docker mounts by destination depth, so the
       # parent lands first. Mirrors production so a restore is laid out the way
       # the store expects to find itself.
       - type: bind
-        source: "${MAIL_DRILL_BLOB_DIR:-/mnt/data/verder/mail-drill-tmp/store/blobs}"
+        source: "${MAIL_DRILL_BLOB_DIR:-/mnt/data/grip/mail-drill-tmp/store/blobs}"
         target: /var/lib/stalwart/blobs
         bind: { create_host_path: false }
     # OUTBOUND IS A SEPARATE QUESTION FROM THE ONE BELOW, AND IT IS OPEN.
     # `NO ports:` closes INBOUND completely — nothing outside the host can reach
     # this server and no MX points at it. It says nothing about the server
     # DELIVERING: the restored registry is production's, byte for byte, under
-    # production's identity, and this container sits on `verder_default` with
+    # production's identity, and this container sits on `grip_default` with
     # ordinary internet egress. A Stalwart opening a store whose outbound queue is
     # non-empty, or which owes DMARC/TLS aggregate reports, would try to send them
     # — once a month, as production.
