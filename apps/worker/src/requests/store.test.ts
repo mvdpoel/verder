@@ -166,8 +166,8 @@ describe("storeAnswer", () => {
       expect(row).toMatchObject({ status: "answered", answer: "Je betaalt € 10 per maand.", martinSteps: ["Zeg de machtiging op via je bank"],
         sources: [{ type: "document", id: d.id, why: "de brief", label: d.title }], model: "claude-cli 2.1", proposalId: null });
       expect(row.answeredAt).toBeInstanceOf(Date);
-      expect(n.sent).toEqual([expect.objectContaining({ kind: "request", title: "Grip heeft je vraag uitgezocht",
-        body: "Tik om het antwoord te lezen.", link: `grip://request/${r.id}` })]);
+      expect(n.sent).toEqual([expect.objectContaining({ kind: "proposal", title: "Grip heeft je vraag uitgezocht",
+        body: "Tik om het antwoord te lezen.", link: "grip://inbox", dedupKey: `request:${r.id}` })]);
       expect(JSON.stringify(n.sent)).not.toMatch(/€|donatie|UNHCR/);
       const runs = await db.select().from(schema.workerRuns).where(eq(schema.workerRuns.worker, REQUEST_RUNNER_WORKER_NAME));
       expect(runs.find((x) => (x.detail as { requestId?: string } | null)?.requestId === r.id))

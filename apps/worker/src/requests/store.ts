@@ -355,10 +355,23 @@ export async function storeAnswer(deps: StoreDeps, input: { id: string; model: s
 
   // After the commit: the answer is stored whatever happens to the push. No
   // case content on the lock screen — the question itself can name a creditor.
+  // The link is Voor jou, where the answered request is listed at the top:
+  // the phone's DeepLink does not parse a request link yet (LinkDestinationTests
+  // pins that every link the worker sends lands somewhere), and `grip://inbox`
+  // lands on every installed build. The phone half switches it to its own
+  // `grip://request/<id>` once DeepLink knows it.
+  //
+  // KIND `proposal` (category PROPOSAL, "Bekijken" behind Face ID) rather than
+  // a kind of its own, for the same reason: NotificationCategoriesTests on the
+  // phone pins the worker's CATEGORY map to the categories the installed app
+  // registers, and a category the app never registered shows without its
+  // hidden-preview text. An answer is something Grip prepared for Martin to
+  // read, which is what PROPOSAL already means on the lock screen. A `REQUEST`
+  // category arrives with the phone half, in both places at once.
   if (result.outcome === "answered") {
     try {
-      await deps.notify({ kind: "request", level: "active", title: "Grip heeft je vraag uitgezocht",
-        body: "Tik om het antwoord te lezen.", link: `grip://request/${input.id}`, dedupKey: `request:${input.id}`,
+      await deps.notify({ kind: "proposal", level: "active", title: "Grip heeft je vraag uitgezocht",
+        body: "Tik om het antwoord te lezen.", link: "grip://inbox", dedupKey: `request:${input.id}`,
         threadId: `request:${input.id}`, collapseId: `request:${input.id}` });
     } catch (err) { console.error(`requests-store: notify failed: ${String(err)}`); }
   }

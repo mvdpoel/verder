@@ -407,7 +407,7 @@ describe("notify", () => {
     expect(CATEGORY).toEqual({
       "verder-mail": "VERDER_MAIL", "creditor-mail": "CREDITOR_MAIL", proposal: "PROPOSAL",
       reminder: "REMINDER", "follow-up": "FOLLOW_UP", "task-due": "TASK_DUE",
-      filing: "FILING", system: "SYSTEM", weekly: "WEEKLY", request: "REQUEST",
+      filing: "FILING", system: "SYSTEM", weekly: "WEEKLY",
     });
   });
 });
