@@ -1,0 +1,97 @@
+{
+  "requests": [
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000006",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a56",
+      "text": "En moet ik die incasso stoppen nu Noordkust mijn rekening beheert?",
+      "status": "answered",
+      "parentRequestId": "00000000-f1c5-4000-8000-a00000000004",
+      "createdAt": "2026-11-04T10:05:00.000Z",
+      "claimedAt": "2026-11-04T10:06:00.000Z",
+      "answeredAt": "2026-11-04T10:08:00.000Z",
+      "openedAt": null,
+      "unread": true,
+      "progressLine": null,
+      "failure": null,
+      "proposal": null
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000001",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a51",
+      "text": "Kun je uitzoeken wat Gemeente Westerlaan nog nodig heeft voor de bijzondere bijstand?",
+      "status": "queued",
+      "parentRequestId": null,
+      "createdAt": "2026-11-04T10:02:00.000Z",
+      "claimedAt": null,
+      "answeredAt": null,
+      "openedAt": null,
+      "unread": false,
+      "progressLine": null,
+      "failure": null,
+      "proposal": null
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000002",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a52",
+      "text": "Welke loonstroken heeft Team Startdossier al van me gekregen?",
+      "status": "working",
+      "parentRequestId": null,
+      "createdAt": "2026-11-04T09:58:00.000Z",
+      "claimedAt": "2026-11-04T09:59:00.000Z",
+      "answeredAt": null,
+      "openedAt": null,
+      "unread": false,
+      "progressLine": "leest 2 documenten, bekijkt de bankafschriften",
+      "failure": null,
+      "proposal": null
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000003",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a53",
+      "text": "Ilse vraagt om mijn loonstrook van oktober. Kun je een antwoord klaarzetten?",
+      "status": "answered",
+      "parentRequestId": null,
+      "createdAt": "2026-11-04T09:50:00.000Z",
+      "claimedAt": "2026-11-04T09:51:00.000Z",
+      "answeredAt": "2026-11-04T09:54:00.000Z",
+      "openedAt": null,
+      "unread": true,
+      "progressLine": null,
+      "failure": null,
+      "proposal": {
+        "id": "00000000-f1c5-4000-8000-000000000001",
+        "status": "pending"
+      }
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000004",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a54",
+      "text": "Loopt er nog een incasso van Stroomnet Energie?",
+      "status": "answered",
+      "parentRequestId": null,
+      "createdAt": "2026-11-04T09:40:00.000Z",
+      "claimedAt": "2026-11-04T09:41:00.000Z",
+      "answeredAt": "2026-11-04T09:44:00.000Z",
+      "openedAt": "2026-11-04T09:50:00.000Z",
+      "unread": false,
+      "progressLine": null,
+      "failure": null,
+      "proposal": null
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000005",
+      "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a55",
+      "text": "Zoek de polis van Duinzorg en kijk of de premie al is aangepast.",
+      "status": "failed",
+      "parentRequestId": null,
+      "createdAt": "2026-11-03T20:10:00.000Z",
+      "claimedAt": "2026-11-03T20:11:00.000Z",
+      "answeredAt": null,
+      "openedAt": null,
+      "unread": false,
+      "progressLine": null,
+      "failure": "Duurde te lang",
+      "proposal": null
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "00000000-f1c5-4000-8000-a00000000006",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a56",
+  "text": "En moet ik die incasso stoppen nu Noordkust mijn rekening beheert?",
+  "status": "answered",
+  "parentRequestId": "00000000-f1c5-4000-8000-a00000000004",
+  "createdAt": "2026-11-04T10:05:00.000Z",
+  "claimedAt": "2026-11-04T10:06:00.000Z",
+  "answeredAt": "2026-11-04T10:08:00.000Z",
+  "openedAt": null,
+  "unread": true,
+  "progressLine": null,
+  "failure": null,
+  "proposal": null,
+  "about": null,
+  "answer": "Nee, laat hem lopen. De stroom is een vaste last die Noordkust vanaf de beheerrekening betaalt. Vraag Ilse wel of ze de incasso op de beheerrekening overneemt, dan gaat er niets mis bij de overstap.",
+  "sources": [
+    {
+      "type": "transaction",
+      "id": "00000000-f1c5-4000-8000-700000000002",
+      "why": "De incasso van 3 november.",
+      "label": "Stroomnet Energie · -€ 42,50"
+    }
+  ],
+  "martinSteps": [
+    "Vraag Ilse of Noordkust de incasso van Stroomnet overneemt"
+  ],
+  "progress": null,
+  "thread": [
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000004",
+      "text": "Loopt er nog een incasso van Stroomnet Energie?",
+      "status": "answered",
+      "createdAt": "2026-11-04T09:40:00.000Z",
+      "answer": "Ja, er loopt nog een incasso. Stroomnet Energie schreef op 1 oktober en op 3 november elk € 42,50 af van je rekening.\n\nDe vordering van Kade & Partners namens Stroomnet staat los daarvan: die gaat over de oude jaarafrekening. Je hoeft voor de lopende incasso dus niets aan Kade te sturen."
+    }
+  ],
+  "followUps": []
+}

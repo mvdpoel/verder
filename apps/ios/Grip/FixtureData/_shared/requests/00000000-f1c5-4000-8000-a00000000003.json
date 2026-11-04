@@ -1,0 +1,48 @@
+{
+  "id": "00000000-f1c5-4000-8000-a00000000003",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a53",
+  "text": "Ilse vraagt om mijn loonstrook van oktober. Kun je een antwoord klaarzetten?",
+  "status": "answered",
+  "parentRequestId": null,
+  "createdAt": "2026-11-04T09:50:00.000Z",
+  "claimedAt": "2026-11-04T09:51:00.000Z",
+  "answeredAt": "2026-11-04T09:54:00.000Z",
+  "openedAt": null,
+  "unread": true,
+  "progressLine": null,
+  "failure": null,
+  "proposal": {
+    "id": "00000000-f1c5-4000-8000-000000000001",
+    "status": "pending",
+    "kind": "reply",
+    "to": [
+      "ilse@noordkust.example"
+    ],
+    "subject": "Re: Loonstrook oktober",
+    "attachmentCount": 1
+  },
+  "about": {
+    "type": "mail",
+    "id": "00000000-f1c5-4000-8000-400000000201",
+    "label": "Loonstrook oktober"
+  },
+  "answer": "Ik heb de loonstrook van oktober gevonden en een antwoord aan Ilse klaargezet, met de loonstrook als bijlage. Lees het even na; versturen doe jij.",
+  "sources": [
+    {
+      "type": "mail",
+      "id": "00000000-f1c5-4000-8000-400000000201",
+      "why": "Ilse vraagt om de loonstrook van oktober.",
+      "label": "Loonstrook oktober"
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "why": "De gevraagde loonstrook.",
+      "label": "Loonstrook 2026-10"
+    }
+  ],
+  "martinSteps": [],
+  "progress": null,
+  "thread": [],
+  "followUps": []
+}
