@@ -1,0 +1,75 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000a2",
+  "kind": "follow-up",
+  "status": "pending",
+  "priority": "verder",
+  "ask": "Nog geen antwoord van Ilse op je vraag om een kopie van de beschikking",
+  "partyName": "Bewindkantoor Noordkust",
+  "triggerAt": "2026-10-07T09:02:00.000Z",
+  "createdAt": "2026-11-02T08:20:00.000Z",
+  "trigger": {
+    "type": "proposal",
+    "id": "00000000-f1c5-4000-8000-0000000000b1",
+    "from": "verder",
+    "subject": "Kopie beschikking",
+    "date": "2026-10-07T09:02:00.000Z",
+    "excerpt": "Beste Ilse, kunt u mij een kopie van de beschikking van de rechtbank sturen?"
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": "Herinnering gestuurd aan Noordkust over de kopie van de beschikking.",
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [
+    {
+      "type": "proposal",
+      "id": "00000000-f1c5-4000-8000-0000000000b1",
+      "label": "Kopie beschikking (7 okt)",
+      "why": "Je eerdere vraag."
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000108",
+      "label": "Beschikking Rechtbank Westerlaan",
+      "why": "Wat er gevraagd is."
+    },
+    {
+      "type": "stop",
+      "id": "00000000-f1c5-4000-8000-500000000301",
+      "label": "Stukken aanleveren bij Team Startdossier",
+      "why": "Dit is wat er nu openstaat."
+    }
+  ],
+  "payload": {
+    "entrySummary": "Herinnering gestuurd aan Noordkust over de kopie van de beschikking.",
+    "reply": {
+      "to": [
+        "ilse@noordkust.example"
+      ],
+      "cc": [],
+      "subject": "Re: Kopie beschikking",
+      "body": "Beste Ilse,\n\nOp 7 oktober vroeg ik u om een kopie van de beschikking van de rechtbank. Kunt u laten weten wanneer ik die kan verwachten?\n\nMet vriendelijke groet,\n",
+      "attachmentDocumentIds": []
+    },
+    "question": null
+  },
+  "revision": 2,
+  "attachments": [],
+  "attachable": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook.2026-09.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000107",
+      "title": "Polis Duinzorg 2026.pdf"
+    }
+  ],
+  "options": [],
+  "error": null
+}

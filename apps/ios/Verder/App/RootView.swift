@@ -246,6 +246,7 @@ struct RootView: View {
                            onUnauthorized: { auth.sessionRejected() }, now: now)
                     .lockGated(by: lock)
                     .environment(\.lockedTarget, lockedTarget?.tab == .voorJou ? lockedTarget : nil)
+                    .environment(\.networkOffline, uploads.isOffline)
             }
             Tab("Scan", image: ScanGlyph.tabAsset, value: TabID.scan) {
                 // NOT gated: plan Task 7 step 3.

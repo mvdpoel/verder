@@ -118,7 +118,7 @@ struct VoorJouTab: View {
     @ViewBuilder private func destination(_ route: InboxRoute) -> some View {
         switch route {
         case .proposal(let id):
-            ProposalScreen(id: id, client: client, gate: gate, onUnauthorized: onUnauthorized)
+            ProposalScreen(id: id, client: client, gate: gate, onUnauthorized: onUnauthorized, now: now)
         case .suggestion(let id):
             SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized)
         case .task(let id):

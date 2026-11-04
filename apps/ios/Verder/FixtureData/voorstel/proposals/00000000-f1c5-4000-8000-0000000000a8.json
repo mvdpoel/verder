@@ -1,0 +1,131 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000a8",
+  "kind": "reply",
+  "status": "pending",
+  "priority": "verder",
+  "ask": "Ilse vraagt om aanvullende stukken voor je aanvraag bijzondere bijstand en een kopie van de beschikking",
+  "partyName": "Bewindkantoor Noordkust",
+  "triggerAt": "2026-11-02T08:14:00.000Z",
+  "createdAt": "2026-11-02T08:20:00.000Z",
+  "trigger": {
+    "type": "email",
+    "id": "00000000-f1c5-4000-8000-400000000201",
+    "from": "Ilse <ilse@noordkust.example>",
+    "subject": "Aanvullende stukken voor de aanvraag bijzondere bijstand en een kopie van de beschikking",
+    "date": "2026-11-02T08:14:00.000Z",
+    "excerpt": "Wil je de loonstrook van oktober sturen? Dan kunnen we het leefgeld voor november vaststellen."
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": "Loonstrook oktober gestuurd aan Noordkust.",
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [
+    {
+      "type": "email",
+      "id": "00000000-f1c5-4000-8000-400000000201",
+      "label": "2 nov · Ilse <ilse@noordkust.example> — Loonstrook oktober",
+      "why": "De vraag waarop dit antwoordt."
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "label": "Loonstrook 2026-10",
+      "why": "De gevraagde loonstrook."
+    },
+    {
+      "type": "stop",
+      "id": "00000000-f1c5-4000-8000-500000000301",
+      "label": "Stukken aanleveren bij Team Startdossier",
+      "why": "Dit is wat er nu openstaat."
+    }
+  ],
+  "payload": {
+    "entrySummary": "Loonstrook oktober gestuurd aan Noordkust.",
+    "reply": {
+      "to": [
+        "ilse@noordkust.example"
+      ],
+      "cc": [],
+      "subject": "Re: Aanvullende stukken voor de aanvraag bijzondere bijstand en een kopie van de beschikking",
+      "body": "Beste Ilse,\n\nHierbij ontvangt u mijn loonstrook van oktober, zoals gevraagd.\n\nMet vriendelijke groet,\n",
+      "attachmentDocumentIds": [
+        "00000000-f1c5-4000-8000-200000000104",
+        "00000000-f1c5-4000-8000-200000000105",
+        "00000000-f1c5-4000-8000-200000000107",
+        "00000000-f1c5-4000-8000-200000000109",
+        "00000000-f1c5-4000-8000-200000000101",
+        "00000000-f1c5-4000-8000-200000000108"
+      ]
+    },
+    "question": null
+  },
+  "revision": 2,
+  "attachments": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf",
+      "sizeBytes": 184320,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook.2026-09.pdf",
+      "sizeBytes": 179200,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000107",
+      "title": "Polis Duinzorg 2026.pdf",
+      "sizeBytes": 412000,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000109",
+      "title": "Huurcontract Lindehof.pdf",
+      "sizeBytes": 1100000,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000101",
+      "title": "Afschrift september.pdf",
+      "sizeBytes": 1700000,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000108",
+      "title": "Beschikking Rechtbank Westerlaan 2026.pdf",
+      "sizeBytes": 640000,
+      "unavailable": false
+    }
+  ],
+  "attachable": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook.2026-09.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000107",
+      "title": "Polis Duinzorg 2026.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000109",
+      "title": "Huurcontract Lindehof.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000101",
+      "title": "Afschrift september.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000108",
+      "title": "Beschikking Rechtbank Westerlaan 2026.pdf"
+    }
+  ],
+  "options": [],
+  "error": null
+}

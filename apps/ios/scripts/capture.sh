@@ -7,6 +7,7 @@
 #                      [--timeline <state[,state…]>] [--tap <label>]
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
+#                      [--proposal <state>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
@@ -69,6 +70,11 @@
 #            ongedaan | scroll:<row key|done|more>[@<y>], comma-separated
 #            (@<y>: the row's point y — 0 top, 1 bottom — on the same point
 #            of the visible list; without it the row's top is at the top)
+#   --proposal  the proposal screen (route proposal:<id>) in a state only a
+#            gesture reaches: hold faceid afgebroken aangepast editor typen
+#            weggooien afwijzen. On a proposal route, --scroll rest puts the
+#            trigger card at the top (the frames' "scrolled" position),
+#            middle the attachments and end the end
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does
@@ -104,7 +110,7 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -175,6 +181,11 @@ while [ $# -gt 0 ]; do
       done
       VOORJOU="$2"
       shift ;;
+    --proposal)
+      [ $# -ge 2 ] || usage
+      case "$2" in hold|faceid|afgebroken|aangepast|editor|typen|weggooien|afwijzen) PROPOSAL="$2" ;;
+        *) echo "capture.sh: --proposal takes hold, faceid, afgebroken, aangepast, editor, typen, weggooien or afwijzen" >&2; exit 2 ;; esac
+      shift ;;
     --swipe)
       [ $# -ge 2 ] || usage
       case "$2" in ?*:left|?*:right) SWIPE="$2" ;; *) echo "capture.sh: --swipe takes <text>:left or <text>:right" >&2; exit 2 ;; esac
@@ -244,6 +255,7 @@ fi
 [ -z "$MORE" ] || ARGS+=(-fixtures-more "$MORE")
 [ -z "$TIMELINE" ] || ARGS+=(-fixtures-timeline "$TIMELINE")
 [ -z "$VOORJOU" ] || ARGS+=(-fixtures-voorjou "$VOORJOU")
+[ -z "$PROPOSAL" ] || ARGS+=(-fixtures-proposal "$PROPOSAL")
 [ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
 [ -z "$COVER" ] || ARGS+=(-fixtures-cover)
 [ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)

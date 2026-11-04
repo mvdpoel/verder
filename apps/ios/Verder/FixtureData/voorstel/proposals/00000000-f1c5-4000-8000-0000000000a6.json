@@ -1,0 +1,63 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000a6",
+  "kind": "reply",
+  "status": "drafting",
+  "priority": "verder",
+  "ask": "Ilse vraagt om je loonstrook van oktober",
+  "partyName": "Bewindkantoor Noordkust",
+  "triggerAt": "2026-11-02T08:14:00.000Z",
+  "createdAt": "2026-11-02T08:41:00.000Z",
+  "trigger": {
+    "type": "email",
+    "id": "00000000-f1c5-4000-8000-400000000201",
+    "from": "Ilse <ilse@noordkust.example>",
+    "subject": "Loonstrook oktober",
+    "date": "2026-11-02T08:14:00.000Z",
+    "excerpt": "Wil je de loonstrook van oktober sturen? Dan kunnen we het leefgeld voor november vaststellen."
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": null,
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [
+    {
+      "type": "email",
+      "id": "00000000-f1c5-4000-8000-400000000201",
+      "label": "2 nov · Ilse <ilse@noordkust.example> — Loonstrook oktober",
+      "why": "De vraag waarop dit antwoordt."
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "label": "Loonstrook 2026-10",
+      "why": "De gevraagde loonstrook."
+    },
+    {
+      "type": "stop",
+      "id": "00000000-f1c5-4000-8000-500000000301",
+      "label": "Stukken aanleveren bij Team Startdossier",
+      "why": "Dit is wat er nu openstaat."
+    }
+  ],
+  "payload": null,
+  "revision": 1,
+  "attachments": [],
+  "attachable": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook.2026-10.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000105",
+      "title": "Loonstrook.2026-09.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000107",
+      "title": "Polis Duinzorg 2026.pdf"
+    }
+  ],
+  "options": [],
+  "error": null
+}

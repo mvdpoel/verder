@@ -2,19 +2,19 @@
 
 ## Stand van de bouw
 
-Geteld op branch `feat/iphone-app`, 2026-11-03, door de code te lezen (niet door aan te nemen). Dit document beschrijft de VOLLEDIGE functieset van het scherm: wat vandaag werkt, plus alles wat de definitieve frames, de spec (`2026-10-28-iphone-app-design.md` §6.5, §7.2, §12) en de designbrief (`2026-11-01-iphone-design-brief.md` §2.4–2.7 en de §3-rijen "Proposal detail" en "Notifications") vastleggen. Elke functie heeft één statusregel.
+Geteld op branch `feat/iphone-app`, 2026-11-04 (na de bouw van de definitieve frames: vasthouden, editor-sheet, ⋯-menu, vaste afwijsredenen, leesdrempel, offline vooraf, Face ID-balk, de besloten toestanden), door de code te lezen (niet door aan te nemen). Dit document beschrijft de VOLLEDIGE functieset van het scherm: wat vandaag werkt, plus alles wat de definitieve frames, de spec (`2026-10-28-iphone-app-design.md` §6.5, §7.2, §12) en de designbrief (`2026-11-01-iphone-design-brief.md` §2.4–2.7 en de §3-rijen "Proposal detail" en "Notifications") vastleggen. Elke functie heeft één statusregel.
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 22 |
-| Deels gebouwd | 11 |
-| Nog te bouwen | 21 |
+| Gebouwd | 35 |
+| Deels gebouwd | 9 |
+| Nog te bouwen | 10 |
 | **Totaal** | **54** |
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 1. **Een mislukte verzending die Martin kan zien en opnieuw kan proberen** (F-38, F-39). Vandaag verdwijnt een `failed` voorstel uit Voor jou (alleen `pending` wacht op Martin) en heeft het geen actie, dus zodra de `SYSTEM`-push is weggeveegd, is de mislukking alleen nog te vinden door eraan te denken. Nodig: een besluit of `failed` op Martin wacht (de amberwet), een overgang in de levenscyclus vanuit `failed` (vandaag `failed: []`) die ALLEEN mag na een aantoonbare niet-aflevering, een route om opnieuw te versturen achter een verse Face ID, en tests dat een onzekere verzending nooit opnieuw verstuurd kan worden.
-2. **Vasthouden om te versturen, met het toegankelijke alternatief en haptiek** (F-24, F-25, F-26, F-48). Dit is het moment waarop de brief de afwerking wil laten zitten (§1, principe 7), en het vasthouden is de tweede bewuste handeling vóór Face ID. Alleen iOS; het patroon bestaat al in `Voice/VoiceLogView.swift`.
+2. **Uitkomst onbekend, duidelijk gezegd** (F-42). De worker weet dat een verzending in herstel is, de telefoon niet: hij toont de hele tijd "Goedgekeurd · Wordt verstuurd…" en `followSend` stopt na ongeveer 10 minuten. Nodig: een herstelvlag of het claimtijdstip in `GET`, de tekst "Nog onbekend of het is aangekomen." en een volglus die het herstelvenster van 30 minuten overleeft.
 3. **Openen waar het voorstel op steunt** (F-29, F-30, F-31): de oorspronkelijke mail, de bijlagen en de aangehaalde dossierdocumenten. Vandaag is geen daarvan een knop, dus keurt Martin een antwoord goed zonder de mail te kunnen openen waarop het antwoordt. Documenten kunnen `Dossier/DocumentViewer.swift` en `GET /api/mobile/v1/documents/<id>/file` hergebruiken; de mail heeft een nieuwe mobiele route nodig.
 
 Conceptversies en de keuze tussen twee versies bij een 409 (F-34, F-35, F-36) zijn het grootste resterende stuk, maar vragen eerst een besluit: vandaag is een nieuw concept een NIEUW voorstel dat het oude vervangt, terwijl de frames ervan uitgaan dat een nieuw concept een nieuwe VERSIE van hetzelfde voorstel is.
@@ -236,42 +236,42 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 **Status:** Deels gebouwd — opties en de bevestigingsdialoog bestaan (`ProposalScreen.questionSection`), maar elke optie wordt bevestigd, `none` inbegrepen. Nodig: de dialoog overslaan als `option.action == "none"`, en een testgeval in `ProposalModelTests`.
 
 **F-24 · Vasthouden om te versturen.** Versturen is vasthouden, geen tik: een vulling loopt in 0,6 s met oplopende haptiek, het label luidt "Blijf vasthouden" en de hint "Loslaten stopt — er gaat dan niets weg."; te vroeg loslaten annuleert en er wordt niets gepost; alleen een voltooid vasthouden opent Face ID ("Houd vast om te versturen — daarna Face ID."). Het vasthouden is Martins bewuste handeling en Face ID het bewijs dat hij het is; het een vervangt het ander niet. Op elk moment te onderbreken (brief §2.6).
-**Status:** Nog te bouwen — alleen iOS: een vasthoud-om-te-bevestigen-bediening in `Proposals/` (het lang-drukken-patroon bestaat in `Voice/VoiceLogView.swift`), gekoppeld aan de ongewijzigde `ProposalModel.approve()`, en een test dat te vroeg loslaten `ApprovalGate` nooit bereikt. Geen serverwijziging.
+**Status:** Gebouwd — `SendHold` (de vasthoudtoestand, getest in `SendHoldTests`: te vroeg loslaten bereikt `approve()` en dus `ApprovalGate` nooit) en `HoldToSendButton` in `Proposals/ProposalViews.swift`; drie oplopende tikken tijdens de 0,6 s. Geen serverwijziging.
 
 **F-25 · Een toegankelijke manier om te versturen zonder vasthouden.** Voor VoiceOver en Schakelbediening wordt het vasthouden aangeboden als één aangepaste actie die eerst om bevestiging vraagt ("tikken en bevestigen"); met Verminder beweging wordt de vulling een gewone voortgangsbalk (brief §2.6, §2.7).
-**Status:** Nog te bouwen — alleen iOS, komt mee met F-24 (`accessibilityAction` plus een bevestiging, zoals `VoiceLogView` al doet voor zijn vasthouden).
+**Status:** Gebouwd — `HoldToSendButton` biedt het vasthouden als één toegankelijkheidsactie die eerst vraagt ("Nu versturen?", met ontvanger en bijlagen) en daarna dezelfde verse Face ID. De vulling is al een voortgangsbalk, dus Verminder beweging verandert er niets aan.
 
 **F-26 · Wat een verzending doet, vermeld boven de knop.** Eén regel onder de hint noemt de ontvangers en het aantal bijlagen: "NAAR ilse@noordkust.example · 1 BIJLAGE" / "· GEEN BIJLAGE" / "· 6 BIJLAGEN", en de acties staan vast onderaan het scherm (brief §3: "Versturen bottom-pinned").
-**Status:** Nog te bouwen — puur UI; `draft.to` en `attachmentRows` staan al op het model.
+**Status:** Gebouwd — de vastgezette balk (`ProposalScreen.barPanel`, inhoud uit `ProposalModel.sendBar`, getest in `ProposalBarTests`); bij de toegankelijkheidsgroottes staat dezelfde inhoud als sectie "Versturen" in de scroll.
 
 **F-27 · Het Face ID-moment op het scherm.** Zolang de systeemsheet openstaat, zegt een balk in de app "Bevestig met Face ID · Naar Ilse, 1 bijlage. Annuleren stuurt niets."; na annuleren of mislukken zegt het scherm "Face ID afgebroken. Er is niets verstuurd. Houd opnieuw vast."
-**Status:** Deels gebouwd — de verse Face ID en "een nee verstuurt niets" bestaan (`ApprovalGate.confirmSend`, `ProposalModel.approve` geeft `.cancelled` terug), maar er wordt geen balk getoond en annuleren gebeurt stil. Nodig: UI-tekst bij `.cancelled`, en een test dat het bericht verschijnt en er niets wordt gepost.
+**Status:** Gebouwd — `ProposalModel.phase` (`confirming` / `cancelled`) en de balk "Bevestig met Face ID" / "Face ID afgebroken."; getest dat een geannuleerde Face ID niets post en dat een nieuw vasthouden het bericht wist.
 
 **F-51 · Afwijzen met een vaste reden.** Vier redenen met één tik ("Klopt inhoudelijk niet", "Toon past niet", "Ik regel het zelf", "Niet meer nodig") boven de vrije tekst, en de sheet zegt "Het voorstel verdwijnt uit Voor jou."
-**Status:** Deels gebouwd — de sheet, de vrije reden en het afwijzen op de server bestaan (F-14). Nodig: de chips met vaste redenen in `ProposalScreen.rejectSheet`, verstuurd als `reason`-tekst (de route neemt één vrij tekstveld, dus geen serverwijziging, tenzij de vaste redenen als gestructureerde code moeten worden opgeslagen om van te leren; dat zou een kolom op `proposals` zijn).
+**Status:** Gebouwd — vier vaste redenen met één tik boven de vrije tekst, "Het voorstel verdwijnt uit Voor jou.", verstuurd als de ene `reason`-tekst (`ProposalText.rejectReason`, getest). Opslaan als gestructureerde code zou een kolom vragen.
 
 ### Lezen waar het op steunt
 
 **F-28 · Wanneer het concept is gemaakt.** De kop toont "OPGESTELD 09:20" tijdens het wachten, en "WORDT OPGESTELD · SINDS 09:41" tijdens het opstellen.
-**Status:** Deels gebouwd — `createdAt` wordt geleverd door `GET /proposals/<id>` en gedecodeerd in `ProposalDetail`, maar niet getoond. Nodig: alleen UI (en, bij nieuwe concepten, het tijdstip van het concept in plaats van dat van de rij; zie F-34).
+**Status:** Deels gebouwd — "OPGESTELD 09:20" en "SINDS 09:41" staan in de kop (`ProposalText.badgeNote`), maar uit de `createdAt` van de rij; het tijdstip van het concept zelf hoort bij F-34.
 
 **F-29 · De oorspronkelijke mail openen.** De aanleidingskaart (via haar chevron), een bronrij "Mail van Ilse" en "Originele mail openen" in het ⋯-menu openen het bericht waarop het voorstel antwoordt.
 **Status:** Nog te bouwen — nodig: een mobiele route die één `raw_emails`-rij levert (headers en tekst, achter de sessie, `no-store`), een mailweergave op de telefoon, een routetest, en dezelfde regel als in het dossier voor wat getoond mag worden. `type` en `id` van de aanleiding worden al geleverd.
 
 **F-30 · Een bijlage of een aangehaald dossierdocument openen.** Elke bijlagerij en elke dossier-bronrij opent het document schermvullend.
-**Status:** Deels gebouwd — de weergave bestaat (`Dossier/DocumentViewer.swift`) en `GET /api/mobile/v1/documents/<id>/file` ook; niets op het voorstelscherm linkt ernaar. Nodig: de rijen aan de weergave koppelen, en een test dat een definitief verwijderd of weggegooid document als onbeschikbaar wordt getoond in plaats van te openen.
+**Status:** Deels gebouwd — elke bijlagerij en elke dossierbron opent `DocumentViewer` via `InboxRoute.document`; een onbeschikbare bijlage wordt doorgestreept en opent niet. Nog nodig: een test dat een definitief verwijderd of weggegooid aangehaald document (een bronrij) niet opent.
 
 **F-31 · Bronnen als rijen: wat, wanneer, waarom, hoeveel.** "Waar verder op leunt · 3 BRONNEN" toont elke bron als rij met type en datum ("MAIL · 2 NOV 09:14", "DOSSIER · LOONSTROOK") en de reden van de opsteller.
-**Status:** Deels gebouwd — chips met labels bestaan (F-5); `type` en `why` worden per bron geleverd maar niet getoond; er wordt geen datum geleverd. Nodig: een datum per bron in `proposals.ts` `get` (uit de opgeslagen context), de rij-UI en een routertest.
+**Status:** Deels gebouwd — bronnen zijn rijen met soort ("MAIL", "DOSSIER", "KAART · HALTE") en "3 BRONNEN"; de mail waarop het antwoordt heet "Mail van Ilse" met haar datum (`ProposalText.source`). Nog nodig: een datum per bron uit de server, en of `why` getoond wordt (de frames tonen het niet).
 
 **F-32 · Het ⋯-menu.** Aanpassen, Afwijzen, "Originele mail openen" en "Kopieer concepttekst" (kopieert onderwerp en tekst naar het klembord).
-**Status:** Nog te bouwen — alleen iOS, afgezien van de route van F-29. Vandaag kan de tekst met de hand worden geselecteerd (`.textSelection(.enabled)`).
+**Status:** Deels gebouwd — het ⋯-menu met Aanpassen, Afwijzen en "Tekst kopiëren" (niet "Kopieer concepttekst": het systeemmenu breekt dat woord af). "Originele mail openen" wacht op F-29.
 
 **F-33 · Hoe lang de andere kant al stil is.** De aanleiding van een opvolging luidt "25 DAGEN STIL · Jouw vraag van 7 okt staat nog open bij Ilse."
-**Status:** Deels gebouwd — de datum van het eerdere uitgaande bericht wordt geleverd als `trigger.date`. Nodig: het aantal dagen in Amsterdamse kalenderdagen (de eigen regel van de klok in `clocks.ts`), geleverd of op de telefoon berekend, en de tekst.
+**Status:** Gebouwd — "AANLEIDING · 26 DAGEN STIL" en "**Jouw vraag van 7 okt** staat nog open bij Noordkust.", in Amsterdamse kalenderdagen op de telefoon berekend (`ProposalText.daysSilent`, getest).
 
 **F-50 · Het totaal van de bijlagen.** "6 BIJLAGEN · 4,2 MB SAMEN" boven een lange bijlagenlijst.
-**Status:** Nog te bouwen — puur UI; elke `sizeBytes` wordt geleverd.
+**Status:** Gebouwd — "6 BIJLAGEN · 4,2 MB SAMEN" vanaf drie bijlagen (`ProposalText.attachmentsTotal`, getest).
 
 ### Versies en Martins wijzigingen
 
@@ -279,16 +279,16 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 **Status:** Nog te bouwen — vraagt eerst een besluit: vandaag is een nieuw concept een nieuw voorstel dat het oude vervangt (`create.ts` `supersedeOlder`), en `revision` is een besluitteller, geen conceptversie. Daarna: een kolom voor de conceptversie of een geschiedenistabel `proposal_drafts` (migratie; geen bewijs, geen ledger-gebeurtenis), `storeDraft` die versies schrijft, de versie in `GET`, en tests.
 
 **F-35 · Martins wijzigingen gemarkeerd.** Bewerkte regels worden gemarkeerd en samengevat ("AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"), met "VERSIE 2 VAN VERDER BEWAARD", zowel op het scherm als in de editor (brief §3: de gouden regel zichtbaar vóór het goedkeuren).
-**Status:** Nog te bouwen — de telefoon heeft het concept van het model (`payload.reply`) al naast dat van Martin (`ProposalModel.draft`), dus nodig zijn een pure regeldiff op de telefoon (of de `proposalDiff` van de server ontsloten als voorbeeldroute), de markerings-UI en unittests. De eigen diff van de server wordt alleen bij het goedkeuren berekend en nooit getoond.
+**Status:** Deels gebouwd — Martins eigen wijzigingen tegen het concept van verder worden gemarkeerd en samengevat (`DraftChanges`, getest; "CONCEPT · AANGEPAST DOOR JOU", "AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"). "VERSIE 2 VAN VERDER" wacht op F-34; in de editor zelf wordt een toegevoegde zin niet gemarkeerd (alleen samengevat).
 
 **F-36 · Een conflict biedt twee versies.** Als het concept onder Martin door veranderde: "Het concept is intussen gewijzigd. Er is niets verstuurd." met de wijzigingen van versie 3 gemarkeerd; met lokale wijzigingen een keuze "Jouw versie" / "Versie 3" ("Jouw versie houden", "Versie 3 gebruikt"), en een weggevallen zin vermeld als "JOUW ZIN NIET OPGENOMEN · BEWAARD IN DE GESCHIEDENIS".
 **Status:** Nog te bouwen — hangt af van F-34 (versies en hun geschiedenis) en F-35 (diff); vandaag betekent een 409 "elders besloten of vervangen" en toont één bericht (F-18). Nodig: een samenvoegmodel op de telefoon, een geschiedenis die de server bijhoudt, en tests dat geen van beide keuzes kan versturen zonder opnieuw vasthouden en een verse Face ID.
 
 **F-37 · De editor als eigen sheet.** "Concept aanpassen" opent een grote sheet met "Annuleren" links en "Klaar" rechts; Cc luidt "Iemand toevoegen"; "Bijlage uit je dossier" voegt een aangeboden document toe; elke bijlage heeft een bediening om haar weg te halen. "Annuleren" keert terug naar het concept zoals het was voordat de sheet openging.
-**Status:** Deels gebouwd — elke bewerking bestaat ter plekke (F-12), inclusief alleen aangeboden bijlagen toevoegen. Wat ontbreekt: de sheet zelf en een echt Annuleren (vandaag houdt "Klaar met aanpassen" elke wijziging en is er geen weg terug naar het concept van vóór de bewerking, behalve het scherm verlaten). Alleen iOS.
+**Status:** Gebouwd — `ProposalEditor` in `Proposals/ProposalEditor.swift`: een werkkopie; Klaar geeft haar aan `ProposalModel.replaceDraft` (alleen aangeboden bijlagen, logboekregel op 100 tekens; getest), Annuleren laat het concept zoals het was.
 
 **F-40 · Vragen voordat wijzigingen worden weggegooid.** Annuleren of de editor met wijzigingen omlaag vegen vraagt "Wijzigingen weggooien? Je aanpassingen aan dit concept gaan verloren. Het oorspronkelijke concept blijft staan." met "Wijzigingen weggooien" en "Doorgaan met aanpassen" (brief §3: "swipe-dismiss with edits asks first").
-**Status:** Nog te bouwen — alleen iOS, komt mee met F-37 (`interactiveDismissDisabled` zolang er wijzigingen zijn, plus een bevestiging).
+**Status:** Deels gebouwd — Annuleren met wijzigingen vraagt "Wijzigingen weggooien?". Omlaag vegen met wijzigingen is geblokkeerd (`interactiveDismissDisabled`) maar vraagt niets: SwiftUI geeft geen signaal bij een poging tot sluiten.
 
 ### Na het besluit
 
@@ -299,13 +299,13 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 **Status:** Nog te bouwen — `waiting.ts` telt alleen `pending` voorstellen, dus een mislukking verdwijnt uit de lijst en uit de badge. Nodig: Martins besluit dat een mislukte verzending op hem wacht (de amberwet), daarna `loadWaiting` die recente `failed` voorstellen meeneemt, de rijsoort op de telefoon, en de pushtekst in `send.ts` `notSent` zodra F-38 bestaat (de push van vandaag zegt "Er is niets verzonden." zonder volgende stap).
 
 **F-41 · De bevestiging van verzending.** Een badge "VERSTUURD", de sectie hernoemd tot "VERSTUURD BERICHT", en een afsluitende kaart "Verstuurd aan Ilse · Staat in je logboek en in de draad Loonstrook oktober · 09:31" met "Terug naar Voor jou".
-**Status:** Deels gebouwd — de toestand `sent` en "Verstuurd." bestaan (F-17). Nodig: `sentAt` in `GET /proposals/<id>` (wordt vandaag niet geleverd), de kaart en de terugknop. UI plus één veld.
+**Status:** Deels gebouwd — badge "VERSTUURD", "VERSTUURD BERICHT", de kaart "Verstuurd aan Ilse · Staat in je logboek en in de draad …" en "Terug naar Voor jou". Het tijdstip ontbreekt: `sentAt` wordt niet geleverd.
 
 **F-42 · Uitkomst onbekend, duidelijk gezegd.** "Nog onbekend of het is aangekomen. Gmail gaf geen antwoord. In je Verzonden mail wordt nu gekeken; dit scherm werkt zichzelf bij."
 **Status:** Deels gebouwd — het herstel van de worker bestaat en verstuurt nooit opnieuw (`send.ts`: na `RECOVERY_AFTER_MS` vraagt het Verzonden, rondt af als verstuurd wanneer gevonden, mislukt met "Versturen onzeker" na `NOT_FOUND_FAIL_MS`). De telefoon toont de hele tijd "Wordt verstuurd…" en `followSend` stopt na ongeveer 10 minuten. Nodig: dat de server zegt dat een verzending in herstel is (bijvoorbeeld het claimtijdstip, of een herstelvlag, in `GET`), de tekst, en een volglus die het herstelvenster van 30 minuten overleeft.
 
 **F-43 · Wordt opgesteld.** "WORDT OPGESTELD · SINDS 09:41", "Wordt opnieuw opgesteld · Meestal binnen 5 minuten. Je krijgt een melding als het klaar is.", een skeletconcept, en "Versturen kan zodra er een concept staat." onder een uitgeschakeld Versturen.
-**Status:** Deels gebouwd — de klaar-push bestaat (`proposals-store.ts` meldt het wanneer een concept is opgeslagen, F-21). Het scherm toont bij `drafting` alleen de kop en verder geen regel. Nodig: UI voor de toestand (en het tijdstip, F-28).
+**Status:** Gebouwd — badge "WORDT OPGESTELD · SINDS 09:41", `DraftingCard` met skelet en "Versturen kan zodra er een concept staat." onder een uitgeschakeld Versturen.
 
 **F-44 · Opnieuw opstellen na een mislukt concept.** "Het concept is niet gelukt · Het opstellen duurde te lang en is gestopt." met **"Opnieuw laten opstellen"** en "Er gaat niets weg tot jij een concept goedkeurt."
 **Status:** Nog te bouwen — de levenscyclus staat `draft-failed → drafting` toe en de opsteller op de host (`ops/proposal-drafter.sh`) pakt `drafting`-rijen op, maar geen route voert de stap uit en de opgeslagen `error` (wordt geleverd) wordt niet getoond. Nodig: een mobiele route plus routerprocedure voor de stap, UI en tests.
@@ -316,19 +316,19 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 ### Offline, kleine schermen, terugkoppeling
 
 **F-46 · Vóór het handelen weten dat er geen verbinding is.** "GEEN VERBINDING · 09:20" in de kop, Versturen uitgeschakeld met de reden "Versturen kan weer zodra je verbinding hebt." (brief §2.4: acties die de server nodig hebben, worden met reden uitgeschakeld, nooit stilletjes).
-**Status:** Nog te bouwen — alleen iOS; een padmonitor bestaat in `Upload/UploadCenter.swift` (`NWPathMonitor`) en kan gedeeld worden. Vandaag merkt het scherm pas aan een mislukt verzoek dat het offline is (F-18).
+**Status:** Gebouwd — `EnvironmentValues.networkOffline` (gezet in `RootView` uit `UploadCenter.isOffline`); "GEEN VERBINDING" in de kop en Versturen uitgeschakeld met de reden. De tweede zin zegt eerlijk dat wijzigingen alleen blijven zolang het scherm openstaat (F-47).
 
 **F-47 · Wijzigingen op de iPhone bewaren.** "Aanpassen kan wel; je wijzigingen blijven op deze iPhone bewaard." Wijzigingen overleven het verlaten van het scherm en een herstart van de app, tot ze verstuurd, afgewezen of vervangen zijn.
 **Status:** Nog te bouwen — nodig: een conceptopslag op het toestel, met als sleutel voorstel-id en revisie, met bestandsbeveiliging, bij uitloggen gewist door het sessie-epoch zoals elke andere opslag, en weggegooid zodra de revisie op de server verder is (nooit verouderd verstuurd). Vandaag leven wijzigingen alleen in het geheugen. Tests: overleeft een herstart, gewist bij uitloggen, nooit gepost na een 409.
 
 **F-48 · Haptiek op de momenten die ertoe doen** (brief §2.5): `.success` wanneer de server de goedkeuring accepteert (niet bij het indrukken), een tweede `.success` wanneer de toestand `sent` wordt terwijl het scherm openstaat, `.success` bij een antwoord, `.impact(.soft)` bij een bevestigde afwijzing (afwijzen is geen mislukking), `.error` bij een mislukte actie, en oplopende terugkoppeling tijdens het vasthouden (F-24). Overgeslagen als systeemhaptiek uitstaat.
-**Status:** Nog te bouwen — alleen iOS; het patroon `.sensoryFeedback` wordt gebruikt in `Scan/ScanTab.swift` en `Home/HomeTab.swift`, niet op dit scherm.
+**Status:** Gebouwd — `.sensoryFeedback` op `ProposalModel.successes` / `softs` / `errors` (goedkeuring geaccepteerd, `sent` terwijl het scherm openstaat, een antwoord; een zachte tik bij afwijzen; `.error` bij een mislukte actie) en oplopende tikken tijdens het vasthouden. iOS slaat ze over als systeemhaptiek uitstaat.
 
 **F-49 · Het hele concept lezen vóór het versturen.** Op een klein scherm (iPhone SE) blijft Versturen uitgeschakeld tot het hele concept in beeld is gescrold: "Versturen wordt actief zodra je het hele concept hebt gezien." met "Lees het concept", dat naar het einde scrolt.
-**Status:** Nog te bouwen — alleen iOS (scrollpositie volgen op het einde van het concept), plus een test dat een kort concept dat past nooit wordt tegengehouden.
+**Status:** Gebouwd — het einde van de conceptkaart meldt zich via `onScrollVisibilityChange` (`ProposalModel.markDraftSeen`, een vergrendeling die niet terugvalt); tot dan zegt de balk "Versturen wordt actief zodra je het hele concept hebt gezien." met "Lees het concept". Een concept dat past, is meteen gezien.
 
 **F-52 · Een skelet tijdens het laden.** Het eerste frame toont binnen 100 ms de vorm van het scherm, nooit een kaal draaiend wieltje (brief §2.1, §2.4).
-**Status:** Nog te bouwen — vandaag toont `ProposalScreen` een `ProgressView`. Alleen iOS.
+**Status:** Gebouwd — `ProposalSkeleton` in plaats van een kaal wieltje.
 
 **F-53 · Voortgang in de knop.** Goedkeuren, afwijzen, beantwoorden en opnieuw versturen tonen binnen 100 ms voortgang in de ingedrukte knop, nooit een schermvullende blokkade (brief §2.1).
 **Status:** Nog te bouwen — `Auth/AuthButton.swift` heeft geen voortgangstoestand; de knoppen zijn alleen uitgeschakeld zolang `isBusy`. Alleen iOS.
@@ -373,7 +373,7 @@ De klokken (`proposals.clock`, elke 15 minuten) pushen alleen van 08:00 tot 22:0
 
 **F-22 · Een vraag beantwoorden vanuit de melding.** **Status:** Gebouwd (`apps/ios/VerderNotify/NotificationService.swift`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`; gemeten op iOS 27.2, 2026-11-01). "Bekijken" weghalen bij de antwoordcategorieën is F-54.
 
-**Haptiek:** geen. Het voorstelscherm geeft geen voelbare terugkoppeling. De haptiekkaart uit de brief voor dit scherm is F-48.
+**Haptiek:** zie F-48 — `.success` bij een geaccepteerde goedkeuring en bij `sent` terwijl het scherm openstaat, `.impact(.soft)` bij afwijzen, `.error` bij een mislukte actie, en drie oplopende tikken tijdens het vasthouden.
 
 ## Offline gedrag en synchronisatie
 
@@ -426,36 +426,36 @@ Alle frames komen uit de Figma-sectie `proposal · final` (node `307:1047`), opn
 
 | Frame | Toestand die het toont | Gebouwd |
 |---|---|---|
-| [Proposal / wacht op jou](frames/Proposal_wacht_op_jou.jpg) | Een openstaand antwoord, gescrold, met de aanleiding, concept versie 2, één bijlage, "Waar verder op leunt" en de vasthoudbalk om te versturen | Inhoud ja; vasthoudbalk nee |
-| [Proposal / opvolging](frames/Proposal_opvolging.jpg) | Een openstaande opvolging: "25 DAGEN STIL", "Jouw vraag van 7 okt staat nog open bij Ilse." | Ja, op de opmaak na |
-| [Proposal / vasthouden](frames/Proposal_vasthouden.jpg) | Vasthouden bezig: "Blijf vasthouden", "Loslaten stopt — er gaat dan niets weg." | Nee |
-| [Proposal / Face ID](frames/Proposal_Face_ID.jpg) | De Face ID-systeemsheet over het concept, balk "Bevestig met Face ID" | Sheet ja; balk nee |
-| [Proposal / Face ID afgebroken](frames/Proposal_Face_ID_afgebroken.jpg) | Face ID geannuleerd: "Er is niets verstuurd." | Gedrag ja; bericht nee |
-| [Proposal / wordt verstuurd](frames/Proposal_wordt_verstuurd.jpg) | Goedgekeurd, wacht op de worker: "Goedgekeurd met Face ID", "Wordt verstuurd…" | Ja, als statusregel |
-| [Proposal / verstuurd](frames/Proposal_verstuurd.jpg) | Verstuurd: "Verstuurd aan Ilse", "Staat in je logboek…", "Terug naar Voor jou" | Alleen "Verstuurd." |
-| [Proposal / geweigerd door Gmail](frames/Proposal_geweigerd_door_Gmail.jpg) | Versturen mislukt, "Opnieuw versturen" | Mislukking ja; opnieuw nee |
+| [Proposal / wacht op jou](frames/Proposal_wacht_op_jou.jpg) | Een openstaand antwoord, gescrold, met de aanleiding, concept versie 2, één bijlage, "Waar verder op leunt" en de vasthoudbalk om te versturen | Ja (de systeemterugknop is een glazen chevron zonder "Voor jou") |
+| [Proposal / opvolging](frames/Proposal_opvolging.jpg) | Een openstaande opvolging: "25 DAGEN STIL", "Jouw vraag van 7 okt staat nog open bij Ilse." | Ja ("26 DAGEN STIL" op de klok van de fixture) |
+| [Proposal / vasthouden](frames/Proposal_vasthouden.jpg) | Vasthouden bezig: "Blijf vasthouden", "Loslaten stopt — er gaat dan niets weg." | Ja |
+| [Proposal / Face ID](frames/Proposal_Face_ID.jpg) | De Face ID-systeemsheet over het concept, balk "Bevestig met Face ID" | Balk ja; de systeemsheet is van iOS |
+| [Proposal / Face ID afgebroken](frames/Proposal_Face_ID_afgebroken.jpg) | Face ID geannuleerd: "Er is niets verstuurd." | Ja |
+| [Proposal / wordt verstuurd](frames/Proposal_wordt_verstuurd.jpg) | Goedgekeurd, wacht op de worker: "Goedgekeurd met Face ID", "Wordt verstuurd…" | Ja; "met Face ID" alleen na een goedkeuring op dit scherm |
+| [Proposal / verstuurd](frames/Proposal_verstuurd.jpg) | Verstuurd: "Verstuurd aan Ilse", "Staat in je logboek…", "Terug naar Voor jou" | Ja, zonder tijdstip (`sentAt` ontbreekt) |
+| [Proposal / geweigerd door Gmail](frames/Proposal_geweigerd_door_Gmail.jpg) | Versturen mislukt, "Opnieuw versturen" | Mislukking ja; "Opnieuw versturen" nee (F-38) |
 | [Voor jou / niet verstuurd in de lijst](frames/Voor_jou_niet_verstuurd_in_de_lijst.jpg) | De pushbanner "Versturen mislukt" en een rij "NIET VERSTUURD" in Voor jou | Push ja (andere tekst); rij nee |
 | [Proposal / uitkomst onbekend](frames/Proposal_uitkomst_onbekend.jpg) | Gmail gaf geen antwoord; Verzonden wordt nagekeken | Worker ja; schermtekst nee |
 | [Proposal / intussen gewijzigd (409)](frames/Proposal_intussen_gewijzigd_409.jpg) | Conflict: versie 3 met gemarkeerde wijzigingen | Nee (409 toont één bericht) |
 | [Proposal / 409 met jouw aanpassingen](frames/Proposal_409_met_jouw_aanpassingen.jpg) | Conflict met lokale wijzigingen: kies "Jouw versie" of "Versie 3" | Nee |
 | [Proposal / 409 · jouw versie gekozen](frames/Proposal_409_jouw_versie_gekozen.jpg) | Martin hield zijn versie | Nee |
 | [Proposal / 409 · versie 3 gebruikt](frames/Proposal_409_versie_3_gebruikt.jpg) | Martin nam versie 3; zijn zin bewaard in de geschiedenis | Nee |
-| [Proposal / offline](frames/Proposal_offline.jpg) | Geen verbinding; Versturen uitgeschakeld; wijzigingen op de telefoon bewaard | Alleen bericht bij mislukking |
-| [Proposal / geen concept](frames/Proposal_geen_concept.jpg) | Opstellen mislukt: "Zelf schrijven", "Opnieuw laten opstellen" | Nee |
-| [Proposal / wordt opgesteld](frames/Proposal_wordt_opgesteld.jpg) | Wordt opnieuw opgesteld, skeletconcept | Nee |
-| [Proposal / aangepast door jou](frames/Proposal_aangepast_door_jou.jpg) | Concept bewerkt door Martin, wijziging gemarkeerd | Bewerken ja; markeren nee |
-| [Proposal / lange titels · begin](frames/Proposal_lange_titels_begin.jpg) | Lang onderwerp, zes bijlagen, leesdrempel "Lees het concept" | Lange tekst ja; drempel nee |
-| [Proposal / lange titels · 6 bijlagen](frames/Proposal_lange_titels_6_bijlagen.jpg) | Gescrold naar zes bijlagen, "6 BIJLAGEN · 4,2 MB SAMEN" | Lijst ja; totaal nee |
-| [Proposal / ⋯ menu](frames/Proposal_menu.jpg) | Menu: Aanpassen, Afwijzen, Originele mail openen, Kopieer concepttekst | Nee |
-| [Aanpassen / editor · typen](frames/Aanpassen_editor_typen.jpg) | Editor-sheet met toetsenbord, nieuwe zin gemarkeerd | In plaats daarvan editor ter plekke |
+| [Proposal / offline](frames/Proposal_offline.jpg) | Geen verbinding; Versturen uitgeschakeld; wijzigingen op de telefoon bewaard | Ja; wijzigingen blijven alleen zolang het scherm openstaat (F-47) |
+| [Proposal / geen concept](frames/Proposal_geen_concept.jpg) | Opstellen mislukt: "Zelf schrijven", "Opnieuw laten opstellen" | Kaart ja; "Zelf schrijven" en "Opnieuw laten opstellen" nee (F-44, F-45) |
+| [Proposal / wordt opgesteld](frames/Proposal_wordt_opgesteld.jpg) | Wordt opnieuw opgesteld, skeletconcept | Ja |
+| [Proposal / aangepast door jou](frames/Proposal_aangepast_door_jou.jpg) | Concept bewerkt door Martin, wijziging gemarkeerd | Ja |
+| [Proposal / lange titels · begin](frames/Proposal_lange_titels_begin.jpg) | Lang onderwerp, zes bijlagen, leesdrempel "Lees het concept" | Ja |
+| [Proposal / lange titels · 6 bijlagen](frames/Proposal_lange_titels_6_bijlagen.jpg) | Gescrold naar zes bijlagen, "6 BIJLAGEN · 4,2 MB SAMEN" | Ja |
+| [Proposal / ⋯ menu](frames/Proposal_menu.jpg) | Menu: Aanpassen, Afwijzen, Originele mail openen, Kopieer concepttekst | Ja, zonder "Originele mail openen" (F-29) |
+| [Aanpassen / editor · typen](frames/Aanpassen_editor_typen.jpg) | Editor-sheet met toetsenbord, nieuwe zin gemarkeerd | Sheet ja; geen markering in het tekstveld, geen bijlagebalk boven het toetsenbord |
 | [Aanpassen / jouw zin in versie 3](frames/Aanpassen_jouw_zin_in_versie_3.jpg) | Editor na het overnemen van versie 3, met Martins zin ingevoegd | Nee |
-| [Aanpassen / wijzigingen weggooien?](frames/Aanpassen_wijzigingen_weggooien.jpg) | Bevestiging om wijzigingen weg te gooien | Nee |
-| [Afwijzen / reden](frames/Afwijzen_reden.jpg) | Afwijssheet met vaste redenen en vrije tekst | Alleen vrije tekst |
-| [Proposal / iPhone SE · concept nog niet gezien](frames/Proposal_iPhone_SE_concept_nog_niet_gezien.jpg) | Kleine telefoon, concept nog niet helemaal gezien, "Lees het concept" | Geen drempel |
-| [Proposal / iPhone SE · concept gelezen](frames/Proposal_iPhone_SE_concept_gelezen.jpg) | Kleine telefoon, concept gezien, Versturen actief | Opmaak ja |
-| [Proposal / AX5 · begin](frames/Proposal_AX5_begin.jpg) | Grootste toegankelijkheidstekstgrootte, bovenkant van het scherm | Dynamic Type ja |
-| [Proposal / AX5 · hele scroll](frames/Proposal_AX5_hele_scroll.jpg) | Grootste tekstgrootte, de hele scroll | Dynamic Type ja |
+| [Aanpassen / wijzigingen weggooien?](frames/Aanpassen_wijzigingen_weggooien.jpg) | Bevestiging om wijzigingen weg te gooien | Ja (iOS tekent de vraag vanaf Annuleren) |
+| [Afwijzen / reden](frames/Afwijzen_reden.jpg) | Afwijssheet met vaste redenen en vrije tekst | Ja |
+| [Proposal / iPhone SE · concept nog niet gezien](frames/Proposal_iPhone_SE_concept_nog_niet_gezien.jpg) | Kleine telefoon, concept nog niet helemaal gezien, "Lees het concept" | Ja |
+| [Proposal / iPhone SE · concept gelezen](frames/Proposal_iPhone_SE_concept_gelezen.jpg) | Kleine telefoon, concept gezien, Versturen actief | Ja |
+| [Proposal / AX5 · begin](frames/Proposal_AX5_begin.jpg) | Grootste toegankelijkheidstekstgrootte, bovenkant van het scherm | Ja |
+| [Proposal / AX5 · hele scroll](frames/Proposal_AX5_hele_scroll.jpg) | Grootste tekstgrootte, de hele scroll | Ja |
 | [Proposal / AX5 · uitkomst onbekend](frames/Proposal_AX5_uitkomst_onbekend.jpg) | Grootste tekstgrootte, uitkomst onbekend | Tekst nee |
-| [Aanpassen / AX5 · in rust](frames/Aanpassen_AX5_in_rust.jpg) | Grootste tekstgrootte, editor-sheet in rust | Nee |
+| [Aanpassen / AX5 · in rust](frames/Aanpassen_AX5_in_rust.jpg) | Grootste tekstgrootte, editor-sheet in rust | Ja; adressen en bestandsnamen op één regel, in het midden afgekapt |
 | [Proposal / AX5 · 409 kiezen](frames/Proposal_AX5_409_kiezen.jpg) | Grootste tekstgrootte, keuze tussen twee versies | Nee |
-| [Afwijzen / AX5 · reden](frames/Afwijzen_AX5_reden.jpg) | Grootste tekstgrootte, afwijssheet | Alleen vrije tekst |
+| [Afwijzen / AX5 · reden](frames/Afwijzen_AX5_reden.jpg) | Grootste tekstgrootte, afwijssheet | Ja |

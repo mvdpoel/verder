@@ -38,6 +38,12 @@ import Foundation
 ///                              nietopgeslagen (a decision that failed to save) · selecteren ·
 ///                              bevestigen ("3 suggesties goedkeuren?") · gedaan ("Door verder
 ///                              gedaan" open) · ongedaan (open, an undo held) · scroll:<row key|done|more>
+///     -fixtures-proposal <state>  the proposal screen in a state only a gesture reaches:
+///                              hold (Versturen held, part-way) · faceid (the Face ID sheet up) ·
+///                              afgebroken (Face ID cancelled) · aangepast (Martin added a sentence) ·
+///                              editor (the editor sheet, edited) · typen (the editor, typing) ·
+///                              weggooien (the editor's "Wijzigingen weggooien?") · afwijzen (the reject sheet,
+///                              "Ik regel het zelf" chosen)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
 ///             |meer:<account|notifications|widgets|about|developer>>
@@ -125,6 +131,11 @@ struct FixtureLaunch: Equatable, Sendable {
 
     enum MicState: String, CaseIterable, Sendable { case notDetermined, denied }
 
+    /// The proposal screen's gesture-only states (`-fixtures-proposal`).
+    enum ProposalState: String, CaseIterable, Sendable {
+        case hold, faceid, afgebroken, aangepast, editor, typen, weggooien, afwijzen
+    }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end, middle }
@@ -202,6 +213,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var pushPrePrompt = false
     var mic: MicState? = nil
     var voorJou: [VoorJouState] = []
+    var proposal: ProposalState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -285,7 +297,11 @@ struct FixtureLaunch: Equatable, Sendable {
                                          throw .unknownValue("-fixtures-voorjou", String(raw))
                                      }
                                      return s
-                                 })
+                                 },
+                             proposal: try value(after: "-fixtures-proposal").map { (raw: String) throws(ParseError) -> ProposalState in
+                                 guard let s = ProposalState(rawValue: raw) else { throw .unknownValue("-fixtures-proposal", raw) }
+                                 return s
+                             })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

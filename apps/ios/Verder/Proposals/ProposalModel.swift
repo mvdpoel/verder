@@ -49,6 +49,29 @@ final class ProposalModel {
     private(set) var message: String?
     private(set) var loadError: String?
     private(set) var taskCreated = false
+    /// verder's own draft as the server stored it: what Martin's edits are
+    /// measured against (`changes`).
+    private(set) var originalDraft: ReplyDraft?
+
+    /// Where a send stands on THIS screen, before the server knows anything.
+    enum SendPhase: Equatable {
+        case idle
+        /// The Face ID sheet is up.
+        case confirming
+        /// Face ID was cancelled or failed: nothing was sent.
+        case cancelled
+    }
+    private(set) var phase: SendPhase = .idle
+    /// This screen's own approve went through (after a fresh Face ID), so the
+    /// bar may say "Goedgekeurd met Face ID". A proposal approved elsewhere
+    /// (the web) says only "Goedgekeurd".
+    private(set) var approvedHere = false
+    /// The whole draft has been on screen (F-49): Versturen waits for it.
+    private(set) var draftSeen = false
+    /// Haptic triggers (brief §2.5): the view plays one per change.
+    private(set) var successes = 0
+    private(set) var softs = 0
+    private(set) var errors = 0
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let gate: ApprovalGate
@@ -83,14 +106,18 @@ final class ProposalModel {
     }
 
     private func apply(_ d: ProposalDetail) {
+        // The send landed while the screen was open: a second success.
+        if let before = detail?.status, before != "sent", d.status == "sent", d.kind != "question" { successes += 1 }
         detail = d
         taskCreated = d.createdTaskId != nil
         if let r = d.payload?.reply {
             draft = ReplyDraft(to: r.to, cc: r.cc, subject: r.subject, body: r.body,
                                attachmentDocumentIds: r.attachmentDocumentIds,
                                entrySummary: d.entrySummary ?? d.payload?.entrySummary ?? "")
+            originalDraft = draft
         } else {
             draft = nil
+            originalDraft = nil
         }
     }
 
@@ -157,6 +184,98 @@ final class ProposalModel {
         }
     }
 
+    /// What Martin changed against verder's draft; nil before loading or for
+    /// a question.
+    var changes: DraftChanges? {
+        guard let originalDraft, let draft else { return nil }
+        return DraftChanges(original: originalDraft, current: draft)
+    }
+
+    var isEdited: Bool { changes.map { !$0.isEmpty } ?? false }
+
+    /// "Antwoord aan Noordkust".
+    var title: String {
+        guard let d = detail else { return "Voorstel" }
+        return ProposalText.title(kind: d.kind, partyName: d.partyName)
+    }
+
+    /// "Ilse" when the one recipient is the trigger's sender, else the addresses.
+    var recipientName: String {
+        ProposalText.recipientName(to: draft?.to ?? [], triggerFrom: detail?.trigger.from)
+    }
+
+    func markDraftSeen() { draftSeen = true }
+
+    /// "NAAR ilse@noordkust.example · 1 BIJLAGE".
+    var sendMeta: String? {
+        guard let draft, !draft.to.isEmpty else { return nil }
+        return "Naar \(draft.to.joined(separator: ", ")) · \(ProposalText.attachmentCount(attachmentRows.count))"
+    }
+
+    /// The bar under the proposal, from what the server said and what is
+    /// happening on this screen. `holding`: a finger is on Versturen.
+    func sendBar(offline: Bool, holding: Bool) -> SendBar? {
+        guard let d = detail else { return nil }
+        let isQuestion = d.kind == "question"
+        switch d.status {
+        case "pending":
+            guard !isQuestion, draft != nil else { return nil }
+            if phase == .confirming {
+                return SendBar(icon: "faceid", title: SendCopy.confirm,
+                               detail: ProposalText.faceIDLine(to: draft?.to ?? [], triggerFrom: d.trigger.from,
+                                                               attachments: attachmentRows.count),
+                               button: .disabled(SendCopy.waitingFaceID))
+            }
+            if holding {
+                return SendBar(detail: SendCopy.holding, meta: sendMeta, button: .hold(SendCopy.keepHolding))
+            }
+            if offline {
+                return SendBar(icon: "wifi.slash", title: SendCopy.offline, detail: SendCopy.offlineDetail,
+                               button: .disabled(SendCopy.send))
+            }
+            if phase == .cancelled {
+                return SendBar(icon: "faceid", title: SendCopy.cancelled, detail: SendCopy.cancelledDetail,
+                               button: .hold(SendCopy.send))
+            }
+            if attachmentRows.contains(where: \.unavailable) {
+                return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: Copy.unavailableAttachment,
+                               meta: sendMeta, button: .disabled(SendCopy.send))
+            }
+            if !canSend && !isBusy {
+                return SendBar(detail: SendCopy.notReady, button: .disabled(SendCopy.send))
+            }
+            if !draftSeen { return SendBar(detail: SendCopy.readGate, button: .readDraft) }
+            if let message {
+                return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: message,
+                               detail: SendCopy.hint, meta: sendMeta, button: .hold(SendCopy.send))
+            }
+            return SendBar(detail: SendCopy.hint, meta: sendMeta, button: .hold(SendCopy.send))
+        case "approved", "sending":
+            return SendBar(spinning: true, title: approvedHere ? SendCopy.approvedHere : SendCopy.approved,
+                           meta: SendCopy.approvedMeta, button: .disabled(SendCopy.sending))
+        case "sent":
+            if isQuestion { return SendBar(icon: "checkmark.circle.fill", tone: .ok, title: SendCopy.answered, button: .back) }
+            return SendBar(icon: "checkmark.circle.fill", tone: .ok, title: "Verstuurd aan \(recipientName)",
+                           detail: ProposalText.sentLine(subject: draft?.subject), button: .back)
+        case "failed":
+            return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: SendCopy.failed,
+                           detail: d.error ?? SendCopy.failedDetail)
+        case "rejected":
+            return SendBar(title: SendCopy.rejected, detail: SendCopy.rejectedDetail, button: .back)
+        case "superseded":
+            return SendBar(title: SendCopy.superseded, button: .back)
+        case "drafting":
+            return SendBar(detail: SendCopy.drafting, button: .disabled(SendCopy.send))
+        case "draft-failed":
+            return SendBar(detail: SendCopy.draftFailed)
+        default:
+            return nil
+        }
+    }
+
+    /// A new hold clears "Face ID afgebroken".
+    func holdStarted() { if phase == .cancelled { phase = .idle } }
+
     // MARK: - Editing
 
     func edit(body: String? = nil, subject: String? = nil, removing attachmentId: String? = nil) {
@@ -187,6 +306,18 @@ final class ProposalModel {
         draft = d
     }
 
+    /// The editor's "Klaar": its working copy becomes the draft. Attachments
+    /// outside what the server offered (or already attached) are dropped —
+    /// the same rule as `attach`; the log line is cut at the server's 100.
+    func replaceDraft(_ new: ReplyDraft) {
+        guard let current = draft, isPending else { return }
+        let allowed = Set(current.attachmentDocumentIds).union((detail?.attachable ?? []).map(\.id))
+        var d = new
+        d.attachmentDocumentIds = new.attachmentDocumentIds.filter { allowed.contains($0) }
+        d.entrySummary = String(new.entrySummary.prefix(100))
+        draft = d
+    }
+
     // MARK: - Deciding
 
     func approve() async -> ApproveOutcome {
@@ -198,21 +329,31 @@ final class ProposalModel {
         isBusy = true
         defer { isBusy = false }
         message = nil
-        guard await gate.confirmSend(to: snapshot.to) else { return .cancelled }
+        phase = .confirming
+        guard await gate.confirmSend(to: snapshot.to) else {
+            phase = .cancelled
+            return .cancelled
+        }
+        phase = .idle
         do {
             let _: Ignored = try await client.postJSON("\(base)/approve",
                                                       ApproveRequest(revision: revision, payload: snapshot))
+            approvedHere = true
+            successes += 1
             await reload()
             return .approved
         } catch APIError.rejected(409) {
             await reload()
             message = isPending ? Copy.newerVersion : Copy.notPending
+            errors += 1
             return .newerVersion
         } catch APIError.rejected(400) {
             message = Copy.refused
+            errors += 1
             return .refused
         } catch {
             message = handle(error)
+            errors += 1
             return .failed
         }
     }
@@ -222,7 +363,10 @@ final class ProposalModel {
         isBusy = true
         defer { isBusy = false }
         let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return await decide("\(base)/reject", RejectRequest(reason: trimmed?.isEmpty == false ? trimmed : nil))
+        let ok = await decide("\(base)/reject", RejectRequest(reason: trimmed?.isEmpty == false ? trimmed : nil))
+        // Rejecting is not a failure: a soft tap, never `.error`.
+        if ok { softs += 1 }
+        return ok
     }
 
     /// Answers a question with one of the server's options. A question never
@@ -232,7 +376,9 @@ final class ProposalModel {
         guard isPending, let revision, optionButtons.contains(where: { $0.index == index }) else { return false }
         isBusy = true
         defer { isBusy = false }
-        return await decide("\(base)/answer", AnswerOptionRequest(revision: revision, option: index))
+        let ok = await decide("\(base)/answer", AnswerOptionRequest(revision: revision, option: index))
+        if ok { successes += 1 }
+        return ok
     }
 
     func answer(freeText: String) async -> Bool {
@@ -240,7 +386,9 @@ final class ProposalModel {
         guard isPending, let revision, !text.isEmpty else { return false }
         isBusy = true
         defer { isBusy = false }
-        return await decide("\(base)/answer", AnswerTextRequest(revision: revision, freeText: text))
+        let ok = await decide("\(base)/answer", AnswerTextRequest(revision: revision, freeText: text))
+        if ok { successes += 1 }
+        return ok
     }
 
     private func decide<B: Encodable & Sendable>(_ path: String, _ body: B) async -> Bool {
@@ -252,12 +400,15 @@ final class ProposalModel {
         } catch APIError.rejected(409) {
             await reload()
             message = isPending ? Copy.newerVersion : Copy.notPending
+            errors += 1
             return false
         } catch APIError.rejected(400) {
             message = Copy.refused
+            errors += 1
             return false
         } catch {
             message = handle(error)
+            errors += 1
             return false
         }
     }
@@ -299,3 +450,11 @@ final class ProposalModel {
         }
     }
 }
+
+#if DEBUG
+extension ProposalModel {
+    /// A capture's moment the screen otherwise reaches only by a gesture
+    /// (`-fixtures-proposal`): the Face ID sheet up, or just cancelled.
+    func fixtureSetPhase(_ p: SendPhase) { phase = p }
+}
+#endif
