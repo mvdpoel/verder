@@ -32,13 +32,15 @@
       "type": "document",
       "id": "00000000-f1c5-4000-8000-200000000104",
       "label": "Loonstrook 2026-10",
-      "why": "De gevraagde loonstrook."
+      "why": "De gevraagde loonstrook.",
+      "docType": "Loonstrook"
     },
     {
       "type": "stop",
       "id": "00000000-f1c5-4000-8000-500000000301",
       "label": "Stukken aanleveren bij Team Startdossier",
-      "why": "Dit is wat er nu openstaat."
+      "why": "Dit is wat er nu openstaat.",
+      "state": "open"
     }
   ],
   "payload": null,

@@ -114,6 +114,75 @@ struct ProposalTextTests {
         #expect(ProposalText.source(stop, trigger: Self.trigger).meta == "Kaart · Halte")
     }
 
+    @Test func sourceMetaNamesTheSoortAndTheState() {
+        let doc = ProposalDetail.Citation(type: "document", id: "d", label: "Loonstrook 2026-10", why: nil, docType: "Loonstrook")
+        #expect(ProposalText.source(doc, trigger: Self.trigger).meta == "Dossier · Loonstrook")
+        let bare = ProposalDetail.Citation(type: "document", id: "d", label: "x", why: nil, docType: "  ")
+        #expect(ProposalText.source(bare, trigger: Self.trigger).meta == "Dossier")
+        let stop = ProposalDetail.Citation(type: "stop", id: "s", label: "Stukken", why: nil, state: "open")
+        #expect(ProposalText.source(stop, trigger: Self.trigger).meta == "Kaart · Halte · Open")
+        // A state this build does not know is never shown raw.
+        let odd = ProposalDetail.Citation(type: "stop", id: "s", label: "Stukken", why: nil, state: "weird")
+        #expect(ProposalText.source(odd, trigger: Self.trigger).meta == "Kaart · Halte")
+    }
+
+    @Test func triggerMetaWrapsBetweenGroupsOnly() {
+        let now = Self.date("2026-11-02T08:41:00Z")
+        let groups = ProposalText.triggerMetaGroups(kind: "reply", trigger: Self.trigger, now: now)
+        #expect(groups == ["Aanleiding\u{00A0}·\u{00A0}Mail", "2\u{00A0}nov\u{00A0}09:14"])
+        // A group never breaks inside: no ordinary space in it.
+        #expect(groups.allSatisfy { !$0.contains(" ") })
+        #expect(ProposalText.triggerMeta(kind: "reply", trigger: Self.trigger, now: now) == "Aanleiding · Mail · 2 nov 09:14")
+    }
+
+    @Test func conceptLabelNamesTheVersion() {
+        #expect(ProposalText.conceptLabel(status: "pending", edited: false, version: 2) == "Concept · Versie 2")
+        #expect(ProposalText.conceptLabel(status: "pending", edited: false, version: nil) == "Concept")
+        #expect(ProposalText.conceptLabel(status: "pending", edited: true, version: 2) == "Concept · Aangepast door jou")
+        #expect(ProposalText.conceptLabel(status: "sent", edited: false, version: 2) == "Verstuurd bericht")
+        #expect(ProposalText.conceptLabel(status: "failed", edited: false, version: 2) == "Concept · Versie 2")
+    }
+
+    @Test func editSummaryKeepsVerdersVersion() {
+        let o = ReplyDraft(to: ["a@b.nl"], cc: [], subject: "S", body: "Beste Ilse,\n\nGroet,", attachmentDocumentIds: [], entrySummary: "x")
+        var c = o
+        c.body = "Beste Ilse,\n\nExcuses.\n\nGroet,"
+        let s = ProposalText.editSummary(DraftChanges(original: o, current: c), version: 2)
+        #expect(s?.what == "1 zin toegevoegd door jou")
+        #expect(s?.kept == "Versie 2 van verder bewaard")
+        #expect(ProposalText.editSummary(DraftChanges(original: o, current: o), version: 2) == nil)
+        #expect(ProposalText.editSummary(DraftChanges(original: o, current: c), version: nil)?.kept == "Het concept van verder blijft bewaard")
+    }
+
+    @Test func aFollowUpNamesThePersonTheDraftGreets() {
+        let t = ProposalDetail.Trigger(type: "proposal", id: "p", from: "verder", subject: "Kopie", date: Self.date("2026-10-07T09:02:00Z"), excerpt: nil)
+        let line = ProposalText.triggerLine(kind: "follow-up", ask: nil, trigger: t, partyName: "Bewindkantoor Noordkust",
+                                            draftBody: "Beste Ilse,\n\nOp 7 oktober…")
+        #expect(line?.lead == "Jouw vraag van 7 okt")
+        #expect(line?.rest == " staat nog open bij Ilse.")
+        let formal = ProposalText.triggerLine(kind: "follow-up", ask: nil, trigger: t, partyName: "Bewindkantoor Noordkust",
+                                              draftBody: "Geachte heer De Vries,\n\n…")
+        #expect(formal?.rest == " staat nog open bij Noordkust.")
+        #expect(ProposalText.greetedName("Beste allen,") == nil)
+        #expect(ProposalText.greetedName("Beste Ilse") == "Ilse")
+    }
+
+    @Test func failureNeverClaimsNothingWentWhenItMayHave() {
+        let f = ProposalText.failure("Gmail weigerde het bericht met een tijdelijke fout (421).")
+        #expect(f.title == SendCopy.failedNothingSent)
+        #expect(f.detail == "Gmail weigerde het bericht met een tijdelijke fout.")
+        let unsure = ProposalText.failure("meerdere kandidaten in Verzonden")
+        #expect(unsure.title == SendCopy.failed)
+        #expect(unsure.detail == "Meerdere kandidaten in Verzonden.")
+        #expect(ProposalText.failure(nil).title == SendCopy.failed)
+    }
+
+    @Test func softBreaksOnlyAfterAtAndDots() {
+        #expect(ProposalText.softBreaks("ilse@noordkust.example") == "ilse@\u{200B}noordkust.\u{200B}example")
+        #expect(ProposalText.softBreaks("a.") == "a.")
+        #expect(ProposalText.softBreaks("Loonstrook").contains("\u{200B}") == false)
+    }
+
     @Test func threadNameDropsReplyPrefixes() {
         #expect(ProposalText.threadName("Re: RE: Loonstrook oktober") == "Loonstrook oktober")
         #expect(ProposalText.sentLine(subject: "Re: Loonstrook oktober") == "Staat in je logboek en in de draad Loonstrook oktober.")
@@ -295,8 +364,32 @@ struct ProposalBarTests {
         #expect(sent.sendBar(offline: false, holding: false)?.title == "Verstuurd aan Demi")
         #expect(sent.sendBar(offline: false, holding: false)?.button == .back)
         let failed = await loaded(status: "failed", error: #""Gmail weigerde het bericht (400).""#)
-        #expect(failed.sendBar(offline: false, holding: false)?.detail == "Gmail weigerde het bericht (400).")
+        #expect(failed.sendBar(offline: false, holding: false)?.title == SendCopy.failedNothingSent)
+        #expect(failed.sendBar(offline: false, holding: false)?.detail == "Gmail weigerde het bericht.")
         #expect(failed.sendBar(offline: false, holding: false)?.button == nil)
+    }
+
+    /// A newer server's draft version and send time reach the screen; an
+    /// older one's absence names no version and no time.
+    @Test func versionAndSentTimeComeFromTheServer() async {
+        func with(_ status: String, _ extra: String) -> Data {
+            let raw = String(decoding: ProposalFixture.reply(status: status), as: UTF8.self)
+            return Data(raw.replacingOccurrences(of: #""revision":"#, with: extra + #","revision":"#).utf8)
+        }
+        let sent = model(ProposalServer(detail: with("sent", #""draftVersion":2,"sentAt":"2026-10-30T09:31:00.000Z""#)))
+        await sent.load(id: ProposalFixture.id)
+        #expect(sent.sendBar(offline: false, holding: false)?.stamp == "10:31")
+        let pending = model(ProposalServer(detail: with("pending", #""draftVersion":2"#)))
+        await pending.load(id: ProposalFixture.id)
+        #expect(pending.conceptLabel == "Concept · Versie 2")
+        let drafting = model(ProposalServer(detail: with("drafting", #""draftVersion":1"#)))
+        await drafting.load(id: ProposalFixture.id)
+        #expect(drafting.isRedraft)
+        let old = await loaded(status: "sent")
+        #expect(old.sendBar(offline: false, holding: false)?.stamp == nil)
+        #expect(old.conceptLabel == "Verstuurd bericht")
+        let first = await loaded(status: "drafting")
+        #expect(!first.isRedraft)
     }
 
     /// The editor's Klaar keeps only what the server offered.

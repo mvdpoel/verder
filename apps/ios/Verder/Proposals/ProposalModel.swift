@@ -193,6 +193,27 @@ final class ProposalModel {
 
     var isEdited: Bool { changes.map { !$0.isEmpty } ?? false }
 
+    /// Which of verder's drafts is on screen, as the server numbers it.
+    var draftVersion: Int? { detail?.draftVersion }
+
+    /// "CONCEPT · VERSIE 2" / "CONCEPT · AANGEPAST DOOR JOU" / "VERSTUURD BERICHT".
+    var conceptLabel: String {
+        ProposalText.conceptLabel(status: detail?.status ?? "", edited: isEdited, version: draftVersion)
+    }
+
+    /// "1 ZIN TOEGEVOEGD DOOR JOU" over "VERSIE 2 VAN VERDER BEWAARD".
+    var editSummary: (what: String, kept: String)? { ProposalText.editSummary(changes, version: draftVersion) }
+
+    /// A new draft is being made over an earlier one ("Wordt opnieuw opgesteld").
+    var isRedraft: Bool { detail?.status == "drafting" && (detail?.draftVersion ?? 0) >= 1 }
+
+    /// The trigger card's sentence; a follow-up names the person the draft greets.
+    var triggerLine: (lead: String?, rest: String)? {
+        guard let d = detail else { return nil }
+        return ProposalText.triggerLine(kind: d.kind, ask: d.ask, trigger: d.trigger, partyName: d.partyName,
+                                        draftBody: draft?.body ?? originalDraft?.body)
+    }
+
     /// "Antwoord aan Noordkust".
     var title: String {
         guard let d = detail else { return "Voorstel" }
@@ -256,10 +277,11 @@ final class ProposalModel {
         case "sent":
             if isQuestion { return SendBar(icon: "checkmark.circle.fill", tone: .ok, title: SendCopy.answered, button: .back) }
             return SendBar(icon: "checkmark.circle.fill", tone: .ok, title: "Verstuurd aan \(recipientName)",
-                           detail: ProposalText.sentLine(subject: draft?.subject), button: .back)
+                           detail: ProposalText.sentLine(subject: draft?.subject),
+                           stamp: d.sentAt.map(ProposalText.clock), button: .back)
         case "failed":
-            return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: SendCopy.failed,
-                           detail: d.error ?? SendCopy.failedDetail)
+            let f = ProposalText.failure(d.error)
+            return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: f.title, detail: f.detail)
         case "rejected":
             return SendBar(title: SendCopy.rejected, detail: SendCopy.rejectedDetail, button: .back)
         case "superseded":
@@ -456,5 +478,7 @@ extension ProposalModel {
     /// A capture's moment the screen otherwise reaches only by a gesture
     /// (`-fixtures-proposal`): the Face ID sheet up, or just cancelled.
     func fixtureSetPhase(_ p: SendPhase) { phase = p }
+    /// "Goedgekeurd met Face ID": the capture of a send approved on this screen.
+    func fixtureSetApprovedHere() { approvedHere = true }
 }
 #endif

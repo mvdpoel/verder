@@ -6,6 +6,8 @@ import Foundation
 enum ProposalText {
     static let amsterdam = ProposalFormat.amsterdam
 
+    static let nbsp = "\u{00A0}"
+
     // MARK: - Header
 
     /// "Antwoord", "Opvolging", "Vraag".
@@ -95,19 +97,30 @@ enum ProposalText {
 
     /// "AANLEIDING · MAIL · 2 NOV 09:14", or for a follow-up "AANLEIDING · 26 DAGEN STIL".
     static func triggerMeta(kind: String, trigger: ProposalDetail.Trigger, now: Date) -> String {
+        triggerMetaGroups(kind: kind, trigger: trigger, now: now).joined(separator: " · ")
+            .replacingOccurrences(of: nbsp, with: " ")
+    }
+
+    /// The same line as groups that never break inside: "Aanleiding · Mail"
+    /// and "2 nov 09:14". Where the line does not fit, it wraps BETWEEN
+    /// groups and the dot between them goes, so no line ends on a "·". Inside
+    /// a group the spaces are NO-BREAK spaces: a group is one word to the
+    /// layout (and to `wholeWords`, which steps the size down before it breaks).
+    static func triggerMetaGroups(kind: String, trigger: ProposalDetail.Trigger, now: Date) -> [String] {
         if kind == "follow-up", let date = trigger.date, let days = daysSilent(since: date, now: now) {
-            return "Aanleiding · \(days) \(days == 1 ? "dag" : "dagen") stil"
+            return ["Aanleiding", "\(days)\(nbsp)\(days == 1 ? "dag" : "dagen")\(nbsp)stil"]
         }
-        var parts = ["Aanleiding"]
+        var head = "Aanleiding"
         switch trigger.type {
-        case "email", "external": parts.append("Mail")
-        case "document": parts.append("Brief")
-        case "task": parts.append("Taak")
-        case "proposal": parts.append("Eerder antwoord")
+        case "email", "external": head += "\(nbsp)·\(nbsp)Mail"
+        case "document": head += "\(nbsp)·\(nbsp)Brief"
+        case "task": head += "\(nbsp)·\(nbsp)Taak"
+        case "proposal": head += "\(nbsp)·\(nbsp)Eerder\(nbsp)antwoord"
         default: break
         }
-        if let date = trigger.date { parts.append("\(dayMonthName(date)) \(clock(date))") }
-        return parts.joined(separator: " · ")
+        var groups = [head]
+        if let date = trigger.date { groups.append("\(dayMonthName(date))\(nbsp)\(clock(date))".replacingOccurrences(of: " ", with: nbsp)) }
+        return groups
     }
 
     /// Whole Amsterdam calendar days from `date` to `now` (the clock's own
@@ -128,6 +141,20 @@ enum ProposalText {
         return name.isEmpty ? nil : name
     }
 
+    /// "Ilse" from a draft that opens "Beste Ilse,": the one person the
+    /// letter is written to. Nil for "Geachte heer …", "Beste allen" or no
+    /// greeting — a name is only taken when it is one capitalised word.
+    static func greetedName(_ body: String) -> String? {
+        let first = body.replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: true).first
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        guard let r = first.range(of: #"^(Beste|Hallo|Hoi|Dag)\s+(\p{Lu}[\p{L}'-]*)\s*,?$"#, options: .regularExpression)
+        else { return nil }
+        let words = first[r].split(separator: " ")
+        guard words.count == 2 else { return nil }
+        return String(words[1]).trimmingCharacters(in: CharacterSet(charactersIn: ","))
+    }
+
     /// "ilse@noordkust.example" from "Ilse <ilse@noordkust.example>".
     static func address(_ from: String?) -> String? {
         guard let from, let lt = from.firstIndex(of: "<"), let gt = from.lastIndex(of: ">"), lt < gt else { return nil }
@@ -136,12 +163,13 @@ enum ProposalText {
 
     /// The trigger card's sentence, as (bold lead, the rest): "**Ilse** vraagt
     /// om je loonstrook van oktober." A follow-up: "**Jouw vraag van 7 okt**
-    /// staat nog open bij Noordkust." The lead is bold only when the ask
-    /// really starts with the sender's name; nothing is reworded.
+    /// staat nog open bij Ilse." — the person the draft greets, else the
+    /// party's short name. The lead is bold only when the ask really starts
+    /// with the sender's name; nothing is reworded.
     static func triggerLine(kind: String, ask: String?, trigger: ProposalDetail.Trigger,
-                            partyName: String?) -> (lead: String?, rest: String)? {
+                            partyName: String?, draftBody: String? = nil) -> (lead: String?, rest: String)? {
         if kind == "follow-up", let date = trigger.date {
-            let who = partyName.map(VoorJouList.shortParty) ?? "de ander"
+            let who = draftBody.flatMap(greetedName) ?? partyName.map(VoorJouList.shortParty) ?? "de ander"
             return ("Jouw vraag van \(dayMonthName(date))", " staat nog open bij \(who).")
         }
         guard let ask = ask?.trimmingCharacters(in: .whitespacesAndNewlines), !ask.isEmpty else { return nil }
@@ -150,6 +178,18 @@ enum ProposalText {
             return (name, String(sentence.dropFirst(name.count)))
         }
         return (nil, sentence)
+    }
+
+    /// The sheet the trigger card opens: "Mail van Ilse", "Jouw vraag van 7 okt".
+    static func triggerSheetTitle(_ t: ProposalDetail.Trigger) -> String {
+        if t.type == "proposal" { return t.date.map { "Jouw vraag van \(dayMonthName($0))" } ?? "Jouw eerdere vraag" }
+        if let name = displayName(t.from) { return "Mail van \(name)" }
+        return t.subject ?? "De mail"
+    }
+
+    /// The ⋯ menu's way to what started the proposal.
+    static func openTriggerLabel(_ t: ProposalDetail.Trigger) -> String {
+        t.type == "proposal" ? "Jouw eerdere vraag openen" : "Originele mail openen"
     }
 
     // MARK: - Draft
@@ -170,6 +210,23 @@ enum ProposalText {
             s.removeSubrange(r)
         }
         return s
+    }
+
+    /// The draft section's head: "CONCEPT · VERSIE 2", or once Martin has
+    /// changed it "CONCEPT · AANGEPAST DOOR JOU"; "VERSTUURD BERICHT" after.
+    static func conceptLabel(status: String, edited: Bool, version: Int?) -> String {
+        if status == "sent" { return "Verstuurd bericht" }
+        if edited { return "Concept · Aangepast door jou" }
+        if let version, status != "drafting" { return "Concept · Versie \(version)" }
+        return "Concept"
+    }
+
+    /// The two lines under an edited draft: "1 ZIN TOEGEVOEGD DOOR JOU" over
+    /// "VERSIE 2 VAN VERDER BEWAARD". Nil when nothing changed.
+    static func editSummary(_ changes: DraftChanges?, version: Int?) -> (what: String, kept: String)? {
+        guard let summary = changes?.summary else { return nil }
+        let kept = version.map { "Versie \($0) van verder bewaard" } ?? "Het concept van verder blijft bewaard"
+        return ("\(summary) door jou", kept)
     }
 
     /// "Kopieer concepttekst": the subject, a blank line, the body.
@@ -208,6 +265,20 @@ enum ProposalText {
         return "Staat in je logboek en in de draad \(s)."
     }
 
+    /// What a failed send says: the headline, and the worker's reason without
+    /// its raw status code. "Er is niets verstuurd" only when that is known —
+    /// a send that could not be found in Verzonden may have gone out.
+    static func failure(_ error: String?) -> (title: String, detail: String) {
+        guard let error = error?.trimmingCharacters(in: .whitespacesAndNewlines), !error.isEmpty else {
+            return (SendCopy.failed, SendCopy.failedDetail)
+        }
+        let unsure = error.localizedCaseInsensitiveContains("verzonden")
+        var reason = error.replacingOccurrences(of: #"\s*\(\d{3}\)"#, with: "", options: .regularExpression)
+        reason = reason.prefix(1).uppercased() + reason.dropFirst()
+        if let last = reason.last, !".?!".contains(last) { reason += "." }
+        return (unsure ? SendCopy.failed : SendCopy.failedNothingSent, reason)
+    }
+
     // MARK: - Attachments and sources
 
     /// Decimal units, Dutch decimal comma, as the frames: 184 320 → "184 KB",
@@ -241,7 +312,7 @@ enum ProposalText {
             let date = trigger.date.map { " · \(dayMonthName($0)) \(clock($0))" } ?? ""
             return (title, "Mail\(date)")
         }
-        let meta: String
+        var meta: String
         switch c.type {
         case "email": meta = "Mail"
         case "document": meta = "Dossier"
@@ -254,7 +325,37 @@ enum ProposalText {
         case "kb": meta = "Kennisbank"
         default: meta = c.type
         }
+        if c.type == "document", let soort = c.docType?.trimmingCharacters(in: .whitespaces), !soort.isEmpty {
+            meta += " · \(soort)"
+        }
+        if c.type == "stop" || c.type == "task", let state = c.state.flatMap(stateName) { meta += " · \(state)" }
         return (c.label, meta)
+    }
+
+    /// "Open", "Afgerond", "Wacht": a stop's or task's state in Dutch; nil
+    /// for one this build does not know (never shown raw).
+    static func stateName(_ state: String) -> String? {
+        switch state {
+        case "open": "Open"
+        case "done": "Afgerond"
+        case "waiting": "Wacht"
+        case "in-progress", "in_progress": "Bezig"
+        case "ended": "Beëindigd"
+        default: nil
+        }
+    }
+
+    /// Breaks an address or a file name may take when it does not fit one
+    /// line: after "@" and after each ".", never inside a word part
+    /// ("Loonstrook." / "2026-10.pdf", "ilse@" / "noordkust." / "example").
+    /// For DISPLAY only — the zero-width spaces must never reach a field.
+    static func softBreaks(_ s: String) -> String {
+        var out = ""
+        for (i, ch) in s.enumerated() {
+            out.append(ch)
+            if (ch == "@" || ch == "."), i < s.count - 1 { out.append("\u{200B}") }
+        }
+        return out
     }
 
     static func sourcesCount(_ n: Int) -> String { n == 1 ? "1 bron" : "\(n) bronnen" }
@@ -419,6 +520,8 @@ struct SendBar: Equatable {
     var detail: String? = nil
     /// The mono line: "NAAR ilse@noordkust.example · 1 BIJLAGE".
     var meta: String? = nil
+    /// The mono moment under the words: "09:31" when the send landed.
+    var stamp: String? = nil
     var button: Button? = nil
 }
 
@@ -441,6 +544,7 @@ enum SendCopy {
     static let approvedMeta = "Gmail bevestigt meestal binnen 1 minuut"
     static let sending = "Wordt verstuurd…"
     static let failed = "Versturen mislukt."
+    static let failedNothingSent = "Versturen mislukt. Er is niets verstuurd."
     static let failedDetail = "verder kon de mail niet versturen."
     static let rejected = "Afgewezen."
     static let rejectedDetail = "Er is niets verstuurd."

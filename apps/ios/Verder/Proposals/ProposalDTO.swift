@@ -41,6 +41,10 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
         let id: String
         let label: String
         let why: String?
+        /// A document's soort ("Loonstrook"), when the server names one.
+        var docType: String? = nil
+        /// A stop's or task's state ("open", "done"), when the server names one.
+        var state: String? = nil
     }
 
     struct Reply: Decodable, Equatable, Sendable {
@@ -110,6 +114,12 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     let attachable: [Attachable]
     let options: [Option]
     let error: String?
+    /// Which of verder's drafts this is (1 for the first, 2 after a re-draft).
+    /// Not yet served by every server: absent, the screen names no version.
+    /// While `drafting`, the version that is being replaced, if any.
+    var draftVersion: Int? = nil
+    /// When Gmail accepted the send. Absent on an older server.
+    var sentAt: Date? = nil
 }
 
 /// What the phone may change before approving, exactly the `payload` of

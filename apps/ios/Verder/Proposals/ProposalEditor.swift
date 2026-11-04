@@ -12,7 +12,8 @@ struct ProposalEditor: View {
     @State private var toText: String
     @State private var ccText: String
     @State private var confirmingDiscard = false
-    @FocusState private var bodyFocused: Bool
+    @FocusState private var focus: Field?
+    enum Field: Hashable { case to, cc, subject, body }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -45,12 +46,7 @@ struct ProposalEditor: View {
                         // Addresses stay on ONE line (a field scrolls sideways,
                         // never wraps at "@" or a dot); only the Cc prompt,
                         // which is words, wraps.
-                        row("Aan") {
-                            TextField("", text: $toText)
-                                .keyboardType(.emailAddress)
-                                .truncationMode(.middle)
-                                .modifier(EditorField(mono: false))
-                        }
+                        row("Aan") { toField }
                         row("Cc") {
                             ZStack(alignment: .topLeading) {
                                 if ccText.isEmpty {
@@ -63,19 +59,20 @@ struct ProposalEditor: View {
                                 }
                                 TextField("", text: $ccText)
                                     .keyboardType(.emailAddress)
-                                    .truncationMode(.middle)
+                                    .focused($focus, equals: .cc)
                                     .modifier(EditorField(mono: false))
                             }
                         }
                         row("Onderwerp") {
                             TextField("", text: $working.subject, axis: .vertical)
+                                .focused($focus, equals: .subject)
                                 .modifier(EditorField(mono: false))
                         }
                         TextField("", text: $working.body, axis: .vertical)
                             .font(.display(17, relativeTo: .body))
                             .foregroundStyle(Color.ink)
                             .lineSpacing(4)
-                            .focused($bodyFocused)
+                            .focused($focus, equals: .body)
                             .padding(.top, 18)
                             .accessibilityLabel("Tekst van het concept")
                         if let original = model.originalDraft,
@@ -89,14 +86,6 @@ struct ProposalEditor: View {
                             .padding(.top, 14)
                         }
                         attachments.padding(.top, 28)
-                        VStack(alignment: .leading, spacing: 8) {
-                            ProposalLabel("In het logboek als")
-                            TextField("", text: Binding(get: { working.entrySummary },
-                                                        set: { working.entrySummary = String($0.prefix(100)) }),
-                                      axis: .vertical)
-                                .modifier(EditorField(mono: false))
-                        }
-                        .padding(.top, 28)
                         Text("Klaar bewaart je versie en brengt je terug naar het voorstel. Versturen gebeurt daar, met vasthouden en Face ID.")
                             .font(.display(15, relativeTo: .callout))
                             .foregroundStyle(Color.inkMute)
@@ -108,20 +97,17 @@ struct ProposalEditor: View {
                     .frameLeading()
                 }
                 .scrollDismissesKeyboard(.interactively)
+                if confirmingDiscard { discardSheet }
             }
+            .animation(.easeOut(duration: 0.2), value: confirmingDiscard)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuleren") { if dirty { confirmingDiscard = true } else { dismiss() } }
-                        .foregroundStyle(Color.signalLink)
-                        // Anchored to Annuleren: iOS draws it from the button.
-                        .confirmationDialog("Wijzigingen weggooien?", isPresented: $confirmingDiscard,
-                                            titleVisibility: .visible) {
-                            Button("Wijzigingen weggooien", systemImage: "trash") { dismiss() }
-                            Button("Doorgaan met aanpassen", role: .cancel) {}
-                        } message: {
-                            Text("Je aanpassingen aan dit concept gaan verloren. Het oorspronkelijke concept blijft staan.")
-                        }
+                    Button("Annuleren") {
+                        if dirty { focus = nil; confirmingDiscard = true } else { dismiss() }
+                    }
+                    .foregroundStyle(Color.signalLink)
+                    .disabled(confirmingDiscard)
                 }
                 ToolbarItem(placement: .principal) {
                     Text("Concept aanpassen")
@@ -137,6 +123,27 @@ struct ProposalEditor: View {
                         dismiss()
                     }
                     .foregroundStyle(Color.signalLink)
+                    .disabled(confirmingDiscard)
+                }
+                // Over the keyboard: a file from the dossier, and the keyboard away.
+                ToolbarItemGroup(placement: .keyboard) {
+                    attachMenu {
+                        // Words and icon both: a bare Label here draws the icon only.
+                        HStack(spacing: 6) {
+                            Image(systemName: "paperclip")
+                            Text("Bijlage").font(.display(17, relativeTo: .body))
+                        }
+                        .foregroundStyle(Color.signalLink)
+                        .fixedSize()
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Bijlage uit je dossier")
+                    }
+                    Spacer()
+                    Button { focus = nil } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .foregroundStyle(Color.signalLink)
+                    }
+                    .accessibilityLabel("Toetsenbord weg")
                 }
             }
         }
@@ -184,10 +191,8 @@ struct ProposalEditor: View {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         let title = known[id]?.title ?? titles[id] ?? id
-                        Text(title)
-                            .font(.display(17, relativeTo: .body, weight: .medium))
+                        WrappingName(title, font: .display(17, relativeTo: .body, weight: .medium))
                             .foregroundStyle(Color.inkBright)
-                            .oneLine()
                         if let size = known[id]?.sizeBytes, size > 0 {
                             ProposalLabel([ProposalText.fileKind(title), ProposalText.bytes(size)].compactMap { $0 }
                                 .joined(separator: " · "), color: .inkDim)
@@ -206,13 +211,8 @@ struct ProposalEditor: View {
                 }
                 .padding(.vertical, 4)
             }
-            let addable = offered.filter { !ids.contains($0.id) }
             if !addable.isEmpty {
-                Menu {
-                    ForEach(addable) { doc in
-                        Button(doc.title) { working.attachmentDocumentIds.append(doc.id) }
-                    }
-                } label: {
+                attachMenu {
                     Label("Bijlage uit je dossier", systemImage: "plus")
                         .font(.display(17, relativeTo: .body))
                         .foregroundStyle(Color.signalLink)
@@ -224,6 +224,115 @@ struct ProposalEditor: View {
         }
     }
 
+    /// What the dossier offers that is not attached yet: ONLY the server's
+    /// `attachable` (approve refuses anything else).
+    private var addable: [ProposalDetail.Attachable] {
+        (model.detail?.attachable ?? []).filter { !working.attachmentDocumentIds.contains($0.id) }
+    }
+
+    private func attachMenu<L: View>(@ViewBuilder label: () -> L) -> some View {
+        Menu {
+            ForEach(addable) { doc in
+                Button(doc.title) { working.attachmentDocumentIds.append(doc.id) }
+            }
+        } label: { label() }
+        .disabled(addable.isEmpty)
+    }
+
+    /// The Aan field. At the accessibility sizes, at rest, the address WRAPS
+    /// after "@" and its dots ("ilse@" / "noordkust." / "example") — a field
+    /// would scroll it sideways and show a part; a tap puts the field back.
+    @ViewBuilder
+    private var toField: some View {
+        if ax, focus != .to, !toText.isEmpty {
+            Button { focus = .to } label: {
+                WrappingName(toText, font: .display(17, relativeTo: .body))
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Dubbeltik om aan te passen")
+        } else {
+            TextField("", text: $toText, axis: ax ? .vertical : .horizontal)
+                .keyboardType(.emailAddress)
+                .focused($focus, equals: .to)
+                .modifier(EditorField(mono: false))
+        }
+    }
+
+    /// "Wijzigingen weggooien?" as a sheet from the bottom (frame "Aanpassen ·
+    /// wijzigingen weggooien"): the question, the destructive row, and its
+    /// own way back. Not a confirmationDialog: anchored to Annuleren, iOS 26
+    /// draws that as a narrow popover with no cancel row.
+    private var discardSheet: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.5).ignoresSafeArea()
+                .onTapGesture { confirmingDiscard = false }
+                .accessibilityHidden(true)
+            ViewThatFits(in: .vertical) {
+                discardButtons
+                ScrollView { discardButtons }.scrollBounceBehavior(.basedOnSize)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private var discardButtons: some View {
+        VStack(spacing: 8) {
+            VStack(spacing: 0) {
+                VStack(spacing: 6) {
+                    Text("Wijzigingen weggooien?")
+                        .font(.display(17, relativeTo: .headline, weight: .medium))
+                        .foregroundStyle(Color.inkBright)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Je aanpassingen aan dit concept gaan verloren. Het oorspronkelijke concept blijft staan.")
+                        .font(.display(15, relativeTo: .callout))
+                        .foregroundStyle(Color.inkMute)
+                }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                Rectangle().fill(Color.hairline).frame(height: 1)
+                Button(role: .destructive) { dismiss() } label: {
+                    Label("Wijzigingen weggooien", systemImage: "trash")
+                        .font(.display(17, relativeTo: .body))
+                        .foregroundStyle(Color.inkBright)
+                        .labelStyle(TightLabel())
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .background(sheetCard)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.edgeStrong, lineWidth: 1))
+            Button { confirmingDiscard = false } label: {
+                Text("Doorgaan met aanpassen")
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.signalLink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(sheetCard)
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.edgeStrong, lineWidth: 1))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// An action-sheet card: opaque, so the editor never shows through it.
+    private var sheetCard: some View {
+        RoundedRectangle(cornerRadius: 14).fill(Color.void)
+            .overlay(RoundedRectangle(cornerRadius: 14).fill(Color.plate))
+    }
+
     static func addresses(_ text: String) -> [String] {
         ProposalScreenAddresses.split(text)
     }
@@ -233,7 +342,7 @@ struct ProposalEditor: View {
         switch FixtureLaunch.current?.proposal {
         case .typen?:
             try? await Task.sleep(for: .milliseconds(400))
-            bodyFocused = true
+            focus = .body
         case .weggooien?:
             try? await Task.sleep(for: .milliseconds(400))
             confirmingDiscard = true

@@ -133,7 +133,7 @@ struct FixtureLaunch: Equatable, Sendable {
 
     /// The proposal screen's gesture-only states (`-fixtures-proposal`).
     enum ProposalState: String, CaseIterable, Sendable {
-        case hold, faceid, afgebroken, aangepast, editor, typen, weggooien, afwijzen
+        case hold, faceid, afgebroken, aangepast, editor, typen, weggooien, afwijzen, goedgekeurd, bron
     }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).

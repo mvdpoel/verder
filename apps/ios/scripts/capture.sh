@@ -71,7 +71,7 @@
 #            (@<y>: the row's point y — 0 top, 1 bottom — on the same point
 #            of the visible list; without it the row's top is at the top)
 #   --proposal  the proposal screen (route proposal:<id>) in a state only a
-#            gesture reaches: hold faceid afgebroken aangepast editor typen
+#            gesture reaches: hold faceid afgebroken aangepast editor typen goedgekeurd bron
 #            weggooien afwijzen. On a proposal route, --scroll rest puts the
 #            trigger card at the top (the frames' "scrolled" position),
 #            middle the attachments and end the end
@@ -183,8 +183,8 @@ while [ $# -gt 0 ]; do
       shift ;;
     --proposal)
       [ $# -ge 2 ] || usage
-      case "$2" in hold|faceid|afgebroken|aangepast|editor|typen|weggooien|afwijzen) PROPOSAL="$2" ;;
-        *) echo "capture.sh: --proposal takes hold, faceid, afgebroken, aangepast, editor, typen, weggooien or afwijzen" >&2; exit 2 ;; esac
+      case "$2" in hold|faceid|afgebroken|aangepast|editor|typen|weggooien|afwijzen|goedgekeurd|bron) PROPOSAL="$2" ;;
+        *) echo "capture.sh: --proposal takes hold, faceid, afgebroken, aangepast, editor, typen, weggooien, afwijzen, goedgekeurd or bron" >&2; exit 2 ;; esac
       shift ;;
     --swipe)
       [ $# -ge 2 ] || usage

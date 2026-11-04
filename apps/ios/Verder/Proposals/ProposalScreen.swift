@@ -27,7 +27,17 @@ struct ProposalScreen: View {
     @State private var holdTask: Task<Void, Never>?
     @State private var holdTicks = 0
     @State private var confirmingAccessibleSend = false
-    @State private var showsInlineTitle = false
+    /// How far the page has scrolled from its top.
+    @State private var scrolled: CGFloat = 0
+    /// What a source row, the trigger card or "Originele mail openen" shows
+    /// when it has no screen of its own.
+    @State private var sourceSheet: SourceSheetItem?
+    /// Where the page's large title ends, in the scroll's CONTENT space.
+    @State private var titleBottom: CGFloat = .infinity
+    /// Derived from both, so whichever arrives last still decides. The last
+    /// 8 pt of the title's line are its descender space: once only those are
+    /// left above the bar, the words themselves are under it.
+    private var showsInlineTitle: Bool { scrolled + 8 > titleBottom }
     @State private var fixtureApplied = false
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -76,11 +86,25 @@ struct ProposalScreen: View {
                     .padding(.bottom, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frameLeading()
+                    .coordinateSpace(.named(ProposalAnchor.page))
                 }
                 .scrollDismissesKeyboard(.interactively)
-                // The bar names the proposal once the page's own title is gone.
-                .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 64 } action: { _, past in
-                    showsInlineTitle = past
+                // The bar names the proposal once the page's own title has
+                // gone UNDER it — measured, not a fixed offset, so the rule
+                // holds at AX5, where the title is three lines and ~200 pt.
+                .onPreferenceChange(LargeTitleBottom.self) { bottom in
+                    MainActor.assumeIsolated { titleBottom = bottom }
+                }
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, now in
+                    scrolled = now
+                }
+                // Opaque, as the frames draw it: nothing scrolled under the
+                // bar shows through behind its title.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    Rectangle().fill(Color.void).frame(height: 2)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(Color.hairline).frame(height: 1).opacity(showsInlineTitle ? 1 : 0)
+                        }
                 }
                 .task(id: model?.detail?.id) { await applyFixture(proxy) }
             }
@@ -97,14 +121,16 @@ struct ProposalScreen: View {
         .preferredColorScheme(.dark)
         .navigationTitle(model?.title ?? "Voorstel")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.void, for: .navigationBar)
+        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ViewThatFits(in: .horizontal) {
                     navTitle(model?.title ?? "")
                     navTitle(model?.detail.map { ProposalText.kindTitle($0.kind) } ?? "")
                 }
-                .opacity(showsInlineTitle || ax ? 1 : 0)
-                .accessibilityHidden(!(showsInlineTitle || ax))
+                .opacity(showsInlineTitle ? 1 : 0)
+                .accessibilityHidden(!showsInlineTitle)
             }
             ToolbarItem(placement: .topBarTrailing) { moreMenu }
         }
@@ -131,6 +157,9 @@ struct ProposalScreen: View {
         }
         .sheet(isPresented: $rejecting) {
             if let model { RejectSheet(model: model) }
+        }
+        .sheet(item: $sourceSheet) { item in
+            if let d = model?.detail { sourceSheetView(item, d) }
         }
         .confirmationDialog(pendingOption?.target ?? "", isPresented: Binding(
             get: { pendingOption != nil }, set: { if !$0 { pendingOption = nil } }
@@ -166,7 +195,7 @@ struct ProposalScreen: View {
     @ViewBuilder
     private func content(_ model: ProposalModel, _ d: ProposalDetail, _ proxy: ScrollViewProxy) -> some View {
         header(model, d)
-        TriggerCard(model: model, detail: d, now: now())
+        triggerLink(model, d)
             .padding(.top, 22)
             .id(ProposalAnchor.trigger)
         if model.showsMissing {
@@ -190,7 +219,8 @@ struct ProposalScreen: View {
                 if model.taskCreated {
                     ProposalLabel("Taak aangemaakt: \(title)", color: .steel)
                 } else {
-                    AuthButton(title: "Taak aanmaken: \(title)", weight: .secondary, enabled: !model.isBusy) {
+                    AuthButton(title: "Taak aanmaken: \(title)", weight: model.isBusy ? .secondary : .outline,
+                               enabled: !model.isBusy) {
                         Task { await model.createTask() }
                     }
                 }
@@ -200,9 +230,11 @@ struct ProposalScreen: View {
         if model.isPending && (ax || d.kind == "question") {
             VStack(spacing: 12) {
                 if model.draft != nil, ax {
-                    AuthButton(title: "Aanpassen", weight: .secondary, enabled: !model.isBusy) { editing = true }
+                    AuthButton(title: "Aanpassen", weight: model.isBusy ? .secondary : .outline,
+                               enabled: !model.isBusy) { editing = true }
                 }
-                AuthButton(title: "Afwijzen", weight: .secondary, enabled: !model.isBusy) { rejecting = true }
+                AuthButton(title: "Afwijzen", weight: model.isBusy ? .secondary : .outline,
+                           enabled: !model.isBusy) { rejecting = true }
             }
             .padding(.top, 32)
         }
@@ -216,6 +248,35 @@ struct ProposalScreen: View {
         Color.clear.frame(height: 1).id(ProposalAnchor.end)
     }
 
+    /// The trigger card opens what started it: a scanned letter's document,
+    /// else the mail (or the earlier question) as the proposal knows it.
+    @ViewBuilder
+    private func triggerLink(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
+        let card = TriggerCard(model: model, detail: d, now: now())
+        if d.trigger.type == "document" {
+            NavigationLink(value: InboxRoute.document(id: d.trigger.id, title: d.trigger.subject ?? "Brief")) { card }
+                .buttonStyle(.plain)
+        } else {
+            Button { sourceSheet = .trigger } label: { card }
+                .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func sourceSheetView(_ item: SourceSheetItem, _ d: ProposalDetail) -> some View {
+        switch item {
+        case .trigger:
+            SourceSheet(title: ProposalText.triggerSheetTitle(d.trigger),
+                        meta: ProposalText.triggerMeta(kind: d.kind, trigger: d.trigger, now: now()),
+                        why: nil, trigger: d.trigger)
+        case .source(let i):
+            let c = d.reliedOn[i]
+            let s = ProposalText.source(c, trigger: d.trigger)
+            SourceSheet(title: s.title, meta: s.meta, why: c.why,
+                        trigger: c.type == "email" && c.id == d.trigger.id ? d.trigger : nil)
+        }
+    }
+
     private func header(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             // At AX5 the eyebrow is dropped (frame "AX5 · begin"): the title
@@ -227,6 +288,12 @@ struct ProposalScreen: View {
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+                .background {
+                    GeometryReader { g in
+                        Color.clear.preference(key: LargeTitleBottom.self,
+                                               value: g.frame(in: .named(ProposalAnchor.page)).maxY)
+                    }
+                }
             let badge = ProposalText.badge(status: d.status)
             let note = ProposalText.badgeNote(status: d.status, createdAt: d.createdAt, now: now(), offline: offline)
             if badge != nil || note != nil {
@@ -256,10 +323,7 @@ struct ProposalScreen: View {
 
     @ViewBuilder
     private func conceptSection(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
-        let label: String = switch d.status {
-        case "sent": "Verstuurd bericht"
-        default: model.isEdited ? "Concept · aangepast door jou" : "Concept"
-        }
+        let label = model.conceptLabel
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 ProposalLabel(label)
@@ -275,7 +339,7 @@ struct ProposalScreen: View {
                 }
             }
             switch d.status {
-            case "drafting": DraftingCard()
+            case "drafting": DraftingCard(redraft: model.isRedraft)
             case "draft-failed": DraftFailedCard(error: d.error)
             default:
                 if model.draft != nil {
@@ -296,7 +360,7 @@ struct ProposalScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(d.reliedOn.enumerated()), id: \.offset) { i, c in
                     if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                    SourceRow(citation: c, trigger: d.trigger)
+                    SourceRow(citation: c, trigger: d.trigger) { sourceSheet = .source(i) }
                 }
             }
             .padding(.horizontal, 16)
@@ -376,11 +440,11 @@ struct ProposalScreen: View {
             case .disabled(let label)?:
                 AuthButton(title: label, weight: .secondary, enabled: false) {}
             case .readDraft?:
-                AuthButton(title: SendCopy.readDraft, weight: .secondary) {
+                AuthButton(title: SendCopy.readDraft, weight: .outline) {
                     withAnimation { proxy.scrollTo(ProposalAnchor.draftEnd, anchor: .bottom) }
                 }
             case .back?:
-                AuthButton(title: SendCopy.back, weight: .secondary) { dismiss() }
+                AuthButton(title: SendCopy.back, weight: .outline) { dismiss() }
             case nil:
                 EmptyView()
             }
@@ -433,9 +497,13 @@ struct ProposalScreen: View {
             if model?.isPending == true {
                 Button("Afwijzen", systemImage: "xmark") { rejecting = true }
             }
+            if let d = model?.detail, d.trigger.type != "document" {
+                Button(ProposalText.openTriggerLabel(d.trigger), systemImage: "envelope") { sourceSheet = .trigger }
+            }
             if let d = model?.draft {
-                // Not "Kopieer concepttekst": the system menu is narrow and
-                // hyphenates that word, and a word never breaks in the middle.
+                // Not "Kopieer concepttekst" (the frame's words): the system
+                // menu is narrow, iOS hyphenates that word to "concept-/tekst",
+                // and a word never breaks in the middle (measured 2026-11-04).
                 Button("Tekst kopiëren", systemImage: "doc.on.doc") {
                     UIPasteboard.general.string = ProposalText.copyText(d)
                 }
@@ -482,6 +550,8 @@ struct ProposalScreen: View {
             if let body = model.draft?.body { model.edit(body: ProposalFixtureEdit.apply(to: body)) }
             if launch.proposal != .aangepast { editing = true }
         case .afwijzen?: rejecting = true
+        case .goedgekeurd?: model.fixtureSetApprovedHere()
+        case .bron?: sourceSheet = .trigger
         case nil: break
         }
         try? await Task.sleep(for: .milliseconds(300))
@@ -496,7 +566,22 @@ struct ProposalScreen: View {
 }
 
 enum ProposalAnchor: Hashable {
-    case trigger, attachments, draftEnd, end
+    case trigger, attachments, draftEnd, end, page
+}
+
+/// Where the page's own large title ends, in the scroll's content space:
+/// once the scroll has moved further than that, it is under the bar.
+private struct LargeTitleBottom: PreferenceKey {
+    static let defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
+}
+
+/// The sheet a source opens when it has no screen of its own.
+enum SourceSheetItem: Identifiable, Hashable {
+    case trigger
+    /// The index in `reliedOn`.
+    case source(Int)
+    var id: Self { self }
 }
 
 #if DEBUG

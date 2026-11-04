@@ -30,6 +30,8 @@ struct ProposalLabel: View {
 struct StatusBadge: View {
     let badge: ProposalText.Badge
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The dot's gap grows with the text, or at AX5 it touches the "W".
+    @ScaledMetric(relativeTo: .caption) private var gap: CGFloat = 6
 
     private var color: Color {
         switch badge {
@@ -42,7 +44,7 @@ struct StatusBadge: View {
     var body: some View {
         let ax = typeSize.isAccessibilitySize
         let text = ProposalText.badgeText(badge)
-        HStack(spacing: 6) {
+        HStack(spacing: gap) {
             Circle().fill(color).frame(width: ax ? 10 : 5, height: ax ? 10 : 5)
             Text(ax ? text : text.uppercased())
                 .font(.mono(12, relativeTo: .caption, weight: .medium))
@@ -66,54 +68,86 @@ struct TightLabel: LabelStyle {
     }
 }
 
-/// An e-mail address or a file name on ONE line, cut in the middle when it
-/// does not fit — never wrapped at its "@" or its dots (Martin's rule for
-/// the accessibility sizes). At the ordinary sizes a file name may wrap,
-/// as the frames draw "Beschikking Rechtbank Westerlaan 2026.pdf".
-struct OneLine: ViewModifier {
-    var always = false
-    @Environment(\.dynamicTypeSize) private var typeSize
+/// An e-mail address or a file name that WRAPS rather than clips (Martin's
+/// rule: no text is ever cut off), breaking only after "@" and after a dot
+/// ("Loonstrook." / "2026-10.pdf") — never inside a word part. VoiceOver
+/// reads the text as written.
+struct WrappingName: View {
+    let text: String
+    let font: Font
 
-    func body(content: Content) -> some View {
-        if always || typeSize.isAccessibilitySize {
-            content.lineLimit(1).truncationMode(.middle)
-        } else {
-            content.fixedSize(horizontal: false, vertical: true)
-        }
+    init(_ text: String, font: Font) {
+        self.text = text
+        self.font = font
+    }
+
+    var body: some View {
+        Text(ProposalText.softBreaks(text))
+            .font(font)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel(text)
     }
 }
 
-extension View {
-    func oneLine(always: Bool = false) -> some View { modifier(OneLine(always: always)) }
+/// The small chevron of a row that opens something.
+struct RowChevron: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color.inkDim)
+            .accessibilityHidden(true)
+    }
 }
 
 // MARK: - Trigger
 
 /// "AANLEIDING · MAIL · 2 NOV 09:14" over "**Ilse** vraagt om je loonstrook van
-/// oktober." The mail itself does not open on the phone yet (F-29).
+/// oktober.", with the chevron that opens what started it. The screen wraps
+/// it in the link or button.
 struct TriggerCard: View {
     let model: ProposalModel
     let detail: ProposalDetail
     let now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ProposalLabel(ProposalText.triggerMeta(kind: detail.kind, trigger: detail.trigger, now: now))
-            if let line = ProposalText.triggerLine(kind: detail.kind, ask: detail.ask, trigger: detail.trigger,
-                                                   partyName: detail.partyName) {
-                let lead = Text(line.lead ?? "").font(.display(17, relativeTo: .body, weight: .semibold))
-                    .foregroundStyle(Color.inkBright)
-                let rest = Text(line.rest).font(.display(17, relativeTo: .body)).foregroundStyle(Color.ink)
-                Text("\(lead)\(rest)")
-                    .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                meta
+                if let line = model.triggerLine {
+                    // Saira 15, as the frames set it: at 17 the sentence wraps
+                    // beside the chevron even on a 402-pt screen.
+                    let lead = Text(line.lead ?? "").font(.display(15, relativeTo: .callout, weight: .semibold))
+                        .foregroundStyle(Color.inkBright)
+                    let rest = Text(line.rest).font(.display(15, relativeTo: .callout)).foregroundStyle(Color.ink)
+                    Text("\(lead)\(rest)")
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note = model.senderNote { ProposalLabel(note, color: .inkMute) }
+                if let due = model.dueText { ProposalLabel(due, color: model.isPending ? .attn : .ink) }
             }
-            if let note = model.senderNote { ProposalLabel(note, color: .inkMute) }
-            if let due = model.dueText { ProposalLabel(due, color: model.isPending ? .attn : .ink) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            RowChevron().padding(.top, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassPanel()
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// One line where it fits; else one group per line, so no line ends on
+    /// a dangling "·" (frame "AX5 · begin": "Aanleiding · Mail" / "2 nov 09:14").
+    private var meta: some View {
+        let groups = ProposalText.triggerMetaGroups(kind: detail.kind, trigger: detail.trigger, now: now)
+        return ViewThatFits(in: .horizontal) {
+            ProposalLabel(groups.joined(separator: " · ")).fixedSize()
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(groups, id: \.self) { ProposalLabel($0) }
+            }
+        }
     }
 }
 
@@ -141,10 +175,10 @@ struct DraftCard: View {
                         .padding(.top, 2)
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in paragraph(line) }
                         .textSelection(.enabled)
-                    if let summary = changes?.summary {
+                    if let summary = model.editSummary {
                         VStack(alignment: .leading, spacing: 2) {
-                            ProposalLabel("Aangepast door jou · \(summary)", color: .inkDim)
-                            ProposalLabel("Het concept van verder blijft bewaard", color: .inkDim)
+                            ProposalLabel(summary.what, color: .inkDim)
+                            ProposalLabel(summary.kept, color: .inkDim)
                         }
                         .padding(.top, 4)
                     }
@@ -173,7 +207,7 @@ struct DraftCard: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 ProposalLabel(label)
-                Text(joined).font(.mono(13, relativeTo: .footnote)).foregroundStyle(Color.ink).oneLine(always: true)
+                WrappingName(joined, font: .mono(13, relativeTo: .footnote)).foregroundStyle(Color.ink)
             }
         }
         .accessibilityElement(children: .combine)
@@ -235,11 +269,9 @@ struct AttachmentRow: View {
         if attachment.unavailable {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(attachment.title)
-                        .font(.display(17, relativeTo: .body, weight: .medium))
+                    WrappingName(attachment.title, font: .display(17, relativeTo: .body, weight: .medium))
                         .foregroundStyle(Color.inkMute)
                         .strikethrough()
-                        .oneLine()
                     ProposalLabel("Niet meer beschikbaar", color: .inkDim)
                 }
                 Spacer(minLength: 8)
@@ -254,18 +286,12 @@ struct AttachmentRow: View {
             NavigationLink(value: InboxRoute.document(id: attachment.id, title: attachment.title)) {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(attachment.title)
-                            .font(.display(17, relativeTo: .body, weight: .medium))
+                        WrappingName(attachment.title, font: .display(17, relativeTo: .body, weight: .medium))
                             .foregroundStyle(Color.inkBright)
-                            .multilineTextAlignment(.leading)
-                            .oneLine()
                         ProposalLabel(meta, color: .inkDim)
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.inkDim)
-                        .accessibilityHidden(true)
+                    RowChevron()
                 }
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
@@ -282,6 +308,9 @@ struct AttachmentRow: View {
 
 /// "Wordt opgesteld · Meestal binnen 5 minuten" over the shape of a draft.
 struct DraftingCard: View {
+    /// An earlier version exists: "Wordt opnieuw opgesteld".
+    var redraft = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 12) {
@@ -290,7 +319,7 @@ struct DraftingCard: View {
                     .foregroundStyle(Color.steel)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Wordt opgesteld")
+                    Text(redraft ? "Wordt opnieuw opgesteld" : "Wordt opgesteld")
                         .font(.display(17, relativeTo: .body, weight: .medium))
                         .foregroundStyle(Color.inkBright)
                     Text("Meestal binnen 5 minuten. Je krijgt een melding als het klaar is.")
@@ -347,11 +376,13 @@ struct DraftFailedCard: View {
     }
 }
 
-/// One thing verder relied on. A dossier document opens; the others are
-/// shown, not opened, until the phone can show them.
+/// One thing verder relied on, with a chevron: every source opens. A
+/// document, a task or an earlier proposal opens its own screen; anything
+/// else (the mail, a stop, a debt) opens what the proposal knows of it.
 struct SourceRow: View {
     let citation: ProposalDetail.Citation
     let trigger: ProposalDetail.Trigger
+    let open: () -> Void
 
     var body: some View {
         let s = ProposalText.source(citation, trigger: trigger)
@@ -364,23 +395,113 @@ struct SourceRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 ProposalLabel(s.meta, color: .inkDim)
             }
-            Spacer(minLength: 8)
-            if citation.type == "document" {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.inkDim)
-                    .accessibilityHidden(true)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            RowChevron()
         }
         .padding(.vertical, 16)
         .contentShape(Rectangle())
 
-        if citation.type == "document" {
-            NavigationLink(value: InboxRoute.document(id: citation.id, title: citation.label)) { row }
+        if let route = SourceRow.route(citation) {
+            NavigationLink(value: route) { row }
                 .buttonStyle(.plain)
         } else {
-            row.accessibilityElement(children: .combine)
+            Button(action: open) { row }
+                .buttonStyle(.plain)
         }
+    }
+
+    /// The screen a source opens on the inbox stack; nil when it opens the
+    /// proposal's own sheet.
+    static func route(_ c: ProposalDetail.Citation) -> InboxRoute? {
+        switch c.type {
+        case "document": .document(id: c.id, title: c.label)
+        case "task": .task(c.id)
+        case "proposal": .proposal(c.id)
+        default: nil
+        }
+    }
+}
+
+/// What the proposal knows of a source the phone cannot open on its own
+/// screen: the mail it answers (sender, subject, when, the opening lines) or
+/// a stop or debt (its name, and why verder leaned on it).
+struct SourceSheet: View {
+    let title: String
+    let meta: String
+    let why: String?
+    let trigger: ProposalDetail.Trigger?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.void.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ProposalLabel(meta)
+                        Text(title)
+                            .font(.display(22, relativeTo: .title2, weight: .medium))
+                            .foregroundStyle(Color.inkBright)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 6)
+                            .accessibilityAddTraits(.isHeader)
+                        if let t = trigger {
+                            VStack(alignment: .leading, spacing: 10) {
+                                if let from = t.from { field("Van", from) }
+                                if let subject = t.subject { field("Onderwerp", subject) }
+                                if let date = t.date { field("Ontvangen", ProposalFormat.dateTime(date)) }
+                            }
+                            .padding(.top, 20)
+                            if let excerpt = t.excerpt?.trimmingCharacters(in: .whitespacesAndNewlines), !excerpt.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ProposalLabel("Uit de mail")
+                                    Text(excerpt)
+                                        .font(.display(17, relativeTo: .body))
+                                        .foregroundStyle(Color.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
+                                }
+                                .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .glassPanel()
+                                .padding(.top, 24)
+                            }
+                        }
+                        if let why = why?.trimmingCharacters(in: .whitespacesAndNewlines), !why.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ProposalLabel("Waarom verder hierop leunt")
+                                Text(why)
+                                    .font(.display(17, relativeTo: .body))
+                                    .foregroundStyle(Color.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.top, 28)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frameLeading()
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Klaar") { dismiss() }.foregroundStyle(Color.signalLink)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDragIndicator(.visible)
+    }
+
+    private func field(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ProposalLabel(label, color: .inkDim)
+            WrappingName(value, font: .mono(13, relativeTo: .footnote)).foregroundStyle(Color.ink)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -421,6 +542,7 @@ struct BarText: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if let meta = bar.meta { metaLine(meta, ax: ax).padding(.top, 2) }
+                    if let stamp = bar.stamp { ProposalLabel(stamp, color: .inkDim).padding(.top, 2) }
                 }
             }
             .accessibilityElement(children: .combine)
@@ -437,16 +559,20 @@ struct BarText: View {
             let to = head.hasPrefix("Naar ") ? String(head.dropFirst(5)) : head
             VStack(alignment: .leading, spacing: 2) {
                 if head.hasPrefix("Naar ") { ProposalLabel("Naar", color: .inkDim) }
-                Text(to).font(.mono(12, relativeTo: .caption)).foregroundStyle(Color.inkDim).oneLine(always: true)
+                WrappingName(to, font: .mono(12, relativeTo: .caption)).foregroundStyle(Color.inkDim)
                 ForEach(parts.dropFirst(), id: \.self) { ProposalLabel($0, color: .inkDim) }
             }
         } else {
-            Text(meta.uppercasedKeepingAddresses())
-                .font(.mono(12, relativeTo: .caption))
-                .tracking(1)
-                .foregroundStyle(Color.inkDim)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            let line = meta.uppercasedKeepingAddresses()
+            // One line where it fits; else it wraps after "@" or a dot, never clipped.
+            ViewThatFits(in: .horizontal) {
+                Text(line).lineLimit(1).fixedSize()
+                Text(ProposalText.softBreaks(line)).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(line)
+            }
+            .font(.mono(12, relativeTo: .caption))
+            .tracking(1)
+            .foregroundStyle(Color.inkDim)
         }
     }
 

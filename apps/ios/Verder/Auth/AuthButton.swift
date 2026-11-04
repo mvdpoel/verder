@@ -5,10 +5,12 @@ import SwiftUI
 /// (Saira Medium 17 on the signal gradient, with the action glow — glow only
 /// on what is pressable), `secondary` the outlined alternative beside it
 /// ("Bekijk alleen het overzicht"), `ghost` a link in signal ("Inloggen met
-/// wachtwoord", "Sla over"). Never amber: nothing here is waiting on Martin in
+/// wachtwoord", "Sla over"), `outline` the secondary's outline with its label
+/// in signal (the proposal screen's "Aanpassen", "Afwijzen", "Lees het
+/// concept", "Terug naar Voor jou"; a DISABLED one stays `secondary` grey). Never amber: nothing here is waiting on Martin in
 /// the dossier. Labels wrap rather than clip at the accessibility sizes.
 struct AuthButton: View {
-    enum Weight { case primary, secondary, ghost }
+    enum Weight { case primary, secondary, ghost, outline }
 
     let title: String
     var weight: Weight = .primary
@@ -29,7 +31,7 @@ struct AuthButton: View {
                 .frame(maxWidth: .infinity, minHeight: weight == .ghost ? 44 : 48)
                 .background(background)
                 .overlay {
-                    if weight == .secondary {
+                    if weight == .secondary || weight == .outline {
                         RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1)
                     }
                 }
@@ -49,7 +51,7 @@ struct AuthButton: View {
         switch weight {
         case .primary: .onSignal
         case .secondary: .inkBright
-        case .ghost: .signalLink
+        case .ghost, .outline: .signalLink
         }
     }
 
@@ -59,7 +61,7 @@ struct AuthButton: View {
             RoundedRectangle(cornerRadius: Radius.chip)
                 .fill(LinearGradient(colors: [.signalLit, .signal], startPoint: .top, endPoint: .bottom))
                 .opacity(enabled ? 1 : 0.42)
-        case .secondary:
+        case .secondary, .outline:
             RoundedRectangle(cornerRadius: Radius.chip).fill(Color.field)
         case .ghost:
             Color.clear
