@@ -56,7 +56,8 @@ struct InboxCache: Sendable {
 /// list, the icon badge and the widget are fed by one fetch and cannot drift.
 ///
 /// THE BADGE AND THE WIDGET ARE THE SERVER'S COUNT, never one the phone works
-/// out: `count` comes from the one definition in packages/api/src/waiting.ts.
+/// out: `todo` (Martin's own work, `waitingCounts` in packages/api/src/waiting.ts)
+/// — the same number the server's badge push sets.
 /// A refresh that FAILS changes neither — it learned nothing, and a badge
 /// zeroed by a dead network is a badge that lies.
 @MainActor
@@ -157,15 +158,19 @@ final class InboxStore {
         if let cache, let fetchedAt { try? cache.save(.init(savedAt: fetchedAt, inbox: dto)) }
 
         if let snapshotDir {
-            let top = dto.items.first
+            // The widget shows TODO — Martin's own work, the icon's number —
+            // so the icon, the widget and Voor jou's headline agree; the
+            // suggestion backlog never reaches the home screen.
+            let todo = dto.todoItems
+            let top = todo.first
             let snapshot = WidgetSnapshot(
-                count: dto.count, topTitle: top?.title, topKind: top?.kind.rawValue,
+                count: dto.todoCount, topTitle: top?.title, topKind: top?.kind.rawValue,
                 headline: summary?.headline?.stopTitle, updatedAt: now(),
-                items: dto.items.prefix(WidgetSnapshot.maxItems).map {
+                items: todo.prefix(WidgetSnapshot.maxItems).map {
                     WidgetSnapshot.Item(kind: $0.kind.rawValue, id: $0.id, title: $0.title,
                                         at: $0.at, dueAt: $0.dueAt)
                 },
-                oldestAt: dto.items.map(\.at).min(),
+                oldestAt: todo.map(\.at).min(),
                 headlineTrack: summary?.headline?.trackTitle, headlineAt: summary?.headline?.happenedAt)
             // A snapshot that cannot be written leaves the old one; the widget
             // ages it out after 24 h ("Open Grip om bij te werken").
@@ -175,7 +180,8 @@ final class InboxStore {
             }
             WidgetSnapshot.reportProtectionIfAsked(in: snapshotDir)
         }
-        await setBadge(dto.count)
+        // The icon is todo, as the server's own badge push (`countWaiting`).
+        await setBadge(dto.todoCount)
         // The session ended while the badge was being set: the ender's 0 may
         // have landed first, so say 0 again, last.
         if !epoch.isCurrent(started) { await setBadge(0) }

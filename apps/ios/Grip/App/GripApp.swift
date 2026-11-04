@@ -28,6 +28,10 @@ struct GripApp: App {
     /// "Gesprek voorbereiden" and its Live Activity, owned here for the same
     /// reason: the Phone app taking the screen, or a relock, keeps the ticks.
     @State private var call: CallSession
+    /// Vraag Grip: the questions, the outbox and the compose sheet's draft —
+    /// above the lock gate, so a relock keeps what Martin was writing.
+    @State private var requests: RequestStore
+    @State private var dictation: RequestDictation
     /// `AppServices.now`: Overzicht's clock.
     private let now: @Sendable () -> Date
     private let camera: any CameraAccess
@@ -74,6 +78,11 @@ struct GripApp: App {
         now = s.now
         camera = s.camera
         _inbox = State(initialValue: inbox)
+        _requests = State(initialValue: RequestStore(client: s.client, outbox: RequestOutbox(dir: s.requestOutboxDir),
+                                                     epoch: auth.epoch, now: s.now,
+                                                     onChanged: { await inbox.refresh() },
+                                                     onUnauthorized: { auth.sessionRejected() }))
+        _dictation = State(initialValue: RequestDictation(recorder: s.makeRecorder(), transcriber: s.transcriber, now: s.now))
         _money = State(initialValue: MoneyStore(client: s.client, onUnauthorized: { auth.sessionRejected() },
                                                 epoch: auth.epoch, now: s.now))
         _dossier = State(initialValue: DossierModel(store: DossierStore(dir: s.dossierDir, now: s.now),
@@ -113,7 +122,7 @@ struct GripApp: App {
     private var root: some View {
         RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
                  money: money, dossier: dossier, timeline: timeline, weekly: weekly, voice: voice, call: call,
-                 now: now, camera: camera)
+                 requests: requests, dictation: dictation, now: now, camera: camera)
             .onAppear { appDelegate.attach(push) }
     }
 

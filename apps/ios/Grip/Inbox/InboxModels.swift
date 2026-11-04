@@ -61,13 +61,17 @@ enum JSONValue: Codable, Equatable, Sendable {
 /// `.other` rather than failing the whole list: one new kind on the server
 /// must never empty Voor jou and zero the badge on an older phone.
 enum WaitingKind: Codable, Hashable, Sendable {
-    case proposal, question, suggestion, task, stop
+    /// `request`: one of Martin's own questions (Vraag Grip) that waits on him
+    /// — an unread answer, a step, the proposal it drafted (folded into this
+    /// row), or a failure to retry.
+    case proposal, question, request, suggestion, task, stop
     case other(String)
 
     init(rawValue: String) {
         switch rawValue {
         case "proposal": self = .proposal
         case "question": self = .question
+        case "request": self = .request
         case "suggestion": self = .suggestion
         case "task": self = .task
         case "stop": self = .stop
@@ -79,6 +83,7 @@ enum WaitingKind: Codable, Hashable, Sendable {
         switch self {
         case .proposal: "proposal"
         case .question: "question"
+        case .request: "request"
         case .suggestion: "suggestion"
         case .task: "task"
         case .stop: "stop"
@@ -169,12 +174,47 @@ struct GripAction: Codable, Identifiable, Equatable, Sendable {
 /// so the badge and the list cannot disagree.
 struct InboxDTO: Codable, Equatable, Sendable {
     let count: Int
+    /// Martin's own work (`waitingBucket` "todo"): the number the icon, the
+    /// widget, Overzicht and Voor jou's headline show. Absent from an older
+    /// server: then every item counts, as before.
+    var todo: Int? = nil
+    /// The suggestion backlog awaiting his verdict ("te beoordelen").
+    var review: Int? = nil
     let items: [WaitingItem]
     let doneByGrip: [GripAction]
     /// When the last item that waited on Martin was dealt with — the calm
     /// card's "jij was klaar · vandaag 08:20". Optional: absent, the card
     /// simply says nothing about when.
     var lastClearedAt: Date? = nil
+
+    /// The headline number: `todo`, else (an older server) `count`.
+    var todoCount: Int { todo ?? count }
+
+    /// The items that are Martin's own work, in the server's order.
+    var todoItems: [WaitingItem] { items.filter { $0.kind.isTodo } }
+
+    private enum CodingKeys: String, CodingKey { case count, todo, review, items, doneByGrip, lastClearedAt }
+
+    init(count: Int, todo: Int? = nil, review: Int? = nil, items: [WaitingItem], doneByGrip: [GripAction],
+         lastClearedAt: Date? = nil) {
+        self.count = count; self.todo = todo; self.review = review; self.items = items
+        self.doneByGrip = doneByGrip; self.lastClearedAt = lastClearedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count = try c.decode(Int.self, forKey: .count)
+        todo = try c.decodeIfPresent(Int.self, forKey: .todo)
+        review = try c.decodeIfPresent(Int.self, forKey: .review)
+        items = try c.decode([WaitingItem].self, forKey: .items)
+        doneByGrip = try c.decode([GripAction].self, forKey: .doneByGrip)
+        lastClearedAt = try c.decodeIfPresent(Date.self, forKey: .lastClearedAt)
+    }
+}
+
+extension WaitingKind {
+    /// The server's `waitingBucket`: suggestions are review, the rest todo.
+    var isTodo: Bool { self != .suggestion }
 }
 
 // MARK: - Suggestion

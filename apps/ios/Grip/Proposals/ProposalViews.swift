@@ -392,6 +392,8 @@ private struct DraftCardSurface: ViewModifier {
 struct DraftingCard: View {
     /// An earlier version exists: "Wordt opnieuw opgesteld".
     var redraft = false
+    /// A follow-up question is rewriting it (Vraag Grip): "Wordt bijgewerkt".
+    var followUp = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -401,10 +403,12 @@ struct DraftingCard: View {
                     .foregroundStyle(Color.steel)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(redraft ? "Wordt opnieuw opgesteld" : "Wordt opgesteld")
+                    Text(followUp ? "Wordt bijgewerkt" : redraft ? "Wordt opnieuw opgesteld" : "Wordt opgesteld")
                         .font(.display(17, relativeTo: .body, weight: .medium))
                         .foregroundStyle(Color.inkBright)
-                    Text("Meestal binnen 5 minuten. Je krijgt een melding als het klaar is.")
+                    Text(followUp
+                         ? "Je vervolgvraag past dit voorstel aan. Meestal binnen een paar minuten; je krijgt een melding als het klaar is."
+                         : "Meestal binnen 5 minuten. Je krijgt een melding als het klaar is.")
                         .font(.display(15, relativeTo: .callout))
                         .foregroundStyle(Color.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)

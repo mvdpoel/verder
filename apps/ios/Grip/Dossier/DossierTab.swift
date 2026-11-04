@@ -425,6 +425,11 @@ struct DossierTab: View {
                             if i > 0 { Hairline().padding(.horizontal, 16) }
                             Button { path.append(.task(task.id)) } label: { taskRow(task) }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Open", systemImage: "checklist") { path.append(.task(task.id)) }
+                                    AskGripButton(about: RequestAbout(type: "task", id: task.id, label: task.title,
+                                                                      meta: [], at: task.dueAt))
+                                }
                         }
                     }
                 } else if model.offline {
@@ -646,12 +651,14 @@ struct DossierTab: View {
             Button { path.append(.document(id: d.id, title: d.doc.title)) } label: { row }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button("Bekijken", systemImage: "eye") { path.append(.document(id: d.id, title: d.doc.title)) }
+                    AskGripButton(about: RequestAbout(type: "document", id: d.id, label: d.doc.title,
+                                                      meta: [d.doc.docType].compactMap { $0 }, at: d.doc.receivedAt))
                     Button(DocumentViewerModel.Copy.counter, systemImage: "sun.max") { path.append(.counter(id: d.id)) }
                     ShareLink(item: SharedDocument(store: model.store, id: d.id, title: d.doc.title),
                               preview: SharePreview(d.doc.title)) {
                         Label("Deel…", systemImage: "square.and.arrow.up")
                     }
-                    Button("Open", systemImage: "doc") { path.append(.document(id: d.id, title: d.doc.title)) }
                 } preview: {
                     row.frame(width: 370).background(Color.plate)
                 }

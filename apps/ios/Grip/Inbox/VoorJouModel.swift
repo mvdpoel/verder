@@ -28,19 +28,23 @@ enum VoorJouCopy {
 /// What the list draws, decided outside the view so it is testable.
 ///
 /// THE PHONE NEVER RE-RANKS: rows come in exactly the server's order
-/// (`waitingOnMartin` in packages/api/src/waiting.ts), and the split into Nu
-/// and Kan wachten moves nothing, because that order already puts every
-/// proposal and question before every suggestion, task and stop.
+/// (`waitingOnMartin` in packages/api/src/waiting.ts). THE TODO/REVIEW SPLIT
+/// (Martin, 2026-11-04; merged in 51feb0a): Nu is what is Martin's to DO —
+/// his questions, proposals, questions, tasks and the current stop, the
+/// server's `todo` — and leads; "Te beoordelen" is the suggestion backlog,
+/// a COLLAPSED group with its count, so a backlog of hundreds never buries
+/// what he has to do. The split moves nothing within either group.
 ///
-/// AMBER MEANS WAITING ON MARTIN NOW: the dot sits on the Nu rows (proposals
-/// and questions) and beside the header's count, never on its own without
-/// words. "Door Grip gedaan" is what Grip already did: never amber.
+/// AMBER MEANS WAITING ON MARTIN NOW: the dot sits on the rows that ask a
+/// decision of him (his answered questions, proposals, questions) and beside
+/// the header's count, never on its own without words. "Door Grip gedaan" is
+/// what Grip already did: never amber.
 enum VoorJouList {
     static let emptyText = "Niets wacht op je."
     /// A long section shows this many rows, then "Toon alle N" (brief §3).
     static let sectionLimit = 20
 
-    enum SectionKind: String, Sendable { case nu, kanWachten }
+    enum SectionKind: String, Sendable { case nu, review }
 
     struct Row: Identifiable, Equatable {
         let item: WaitingItem
@@ -70,7 +74,7 @@ enum VoorJouList {
         let total: Int
         var id: SectionKind { kind }
         var truncated: Bool { rows.count < total }
-        var label: String { kind == .nu ? "nu" : "kan wachten" }
+        var label: String { kind == .nu ? "nu" : "te beoordelen" }
     }
 
     struct DoneRow: Identifiable, Equatable {
@@ -83,21 +87,26 @@ enum VoorJouList {
     static func key(_ item: WaitingItem) -> String { "\(item.kind.rawValue):\(item.id)" }
 
     static func section(_ kind: WaitingKind) -> SectionKind {
+        kind.isTodo ? .nu : .review
+    }
+
+    /// The rows that ask a DECISION of Martin carry the amber dot.
+    static func amber(_ kind: WaitingKind) -> Bool {
         switch kind {
-        case .proposal, .question: .nu
-        case .suggestion, .task, .stop, .other: .kanWachten
+        case .proposal, .question, .request: true
+        default: false
         }
     }
 
     static func rows(_ inbox: InboxDTO, hiding hidden: Set<String> = []) -> [Row] {
         inbox.items
             .filter { !hidden.contains(key($0)) }
-            .map { Row(item: $0, route: InboxRoute($0), amber: section($0.kind) == .nu) }
+            .map { Row(item: $0, route: InboxRoute($0), amber: amber($0.kind)) }
     }
 
-    /// Nu, then Kan wachten, each in the server's order; an empty section is
-    /// not drawn. ONLY Kan wachten is ever cut short: a limit never hides
-    /// something that waits on Martin now.
+    /// Nu, then Te beoordelen, each in the server's order; an empty section
+    /// is not drawn. ONLY Te beoordelen is ever cut short: a limit never hides
+    /// something that is Martin's to do.
     ///
     /// `restoring`: "Door Grip gedaan" actions whose undo the phone holds
     /// or is posting. Each document is back at the top of Kan wachten AT
@@ -112,7 +121,7 @@ enum VoorJouList {
                            amber: false, restored: true)
             all.insert(back, at: restoredIndex(back.item.at, in: all))
         }
-        return [SectionKind.nu, .kanWachten].compactMap { kind in
+        return [SectionKind.nu, .review].compactMap { kind in
             let mine = all.filter { $0.section == kind }
             guard !mine.isEmpty else { return nil }
             let shown = kind == .nu || expanded ? mine : Array(mine.prefix(sectionLimit))
@@ -124,17 +133,29 @@ enum VoorJouList {
     /// date, newest first — where the server will put it on the next
     /// refresh, so the row does not jump when the real one replaces it.
     static func restoredIndex(_ at: Date, in rows: [Row]) -> Int {
-        if let i = rows.firstIndex(where: { $0.section == .kanWachten && ($0.item.kind != .suggestion || $0.item.at < at) }) {
+        if let i = rows.firstIndex(where: { $0.section == .review && ($0.item.kind != .suggestion || $0.item.at < at) }) {
             return i
         }
         return rows.count
     }
 
-    /// The header's number: the SERVER's count, less only the decisions the
+    /// The header's number: the SERVER's `todo` — what is Martin's to do, the
+    /// number the icon and the widget show — less only the todo decisions the
     /// phone is holding in their undo window (they are gone from the list,
-    /// and the count follows them down; an undo puts both back).
-    /// An undo of "Door Grip gedaan" adds its document back (`restored`).
-    static func count(_ inbox: InboxDTO, hidden: Int, restored: Int = 0) -> Int { max(0, inbox.count - hidden + restored) }
+    /// and the count follows them down; an undo puts both back). A held or
+    /// restored SUGGESTION is review, so it never moves this number.
+    static func count(_ inbox: InboxDTO, hidden: Int, restored: Int = 0) -> Int { max(0, inbox.todoCount - hidden + restored) }
+
+    /// The held decisions that are Martin's own work (a task's status).
+    static func hiddenTodo(_ inbox: InboxDTO, keys: Set<String>) -> Int {
+        inbox.items.filter { $0.kind.isTodo && keys.contains(key($0)) }.count
+    }
+
+    /// The suggestion backlog's number, less what the phone holds.
+    static func reviewCount(_ inbox: InboxDTO, keys: Set<String>) -> Int {
+        let held = inbox.items.filter { !$0.kind.isTodo && keys.contains(key($0)) }.count
+        return max(0, (inbox.review ?? (inbox.count - inbox.todoCount)) - held)
+    }
 
     /// The undoable "Door Grip gedaan" actions among `keys` (the held and
     /// posting decisions): the documents on their way back to Kan wachten.
@@ -246,6 +267,7 @@ enum VoorJouList {
     /// "09:32" today, else its day as `age` says it — rather than when the
     /// proposal was made.
     static func rowAge(_ item: WaitingItem, now: Date) -> String {
+        if item.kind == .request { return RequestText.when(item.at, now: now) }
         guard let failed = item.failedAt, item.kind == .proposal else { return age(item.at, now: now) }
         guard HomeSummary.calendar.isDate(failed, inSameDayAs: now) else { return age(failed, now: now) }
         return HomeSummary.clock(failed)
@@ -294,6 +316,11 @@ enum VoorJouList {
     /// "Kade & Partners"), so "VOORSTEL · NOORDKUST" keeps one line beside
     /// the age as the frames draw it; VoiceOver reads the whole name.
     static func meta(_ item: WaitingItem, now: Date, short: Bool = true) -> [String] {
+        // His own question: the server words where it stands ("Nieuw
+        // antwoord · 1 voorstel"); the kind is in the glyph.
+        if item.kind == .request {
+            return (item.subtitle ?? "").components(separatedBy: " · ").filter { !$0.isEmpty }
+        }
         var parts = [rowKindLabel(item.kind)]
         // A send that failed says so in place of the party (frame "Voor jou ·
         // niet verstuurd in de lijst": "VOORSTEL · NIET VERSTUURD · 09:32").
@@ -409,6 +436,7 @@ enum VoorJouList {
         switch item.kind {
         case .proposal: "arrowshape.turn.up.left"
         case .question: "questionmark.bubble"
+        case .request: "doc.text.magnifyingglass"
         case .task: "checkmark.circle"
         case .stop: "smallcircle.filled.circle"
         case .other: "circle.dashed"
@@ -431,6 +459,11 @@ enum VoorJouList {
 
     /// One row, read whole: kind, title, who, "wacht op jou", age.
     static func accessibilityLabel(_ item: WaitingItem, now: Date) -> String {
+        if item.kind == .request {
+            return RequestText.rowLabel(title: "\(RequestText.title), \(item.title)",
+                                        meta: meta(item, now: now).joined(separator: ", ").lowercased(),
+                                        when: rowAge(item, now: now), waits: true)
+        }
         var parts = [HomeSummary.sentence(rowKindLabel(item.kind)), item.title]
         parts += meta(item, now: now, short: false).dropFirst()
         parts += ["wacht op jou", rowAge(item, now: now)]
@@ -453,6 +486,17 @@ enum VoorJouList {
     }
 
     static func selectedLine(_ n: Int) -> String { "\(n) geselecteerd" }
+
+    // MARK: - Te beoordelen
+
+    static let reviewLabel = "te beoordelen"
+    static let reviewOpenLabel = "bekijken"
+
+    /// The folded group's sentence: what is in it, and that it can wait.
+    static func reviewLine(_ n: Int) -> String {
+        n == 1 ? "1 suggestie van Grip. Die kan wachten tot jij er tijd voor hebt."
+               : "\(n) suggesties van Grip. Die kunnen wachten tot jij er tijd voor hebt."
+    }
     static func allHere(_ n: Int) -> String { "Alle \(n) hier" }
     static func approveMany(_ n: Int) -> String { "Keur \(n) goed" }
     static func rejectMany(_ n: Int) -> String { "Niet relevant (\(n))" }

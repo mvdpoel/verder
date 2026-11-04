@@ -45,6 +45,8 @@ struct ProposalScreen: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(CallSession.self) private var call: CallSession?
+    /// Vraag Grip: the AANLEIDING card of a proposal a question drafted leads back to it.
+    @Environment(\.requestActions) private var requestActions
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     private var isQuestion: Bool { model?.detail?.kind == "question" }
@@ -343,7 +345,12 @@ struct ProposalScreen: View {
     @ViewBuilder
     private func triggerLink(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
         let card = TriggerCard(model: model, detail: d, now: now())
-        if d.trigger.type == "document" {
+        if ProposalText.isRequest(d.trigger), let actions = requestActions {
+            // The question it came from: back to the answer when that is the
+            // screen under this one, else the answer pushed.
+            Button { actions.openRequest(d.trigger.id) } label: { card }
+                .buttonStyle(.plain)
+        } else if d.trigger.type == "document" {
             NavigationLink(value: InboxRoute.document(id: d.trigger.id, title: d.trigger.subject ?? "Brief")) { card }
                 .buttonStyle(.plain)
         } else {
@@ -429,7 +436,7 @@ struct ProposalScreen: View {
                 }
             }
             switch d.status {
-            case "drafting": DraftingCard(redraft: model.isRedraft)
+            case "drafting": DraftingCard(redraft: model.isRedraft, followUp: d.updating != nil)
             case "draft-failed": DraftFailedCard(error: d.error)
             default:
                 if model.draft != nil {

@@ -717,7 +717,9 @@ struct TimelineStopRowView: View {
     }
 
     @ViewBuilder private var menu: some View {
-        Button(TimelineCopy.view, systemImage: "doc.text.magnifyingglass") { select(row.stop) }
+        Button(TimelineCopy.view, systemImage: "eye") { select(row.stop) }
+        AskGripButton(about: RequestAbout(type: "stop", id: row.stop.id, label: row.stop.title,
+                                          meta: [row.track?.title].compactMap { $0 }, at: row.stop.happenedAt))
         if let task = row.stop.evidence.task, let route = TimelineStopSheet.taskRoute(task.link) {
             Button(TimelineCopy.openTask, systemImage: "checklist") { open(route) }
         } else if let doc = row.stop.evidence.documents.first,

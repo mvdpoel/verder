@@ -109,13 +109,13 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
 
     let id: String
     let kind: String
-    let status: String
+    var status: String
     let priority: String
     let ask: String?
     let partyName: String?
     let triggerAt: Date?
-    let createdAt: Date
-    let trigger: Trigger
+    var createdAt: Date
+    var trigger: Trigger
     let dueAt: String?
     let missing: [String]
     let entrySummary: String?
@@ -135,6 +135,16 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     var draftVersion: Int? = nil
     /// When Gmail accepted the send. Absent on an older server.
     var sentAt: Date? = nil
+    /// A follow-up question ("Vraag door") is rewriting this proposal: this
+    /// version is never sent while the next is being drafted (the server
+    /// refuses approve too). Absent on an older server.
+    var updating: Updating? = nil
+
+    struct Updating: Decodable, Equatable, Sendable {
+        let requestId: String
+        let text: String
+        let since: Date
+    }
     /// When the worker claimed the send (`proposals.sending_at`). Not yet
     /// served: absent, a send in flight is never called "unknown".
     var sendingAt: Date? = nil

@@ -45,6 +45,7 @@ struct HomeTab: View {
     @State private var failedUnlocks = 0
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.requestActions) private var requestActions
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     /// Soft hyphens only at the accessibility sizes, where a compound cannot
@@ -143,7 +144,7 @@ struct HomeTab: View {
 
     /// What changes a card's height, so the change springs (Reduce Motion: a crossfade).
     private var animationKey: [Int] {
-        [store.inbox?.count ?? -1, store.inbox == nil ? 0 : 1, store.lastError == nil ? 0 : 1,
+        [store.inbox?.todoCount ?? -1, store.inbox == nil ? 0 : 1, store.lastError == nil ? 0 : 1,
          money.glance == nil ? 0 : 1, lock.revealsCaseContent ? 1 : 0]
     }
 
@@ -175,10 +176,17 @@ struct HomeTab: View {
             .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(eyebrow.accessibilityLabel)
-            Text(HomeSummary.title)
-                .font(HomeType.title)
-                .foregroundStyle(Color.inkBright)
-                .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .center, spacing: 12) {
+                Text(HomeSummary.title)
+                    .font(HomeType.title)
+                    .foregroundStyle(Color.inkBright)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                // Vraag Grip: the same capsule as Voor jou's, on the title's
+                // line. Not gated: the sheet asks nothing of the dossier, and
+                // a question can be written behind the lock.
+                if let ask = requestActions?.ask { AskGripCapsule { ask(nil) } }
+            }
         }
     }
 
@@ -222,21 +230,21 @@ struct HomeTab: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(HomeSummary.waitingLabel)
-            if inbox.count == 0 {
+            if inbox.todoCount == 0 {
                 calm(inbox)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(inbox.count)")
+                    Text("\(inbox.todoCount)")
                         .font(HomeType.hero)
                         .lineHeight(.multiple(factor: 56.0 / 48.0))
                         .foregroundStyle(Color.attn)
                         .contentTransition(.numericText())
                         .dynamicTypeSize(...DynamicTypeSize.accessibility4)
-                    Text(hy(HomeSummary.countCaption(inbox.count)))
+                    Text(hy(HomeSummary.countCaption(inbox.todoCount)))
                         .font(HomeType.body)
                         .foregroundStyle(Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let hint = HomeSummary.manyHint(inbox.count, shown: lock.revealsCaseContent ? limit : 0),
+                    if let hint = HomeSummary.manyHint(inbox.todoCount, shown: lock.revealsCaseContent ? limit : 0),
                        lock.revealsCaseContent {
                         Text(hy(hint))
                             .font(HomeType.body)
@@ -245,13 +253,13 @@ struct HomeTab: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(HomeSummary.waitingLine(inbox.count))
+                .accessibilityLabel(HomeSummary.waitingLine(inbox.todoCount))
                 if lock.revealsCaseContent {
                     Rectangle().fill(Color.edge).frame(height: 1)
                     ForEach(rows) { previewRow($0) }
-                    if inbox.count > rows.count {
+                    if inbox.todoCount > rows.count {
                         Button { openInbox(nil) } label: {
-                            linkRow(HomeSummary.seeAll(inbox.count))
+                            linkRow(HomeSummary.seeAll(inbox.todoCount))
                         }
                         .buttonStyle(.plain)
                     }

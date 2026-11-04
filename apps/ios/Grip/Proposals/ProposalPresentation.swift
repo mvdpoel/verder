@@ -120,9 +120,16 @@ enum ProposalText {
         case "document": head += "\(nbsp)·\(nbsp)Brief"
         case "task": head += "\(nbsp)·\(nbsp)Taak"
         case "proposal": head += "\(nbsp)·\(nbsp)Eerder\(nbsp)antwoord"
+        case "request": head += "\(nbsp)·\(nbsp)Jouw\(nbsp)vraag"
+        case "follow-up-request": head += "\(nbsp)·\(nbsp)Jouw\(nbsp)vervolgvraag"
         default: break
         }
         var groups = [head]
+        // A question of today reads by its time alone ("Jouw vraag · 14:03").
+        if isRequest(trigger), let date = trigger.date, sameDay(date, now) {
+            groups.append(clock(date))
+            return groups
+        }
         if let date = trigger.date { groups.append("\(dayMonthName(date))\(nbsp)\(clock(date))".replacingOccurrences(of: " ", with: nbsp)) }
         return groups
     }
@@ -172,6 +179,10 @@ enum ProposalText {
     /// with the sender's name; nothing is reworded.
     static func triggerLine(kind: String, ask: String?, trigger: ProposalDetail.Trigger,
                             partyName: String?, draftBody: String? = nil) -> (lead: String?, rest: String)? {
+        // Vraag Grip: Martin's own words were the reason.
+        if isRequest(trigger), let words = trigger.subject {
+            return ("Jij vroeg Grip:", " “\(words)”")
+        }
         if kind == "follow-up", let date = trigger.date {
             let who = draftBody.flatMap(greetedName) ?? partyName.map(VoorJouList.shortParty) ?? "de ander"
             return ("Jouw vraag van \(dayMonthName(date))", " staat nog open bij \(who).")
@@ -182,6 +193,15 @@ enum ProposalText {
             return (name, String(sentence.dropFirst(name.count)))
         }
         return (nil, sentence)
+    }
+
+    /// A proposal Vraag Grip drafted: its trigger is Martin's own question.
+    static func isRequest(_ t: ProposalDetail.Trigger) -> Bool { t.type == "request" || t.type == "follow-up-request" }
+
+    static func sameDay(_ a: Date, _ b: Date) -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = amsterdam
+        return cal.isDate(a, inSameDayAs: b)
     }
 
     /// The sheet the trigger card opens: "Mail van Ilse", "Jouw vraag van 7 okt".

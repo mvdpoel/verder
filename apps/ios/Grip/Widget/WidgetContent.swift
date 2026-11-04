@@ -392,6 +392,7 @@ struct WidgetContent: Equatable {
         let host: String
         switch item.kind {
         case "proposal", "question": host = "proposal"
+        case "request": host = "request"
         case "suggestion": host = "suggestion"
         case "task": host = "task"
         default: return inboxURL

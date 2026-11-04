@@ -25,6 +25,9 @@ struct RootView: View {
     /// "Gesprek voorbereiden" (Call/): opened from Dossier, Voor jou and a
     /// proposal through the environment.
     let call: CallSession
+    /// Vraag Grip: the questions and the compose sheet (Requests/).
+    let requests: RequestStore
+    let dictation: RequestDictation
     /// Overzicht's clock (`AppServices.now`).
     var now: @Sendable () -> Date = { Date() }
     var camera: any CameraAccess = LiveCameraAccess()
@@ -242,6 +245,31 @@ struct RootView: View {
         Task { await lock.autoPromptIfNeeded() }
     }
 
+    /// The app's Vraag Grip ways in (`RequestActions`); Voor jou binds
+    /// "open this question" to its own stack.
+    private var requestActions: RequestActions {
+        RequestActions(
+            ask: { [requests] about in requests.compose(about: about) },
+            openRequest: { id in
+                inboxPath = [.request(id)]
+                tab = .voorJou
+            },
+            openLink: { [links] link in links.deliver(link) })
+    }
+
+    /// The compose sheet's "offline" (frame "opstellen · offline").
+    private var requestsOffline: Bool {
+        #if DEBUG
+        if FixtureLaunch.current?.vraag.contains(.opstellenOffline) == true { return true }
+        #endif
+        return uploads.isOffline
+    }
+
+    /// A bank row's account, as Geld names it ("Leefgeldrekening").
+    private func accountName(_ iban: String) -> String? {
+        money.glance?.geld.first { $0.id == iban }?.title
+    }
+
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Overzicht", systemImage: "square.grid.2x2", value: TabID.home) {
@@ -267,11 +295,14 @@ struct RootView: View {
                         dossier: dossier)
             }
             Tab("Voor jou", systemImage: "tray", value: TabID.voorJou) {
-                VoorJouTab(store: inbox, dossier: dossier.store, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
+                VoorJouTab(store: inbox, requests: requests, accountName: accountName,
+                           dossier: dossier.store, client: auth.client, gate: ApprovalGate(), path: $inboxPath,
                            onUnauthorized: { auth.sessionRejected() }, now: now)
                     .lockGated(by: lock)
                     .environment(\.lockedTarget, lockedTarget?.tab == .voorJou ? lockedTarget : nil)
                     .environment(\.networkOffline, uploads.isOffline)
+                    // A bank row on an answer names its account as Geld does.
+                    .task { if money.glance == nil { await money.refresh() } }
             }
             Tab("Scan", image: ScanGlyph.tabAsset, value: TabID.scan) {
                 // NOT gated: plan Task 7 step 3.
@@ -371,6 +402,19 @@ struct RootView: View {
             .lockGated(by: lock)
         }
         .environment(call)
+        .environment(\.requestActions, requestActions)
+        // "Vraag Grip": one compose sheet for every way in (Overzicht, Voor
+        // jou, a row's "Vraag Grip hierover", "Vraag door"). Its draft lives
+        // in `requests`, above the lock gate.
+        .sheet(item: Binding(get: { requests.draft }, set: { requests.draft = $0 })) { draft in
+            RequestComposeSheet(store: requests, dictation: dictation, offline: requestsOffline, draft: draft)
+                .lockGated(by: lock)
+        }
+        // A question written offline goes by itself once the network is back.
+        .onChange(of: uploads.isOffline) { _, offline in
+            if !offline { Task { await requests.flush() } }
+        }
+        .onAppear { requests.isOffline = { [uploads] in uploads.isOffline } }
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
         .onAppear {
@@ -414,7 +458,40 @@ struct RootView: View {
             tab = .meer
             meerPath = path
         case .call(let partyId)?: Task { await call.open(partyId: partyId, name: nil) }
+        case .voorJou(let path)?:
+            tab = .voorJou
+            inboxPath = path
         case nil: break
+        }
+        applyVraagFixture(launch)
+    }
+
+    /// `-fixtures-vraag`: Vraag Grip's compose sheet in a frame's state, a
+    /// question waiting on the network, or Voor jou's undo toast.
+    private func applyVraagFixture(_ launch: FixtureLaunch) {
+        let boedel = RequestAbout(type: "mail", id: "00000000-f1c5-4000-8000-400000000202",
+                                  label: "Boedelbeschrijving invullen", meta: ["Ilse"],
+                                  at: parseISODate("2026-11-02T07:40:00Z"))
+        for state in launch.vraag {
+            switch state {
+            case .opstellenLeeg, .opstellenKoppel:
+                requests.draft = RequestDraft()
+            case .opstellenTypen, .opstellenWeggooien, .opstellenOffline, .opstellenDicteren, .opstellenTekst:
+                requests.draft = RequestDraft(text: RequestText.example)
+            case .opstellenBijlage:
+                requests.draft = RequestDraft(text: "Wat moet ik hierop antwoorden? Check de feiten.", about: boedel)
+            case .netwerk:
+                requests.fixtureSeed([PendingRequest(clientId: "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f40ff",
+                                                     text: RequestText.example, about: boedel, parentRequestId: nil,
+                                                     createdAt: now())])
+                // Written offline: nothing posts it until the network is back.
+                uploads.setOffline(true)
+            case .laatmaarToast:
+                requests.fixtureToast(RequestToast(text: RequestText.putAwayReleasedToast,
+                                                   undo: .undismiss("00000000-f1c5-4000-8000-a00000000007")))
+            case .afgevinkt, .bronGmail, .bronBank:
+                break
+            }
         }
     }
     #endif

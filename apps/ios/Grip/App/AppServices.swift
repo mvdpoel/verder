@@ -29,6 +29,9 @@ struct AppServices {
     var weeklyDir: URL = WeeklyCache.live.dir
     /// Voor jou's kept list (`InboxCache`): Application Support, never the App Group.
     var inboxDir: URL = InboxCache.live.dir
+    /// Vraag Grip's questions not yet sent (`RequestOutbox`): Application
+    /// Support, never the App Group.
+    var requestOutboxDir: URL = RequestOutbox.live.dir
     /// The voice log's microphone and on-device transcription (Task 25).
     let makeRecorder: @MainActor () -> any VoiceRecording
     let transcriber: any Transcribing

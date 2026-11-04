@@ -8,6 +8,7 @@ enum KindLabel {
         switch kind {
         case "proposal": "voorstel"
         case "question": "vraag"
+        case "request": "vraag grip"
         case "suggestion": "suggestie"
         case "task": "taak"
         case "stop": "op de kaart"

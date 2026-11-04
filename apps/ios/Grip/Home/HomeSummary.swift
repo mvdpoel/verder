@@ -153,8 +153,10 @@ enum HomeSummary {
 
     /// The first items in the SERVER's order — never re-ranked here. Empty
     /// while the app is locked: the glance shows counts, never titles.
+    /// Only Martin's own work (`todo`): the card's number is todo, so its
+    /// rows are too — the suggestion backlog waits in Voor jou's review group.
     static func preview(_ inbox: InboxDTO, revealed: Bool, limit: Int = 3) -> [WaitingItem] {
-        revealed ? Array(inbox.items.prefix(limit)) : []
+        revealed ? Array(inbox.todoItems.prefix(limit)) : []
     }
 
     /// The words under the hero number: "ding wacht op je" / "dingen wachten op je".
@@ -192,7 +194,11 @@ enum HomeSummary {
     /// A preview row's meta: kind · who · age. `subtitle` is the server's
     /// (the party for a proposal or question, the suggestion's kind label).
     static func meta(_ item: WaitingItem, now: Date) -> [String] {
-        [VoorJouList.kindLabel(item.kind), item.subtitle, age(item.at, now: now)].compactMap { s in
+        // His own question: the server words where it stands, then its time.
+        if item.kind == .request {
+            return VoorJouList.meta(item, now: now) + [RequestText.when(item.at, now: now)]
+        }
+        return [VoorJouList.kindLabel(item.kind), item.subtitle, age(item.at, now: now)].compactMap { s in
             guard let s, !s.isEmpty else { return nil }
             return s
         }
@@ -212,6 +218,10 @@ enum HomeSummary {
     }
 
     static func previewMeta(_ item: WaitingItem, now: Date) -> PreviewMeta {
+        if item.kind == .request {
+            let parts = meta(item, now: now)
+            return PreviewMeta(oneLine: metaLine(parts), stacked: [metaLine(parts)])
+        }
         let kind = VoorJouList.kindLabel(item.kind)
         let when = age(item.at, now: now)
         guard let who = item.subtitle, !who.isEmpty else {
@@ -312,7 +322,7 @@ enum HomeSummary {
     /// so only the waiting card can be amber, and only when something waits.
     static func cardAmber(_ card: Card, inbox: InboxDTO?) -> Bool {
         switch card {
-        case .waiting: (inbox?.count ?? 0) > 0
+        case .waiting: (inbox?.todoCount ?? 0) > 0
         case .money, .done, .tasks, .scans, .headline: false
         }
     }

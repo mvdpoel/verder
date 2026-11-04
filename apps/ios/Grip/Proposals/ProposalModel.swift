@@ -121,6 +121,17 @@ final class ProposalModel {
     private func apply(_ d: ProposalDetail) {
         // The send landed while the screen was open: a second success.
         if let before = detail?.status, before != "sent", d.status == "sent", d.kind != "question" { successes += 1 }
+        var d = d
+        // A follow-up is rewriting it: drawn as the next version being drafted
+        // ("Voorstel · wordt bijgewerkt"), so this one cannot be sent.
+        if let u = d.updating {
+            d.status = "drafting"
+            d.draftVersion = d.draftVersion ?? 1
+            d.createdAt = u.since
+            // Its reason is now the follow-up ("Aanleiding · jouw vervolgvraag").
+            d.trigger = .init(type: "follow-up-request", id: u.requestId, from: nil, subject: u.text,
+                              date: u.since, excerpt: nil)
+        }
         detail = d
         taskCreated = d.createdTaskId != nil
         if let r = d.payload?.reply {

@@ -44,6 +44,8 @@ struct VoorJouHeader: View {
     let freshness: String?
     let canSelect: Bool
     let select: () -> Void
+    /// "Vraag Grip": the compose sheet.
+    var ask: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -64,6 +66,7 @@ struct VoorJouHeader: View {
                         .foregroundStyle(Color.signal)
                         .buttonStyle(.borderless)
                 }
+                if let ask { AskGripCapsule(action: ask) }
             }
             if !empty {
                 HStack(alignment: .center, spacing: 14) {
@@ -104,6 +107,8 @@ struct VoorJouCompactHeader: View {
     let count: Int
     let canSelect: Bool
     let select: () -> Void
+    var ask: (() -> Void)? = nil
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 2) {
@@ -113,14 +118,37 @@ struct VoorJouCompactHeader: View {
                     .foregroundStyle(Color.inkBright)
                     .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .accessibilityAddTraits(.isHeader)
-                if canSelect {
+                if canSelect || ask != nil {
                     HStack {
                         Spacer()
-                        Button(VoorJouCopy.select, action: select)
-                            .font(.display(17, relativeTo: .body))
-                            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                            .foregroundStyle(Color.signal)
-                            .buttonStyle(.borderless)
+                        if canSelect {
+                            Button(VoorJouCopy.select, action: select)
+                                .font(.display(17, relativeTo: .body))
+                                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                                .foregroundStyle(Color.signal)
+                                .buttonStyle(.borderless)
+                        }
+                        // At the accessibility sizes the capsule is its glyph
+                        // alone, 56 pt (the Large Content Viewer names it).
+                        if let ask {
+                            if typeSize.isAccessibilitySize {
+                                Button(action: ask) {
+                                    Image(systemName: "doc.text.magnifyingglass")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(Color.signalLink)
+                                        .frame(width: 56, height: 56)
+                                        .background(Circle().fill(Color.field))
+                                        .overlay(Circle().strokeBorder(Color.edgeStrong, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(RequestText.title)
+                                .accessibilityShowsLargeContentViewer {
+                                    Label(RequestText.title, systemImage: "doc.text.magnifyingglass")
+                                }
+                            } else {
+                                AskGripCapsule(action: ask)
+                            }
+                        }
                     }
                 }
             }
@@ -151,6 +179,8 @@ struct VoorJouCompactHeader: View {
 struct VoorJouSectionHeader: View {
     let section: VoorJouList.Section
     let trailing: String?
+    /// A word on the right that acts ("Selecteer" on Te beoordelen).
+    var action: (String, () -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -171,6 +201,12 @@ struct VoorJouSectionHeader: View {
                     label
                     Spacer(minLength: 12)
                     if let trailing { Text(trailing.uppercased()).foregroundStyle(Color.inkLabel) }
+                    if let action {
+                        Button(action.0, action: action.1)
+                            .font(.display(17, relativeTo: .body))
+                            .foregroundStyle(Color.signal)
+                            .buttonStyle(.borderless)
+                    }
                 }
             }
         }
@@ -851,5 +887,106 @@ struct DecisionReviewSheet: View {
             .onChange(of: decisions.held.isEmpty) { _, empty in if empty { dismiss() } }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+
+// MARK: - Vraag Grip and the review group
+
+/// "Vraag Grip": the glass capsule on Overzicht's and Voor jou's title line —
+/// one button, Saira 17 Medium, the magnifier-on-a-page glyph.
+struct AskGripCapsule: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 16))
+                    .accessibilityHidden(true)
+                Text(RequestText.title)
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.signalLink)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(Color.glassA))
+            .overlay(Capsule().strokeBorder(Color.edgeStrong, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityLabel(RequestText.title)
+        .accessibilityHint("Stel een eigen vraag over je dossier.")
+    }
+}
+
+/// "JOUW VRAAG  1" / "JOUW VRAGEN", pinned like the other section names.
+struct JouwVraagHeader: View {
+    let open: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(RequestText.groupLabel(open: open).uppercased())
+            if open > 0 { Text("\(open)").monospacedDigit() }
+            Spacer(minLength: 0)
+        }
+        .font(VoorJouMetrics.label)
+        .tracking(VoorJouMetrics.labelTracking)
+        .foregroundStyle(Color.inkSoft)
+        .padding(.horizontal, VoorJouMetrics.margin)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.void)
+        .listRowInsets(EdgeInsets())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// "TE BEOORDELEN  496 ›": the suggestion backlog, folded to one calm row
+/// with its count. A tap opens the group in place — not a second screen.
+struct VoorJouReviewRow: View {
+    let count: Int
+    let ax: Bool
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(VoorJouList.reviewLabel.uppercased())
+                        .font(VoorJouMetrics.label)
+                        .tracking(VoorJouMetrics.labelTracking)
+                        .foregroundStyle(Color.inkSoft)
+                    Text("\(count)").monospacedDigit()
+                        .font(VoorJouMetrics.label)
+                        .foregroundStyle(Color.inkSoft)
+                    Spacer(minLength: 8)
+                    if !ax {
+                        Text(VoorJouList.reviewOpenLabel.uppercased())
+                            .font(VoorJouMetrics.label)
+                            .tracking(VoorJouMetrics.labelTracking)
+                            .foregroundStyle(Color.signal)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.signal)
+                    }
+                }
+                .padding(.vertical, 8)
+                Text(VoorJouList.reviewLine(count))
+                    .font(VoorJouMetrics.body)
+                    .foregroundStyle(Color.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 20)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(HomeSummary.sentence(VoorJouList.reviewLabel)), \(count). \(VoorJouList.reviewLine(count))")
+        .accessibilityHint("Toont de suggesties")
+        .accessibilityAddTraits(.isButton)
     }
 }

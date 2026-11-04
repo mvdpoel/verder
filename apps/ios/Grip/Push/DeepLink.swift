@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Where a tapped notification leads, parsed from the push payload's `link`
-/// (`grip://proposal/<uuid>`, `grip://suggestion/<uuid>`,
+/// (`grip://proposal/<uuid>`, `grip://request/<uuid>`, `grip://suggestion/<uuid>`,
 /// `grip://task/<uuid>`, `grip://document/<uuid>`, `grip://inbox`,
 /// `grip://weekly`, `grip://voice`, `grip://done-by-grip`,
 /// `grip://dossier`, `grip://timeline`, `grip://overzicht`, `grip://money`,
@@ -26,6 +26,9 @@ import Observation
 /// or other app can fire one.
 enum DeepLink: Equatable, Sendable {
     case proposal(UUID)
+    /// `grip://request/<uuid>`: one of Martin's questions (Vraag Grip),
+    /// answered or failed — the two pushes `requests-store` sends.
+    case request(UUID)
     case suggestion(UUID)
     case task(UUID)
     case document(UUID)
@@ -99,10 +102,11 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .scan : .none
         case "call":
             return parts.path.isEmpty ? .call : .none
-        case "proposal", "suggestion", "task", "document":
+        case "proposal", "suggestion", "task", "document", "request":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
             case "proposal": return .proposal(id)
+            case "request": return .request(id)
             case "suggestion": return .suggestion(id)
             case "task": return .task(id)
             default: return .document(id)
@@ -123,6 +127,7 @@ enum DeepLink: Equatable, Sendable {
     var destination: LinkDestination? {
         switch self {
         case .proposal(let id): LinkDestination(tab: .voorJou, stack: .inbox([.proposal(id.lowerString)]))
+        case .request(let id): LinkDestination(tab: .voorJou, stack: .inbox([.request(id.lowerString)]))
         case .suggestion(let id): LinkDestination(tab: .voorJou, stack: .inbox([.suggestion(id.lowerString)]))
         case .task(let id): LinkDestination(tab: .voorJou, stack: .inbox([.task(id.lowerString)]))
         case .inbox: LinkDestination(tab: .voorJou, stack: .inbox([]))

@@ -21,6 +21,7 @@ struct LockedTarget: Equatable, Sendable {
     init?(_ link: DeepLink) {
         switch link {
         case .proposal: self.init(tab: .voorJou, back: "Voor jou", title: "Voorstel", noun: "Een voorstel")
+        case .request: self.init(tab: .voorJou, back: "Voor jou", title: "Antwoord", noun: "Een antwoord van Grip")
         case .suggestion: self.init(tab: .voorJou, back: "Voor jou", title: "Suggestie", noun: "Een suggestie")
         case .task: self.init(tab: .voorJou, back: "Voor jou", title: "Taak", noun: "Een taak")
         case .document: self.init(tab: .dossier, back: "Dossier", title: "Document", noun: "Een document")

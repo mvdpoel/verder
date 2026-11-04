@@ -13,12 +13,20 @@ enum InboxRoute: Hashable, Sendable {
     /// "Door Grip gedaan" on a screen of its own, open: where Overzicht's
     /// card and the daily digest lead.
     case doneByGrip
+    /// Vraag Grip: one question's answer screen (`RequestScreen`).
+    case request(String)
+    /// One of an answer's sources that has no screen of its own (a live
+    /// Gmail message, a dossier mail, a party, a stop).
+    case requestSource(requestId: String, index: Int)
+    /// "Eerdere vragen".
+    case earlierRequests
 
     /// Nil for the map's current stop and for a kind this build does not know:
     /// those are shown, not opened.
     init?(_ item: WaitingItem) {
         switch item.kind {
         case .proposal, .question: self = .proposal(item.id)
+        case .request: self = .request(item.id)
         case .suggestion: self = .suggestion(item.id)
         case .task: self = .task(item.id)
         case .stop, .other: return nil
@@ -38,6 +46,10 @@ enum InboxRoute: Hashable, Sendable {
 /// bulk send, or an approval of anything the server did not call approvable.
 struct VoorJouTab: View {
     let store: InboxStore
+    /// Vraag Grip: the question threads, the outbox and the compose sheet.
+    let requests: RequestStore
+    /// A bank row's account name ("Leefgeldrekening"), from Geld.
+    var accountName: (String) -> String? = { _ in nil }
     /// Where a document's bytes are kept; a restored row opens its document.
     let dossier: DossierStore
     let client: APIClient
@@ -57,6 +69,9 @@ struct VoorJouTab: View {
     @State private var scrolled = false
     @State private var gripUndos = 0
     @State private var fixtureApplied = false
+    /// "Te beoordelen" is collapsed until Martin opens it.
+    @State private var reviewOpen = false
+    @Environment(\.requestActions) private var requestActions
     @Namespace private var zoom
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
@@ -64,9 +79,12 @@ struct VoorJouTab: View {
     /// "Gesprek voorbereiden" on a row about a party (Call/).
     @Environment(CallSession.self) private var call: CallSession?
 
-    init(store: InboxStore, dossier: DossierStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
+    init(store: InboxStore, requests: RequestStore, accountName: @escaping (String) -> String? = { _ in nil },
+         dossier: DossierStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
          onUnauthorized: @escaping @MainActor () -> Void, now: @escaping @Sendable () -> Date = { Date() }) {
         self.store = store
+        self.requests = requests
+        self.accountName = accountName
         self.dossier = dossier
         self.client = client
         self.gate = gate
@@ -98,11 +116,16 @@ struct VoorJouTab: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbar(selecting ? .hidden : .automatic, for: .tabBar)
         }
+        .environment(\.requestActions, stackActions)
         .preferredColorScheme(.dark)
-        .task { await store.refresh() }
+        .task {
+            async let a: Void = store.refresh()
+            async let b: Void = requests.refresh()
+            _ = await (a, b)
+        }
         // Back from a screen: what was decided there has moved on the list.
         .onChange(of: path) { _, now in
-            if now.isEmpty { Task { await store.refresh() } }
+            if now.isEmpty { Task { await store.refresh(); await requests.refresh() } }
         }
         // Leaving the app posts what is held: a decision is never lost to a
         // suspended timer.
@@ -171,7 +194,29 @@ struct VoorJouTab: View {
             DoneByGripScreen(store: store, model: done)
         case .document(let id, let title):
             DocumentViewer(id: id, title: title, store: dossier, client: client, onUnauthorized: onUnauthorized)
+        case .request(let id):
+            RequestScreen(id: id, store: requests, accountName: accountName, push: { path.append($0) })
+        case .requestSource(let id, let index):
+            RequestSourceScreen(requestId: id, index: index, store: requests)
+        case .earlierRequests:
+            EarlierRequestsScreen(store: requests, push: { path.append($0) })
         }
+    }
+
+    /// The app's Vraag Grip actions, with "open this question" bound to THIS
+    /// stack: from a proposal opened off an answer, the AANLEIDING card pops
+    /// back to that answer ("‹ Antwoord") instead of stacking a second copy.
+    private var stackActions: RequestActions {
+        var a = requestActions ?? RequestActions()
+        a.openRequest = { [path = $path] id in
+            let p = path.wrappedValue
+            if p.count >= 2, p[p.count - 2] == .request(id) {
+                path.wrappedValue.removeLast()
+            } else {
+                path.wrappedValue.append(.request(id))
+            }
+        }
+        return a
     }
 
     @ViewBuilder private var root: some View {
@@ -195,7 +240,7 @@ struct VoorJouTab: View {
         let clock = now()
         let restoring = VoorJouList.restoring(inbox, keys: decisions.hiddenKeys)
         let sections = VoorJouList.sections(inbox, hiding: decisions.hiddenKeys, expanded: showAll, restoring: restoring)
-        let count = VoorJouList.count(inbox, hidden: decisions.hiddenCount, restored: restoring.count)
+        let count = VoorJouList.count(inbox, hidden: VoorJouList.hiddenTodo(inbox, keys: decisions.hiddenKeys))
         let notice = VoorJouList.notice(store.lastError, hasList: true)
         let readOnly = notice == .offline
         let freshness = VoorJouList.freshness(now: clock, fetchedAt: store.fetchedAt, error: store.lastError)
@@ -207,8 +252,10 @@ struct VoorJouTab: View {
         return ScrollViewReader { proxy in
             List {
                 if !ax && !selecting {
-                    VoorJouHeader(eyebrow: VoorJouList.eyebrow(clock), count: count, empty: sections.isEmpty,
-                                  freshness: freshness, canSelect: canSelect, select: startSelecting)
+                    VoorJouHeader(eyebrow: VoorJouList.eyebrow(clock), count: count,
+                                  empty: !sections.contains { $0.kind == .nu },
+                                  freshness: freshness, canSelect: false, select: startSelecting,
+                                  ask: { requestActions?.ask(nil) })
                         .voorJouRow()
                         .id("top")
                 }
@@ -223,51 +270,10 @@ struct VoorJouTab: View {
                         .voorJouRow()
                 }
                 ForEach(sections) { section in
-                    Section {
-                        // At the accessibility sizes the section's name is an
-                        // ordinary row, not a pinned header: two lines of AX5
-                        // pinned over the rows leave them a sliver and read as
-                        // the next row's title cut off beneath it.
-                        if ax {
-                            VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
-                                .listRowBackground(Color.void)
-                                .listRowSeparator(.hidden)
-                        }
-                        if selecting && section.kind == .nu {
-                            Text(VoorJouCopy.nuNote)
-                                .font(.display(15, relativeTo: .subheadline))
-                                .foregroundStyle(Color.inkMute)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.bottom, 8)
-                                .voorJouRow()
-                        }
-                        ForEach(section.rows) { row in
-                            rowCell(row, readOnly: readOnly, now: clock)
-                            if let failure = decisions.failures[row.id] {
-                                VoorJouNotSavedNotice(failure: failure, ax: ax,
-                                                      retry: { Task { await decisions.retry(row.id) } },
-                                                      withdraw: { decisions.withdraw(row.id) })
-                                    .voorJouRow()
-                            }
-                        }
-                        if section.truncated {
-                            VoorJouShowAllRow(shown: section.rows.count, total: section.total, ax: ax) { showAll = true }
-                                .voorJouRow()
-                                .id("more")
-                        } else if section.kind == .nu, sections.count == 1, count == 1 {
-                            Text(VoorJouCopy.onlyOne)
-                                .font(.display(15, relativeTo: .subheadline))
-                                .foregroundStyle(Color.inkMute)
-                                .padding(.leading, ax ? 0 : VoorJouMetrics.gutter)
-                                .padding(.vertical, 14)
-                                .voorJouRow()
-                        }
-                        Color.clear.frame(height: 28).voorJouRow()
-                    } header: {
-                        if !ax {
-                            VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
-                        }
-                    }
+                    sectionView(section, inbox: inbox, readOnly: readOnly, canSelect: canSelect, now: clock)
+                }
+                if !sections.contains(where: { $0.kind == .review }) {
+                    jouwVraag(now: clock)
                 }
                 if !inbox.doneByGrip.isEmpty {
                     DoneByGripListSection(actions: doneActions,
@@ -298,7 +304,8 @@ struct VoorJouTab: View {
                                         cancel: stopSelecting,
                                         selectAll: { selected = Set(selectable.map(\.id)) })
                 } else if ax || scrolled {
-                    VoorJouCompactHeader(count: count, canSelect: ax && canSelect, select: startSelecting)
+                    VoorJouCompactHeader(count: count, canSelect: ax && canSelect && reviewOpen, select: startSelecting,
+                                         ask: { requestActions?.ask(nil) })
                         .transition(.opacity)
                 }
             }
@@ -312,6 +319,9 @@ struct VoorJouTab: View {
                 } else if let content = DecisionToast.content(decisions.held, short: ax) {
                     DecisionToastView(content: content, decisions: decisions, ax: ax,
                                       undo: { decisions.undoLast() }, review: { reviewing = true })
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if let t = requests.toast {
+                    RequestToastView(toast: t) { Task { await requests.undo(t) } }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -335,8 +345,77 @@ struct VoorJouTab: View {
         }
     }
 
+    @ViewBuilder
+    private func sectionView(_ section: VoorJouList.Section, inbox: InboxDTO, readOnly: Bool, canSelect: Bool,
+                             now clock: Date) -> some View {
+        if section.kind == .review {
+            jouwVraag(now: clock)
+        }
+        if section.kind == .review && !reviewOpen && !selecting {
+            VoorJouReviewRow(count: VoorJouList.reviewCount(inbox, keys: decisions.hiddenKeys), ax: ax) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { reviewOpen = true }
+            }
+            .voorJouRow()
+            .id("review")
+        } else {
+        Section {
+            // At the accessibility sizes the section's name is an
+            // ordinary row, not a pinned header: two lines of AX5
+            // pinned over the rows leave them a sliver and read as
+            // the next row's title cut off beneath it.
+            if ax {
+                VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
+                    .listRowBackground(Color.void)
+                    .listRowSeparator(.hidden)
+            }
+            if selecting && section.kind == .nu {
+                Text(VoorJouCopy.nuNote)
+                    .font(.display(15, relativeTo: .subheadline))
+                    .foregroundStyle(Color.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+                    .voorJouRow()
+            }
+            ForEach(section.rows) { row in
+                rowCell(row, readOnly: readOnly, now: clock)
+                if let failure = decisions.failures[row.id] {
+                    VoorJouNotSavedNotice(failure: failure, ax: ax,
+                                          retry: { Task { await decisions.retry(row.id) } },
+                                          withdraw: { decisions.withdraw(row.id) })
+                        .voorJouRow()
+                }
+            }
+            if section.truncated {
+                VoorJouShowAllRow(shown: section.rows.count, total: section.total, ax: ax) { showAll = true }
+                    .voorJouRow()
+                    .id("more")
+            } else if section.kind == .nu, section.total <= 5 {
+                Text(VoorJouCopy.onlyOne)
+                    .font(.display(15, relativeTo: .subheadline))
+                    .foregroundStyle(Color.inkMute)
+                    .padding(.leading, ax ? 0 : VoorJouMetrics.gutter)
+                    .padding(.vertical, 14)
+                    .voorJouRow()
+            }
+            Color.clear.frame(height: 28).voorJouRow()
+        } header: {
+            if !ax {
+                VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly),
+                                     action: selectAction(section, canSelect: canSelect))
+            }
+        }
+        }
+
+    }
+
+    /// "Selecteer" on the open review group's header.
+    private func selectAction(_ section: VoorJouList.Section, canSelect: Bool) -> (String, () -> Void)? {
+        guard section.kind == .review, canSelect, !selecting else { return nil }
+        return (VoorJouCopy.select, { startSelecting() })
+    }
+
     private func sectionTrailing(_ section: VoorJouList.Section, readOnly: Bool) -> String? {
-        guard section.kind == .kanWachten else { return nil }
+        guard section.kind == .review else { return nil }
         if selecting { return VoorJouList.suggestionsCount(section.rows.count { $0.selectable }) }
         if readOnly { return VoorJouCopy.readOnly }
         return section.truncated ? "\(section.rows.count) getoond" : nil
@@ -416,6 +495,8 @@ struct VoorJouTab: View {
         case .proposal, .question:
             Divider()
             Text(VoorJouCopy.sendOnlyInProposal)
+        case .request:
+            requestMenu(row)
         case .suggestion where readOnly, .task where readOnly:
             Divider()
             Text(VoorJouCopy.offlineMenu)
@@ -456,6 +537,88 @@ struct VoorJouTab: View {
         return { Task { await call.open(partyId: partyId, name: name) } }
     }
 
+    /// A question in Nu: a failed one offers its next steps; any can be let go.
+    @ViewBuilder private func requestMenu(_ row: VoorJouList.Row) -> some View {
+        let failed = row.item.subtitle?.hasPrefix("Lukte niet") == true
+        if failed {
+            Button(RequestText.retry, systemImage: "arrow.trianglehead.2.clockwise") {
+                Task { if let fresh = await requests.retry(row.item.id) { path.append(.request(fresh)) } }
+            }
+            Button(RequestText.edit, systemImage: "pencil") {
+                let thread = requests.thread(row.item.id)
+                requests.draft = RequestDraft(text: thread?.text ?? row.item.title, replaces: row.item.id)
+            }
+        }
+        Button {
+            Task { await requests.dismiss(row.item.id, carriesProposal: requests.thread(row.item.id)?.proposal?.status == "pending") }
+        } label: {
+            Text(RequestText.letGo)
+            Text(RequestText.letGoNote)
+            Image(systemName: "trash")
+        }
+    }
+
+    /// JOUW VRAAG / JOUW VRAGEN: Martin's questions that wait on Grip (queued,
+    /// being researched, a proposal being rewritten) and those still on the
+    /// phone, then "Eerdere vragen · N klaar". Never amber: nothing here waits
+    /// on him. Those that DO wait on him are in Nu, counted once.
+    @ViewBuilder private func jouwVraag(now: Date) -> some View {
+        let open = requests.open
+        let pending = requests.pending
+        let earlier = requests.earlier
+        let total = open.count + pending.count
+        if total > 0 || !earlier.isEmpty {
+            Section {
+                if ax {
+                    JouwVraagHeader(open: total).listRowBackground(Color.void).listRowSeparator(.hidden)
+                }
+                ForEach(pending) { p in
+                    RequestRowView(symbol: "doc.text.magnifyingglass", amber: false, marker: .dashedRing,
+                                   title: p.about?.label ?? requestName(p.text), meta: RequestText.waitingOnNetwork,
+                                   when: RequestText.when(p.createdAt, now: now), chevron: false)
+                        .voorJouRow()
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(RequestText.title), \(p.about?.label ?? requestName(p.text)), wacht op netwerk, wordt verstuurd zodra je online bent.")
+                }
+                ForEach(open) { item in
+                    Button { path.append(.request(item.id)) } label: {
+                        RequestRowView(symbol: "doc.text.magnifyingglass", amber: false, marker: .ring,
+                                       title: item.title, meta: RequestText.openMeta(item, now: now),
+                                       when: RequestText.when(item.createdAt, now: now))
+                    }
+                    .buttonStyle(.plain)
+                    .voorJouRow()
+                    .contextMenu {
+                        Button(VoorJouCopy.view, systemImage: "eye") { path.append(.request(item.id)) }
+                        Button(RequestText.stop, systemImage: "stop.circle") { Task { _ = await requests.cancel(item.id) } }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(RequestText.rowLabel(title: "\(RequestText.title), \(item.title)",
+                                                             meta: RequestText.openMeta(item, now: now).lowercased(),
+                                                             when: RequestText.when(item.createdAt, now: now), waits: false))
+                }
+                if !earlier.isEmpty {
+                    Button { path.append(.earlierRequests) } label: {
+                        RequestRowView(symbol: "clock", amber: false, title: RequestText.earlierTitle,
+                                       meta: RequestText.earlierCount(earlier.count), when: nil)
+                    }
+                    .buttonStyle(.plain)
+                    .voorJouRow()
+                    .accessibilityLabel("\(RequestText.earlierTitle), \(RequestText.earlierCount(earlier.count))")
+                }
+                Color.clear.frame(height: 28).voorJouRow()
+            } header: {
+                if !ax { JouwVraagHeader(open: total) }
+            }
+        }
+    }
+
+    /// Martin's own words as a row title: one line of them.
+    private func requestName(_ text: String) -> String {
+        let t = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return t.count > 120 ? String(t.prefix(119)) + "…" : t
+    }
+
     private func decide(_ row: VoorJouList.Row, _ action: ListDecision.Action) {
         decisions.decide(Self.decision(row, action))
     }
@@ -491,6 +654,8 @@ struct VoorJouTab: View {
     private func applyFixtureState(_ inbox: InboxDTO, proxy: ScrollViewProxy) {
         guard !fixtureApplied, let states = FixtureLaunch.current?.voorJou, !states.isEmpty else { return }
         fixtureApplied = true
+        // The decision states act on suggestions: the review group is open.
+        reviewOpen = true
         let rows = VoorJouList.rows(inbox)
         let suggestions = rows.filter { $0.item.kind == .suggestion }
         let task = rows.first { $0.item.kind == .task }
