@@ -8,7 +8,7 @@
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
 #                      [--proposal <state>] [--detail <state>] [--dossier <state[,state…]>]
-#                      [--voice <state>] [--notify <state>]
+#                      [--voice <state>] [--notify <state>] [--vraag <state[,state…]>]
 #
 #   fixture  a folder in Grip/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
@@ -178,8 +178,9 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""; VOICE=""; NOTIFY=""
-NOTIFY_STATES="verborgen verder-mail creditor-mail proposal reminder follow-up follow-up-schuldeiser filing system weekly stapel se banner badge task-due task-due-scroll vraag vraag-scroll gedaan-notice keuze-notice"
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""; VOICE=""; NOTIFY=""; VRAAG=""
+VRAAG_STATES="opstellen-tekst opstellen-leeg opstellen-typen opstellen-dicteren opstellen-bijlage opstellen-koppel opstellen-weggooien opstellen-offline netwerk laatmaar-toast afgevinkt bron-gmail bron-bank"
+NOTIFY_STATES="request request-failed verborgen verder-mail creditor-mail proposal reminder follow-up follow-up-schuldeiser filing system weekly stapel se banner badge task-due task-due-scroll vraag vraag-scroll gedaan-notice keuze-notice"
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -277,6 +278,13 @@ while [ $# -gt 0 ]; do
       done
       DOSSIER="$2"
       shift ;;
+    --vraag)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      for v in ${2//,/ }; do
+        case " $VRAAG_STATES " in *" $v "*) ;; *) echo "capture.sh: --vraag takes one of: $VRAAG_STATES" >&2; exit 2 ;; esac
+      done
+      VRAAG="$2"
+      shift ;;
     --swipe)
       [ $# -ge 2 ] || usage
       case "$2" in ?*:left|?*:right) SWIPE="$2" ;; *) echo "capture.sh: --swipe takes <text>:left or <text>:right" >&2; exit 2 ;; esac
@@ -307,7 +315,7 @@ HEX='[0-9A-Fa-f]'
 UUID_RE="^$HEX{8}-$HEX{4}-$HEX{4}-$HEX{4}-$HEX{12}\$"
 case "$TARGET" in
   overzicht|voorjou|scan|dossier|meer) ARGS=(-tab "$TARGET") ;;
-  geld|weekly|timeline|voice) ARGS=(-route "$TARGET") ;;
+  geld|weekly|timeline|voice|vraag-eerder) ARGS=(-route "$TARGET") ;;
   meer:account|meer:notifications|meer:widgets|meer:about|meer:developer) ARGS=(-route "$TARGET") ;;
   widget:*)
     WIDGET_SCENES="thuis-volle-kleur thuis-getint thuis-helder thuis-leeg thuis-leeg-getint thuis-een-item thuis-verouderd thuis-afgemeld groot-volle-kleur groot-getint groot-helder groot-leeg groot-verouderd groot-afgemeld vandaag-vergrendeld toegang-wacht toegang-een-item toegang-leeg toegang-verouderd toegang-afgemeld standby-ontgrendeld standby-vergrendeld standby-nacht standby-leeg standby-verouderd standby-afgemeld"
@@ -317,7 +325,7 @@ case "$TARGET" in
     SHARE_SCENES="deelblad laden laden-fout een-pdf een-pdf-lang fotos meerdere meerdere-deels meer-dan-10 versturen versturen-fout verstuurd bewaard-offline bewaard-groot niet-ingelogd bewaard niet-ondersteund te-groot"
     case " $SHARE_SCENES " in *" ${TARGET#share:} "*) ;; *) echo "capture.sh: unknown share scene '${TARGET#share:}'; known: $SHARE_SCENES" >&2; exit 2 ;; esac
     ARGS=(-share-host "${TARGET#share:}") ;;
-  proposal:*|suggestion:*|task:*|document:*)
+  proposal:*|suggestion:*|task:*|document:*|request:*)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
       echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2
     fi
@@ -325,7 +333,7 @@ case "$TARGET" in
   *)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ]; then
       echo "capture.sh: unknown target '$TARGET'; tabs: overzicht voorjou scan dossier meer;" \
-        "routes: geld weekly timeline voice proposal:<uuid> suggestion:<uuid> task:<uuid> document:<uuid>" \
+        "routes: geld weekly timeline voice vraag-eerder proposal:<uuid> request:<uuid> suggestion:<uuid> task:<uuid> document:<uuid>" \
         "meer:account meer:notifications meer:widgets meer:about meer:developer" >&2; exit 2
     fi
     ARGS=(-route "$TARGET") ;;
@@ -358,6 +366,7 @@ fi
 [ -z "$DETAIL" ] || ARGS+=(-fixtures-detail "$DETAIL")
 [ -z "$DOSSIER" ] || ARGS+=(-fixtures-dossier "$DOSSIER")
 [ -z "$VOICE" ] || ARGS+=(-fixtures-voice "$VOICE")
+[ -z "$VRAAG" ] || ARGS+=(-fixtures-vraag "$VRAAG")
 [ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
 [ -z "$COVER" ] || ARGS+=(-fixtures-cover)
 [ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)

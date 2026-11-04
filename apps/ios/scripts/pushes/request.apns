@@ -1,0 +1,15 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
+  "aps": {
+    "alert": {
+      "title": "Grip heeft je vraag uitgezocht",
+      "body": "Tik om het antwoord te lezen."
+    },
+    "category": "PROPOSAL",
+    "interruption-level": "active",
+    "badge": 2,
+    "sound": "default",
+    "thread-id": "request:00000000-f1c5-4000-8000-a00000000003"
+  },
+  "link": "grip://request/00000000-f1c5-4000-8000-a00000000003"
+}

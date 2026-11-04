@@ -173,6 +173,10 @@ enum FixtureEnvironment {
                            now: clock(keptAt: server.manifest.keptAt, today: server.manifest.today))
         services.weeklyDir = weeklyDir
         services.inboxDir = inboxDir
+        // Vraag Grip's outbox: a fresh, temporary one per launch.
+        let requestsDir = URL.temporaryDirectory.appending(path: "grip-fixture-requests", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: requestsDir)
+        services.requestOutboxDir = requestsDir
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
         // The call sheet's copy of the synthetic points, never the real folder.
         let callDir = URL.temporaryDirectory.appending(path: "grip-fixture-calls", directoryHint: .isDirectory)

@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SwiftUI
 
 /// The launch arguments that run the app on the synthetic dataset, for
 /// screenshots (`scripts/capture.sh`) and for designing against the Figma
@@ -86,6 +87,41 @@ struct FixtureLaunch: Equatable, Sendable {
         /// "Gesprek voorbereiden" for this party (`CallSession.open`), the
         /// sheet a Dossier row or a proposal's sender opens.
         case call(String)
+        /// A Voor jou screen no link reaches ("Eerdere vragen").
+        case voorJou([InboxRoute])
+    }
+
+    /// Vraag Grip's gesture-only states (`-fixtures-vraag`, frames "Vraag
+    /// Grip · it6"): the compose sheet in each of its states, a question
+    /// waiting on the network, an undo toast, a source opened.
+    enum VraagState: String, CaseIterable, Sendable {
+        case opstellenLeeg = "opstellen-leeg"
+        case opstellenTypen = "opstellen-typen"
+        case opstellenDicteren = "opstellen-dicteren"
+        case opstellenBijlage = "opstellen-bijlage"
+        case opstellenKoppel = "opstellen-koppel"
+        case opstellenWeggooien = "opstellen-weggooien"
+        case opstellenOffline = "opstellen-offline"
+        /// The question written, the keyboard down (the AX5 frame).
+        case opstellenTekst = "opstellen-tekst"
+        /// A question written offline, on the phone ("Wacht op netwerk").
+        case netwerk
+        /// "Vraag weggelegd. Het voorstel staat nu los in Nu." over Voor jou.
+        case laatmaarToast = "laatmaar-toast"
+        /// The last step ticked on the answer screen, its toast up.
+        case afgevinkt
+        case bronGmail = "bron-gmail"
+        case bronBank = "bron-bank"
+
+        var isCompose: Bool { rawValue.hasPrefix("opstellen-") }
+
+        /// The sheet's height in the frame: medium while empty, large with a keyboard.
+        var composeDetent: PresentationDetent {
+            switch self {
+            case .opstellenTypen, .opstellenWeggooien, .opstellenKoppel, .opstellenTekst: .large
+            default: .medium
+            }
+        }
     }
 
     /// Meer states only a gesture reaches (`-fixtures-more`).
@@ -308,6 +344,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var detail: DetailState? = nil
     var dossier: [DossierState] = []
     var voice: VoiceState? = nil
+    var vraag: [VraagState] = []
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -411,7 +448,14 @@ struct FixtureLaunch: Equatable, Sendable {
                              voice: try value(after: "-fixtures-voice").map { (raw: String) throws(ParseError) -> VoiceState in
                                  guard let s = VoiceState(rawValue: raw) else { throw .unknownValue("-fixtures-voice", raw) }
                                  return s
-                             })
+                             },
+                             vraag: try (value(after: "-fixtures-vraag") ?? "").split(separator: ",")
+                                 .map { (raw: Substring) throws(ParseError) -> VraagState in
+                                     guard let s = VraagState(rawValue: String(raw)) else {
+                                         throw .unknownValue("-fixtures-vraag", String(raw))
+                                     }
+                                     return s
+                                 })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict
@@ -424,6 +468,7 @@ struct FixtureLaunch: Equatable, Sendable {
         if raw == "weekly" { return .link(.weekly) }
         if raw == "geld" { return .link(.money) }
         if raw == "timeline" { return .link(.timeline) }
+        if raw == "vraag-eerder" { return .voorJou([.earlierRequests]) }
         if raw.hasPrefix("meer:") {
             switch raw.dropFirst("meer:".count) {
             case "account": return .meer([.account])
@@ -440,7 +485,7 @@ struct FixtureLaunch: Equatable, Sendable {
             return .call(uuid.uuidString.lowercased())
         }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
+        guard parts.count == 2, ["proposal", "suggestion", "task", "document", "request"].contains(parts[0]) else {
             throw .unknownRoute(raw)
         }
         let link = DeepLink.parse("grip://\(parts[0])/\(parts[1])")

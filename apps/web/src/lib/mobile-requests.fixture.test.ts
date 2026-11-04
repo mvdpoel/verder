@@ -262,7 +262,7 @@ const states: State[] = [
   { name: "vraag-bezig", description: "Vraag Grip: Grip researching the boedelbeschrijving question, 2 min in.",
     today: nov(2, "14:05"), rows: [reqs.working, ...earlier], proposals: [ilse] },
   { name: "vraag-netwerk", description: "Vraag Grip: offline; the question waits on the phone (seed with -fixtures-vraag netwerk).",
-    today: nov(2, "14:02"), rows: earlier, proposals: [ilse], extra: { thenFail: "offline" } },
+    today: nov(2, "14:02"), rows: earlier, proposals: [ilse] },
   { name: "vraag-ongelezen", description: "Vraag Grip: the answer is in, unread, with a proposal folded into its row (2 wachten).",
     today: nov(2, "14:06"), rows: [reqs.unread, ...earlier], proposals: [ilse, boedelProposal(P("c1"), R("03"))] },
   { name: "vraag-gelezen", description: "Vraag Grip: the answer read; its proposal and one step still wait on you.",
@@ -347,7 +347,9 @@ function files(): Record<string, string> {
 
   for (const s of states) {
     const rows = s.rows.map((q) => q.row);
-    out[`${s.name}/fixture.json`] = text({ description: s.description, today: s.today.toISOString(), ...(s.extra ?? {}) });
+    // FixtureServer reads `today` with ISO8601DateFormatter: no fractional seconds.
+    out[`${s.name}/fixture.json`] = text({ description: s.description, today: s.today.toISOString().replace(".000Z", "Z"),
+      ...(s.extra ?? {}) });
     out[`${s.name}/requests.json`] = text({ requests: requestThreads(rows).map(requestListItem).map(toRequestListItemDTO) });
     const items = waitingOnMartin({ proposals: s.proposals, requests: rows, suggestions: [], tasks: [], currentStop: null, now: s.today });
     out[`${s.name}/inbox.json`] = text({ ...toInboxDTO(items), doneByGrip });
