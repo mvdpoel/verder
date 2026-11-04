@@ -18,91 +18,194 @@ struct VoiceEditorPage: View {
     /// (frame "tekst bewerken"); a typed note keeps "Met wie" in view.
     private var textOnly: Bool { model.textFocused && !model.recognizedTranscript.isEmpty }
 
+    /// The field while the keyboard is up: as tall as the frame's (125 pt
+    /// for a typed note, 220 for an edited transcript) where the room is
+    /// there, never so tall that what is under it is cut by the footer
+    /// (frames "typen", "tekst bewerken").
+    @State private var scrollTop: CGFloat = 0
+    @State private var footerTop: CGFloat = 0
+    private var visibleHeight: CGFloat { footerTop - scrollTop }
+    @State private var contentHeight: CGFloat = 0
+    /// The field's text height while the keyboard is up (`fitField`).
+    @State private var typingFieldHeight: CGFloat = 125
+    static let typingFieldMin: CGFloat = 76
+    private var fieldMax: CGFloat { textOnly ? 220 : 125 }
+    private var fieldMin: CGFloat { textOnly ? 120 : Self.typingFieldMin }
+    /// The transcript as the editor holds it: the same words, with the
+    /// words it was read from marked (frame "tekst bewerken").
+    @State private var styled = AttributedString()
+
+    private var typingFresh: Bool { model.textFocused && model.recognizedTranscript.isEmpty }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
+            // Pinned at the ordinary sizes (frame "tijd wijzigen": the note
+            // scrolls under the title); at the accessibility sizes it is part
+            // of the page, where a pinned two-line title would take a third
+            // of the screen.
+            if !ax {
                 header
-                if let banner = model.banner {
-                    VoiceBannerCard(banner: banner).padding(.top, 16)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+            }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    content
                 }
-                textLabelRow.padding(.top, model.banner == nil ? 20 : 24)
-                transcriptField.padding(.top, 8)
-                if model.canRecordAgain && !model.textFocused {
-                    HStack {
-                        if !ax { Spacer(minLength: 0) }
-                        Button {
-                            if model.needsRecordAgainConfirmation { model.confirmingRecordAgain = true } else { model.recordAgain() }
-                        } label: {
-                            // Wraps at AX5 (two lines, frame "voorbeeld · AX5"):
-                            // a one-line label widened the whole page.
-                            Text(VoiceLogModel.Copy.recordAgain)
-                                .wholeWords(VoiceLogModel.Copy.recordAgain, font: VoiceType.headlineMedium)
-                                .foregroundStyle(Color.signalLink)
-                                .multilineTextAlignment(ax ? .leading : .trailing)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
+                .scrollDismissesKeyboard(.interactively)
+                .scrollIndicators(.visible)
+                .fixtureVoiceScroll()
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                    scrollTop = $0
+                    fitField()
+                }
+                .onChange(of: model.timeOpen) { _, open in
+                    // Opening the wheel shows it (and the row under it).
+                    guard open else { return }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(80))
+                        withAnimation(.snappy) { proxy.scrollTo(Anchor.channel, anchor: .bottom) }
                     }
-                    .padding(.top, 4)
-                }
-                if !textOnly {
-                    ProposalLabel("Gesprek").padding(.top, model.canRecordAgain ? 12 : 20)
-                    conversationCard.padding(.top, 8)
-                }
-                if ax, let note = model.footnote(locked: locked) {
-                    footnoteText(note).padding(.top, 24)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 16)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .scrollIndicators(.visible)
-        .fixtureVoiceScroll()
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
         .onChange(of: model.textFocused, initial: true) { _, focused in
             if textFocus != focused { textFocus = focused }
+            typingFieldHeight = fieldMax
         }
         .onChange(of: textFocus) { _, focused in
             if model.textFocused != focused { model.textFocused = focused }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Gereed") { model.textFocused = false }
-                    .font(VoiceType.headlineMedium)
-                    .foregroundStyle(Color.signalLink)
-                Spacer()
+        .onChange(of: model.transcript, initial: true) { _, text in
+            if String(styled.characters) != text { styled = restyled(AttributedString(text)) }
+        }
+        .onChange(of: model.marks) { _, _ in styled = restyled(styled) }
+        // The note dims under the party picker, as every sheet's presenter
+        // does (frames "met wie · …").
+        .overlay {
+            if model.pickerOpen {
+                Color.black.opacity(0.55).ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: model.pickerOpen)
         .sheet(isPresented: $model.pickerOpen) { PartyPickerSheet(model: model) }
+    }
+
+    private enum Anchor: Hashable { case channel }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if ax { header }
+            if let banner = model.banner {
+                VoiceBannerCard(banner: banner).padding(.top, 16)
+            }
+            textLabelRow.padding(.top, model.banner == nil ? 20 : 24)
+            transcriptField.padding(.top, 8)
+            if model.canRecordAgain && !model.textFocused {
+                HStack {
+                    if !ax { Spacer(minLength: 0) }
+                    Button {
+                        if model.needsRecordAgainConfirmation { model.confirmingRecordAgain = true } else { model.recordAgain() }
+                    } label: {
+                        // Wraps at AX5 (two lines, frame "voorbeeld · AX5"):
+                        // a one-line label widened the whole page.
+                        Text(VoiceLogModel.Copy.recordAgain)
+                            .wholeWords(VoiceLogModel.Copy.recordAgain, font: VoiceType.headlineMedium)
+                            .foregroundStyle(Color.signalLink)
+                            .multilineTextAlignment(ax ? .leading : .trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
+            }
+            if !textOnly {
+                VoiceLabel("Gesprek").padding(.top, model.canRecordAgain && !model.textFocused ? 16 : 24)
+                conversationCard.padding(.top, 8)
+            }
+            if ax, let note = model.footnote(locked: locked) {
+                footnoteText(note).padding(.top, 24)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, ax ? 20 : 0)
+        .padding(.bottom, Self.bottomPadding(typing: typingFresh))
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+            contentHeight = $0
+            fitField()
+        }
+    }
+
+    /// The field's text height while the keyboard is up: what the visible
+    /// area leaves once everything else in the column is laid out (both
+    /// measured in the same pass, so it settles in one), between the
+    /// field's least and the frame's height.
+    private func fitField() {
+        guard model.textFocused, scrollTop > 0, visibleHeight > 0, contentHeight > 0 else { return }
+        // The content was laid out with the field at `typingFieldHeight`
+        // (its frame is exact while focused), so this is what the rest takes.
+        let others = contentHeight - typingFieldHeight - Self.fieldPadding
+        // Clear of the footer's 24-pt scroll-edge fade too: the card under
+        // the field must not fade into the footer (frame "typen").
+        let room = visibleHeight - VoiceFooter<EmptyView>.fade + Self.bottomPadding(typing: true)
+        let want = min(max(room - others - Self.fieldPadding, fieldMin), fieldMax).rounded()
+        if abs(want - typingFieldHeight) >= 2 { typingFieldHeight = want }
+    }
+    static func bottomPadding(typing: Bool) -> CGFloat { typing ? 4 : 16 }
+
+    /// The editor's vertical padding, inside the measured field.
+    static let fieldPadding: CGFloat = 16
+
+    /// The editor's text restyled from the model's marks: ink, and the
+    /// words it was read from dotted in signal (`VoiceMarks`).
+    private func restyled(_ text: AttributedString) -> AttributedString {
+        var out = text
+        let whole = out.startIndex..<out.endIndex
+        out[whole].foregroundColor = .inkBright
+        out[whole].underlineStyle = nil
+        let plain = String(out.characters)
+        guard plain == model.transcript, !locked else { return out }
+        for mark in model.marks where mark.upperBound <= plain.endIndex {
+            let lo = plain.distance(from: plain.startIndex, to: mark.lowerBound)
+            let hi = plain.distance(from: plain.startIndex, to: mark.upperBound)
+            let a = out.characters.index(out.startIndex, offsetBy: lo)
+            let b = out.characters.index(out.startIndex, offsetBy: hi)
+            out[a..<b].foregroundColor = .signalLink
+            out[a..<b].underlineStyle = Text.LineStyle(pattern: .dot, color: .signalLink.opacity(0.8))
+        }
+        return out
     }
 
     // MARK: What was said
 
     private var textLabelRow: some View {
         HStack(alignment: .firstTextBaseline) {
-            ProposalLabel(model.textLabel)
+            VoiceLabel(model.textLabel)
             Spacer(minLength: 12)
             if !ax && !model.textFocused && !model.trimmedTranscript.isEmpty {
-                ProposalLabel("Tik om te bewerken").accessibilityHidden(true)
+                VoiceLabel("Tik om te bewerken").accessibilityHidden(true)
             }
         }
     }
 
     @ViewBuilder private var transcriptField: some View {
         if model.textFocused || (model.trimmedTranscript.isEmpty && !locked) {
-            TextEditor(text: $model.transcript)
+            TextEditor(text: Binding(get: { styled }, set: { edited in
+                let plain = String(edited.characters)
+                if plain != model.transcript { model.transcript = plain }
+                styled = restyled(edited)
+            }))
                 .focused($textFocus)
                 .font(VoiceType.headline)
                 .foregroundStyle(Color.inkBright)
                 .tint(Color.signal)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: textOnly ? 200 : 76)
+                .frame(minHeight: model.textFocused ? typingFieldHeight : Self.typingFieldMin,
+                       maxHeight: model.textFocused ? typingFieldHeight : nil)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, Self.fieldPadding / 2)
                 .overlay(alignment: .topLeading) {
                     if model.transcript.isEmpty {
                         Text(VoiceLogModel.Copy.placeholder)
@@ -127,7 +230,7 @@ struct VoiceEditorPage: View {
                     text.padding(.bottom, 12)
                         .overlay(alignment: .bottom) { Rectangle().fill(Color.hairline).frame(height: 1) }
                 } else {
-                    text.padding(16).glassPanel()
+                    text.padding(.horizontal, 16).padding(.vertical, 20).glassPanel()
                 }
             }
             .contentShape(Rectangle())
@@ -157,7 +260,7 @@ struct VoiceEditorPage: View {
                 divider
                 timeRow
                 divider
-                channelControl
+                channelControl.id(Anchor.channel)
                 if model.hasRecording {
                     divider
                     keepRow
@@ -182,25 +285,8 @@ struct VoiceEditorPage: View {
             .buttonStyle(.plain)
             .accessibilityHint(model.timeOpen ? "Dubbeltik om te sluiten" : "Dubbeltik om de tijd te wijzigen")
             if model.timeOpen {
-                // In an overlay: the wheel's own intrinsic width is wider
-                // than the card, and as a plain child it widened the whole
-                // page past the screen.
-                Color.clear
-                    .frame(height: ax ? 260 : 132)
-                    .frame(maxWidth: .infinity)
-                    .overlay {
-                        DatePicker("", selection: Binding(get: { model.occurredAt ?? model.latestOccurredAt },
-                                                          set: { model.setOccurredAt($0) }),
-                                   in: ...model.latestOccurredAt,
-                                   displayedComponents: [.date, .hourAndMinute])
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .environment(\.locale, VoiceText.dutch)
-                            .environment(\.timeZone, ProposalFormat.amsterdam)
-                            .accessibilityLabel(VoiceLogModel.Copy.occurredAt)
-                    }
-                    .clipped()
-                    .padding(.horizontal, 16)
+                VoiceTimeWheel(model: model)
+                    .padding(.horizontal, ax ? 0 : 16)
                     .padding(.bottom, 8)
             }
         }
@@ -243,7 +329,7 @@ struct VoiceEditorPage: View {
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.void.opacity(0.5)))
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.edge, lineWidth: 1))
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
     }
 
@@ -259,7 +345,7 @@ struct VoiceEditorPage: View {
             .lineLimit(1)
             .minimumScaleFactor(0.85)
             .foregroundStyle(selected ? Color.inkBright : Color.inkSoft)
-            .frame(maxWidth: .infinity, minHeight: 38)
+            .frame(maxWidth: .infinity, minHeight: 42)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.void)
@@ -280,12 +366,37 @@ struct VoiceEditorPage: View {
         }
         .accessibilityElement(children: .combine)
         .padding(.horizontal, ax ? 0 : 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 
     // MARK: The footer
 
     private var footer: some View {
+        VStack(spacing: 0) {
+            noteFooter
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                    footerTop = $0
+                    fitField()
+                }
+            // "Gereed" as the frames draw it: a row of the footer on the
+            // keyboard, not iOS 26's floating keyboard-toolbar pill, which
+            // overlapped the footnote and took the GESPREK card's room.
+            if model.textFocused {
+                Rectangle().fill(Color.hairline).frame(height: 1)
+                Button { model.textFocused = false } label: {
+                    Text("Gereed")
+                        .wholeWords("Gereed", font: VoiceType.headlineMedium)
+                        .foregroundStyle(Color.signalLink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(VoiceSurface.color)
+            }
+        }
+    }
+
+    private var noteFooter: some View {
         VoiceFooter(hairline: true) {
             let primary = model.primary(locked: locked)
             AuthButton(title: primary.title, enabled: primary.enabled) {
@@ -344,9 +455,9 @@ struct VoiceRow: View {
                 // between groups), so "ANDERS GEWIST NA VERSTUREN" at AX5
                 // would widen the page: a single group wraps instead.
                 if meta.contains(" · ") {
-                    MetaLine(meta, color: .inkLabel)
+                    VoiceMetaLine(meta)
                 } else {
-                    ProposalLabel(meta, color: .inkLabel)
+                    VoiceLabel(meta, color: .inkLabel)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,7 +467,7 @@ struct VoiceRow: View {
         // gutter (frame "voorbeeld · AX5"): a 53-pt "Woonstichting" needs
         // every point of the line.
         .padding(.horizontal, padded && !typeSize.isAccessibilitySize ? 16 : 0)
-        .padding(.vertical, padded ? 12 : 0)
+        .padding(.vertical, padded ? 14 : 0)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
     }
@@ -490,11 +601,11 @@ struct PartyPickerSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 searchField.padding(.top, 16)
                 if !sections.recent.isEmpty {
-                    ProposalLabel("Recent").padding(.top, 24)
+                    VoiceLabel("Recent").padding(.top, 24)
                     card(sections.recent, recent: true).padding(.top, 8)
                 }
                 if !sections.all.isEmpty {
-                    ProposalLabel("Alle partijen · A–Z").padding(.top, 24)
+                    VoiceLabel("Alle partijen · A–Z").padding(.top, 24)
                     card(sections.all, recent: false).padding(.top, 8)
                 }
                 if sections.recent.isEmpty && sections.all.isEmpty {
@@ -542,7 +653,7 @@ struct PartyPickerSheet: View {
                                 .foregroundStyle(Color.inkBright)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
-                            if let meta = Self.meta(party, recent: recent) { MetaLine(meta, color: .inkLabel) }
+                            if let meta = Self.meta(party, recent: recent) { VoiceMetaLine(meta) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         if party.id == model.partyId {
@@ -605,6 +716,13 @@ struct VoiceRecordingAccessory: View {
                 .accessibilityLabel("Stop de opname")
         }
         .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Opaque, with the frame's border: the tab's content must not show
+        // through behind "Opname loopt" (frame "opname · blad omlaag").
+        .background {
+            Capsule().fill(Color.plate)
+                .overlay(Capsule().strokeBorder(Color.edgeStrong, lineWidth: 1))
+        }
     }
 }
 
@@ -629,5 +747,111 @@ private struct CardAtRegularSizes: ViewModifier {
     let ax: Bool
     func body(content: Content) -> some View {
         if ax { content } else { content.glassPanel() }
+    }
+}
+
+/// "Gesprek was om …" opened (frame "tijd wijzigen"): three short wheels —
+/// day, hour, minute — on one selection band. The days end at "Vandaag":
+/// a call is never in the future, and a minute past now snaps back to now
+/// (`VoiceLogModel.setOccurred`).
+private struct VoiceTimeWheel: View {
+    let model: VoiceLogModel
+    @ScaledMetric(relativeTo: .headline) private var row: CGFloat = 40
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let parts = model.wheelParts
+        let rowHeight = min(row, 64)
+        // The frame's proportions: the day takes the widest column.
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                VoiceWheelColumn(items: model.wheelDays.map(\.start), selected: parts.day, rowHeight: rowHeight,
+                                 label: { day in model.wheelDays.first { $0.start == day }?.label ?? "" },
+                                 name: "Dag") { model.setOccurred(day: $0) }
+                    .frame(width: geo.size.width * 0.42)
+                VoiceWheelColumn(items: Array(0..<24), selected: parts.hour, rowHeight: rowHeight,
+                                 label: { String(format: "%02d", $0) }, name: "Uur") { model.setOccurred(hour: $0) }
+                    .frame(width: geo.size.width * 0.29)
+                VoiceWheelColumn(items: Array(0..<60), selected: parts.minute, rowHeight: rowHeight,
+                                 label: { String(format: "%02d", $0) }, name: "Minuut") { model.setOccurred(minute: $0) }
+                    .frame(width: geo.size.width * 0.29)
+            }
+        }
+        .frame(height: rowHeight * 3)
+        .background {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.void.opacity(0.55))
+                .frame(height: rowHeight)
+                .accessibilityHidden(true)
+        }
+        .environment(\.locale, VoiceText.dutch)
+    }
+}
+
+/// One wheel: three rows in view, the middle one chosen; it snaps to a row
+/// and commits when the scroll comes to rest. VoiceOver adjusts it.
+private struct VoiceWheelColumn<Item: Hashable>: View {
+    let items: [Item]
+    let selected: Item
+    let rowHeight: CGFloat
+    let label: (Item) -> String
+    let name: String
+    let choose: (Item) -> Void
+    @State private var position: Item?
+
+    var body: some View {
+        ScrollView(.vertical) {
+            // Not lazy: a lazy stack left the hour and minute wheels blank
+            // when they opened scrolled to row 14 of 24.
+            VStack(spacing: 0) {
+                ForEach(items, id: \.self) { item in
+                    Text(label(item))
+                        .font(VoiceType.headline)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                        .foregroundStyle(item == (position ?? selected) ? Color.inkBright : Color.inkMute)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: rowHeight)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.snappy) { position = item }
+                            choose(item)
+                        }
+                        .id(item)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .contentMargins(.vertical, rowHeight, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $position, anchor: .center)
+        .scrollIndicators(.hidden)
+        .onAppear { position = selected }
+        .onChange(of: selected) { _, now in
+            if position != now { withAnimation(.snappy) { position = now } }
+        }
+        .onScrollPhaseChange { _, phase in
+            if phase == .idle, let position, position != selected { choose(position) }
+        }
+        .mask {
+            LinearGradient(stops: [.init(color: .black.opacity(0.35), location: 0),
+                                   .init(color: .black, location: 0.33),
+                                   .init(color: .black, location: 0.67),
+                                   .init(color: .black.opacity(0.35), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(name)
+        .accessibilityValue(label(selected))
+        .accessibilityAdjustableAction { direction in
+            guard let i = items.firstIndex(of: selected) else { return }
+            switch direction {
+            case .increment: if i + 1 < items.count { choose(items[i + 1]) }
+            case .decrement: if i > 0 { choose(items[i - 1]) }
+            @unknown default: break
+            }
+        }
     }
 }

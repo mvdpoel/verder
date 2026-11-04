@@ -571,6 +571,19 @@ final class VoiceLogModel {
         occurredAtSetByHand = true
     }
 
+    /// The time wheel's days: up to today, labelled "Vandaag" (frame "tijd
+    /// wijzigen").
+    var wheelDays: [VoiceText.WheelDay] { VoiceText.wheelDays(now: now()) }
+
+    /// The wheel's position: the day (its start), hour and minute shown.
+    var wheelParts: (day: Date, hour: Int, minute: Int) { VoiceText.wheelParts(occurredAt ?? now()) }
+
+    /// One wheel turned: the time it names, never later than now.
+    func setOccurred(day: Date? = nil, hour: Int? = nil, minute: Int? = nil) {
+        let at = wheelParts
+        setOccurredAt(VoiceText.wheelDate(day: day ?? at.day, hour: hour ?? at.hour, minute: minute ?? at.minute))
+    }
+
     /// "Typ je notitie": the editor, empty or with the take's state left.
     func typeInstead() {
         switch phase {
@@ -622,7 +635,12 @@ final class VoiceLogModel {
 
     /// The words to mark in the transcript: the party and the channel word
     /// that were READ from it (dotted, in signal).
+    /// None while the parties are not loaded (frame "voorbeeld · partijen
+    /// laden lukt niet"): nothing could be matched, so nothing is marked —
+    /// not even the channel word, or the text would claim a reading the
+    /// Gesprek card cannot show.
     var marks: [Range<String.Index>] {
+        guard partiesState == .loaded else { return [] }
         var out: [Range<String.Index>] = []
         if partySource == .fromText, let p = selectedParty {
             let r = VoiceText.read(transcript, parties: [p])

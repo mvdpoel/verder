@@ -4,7 +4,12 @@ import { voiceSummary, VOICE_SUMMARY_MAX } from "./voice-summary";
 describe("voiceSummary", () => {
   it("takes the first sentence", () => {
     expect(voiceSummary("Gebeld met Verder over de loonstroken. Ze sturen een mail.")).toBe(
-      "Gebeld met Verder over de loonstroken.");
+      "Gebeld met Verder over de loonstroken");
+  });
+
+  it("drops only a closing full stop: a question or an ellipsis stays", () => {
+    expect(voiceSummary("Belt CAK terug? Ze wist het niet.")).toBe("Belt CAK terug?");
+    expect(voiceSummary("Gebeld...")).toBe("Gebeld...");
   });
 
   it("summary cuts at a word under 120", () => {
@@ -36,6 +41,6 @@ describe("voiceSummary", () => {
 
   it("does not take a decimal point or an abbreviation for a sentence end", () => {
     expect(voiceSummary("Betaald € 12.50 aan CAK vandaag. Rest volgt.")).toBe(
-      "Betaald € 12.50 aan CAK vandaag.");
+      "Betaald € 12.50 aan CAK vandaag");
   });
 });

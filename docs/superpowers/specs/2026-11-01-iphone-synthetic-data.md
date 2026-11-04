@@ -109,7 +109,7 @@ Added 2026-11-03 for the "weekly · final" frames. The case's today for every
 
 ## Voice quick-log (fixture `voice`)
 
-Transcript: "Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van vijftig euro per maand, de eerste betaling is op één december." Party picker recent: Woonstichting Lindehof, Bewindkantoor Noordkust, Kade & Partners.
+Transcript: "Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van vijftig euro per maand, de eerste betaling is op één december." Party picker recent: Woonstichting Lindehof, Bewindkantoor Noordkust, Kade & Partners (the parties route names the debt collector "Kade & Partners", as the picker frame draws it). The voice log's suggestion title drops the first sentence's closing full stop ("Gebeld met Woonstichting Lindehof").
 
 ## Fields the fixtures needed beyond the above (added 2026-11-01, Task FX)
 

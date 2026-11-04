@@ -452,7 +452,7 @@ struct FixtureTests {
         let parties = try Self.decode(JSONValue.self, "voice", "parties")
         // The picker frame's seven: three recent, four never spoken to.
         #expect(Self.array(parties).map { $0["name"]?.string } ==
-                ["Woonstichting Lindehof", "Bewindkantoor Noordkust", "Incassobureau Kade & Partners",
+                ["Woonstichting Lindehof", "Bewindkantoor Noordkust", "Kade & Partners",
                  "Atelier Sterrenwacht", "Gemeente Westerlaan", "Stroomnet Energie", "Zorgverzekeraar Duinzorg"])
         // `role` is the one field beyond the parties route: NOT SERVED YET,
         // and optional on the phone (`PartyDTO.role`).

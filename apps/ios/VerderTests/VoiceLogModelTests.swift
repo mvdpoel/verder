@@ -440,6 +440,10 @@ struct VoiceLogModelTests {
         m.transcript = "Gebeld."
         #expect(m.footnote(locked: false) == VoiceLogModel.Copy.waitForParties)
         #expect(m.canRetryParties)
+        // Nothing could be matched, so nothing is marked — the channel word
+        // neither (frame "voorbeeld · partijen laden lukt niet").
+        m.transcript = "Gebeld met Woonstichting Lindehof."
+        #expect(m.marks.isEmpty)
     }
 
     /// The recording is NSFileProtectionComplete: its folder before the

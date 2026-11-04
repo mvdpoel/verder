@@ -92,6 +92,9 @@ enum VoiceText {
             }
             i = next
         }
+        // A title, not a sentence: its closing full stop goes (frame "staat
+        // in Voor jou"). "?" and "!" stay, they carry meaning.
+        if sentence.count > 1, sentence.hasSuffix("."), !sentence.hasSuffix("..") { sentence.removeLast() }
         guard sentence.count > summaryMax else { return sentence }
         let room = String(sentence.prefix(summaryMax - 1))
         var kept = room
@@ -163,6 +166,40 @@ enum VoiceText {
         let days = ["zo", "ma", "di", "wo", "do", "vr", "za"]
         let d = "\(c.day ?? 1) \(months[((c.month ?? 1) - 1) % 12])"
         return weekday ? "\(days[((c.weekday ?? 1) - 1) % 7]) \(d)" : d
+    }
+
+    // MARK: - The time wheel ("tijd wijzigen")
+
+    /// One day on the time wheel: its start on Amsterdam's calendar and its
+    /// label — "Vandaag" for today, "za 31 okt" for every earlier day.
+    struct WheelDay: Hashable, Sendable {
+        let start: Date
+        let label: String
+    }
+
+    /// The days the wheel offers, oldest first and TODAY LAST: a call is
+    /// never in the future, so no later day is listed (frame "tijd
+    /// wijzigen": "za 31 okt", "Vandaag", nothing below it).
+    static func wheelDays(now: Date, back: Int = 30) -> [WheelDay] {
+        let cal = calendar
+        let today = cal.startOfDay(for: now)
+        return (0...max(0, back)).reversed().compactMap { offset in
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            return WheelDay(start: day, label: offset == 0 ? "Vandaag" : shortDay(day, weekday: true))
+        }
+    }
+
+    /// The day (its start), hour and minute of `date` on Amsterdam's clock.
+    static func wheelParts(_ date: Date) -> (day: Date, hour: Int, minute: Int) {
+        let cal = calendar
+        let c = cal.dateComponents([.hour, .minute], from: date)
+        return (cal.startOfDay(for: date), c.hour ?? 0, c.minute ?? 0)
+    }
+
+    /// The moment a wheel position names, on Amsterdam's clock.
+    static func wheelDate(day: Date, hour: Int, minute: Int) -> Date {
+        let cal = calendar
+        return cal.date(bySettingHour: min(max(hour, 0), 23), minute: min(max(minute, 0), 59), second: 0, of: day) ?? day
     }
 
     /// "LAATST 31 OKT".

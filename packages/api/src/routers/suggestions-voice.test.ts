@@ -64,7 +64,7 @@ describe("suggestions.createVoice", () => {
     expect(s.resultEntryId).toBeNull();
     expect(s.proposed).toEqual({
       clientId: i.clientId, occurredAt: "2026-11-01T10:15:00.000Z", channel: "call",
-      direction: "inbound", summary: i.transcript.split(". ")[0] + ".", details: i.transcript,
+      direction: "inbound", summary: i.transcript.split(". ")[0], details: i.transcript,
       participantPartyIds: [partyId], participantNames: [partyName],
       attachmentDocumentIds: [], actionItems: [],
     });

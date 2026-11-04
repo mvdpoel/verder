@@ -10,12 +10,15 @@ struct ProposalLabel: View {
     /// How far this label grows; the detail screens' frames let it grow all
     /// the way (`DetailLabel`).
     var cap: DynamicTypeSize = ProposalLabel.largest
+    /// Upper case at the accessibility sizes too (the voice log's frames).
+    var alwaysUpper = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(_ text: String, color: Color = .inkLabel, cap: DynamicTypeSize = ProposalLabel.largest) {
+    init(_ text: String, color: Color = .inkLabel, cap: DynamicTypeSize = ProposalLabel.largest, alwaysUpper: Bool = false) {
         self.text = text
         self.color = color
         self.cap = cap
+        self.alwaysUpper = alwaysUpper
     }
 
     /// The largest size a label grows to. At AX5 a 12-pt caption would grow
@@ -25,10 +28,10 @@ struct ProposalLabel: View {
 
     var body: some View {
         let ax = typeSize.isAccessibilitySize
-        let shown = ax ? text : text.uppercased()
+        let shown = ax && !alwaysUpper ? text : text.uppercased()
         Text(shown)
             .wholeWords(shown, font: .mono(12, relativeTo: .caption))
-            .tracking(ax ? 0 : 1.2)
+            .tracking(ax ? (alwaysUpper ? 0.6 : 0) : 1.2)
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
             .dynamicTypeSize(...cap)
@@ -41,19 +44,24 @@ struct ProposalLabel: View {
 struct MetaLine: View {
     let parts: [String]
     var color: Color = .inkDim
+    var cap: DynamicTypeSize = ProposalLabel.largest
+    var alwaysUpper = false
 
-    init(_ line: String, color: Color = .inkDim) {
+    init(_ line: String, color: Color = .inkDim, cap: DynamicTypeSize = ProposalLabel.largest, alwaysUpper: Bool = false) {
         parts = line.components(separatedBy: " · ")
         self.color = color
+        self.cap = cap
+        self.alwaysUpper = alwaysUpper
     }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             ForEach(Array(stride(from: parts.count, through: 1, by: -1)), id: \.self) { head in
                 VStack(alignment: .leading, spacing: 0) {
-                    ProposalLabel(parts.prefix(head).joined(separator: " · "), color: color).fixedSize()
+                    ProposalLabel(parts.prefix(head).joined(separator: " · "), color: color, cap: cap,
+                                  alwaysUpper: alwaysUpper).fixedSize()
                     ForEach(Array(parts.dropFirst(head).enumerated()), id: \.offset) { _, p in
-                        ProposalLabel(p, color: color)
+                        ProposalLabel(p, color: color, cap: cap, alwaysUpper: alwaysUpper)
                     }
                 }
             }

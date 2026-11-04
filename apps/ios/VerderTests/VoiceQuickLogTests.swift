@@ -159,13 +159,43 @@ struct VoiceQuickLogTests {
     // MARK: - The summary and the picker
 
     @Test func theSummaryIsTheServersFirstSentence() {
-        #expect(VoiceText.summary(Self.heard) == "Gebeld met Woonstichting Lindehof.")
+        // A title: the closing full stop goes; "?" and an ellipsis stay.
+        #expect(VoiceText.summary(Self.heard) == "Gebeld met Woonstichting Lindehof")
+        #expect(VoiceText.summary("Belt CAK terug? Ze wist het niet.") == "Belt CAK terug?")
+        #expect(VoiceText.summary("Gebeld...") == "Gebeld...")
         #expect(VoiceText.summary("  ") == "Gesprek (spraaknotitie)")
-        #expect(VoiceText.summary("Betaald € 12.50 via www.cak.nl vandaag. Rest.") == "Betaald € 12.50 via www.cak.nl vandaag.")
+        #expect(VoiceText.summary("Betaald € 12.50 via www.cak.nl vandaag. Rest.") == "Betaald € 12.50 via www.cak.nl vandaag")
         let long = String(repeating: "woord ", count: 40) + "einde."
         let cut = VoiceText.summary(long)
         #expect(cut.count <= 120)
         #expect(cut.hasSuffix("woord…"))
+    }
+
+    /// "tijd wijzigen": today reads "Vandaag", earlier days "za 31 okt",
+    /// and no day after today is offered — a call is never in the future.
+    @Test func theTimeWheelEndsAtVandaag() throws {
+        let now = try Date("2026-11-01T13:20:00Z", strategy: .iso8601)   // 14:20 in Amsterdam
+        let days = VoiceText.wheelDays(now: now, back: 2)
+        #expect(days.map(\.label) == ["vr 30 okt", "za 31 okt", "Vandaag"])
+        let parts = VoiceText.wheelParts(now)
+        #expect(parts.hour == 14 && parts.minute == 20)
+        #expect(parts.day == days.last?.start)
+        let yesterday = VoiceText.wheelDate(day: days[1].start, hour: 15, minute: 21)
+        #expect(VoiceText.time(yesterday) == "15:21")
+        #expect(VoiceText.day(yesterday, now: now) == "GISTEREN")
+    }
+
+    @Test func turningTheWheelNeverPassesNow() async throws {
+        let m = try model(base.server())
+        await m.prepare()
+        m.typeInstead()
+        let now = m.latestOccurredAt
+        m.setOccurred(hour: 23, minute: 59)
+        #expect(try #require(m.occurredAt) <= m.latestOccurredAt)
+        #expect(m.occurredAt! >= now)
+        let earlier = m.wheelDays.dropLast().last!
+        m.setOccurred(day: earlier.start)
+        #expect(VoiceText.calendar.isDate(m.occurredAt!, inSameDayAs: earlier.start))
     }
 
     @Test func thePickerSplitsRecentFromAToZAndSearches() {
@@ -269,7 +299,7 @@ struct VoiceQuickLogTests {
         await m.send()
         #expect(m.screen == .sent)
         #expect(m.sentSuggestionId == "00000000-f1c5-4000-8000-700000000007")
-        #expect(m.sentSummary == "Gebeld met Woonstichting Lindehof.")
+        #expect(m.sentSummary == "Gebeld met Woonstichting Lindehof")
         #expect(m.sentTitle == "Staat in Voor jou")
         #expect(m.sentRecordingLine == "OPNAME GEWIST · ALLEEN DE TEKST IS VERSTUURD")
     }

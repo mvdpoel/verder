@@ -29,6 +29,10 @@ struct VoiceLogSheet: View {
     /// The frames' short sheet (559 of 874 pt), plus the room the floating
     /// sheet of iOS 26 keeps under itself.
     static let short = PresentationDetent.fraction(0.68)
+    /// The note's sheet (frame "voorbeeld"): its top at 120 of 874 pt, so
+    /// Overzicht's title stays in view, dimmed, behind it.
+    static let note = PresentationDetent.fraction(VoiceLogSheet.noteFraction)
+    static let noteFraction: CGFloat = 0.96
 
     var body: some View {
         Group {
@@ -55,8 +59,8 @@ struct VoiceLogSheet: View {
         // On the whole sheet, so the lock screen and the note agree on the
         // height (a locked note once kept the lock screen's short detent).
         .presentationDetents(session.model.map(detents) ?? [Self.short, .large], selection: $detent)
-        .onChange(of: session.model.map(tall) ?? false, initial: true) { _, tall in
-            detent = tall ? .large : Self.short
+        .onChange(of: session.model.map(fitting) ?? Self.short, initial: true) { _, fitting in
+            detent = fitting
         }
         .task(id: session.model.map(ObjectIdentifier.init)) {
             guard let model = session.model else { return }
@@ -72,12 +76,24 @@ struct VoiceLogSheet: View {
         .presentationBackground(VoiceSurface.color)
     }
 
-    private func tall(_ model: VoiceLogModel) -> Bool {
-        typeSize.isAccessibilitySize || model.screen == .editor || model.screen == .prePrompt
+    /// The detent a screen opens at: full height for the pre-prompt, the
+    /// accessibility sizes, a keyboard (frames "typen", "tekst bewerken")
+    /// and the party picker; the note's height for the note; short for the
+    /// rest.
+    private func fitting(_ model: VoiceLogModel) -> PresentationDetent {
+        if typeSize.isAccessibilitySize || model.screen == .prePrompt { return .large }
+        // Under the party picker too (frames "met wie · …"): a sheet that
+        // presents a short sheet from a shorter detent is pushed out of view.
+        // A failed send's banner makes the note too tall for the note's
+        // detent (frames "niet verstuurd …" are drawn full height).
+        if model.screen == .editor {
+            return model.textFocused || model.pickerOpen || model.banner != nil ? .large : Self.note
+        }
+        return Self.short
     }
 
     private func detents(_ model: VoiceLogModel) -> Set<PresentationDetent> {
-        model.screen == .prePrompt ? [.large] : [Self.short, .large]
+        model.screen == .prePrompt ? [.large] : [Self.short, Self.note, .large]
     }
 }
 
@@ -134,6 +150,35 @@ enum VoiceType {
     static let callout = Font.display(15, relativeTo: .callout)
 }
 
+/// The voice log's mono labels ("WAT JE ZEI", "GESPREK", "MET WIE · UIT JE
+/// TEKST"): upper case at every size, and growing with Dynamic Type to about
+/// 60% of the body at AX5 (frame "voorbeeld · AX5") — further than the
+/// detail screens' labels, which stop at AX2 and read as footnotes there.
+struct VoiceLabel: View {
+    static let largest = DynamicTypeSize.accessibility4
+    let text: String
+    var color: Color = .inkLabel
+
+    init(_ text: String, color: Color = .inkLabel) {
+        self.text = text
+        self.color = color
+    }
+
+    var body: some View {
+        ProposalLabel(text, color: color, cap: Self.largest, alwaysUpper: true)
+    }
+}
+
+/// A meta line of groups, in `VoiceLabel`'s size (`MetaLine`'s wrapping).
+struct VoiceMetaLine: View {
+    let line: String
+    init(_ line: String) { self.line = line }
+
+    var body: some View {
+        MetaLine(line, color: .inkLabel, cap: VoiceLabel.largest, alwaysUpper: true)
+    }
+}
+
 /// The screen. Layout only: every word and every rule comes from
 /// `VoiceLogModel` (VoiceLogModelTests). Amber appears only on "WACHT OP JOU".
 /// No haptics while recording (brief §2.5: never disturb the microphone);
@@ -172,26 +217,38 @@ struct VoiceLogView: View {
         .background(VoiceSurface.color.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .lineHeight(.multiple(factor: AuthType.lineFactor))
-        .confirmationDialog(VoiceLogModel.Copy.confirmTitle, isPresented: $model.confirmingClose,
-                            titleVisibility: .visible) {
-            if model.canSend && !locked {
-                Button(VoiceLogModel.Copy.send) { Task { await model.send() } }
+        // Bottom action sheets drawn here, not confirmationDialogs: iOS 26
+        // anchors a dialog to its source and draws a mid-sheet popover with
+        // no cancel row and no dimming (frame "weggooien?").
+        .overlay {
+            if model.confirmingClose {
+                VoiceActionSheet(title: VoiceLogModel.Copy.confirmTitle,
+                                 actions: closeActions, cancel: VoiceLogModel.Copy.keepEditing,
+                                 dismiss: { model.confirmingClose = false })
+            } else if model.confirmingRecordAgain {
+                VoiceActionSheet(title: VoiceLogModel.Copy.recordAgainTitle,
+                                 actions: [.init(title: VoiceLogModel.Copy.recordAgain, destructive: true) {
+                                     model.recordAgain()
+                                 }],
+                                 cancel: VoiceLogModel.Copy.keepEditing,
+                                 dismiss: { model.confirmingRecordAgain = false })
             }
-            Button(role: .destructive) {
-                discards += 1
-                close()
-            } label: {
-                Label(VoiceLogModel.Copy.discard, systemImage: "trash")
-            }
-            Button(VoiceLogModel.Copy.keepEditing, role: .cancel) {}
         }
-        .confirmationDialog(VoiceLogModel.Copy.recordAgainTitle, isPresented: $model.confirmingRecordAgain,
-                            titleVisibility: .visible) {
-            Button(VoiceLogModel.Copy.recordAgain, role: .destructive) { model.recordAgain() }
-            Button(VoiceLogModel.Copy.keepEditing, role: .cancel) {}
-        }
+        .animation(.easeOut(duration: 0.2), value: model.confirmingClose || model.confirmingRecordAgain)
         .sensoryFeedback(.error, trigger: model.sendFailures)
         .sensoryFeedback(.warning, trigger: discards)
+    }
+
+    private var closeActions: [VoiceActionSheet.Action] {
+        var out: [VoiceActionSheet.Action] = []
+        if model.canSend && !locked {
+            out.append(.init(title: VoiceLogModel.Copy.send) { Task { await model.send() } })
+        }
+        out.append(.init(title: VoiceLogModel.Copy.discard, symbol: "trash", destructive: true) {
+            discards += 1
+            close()
+        })
+        return out
     }
 
     private func header(titled: Bool) -> VoiceHeader {
@@ -243,14 +300,18 @@ struct VoiceHeader: View {
             .accessibilityAddTraits(.isHeader)
     }
 
+    /// The ✕ grows with the text, to a large ✕ in a 56-pt circle at AX5
+    /// (frame "voorbeeld · AX5 · 874-venster").
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 13
+    @ScaledMetric(relativeTo: .body) private var circle: CGFloat = 32
+
     private var closeButton: some View {
         Button(action: close) {
             Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .font(.system(size: min(glyph, 22), weight: .semibold))
                 .foregroundStyle(Color.inkSoft)
-                .frame(width: typeSize.isAccessibilitySize ? 52 : 32, height: typeSize.isAccessibilitySize ? 52 : 32)
-                .background(Circle().fill(Color.field))
+                .frame(width: min(circle, 56), height: min(circle, 56))
+                .background(Circle().fill(Color.plate))
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -259,9 +320,115 @@ struct VoiceHeader: View {
     }
 }
 
+/// A bottom action sheet over the voice log (frame "weggooien?"): the
+/// question, its actions in one card, and the way back in its own card,
+/// over a dimmed sheet. Tapping the dimmed part is the way back too.
+struct VoiceActionSheet: View {
+    struct Action: Identifiable {
+        let id = UUID()
+        let title: String
+        var symbol: String? = nil
+        var destructive = false
+        let perform: () -> Void
+    }
+
+    let title: String
+    let actions: [Action]
+    let cancel: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // Darker than `scrim`: the frame's dimmed note reads as near-black,
+            // and the pinned send button must not glow between the cards.
+            Color.void.opacity(0.92).ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: dismiss)
+                .accessibilityHidden(true)
+            ViewThatFits(in: .vertical) {
+                cards
+                ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape, dismiss)
+    }
+
+    private var cards: some View {
+        VStack(spacing: 8) {
+            VStack(spacing: 0) {
+                Text(title)
+                    .wholeWords(title, font: VoiceType.callout)
+                    .foregroundStyle(Color.inkMute)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(actions) { action in
+                    Rectangle().fill(Color.hairline).frame(height: 1)
+                    Button {
+                        dismiss()
+                        action.perform()
+                    } label: {
+                        row(action)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(card)
+            Button(action: dismiss) {
+                Text(cancel)
+                    .wholeWords(cancel, font: VoiceType.headlineMedium)
+                    .foregroundStyle(Color.signalLink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .padding(.horizontal, 16)
+                    .background(card)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func row(_ action: Action) -> some View {
+        // iOS's own destructive red: the one red in the app, on the one
+        // action that loses work.
+        let color: Color = action.destructive ? Color(uiColor: .systemRed) : .signalLink
+        return HStack(spacing: 8) {
+            if let symbol = action.symbol {
+                Image(systemName: symbol)
+                    .font(VoiceType.callout)
+                    .accessibilityHidden(true)
+            }
+            Text(action.title)
+                .wholeWords(action.title, font: VoiceType.headline)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(color)
+        .frame(maxWidth: .infinity, minHeight: 56)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+    }
+
+    /// Opaque, so the note never shows through it.
+    private var card: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.plate)
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.edge, lineWidth: 1))
+    }
+}
+
 /// The pinned bottom of a page: a hairline, then its buttons and words,
 /// clear of the home indicator.
 struct VoiceFooter<Content: View>: View {
+    /// The scroll-edge fade's height above the hairline.
+    static var fade: CGFloat { 24 }
     var hairline = false
     @ViewBuilder let content: Content
 
@@ -280,8 +447,8 @@ struct VoiceFooter<Content: View>: View {
             .background(alignment: .top) {
                 if hairline {
                     LinearGradient(colors: [VoiceSurface.color.opacity(0), VoiceSurface.color], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 24)
-                        .offset(y: -24)
+                        .frame(height: Self.fade)
+                        .offset(y: -Self.fade)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -370,7 +537,7 @@ private struct RecordingLine: View {
                     .font(.mono(17, relativeTo: .headline, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(Color.inkBright)
-                ProposalLabel("Nederlands · op je iPhone", color: .inkLabel)
+                VoiceLabel("Nederlands · op je iPhone", color: .inkLabel)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -478,7 +645,7 @@ private struct VoiceTranscribingPage: View {
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(Color.signalLink)
                         .symbolEffect(.variableColor.iterative)
-                    ProposalLabel("Omzetten naar tekst…", color: .inkBright)
+                    VoiceLabel("Omzetten naar tekst…", color: .inkBright)
                 }
                 .padding(.top, 20)
                 .accessibilityElement(children: .combine)
@@ -489,7 +656,7 @@ private struct VoiceTranscribingPage: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
                 }
-                ProposalLabel("Gesprek").padding(.top, 24)
+                VoiceLabel("Gesprek").padding(.top, 24)
                 VStack(spacing: 0) {
                     SkeletonLine()
                     Rectangle().fill(Color.hairline).frame(height: 1).padding(.leading, 48)
@@ -547,14 +714,14 @@ private struct VoiceStatePage: View {
                 if let progress = page.progress {
                     ProgressBar(fraction: progress.fraction).padding(.top, 20)
                     HStack(alignment: .firstTextBaseline) {
-                        ProposalLabel("Eenmalig")
+                        VoiceLabel("Eenmalig")
                         Spacer(minLength: 12)
-                        if let amount = model.installAmount { ProposalLabel(amount) }
+                        if let amount = model.installAmount { VoiceLabel(amount) }
                     }
                     .padding(.top, 8)
                     .accessibilityElement(children: .combine)
                 }
-                if let meta = page.meta { ProposalLabel(meta).padding(.top, 16) }
+                if let meta = page.meta { VoiceLabel(meta).padding(.top, 16) }
                 if let note = page.note { VoiceNote(text: note).padding(.top, 16) }
             }
             .padding(.horizontal, 16)
@@ -644,7 +811,7 @@ private struct VoiceSentPage: View {
                                 Text(Self.meta)
                                     .font(.mono(12, relativeTo: .caption))
                                     .tracking(1.2)
-                                    .dynamicTypeSize(...ProposalLabel.largest)
+                                    .dynamicTypeSize(...VoiceLabel.largest)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -659,7 +826,7 @@ private struct VoiceSentPage: View {
                 .padding(.top, 20)
                 .accessibilityElement(children: .combine)
                 .accessibilityHint("Opent de suggestie in Voor jou.")
-                ProposalLabel(model.sentRecordingLine, color: .inkLabel).padding(.top, 16)
+                VoiceLabel(model.sentRecordingLine, color: .inkLabel).padding(.top, 16)
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
