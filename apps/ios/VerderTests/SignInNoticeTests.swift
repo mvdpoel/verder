@@ -33,6 +33,19 @@ import Testing
         #expect(SignInNotice(cause: .sessionExpired, at: expiry, method: .passkey).label == "UITGELOGD · 1 NOV 09:12")
     }
 
+    /// At AX5 the time goes on its own line, so its halves carry no " · ":
+    /// a line never starts with the dot (auth final, Geen toegangssleutel
+    /// gevonden · AX5).
+    @Test func theLabelSplitsIntoKindAndMomentWithoutTheDot() {
+        let n = SignInNotice(cause: .noPasskeyOnDevice, at: Self.at, method: .passkey)
+        #expect(n.labelKind == "TOEGANGSSLEUTEL")
+        #expect(n.labelStamp == "14:02")
+        #expect(n.label == "\(n.labelKind) · \(n.labelStamp)")
+        for notice in Self.everyNotice {
+            #expect(!notice.labelKind.contains("·") && !notice.labelStamp.contains("·"))
+        }
+    }
+
     @Test func theFramesWords() {
         let wrong = SignInNotice(cause: .wrongPassword, at: Self.at, method: .password)
         #expect(wrong.title == "E-mailadres of wachtwoord klopt niet.")

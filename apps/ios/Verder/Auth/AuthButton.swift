@@ -198,14 +198,16 @@ struct FaceIDTile: View {
 /// element, in that order.
 struct AuthNoticeCard: View {
     let label: String
+    /// The moment, joined to `label` with " · " when both fit one line and
+    /// set on a line of its own (no dot) when they do not.
+    var stamp: String?
     let title: String
     let text: String
     var detail: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .wholeWords(label, font: AuthType.label)
+            labelLine
                 .tracking(AuthType.labelTracking)
                 .foregroundStyle(Color.inkLabel)
                 .padding(.bottom, 8)
@@ -247,5 +249,26 @@ struct AuthCaption: View {
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
+    }
+}
+
+extension AuthNoticeCard {
+    @ViewBuilder fileprivate var labelLine: some View {
+        if let stamp {
+            let joined = "\(label) · \(stamp)"
+            ViewThatFits(in: .horizontal) {
+                Text(joined)
+                    .font(AuthType.label)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(label).wholeWords(label, font: AuthType.label)
+                    Text(stamp).wholeWords(stamp, font: AuthType.label)
+                }
+            }
+            .accessibilityLabel(joined)
+        } else {
+            Text(label).wholeWords(label, font: AuthType.label)
+        }
     }
 }

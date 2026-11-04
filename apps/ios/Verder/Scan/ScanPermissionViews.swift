@@ -9,10 +9,12 @@ struct PermissionPrePrompt<Art: View>: View {
     let purpose: String
     let promises: [String]
     let proceed: () -> Void
-    @ViewBuilder let art: () -> Art
+    /// Given whether the phone is a short one (`Layout.Metrics.compact`).
+    @ViewBuilder let art: (_ compact: Bool) -> Art
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var height: CGFloat = 0
+    @State private var screenHeight: CGFloat = 0
 
     static var goOn: String { "Ga verder" }
     static var thenIOS: String { "Daarna vraagt iOS om toestemming." }
@@ -26,7 +28,31 @@ struct PermissionPrePrompt<Art: View>: View {
         static var titleFromBottom: CGFloat { 266 }
         /// The picture's bottom to the title (frames: 35–46).
         static var artGap: CGFloat { 40 }
+
+        /// What changes on a short phone (frame "Pre-prompt / Camera ·
+        /// iPhone SE"): a smaller picture (bracket 132 wide, not 158), the
+        /// title nearer the button, and the button raised so the caption
+        /// ends ~50 above the bottom edge, which on an SE has no home
+        /// indicator to keep it there. `height` is the screen's height
+        /// inside the safe area.
+        struct Metrics: Equatable {
+            let compact: Bool
+            let titleFromBottom: CGFloat
+            let actionsBottom: CGFloat
+        }
+
+        /// An SE is 647 tall inside its safe area; the smallest Face ID
+        /// phone is 728 or more.
+        static var compactBelow: CGFloat { 700 }
+
+        static func metrics(height: CGFloat) -> Metrics {
+            height > 0 && height < compactBelow
+                ? Metrics(compact: true, titleFromBottom: 208, actionsBottom: 52)
+                : Metrics(compact: false, titleFromBottom: titleFromBottom, actionsBottom: 16)
+        }
     }
+
+    private var metrics: Layout.Metrics { Layout.metrics(height: screenHeight) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,9 +61,9 @@ struct PermissionPrePrompt<Art: View>: View {
                     // At the accessibility sizes the words need the room the
                     // picture takes (frame "Pre-prompt / Meldingen · AX5").
                     if !ax {
-                        art()
+                        art(metrics.compact)
                             .frame(maxWidth: .infinity)
-                            .frame(minHeight: max(0, height - Layout.titleFromBottom - Layout.artGap),
+                            .frame(minHeight: max(0, height - metrics.titleFromBottom - Layout.artGap),
                                    alignment: .bottom)
                             .accessibilityHidden(true)
                             .padding(.bottom, Layout.artGap)
@@ -58,16 +84,18 @@ struct PermissionPrePrompt<Art: View>: View {
                 .padding(.top, ax ? 24 : 0)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.bottom, 24)
-                // At the accessibility sizes the button scrolls with the
-                // words: pinned, it would slice the last promise in half at
-                // its edge (frame "Meldingen · AX5" shows every line).
-                if ax { actions }
             }
             .scrollBounceBehavior(.basedOnSize)
             .fixtureScrollAnchor()
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-            if !ax { actions }
+            // Pinned at every size (frame "Pre-prompt / Meldingen · AX5"):
+            // only the words scroll, so "Ga verder" is on the first screen.
+            // At the accessibility sizes a hairline marks where they pass
+            // under it.
+            if ax { Rectangle().fill(Color.edge).frame(height: 1).accessibilityHidden(true) }
+            actions
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
         .background(Color.void.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled()
@@ -81,7 +109,7 @@ struct PermissionPrePrompt<Art: View>: View {
         .lineHeight(.multiple(factor: AuthType.lineFactor))
         .padding(.horizontal, 16)
         .padding(.top, 16)
-        .padding(.bottom, 16)
+        .padding(.bottom, ax ? 16 : metrics.actionsBottom)
     }
 
     private func promise(_ text: String) -> some View {
@@ -110,8 +138,8 @@ struct CameraPrePrompt: View {
     }
 
     var body: some View {
-        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) {
-            LetterArt()
+        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) { compact in
+            LetterArt(width: compact ? LetterArt.compactWidth : LetterArt.defaultWidth)
         }
     }
 }
@@ -135,7 +163,7 @@ struct NotificationPrePrompt: View {
     }
 
     var body: some View {
-        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) {
+        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) { _ in
             SampleNotification(title: Copy.sampleTitle, text: Copy.sampleBody)
         }
     }
@@ -169,7 +197,11 @@ struct SampleNotification: View {
 /// crossed out and dimmed, the "camera uit" state's.
 struct LetterArt: View {
     var crossed = false
-    var width: CGFloat = 132
+    var width: CGFloat = LetterArt.defaultWidth
+
+    static let defaultWidth: CGFloat = 132
+    /// The SE frame's letter: its brackets 132 × 160 rather than 158 × 194.
+    static let compactWidth: CGFloat = 106
 
     var body: some View {
         let height = width * 1.3

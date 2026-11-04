@@ -203,6 +203,15 @@ struct RootView: View {
                 set: { if $0 == nil { lock.dismissUnlockSheet() } })
     }
 
+    /// The frames dim the screen behind the unlock sheet and the voice log's
+    /// sheets to about a quarter (auth final: Face ID geannuleerd, Geen
+    /// toegangscode, Microfoon geweigerd), far past the system's own light
+    /// dim — the counts behind a lock sheet must not read as the thing to do.
+    /// Drawn on the presenting view, so it lies under the sheet, never on it.
+    private var dimsBehindSheet: Bool {
+        (lock.isUnlocking && tab != .scan) || unlockSheet.wrappedValue != nil || voice.isPresented
+    }
+
     private func promptOnOpen() {
         guard auth.isSignedIn, lock.isLocked, tab != .scan else { return }
         Task { await lock.autoPromptIfNeeded() }
@@ -295,9 +304,9 @@ struct RootView: View {
         // Above the tab bar: the handoff dims it too (frame "Scan · overdracht").
         .overlay { ScanHandoffOverlay(handoff: scanHandoff) }
         .overlay {
-            if lock.isUnlocking && tab != .scan { UnlockScrim().transition(.opacity) }
+            if dimsBehindSheet { UnlockScrim().transition(.opacity) }
         }
-        .animation(.easeInOut(duration: 0.2), value: lock.isUnlocking)
+        .animation(.easeInOut(duration: 0.2), value: dimsBehindSheet)
         .preferredColorScheme(.dark)
         // Lock-gated: it names parties. From the quick action on a cold
         // launch the lock asks Face ID by itself (`promptOnOpen`).

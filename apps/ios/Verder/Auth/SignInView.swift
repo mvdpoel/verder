@@ -100,7 +100,7 @@ struct SignInView: View {
                     VStack(alignment: .leading, spacing: 0) { header }
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                     if let notice {
-                        AuthNoticeCard(label: notice.label, title: notice.title, text: notice.body, detail: notice.detail)
+                        AuthNoticeCard(label: notice.labelKind, stamp: notice.labelStamp, title: notice.title, text: notice.body, detail: notice.detail)
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { noticeHeight = $0 }
                             .padding(.top, 24)
                     }

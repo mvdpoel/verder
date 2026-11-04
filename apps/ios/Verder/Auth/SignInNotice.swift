@@ -73,10 +73,13 @@ struct SignInNotice: Equatable, Sendable {
 
     /// "WACHTWOORD · 14:02"; the expiry carries its day ("UITGELOGD · 1 NOV 09:12"),
     /// because it may be read the next morning.
-    var label: String {
-        let stamp = cause == .sessionExpired ? Self.dayTime(at) : Self.time(at)
-        return "\(kind.rawValue.uppercased()) · \(stamp)"
-    }
+    var label: String { "\(labelKind) · \(labelStamp)" }
+
+    /// The label's two halves, for when it cannot stand on one line (AX5):
+    /// the time then goes on its own line WITHOUT the " · ", so the dot never
+    /// starts a line (auth final, Geen toegangssleutel gevonden · AX5).
+    var labelKind: String { kind.rawValue.uppercased() }
+    var labelStamp: String { cause == .sessionExpired ? Self.dayTime(at) : Self.time(at) }
 
     var title: String {
         switch cause {

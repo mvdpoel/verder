@@ -286,8 +286,11 @@ struct HomeTab: View {
 
     private var lockedReveal: some View {
         let prompt = HomeSummary.lockedPrompt(asking: lock.isUnlocking, cancelled: lock.lastAttemptCancelled)
-        let text = Text(hy(prompt.text))
-            .font(HomeType.body)
+        // Whole words, never the soft hyphens the rest of the card takes at
+        // AX5: "verschij- / nen" is the split Martin's rule forbids (auth
+        // final, Lock / Alleen overzicht · AX5).
+        let text = Text(prompt.text)
+            .wholeWords(prompt.text, font: HomeType.body)
             .foregroundStyle(prompt.textFirst ? Color.ink : Color.inkSoft)
             .fixedSize(horizontal: false, vertical: true)
         return VStack(alignment: .leading, spacing: 12) {

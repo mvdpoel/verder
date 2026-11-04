@@ -53,7 +53,7 @@ struct MicrophonePrePrompt: View {
     }
 
     var body: some View {
-        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) {
+        PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) { _ in
             VStack(spacing: 20) {
                 Capsule().fill(Color.inkFaint).frame(width: 36, height: 4)
                 Image(systemName: "mic")
