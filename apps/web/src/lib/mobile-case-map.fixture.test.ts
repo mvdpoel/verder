@@ -44,10 +44,11 @@ const stop = (o: Partial<StopRow> & { id: string; trackId: string; title: string
 const tracks: TrackRow[] = [
   track({ id: ROOT, title: "Bewindvoering", parentTrackId: null }),
   track({ id: AANVRAAG, title: "Aanvraag bewindvoering", status: "done",
-    branchesAtStopId: S(1), mergesAtStopId: S(2) }),
+    branchesAtStopId: S(1), mergesAtStopId: S(2), note: "Het was nodig om onder bewind te komen." }),
   track({ id: OPSTART, title: "Opstart en stukken", branchesAtStopId: S(2) }),
   track({ id: KADE, title: "Vordering Kade & Partners", branchesAtStopId: S(4) }),
-  track({ id: HUUR, title: "Huurachterstand Lindehof", status: "ended" }),
+  track({ id: HUUR, title: "Huurachterstand Lindehof", status: "ended",
+    note: "De huurachterstand is geregeld." }),
 ];
 
 const stops: StopRow[] = [
@@ -93,9 +94,11 @@ const evidence: Record<string, StopEvidence> = {
     email: { id: "x", subject: "Sommatie namens Stroomnet Energie", fromAddr: "incasso@kade.example",
       sentAt: day("2026-10-14"), gmailMessageId: "x" } },
   [S(5)]: { ...none, documents: [doc(307, "Brief Gemeente Westerlaan 30 okt")] },
-  [S(6)]: { ...none, task: { id: TASK_STUKKEN, title: "Loonstroken en polissen sturen naar Team Startdossier",
-    status: "open", dueAt: null } },
+  [S(6)]: { ...none, documents: [doc(104, "Loonstrook 2026-10"), doc(303, "Polis Duinzorg 2026")],
+    task: { id: TASK_STUKKEN, title: "Loonstroken en polissen sturen naar Team Startdossier",
+      status: "open", dueAt: new Date("2026-10-30T16:00:00.000Z") } },
   [S(11)]: { ...none, entry: entry("Intakegesprek met Ilse", "2026-05-19", "meeting", "inbound") },
+  [S(12)]: { ...none, documents: [doc(300, "Beschikking Rechtbank Westerlaan")] },
   [S(22)]: { ...none, entry: entry("Loonstroken gemaild aan Team Startdossier", "2026-06-20", "email", "outbound") },
   [S(41)]: { ...none, entry: entry("Telefoongesprek met Lindehof over een regeling", "2026-09-08", "call", "outbound") },
 };
@@ -126,7 +129,9 @@ const LA = T(10), LB = T(11);
 const shared = (o: { aBranch?: string; aMerge?: string; root: StopRow[]; a: string[]; b: string[] }) => {
   const ts: TrackRow[] = [
     track({ id: ROOT, title: "Bewindvoering", parentTrackId: null }),
-    track({ id: LA, title: "Spoor A", branchesAtStopId: o.aBranch ?? null, mergesAtStopId: o.aMerge ?? null }),
+    // Finished: an OPEN spoor reserves its lane up to now (track-map packing),
+    // and these cases are about connector spans, not about a running spoor.
+    track({ id: LA, title: "Spoor A", status: "done", branchesAtStopId: o.aBranch ?? null, mergesAtStopId: o.aMerge ?? null }),
     track({ id: LB, title: "Spoor B", status: "ended" }),
   ];
   const ss: StopRow[] = [

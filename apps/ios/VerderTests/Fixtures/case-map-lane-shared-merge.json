@@ -25,7 +25,7 @@
     {
       "id": "00000000-f1c5-4000-8000-400000000010",
       "title": "Spoor A",
-      "status": "open",
+      "status": "done",
       "isRoot": false,
       "parentTrackId": "00000000-f1c5-4000-8000-400000000001",
       "note": null,

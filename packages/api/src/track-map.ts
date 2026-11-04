@@ -518,7 +518,12 @@ export function buildTrackMap(input: {
     spans.get(b.id)!.lastRow - spans.get(a.id)!.lastRow ||
     (trackOrder.get(a.id) ?? 0) - (trackOrder.get(b.id) ?? 0));
   for (const t of packing) {
-    const span = spans.get(t.id)!;
+    // A spoor that still runs is drawn on towards now (dashed, on the phone),
+    // so it RESERVES its lane up to the top: another spoor packed into that
+    // lane above it would sit on top of the line. Only the packing uses this
+    // reach — the track's reported firstRow/lastRow stay its real stops.
+    const own = spans.get(t.id)!;
+    const span = t.status === "open" ? { firstRow: 0, lastRow: own.lastRow } : own;
     let lane = 1;
     for (;; lane++) {
       const taken = laneSpans.get(lane) ?? [];

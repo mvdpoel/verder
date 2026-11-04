@@ -142,13 +142,27 @@ describe("buildTrackMap lanes", () => {
 
   it("lets two sporen that never overlap in time share a lane", () => {
     const f = caseFixture();
-    f.tracks.push(track({ id: "oud", title: "Oud spoor", parentTrackId: "spine" }));
+    f.tracks.push(track({ id: "oud", title: "Oud spoor", parentTrackId: "spine", status: "ended" }));
     f.stops.push(stop({ id: "x1", trackId: "oud", orderIndex: 100,
       happenedAt: on("2026-04-20") }));
     const map = buildTrackMap(f);
     expect(map.tracks.find((t) => t.id === "oud")!.lane)
       .toBe(map.tracks.find((t) => t.id === "ontruiming")!.lane);
     expect(map.laneCount).toBe(2);
+  });
+
+  it("keeps a running spoor's lane free above its newest stop, up to now", () => {
+    // An open spoor is drawn on towards now, so a newer spoor packed into its
+    // lane would sit on that line. The old "Oud spoor" is still running here.
+    const f = caseFixture();
+    f.tracks.push(track({ id: "oud", title: "Oud spoor", parentTrackId: "spine", status: "open" }));
+    f.stops.push(stop({ id: "x1", trackId: "oud", orderIndex: 100,
+      happenedAt: on("2026-04-20") }));
+    const map = buildTrackMap(f);
+    const oud = map.tracks.find((t) => t.id === "oud")!;
+    expect(oud.lane).not.toBe(map.tracks.find((t) => t.id === "ontruiming")!.lane);
+    // The reach is the packing's only: the reported span is still its stops.
+    expect(oud.firstRow).toBe(oud.lastRow);
   });
 
   it("gives two sporen that overlap in time different lanes", () => {
