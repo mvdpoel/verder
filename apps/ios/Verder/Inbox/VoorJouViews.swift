@@ -198,6 +198,9 @@ struct VoorJouRowView: View {
     let selected: Bool
     let failed: Bool
 
+    /// The frame's light step back for a row selection cannot tick.
+    static let unselectableOpacity = 0.78
+
     var body: some View {
         let item = row.item
         VStack(alignment: .leading, spacing: 0) {
@@ -220,12 +223,12 @@ struct VoorJouRowView: View {
                             .accessibilityHidden(true)
                     }
                 }
+                // Selecting: a row that cannot be ticked steps back a little —
+                // its words only. The gutter keeps full colour: Nu's amber dot
+                // still means it waits on Martin, selection or not.
+                .opacity(selecting && !row.selectable ? Self.unselectableOpacity : 1)
             }
             .padding(.vertical, 14)
-            // Selecting: every row that cannot be ticked steps back — Nu's
-            // proposals and questions too, or they read as selectable under
-            // the very note that says they are not.
-            .opacity(selecting && !row.selectable ? 0.55 : 1)
             if !failed { RowHairlineShape(leading: ax ? 0 : VoorJouMetrics.gutter) }
         }
         .background(Color.void)
@@ -466,71 +469,111 @@ struct VoorJouEmptyState: View {
     }
 }
 
-/// The page's top before any list: eyebrow and title only.
+/// The page's top before any list: eyebrow and title only, built exactly as
+/// `VoorJouHeader` builds its own, so "Voor jou" never moves when the list
+/// replaces the skeleton or the failure.
 private struct VoorJouPageTop: View {
     let eyebrow: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(eyebrow)
                 .font(VoorJouMetrics.label)
                 .tracking(VoorJouMetrics.labelTracking)
                 .foregroundStyle(Color.inkLabel)
-            Text(VoorJouCopy.title)
-                .font(VoorJouMetrics.screenTitle)
-                .foregroundStyle(Color.inkBright)
-                .accessibilityAddTraits(.isHeader)
+                .padding(.bottom, -3)
+            HStack(alignment: .firstTextBaseline) {
+                Text(VoorJouCopy.title)
+                    .font(VoorJouMetrics.screenTitle)
+                    .foregroundStyle(Color.inkBright)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 12)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
+/// The list's own container (a plain List with the list's row metrics), for
+/// the pages shown before there is a list: the same top inset as the list.
+private struct VoorJouPageList<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        List { content }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+            .listSectionSpacing(0)
+    }
+}
+
 /// Before the first answer: grey rows in the shape of the real sections,
-/// never a bare spinner where a list will appear (brief §2.1).
+/// never a bare spinner where a list will appear (brief §2.1). The header is
+/// shaped like the loaded count: a number block with two lines beside it.
 struct VoorJouLoadingPage: View {
     let eyebrow: String
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        VoorJouPageList {
+            Group {
                 VoorJouPageTop(eyebrow: eyebrow)
-                VStack(alignment: .leading, spacing: 8) {
-                    bar(170, 8)
-                    bar(96, 6)
-                }
-                .padding(.top, 22)
-                bar(70, 6).padding(.top, 40)
+                countBlock
+                sectionLabel
                 ForEach(0..<2, id: \.self) { _ in skeletonRow }
-                bar(70, 6).padding(.top, 40)
+                Color.clear.frame(height: 28)
+                sectionLabel
                 ForEach(0..<4, id: \.self) { _ in skeletonRow }
             }
-            .padding(.horizontal, VoorJouMetrics.margin)
+            .voorJouRow()
         }
         .scrollDisabled(true)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Voor jou laadt")
     }
 
+    /// "498 · wachten op jou / bijgewerkt", in grey: the hero numeral's own
+    /// line height holds the block, so the skeleton is as tall as the count.
+    private var countBlock: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Text("498").font(VoorJouMetrics.hero).monospacedDigit().hidden()
+                .overlay(alignment: .leading) { bar(68, 30, radius: 3) }
+            VStack(alignment: .leading, spacing: 8) {
+                bar(124, 11)
+                bar(96, 8)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, -5)
+        .padding(.bottom, 12)
+    }
+
+    private var sectionLabel: some View {
+        bar(72, 8).padding(.vertical, 12)
+    }
+
     private var skeletonRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 0) {
-                Circle().fill(Color.hairlineLit).frame(width: 16, height: 16)
+                RoundedRectangle(cornerRadius: 5).fill(Color.hairlineLit).frame(width: 20, height: 20)
                     .frame(width: VoorJouMetrics.gutter, alignment: .leading)
-                VStack(alignment: .leading, spacing: 14) {
-                    bar(220, 10)
-                    HStack {
-                        bar(110, 7)
-                        Spacer()
-                        bar(48, 7)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        bar(220, 11, lit: true)
+                        HStack {
+                            bar(110, 7, lit: true)
+                            Spacer()
+                            bar(48, 8)
+                        }
                     }
+                    bar(6, 10)
                 }
             }
-            .padding(.vertical, 22)
+            .padding(.vertical, 20)
             RowHairlineShape(leading: VoorJouMetrics.gutter)
         }
     }
 
-    private func bar(_ width: CGFloat, _ height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 1).fill(Color.edge).frame(width: width, height: height)
+    private func bar(_ width: CGFloat, _ height: CGFloat, radius: CGFloat = 1, lit: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: radius).fill(lit ? Color.edge : Color.hairlineLit).frame(width: width, height: height)
     }
 }
 
@@ -543,7 +586,7 @@ struct VoorJouFailurePage: View {
     let retry: () -> Void
 
     var body: some View {
-        ScrollView {
+        VoorJouPageList {
             VStack(alignment: .leading, spacing: 0) {
                 VoorJouPageTop(eyebrow: eyebrow)
                 Image(systemName: "exclamationmark.triangle")
@@ -570,8 +613,8 @@ struct VoorJouFailurePage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
             }
-            .padding(.horizontal, VoorJouMetrics.margin)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .voorJouRow()
         }
     }
 

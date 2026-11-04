@@ -42,6 +42,9 @@ struct ListDecision: Identifiable, Equatable, Sendable {
     let action: Action
     /// The suggestion, task or change id the route names.
     let target: String
+    /// "Logboek · Lindehof": the toast's subject at the accessibility sizes
+    /// (`VoorJouList.toastSubject`); nil falls back to the short title.
+    var short: String? = nil
 
     var path: String {
         switch action {
@@ -338,11 +341,13 @@ enum DecisionToast {
     }
 
     /// `short`: the accessibility sizes, where the subject is wrapped whole
-    /// rather than cut, so it goes without its "over …" tail
-    /// (`VoorJouList.shortTitle`) to keep the card from filling the screen.
+    /// rather than cut, so it is named by kind and party ("Logboek ·
+    /// Lindehof", the frame's two lines) or, naming no party, without its
+    /// "over …" tail (`VoorJouList.shortTitle`), to keep the card from
+    /// filling the screen.
     static func content(_ held: [ListDecision], short: Bool = false) -> Content? {
         guard let last = held.last else { return nil }
-        let lastTitle = short ? VoorJouList.shortTitle(last.title) : last.title
+        let lastTitle = short ? (last.short ?? VoorJouList.shortTitle(last.title)) : last.title
         if held.count == 1 {
             return Content(title: last.verb, body: lastTitle, reviewAll: nil, undoGlyph: last.action == .undoVerder)
         }

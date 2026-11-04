@@ -122,6 +122,10 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     var validNext: [String]? = nil
     /// The map stop's open tasks ("halte · 1 taak"); absent, the row says only "halte".
     var taskCount: Int? = nil
+    /// The party a SUGGESTION concerns ("Incassobureau Kade & Partners"),
+    /// shown in the row's meta in place of what it suggests. Absent (the
+    /// server does not send it yet), the row says "Logboek" / "Document".
+    var party: String? = nil
 }
 
 /// One thing verder did on its own (spec §6.6), as `verderActions.list` builds

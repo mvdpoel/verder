@@ -109,7 +109,7 @@ Trekken om te verversen haalt opnieuw op. Het tabblad ververst ook wanneer het v
 Elke rij leest als een vertrekbord (brief §1.1): wat het is, van wie het komt, hoe lang het al wacht, en of het op Martin wacht.
 
 - **Soort:** een symbool per soort (antwoord, vraag, logboek, document, taak, halte) en het Nederlandse soortlabel: "voorstel", "vraag", "suggestie", "taak", "halte" in de frames ("op de kaart" in de code), "overig" voor een onbekende soort.
-- **Wie / wat:** de ondertitel (naam van de partij, "Verder", of het soort suggestie, zoals "Logboek" / "Document"). Een halterij zegt hoeveel taken eraan hangen ("halte · 1 taak").
+- **Wie / wat:** de partij met haar korte naam, zonder het woord voor het soort organisatie ("Bewindkantoor Noordkust" → "Noordkust", "Incassobureau Kade & Partners" → "Kade & Partners"; een gemeente houdt haar woord), "Verder", of voor een suggestie de partij waar die over gaat (veld `party`, nog niet door de server gestuurd) en anders het soort suggestie ("Logboek" voor de `Logboekregel` van de server, "Document"). Zo blijft "VOORSTEL · NOORDKUST" op één regel naast de leeftijd; VoiceOver leest de hele naam. Een halterij zegt hoeveel taken eraan hangen ("halte · 1 taak").
 - **Deadline,** relatief waar dat helpt: "uiterlijk morgen".
 - **Leeftijd,** rechts uitgelijnd: "vandaag", "gisteren", "31 okt", uit de `at` van het item.
 - **Amber:** de stip staat op de Nu-rijen (voorstellen en vragen); de Kan wachten-rijen dragen hun soortsymbool. Het aantal in de kop draagt "wachten op jou" met zijn amberen stip, zodat de kleur nooit zonder woorden staat.
@@ -286,7 +286,7 @@ Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server bes
 
 Na "Ongedaan maken" toont het frame een toast "Terug in Kan wachten · Afschrift september" met "Ongedaan maken" en een aftelling, en verschijnt de suggestie van het document weer in Kan wachten. Haptiek `.impact(.light)` (brief §2.5).
 
-**Status:** Gebouwd (2026-11-04) — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Zolang die undo op de telefoon staat (vastgehouden of onderweg) staat het document bovenaan Kan wachten, en volgen het hoofdgetal, het getal van Kan wachten en dat van "Door verder gedaan" mee (`VoorJouList.restoring` / `restoredItem` / `doneCount`), zoals het frame toont. Die rij heeft nog geen id van de server en biedt dus niets aan (geen route, geen veeg, geen vinkje); de volgende verversing zet de rij van de server ervoor in de plaats. Haptiek `.impact(.light)`.
+**Status:** Gebouwd (2026-11-04) — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Zolang die undo op de telefoon staat (vastgehouden of onderweg) staat het document in Kan wachten tussen de suggesties op zijn eigen datum (nieuwste eerst, waar de server het bij de volgende verversing zet), en volgen het hoofdgetal, het getal van Kan wachten en dat van "Door verder gedaan" mee (`VoorJouList.restoring` / `restoredItem` / `doneCount`), zoals het frame toont. Die rij heeft nog geen suggestie-id van de server en biedt dus geen beslissing aan (geen veeg, geen vinkje); een tik opent het document zelf (`InboxRoute.document`). De volgende verversing zet de rij van de server ervoor in de plaats. Haptiek `.impact(.light)`.
 
 ### Een item openen
 

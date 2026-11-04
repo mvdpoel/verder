@@ -7,6 +7,9 @@ enum InboxRoute: Hashable, Sendable {
     case proposal(String)
     case suggestion(String)
     case task(String)
+    /// A document, read-only: the one an undo of "Door verder gedaan" is
+    /// putting back into Kan wachten, before its suggestion has an id.
+    case document(id: String, title: String)
     /// "Door verder gedaan" on a screen of its own, open: where Overzicht's
     /// card and the daily digest lead.
     case doneByVerder
@@ -35,6 +38,8 @@ enum InboxRoute: Hashable, Sendable {
 /// bulk send, or an approval of anything the server did not call approvable.
 struct VoorJouTab: View {
     let store: InboxStore
+    /// Where a document's bytes are kept; a restored row opens its document.
+    let dossier: DossierStore
     let client: APIClient
     let gate: ApprovalGate
     @Binding var path: [InboxRoute]
@@ -57,9 +62,10 @@ struct VoorJouTab: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(store: InboxStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
+    init(store: InboxStore, dossier: DossierStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
          onUnauthorized: @escaping @MainActor () -> Void, now: @escaping @Sendable () -> Date = { Date() }) {
         self.store = store
+        self.dossier = dossier
         self.client = client
         self.gate = gate
         self._path = path
@@ -119,6 +125,8 @@ struct VoorJouTab: View {
             TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
         case .doneByVerder:
             DoneByVerderScreen(store: store, model: done)
+        case .document(let id, let title):
+            DocumentViewer(id: id, title: title, store: dossier, client: client, onUnauthorized: onUnauthorized)
         }
     }
 
@@ -391,14 +399,17 @@ struct VoorJouTab: View {
     }
 
     private func decide(_ row: VoorJouList.Row, _ action: ListDecision.Action) {
-        decisions.decide(ListDecision(id: UUID(), key: row.id, title: row.item.title, action: action, target: row.item.id))
+        decisions.decide(Self.decision(row, action))
     }
 
     private func decideAll(_ rows: [VoorJouList.Row], _ action: ListDecision.Action) {
-        decisions.decide(rows.map {
-            ListDecision(id: UUID(), key: $0.id, title: $0.item.title, action: action, target: $0.item.id)
-        })
+        decisions.decide(rows.map { Self.decision($0, action) })
         stopSelecting()
+    }
+
+    static func decision(_ row: VoorJouList.Row, _ action: ListDecision.Action) -> ListDecision {
+        ListDecision(id: UUID(), key: row.id, title: row.item.title, action: action, target: row.item.id,
+                     short: VoorJouList.toastSubject(row.item))
     }
 
     private func toggle(_ row: VoorJouList.Row) {
@@ -426,7 +437,7 @@ struct VoorJouTab: View {
         let suggestions = rows.filter { $0.item.kind == .suggestion }
         let task = rows.first { $0.item.kind == .task }
         func decision(_ row: VoorJouList.Row, _ action: ListDecision.Action) -> ListDecision {
-            ListDecision(id: UUID(), key: row.id, title: row.item.title, action: action, target: row.item.id)
+            Self.decision(row, action)
         }
         for state in states {
             switch state {

@@ -48,8 +48,8 @@ enum VoorJouList {
         let amber: Bool
         /// A document an undo of "Door verder gedaan" is putting back, drawn
         /// in Kan wachten while that undo is on the phone (`restoredItem`).
-        /// It carries no server id, so it offers nothing: no route, no swipe,
-        /// no menu step, no tick.
+        /// It carries no suggestion id yet, so it offers no decision: no
+        /// swipe, no menu step, no tick. A tap opens the document itself.
         var restored = false
         var id: String { VoorJouList.key(item) }
         var section: SectionKind { VoorJouList.section(item.kind) }
@@ -106,14 +106,28 @@ enum VoorJouList {
     /// server's own row in its place.
     static func sections(_ inbox: InboxDTO, hiding hidden: Set<String> = [], expanded: Bool = false,
                          restoring: [VerderAction] = []) -> [Section] {
-        let back = restoring.map { Row(item: restoredItem($0), route: nil, amber: false, restored: true) }
-        let all = back + rows(inbox, hiding: hidden)
+        var all = rows(inbox, hiding: hidden)
+        for a in restoring {
+            let back = Row(item: restoredItem(a), route: .document(id: a.documentId, title: restoredItem(a).title),
+                           amber: false, restored: true)
+            all.insert(back, at: restoredIndex(back.item.at, in: all))
+        }
         return [SectionKind.nu, .kanWachten].compactMap { kind in
             let mine = all.filter { $0.section == kind }
             guard !mine.isEmpty else { return nil }
             let shown = kind == .nu || expanded ? mine : Array(mine.prefix(sectionLimit))
             return Section(kind: kind, rows: shown, total: mine.count)
         }
+    }
+
+    /// Where a restored document goes: among the suggestions, by its own
+    /// date, newest first — where the server will put it on the next
+    /// refresh, so the row does not jump when the real one replaces it.
+    static func restoredIndex(_ at: Date, in rows: [Row]) -> Int {
+        if let i = rows.firstIndex(where: { $0.section == .kanWachten && ($0.item.kind != .suggestion || $0.item.at < at) }) {
+            return i
+        }
+        return rows.count
     }
 
     /// The header's number: the SERVER's count, less only the decisions the
@@ -264,16 +278,90 @@ enum VoorJouList {
     /// The meta line's parts before the age: kind, then who (the server's
     /// subtitle) or, for a task, its deadline; a stop says how many tasks
     /// hang off it when the server says so.
-    static func meta(_ item: WaitingItem, now: Date) -> [String] {
+    ///
+    /// `short` (the row): a party by its short display name ("Noordkust",
+    /// "Kade & Partners"), so "VOORSTEL · NOORDKUST" keeps one line beside
+    /// the age as the frames draw it; VoiceOver reads the whole name.
+    static func meta(_ item: WaitingItem, now: Date, short: Bool = true) -> [String] {
         var parts = [rowKindLabel(item.kind)]
         switch item.kind {
         case .stop:
             if let n = item.taskCount, n > 0 { parts.append(n == 1 ? "1 taak" : "\(n) taken") }
         default:
-            if let who = item.subtitle, !who.isEmpty { parts.append(who) }
+            if let who = who(item, short: short) { parts.append(who) }
             if let due = deadline(item.dueAt, now: now) { parts.append(due) }
         }
         return parts
+    }
+
+    /// The meta line's second slot. A proposal or question: its party. A
+    /// suggestion: the party it concerns when the server names one, else
+    /// what it suggests ("Logboek", "Document"). A task: its subtitle (the
+    /// map stop it serves), never shortened — that is a title, not a party.
+    static func who(_ item: WaitingItem, short: Bool = true) -> String? {
+        func party(_ name: String?) -> String? {
+            guard let name, !name.isEmpty else { return nil }
+            return short ? shortParty(name) : name
+        }
+        switch item.kind {
+        case .proposal, .question: return party(item.subtitle)
+        case .suggestion: return party(item.party) ?? suggestionKind(item.subtitle)
+        default:
+            guard let s = item.subtitle, !s.isEmpty else { return nil }
+            return s
+        }
+    }
+
+    /// What a suggestion suggests, in the list's word: the server's
+    /// "Logboekregel" is "Logboek" on the phone (the frames' word).
+    static func suggestionKind(_ subtitle: String?) -> String? {
+        guard let s = subtitle, !s.isEmpty else { return nil }
+        return s == "Logboekregel" ? "Logboek" : s
+    }
+
+    /// Words that say WHAT KIND of organisation a party is, not which one.
+    /// The row names a party without them: "Bewindkantoor Noordkust" →
+    /// "Noordkust". A municipality keeps its word ("Gemeente Westerlaan"):
+    /// "Westerlaan" alone reads as a street.
+    static let organisationWords: Set<String> = [
+        "bewindkantoor", "incassobureau", "woonstichting", "woningcorporatie", "zorgverzekeraar",
+        "deurwaarderskantoor", "gerechtsdeurwaarders", "gerechtsdeurwaarder", "advocatenkantoor",
+        "notariskantoor", "administratiekantoor",
+    ]
+
+    /// "Bewindkantoor Noordkust" → "Noordkust"; a name that is only the
+    /// organisation word, or does not start with one, stays whole.
+    static func shortParty(_ name: String) -> String {
+        let words = name.split(separator: " ", omittingEmptySubsequences: true)
+        guard words.count >= 2, organisationWords.contains(words[0].lowercased()) else { return name }
+        return words.dropFirst().joined(separator: " ")
+    }
+
+    /// A party a title names after an organisation word: "Telefoongesprek met
+    /// Woonstichting Lindehof over …" → "Lindehof". The name runs while its
+    /// words are capitalised (or "&"); nil when the title names none.
+    static func partyMentioned(in title: String) -> String? {
+        let words = title.split(separator: " ").map(String.init)
+        guard let i = words.firstIndex(where: { organisationWords.contains($0.lowercased()) }) else { return nil }
+        var name: [String] = []
+        for w in words[(i + 1)...] {
+            guard w == "&" || w.first?.isUppercase == true else { break }
+            name.append(w.trimmingCharacters(in: CharacterSet(charactersIn: ":,.;?!")))
+        }
+        while name.last == "&" { name.removeLast() }
+        return name.isEmpty ? nil : name.joined(separator: " ")
+    }
+
+    /// The toast's subject at the accessibility sizes, where it wraps whole:
+    /// "Logboek · Lindehof" (what it is · whom it concerns). Nil when the
+    /// item names no party — the short title then stands in.
+    static func toastSubject(_ item: WaitingItem) -> String? {
+        guard item.kind == .suggestion else { return nil }
+        let party = item.party.map(shortParty) ?? partyMentioned(in: item.title)
+        guard let party, let kind = suggestionKind(item.subtitle) else { return nil }
+        // A no-break space before the "·": wrapped, the separator ends the
+        // first line ("Logboek ·" / "Lindehof") and never starts the second.
+        return "\(kind)\u{00A0}· \(party)"
     }
 
     /// The meta line, whole ("VRAAG · INCASSOBUREAU KADE & PARTNERS"), and
@@ -330,7 +418,7 @@ enum VoorJouList {
     /// One row, read whole: kind, title, who, "wacht op jou", age.
     static func accessibilityLabel(_ item: WaitingItem, now: Date) -> String {
         var parts = [HomeSummary.sentence(rowKindLabel(item.kind)), item.title]
-        parts += meta(item, now: now).dropFirst()
+        parts += meta(item, now: now, short: false).dropFirst()
         parts += ["wacht op jou", age(item.at, now: now)]
         return parts.joined(separator: ", ")
     }

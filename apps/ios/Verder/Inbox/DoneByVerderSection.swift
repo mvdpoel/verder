@@ -139,6 +139,8 @@ struct DoneByVerderListSection: View {
                 .voorJouRow()
                 .accessibilityLabel("\(DoneByVerderCopy.title), \(total)")
                 .accessibilityHint(open ? "Klapt in" : "Klapt open")
+                // On the header ROW: a List scrolls to a row's id, not a Section's.
+                .id("done")
             // At the accessibility sizes the explanation would fill a screen
             // above the rows it explains; the frame goes straight to them.
             if (open && !ax) || (summary && !open) {
@@ -157,7 +159,6 @@ struct DoneByVerderListSection: View {
                 }
             }
         }
-        .id("done")
     }
 
     private var header: some View {

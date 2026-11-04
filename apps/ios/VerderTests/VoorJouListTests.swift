@@ -235,13 +235,16 @@ struct InboxDecisionsTests {
         #expect(restoring.map(\.changeId) == ["c1"], "only what the server called undoable comes back")
         let sections = VoorJouList.sections(inbox, hiding: keys, restoring: restoring)
         let kan = sections[1]
-        #expect(kan.rows.first?.item.title == "Afschrift 1", "at the top of Kan wachten")
+        #expect(kan.rows.map(\.item.title) == ["T s", "Afschrift 1", "T t"],
+                "among the suggestions by its own date (30 okt after 1 nov), where the server will put it")
         #expect(kan.total == 3)
         #expect(VoorJouList.count(inbox, hidden: 0, restored: restoring.count) == 4)
         #expect(VoorJouList.doneCount(inbox, restored: restoring.count) == 2)
-        let back = kan.rows[0]
-        #expect(back.restored && back.route == nil && !back.selectable && !back.approvable,
-                "no server id yet: nothing to open, tick or approve")
+        let back = kan.rows[1]
+        #expect(back.restored && !back.selectable && !back.approvable,
+                "no suggestion id yet: nothing to tick or approve")
+        #expect(back.route == .document(id: "d1", title: "Afschrift 1"), "a tap opens the document itself")
+        #expect(VoorJouList.age(back.item.at, now: VoorJouListTests.now) == "30 okt", "its own date, not the undo's")
         #expect(VoorJouList.restoring(inbox, keys: []).isEmpty)
     }
 
@@ -267,6 +270,59 @@ struct InboxDecisionsTests {
                              action: .approve, target: "s")
         #expect(DecisionToast.content([d], short: true)?.body == "Telefoongesprek met Woonstichting Lindehof")
         #expect(DecisionToast.content([d])?.body == d.title)
+    }
+
+    /// A newer restored document goes first; with no suggestions it opens Kan wachten.
+    @Test func aRestoredDocumentSortsAmongTheSuggestionsByDate() {
+        let rows = VoorJouList.rows(VoorJouListTests.inbox([VoorJouListTests.item(.proposal, "p"), VoorJouListTests.item(.task, "t")]))
+        #expect(VoorJouList.restoredIndex(parseISODate("2026-10-30T09:00:00Z")!, in: rows) == 1)
+        let withS = VoorJouList.rows(VoorJouListTests.inbox([VoorJouListTests.item(.suggestion, "s", at: "2026-10-29T10:00:00Z")]))
+        #expect(VoorJouList.restoredIndex(parseISODate("2026-10-30T09:00:00Z")!, in: withS) == 0)
+        #expect(VoorJouList.restoredIndex(parseISODate("2026-10-28T09:00:00Z")!, in: withS) == 1)
+    }
+
+    /// The row names a party short, as the frames do, so "VOORSTEL ·
+    /// NOORDKUST" keeps one line beside the age; VoiceOver keeps the name whole.
+    @Test func theRowNamesAPartyShort() {
+        #expect(VoorJouList.shortParty("Bewindkantoor Noordkust") == "Noordkust")
+        #expect(VoorJouList.shortParty("Incassobureau Kade & Partners") == "Kade & Partners")
+        #expect(VoorJouList.shortParty("Gemeente Westerlaan") == "Gemeente Westerlaan", "a municipality keeps its word")
+        #expect(VoorJouList.shortParty("Verder") == "Verder")
+        #expect(VoorJouList.shortParty("Bewindkantoor") == "Bewindkantoor", "never down to nothing")
+        let p = VoorJouListTests.item(.proposal, "p", at: "2026-11-02T07:30:00Z", subtitle: "Bewindkantoor Noordkust")
+        #expect(VoorJouList.meta(p, now: VoorJouListTests.now) == ["voorstel", "Noordkust"])
+        let q = VoorJouListTests.item(.question, "q", subtitle: "Incassobureau Kade & Partners")
+        #expect(VoorJouList.meta(q, now: VoorJouListTests.now) == ["vraag", "Kade & Partners"])
+        let task = VoorJouListTests.item(.task, "t", subtitle: "Bewindkantoor Noordkust stukken")
+        #expect(VoorJouList.meta(task, now: VoorJouListTests.now) == ["taak", "Bewindkantoor Noordkust stukken"],
+                "a task's subtitle is a stop's title, never shortened")
+    }
+
+    /// "Logboekregel" is "Logboek" on the phone; a suggestion that names its
+    /// party shows the party in that slot instead.
+    @Test func aSuggestionSaysLogboekOrItsParty() {
+        var s = VoorJouListTests.item(.suggestion, "s", subtitle: "Logboekregel")
+        #expect(VoorJouList.meta(s, now: VoorJouListTests.now) == ["suggestie", "Logboek"])
+        s.party = "Incassobureau Kade & Partners"
+        #expect(VoorJouList.meta(s, now: VoorJouListTests.now) == ["suggestie", "Kade & Partners"])
+        #expect(VoorJouList.meta(VoorJouListTests.item(.suggestion, "d", subtitle: "Document"), now: VoorJouListTests.now) == ["suggestie", "Document"])
+    }
+
+    /// At AX the toast names a suggestion by kind and party, in two short lines.
+    @Test func theAccessibilityToastSaysKindAndParty() {
+        let phone = WaitingItem(kind: .suggestion, id: "s", title: "Telefoongesprek met Woonstichting Lindehof over de betalingsregeling",
+                                subtitle: "Logboekregel", priority: 3, at: VoorJouListTests.now, dueAt: nil, verder: false)
+        #expect(VoorJouList.partyMentioned(in: phone.title) == "Lindehof")
+        #expect(VoorJouList.partyMentioned(in: "Brief van Incassobureau Kade & Partners over de huur") == "Kade & Partners")
+        #expect(VoorJouList.partyMentioned(in: "Brief Gemeente Westerlaan over de woonkostentoeslag") == nil)
+        #expect(VoorJouList.toastSubject(phone) == "Logboek\u{00A0}· Lindehof")
+        let row = VoorJouList.rows(VoorJouListTests.inbox([phone]))[0]
+        let d = VoorJouTab.decision(row, .approve)
+        #expect(DecisionToast.content([d], short: true)?.body == "Logboek\u{00A0}· Lindehof")
+        #expect(DecisionToast.content([d])?.body == phone.title, "the full title at the default sizes")
+        let brief = WaitingItem(kind: .suggestion, id: "b", title: "Brief Gemeente Westerlaan over de woonkostentoeslag",
+                                subtitle: "Document", priority: 3, at: VoorJouListTests.now, dueAt: nil, verder: false)
+        #expect(VoorJouList.toastSubject(brief) == nil, "no party named: the short title stands in")
     }
 
     /// Stacked, the kind keeps the age's line and the rest wraps under it:
