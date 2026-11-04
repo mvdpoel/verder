@@ -286,6 +286,22 @@ struct DossierPresentationTests {
         #expect(DossierProgressCopy.rows(held: [], waiting: []).isEmpty)
     }
 
+    /// A later sync keeps a place for each announced document still on its
+    /// way ("bijwerken… · 2 van 3 nieuw": the third is a skeleton between
+    /// the two that came in), but only unfiltered and only while it runs.
+    @Test func aLaterSyncKeepsAPlaceForTheDocumentStillOnItsWay() {
+        let shown = [Self.doc("b", "Brief", receivedAt: "2026-10-30T09:00:00Z"),
+                     Self.doc("l", "Loonstrook", receivedAt: "2026-10-28T09:00:00Z"),
+                     Self.doc("s", "Sommatie", receivedAt: "2026-10-14T09:00:00Z")]
+        let waiting = [DossierStore.Arriving(id: "f", receivedAt: parseISODate("2026-10-29T09:00:00Z")!)]
+        let rows = DossierProgressCopy.listRows(shown: shown, waiting: waiting, syncing: true, filtered: false)
+        #expect(rows.map(\.id) == ["b", "arriving:f", "l", "s"])
+        #expect(DossierProgressCopy.listRows(shown: shown, waiting: waiting, syncing: false, filtered: false)
+            .map(\.id) == ["b", "l", "s"], "a finished sync draws no skeleton")
+        #expect(DossierProgressCopy.listRows(shown: shown, waiting: waiting, syncing: true, filtered: true)
+            .map(\.id) == ["b", "l", "s"], "an arriving document's soort is unknown")
+    }
+
     /// The Documenten label counts the whole dossier while a sync that knows
     /// it runs ("documenten · 12" with the 12th on its way), else what is held.
     @Test func theDocumentCountIsTheWholeWhileASyncKnowsIt() {

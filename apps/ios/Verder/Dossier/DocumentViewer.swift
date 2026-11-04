@@ -272,6 +272,7 @@ struct DocumentViewer: View {
                 .accessibilityElement(children: .combine)
                 .padding(.top, 8)
             }
+            Color.clear.frame(height: 0).id(ViewerAnchor.end)
         }
         // The system bar is taller than the frames' 44 pt: the column starts
         // right under its buttons (the frames' "back gap 6").
@@ -453,7 +454,7 @@ struct DocumentViewer: View {
     }
 }
 
-enum ViewerAnchor: Hashable { case title, page }
+enum ViewerAnchor: Hashable { case title, page, end }
 
 enum ViewerSpacing {
     /// How far the column moves up under iOS's taller navigation bar, so the
@@ -462,16 +463,16 @@ enum ViewerSpacing {
 }
 
 extension View {
-    /// `-fixtures-dossier pagina`: the AX5 viewer scrolled so the page starts
-    /// right under the bar ("Document / AX5 · gescrold"). Nothing in a
-    /// Release build.
+    /// `-fixtures-dossier pagina`: the AX5 viewer scrolled to its end, the
+    /// meta lines clear above the bottom plate ("Document / AX5 · gescrold").
+    /// Nothing in a Release build.
     @ViewBuilder func fixtureViewerScroll(_ proxy: ScrollViewProxy, ready: Bool) -> some View {
         #if DEBUG
         if FixtureLaunch.current?.dossier.contains(.pagina) == true {
             task(id: ready) {
                 guard ready else { return }
                 try? await Task.sleep(for: .milliseconds(500))
-                proxy.scrollTo(ViewerAnchor.page, anchor: .top)
+                proxy.scrollTo(ViewerAnchor.end, anchor: .bottom)
             }
         } else { self }
         #else

@@ -275,6 +275,18 @@ enum DossierProgressCopy {
         return places.sorted { a, b in a.at != b.at ? a.at > b.at : a.id < b.id }.map(\.row)
     }
 
+    /// The list after the first sync: what the chips show, with a place kept
+    /// for each document a running later sync announced and has not taken in
+    /// yet ("bijwerken… · 2 van 3 nieuw" draws the third as a skeleton in its
+    /// date's place, as a first sync does). Only unfiltered: an arriving
+    /// document's soort is not known until it is in. Without a running sync
+    /// the held list stands as it is.
+    static func listRows(shown: [IndexedDoc], waiting: [DossierStore.Arriving], syncing: Bool,
+                         filtered: Bool) -> [Row] {
+        guard syncing, !filtered, !waiting.isEmpty else { return shown.map(Row.held) }
+        return rows(held: shown, waiting: waiting)
+    }
+
     /// How many documents the Documenten label and the "Alles" chip count:
     /// while a sync runs that knows the whole dossier, the whole of it
     /// ("documenten · 12" while the 12th is still on its way); else what

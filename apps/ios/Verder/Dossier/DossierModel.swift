@@ -254,6 +254,11 @@ final class DossierModel {
     }
     /// The list as the chips narrow it.
     var shownDocs: [IndexedDoc] { DossierKinds.filter(docs, kind: kind) }
+    /// The list as drawn after the first sync (`DossierProgressCopy.listRows`).
+    var listRows: [DossierProgressCopy.Row] {
+        DossierProgressCopy.listRows(shown: shownDocs, waiting: progress?.waiting ?? [],
+                                     syncing: isSyncing && syncedAt != nil, filtered: kind != nil)
+    }
     /// Held documents with no recognised text: found by their title only.
     var titleOnlyCount: Int { docs.filter { !$0.doc.hasText }.count }
 

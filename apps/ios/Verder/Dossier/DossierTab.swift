@@ -435,7 +435,9 @@ struct DossierTab: View {
 
     private func taskRow(_ t: TaskDTO) -> some View {
         HStack(alignment: .center, spacing: 0) {
-            amberDot.padding(.trailing, 12)
+            // At the accessibility sizes the title takes the whole width (the
+            // AX5 frames): the amber "wacht op jou" line carries the state.
+            if !ax { amberDot.padding(.trailing, 12) }
             VStack(alignment: .leading, spacing: 4) {
                 Text(t.title)
                     .font(.display(17, relativeTo: .body))
@@ -544,10 +546,27 @@ struct DossierTab: View {
         } else if model.docs.isEmpty {
             muted(DossierCopy.noDocuments).padding(16).frame(maxWidth: .infinity, alignment: .leading).glassPanel()
         } else {
-            VStack(alignment: .leading, spacing: 0) { documentRows(model.shownDocs, filtered: model.kind != nil) }
+            VStack(alignment: .leading, spacing: 0) { listRows(model.listRows, filtered: model.kind != nil) }
                 .glassPanel()
             if model.kind != nil {
                 muted(DossierSearchCopy.filterApplies).padding(.top, 24)
+            }
+        }
+    }
+
+    /// The list after the first sync: held rows, and a skeleton in the place
+    /// of a document a later sync is still taking in.
+    private func listRows(_ rows: [DossierProgressCopy.Row], filtered: Bool) -> some View {
+        ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+            if i > 0 { Hairline().padding(.horizontal, 16) }
+            Group {
+                switch row {
+                case .held(let d): documentRow(d, filtered: filtered)
+                case .arriving: SkeletonRow()
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                placeTops[DossierPlace.row(i)] = $0
             }
         }
     }
@@ -588,7 +607,9 @@ struct DossierTab: View {
     // MARK: Eerste synchronisatie
 
     private func syncCard(_ card: DossierProgressCopy.Card) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // 8 between the parts, as the frames space the card (bar → meta,
+        // meta → body, body → "Haal de rest op").
+        VStack(alignment: .leading, spacing: 8) {
             Text(ax ? HomeSummary.sentence(card.label) : card.label.uppercased())
                 .font(.mono(12, relativeTo: .caption)).monoCap().tracking(ax ? 0 : 1)
                 .foregroundStyle(Color.inkLabel)
@@ -618,7 +639,7 @@ struct DossierTab: View {
                 AuthButton(title: DossierProgressCopy.resume, weight: .outline, enabled: !model.isSyncing) {
                     Task { await refresh() }
                 }
-                .padding(.top, 6)
+                .padding(.top, 2)
             }
         }
         .padding(16)
@@ -801,7 +822,7 @@ struct DossierTab: View {
         case .done:
             let groups = model.serverGroups
             if !groups.isEmpty {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .firstTextBaseline) {
                         sectionLabel(DossierSearchCopy.serverLabel, count: groups.reduce(0) { $0 + $1.hits.count })
                         Spacer(minLength: 8)
@@ -811,7 +832,7 @@ struct DossierTab: View {
                     }
                     .id(DossierAnchor.server)
                     ForEach(groups) { group in
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
                             sectionLabel(group.label, count: group.hits.count)
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(Array(group.hits.enumerated()), id: \.element.id) { i, hit in
@@ -896,8 +917,10 @@ struct DossierTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                 readout(ServerHits.detail(hit, now: now), amber: waits)
             }
-            Spacer(minLength: opens != nil ? DossierSpacing.toChevron : 0)
-            if opens != nil { chevron }
+            // The text takes every point up to the chevron: a Spacer beside
+            // it was given an equal share and wrapped the title ~60 pt early.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if opens != nil { chevron.padding(.leading, DossierSpacing.toChevron) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -1115,10 +1138,12 @@ struct DossierDocRow: View {
                         .padding(.top, 8)
                 }
             }
-            Spacer(minLength: DossierSpacing.toChevron)
+            // Every point up to the chevron (a Spacer beside it took a share).
+            .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.inkFaint)
+                .padding(.leading, DossierSpacing.toChevron)
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
