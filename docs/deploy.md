@@ -1650,6 +1650,47 @@ list is not the place to depend on for host state.
 within about 10 minutes. Comment out the crontab line first, and put it back when
 you are done. A deploy (`up -d` / rebuild) is fine: it is faster than two ticks.
 
+## Vraag Grip: the request runner (migration 0044)
+
+Spec: `docs/superpowers/specs/2026-11-04-vraag-grip-design.md`. Martin asks on the
+phone; the host cron `ops/request-runner.sh` claims one request a minute and runs
+`claude -p` with ONLY the read-only `grip` MCP server (`grip-tools`, started inside
+the worker container per request); `requests-store` validates the answer against
+the request's tool log and writes it, plus a `pending` proposal when a mail is
+needed. Nothing is sent without Martin's approval on the phone.
+
+Order — the SAME ordering trap as 0020–0043, and the web image 500s every Voor jou
+load on `relation "requests" does not exist` without it:
+
+```
+# 1. rsync (the documented command, dry run first)
+# 2. migrate from the HOST (DATABASE_URL from .env.prod, as §7.1 spells it)
+# 3. rebuild web + worker:
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build web worker
+# 4. prove the loop end to end without Claude? NOT in production: the dry run
+#    (`pnpm --filter worker requests-dry-run`) refuses any non-local database.
+#    In production, prove the pieces instead:
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+  pnpm --silent --filter worker requests-pending --claim      # prints nothing: queue empty
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T worker \
+  pnpm --silent --filter worker requests-store --heartbeat    # one request-runner ok row
+# 5. only then the crontab line (and `mkdir -p ~/.local/state/grip-requests`):
+* * * * * /home/<user>/apps/grip/ops/request-runner.sh >> /home/<user>/.local/state/grip-requests/cron.log 2>&1
+```
+
+No new `.env.prod` key: the runner reads the same token file as the drafter
+(`~/.config/claude-agent/oauth-token`, override `CLAUDE_TOKEN_FILE`), the tools read
+Gmail through the worker's existing `gmail.readonly` token, and recipients under
+`RELEVANT_SENDERS` give a proposal priority `verder`. State lives in
+`~/.local/state/grip-requests/` (outside the repo, because of `rsync --delete`):
+`runner.log`, the flock, and a per-request MCP config that is removed after use.
+
+**Reading it.** `request-runner` is a 1-minute watcher: every tick writes a row —
+a heartbeat when nothing is queued, a `busy` heartbeat while a request is being
+researched (up to 600 s). A request left `working` for 15 minutes is reset to
+`failed` by the next claim. A Gmail 429 a tool hits is recorded on this name with
+`detail.retryAfter`, which `rateLimitedUntil` treats as account-wide.
+
 ## Restore procedure
 
 Both the dump and the restore must run on a **pgvector-capable image**
