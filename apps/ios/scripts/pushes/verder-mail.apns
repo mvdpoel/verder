@@ -2,8 +2,8 @@
   "Simulator Target Bundle": "pro.vanderpoel.verder",
   "aps": {
     "alert": {
-      "title": "Noordkust vraagt je loonstrook",
-      "body": "Tik om de mail van Ilse te lezen. Ze vraagt je loonstrook van oktober."
+      "title": "Verder: Ilse",
+      "body": "Ilse vraagt om je loonstrook van oktober"
     },
     "category": "VERDER_MAIL",
     "interruption-level": "time-sensitive",

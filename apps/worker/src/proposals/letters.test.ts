@@ -143,8 +143,8 @@ describe("proposalForLetter", () => {
       await proposalForLetter(deps(db, r.fn), d.id, text);
       expect(r.calls).toHaveLength(1);
       expect(r.calls[0]).toMatchObject({
-        kind: "creditor-mail", level: "active", title: `Brief lijkt van ${name}`,
-        dedupKey: `letter:${d.id}`, collapseId: `letter:${d.id}`,
+        kind: "creditor-mail", level: "active", title: "Brief van een schuldeiser",
+        body: "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier.", dedupKey: `letter:${d.id}`, collapseId: `letter:${d.id}`,
       });
       const [p] = await proposalsFor(db, d.id);
       expect(p).toMatchObject({

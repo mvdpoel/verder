@@ -121,8 +121,8 @@ describe("storeDraft", () => {
       expect(fake.calls).toHaveLength(1);
       expect(fake.calls[0]).toMatchObject({
         kind: "proposal", level: "time-sensitive",
-        title: "Voorstel: Loonstrook oktober aanleveren",
-        body: "Antwoord klaar voor Team Opstart (Verder). Bekijk en verstuur.",
+        title: "Voorstel klaar om te lezen",
+        body: "Tik om het na te lezen en te versturen. Het is een antwoord aan Team Opstart (Verder).",
         link: `verder://proposal/${p.id}`, dedupKey: `proposal:${p.id}`,
         threadId: `mail:${triggerRawEmailId}`, collapseId: `mail:${triggerRawEmailId}`,
       });
@@ -138,6 +138,8 @@ describe("storeDraft", () => {
       await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: replyAnswer(ctx) });
       expect(fake.calls[0].level).toBe("active");
       expect(fake.calls[0].collapseId).toBeUndefined();
+      // Never the creditor's name on the lock screen.
+      expect(fake.calls[0].body).toBe("Tik om het na te lezen en te versturen. Het is een antwoord aan een schuldeiser.");
     });
   });
 
@@ -158,7 +160,7 @@ describe("storeDraft", () => {
       const fake = fakeNotify();
       await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: replyAnswer(ctx) });
       expect(fake.calls[0]).toMatchObject({
-        level: "time-sensitive", body: "Antwoord klaar voor Verder. Bekijk en verstuur.",
+        level: "time-sensitive", body: "Tik om het na te lezen en te versturen. Het is een antwoord aan Verder.",
         threadId: `letter:${d.id}`, collapseId: `letter:${d.id}`,
       });
     });

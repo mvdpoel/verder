@@ -68,7 +68,8 @@ function partyLabel(row: Row, ctx: ProposalContext): string {
 }
 
 function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): NotifyInput {
-  const who = partyLabel(row, ctx);
+  // Never a creditor's name on the lock screen (iPhone design brief §3).
+  const who = row.priority === "creditor" ? "een schuldeiser" : partyLabel(row, ctx);
   // The key of the push that announced the trigger (Task 10's mail push,
   // Task 18's letter push), so this one replaces it.
   const triggerKey = row.triggerRawEmailId ? `mail:${row.triggerRawEmailId}`
@@ -76,11 +77,14 @@ function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): No
   return {
     kind: "proposal",
     level: row.priority === "verder" ? "time-sensitive" : "active",
-    title: `Voorstel: ${payload.ask}`,
+    // A reply's title is fixed text: the ask is free text that can name a
+    // creditor or an amount, which a lock-screen preview never shows (iPhone
+    // design brief §3, Notifications). A question keeps its ask.
+    title: payload.question ? `Voorstel: ${payload.ask}` : "Voorstel klaar om te lezen",
     // A question never leaves the house, so "verstuur" would be a lie there.
     body: payload.question
       ? `Een vraag over ${who}. Kies een antwoord.`
-      : `Antwoord klaar voor ${who}. Bekijk en verstuur.`,
+      : `Tik om het na te lezen en te versturen. Het is een antwoord aan ${who}.`,
     link: `verder://proposal/${row.id}`,
     dedupKey: `proposal:${row.id}`,
     // Same thread and collapse id as the mail or letter push, so this one

@@ -3,7 +3,7 @@
   "aps": {
     "alert": {
       "title": "Brief van een schuldeiser",
-      "body": "Tik om te kiezen bij welke vordering hij hoort. Hij staat al in je dossier."
+      "body": "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier."
     },
     "category": "CREDITOR_MAIL",
     "interruption-level": "active",

@@ -57,7 +57,13 @@ export async function notifyForMail(
   const key = `mail:${rawEmailId}`;
   const push: NotifyInput = priority === "verder"
     ? { kind: "verder-mail", level: "time-sensitive", title: `Verder: ${who}`, body }
-    : { kind: "creditor-mail", level: "active", title: who, body };
+    // A lock-screen preview never names a creditor nor shows an amount (iPhone
+    // design brief §3, Notifications), so neither the sender, the subject nor
+    // the summary reaches a creditor push.
+    : {
+      kind: "creditor-mail", level: "active", title: "Mail van een schuldeiser",
+      body: "Tik om hem te bekijken. Hij staat al in je dossier.",
+    };
   await deps.notify({
     ...push, link: "verder://inbox", dedupKey: key, threadId: key, collapseId: key,
   });

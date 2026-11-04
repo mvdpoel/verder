@@ -3,10 +3,10 @@
   "aps": {
     "alert": {
       "title": "Herinneringsmail klaar",
-      "body": "Tik om hem na te lezen en te versturen. Gemeente Westerlaan heeft sinds 21 okt niet gereageerd."
+      "body": "Tik om hem na te lezen en te versturen. Bewindkantoor Noordkust heeft sinds 21 okt niet gereageerd."
     },
     "category": "FOLLOW_UP",
-    "interruption-level": "active",
+    "interruption-level": "time-sensitive",
     "badge": 4,
     "sound": "default"
   },

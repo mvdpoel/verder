@@ -135,7 +135,7 @@ describe("notifyForMail", () => {
     });
   });
 
-  it("creditor mail notifies active, titled with the party name", async () => {
+  it("creditor mail notifies active and names neither the creditor nor the mail", async () => {
     await isolated(async (db) => {
       const addr = `incasso-${crypto.randomUUID()}@creditor.example`;
       const name = `Incasso Testfixture ${crypto.randomUUID()}`;
@@ -147,8 +147,11 @@ describe("notifyForMail", () => {
       const r = recorder();
       await notifyForMail({ db, notify: r.fn }, e.id);
       expect(r.calls).toHaveLength(1);
-      expect(r.calls[0]).toMatchObject({ kind: "creditor-mail", level: "active", title: name,
-        body: "Aanmaning", dedupKey: `mail:${e.id}`, link: "verder://inbox" });
+      expect(r.calls[0]).toMatchObject({ kind: "creditor-mail", level: "active",
+        title: "Mail van een schuldeiser", body: "Tik om hem te bekijken. Hij staat al in je dossier.",
+        dedupKey: `mail:${e.id}`, link: "verder://inbox" });
+      expect(`${r.calls[0]?.title} ${r.calls[0]?.body}`).not.toContain("Incasso");
+      expect(r.calls[0]?.body).not.toContain("Aanmaning");
     });
   });
 

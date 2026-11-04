@@ -282,7 +282,7 @@ export async function runWeeklySummary(
 
   await recordRun(deps.db, WEEKLY_SUMMARY_WORKER_NAME, "ok", { summary });
   const r = await deps.notify({
-    kind: "weekly", level: "passive", title: "Je week", body,
+    kind: "weekly", level: "passive", title: "Je week in verder", body,
     link: "verder://inbox", dedupKey: `weekly:${week.key}`,
   });
   return { summary, body, sent: !r.duplicate };

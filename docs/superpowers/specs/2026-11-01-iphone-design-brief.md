@@ -415,7 +415,38 @@ from.
   is the ORDER: what waits longest on Martin is sent last so it lands on top
   (capture.sh sends the follow-up before the reminder, the filing digest
   before the Verder mail). The worker sets no `thread-id` on reminders or
-  follow-ups; separate cards would need one per kind there.
+  follow-ups; separate cards would need one per kind there. Not done: it
+  is Martin's call whether the frames' separate cards are worth a worker
+  change, and until then the second card is read by expanding the group.
+- **The notification captures are the WORKER's copy, and the worker keeps
+  creditors off the lock screen** (2026-11-04). Before, the fixtures carried
+  the frames' words while production sent other text, and two pushes broke
+  the §3 rule that a preview never shows a creditor or an amount. Now, where
+  the priority is creditor, no title or body names a party, a subject or a
+  summary: "Mail van een schuldeiser" / "Tik om hem te bekijken. Hij staat
+  al in je dossier."; a scanned letter "Brief van een schuldeiser" / "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier."; a reply
+  proposal "Voorstel klaar om te lezen" / "… Het is een antwoord aan een
+  schuldeiser."; a follow-up "Herinneringsmail klaar" / "… De schuldeiser
+  heeft sinds 16 okt niet gereageerd." The weekly title is "Je week in
+  verder". Kept, against the frames: a letter's body says how its sender
+  was recognised (it is a guess from the OCR text; "Brief lijkt van een
+  schuldeiser" as a title truncated beside the timestamp, so the hedge moved
+  to the body); the creditor body does not promise "kiezen bij welke
+  vordering hij hoort", because the tap opens Voor jou, not a picker; a
+  Verder mail is still "Verder: <afzender>" / the one-line summary (a title
+  built from the summary would truncate at AX5 — the summary wraps in the
+  body), and that summary can still hold an amount; a question's title is
+  still "Voorstel: <ask>", free model text; the reminder stays "Wacht nog:
+  <ask>"; the weekly body is `weeklyBody`'s counts ("3 verstuurd · 7 binnen
+  · 5 opgeborgen · 2 taken klaar — 4 wachten op jou"), with no "Tik voor je
+  week". The pushes in `apps/ios/scripts/pushes/` now carry these texts
+  except the three AX5 cuts below and the system and question pushes.
+- **Verder proposals, follow-ups to Verder and deadline pushes stay
+  time-sensitive, so iOS draws "TIJDGEVOELIG" where the frames draw a plain
+  card** (`proposal`, `follow-up`, `task-due · lang ingedrukt · Gedaan`; at
+  AX5 the header takes two lines, "TIJDGE-/VOELIG"). This is the open
+  interruption-levels decision above, not drift: the build keeps the
+  worker's levels until Martin decides, and the captures show them.
 - **Notification texts are cut to what AX5 shows whole.** The filing digest's
   title is the worker's own "Door verder gedaan" — the frame's "2 opgeborgen
   · 1 hernoemd" as a TITLE clipped to "…hernoe…" beside "5 min. geleden" —

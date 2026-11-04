@@ -3,7 +3,7 @@
   "aps": {
     "alert": {
       "title": "Je week in verder",
-      "body": "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. Tik voor je week."
+      "body": "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou"
     },
     "category": "WEEKLY",
     "interruption-level": "passive",

@@ -394,7 +394,8 @@ describe("runClocks: the follow-up clock", () => {
       const mine = n.mine(`followup:gmail:${th}:`);
       expect(mine).toHaveLength(1);
       expect(mine[0]).toMatchObject({ kind: "follow-up", level: "time-sensitive", dedupKey: key });
-      expect(mine[0].title).toMatch(/^Nog geen antwoord van .+ sinds \d{2}-\d{2}$/);
+      expect(mine[0].title).toBe("Herinneringsmail klaar");
+      expect(mine[0].body).toMatch(/^Tik om hem na te lezen en te versturen\. .+ heeft sinds \d{1,2} (jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec) niet gereageerd\.$/);
       const created = f.calls.filter((t) => t.threadKey === `gmail:${th}`);
       expect(created).toHaveLength(1);
       expect(created[0]).toMatchObject({ priority: "verder", lastOutbound: { kind: "raw-email", id: out.id } });
@@ -464,7 +465,7 @@ describe("runClocks: the follow-up clock", () => {
     });
   });
 
-  it("a creditor thread chases at active", async () => {
+  it("a creditor thread chases at active, and the push never names the creditor", async () => {
     await isolated(async (db) => {
       const c = clock();
       const th = `th-${uid()}`;
@@ -479,7 +480,9 @@ describe("runClocks: the follow-up clock", () => {
       const mine = n.mine(`followup:gmail:${th}:`);
       expect(mine).toHaveLength(1);
       expect(mine[0].level).toBe("active");
-      expect(mine[0].title).toContain(pt.name);
+      expect(mine[0].title).toBe("Herinneringsmail klaar");
+      expect(mine[0].body).toMatch(/^Tik om hem na te lezen en te versturen\. De schuldeiser heeft sinds \d{1,2} [a-z]{3} niet gereageerd\.$/);
+      expect(`${mine[0].title} ${mine[0].body}`).not.toContain("Stam");
     });
   });
 

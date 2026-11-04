@@ -217,7 +217,7 @@ pg-boss-queue `weekly.summary`, ingepland op `0 18 * * 0` met `tz: "Europe/Amste
 
 1. **Samenstellen.** `summaryWeek(now)` kiest het venster dat sluit op de nieuwste zondag 18:00 Amsterdam op of vóór `now`. `loadWeekly` leest de bronnen met een SQL-grens die aan beide kanten twee dagen is verruimd, en de pure `composeWeekly` beslist in JS.
 2. **Vastleggen.** Ze schrijft één `worker_runs`-rij, `weekly-summary` / `ok`, met `detail.summary`. Die rij is de opgeslagen kopie die het scherm leest. Er is geen nieuwe tabel.
-3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week", body, link: "verder://inbox", dedupKey: "weekly:<ISO week>" })`.
+3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week in verder", body, link: "verder://inbox", dedupKey: "weekly:<ISO week>" })`.
 
 **Het venster** loopt van de vorige zondag 18:00 tot deze zondag 18:00 Amsterdam. Het is halfopen, `[from, to)`, en NIET maandag tot en met zondag. Opeenvolgende vensters raken elkaar op het moment dat de job draait, zodat activiteit op zondagavond precies één keer wordt geteld, in het volgende overzicht. Het venster hoort bij de week, niet bij het moment waarop de job draaide, dus een late run telt dezelfde rijen als een stipte.
 
@@ -290,7 +290,7 @@ Het contract (`WeeklySummary`) staat in `packages/api/src/weekly-summary.ts`, om
 ## Privacy en beveiliging
 
 - **Face ID.** Het scherm zit achter het app-slot: Meer zit achter het slot, en alleen Overzicht (tellingen en geld) en Scan zijn open tijdens vergrendeling. De app vraagt uit zichzelf één keer om Face ID, bij openen of bij terugkeer na de respijtperiode van 300 s. Daarna is elk tabblad open tot de volgende vergrendeling.
-- **Vergrendelscherm.** De zondagse push bevat **alleen tellingen**, bijvoorbeeld `3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou`, met de titel "Je week". De `topWaiting`-titels staan nooit in de push. Een titel op het vergrendelscherm zou het dossier hardop voorlezen aan wie de telefoon oppakt, dus de titels reizen alleen mee in het opgeslagen overzicht, achter Face ID.
+- **Vergrendelscherm.** De zondagse push bevat **alleen tellingen**, bijvoorbeeld `3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou`, met de titel "Je week in verder". De `topWaiting`-titels staan nooit in de push. Een titel op het vergrendelscherm zou het dossier hardop voorlezen aan wie de telefoon oppakt, dus de titels reizen alleen mee in het opgeslagen overzicht, achter Face ID.
 - **Widgets.** Geen. Het Weekoverzicht voedt geen widget.
 - **Opgeslagen op de telefoon.** Niets. `WeeklyStore` houdt het overzicht in het geheugen zolang het scherm open is. Het staat niet in het zakdossier, de widget-momentopname of enig bestand. De sessiecookie waarmee het wordt opgehaald, is het gebruikelijke Keychain-item van de app (`AfterFirstUnlockThisDeviceOnly`).
 - **Afmelden / ingetrokken sessie.** Er blijft niets wekelijks over om te wissen. Een 401 hier beëindigt de sessie op dezelfde manier als overal elders (`sessionRejected` → `forgetLocally`).
@@ -307,7 +307,7 @@ De code handhaaft deze regels vandaag, en de hieronder genoemde tests controlere
 
 ## Meldingen en haptiek
 
-- **Eén push per ISO-week**, zondag 18:00 Amsterdam: soort `weekly`, categorie `WEEKLY`, onderbrekingsniveau **passive** (geen geluid; APNs-prioriteit 5), titel "Je week", de body met alleen tellingen. Zoals elke melding gaat ze via `notify()`, dat ook de icoonbadge zet op basis van de live wachttelling en één `notification_attempts`-rij per kanaal schrijft.
+- **Eén push per ISO-week**, zondag 18:00 Amsterdam: soort `weekly`, categorie `WEEKLY`, onderbrekingsniveau **passive** (geen geluid; APNs-prioriteit 5), titel "Je week in verder", de body met alleen tellingen. Zoals elke melding gaat ze via `notify()`, dat ook de icoonbadge zet op basis van de live wachttelling en één `notification_attempts`-rij per kanaal schrijft.
 - **Meer → Meldingen** beschrijft de categorie als "Weekoverzicht — Zondag om 18:00: wat er die week gebeurde. Stil."
 - **Haptiek:** geen. Het scherm geeft geen haptische feedback.
 

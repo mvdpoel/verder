@@ -64,16 +64,21 @@ export async function proposalForLetter(
   if (!sender) return { sender: null, created: false };
 
   const key = `letter:${documentId}`;
-  const push: Pick<NotifyInput, "kind" | "level" | "title"> = sender.kind === "verder"
-    ? { kind: "verder-mail", level: "time-sensitive", title: "Brief lijkt van Verder" }
+  // A lock-screen preview never names a creditor (iPhone design brief §3,
+  // Notifications): not in the title, and not through the document's title,
+  // which auto-name writes from the letter's sender.
+  const push: Pick<NotifyInput, "kind" | "level" | "title" | "body"> = sender.kind === "verder"
+    ? { kind: "verder-mail", level: "time-sensitive", title: "Brief lijkt van Verder", body: doc.title }
     : {
-      kind: "creditor-mail", level: "active",
-      title: `Brief lijkt van ${creditors.find((c) => c.partyId === sender.partyId)?.name ?? "een schuldeiser"}`,
+      // "lijkt van" moved to the body: as a title it truncated beside the
+      // timestamp. The sender is matched on an email address in the OCR text.
+      kind: "creditor-mail", level: "active", title: "Brief van een schuldeiser",
+      body: "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier.",
     };
   // Before the proposal exists, so it links to the Voor jou tab; the
   // "Voorstel" push for this letter reuses the collapse id and replaces it.
   await deps.notify({
-    ...push, body: doc.title, link: "verder://inbox", dedupKey: key, threadId: key, collapseId: key,
+    ...push, link: "verder://inbox", dedupKey: key, threadId: key, collapseId: key,
   });
 
   const { id, created } = await createProposal(

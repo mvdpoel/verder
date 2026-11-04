@@ -177,6 +177,13 @@ const dayMonth = (d: Date): string => {
   return `${day}-${m}`;
 };
 
+/** "16 okt" in Amsterdam: the push text's spelling of a day. */
+const MONTHS_NL = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+const dayMonthWords = (d: Date): string => {
+  const [, m, day] = dayKey(d).split("-");
+  return `${Number(day)} ${MONTHS_NL[Number(m) - 1]}`;
+};
+
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 // ---- 1. the reminder ---------------------------------------------------------
@@ -384,10 +391,13 @@ async function chaseOne(deps: ClockDeps, sets: PrioritySets, t: ThreadState): Pr
   const [seen] = await db.select({ id: schema.notifications.id }).from(schema.notifications)
     .where(eq(schema.notifications.dedupKey, dedupKey)).limit(1);
   if (existing && seen) return false;
+  // A lock-screen preview never names a creditor (iPhone design brief §3,
+  // Notifications): a creditor thread reads "De schuldeiser"; Verder may be named.
+  const who = t.priority === "creditor" ? "De schuldeiser" : await counterpartyName(db, sets, t.who);
   const r = await deps.notify({
     kind: "follow-up", level: LEVEL[t.priority],
-    title: `Nog geen antwoord van ${await counterpartyName(db, sets, t.who)} sinds ${dayMonth(t.lastOutboundAt)}`,
-    body: "verder heeft een herinnering voor je klaargezet.",
+    title: "Herinneringsmail klaar",
+    body: `Tik om hem na te lezen en te versturen. ${who.charAt(0).toUpperCase()}${who.slice(1)} heeft sinds ${dayMonthWords(t.lastOutboundAt)} niet gereageerd.`,
     link: `verder://proposal/${proposalId}`, dedupKey,
   });
   return !existing || !r.duplicate;

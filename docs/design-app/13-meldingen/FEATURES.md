@@ -6,13 +6,13 @@ Geteld over elke functie in dit document met een **Status:**-regel (gecontroleer
 
 | Gebouwd | Deels gebouwd | Nog te bouwen |
 |---|---|---|
-| 27 | 3 | 7 |
+| 28 | 3 | 6 |
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
-1. **De woorden van de frames in de worker** ("Tik om …", "Voorstel klaar om te lezen", "Je week in verder"). De app tekent wat de worker stuurt; alleen de deadline-push draagt nu de stap ("Al gedaan? Kies Gedaan bij deze melding.").
+1. **De woorden van de frames in de rest van de worker.** Voorstel, navraag en het weekoverzicht dragen sinds 2026-11-04 de titels van de frames ("Voorstel klaar om te lezen", "Herinneringsmail klaar", "Je week in verder"); de mail van Verder ("Verder: ‹afzender›" / de samenvatting), de herinnering ("Wacht nog: ‹ask›") en de tekst van het weekoverzicht nog niet.
 2. **Het mailscherm achter een mail-push**: wat de mail vraagt plus hoe het voorstel ervoor staat ("Voorstel in voorbereiding", "Geen antwoord nodig", "Geen voorstel gemaakt"), met "Opnieuw proberen" en "Zelf antwoorden". De voorstelstatussen `drafting` en `draft-failed` bestaan al op de server; geen route stelt ze per mail beschikbaar en geen scherm toont ze.
-3. **Geen naam van een schuldeiser en geen bedrag op het vergrendelscherm** (brief §3). Nu is de titel van een schuldeisersmail de naam van de afzender en die van een gescande brief "Brief lijkt van ‹creditor›".
+3. **Geen bedrag in de samenvatting van een Verder-mail.** De naam van een schuldeiser komt sinds 2026-11-04 niet meer op het vergrendelscherm (zie hieronder); de samenvatting die de tekst van een Verder-mail is, kan nog een bedrag bevatten.
 
 Alles wat Martin ontwierp staat hieronder beschreven, gebouwd of niet; bij elke functie staat welke van de twee.
 
@@ -22,7 +22,7 @@ Dit document legt uit wat de meldingen van verder doen: welke soorten er zijn, w
 
 > **Lees dit eerst: de frames en de code verschillen, op drie punten.**
 >
-> 1. **De formulering.** Bijna elk frame gebruikt een "Tik om …"-toon die de worker niet verstuurt ("Voorstel klaar om te lezen", "Herinneringsmail klaar", "Je week in verder"). De echte titels en teksten van de worker staan hieronder per soort.
+> 1. **De formulering.** Voorstel, navraag, schuldeisersmail en het weekoverzicht volgen sinds 2026-11-04 de frames (op een paar woorden na); de mail van Verder, de herinnering en de tekst van het weekoverzicht niet. De echte titels en teksten van de worker staan hieronder per soort.
 > 2. **Acties en terugkoppeling: gebouwd op 2026-11-04.** Een deadline-push heeft de actie **"Gedaan"** bij lang indrukken, en de vijf vervolgmeldingen bestaan: "Gedaan kwam niet door", "Opnieuw inloggen nodig", "Taak al afgerond", "Keuze kwam niet door" en "Vraag al afgehandeld" (`NotificationFeedback`, geplaatst door `NotificationRouter`). Wat de frames anders tekenen, is de opmaak van iOS zelf (zie "Elk frame").
 > 3. **Schermen achter de tik die niet bestaan.** De drie frames "Mail van Ilse" (een maildetail met de statuskaart "Voorstel in voorbereiding", "Geen antwoord nodig" of "Geen voorstel gemaakt", plus "Opnieuw proberen" en "Zelf antwoorden") en de rij "Brief gekoppeld · beantwoord · Ongedaan maken" op Voor jou zijn niet gebouwd. Een mail-push opent de lijst Voor jou, en een beantwoorde vraag verdwijnt gewoon uit de lijst.
 >
@@ -70,12 +70,12 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 |---|---|---|---|---|
 | `verder-mail` (`VERDER_MAIL`) | `mail/priority-notify.ts`, na `suggest.entry` | tijdgevoelig | "Verder: ‹sender›" / de samenvatting van één regel uit de logboeksuggestie, anders het onderwerp | `verder://inbox` |
 | `verder-mail`, gescande brief | `proposals/letters.ts` | tijdgevoelig | "Brief lijkt van Verder" / de documenttitel | `verder://inbox` |
-| `creditor-mail` (`CREDITOR_MAIL`) | `mail/priority-notify.ts` | actief | "‹sender›" / samenvatting of onderwerp | `verder://inbox` |
-| `creditor-mail`, gescande brief | `proposals/letters.ts` | actief | "Brief lijkt van ‹creditor›" / de documenttitel | `verder://inbox` |
-| `proposal` (`PROPOSAL`), een antwoord | `ops/proposals-store.ts`, wanneer een concept is opgeslagen | tijdgevoelig als de aanleiding Verder was, anders actief | "Voorstel: ‹ask›" / "Antwoord klaar voor ‹wie›. Bekijk en verstuur." | `verder://proposal/<id>` |
-| `proposal` (`PROPOSAL`), een vraag | idem | idem | "Voorstel: ‹ask›" / "Een vraag over ‹wie›. Kies een antwoord." plus `options` en `revision` | `verder://proposal/<id>` |
+| `creditor-mail` (`CREDITOR_MAIL`) | `mail/priority-notify.ts` | actief | "Mail van een schuldeiser" / "Tik om hem te bekijken. Hij staat al in je dossier." (geen afzender, onderwerp of samenvatting: het vergrendelscherm noemt nooit een schuldeiser of een bedrag) | `verder://inbox` |
+| `creditor-mail`, gescande brief | `proposals/letters.ts` | actief | "Brief van een schuldeiser" / "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier." (de gok staat in de tekst, want "Brief lijkt van een schuldeiser" als titel werd afgekapt naast de tijd; de documenttitel niet: auto-name zet de afzender erin) | `verder://inbox` |
+| `proposal` (`PROPOSAL`), een antwoord | `ops/proposals-store.ts`, wanneer een concept is opgeslagen | tijdgevoelig als de aanleiding Verder was, anders actief | "Voorstel klaar om te lezen" / "Tik om het na te lezen en te versturen. Het is een antwoord aan ‹wie›." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) | `verder://proposal/<id>` |
+| `proposal` (`PROPOSAL`), een vraag | idem | idem | "Voorstel: ‹ask›" / "Een vraag over ‹wie›. Kies een antwoord." (‹wie› is "een schuldeiser" bij schuldeiserprioriteit) plus `options` en `revision` | `verder://proposal/<id>` |
 | `reminder` (`REMINDER`) | `proposals/clocks.ts`, een voorstel dat langer dan 24 u openstaat, één keer ooit | volgt de prioriteit van het voorstel | "Wacht nog: ‹ask›" / "Dit voorstel wacht al een dag op je." | `verder://proposal/<id>` |
-| `follow-up` (`FOLLOW_UP`) | `proposals/clocks.ts`, 7 dagen stilte na een uitgaand bericht (`PROPOSAL_FOLLOWUP_DAYS`), niet meer na 30 | volgt de prioriteit van de thread | "Nog geen antwoord van ‹naam› sinds dd-mm" / "verder heeft een herinnering voor je klaargezet." | `verder://proposal/<id>` (het navraagconcept) |
+| `follow-up` (`FOLLOW_UP`) | `proposals/clocks.ts`, 7 dagen stilte na een uitgaand bericht (`PROPOSAL_FOLLOWUP_DAYS`), niet meer na 30 | volgt de prioriteit van de thread | "Herinneringsmail klaar" / "Tik om hem na te lezen en te versturen. ‹Naam› heeft sinds ‹d mmm› niet gereageerd." (bij een schuldeiser: "De schuldeiser") | `verder://proposal/<id>` (het navraagconcept) |
 | `task-due` (`TASK_DUE`) | `proposals/clocks.ts`, een taak `open` of `in-progress` met een deadline binnen 24 u, verlopen inbegrepen; één keer per taak per deadline (`due:<taskId>:<dueAt>`) | tijdgevoelig | "Te laat: ‹taak›", "Vandaag: ‹taak›" of "Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding." (een deadline met alleen een datum telt als het einde van die dag in Amsterdam) | `verder://task/<id>` (de actie Gedaan; een tik opent de taak bovenaan Voor jou) |
 | `filing` (`FILING`), dagelijks overzicht | `autofile-digest.ts`, 19:00 Amsterdam, alleen op dagen met acties van verder | passief | "Door verder gedaan" / bijvoorbeeld "2 documenten opgeborgen · 1 hernoemd" (alleen aantallen) | `verder://inbox` (de router stuurt het naar Door verder gedaan) |
 | `filing`, dubbelzijdig samengevoegd | `duplex.ts` | passief | "Dubbelzijdige scan samengevoegd" / "scanN.pdf + scanM.pdf → één document, …" | geen (opent Dossier) |
@@ -84,7 +84,7 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 | `system`, verstuurd maar niet gelogd | `proposals/send.ts`, na de derde mislukte poging | tijdgevoelig | "Mail VERSTUURD, logboek ontbreekt" / … | `verder://proposal/<id>` |
 | `system`, herstel door de watchdog | `ops/watchdog-run.ts` | actief | "verder hersteld" / "Automatisch hersteld: ‹diensten›." | geen (opent Overzicht) |
 | `system`, hersteltest | `ops/mail-restore-drill.ts` | actief | "Hersteltest mail MISLUKT" / de eigen redenen van de test (technische tekst, niet vertaald) | geen (opent Overzicht) |
-| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `verder://inbox` (de router opent het Weekoverzicht) |
+| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week in verder" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `verder://inbox` (de router opent het Weekoverzicht) |
 
 **Status per soort.**
 
@@ -105,7 +105,7 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 **Stille uren.** Alleen de klokken (reminder, follow-up, task-due; `proposals.clock`, elke 15 minuten) zijn beperkt tot 08:00–22:00 Amsterdamse tijd (`isAlertHour`, `ALERT_DAY_START_HOUR`/`_END_HOUR`); buiten die uren legt een tik zijn `proposal-clock`-run vast en verstuurt niets. Pushes voor mail, brieven, voorstellen, opbergen, systeem en het weekoverzicht gaan uit zodra hun job draait.
 **Status:** Gebouwd — `apps/worker/src/proposals/clocks.ts` (`isAlertHour`).
 
-**Wie telt als Verder of als schuldeiser.** Verder is elke afzender in de set Verder-domeinen (`mailPriority`/`prioritySets`). Een schuldeiser is een partij die aan een vordering gekoppeld is, als de schuldeiser van die vordering of via een `debt_parties`-koppeling (eiser, incasso, deurwaarder, gemachtigde) (`creditorParties` in `mail/priority.ts`). De prioriteit wordt alleen bepaald op het geparste `From`-adres (`senderAddress`), nooit op de weergavenaam. Elke andere mail, ook Martins eigen uitgaande mail, geeft geen push. De afzender van een gescande brief is een OCR-gok, dus de push zegt "lijkt van". Een schuldeiser wordt op papier alleen herkend aan zijn **e-mailadres**, nooit aan zijn naam, omdat herkennen op naam 14 valse treffers op "Kamer van Koophandel" opleverde in 163 echte scans (CLAUDE.md, Proposals and sending).
+**Wie telt als Verder of als schuldeiser.** Verder is elke afzender in de set Verder-domeinen (`mailPriority`/`prioritySets`). Een schuldeiser is een partij die aan een vordering gekoppeld is, als de schuldeiser van die vordering of via een `debt_parties`-koppeling (eiser, incasso, deurwaarder, gemachtigde) (`creditorParties` in `mail/priority.ts`). De prioriteit wordt alleen bepaald op het geparste `From`-adres (`senderAddress`), nooit op de weergavenaam. Elke andere mail, ook Martins eigen uitgaande mail, geeft geen push. De afzender van een gescande brief is een OCR-gok, dus de push zegt dat ("Brief lijkt van Verder"; bij een schuldeiser "Herkend aan het e-mailadres op de brief."). Een schuldeiser wordt op papier alleen herkend aan zijn **e-mailadres**, nooit aan zijn naam, omdat herkennen op naam 14 valse treffers op "Kamer van Koophandel" opleverde in 163 echte scans (CLAUDE.md, Proposals and sending).
 
 **Vervangen in plaats van stapelen.** Een push voor mail of een brief draagt `thread-id` en `apns-collapse-id`, gezet op `mail:<id>` of `letter:<id>`. De push "Voorstel" voor het voorstel dat die mail of brief opleverde, hergebruikt hetzelfde id en **vervangt** zo de eerdere melding op het vergrendelscherm, in plaats van er een tweede tijdgevoelige bij te zetten. De gedeelde `thread-id` is ook wat iOS een mail samen met zijn voorstel laat groeperen (de frames "gegroepeerde stapel").
 **Status:** Gebouwd — `threadId`/`collapseId` gezet in `mail/priority-notify.ts`, `proposals/letters.ts` en `ops/proposals-store.ts`, als headers verstuurd door `notify/apns.ts`.
@@ -117,15 +117,15 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 | Frame | Frame toont | Code verstuurt |
 |---|---|---|
 | verder-mail · tijdgevoelig | "Noordkust vraagt je loonstrook" / "Tik om de mail van Ilse te lezen. …" | "Verder: ‹sender›" / de samenvatting van één regel |
-| creditor-mail | "Brief van een schuldeiser" / "Tik om te kiezen bij welke vordering hij hoort. …" | voor een brief: "Brief lijkt van ‹creditor›" / de documenttitel |
-| proposal | "Voorstel klaar om te lezen" / "Tik om het na te lezen en te versturen. …" | "Voorstel: ‹ask›" / "Antwoord klaar voor ‹wie›. Bekijk en verstuur." |
+| creditor-mail | "Brief van een schuldeiser" / "Tik om te kiezen bij welke vordering hij hoort. …" | voor een brief dezelfde titel / "Herkend aan het e-mailadres op de brief. Tik om hem te bekijken; hij staat al in je dossier." (de push belooft geen keuze van een vordering die de tik niet opent); voor een mail "Mail van een schuldeiser" met dezelfde tekst |
+| proposal | "Voorstel klaar om te lezen" / "Tik om het na te lezen en te versturen. …", als actieve kaart | dezelfde tekst; maar **tijdgevoelig** bij Verder-prioriteit, dus iOS tekent "TIJDGEVOELIG" erboven (open beslissing, brief §5) |
 | reminder | "Voorstel wacht nog op je" / "… staat sinds 07:30 klaar." | "Wacht nog: ‹ask›" / "Dit voorstel wacht al een dag op je." |
-| follow-up | "Herinneringsmail klaar" / "… Gemeente Westerlaan heeft sinds 21 okt niet gereageerd." | "Nog geen antwoord van ‹naam› sinds dd-mm" / "verder heeft een herinnering voor je klaargezet." |
-| follow-up · aan een schuldeiser | "De schuldeiser heeft sinds 16 okt …" (anoniem) | de **partijnaam** van de schuldeiser, zoals bij elke andere tegenpartij (`counterpartyName`) |
+| follow-up | "Herinneringsmail klaar" / "… Gemeente Westerlaan heeft sinds 21 okt niet gereageerd." | dezelfde tekst, met de naam van de tegenpartij |
+| follow-up · aan een schuldeiser | "De schuldeiser heeft sinds 16 okt …" (anoniem) | dezelfde tekst: een schuldeiserthread wordt nooit bij naam genoemd |
 | task-due | "Morgen: bijstand tekenen" / "Uiterlijk di 3 nov: … Kies Gedaan bij deze melding." | "Te laat / Vandaag / Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding.", met de actie Gedaan |
 | filing · passief | "2 opgeborgen · 1 hernoemd" als titel | titel "Door verder gedaan", aantallen in de tekst |
 | system | "Mislukt: hersteltest mail" / "Je hoeft nu niets te doen; je dossier is in orde. …" | "Hersteltest mail MISLUKT" / de redenen van de test, in technische tekst |
-| weekly · passief | "Je week in verder" om 19:00 / "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. …" | "Je week" om **18:00** / "… verstuurd · … binnen · … opgeborgen · … taken klaar — … wachten op jou" |
+| weekly · passief | "Je week in verder" om 19:00 / "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. …" | "Je week in verder" om **18:00** / "… verstuurd · … binnen · … opgeborgen · … taken klaar — … wachten op jou" |
 
 ![Mail van Verder, tijdgevoelig (Figma final)](frames/Meldingen_verder-mail_tijdgevoelig.jpg)
 
@@ -303,12 +303,12 @@ Alles hieronder is gedefinieerd door de definitieve frames, de spec of de brief 
 ### De woorden: elke tekst noemt de volgende stap
 
 De brief vraagt dat elke melding zegt wat er als volgende moet gebeuren ("Voorstel klaar om te keuren"), en de frames gebruiken daar één toon voor ("Tik om het na te lezen en te versturen", "Kies Gedaan bij deze melding").
-**Status:** Deels gebouwd — de teksten van voorstel ("Bekijk en verstuur."), vraag ("Kies een antwoord.") en navraag ("verder heeft een herinnering voor je klaargezet.") noemen de stap; de tekst van een mail is de samenvatting of het onderwerp, die van een brief de documenttitel, die van een deadline "Deadline dd-mm.", en een systeempush draagt zijn redenen (die van de hersteltest in technisch Engels). Nodig: nieuwe titels en teksten in de aanroepers die onder "Elke soort" staan, met bijgewerkte tests.
+**Status:** Deels gebouwd — de teksten van voorstel ("Tik om het na te lezen en te versturen."), vraag ("Kies een antwoord."), navraag ("Tik om hem na te lezen en te versturen.") en schuldeisersmail ("Tik om hem te bekijken.") noemen de stap; de tekst van een Verder-mail is de samenvatting of het onderwerp, die van een Verder-brief de documenttitel, die van een deadline "Deadline dd-mm.", en een systeempush draagt zijn redenen (die van de hersteltest in technisch Engels). Nodig: nieuwe titels en teksten in de aanroepers die onder "Elke soort" staan, met bijgewerkte tests.
 
 ### Geen schuldeiser en geen bedrag op het vergrendelscherm
 
 De brief: de voorvertoning op het vergrendelscherm toont nooit een schuldeiser of een bedrag, ook niet met zichtbare voorvertoning. Het frame "follow-up · aan een schuldeiser" toont de vorm: "De schuldeiser heeft sinds 16 okt …", met de naam alleen binnen de app.
-**Status:** Nog te bouwen — nu is de titel van een schuldeisersmail de afzender ("‹sender›"), die van een schuldeisersbrief "Brief lijkt van ‹creditor›", en een navraag aan een schuldeiser noemt de partij (`counterpartyName` in `proposals/clocks.ts`). Nodig: een regel in de worker (waar `priority === "creditor"` noemen titel en tekst geen partij en geen bedrag), tests per aanroeper, en een controle dat de mailsamenvatting die als tekst dient geen bedrag kan bevatten.
+**Status:** Gebouwd (2026-11-04) — waar de prioriteit schuldeiser is, noemen titel en tekst geen partij, geen onderwerp en geen samenvatting: "Mail van een schuldeiser" (`mail/priority-notify.ts`), "Brief van een schuldeiser" zonder documenttitel (`proposals/letters.ts`, want auto-name zet de afzender in de titel), "Het is een antwoord aan een schuldeiser" / "Een vraag over een schuldeiser" (`ops/proposals-store.ts`) en "De schuldeiser heeft sinds ‹d mmm› niet gereageerd." (`proposals/clocks.ts`), elk met een test. Nog open: de titel van een **vraag** blijft "Voorstel: ‹ask›", vrije tekst van het model die een naam kan bevatten, en de samenvatting van een Verder-mail kan een bedrag bevatten.
 
 ### Een schuldeisersbrief vraagt bij welke vordering hij hoort
 

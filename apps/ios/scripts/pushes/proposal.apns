@@ -3,7 +3,7 @@
   "aps": {
     "alert": {
       "title": "Voorstel klaar om te lezen",
-      "body": "Tik om het na te lezen en te versturen. Het is een antwoord aan Ilse van Noordkust."
+      "body": "Tik om het na te lezen en te versturen. Het is een antwoord aan Bewindkantoor Noordkust."
     },
     "category": "PROPOSAL",
     "interruption-level": "time-sensitive",
