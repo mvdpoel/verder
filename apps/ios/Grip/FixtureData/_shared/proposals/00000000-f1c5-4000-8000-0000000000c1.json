@@ -1,0 +1,83 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000c1",
+  "kind": "reply",
+  "status": "pending",
+  "priority": "verder",
+  "ask": "Antwoord aan Bewindkantoor Noordkust",
+  "partyName": "Bewindkantoor Noordkust",
+  "triggerAt": "2026-11-02T13:03:00.000Z",
+  "createdAt": "2026-11-02T13:06:00.000Z",
+  "trigger": {
+    "type": "request",
+    "id": "00000000-f1c5-4000-8000-a00000000003",
+    "from": null,
+    "subject": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+    "date": "2026-11-02T13:03:00.000Z",
+    "excerpt": null
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": "Mail aan Bewindkantoor Noordkust: Re: Boedelbeschrijving",
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000304",
+      "label": "Huurcontract Lindehof",
+      "why": "Dit huurcontract ontbreekt nog bij Noordkust."
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000106",
+      "label": "Sommatie Kade & Partners",
+      "why": "De vordering die Noordkust nog niet kent."
+    }
+  ],
+  "payload": {
+    "entrySummary": "Mail aan Bewindkantoor Noordkust: Re: Boedelbeschrijving",
+    "reply": {
+      "to": [
+        "ilse@noordkust.example"
+      ],
+      "cc": [],
+      "subject": "Re: Boedelbeschrijving",
+      "body": "Beste Ilse,\n\nHierbij ontvangt u mijn huurcontract en de sommatie van Kade & Partners, voor de boedelbeschrijving.\n\nMet vriendelijke groet,\n",
+      "attachmentDocumentIds": [
+        "00000000-f1c5-4000-8000-200000000304",
+        "00000000-f1c5-4000-8000-200000000106"
+      ]
+    },
+    "question": null
+  },
+  "revision": 1,
+  "attachments": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000304",
+      "title": "Huurcontract Lindehof.pdf",
+      "sizeBytes": 217088,
+      "unavailable": false
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000106",
+      "title": "Sommatie Kade & Partners.pdf",
+      "sizeBytes": 98304,
+      "unavailable": false
+    }
+  ],
+  "attachable": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000304",
+      "title": "Huurcontract Lindehof.pdf"
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000106",
+      "title": "Sommatie Kade & Partners.pdf"
+    }
+  ],
+  "options": [],
+  "error": null,
+  "partyId": "00000000-f1c5-4000-8000-600000000002",
+  "updating": null
+}

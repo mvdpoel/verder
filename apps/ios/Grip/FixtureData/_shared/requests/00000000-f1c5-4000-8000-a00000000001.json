@@ -1,31 +1,47 @@
 {
   "id": "00000000-f1c5-4000-8000-a00000000001",
-  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a51",
-  "text": "Kun je uitzoeken wat Gemeente Westerlaan nog nodig heeft voor de bijzondere bijstand?",
+  "rootId": "00000000-f1c5-4000-8000-a00000000001",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4001",
+  "text": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
   "status": "queued",
+  "title": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+  "headline": null,
+  "phase": "queued",
+  "todoReason": null,
+  "doneReason": null,
   "parentRequestId": null,
-  "createdAt": "2026-11-04T10:02:00.000Z",
+  "createdAt": "2026-11-02T13:03:00.000Z",
   "claimedAt": null,
   "answeredAt": null,
   "openedAt": null,
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T13:03:00.000Z",
   "unread": false,
   "progressLine": null,
   "failure": null,
-  "proposal": null,
+  "failureDetail": null,
   "about": {
-    "type": "document",
-    "id": "00000000-f1c5-4000-8000-200000000307",
-    "label": "Brief Gemeente Westerlaan 30 okt"
+    "type": "mail",
+    "id": "00000000-f1c5-4000-8000-400000000202",
+    "label": "Boedelbeschrijving invullen",
+    "meta": [
+      "Ilse"
+    ],
+    "at": "2026-11-02T07:40:00.000Z"
   },
   "answer": null,
   "sources": [],
   "martinSteps": [],
+  "steps": [],
+  "proposal": null,
+  "proposalUpdating": false,
   "progress": {
     "calls": 0,
     "documents": 0,
     "mails": 0,
     "liveMail": 0,
-    "line": null
+    "line": null,
+    "steps": []
   },
   "thread": [],
   "followUps": []

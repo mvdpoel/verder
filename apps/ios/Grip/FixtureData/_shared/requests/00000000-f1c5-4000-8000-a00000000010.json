@@ -1,0 +1,93 @@
+{
+  "id": "00000000-f1c5-4000-8000-a00000000010",
+  "rootId": "00000000-f1c5-4000-8000-a00000000010",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4010",
+  "text": "Zeg mijn maandelijkse gift aan Stichting Lindeboom op.",
+  "status": "answered",
+  "title": "Gift Stichting Lindeboom opzeggen",
+  "headline": "De incasso loopt nog",
+  "phase": "todo",
+  "todoReason": "steps",
+  "doneReason": null,
+  "parentRequestId": null,
+  "createdAt": "2026-11-02T14:18:00.000Z",
+  "claimedAt": "2026-11-02T14:18:00.000Z",
+  "answeredAt": "2026-11-02T14:20:00.000Z",
+  "openedAt": "2026-11-02T14:21:00.000Z",
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T14:20:00.000Z",
+  "unread": false,
+  "progressLine": null,
+  "failure": null,
+  "failureDetail": null,
+  "about": null,
+  "answer": "Stichting Lindeboom schrijft elke maand € 10,00 af van je leefgeldrekening, het laatst op 2 okt.\n\nDie rekening beheer je zelf, dus opzeggen doe je in je bank-app. Een mail aan de stichting heb ik niet klaargezet: er staat geen adres in je dossier.\n\nWil je dat Noordkust het weet? Vraag door, dan zet ik een mail aan Ilse klaar.",
+  "sources": [
+    {
+      "type": "transaction",
+      "id": "00000000-f1c5-4000-8000-700000000001",
+      "why": "De maandelijkse gift.",
+      "label": "Stichting Lindeboom",
+      "meta": [],
+      "at": "2026-10-02T09:00:00.000Z",
+      "inDossier": true,
+      "transaction": {
+        "amountCents": -1000,
+        "bookedAt": "2026-10-02T09:00:00.000Z",
+        "counterparty": "Stichting Lindeboom",
+        "accountIban": "NL00TEST9876543210",
+        "description": "Maandelijkse gift",
+        "mandate": true
+      }
+    },
+    {
+      "type": "transaction",
+      "id": "00000000-f1c5-4000-8000-700000000002",
+      "why": "De maandelijkse gift.",
+      "label": "Stichting Lindeboom",
+      "meta": [],
+      "at": "2026-09-02T09:00:00.000Z",
+      "inDossier": true,
+      "transaction": {
+        "amountCents": -1000,
+        "bookedAt": "2026-09-02T09:00:00.000Z",
+        "counterparty": "Stichting Lindeboom",
+        "accountIban": "NL00TEST9876543210",
+        "description": "Maandelijkse gift",
+        "mandate": true
+      }
+    },
+    {
+      "type": "transaction",
+      "id": "00000000-f1c5-4000-8000-700000000003",
+      "why": "De maandelijkse gift.",
+      "label": "Stichting Lindeboom",
+      "meta": [],
+      "at": "2026-08-02T09:00:00.000Z",
+      "inDossier": true,
+      "transaction": {
+        "amountCents": -1000,
+        "bookedAt": "2026-08-02T09:00:00.000Z",
+        "counterparty": "Stichting Lindeboom",
+        "accountIban": "NL00TEST9876543210",
+        "description": "Maandelijkse gift",
+        "mandate": true
+      }
+    }
+  ],
+  "martinSteps": [
+    "Trek de machtiging in via je bank-app: Incasso’s › Stichting Lindeboom."
+  ],
+  "steps": [
+    {
+      "index": 0,
+      "text": "Trek de machtiging in via je bank-app: Incasso’s › Stichting Lindeboom.",
+      "doneAt": null
+    }
+  ],
+  "proposal": null,
+  "proposalUpdating": false,
+  "progress": null,
+  "thread": [],
+  "followUps": []
+}

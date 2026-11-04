@@ -1,0 +1,80 @@
+{
+  "id": "00000000-f1c5-4000-8000-a00000000009",
+  "rootId": "00000000-f1c5-4000-8000-a00000000008",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4009",
+  "text": "Voeg ook mijn loonstrook van oktober toe.",
+  "status": "working",
+  "title": "Boedelbeschrijving Noordkust",
+  "headline": null,
+  "phase": "updating",
+  "todoReason": null,
+  "doneReason": null,
+  "parentRequestId": "00000000-f1c5-4000-8000-a00000000008",
+  "createdAt": "2026-11-02T13:12:00.000Z",
+  "claimedAt": "2026-11-02T13:12:00.000Z",
+  "answeredAt": null,
+  "openedAt": null,
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T13:12:00.000Z",
+  "unread": false,
+  "progressLine": "leest 1 document",
+  "failure": null,
+  "failureDetail": null,
+  "about": null,
+  "answer": null,
+  "sources": [],
+  "martinSteps": [],
+  "steps": [],
+  "proposal": {
+    "id": "00000000-f1c5-4000-8000-0000000000c1",
+    "status": "pending",
+    "kind": "reply",
+    "priority": "verder",
+    "title": "Antwoord aan Bewindkantoor Noordkust",
+    "to": [
+      "ilse@noordkust.example"
+    ],
+    "subject": "Re: Boedelbeschrijving",
+    "attachmentCount": 2,
+    "sentAt": null
+  },
+  "proposalUpdating": true,
+  "progress": {
+    "calls": 1,
+    "documents": 1,
+    "mails": 0,
+    "liveMail": 0,
+    "line": "leest 1 document",
+    "steps": [
+      {
+        "label": "Leest 1 document",
+        "state": "current"
+      }
+    ]
+  },
+  "thread": [
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000008",
+      "text": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+      "status": "answered",
+      "createdAt": "2026-11-02T13:03:00.000Z",
+      "title": "Boedelbeschrijving Noordkust",
+      "headline": "Er ontbreken twee dingen",
+      "answer": "Ik heb de boedelbeschrijving naast je dossier gelegd. Dit mist Noordkust nog:\n\n• Je huurcontract met Woonstichting Lindehof.\n• De vordering van Kade & Partners: € 420,00, sommatie van 14 okt.\n\nDe rest klopt met wat Noordkust al heeft. Ik heb een antwoord aan Ilse klaargezet, met beide als bijlage.",
+      "proposal": {
+        "id": "00000000-f1c5-4000-8000-0000000000c1",
+        "status": "pending",
+        "kind": "reply",
+        "priority": "verder",
+        "title": "Antwoord aan Bewindkantoor Noordkust",
+        "to": [
+          "ilse@noordkust.example"
+        ],
+        "subject": "Re: Boedelbeschrijving",
+        "attachmentCount": 2,
+        "sentAt": null
+      }
+    }
+  ],
+  "followUps": []
+}

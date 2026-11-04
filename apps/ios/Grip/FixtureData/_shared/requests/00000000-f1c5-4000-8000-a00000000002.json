@@ -1,27 +1,60 @@
 {
   "id": "00000000-f1c5-4000-8000-a00000000002",
-  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4a52",
-  "text": "Welke loonstroken heeft Team Startdossier al van me gekregen?",
+  "rootId": "00000000-f1c5-4000-8000-a00000000002",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4002",
+  "text": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
   "status": "working",
+  "title": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+  "headline": null,
+  "phase": "working",
+  "todoReason": null,
+  "doneReason": null,
   "parentRequestId": null,
-  "createdAt": "2026-11-04T09:58:00.000Z",
-  "claimedAt": "2026-11-04T09:59:00.000Z",
+  "createdAt": "2026-11-02T13:03:00.000Z",
+  "claimedAt": "2026-11-02T13:03:00.000Z",
   "answeredAt": null,
   "openedAt": null,
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T13:03:00.000Z",
   "unread": false,
-  "progressLine": "leest 2 documenten, bekijkt de bankafschriften",
+  "progressLine": "leest 4 documenten, zoekt in Gmail",
   "failure": null,
-  "proposal": null,
-  "about": null,
+  "failureDetail": null,
+  "about": {
+    "type": "mail",
+    "id": "00000000-f1c5-4000-8000-400000000202",
+    "label": "Boedelbeschrijving invullen",
+    "meta": [
+      "Ilse"
+    ],
+    "at": "2026-11-02T07:40:00.000Z"
+  },
   "answer": null,
   "sources": [],
   "martinSteps": [],
+  "steps": [],
+  "proposal": null,
+  "proposalUpdating": false,
   "progress": {
-    "calls": 4,
-    "documents": 2,
+    "calls": 6,
+    "documents": 4,
     "mails": 0,
-    "liveMail": 0,
-    "line": "leest 2 documenten, bekijkt de bankafschriften"
+    "liveMail": 1,
+    "line": "leest 4 documenten, zoekt in Gmail",
+    "steps": [
+      {
+        "label": "Leest 4 documenten",
+        "state": "done"
+      },
+      {
+        "label": "Zoekt in je dossier (mail) · 3 gevonden",
+        "state": "done"
+      },
+      {
+        "label": "Zoekt live in Gmail…",
+        "state": "current"
+      }
+    ]
   },
   "thread": [],
   "followUps": []

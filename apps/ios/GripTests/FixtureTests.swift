@@ -538,11 +538,14 @@ struct FixtureTests {
         #expect(files.count > 20)
         let denied = ["vanderpoel", "martin", "verdergroep", "verder bewind", "verderbewind", "woonhave", "truefullstaq",
                       "regio 3", "stam", "het cak", "plm", "kamer van koophandel", "abn", "loondossier", "saurens",
-                      "almere", "nltz", "gmail"]
+                      "almere", "nltz", "gmail.com"]
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8)
             let lower = text.lowercased()
             // Whole words: the contract's own key `filedByMartin` is not a name.
+            // "Gmail" the product is Vraag Grip's own vocabulary (a source "niet
+            // in je dossier", "zoekt live in Gmail"); a real Gmail ADDRESS is
+            // what must never appear (and every address is `.example`, below).
             for word in denied {
                 let pattern = try Regex("\\b" + NSRegularExpression.escapedPattern(for: word) + "\\b")
                 #expect(!lower.contains(pattern), "\(file.lastPathComponent) mentions \(word)")

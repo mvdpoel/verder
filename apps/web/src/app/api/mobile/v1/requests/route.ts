@@ -3,8 +3,9 @@ import { mobileGet, mobilePost } from "@/lib/mobile-route";
 import { toRequestListItemDTO } from "@/lib/mobile-requests";
 
 /**
- * Vraag Grip. GET: the phone's request list — queued, working, answered not
- * yet opened, and the last week's read answers and failures. POST: a new
+ * Vraag Grip. GET: the phone's request list, ONE ROW PER THREAD — queued,
+ * working, waiting on Martin, then the finished ones of the last 60 days
+ * (Eerdere vragen), each with its `phase`. POST: a new
  * request in Martin's own words, IDEMPOTENT on `clientId` (a retry after a
  * lost response returns the same request), optionally about one item and/or
  * following up an earlier answer. Nothing here researches anything: the host

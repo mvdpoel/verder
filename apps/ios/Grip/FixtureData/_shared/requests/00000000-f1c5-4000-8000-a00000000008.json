@@ -1,0 +1,125 @@
+{
+  "id": "00000000-f1c5-4000-8000-a00000000008",
+  "rootId": "00000000-f1c5-4000-8000-a00000000008",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f4008",
+  "text": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+  "status": "answered",
+  "title": "Boedelbeschrijving Noordkust",
+  "headline": "Er ontbreken twee dingen",
+  "phase": null,
+  "todoReason": null,
+  "doneReason": null,
+  "parentRequestId": null,
+  "createdAt": "2026-11-02T13:03:00.000Z",
+  "claimedAt": "2026-11-02T13:03:00.000Z",
+  "answeredAt": "2026-11-02T13:06:00.000Z",
+  "openedAt": "2026-11-02T13:07:00.000Z",
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T13:06:00.000Z",
+  "unread": false,
+  "progressLine": null,
+  "failure": null,
+  "failureDetail": null,
+  "about": {
+    "type": "mail",
+    "id": "00000000-f1c5-4000-8000-400000000202",
+    "label": "Boedelbeschrijving invullen",
+    "meta": [
+      "Ilse"
+    ],
+    "at": "2026-11-02T07:40:00.000Z"
+  },
+  "answer": "Ik heb de boedelbeschrijving naast je dossier gelegd. Dit mist Noordkust nog:\n\n• Je huurcontract met Woonstichting Lindehof.\n• De vordering van Kade & Partners: € 420,00, sommatie van 14 okt.\n\nDe rest klopt met wat Noordkust al heeft. Ik heb een antwoord aan Ilse klaargezet, met beide als bijlage.",
+  "sources": [
+    {
+      "type": "mail",
+      "id": "00000000-f1c5-4000-8000-400000000202",
+      "why": "Ilse stuurde de boedelbeschrijving om in te vullen.",
+      "label": "Boedelbeschrijving invullen",
+      "meta": [
+        "Mail",
+        "In dossier",
+        "Ilse"
+      ],
+      "at": "2026-11-02T07:40:00.000Z",
+      "inDossier": true
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000304",
+      "why": "Dit huurcontract ontbreekt nog bij Noordkust.",
+      "label": "Huurcontract Lindehof",
+      "meta": [
+        "Dossier",
+        "contract"
+      ],
+      "at": "2025-03-01T09:00:00.000Z",
+      "inDossier": true
+    },
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000106",
+      "why": "De vordering die Noordkust nog niet kent.",
+      "label": "Sommatie Kade & Partners",
+      "meta": [
+        "Dossier",
+        "letter"
+      ],
+      "at": "2026-10-14T09:00:00.000Z",
+      "inDossier": true
+    },
+    {
+      "type": "gmail",
+      "id": "18f2a0c4d5e6f701",
+      "why": "Ilse vroeg eerder om het huurcontract.",
+      "label": "Re: Aanvullende stukken",
+      "meta": [
+        "Gmail",
+        "Niet in je dossier"
+      ],
+      "at": "2026-10-20T08:12:00.000Z",
+      "inDossier": false,
+      "gmail": {
+        "from": "Ilse <ilse@noordkust.example>",
+        "to": "jou",
+        "subject": "Re: Aanvullende stukken",
+        "date": "2026-10-20T08:12:00.000Z",
+        "body": "Beste,\n\nVoor de boedelbeschrijving hebben we nog een kopie van uw huurcontract nodig. Wilt u die samen met de ingevulde lijst terugsturen?\n\nMet vriendelijke groet,\nIlse\nBewindkantoor Noordkust"
+      }
+    }
+  ],
+  "martinSteps": [
+    "Check of je huurcontract van 2025 nog het nieuwste is."
+  ],
+  "steps": [
+    {
+      "index": 0,
+      "text": "Check of je huurcontract van 2025 nog het nieuwste is.",
+      "doneAt": null
+    }
+  ],
+  "proposal": {
+    "id": "00000000-f1c5-4000-8000-0000000000c1",
+    "status": "pending",
+    "kind": "reply",
+    "priority": "verder",
+    "title": "Antwoord aan Bewindkantoor Noordkust",
+    "to": [
+      "ilse@noordkust.example"
+    ],
+    "subject": "Re: Boedelbeschrijving",
+    "attachmentCount": 2,
+    "sentAt": null
+  },
+  "proposalUpdating": false,
+  "progress": null,
+  "thread": [],
+  "followUps": [
+    {
+      "id": "00000000-f1c5-4000-8000-a00000000009",
+      "text": "Voeg ook mijn loonstrook van oktober toe.",
+      "status": "working",
+      "createdAt": "2026-11-02T13:12:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "id": "00000000-f1c5-4000-8000-a0000000000d",
+  "rootId": "00000000-f1c5-4000-8000-a0000000000c",
+  "clientId": "6f0b7c1e-2a3d-4e5f-8a9b-0c1d2e3f400d",
+  "text": "Voeg ook mijn loonstrook van oktober toe.",
+  "status": "answered",
+  "title": "Boedelbeschrijving Noordkust",
+  "headline": "Nieuw bericht klaargezet",
+  "phase": "todo",
+  "todoReason": "unread",
+  "doneReason": null,
+  "parentRequestId": "00000000-f1c5-4000-8000-a0000000000c",
+  "createdAt": "2026-11-02T13:12:00.000Z",
+  "claimedAt": "2026-11-02T13:12:00.000Z",
+  "answeredAt": "2026-11-02T13:13:00.000Z",
+  "openedAt": null,
+  "dismissedAt": null,
+  "updatedAt": "2026-11-02T13:13:00.000Z",
+  "unread": true,
+  "progressLine": null,
+  "failure": null,
+  "failureDetail": null,
+  "about": null,
+  "answer": "Je eerste antwoord aan Ilse is om 14:10 al verstuurd, dus dat pas ik niet meer aan. Ik heb een kort nieuw bericht klaargezet met alleen je loonstrook van oktober.",
+  "sources": [
+    {
+      "type": "document",
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "why": "De loonstrook die je wilde meesturen.",
+      "label": "Loonstrook 2026-10",
+      "meta": [
+        "Dossier",
+        "payslip"
+      ],
+      "at": "2026-10-28T09:00:00.000Z",
+      "inDossier": true
+    }
+  ],
+  "martinSteps": [],
+  "steps": [],
+  "proposal": {
+    "id": "00000000-f1c5-4000-8000-0000000000c4",
+    "status": "pending",
+    "kind": "compose",
+    "priority": "verder",
+    "title": "Aanvulling aan Bewindkantoor Noordkust",
+    "to": [
+      "ilse@noordkust.example"
+    ],
+    "subject": "Re: Boedelbeschrijving",
+    "attachmentCount": 1,
+    "sentAt": null
+  },
+  "proposalUpdating": false,
+  "progress": null,
+  "thread": [
+    {
+      "id": "00000000-f1c5-4000-8000-a0000000000c",
+      "text": "Wat moet ik antwoorden op de boedelbeschrijving van Noordkust? Check de feiten.",
+      "status": "answered",
+      "createdAt": "2026-11-02T13:03:00.000Z",
+      "title": "Boedelbeschrijving Noordkust",
+      "headline": "Er ontbreken twee dingen",
+      "answer": "Ik heb de boedelbeschrijving naast je dossier gelegd. Dit mist Noordkust nog:\n\n• Je huurcontract met Woonstichting Lindehof.\n• De vordering van Kade & Partners: € 420,00, sommatie van 14 okt.\n\nDe rest klopt met wat Noordkust al heeft. Ik heb een antwoord aan Ilse klaargezet, met beide als bijlage.",
+      "proposal": {
+        "id": "00000000-f1c5-4000-8000-0000000000c3",
+        "status": "sent",
+        "kind": "reply",
+        "priority": "verder",
+        "title": "Antwoord aan Bewindkantoor Noordkust",
+        "to": [
+          "ilse@noordkust.example"
+        ],
+        "subject": "Re: Boedelbeschrijving",
+        "attachmentCount": 2,
+        "sentAt": "2026-11-02T13:10:00.000Z"
+      }
+    }
+  ],
+  "followUps": []
+}
