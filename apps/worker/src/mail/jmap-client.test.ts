@@ -176,7 +176,7 @@ describe("JMAP client", () => {
     expect(client.basic("Aladdin", "open sesame").authorization)
       .toBe("Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==");
 
-    const cred = client.basic("verder@vanderpoel.pro", "app-password");
+    const cred = client.basic("grip@vanderpoel.pro", "app-password");
     const s = { apiUrl: "https://x/api", downloadUrl: "https://h/{blobId}", accountId: "a" };
 
     const f = fakeFetch({ methodResponses: [["Email/get", { list: [] }, "c0"]] });
@@ -203,7 +203,7 @@ describe("JMAP client", () => {
   // is legal and must survive verbatim — and the credentials are UTF-8, so a
   // latin1 encode would mangle a non-ASCII password into a 401 nobody can read.
   it("keeps a colon in the app password and encodes the credentials as UTF-8", () => {
-    const user = "verder@vanderpoel.pro";
+    const user = "grip@vanderpoel.pro";
     const pass = "pa:ss:woord-ë-ü-☂";
     const header = client.basic(user, pass).authorization;
     const bytes = Buffer.from(header.slice("Basic ".length), "base64");
@@ -233,7 +233,7 @@ describe("JMAP client", () => {
   // persisted run row is a real leak, and app passwords do not expire.
   it("never leaks the credential into an error message", async () => {
     const pass = "s3cr3t:app-wachtwoord-ë";
-    const cred = client.basic("verder@vanderpoel.pro", pass);
+    const cred = client.basic("grip@vanderpoel.pro", pass);
     const encoded = cred.authorization.slice("Basic ".length);
     const s = { apiUrl: "https://x/api", downloadUrl: "https://h/{blobId}", accountId: "a" };
 

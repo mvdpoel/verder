@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The mail agent, folded into verder (Plan 2 Task 20, spec §6.5). Host crontab,
+# The mail agent, folded into Grip (Plan 2 Task 20, spec §6.5). Host crontab,
 # at the OLD agent's cadence so Gmail sees no new load:
 #   7,22,37,52 * * * * /home/<user>/apps/grip/ops/mail-agent.sh >> /mnt/data/grip/mail-agent/cron.log 2>&1
 #
@@ -8,7 +8,7 @@
 #
 # The watchlist senders (Statiegeld Nederland, Bungas, Tikkie, Hanneke) stay OUT
 # of the dossier: their mail is not ingested, only turned into a proposal Martin
-# approves on the phone. Every reply verder sends still becomes an outbound log
+# approves on the phone. Every reply Grip sends still becomes an outbound log
 # entry (decided by Martin 2026-10-31).
 #
 #   1. the watchlist (and seen.txt, each line prefixed `seen:`) goes to the

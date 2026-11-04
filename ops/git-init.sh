@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Attach the full verder git repo to a working tree that Syncthing synced
+# Attach the full Grip git repo to a working tree that Syncthing synced
 # without its .git (~/Workspace/.stignore excludes .git, node_modules, .next).
 #
 #   ops/git-init.sh [branch]      # branch to check out, default main

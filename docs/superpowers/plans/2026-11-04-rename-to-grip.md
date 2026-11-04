@@ -20,6 +20,8 @@ When in doubt, read the sentence: if it is the thing that runs on the phone/home
 | Message-IDs already sent (`@verder.vanderpoel.pro`) | they are in Verder's mailboxes. NEW mail generates `@grip.vanderpoel.pro`. Gmail replaces it anyway (measured 2026-10-31). |
 | Applied migration files' meaning | drizzle tracks by timestamp, not hash, so old `.sql` files ARE edited to the new role names (a fresh database must build), but no new migration renames tables or values. The database and roles are renamed by an ops step, not a migration. |
 | GCP project id `verder-gmail` | Google project ids cannot be renamed; its display name can. |
+| GCP OAuth client `verder-worker` | a name inside that project that the stored tokens were minted for; renaming buys nothing. |
+| NAS marker `.verder-nas` (`/mnt/nas-workspace/.verder-nas`, `ops/watchdog.sh` `MARKER`, `scanNasFolder`) | a file on the production NAS share that `nas.scan` and the watchdog refuse to run without. Renaming it in code without a matching `touch` on the share stops scanning; it is invisible to every user, so it stays. |
 | Historical specs/plans in `docs/superpowers/` before 2026-11-04 | they are a record of what was decided under the old name. Living docs (CLAUDE.md, README, deploy.md, design-app, the iOS README) are renamed. |
 | `docs/grip/` (pitch videos) | already Grip — no collision, it is the product. |
 

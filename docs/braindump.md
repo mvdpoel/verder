@@ -1,4 +1,4 @@
-# Verder — Project Braindump
+# Grip — Project Braindump (the app was called verder until 2026-11-04)
 
 > Captured 2026-08-17, dictated by Martin. Raw intent — this is the source of truth for the "why"; specs come later.
 

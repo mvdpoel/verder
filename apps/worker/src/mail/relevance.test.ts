@@ -206,9 +206,9 @@ describe("ownMailboxAddresses", () => {
 
   it("includes the JMAP account, whose address is on every message it holds", () => {
     process.env.MAIL_OWN_ADDRESSES = "martin@vanderpoel.pro";
-    process.env.JMAP_USER = "Verder@VanderPoel.pro";
+    process.env.JMAP_USER = "Grip@VanderPoel.pro";
     try {
-      expect(ownMailboxAddresses()).toEqual(["martin@vanderpoel.pro", "verder@vanderpoel.pro"]);
+      expect(ownMailboxAddresses()).toEqual(["martin@vanderpoel.pro", "grip@vanderpoel.pro"]);
     } finally { restore(); }
   });
 
