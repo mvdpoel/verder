@@ -119,7 +119,7 @@ struct FixtureLaunch: Equatable, Sendable {
         var composeDetent: PresentationDetent {
             switch self {
             case .opstellenTypen, .opstellenWeggooien, .opstellenKoppel, .opstellenTekst: .large
-            default: .medium
+            default: RequestComposeSheet.compact
             }
         }
     }

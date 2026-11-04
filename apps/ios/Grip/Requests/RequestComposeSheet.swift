@@ -35,13 +35,18 @@ struct RequestComposeSheet: View {
         #if DEBUG
         let f = FixtureLaunch.current?.vraag.first { $0.isCompose }
         fixture = f
-        _detent = State(initialValue: f?.composeDetent ?? (draft.text.isEmpty ? .medium : .large))
+        _detent = State(initialValue: f?.composeDetent ?? (draft.text.isEmpty ? Self.compact : .large))
         _picking = State(initialValue: f == .opstellenKoppel)
         _confirmingDiscard = State(initialValue: f == .opstellenWeggooien)
         #else
-        _detent = State(initialValue: draft.text.isEmpty ? .medium : .large)
+        _detent = State(initialValue: draft.text.isEmpty ? Self.compact : .large)
         #endif
     }
+
+    /// The short sheet: half the screen, but never shorter than its own
+    /// parts (field, example, actions, footnote) — on an iPhone SE half the
+    /// screen would put the footnote under the fold.
+    static let compact = PresentationDetent.custom(ComposeDetent.self)
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     private var isFollowUp: Bool { draft.parent != nil }
@@ -84,7 +89,7 @@ struct RequestComposeSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDetents([RequestComposeSheet.compact, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.plate)
         .interactiveDismissDisabled(!text.isEmpty)
@@ -172,6 +177,9 @@ struct RequestComposeSheet: View {
             // hidden behind the field's own edge.
             TextField("", text: $text, axis: .vertical)
                 .font(.display(17, relativeTo: .body))
+                // At AX5 a long Dutch compound would break mid-word (a text
+                // field does not hyphenate): one step smaller keeps it whole.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 .foregroundStyle(Color.inkBright)
                 .focused($focused)
                 .padding(.horizontal, 16)
@@ -482,5 +490,11 @@ struct DiscardSheet: View {
             .padding(.bottom, 8)
         }
         .sensoryFeedback(.warning, trigger: true)
+    }
+}
+
+struct ComposeDetent: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        max(context.maxDetentValue * 0.5, min(460, context.maxDetentValue))
     }
 }
