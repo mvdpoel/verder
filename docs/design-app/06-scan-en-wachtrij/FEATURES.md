@@ -14,13 +14,13 @@ Gecontroleerd tegen de code op 2026-11-03, 19:15 CET, branch `feat/iphone-app`. 
 
 **De drie belangrijkste dingen die nog gebouwd moeten worden:**
 
-1. **Een duplex-samenvoeging voor telefoonscans.** De duplexkaart belooft al "verder legt ze samen", met een aftelling, maar alleen NAS-bestanden met de naam `scanNNNN.pdf` worden ooit samengevoegd (`apps/worker/src/duplex.ts`). Een scan van de voorkanten en een scan van de achterkanten vanaf de telefoon blijven twee documenten. Zolang er geen samenvoeging is: bouw die, of lever de belofte van de kaart niet uit.
+1. **Een duplex-samenvoeging voor telefoonscans.** De duplexkaart belooft al "Grip legt ze samen", met een aftelling, maar alleen NAS-bestanden met de naam `scanNNNN.pdf` worden ooit samengevoegd (`apps/worker/src/duplex.ts`). Een scan van de voorkanten en een scan van de achterkanten vanaf de telefoon blijven twee documenten. Zolang er geen samenvoeging is: bouw die, of lever de belofte van de kaart niet uit.
 2. **Een plek voor de notitie ("Iets bijzonders?") op de server.** De telefoon bewaart de notitie en stuurt die mee als formulierveld `note`, maar `POST /api/mobile/v1/documents` negeert het en `documents` heeft er geen kolom voor, dus elke notitie die Martin schrijft gaat bij aankomst verloren. Er is ook een manier nodig om na de upload een notitie toe te voegen, want de chip verdwijnt zodra de scan verstuurd is, en online is dat een kwestie van seconden.
 3. **De bediening in het Bedieningspaneel en de Actieknop "Scan een brief"** (brief R20, de "1 + pagina's"-flow uit de brief). Daarvoor zijn een App Intent en een `ControlWidget` in de widgetextensie nodig. Vandaag bestaat alleen de snelle actie op het beginscherm, en die alleen in de working tree.
 
 ---
 
-Het tabblad Scan is de weg waarlangs een papieren brief in het dossier komt: fotografeer hem met de telefoon, en verder schoont de pagina's op, bundelt ze tot één PDF en stuurt die op de achtergrond naar de server. De uploadwachtrij is het eigen overzicht van de telefoon van wat onderweg is, wat is aangekomen en wat is mislukt. Alleen Martin gebruikt de app.
+Het tabblad Scan is de weg waarlangs een papieren brief in het dossier komt: fotografeer hem met de telefoon, en Grip schoont de pagina's op, bundelt ze tot één PDF en stuurt die op de achtergrond naar de server. De uploadwachtrij is het eigen overzicht van de telefoon van wat onderweg is, wat is aangekomen en wat is mislukt. Alleen Martin gebruikt de app.
 
 Dit document beschrijft wat deze schermen doen, ontworpen en gebouwd, en vermeldt per functie hoe ver de code is. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectie `scan · final`, node `305:2`. De frames in `frames/` zijn op 2026-11-03 opnieuw uit die sectie geëxporteerd, nadat de tabbalk centraal was gerepareerd. Elke schermafbeelding gebruikt de synthetische fixture-dataset, geen echte dossiergegevens. UI-teksten worden in het Nederlands geciteerd, precies zoals de app ze toont (of, voor een functie die nog niet gebouwd is, zoals het frame ze toont).
 
@@ -72,11 +72,11 @@ Druk lang op het app-icoon, kies "Scan een brief", en de camera opent meteen, zo
 
 Een bediening in het Bedieningspaneel die de camera op Scan direct opent, zonder Face ID (brief §3 Scan-rij, R20; frame `Scan_snelstart`, sectie "Bedieningspaneel").
 
-**Status:** Nog te bouwen — nodig zijn een App Intent die de app op `.scan` met de camera opent (een `OpenIntent` of een intent die `DeepLink.scan` binnen het proces aflevert, want verder registreert geen URL-schema), een `ControlWidget` in de `GripWidget`-extensie, en een test dat de intent op de cameralink uitkomt. Het commentaar bij `DeepLink.scan` in de working tree noemt deze bediening al, maar er staat nergens in `apps/ios` een `AppIntent` of `ControlWidget`.
+**Status:** Nog te bouwen — nodig zijn een App Intent die de app op `.scan` met de camera opent (een `OpenIntent` of een intent die `DeepLink.scan` binnen het proces aflevert, want Grip registreert geen URL-schema), een `ControlWidget` in de `GripWidget`-extensie, en een test dat de intent op de cameralink uitkomt. Het commentaar bij `DeepLink.scan` in de working tree noemt deze bediening al, maar er staat nergens in `apps/ios` een `AppIntent` of `ControlWidget`.
 
-#### Actieknop "verder: Scan een brief"
+#### Actieknop "Grip: Scan een brief"
 
-De Actieknop, gekoppeld aan de scan van verder, opent de camera direct (brief R20; frame `Scan_snelstart`, sectie "Actieknop").
+De Actieknop, gekoppeld aan de scan van Grip, opent de camera direct (brief R20; frame `Scan_snelstart`, sectie "Actieknop").
 
 **Status:** Nog te bouwen — dezelfde App Intent als voor het Bedieningspaneel, aangeboden als App Shortcut zodat die onder Instellingen → Actieknop te kiezen is. Er is geen serverwerk voor nodig.
 
@@ -122,7 +122,7 @@ De camera is VisionKits `VNDocumentCameraViewController` (`DocumentCamera.swift`
 
 #### Uitleg vóór de cameravraag
 
-Bij het eerste gebruik, vóór de eigen melding van iOS, legt één scherm uit waarom: "Brieven scannen", "verder gebruikt de camera om brieven voor je dossier te scannen.", twee beloftes ("De camera gaat alleen aan als jij op scannen tikt.", "Scannen werkt ook zonder Face ID en zonder verbinding."), en één knop "Ga verder" met daaronder "Daarna vraagt iOS om toestemming.". Het heeft geen sluitknop en kan niet weggeveegd worden (brief R25). Na de tik volgt de melding van iOS; als Martin toestemming geeft, opent de camera. De gebruiksomschrijving is nu "verder gebruikt de camera om brieven voor je dossier te scannen."
+Bij het eerste gebruik, vóór de eigen melding van iOS, legt één scherm uit waarom: "Brieven scannen", "Grip gebruikt de camera om brieven voor je dossier te scannen.", twee beloftes ("De camera gaat alleen aan als jij op scannen tikt.", "Scannen werkt ook zonder Face ID en zonder verbinding."), en één knop "Ga verder" met daaronder "Daarna vraagt iOS om toestemming.". Het heeft geen sluitknop en kan niet weggeveegd worden (brief R25). Na de tik volgt de melding van iOS; als Martin toestemming geeft, opent de camera. De gebruiksomschrijving is nu "Grip gebruikt de camera om brieven voor je dossier te scannen."
 
 **Status:** Deels gebouwd — alleen in de working tree (`Scan/ScanPermissionViews.swift` `CameraPrePrompt`, `Scan/CameraAccess.swift`, `project.yml`). Niet getest, niet op de telefoon gezien. Op een telefoon die de HEAD-build al cameratoegang gaf, verschijnt het nooit.
 
@@ -130,7 +130,7 @@ Bij het eerste gebruik, vóór de eigen melding van iOS, legt één scherm uit w
 
 #### Camera geweigerd
 
-Als de camera uit staat voor verder, vervangt het tabblad de schijf door "De camera staat uit voor verder", "Zet hem aan in Instellingen → verder → Camera. Daarna kun je meteen scannen." en een knop "Open Instellingen" die de pagina van verder in Instellingen opent. De wachtrijregel blijft staan, zodat wachtende scans zichtbaar blijven.
+Als de camera uit staat voor Grip, vervangt het tabblad de schijf door "De camera staat uit voor Grip", "Zet hem aan in Instellingen → Grip → Camera. Daarna kun je meteen scannen." en een knop "Open Instellingen" die de pagina van Grip in Instellingen opent. De wachtrijregel blijft staan, zodat wachtende scans zichtbaar blijven.
 
 **Status:** Deels gebouwd — alleen in de working tree (`ScanPermissionViews.swift` `CameraDenied`). De toestand wordt gelezen bij verschijnen en bij een tik op de schijf, niet wanneer de app terugkomt uit Instellingen, dus nadat Martin de camera heeft aangezet, ziet hij mogelijk het weigerscherm tot hij van tabblad wisselt. Niet getest.
 
@@ -194,7 +194,7 @@ Spec §7.1 vraagt om vouwen en krul glad te trekken voordat de PDF wordt gebouwd
 
 #### Gebundeld buiten de main thread, en opengehouden
 
-Het werk draait in een losgekoppelde taak binnen een `beginBackgroundTask("verder.scan")`, zodat een brief die gefotografeerd wordt vlak voordat de telefoon in de zak gaat, toch de wachtrij bereikt. Zolang het loopt, telt de opname als onderweg (`preparing`). Het aantal pagina's wordt bij het item bewaard ("2 pagina's"), en de bestandsgrootte ook.
+Het werk draait in een losgekoppelde taak binnen een `beginBackgroundTask("grip.scan")`, zodat een brief die gefotografeerd wordt vlak voordat de telefoon in de zak gaat, toch de wachtrij bereikt. Zolang het loopt, telt de opname als onderweg (`preparing`). Het aantal pagina's wordt bij het item bewaard ("2 pagina's"), en de bestandsgrootte ook.
 
 **Status:** Gebouwd (`Upload/UploadCenter.swift` `capture`). Aantal pagina's en grootte per item staan alleen in de working tree (`UploadItem.pages`, `byteCount`).
 
@@ -263,7 +263,7 @@ Zolang er 3 of meer scans onderweg zijn, toont een Live Activity op het toegangs
 
 Een tik op de wachtrijregel opent "Wachtrij", een sheet over de volle hoogte met "Klaar" rechtsboven. Secties in de volgorde waarin Martin erop handelt:
 
-- **"NIET VERSTUURD · N"**: elke rij toont "Scan 11:05 · 1 pagina", de reden in mono ("GEEN ANTWOORD", "NIET AANGENOMEN", "BESTAND ONTBREEKT"), een toelichting ("Staat veilig op dit toestel. Tik Opnieuw proberen om het nog eens te versturen.", of voor een geweigerd bestand "verder nam dit bestand niet aan. Opnieuw proberen stuurt het nog eens.") en een eigen "Opnieuw proberen";
+- **"NIET VERSTUURD · N"**: elke rij toont "Scan 11:05 · 1 pagina", de reden in mono ("GEEN ANTWOORD", "NIET AANGENOMEN", "BESTAND ONTBREEKT"), een toelichting ("Staat veilig op dit toestel. Tik Opnieuw proberen om het nog eens te versturen.", of voor een geweigerd bestand "Grip nam dit bestand niet aan. Opnieuw proberen stuurt het nog eens.") en een eigen "Opnieuw proberen";
 - **"WORDT VERSTUURD · N"**, met de bestandsgrootte ("1,4 MB"); of, wanneer versturen is opgeschort, **"WACHT OP VERBINDING · N"** of **"WACHT OP INLOGGEN · N"** met "Staat veilig op dit toestel" op elke rij, en "Opnieuw inloggen" naast de titel van de inlogsectie;
 - **"VERSTUURD VANDAAG · N"** (de Amsterdamse kalenderdag): de eerste twee rijen, "Verstuurd 13:11 · in Dossier", daarna "Toon alle N".
 
@@ -327,7 +327,7 @@ Spec §7.1 staat na een scan één optionele, niet-blokkerende chip toe, "Iets b
 
 #### De duplexkaart
 
-Onder de schijf staat één instructie: "DUBBELZIJDIG" — "Draai de stapel om over de lange kant en scan binnen 10 minuten de achterkanten. verder legt ze samen." Binnen 10 minuten na een telefoonscan wordt het een aftelling, "DUBBELZIJDIG · NOG 8 MIN" — "Achterkanten van deze brief? Draai de stapel om over de lange kant en scan ze nu. verder legt ze samen." Het scherm leest elke 30 s opnieuw in, zodat de minuten vanzelf verspringen.
+Onder de schijf staat één instructie: "DUBBELZIJDIG" — "Draai de stapel om over de lange kant en scan binnen 10 minuten de achterkanten. Grip legt ze samen." Binnen 10 minuten na een telefoonscan wordt het een aftelling, "DUBBELZIJDIG · NOG 8 MIN" — "Achterkanten van deze brief? Draai de stapel om over de lange kant en scan ze nu. Grip legt ze samen." Het scherm leest elke 30 s opnieuw in, zodat de minuten vanzelf verspringen.
 
 **Status:** Deels gebouwd — de kaart en de aftelling staan in de working tree (`ScanScreen.duplex`, `DuplexCard`), maar **de belofte is vandaag onwaar**: niets voegt telefoonscans samen (volgende functie). Niet getest.
 
@@ -406,13 +406,13 @@ De uploadroute zet niets in een queue (de web-app heeft geen pg-boss-verbinding)
 
 #### Naam
 
-Auto-name kan het hernoemen (bijvoorbeeld van `Scan 2026-10-28 14.05.pdf` naar een beschrijvende naam). Die hernoeming is een eigen wijziging van verder: een `document_status_changes`-rij met `actor = 'verder'` plus een `document.updated`-ledger-event, vermeld onder "Door verder gedaan" en teruggedraaid met `normalize-names --undo`.
+Auto-name kan het hernoemen (bijvoorbeeld van `Scan 2026-10-28 14.05.pdf` naar een beschrijvende naam). Die hernoeming is een eigen wijziging van Grip: een `document_status_changes`-rij met `actor = 'verder'` plus een `document.updated`-ledger-event, vermeld onder "Door Grip gedaan" en teruggedraaid met `normalize-names --undo`.
 
 **Status:** Gebouwd (`apps/worker/src/auto-name.ts`, `auto-name.test.ts`).
 
 #### Soort, en zelf archiveren
 
-Er verschijnt een document-meta-**suggestie** (soort en titel) in Voor jou. Het is alleen een suggestie; als de Ollama-aanroep van 120 s een time-out krijgt, is het een `needs-manual`-suggestie zonder soort. Met de archiveringsuitzondering zou verder het zelf mogen archiveren wanneer de drempel in `auto-file.ts` gehaald wordt.
+Er verschijnt een document-meta-**suggestie** (soort en titel) in Voor jou. Het is alleen een suggestie; als de Ollama-aanroep van 120 s een time-out krijgt, is het een `needs-manual`-suggestie zonder soort. Met de archiveringsuitzondering zou Grip het zelf mogen archiveren wanneer de drempel in `auto-file.ts` gehaald wordt.
 
 **Status:** Deels gebouwd — de suggestie is gebouwd; automatisch archiveren bestaat in `apps/worker/src/auto-file.ts` maar **wordt uitgeschakeld uitgeleverd**: `DOCMETA_AUTO_APPLY` is in productie niet gezet, omdat er nog geen beslisgeschiedenis is om de drempel op te baseren (zie CLAUDE.md, eval baselines). Daarvoor zijn ongeveer 40 beoordeelde document-meta-suggesties en de eval-run nodig, geen code.
 
@@ -456,13 +456,13 @@ Scan en de wachtrij zijn bereikbaar terwijl de app vergrendeld is, bewust (plan 
 
 `apps/ios/GripShare/ShareViewController.swift` (spec §7.8, plan 3 Task 22). PDF's, foto's en andere bestanden die vanuit een willekeurige app gedeeld worden, gaan naar hetzelfde endpoint met bron `phone-share`. In het kort:
 
-- één scherm "Naar verder" met "Annuleren" en "Versturen"; tot 10 items, maximaal 48 MB per bestand ("Dit is te groot voor verder (max. 48 MB per bestand).");
+- één scherm "Naar Grip" met "Annuleren" en "Versturen"; tot 10 items, maximaal 48 MB per bestand ("Dit is te groot voor Grip (max. 48 MB per bestand).");
 - foto's worden één verkleinde PDF, pagina voor pagina gebouwd zodat de extensie onder haar geheugengrens van ~120 MB blijft;
 - de extensie schrijft nooit `queue.json`. Ze laat een drop achter in `<group>/uploads/incoming/` (eerst de bytes, als laatste de beschrijving), doet **één** begrensde poging op de voorgrond voor drops tot 8 MB (20 s in totaal), en schrijft `<uuid>.sent` alleen bij een echte 2xx. De app importeert drops bij elk opstarten en elke activering zolang er ingelogd is (`UploadCenter.start` → `importIncoming`, idempotent); de UUID van de drop wordt de `clientId`, zodat de twee wegen nooit twee documenten kunnen opleveren;
-- uitkomsten: "Staat in je dossier." of "Bewaard. Het gaat mee zodra je verder opent.";
+- uitkomsten: "Staat in je dossier." of "Bewaard. Het gaat mee zodra je Grip opent.";
 - gedeelde items verschijnen in de Wachtrij onder hun eigen bestandsnaam.
 
-**Status:** Gebouwd (`GripShare/`, `Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, tests `IncomingDropTests`, `ShareModelTests`, `PhotoPageTests`). De optionele notitie van één regel is **uitgesteld** om dezelfde reden als de scannotitie. Volledige beschrijving: `../15-delen-naar-verder/FEATURES.md`.
+**Status:** Gebouwd (`GripShare/`, `Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, tests `IncomingDropTests`, `ShareModelTests`, `PhotoPageTests`). De optionele notitie van één regel is **uitgesteld** om dezelfde reden als de scannotitie. Volledige beschrijving: `../15-delen-naar-grip/FEATURES.md`.
 
 ### Opnieuw versturen voor ontwikkelaars (Meer → Ontwikkelaar)
 
@@ -503,7 +503,7 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 | Eerste bezoek | "Nog geen scans — scan je eerste brief", geen wachtrijregel | Deels gebouwd (working tree) |
 | Rust | "Scan een brief" + uitleg, duplexkaart | Deels gebouwd (working tree); HEAD: de camera opent meteen, daarna één knop |
 | Camera nog nooit gevraagd | Uitleg "Brieven scannen" · "Ga verder", daarna de melding van iOS | Deels gebouwd (working tree); HEAD: alleen de melding van iOS |
-| Camera geweigerd | "De camera staat uit voor verder" · "Open Instellingen" | Deels gebouwd (working tree); HEAD: geen eigen scherm |
+| Camera geweigerd | "De camera staat uit voor Grip" · "Open Instellingen" | Deels gebouwd (working tree); HEAD: geen eigen scherm |
 | Camera open | De documentcamera van VisionKit | Gebouwd |
 | Overdracht | De pagina krimpt de wachtrijregel in | Deels gebouwd (working tree) |
 | Net gescand (< 10 min) | Notitiechip, "Volgende brief scannen", duplex-aftelling | Deels gebouwd (working tree; de samenvoeging zelf is Nog te bouwen) |
@@ -535,7 +535,7 @@ Onder 600 pt hoogte krimpt de schijf (168 → 148) en wordt de witruimte krapper
 ## De regels die het volgt
 
 - **Bewijs is append-only.** Een upload voegt precies één `document.ingested`-event toe, of geen als het een duplicaat is. Gemeten: de eerste echte scan bracht de ledger van 548 → 549; opnieuw versturen met dezelfde `clientId` liet hem op 549. Een scan in de wachtrij verwijderen raakt alleen de telefoon, want er heeft nog niets het dossier bereikt. Een duplex-samenvoeging van telefoonscans moet vóór `document.ingested` gebeuren, nooit erna.
-- **AI-uitvoer is een suggestie.** De soort en titel die terugkomen zijn een document-meta-suggestie in Voor jou. De hernoeming door auto-name is van verder zelf, in de ledger vastgelegd met `actor = 'verder'` en vermeld onder "Door verder gedaan". Automatisch archiveren (de archiveringsuitzondering) staat in productie uit.
+- **AI-uitvoer is een suggestie.** De soort en titel die terugkomen zijn een document-meta-suggestie in Voor jou. De hernoeming door auto-name is van Grip zelf, in de ledger vastgelegd met `actor = 'verder'` en vermeld onder "Door Grip gedaan". Automatisch archiveren (de archiveringsuitzondering) staat in productie uit.
 - **Niets wordt verstuurd zonder Martins goedkeuring.** Een gescande brief van Verder kan leiden tot een uitgewerkt antwoord, nooit tot een verstuurd antwoord.
 - **Amber alleen voor wat op Martin wacht.** Niets op het tabblad Scan is amber: niet de wachtrijregel, niet "Niet verstuurd", niet "Opnieuw inloggen".
 

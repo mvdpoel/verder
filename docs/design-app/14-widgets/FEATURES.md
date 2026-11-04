@@ -14,7 +14,7 @@ Wat nog openstaat:
 2. **De Live Activity voor drie of meer uploads** (F48): nog te bouwen.
 3. **Server-ingekorte titels** (`widgetTitle`, `widgetHeadline` uit het ontwerp, ≤ 300 / 314 pt gemeten): de server stuurt ze niet; de widget tekent de volledige titel in maximaal twee regels en VoiceOver leest hem helemaal.
 
-Dit document beschrijft wat de widget van verder doet: wat hij toont, waar hij zijn gegevens vandaan haalt, wat hij verbergt en waar een tik naartoe leidt. Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `widgets · final` (node 347:16197) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
+Dit document beschrijft wat de widget van Grip doet: wat hij toont, waar hij zijn gegevens vandaan haalt, wat hij verbergt en waar een tik naartoe leidt. Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `widgets · final` (node 347:16197) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
 
 Twee woorden worden in dit document zorgvuldig gebruikt:
 
@@ -33,7 +33,7 @@ De widget beantwoordt één vraag zonder dat de app open hoeft: **"Hoeveel wacht
 - **Toegangsscherm** (rond, rechthoek, regel): **alleen aantallen, nooit een titel.**
 - **StandBy:** links de kleine "Voor jou" in zijn eigen StandBy-compositie, rechts de tweede widget "Waar het nu op wacht" (zie de sectie StandBy hieronder).
 
-Het aantal is het eigen getal van de server. Het komt uit de ene definitie van "wacht op Martin" in `packages/api/src/waiting.ts`. Die definitie (`loadWaiting`) omvat openstaande voorstellen (vragen zijn ook voorstellen; voorstellen die worden opgesteld, zijn goedgekeurd of worden verzonden wachten op verder, niet op Martin), openstaande en needs-manual suggesties (niet bij een weggegooid of definitief verwijderd document), open taken en taken in uitvoering, en de huidige open halte van de kaart, tenzij de taak daarvan al in de lijst staat. De Voor jou-lijst, de badge op het app-icoon, de widget en "wacht op jou · N" op het webdashboard lezen allemaal die ene definitie: `count` is de lengte van de lijst zelf (`inbox.list` / `inbox.count`, en `countWaiting` in de worker), nooit een tweede SQL-telling. Het aantal in de widget en de Voor jou-lijst komen uit dezelfde fetch, dus de widget kan nooit 4 zeggen terwijl de lijst er 3 toont (`InboxStore.swift`, `/api/mobile/v1/inbox`).
+Het aantal is het eigen getal van de server. Het komt uit de ene definitie van "wacht op Martin" in `packages/api/src/waiting.ts`. Die definitie (`loadWaiting`) omvat openstaande voorstellen (vragen zijn ook voorstellen; voorstellen die worden opgesteld, zijn goedgekeurd of worden verzonden wachten op Grip, niet op Martin), openstaande en needs-manual suggesties (niet bij een weggegooid of definitief verwijderd document), open taken en taken in uitvoering, en de huidige open halte van de kaart, tenzij de taak daarvan al in de lijst staat. De Voor jou-lijst, de badge op het app-icoon, de widget en "wacht op jou · N" op het webdashboard lezen allemaal die ene definitie: `count` is de lengte van de lijst zelf (`inbox.list` / `inbox.count`, en `countWaiting` in de worker), nooit een tweede SQL-telling. Het aantal in de widget en de Voor jou-lijst komen uit dezelfde fetch, dus de widget kan nooit 4 zeggen terwijl de lijst er 3 toont (`InboxStore.swift`, `/api/mobile/v1/inbox`).
 
 ![Beginscherm, volle kleur: kleine en middelgrote widget](frames/Widgets_thuis_volle_kleur.jpg)
 
@@ -92,7 +92,7 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **F15. Toegangsscherm, rechthoek: het aantal, het onderschrift en "oudste N dagen".**
 **Status:** Gebouwd — `WidgetRectangular`.
 
-**F16. Toegangsscherm, regel: "verder · 3 voor jou" / "verder · niets voor jou".**
+**F16. Toegangsscherm, regel: "Grip · 3 voor jou" / "Grip · niets voor jou".**
 **Status:** Gebouwd — `WidgetContent.make` (`inlineText`).
 
 **F17. Enkelvoud en meervoud.** Het onderschrift luidt "wacht op jou" bij 1 en anders "wachten op jou".
@@ -117,22 +117,22 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **F22. Wachtend, in elke weergavemodus.** In volle kleur zijn het aantal en de stip amber. In getinte, heldere en toegangsschermweergave is er geen amber: het aantal is `.widgetAccentable()` en de woorden dragen de betekenis.
 **Status:** Gebouwd — `WidgetContent.countIsAmber`, `CountBlock`, `Masthead`; tests `amberOnlyInFullColor` en `everyFamilyPaintsItsWords`.
 
-**F23. Leeg: er wacht niets.** Het ontwerp toont een vinkje met "Niets wacht op je" en, op middel en groot, de aanmoedigende regel "Goed bezig. verder laat het weten zodra er iets binnenkomt.". Het toont geen "0".
+**F23. Leeg: er wacht niets.** Het ontwerp toont een vinkje met "Niets wacht op je" en, op middel en groot, de aanmoedigende regel "Goed bezig. Grip laat het weten zodra er iets binnenkomt.". Het toont geen "0".
 **Status:** Gebouwd — vinkje (`okay`), "Niets wacht op je" en op middel en groot de aanmoedigende regel; geen "0". Tests `zeroCountIsNotAmber`, `emptySaysWhenItLastLooked`.
 
 **F24. Groot, leeg: de voettekst beantwoordt nog steeds "waar het nu op wacht".** Als er niets wacht, luidt die "Nergens op. Je bent helemaal bij.".
 **Status:** Gebouwd — de voettekst zegt "Nergens op. Je bent helemaal bij." (niet gevoelig). De open halte telt mee in "wacht op Martin", dus bij 0 is er geen; mocht de snapshot toch een headline dragen, dan toont de voettekst die.
 
-**F25. Verouderd: helemaal geen aantal.** Zonder snapshot, bij een bestand dat niet decodeert, of bij een snapshot van 24 uur of ouder toont de widget een verversingssymbool en "Open verder om bij te werken".
-**Status:** Gebouwd — "oud" (rond) en "verder · open de app" (regel), zoals het ontwerp; test `staleSnapshotSaysOpenApp`.
+**F25. Verouderd: helemaal geen aantal.** Zonder snapshot, bij een bestand dat niet decodeert, of bij een snapshot van 24 uur of ouder toont de widget een verversingssymbool en "Open Grip om bij te werken".
+**Status:** Gebouwd — "oud" (rond) en "Grip · open de app" (regel), zoals het ontwerp; test `staleSnapshotSaysOpenApp`.
 
 **F26. Tijd "bijgewerkt".** Lege en verouderde weergaven zeggen wanneer de snapshot is geschreven: "bijgewerkt 08:12" voor vandaag, "bijgewerkt 31 okt" of "laatst bijgewerkt za 31 okt 14:02" voor oudere. De grote lege weergave toont het in de kop.
 **Status:** Gebouwd — `DutchDate.updated`/`full` in Amsterdamse tijd; klein, middel, groot (kop of voettekst), rechthoek en StandBy. Zonder bestand blijft de regel weg. Tests `emptySaysWhenItLastLooked`, `staleSaysWhenItWasLastTrue`, `noSnapshotIsStale`.
 
-**F27. De uitlegregel bij verouderd, "verder toont bewust geen oud aantal."** Op middel zegt die waarom er geen aantal staat.
+**F27. De uitlegregel bij verouderd, "Grip toont bewust geen oud aantal."** Op middel zegt die waarom er geen aantal staat.
 **Status:** Gebouwd — `WidgetContent.body` op middel en groot.
 
-**F28. Afgemeld.** Na afmelden of een verlopen sessie zegt de widget "Log in bij verder". Klein toont "tik en log in". Middel toont "Open verder om je lijst te zien." en "afgemeld · niets bewaard op dit toestel". Het toegangsscherm toont "log in" en "verder · log in". StandBy toont hetzelfde in een eigen weergave. Een tik opent het inlogscherm.
+**F28. Afgemeld.** Na afmelden of een verlopen sessie zegt de widget "Log in bij Grip". Klein toont "tik en log in". Middel toont "Open Grip om je lijst te zien." en "afgemeld · niets bewaard op dit toestel". Het toegangsscherm toont "log in" en "Grip · log in". StandBy toont hetzelfde in een eigen weergave. Een tik opent het inlogscherm.
 **Status:** Gebouwd — `WidgetSnapshot.erase` laat een LEEG bestand `widget/signed-out` achter (alle afmeldpaden gaan erlangs), `write` haalt het weg; `WidgetContent.State.signedOut` voor alle zes families en StandBy. Tests `theSignedOutMarkerIsEmpty`, `signedOutSaysLogInAndHoldsNothing`. Een tik opent de app, die zelf het inlogscherm toont.
 
 **F29. Gewist bij afmelden en bij elke geweigerde sessie.** De snapshot wordt gewist, de widget herladen en de badge op 0 gezet.
@@ -213,10 +213,10 @@ De brief plaatst deze twee op andere schermen (Scan en Upload-wachtrij). Ze staa
 
 **De widget toevoegen.** iOS voegt widgets toe; de app kan dat niet. De app legt uit hoe in **Meer → "Widgets toevoegen"** (`WidgetGuideScreen`, tekst in `WidgetGuide` in `Grip/More/MoreMenu.swift`):
 
-- **"Op je beginscherm"**: "Houd je vinger op een lege plek van je beginscherm tot de apps bewegen." → "Tik op Wijzig en kies Voeg widget toe." → "Zoek verder en kies een formaat." → "Tik op Voeg widget toe en zet hem waar je wilt."
-- **"Op je toegangsscherm"**: "Houd je vinger op je toegangsscherm en tik op Pas aan." → "Kies Toegangsscherm en tik op het vak onder de klok." → "Kies verder."
+- **"Op je beginscherm"**: "Houd je vinger op een lege plek van je beginscherm tot de apps bewegen." → "Tik op Wijzig en kies Voeg widget toe." → "Zoek Grip en kies een formaat." → "Tik op Voeg widget toe en zet hem waar je wilt."
+- **"Op je toegangsscherm"**: "Houd je vinger op je toegangsscherm en tik op Pas aan." → "Kies Toegangsscherm en tik op het vak onder de klok." → "Kies Grip."
 - **"Formaten"**: één regel per formaat (Klein, Middel, Groot, Rond, Rechthoek, Regel). Deze uitleg is de samenvatting in de app van de familietabel hieronder.
-- De privacyregel: "Op je toegangsscherm toont verder nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is."
+- De privacyregel: "Op je toegangsscherm toont Grip nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is."
 
 De widgetgalerij toont hem als **"Voor jou"**, met de beschrijving "Hoeveel er op je wacht. Op het toegangsscherm nooit titels." (`GripWidget.swift`, kind `pro.vanderpoel.grip.waiting`).
 
@@ -231,7 +231,7 @@ De widgetgalerij toont hem als **"Voor jou"**, met de beschrijving "Hoeveel er o
 | Een rij voor een kaarthalte, een onbekende soort, of een id die geen UUID is | `grip://inbox`. Een link zonder UUID zou anders een tik zijn die niets doet. |
 | De voettekst "waar het nu op wacht" van de grote widget | Voor jou. De voettekst is geen eigen `Link`, dus de URL van de hele widget geldt. |
 
-- **Er is geen URL-scheme geregistreerd.** verder registreert geen `grip://`-scheme, dus geen webpagina of andere app kan een van deze links activeren. De `widgetURL` en `Link`s van de widget bereiken `RootView.onOpenURL` omdat een widget altijd zijn eigen bovenliggende app kan openen. Plan 3 Task 23 Step 3 vroeg om die aflevering op het toestel te controleren. Die stap staat in het plan nog open, dus dit document beweert niet dat het gemeten is.
+- **Er is geen URL-scheme geregistreerd.** Grip registreert geen `grip://`-scheme, dus geen webpagina of andere app kan een van deze links activeren. De `widgetURL` en `Link`s van de widget bereiken `RootView.onOpenURL` omdat een widget altijd zijn eigen bovenliggende app kan openen. Plan 3 Task 23 Step 3 vroeg om die aflevering op het toestel te controleren. Die stap staat in het plan nog open, dus dit document beweert niet dat het gemeten is.
 - **De app-vergrendeling blijft gelden.** De doeltabbladen staan achter de vergrendeling, dus het item waar een link naar wijst, verschijnt pas na Face ID (`RootView.swift`: "what the link points at shows only after unlock"). De widget omzeilt de app-vergrendeling nooit.
 
 **Ontwerp versus code:** het ontwerp annoteert de voettekst van de grote widget als "footer link → Dossier". In de code opent die Voor jou.
@@ -251,7 +251,7 @@ Al deze beslissingen zitten in `WidgetContent.make` in `Grip/Widget/WidgetConten
 | `systemLarge` ("Groot") | Kop met "oudste N dagen", het aantal en zijn woorden op één regel, vijf rijen van één regel (soort naast de titel), en "waar het nu op wacht" + de headline als vaste voettekst | 5 | ja | ja |
 | `accessoryCircular` ("Rond") | Aantal + "voor jou" | 0 | nee | nee |
 | `accessoryRectangular` ("Rechthoek") | Aantal + onderschrift; "oudste N dagen" eronder | 0 | nee | ja |
-| `accessoryInline` ("Regel") | "verder · 3 voor jou" | 0 | nee | nee |
+| `accessoryInline` ("Regel") | "Grip · 3 voor jou" | 0 | nee | nee |
 
 Details die voor alle families gelden:
 
@@ -271,7 +271,7 @@ Details die voor alle families gelden:
 **Wat de snapshot schrijft.** Alleen de app schrijft hem, in `InboxStore.refresh()`:
 
 1. De app haalt `GET /api/mobile/v1/inbox` en `GET /api/mobile/v1/dashboard/summary` naast elkaar op en stuurt daarbij de sessiecookie mee.
-   - De inbox-route geeft `inbox.list()` en `verderActions.list({ sinceDays: 7 })` terug. `count` is de lengte van de lijst zelf.
+   - De inbox-route geeft `inbox.list()` en `gripActions.list({ sinceDays: 7 })` terug. `count` is de lengte van de lijst zelf.
    - De samenvattingsroute geeft `tracks.map()` (de headline), `tasks.stats()` en `inbox.count()` terug.
 2. Als het ophalen van de inbox slaagt, schrijft de app:
    - `count`;
@@ -301,7 +301,7 @@ Details die voor alle families gelden:
 
 ### Wachtend (verse snapshot, aantal > 0)
 
-- **Volle kleur:** het aantal is amber, met een amberen stip naast "verder".
+- **Volle kleur:** het aantal is amber, met een amberen stip naast "Grip".
 - **Getint (`.accented`), helder en toegangsscherm (`.vibrant`):** geen amber. Het aantal hoort bij de accentgroep (`.widgetAccentable()`), en de woorden "wacht op jou" dragen de betekenis. **Amber is nooit de enige drager van betekenis** (`amberOnlyInFullColor`, `everyFamilyPaintsItsWords`).
 
 | Getint | Helder |
@@ -314,22 +314,22 @@ Details die voor alle families gelden:
 
 ### Leeg (verse snapshot, aantal 0)
 
-- **Code:** het aantal luidt "0" met "Niets wacht op je." Het is nooit amber. De regelfamilie luidt "verder · niets voor jou".
-- **Ontwerp versus code:** het ontwerp voegt "Goed bezig. verder laat het weten zodra er iets binnenkomt." (middel) en "bijgewerkt 08:12" toe. De code heeft de aanmoedigende regel noch een bijwerktijd.
+- **Code:** het aantal luidt "0" met "Niets wacht op je." Het is nooit amber. De regelfamilie luidt "Grip · niets voor jou".
+- **Ontwerp versus code:** het ontwerp voegt "Goed bezig. Grip laat het weten zodra er iets binnenkomt." (middel) en "bijgewerkt 08:12" toe. De code heeft de aanmoedigende regel noch een bijwerktijd.
 
 ![Leeg](frames/Widgets_thuis_leeg.jpg)
 
 ### Verouderd (geen snapshot, een bestand dat niet decodeert, of een snapshot van 24 uur of ouder)
 
-- **Helemaal geen aantal.** Een aantal van een dag oud is een gok, en de widget gokt niet. Hij toont een verversingssymbool en "Open verder om bij te werken", in inkt en nooit in amber.
+- **Helemaal geen aantal.** Een aantal van een dag oud is een gok, en de widget gokt niet. Hij toont een verversingssymbool en "Open Grip om bij te werken", in inkt en nooit in amber.
 - **Per familie:**
   - rond: "open";
-  - rechthoek: "verder" + de verouderd-tekst;
-  - regel: "verder · open om bij te werken".
+  - rechthoek: "Grip" + de verouderd-tekst;
+  - regel: "Grip · open om bij te werken".
 - **Oude snapshots worden nog gelezen.** Een snapshot die door een oudere build is geschreven, zonder `items` of `oldestAt`, decodeert nog en wordt getoond als een aantal zonder rijen. Hij wordt daardoor niet verouderd (`aSnapshotWithoutItemsStillReads`).
 - **Ontwerp versus code:**
-  - Het ontwerp voegt "bijgewerkt 31 okt" of "laatst bijgewerkt za 31 okt 14:02" toe, en "verder toont bewust geen oud aantal.". De code toont geen leeftijd.
-  - De verouderd-woorden op het toegangsscherm zijn in het ontwerp "oud" (rond) en "verder · open de app" (regel). In de code zijn ze "open" en "verder · open om bij te werken".
+  - Het ontwerp voegt "bijgewerkt 31 okt" of "laatst bijgewerkt za 31 okt 14:02" toe, en "Grip toont bewust geen oud aantal.". De code toont geen leeftijd.
+  - De verouderd-woorden op het toegangsscherm zijn in het ontwerp "oud" (rond) en "Grip · open de app" (regel). In de code zijn ze "open" en "Grip · open om bij te werken".
 
 | Beginscherm | Toegangsscherm |
 |---|---|
@@ -337,8 +337,8 @@ Details die voor alle families gelden:
 
 ### Afgemeld of sessie verlopen
 
-- **Code:** bij afmelden, en bij elke geweigerde sessie (een 401), wordt de snapshot **gewist**. `AuthModel.forgetLocally()` en `InboxStore.forgetCaseContent()` roepen allebei `WidgetSnapshot.erase` aan en herladen de widget. Een ontbrekend bestand wordt gelezen als de verouderde toestand, dus de widget zegt dan "Open verder om bij te werken", zonder aantal, zonder titels en zonder headline.
-- **Ontwerp versus code:** het ontwerp heeft een aparte toestand **"afgemeld"**: "Log in bij verder", "tik en log in", "Open verder om je lijst te zien.", "afgemeld · niets bewaard op dit toestel", en op het toegangsscherm "log in" / "verder · log in". De code kan die niet tekenen, omdat de widget alleen "geen bestand" ziet. Hij kan afgemeld niet onderscheiden van nooit ververst.
+- **Code:** bij afmelden, en bij elke geweigerde sessie (een 401), wordt de snapshot **gewist**. `AuthModel.forgetLocally()` en `InboxStore.forgetCaseContent()` roepen allebei `WidgetSnapshot.erase` aan en herladen de widget. Een ontbrekend bestand wordt gelezen als de verouderde toestand, dus de widget zegt dan "Open Grip om bij te werken", zonder aantal, zonder titels en zonder headline.
+- **Ontwerp versus code:** het ontwerp heeft een aparte toestand **"afgemeld"**: "Log in bij Grip", "tik en log in", "Open Grip om je lijst te zien.", "afgemeld · niets bewaard op dit toestel", en op het toegangsscherm "log in" / "Grip · log in". De code kan die niet tekenen, omdat de widget alleen "geen bestand" ziet. Hij kan afgemeld niet onderscheiden van nooit ververst.
 
 | Beginscherm | Toegangsscherm |
 |---|---|
@@ -386,7 +386,7 @@ Geen. De placeholder in de galerij is een verse "er wacht niets"-snapshot (aanta
 
 ## StandBy
 
-- **Code:** er is **geen StandBy-specifieke weergave**. StandBy toont de systeemfamilies. In de praktijk is dat `systemSmall`: de kop, het aantal en zijn woorden, zonder headline. De ontwerpbrief (§3 rij Widgets) en de herafbakening in het plan zeggen allebei "StandBy uses the system families". De rode tint van de nachtmodus wordt door iOS toegepast, niet door verder.
+- **Code:** er is **geen StandBy-specifieke weergave**. StandBy toont de systeemfamilies. In de praktijk is dat `systemSmall`: de kop, het aantal en zijn woorden, zonder headline. De ontwerpbrief (§3 rij Widgets) en de herafbakening in het plan zeggen allebei "StandBy uses the system families". De rode tint van de nachtmodus wordt door iOS toegepast, niet door Grip.
 - **Ontwerp versus code:** het ontwerp tekent een StandBy-weergave in twee kolommen. Links "VOOR JOU", het aantal, "wachten op jou" en "oudste 2 dagen". Rechts "WAAR HET NU OP WACHT", de titel van de halte en het spoor met zijn datum ("Opstart bewind · 28 okt"). Vergrendeld wordt de rechterkolom afgeschermd met "ontgrendel om te zien". De code kan die rechterkolom vandaag om twee redenen niet tekenen:
   - De snapshot bevat alleen `headline` (de titel van de halte). Hij bevat niet de titel van het spoor of de datum, die `DashboardSummaryDTO.headline` wel meedraagt.
   - `systemSmall` tekent geen headline.
@@ -408,7 +408,7 @@ Geen. De placeholder in de galerij is een verse "er wacht niets"-snapshot (aanta
   - de titel van de halte uit de headline;
   - de leeftijd van het oudste item, als datum;
   - het schrijftijdstip.
-- **Hoe dat bestand beschermd is.** Het wordt atomisch geschreven met **`NSFileProtectionCompleteUntilFirstUserAuthentication`**, niet `.complete` zoals het zakdossier. Een `.complete`-bestand kan niet worden gelezen terwijl de telefoon vergrendeld is, dus de widget zou leeg zijn op precies de oppervlakken waar het meest naar gekeken wordt. Dit is gemeten op het toestel (2026-11-01): starten met `VERDER_REPORT_SNAPSHOT_PROTECTION=1` drukte `NSFileProtectionCompleteUntilFirstUserAuthentication` af. iOS 27 staat niet toe dat `devicectl` bestanden uit een App Group kopieert; daarom meldt de app het attribuut zelf.
+- **Hoe dat bestand beschermd is.** Het wordt atomisch geschreven met **`NSFileProtectionCompleteUntilFirstUserAuthentication`**, niet `.complete` zoals het zakdossier. Een `.complete`-bestand kan niet worden gelezen terwijl de telefoon vergrendeld is, dus de widget zou leeg zijn op precies de oppervlakken waar het meest naar gekeken wordt. Dit is gemeten op het toestel (2026-11-01): starten met `GRIP_REPORT_SNAPSHOT_PROTECTION=1` drukte `NSFileProtectionCompleteUntilFirstUserAuthentication` af. iOS 27 staat niet toe dat `devicectl` bestanden uit een App Group kopieert; daarom meldt de app het attribuut zelf.
 - **Gewist bij afmelden en bij elke geweigerde sessie.** De snapshot wordt gewist, de widget wordt herladen en de badge wordt op 0 gezet.
 - **Late verversingen kunnen hem niet herschrijven.** `SessionEpoch` voorkomt dat een verversing die nog op het netwerk wachtte, de snapshot terugschrijft nadat de sessie is beëindigd.
 - **Fixture-runs laten hem met rust.** `FixtureEnvironment` raakt nooit de echte snapshot of badge, dus synthetische gegevens bereiken nooit de echte App Group.
@@ -448,8 +448,8 @@ Geen. De placeholder in de galerij is een verse "er wacht niets"-snapshot (aanta
 | Klein toont "oudste 2 dagen"; middel toont "en nog 2"; groot toont "en nog 493 · oudste 6 wk" | Geen "en nog N". De leeftijd verschijnt alleen op groot ("oudste N dagen") en op de rechthoek. |
 | Rijen dragen een datum ("VOORSTEL · 2 NOV") | Alleen de soort. De snapshot slaat geen itemdatum op. |
 | Lege toestand: aanmoedigende regel, "bijgewerkt 08:12" | "0" + "Niets wacht op je." |
-| Verouderde toestand: "bijgewerkt 31 okt", "verder toont bewust geen oud aantal." | "Open verder om bij te werken", zonder leeftijd |
-| Toestand "afgemeld" ("Log in bij verder") | Hetzelfde als verouderd: de snapshot wordt gewist |
+| Verouderde toestand: "bijgewerkt 31 okt", "Grip toont bewust geen oud aantal." | "Open Grip om bij te werken", zonder leeftijd |
+| Toestand "afgemeld" ("Log in bij Grip") | Hetzelfde als verouderd: de snapshot wordt gewist |
 | Grote voettekst → Dossier | De voettekst is geen link; een tik opent Voor jou |
 | StandBy: weergave in twee kolommen met headline, spoor en datum | Systeemfamilies (klein); geen headline in StandBy |
 | AX5: kort onderschrift "voor jou" | Hetzelfde onderschrift, verkleind |
@@ -512,8 +512,8 @@ Alle 29 frames komen uit Figma `widgets · final` (347:16197) en zijn op 2026-11
 | [Widgets_thuis_helder](frames/Widgets_thuis_helder.jpg) | Hetzelfde in heldere modus |
 | [Widgets_thuis_leeg](frames/Widgets_thuis_leeg.jpg) | Leeg: "Niets wacht op je" *(ontwerp voegt de aanmoedigende regel en de bijwerktijd toe)* |
 | [Widgets_thuis_leeg_getint](frames/Widgets_thuis_leeg_getint.jpg) | Leeg, getint |
-| [Widgets_thuis_verouderd](frames/Widgets_thuis_verouderd.jpg) | Verouderd: geen aantal, "Open verder om bij te werken" |
-| [Widgets_thuis_afgemeld](frames/Widgets_thuis_afgemeld.jpg) | Afgemeld, "Log in bij verder" *(alleen ontwerp; de code toont de verouderde toestand)* |
+| [Widgets_thuis_verouderd](frames/Widgets_thuis_verouderd.jpg) | Verouderd: geen aantal, "Open Grip om bij te werken" |
+| [Widgets_thuis_afgemeld](frames/Widgets_thuis_afgemeld.jpg) | Afgemeld, "Log in bij Grip" *(alleen ontwerp; de code toont de verouderde toestand)* |
 | [Widget_groot_volle_kleur](frames/Widget_groot_volle_kleur.jpg) | Groot, volle kleur: aantal, vijf rijen, voettekst "waar het nu op wacht" |
 | [Widget_groot_getint](frames/Widget_groot_getint.jpg) | Groot, getint |
 | [Widget_groot_helder](frames/Widget_groot_helder.jpg) | Groot, helder |

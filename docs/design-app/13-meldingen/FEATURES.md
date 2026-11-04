@@ -10,7 +10,7 @@ Geteld over elke functie in dit document met een **Status:**-regel (gecontroleer
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
-1. **De woorden van de frames in de rest van de worker.** Voorstel, navraag en het weekoverzicht dragen sinds 2026-11-04 de titels van de frames ("Voorstel klaar om te lezen", "Herinneringsmail klaar", "Je week in verder"); de mail van Verder ("Verder: ‹afzender›" / de samenvatting), de herinnering ("Wacht nog: ‹ask›") en de tekst van het weekoverzicht nog niet.
+1. **De woorden van de frames in de rest van de worker.** Voorstel, navraag en het weekoverzicht dragen sinds 2026-11-04 de titels van de frames ("Voorstel klaar om te lezen", "Herinneringsmail klaar", "Je week in Grip"); de mail van Verder ("Verder: ‹afzender›" / de samenvatting), de herinnering ("Wacht nog: ‹ask›") en de tekst van het weekoverzicht nog niet.
 2. **Het mailscherm achter een mail-push**: wat de mail vraagt plus hoe het voorstel ervoor staat ("Voorstel in voorbereiding", "Geen antwoord nodig", "Geen voorstel gemaakt"), met "Opnieuw proberen" en "Zelf antwoorden". De voorstelstatussen `drafting` en `draft-failed` bestaan al op de server; geen route stelt ze per mail beschikbaar en geen scherm toont ze.
 3. **Geen bedrag in de samenvatting van een Verder-mail.** De naam van een schuldeiser komt sinds 2026-11-04 niet meer op het vergrendelscherm (zie hieronder); de samenvatting die de tekst van een Verder-mail is, kan nog een bedrag bevatten.
 
@@ -18,7 +18,7 @@ Alles wat Martin ontwierp staat hieronder beschreven, gebouwd of niet; bij elke 
 
 ---
 
-Dit document legt uit wat de meldingen van verder doen: welke soorten er zijn, wie elke soort verstuurt en wanneer, wat een tik of lang indrukken doet, wat op het vergrendelscherm komt en welke regels ze volgen. Het visuele ontwerp beschrijft het niet. De frames waarnaar verwezen wordt zijn de definitieve Figma-frames (sectie `notifications · final`); ze gebruiken de synthetische dataset en bevatten geen echte dossiergegevens.
+Dit document legt uit wat de meldingen van Grip doen: welke soorten er zijn, wie elke soort verstuurt en wanneer, wat een tik of lang indrukken doet, wat op het vergrendelscherm komt en welke regels ze volgen. Het visuele ontwerp beschrijft het niet. De frames waarnaar verwezen wordt zijn de definitieve Figma-frames (sectie `notifications · final`); ze gebruiken de synthetische dataset en bevatten geen echte dossiergegevens.
 
 > **Lees dit eerst: de frames en de code verschillen, op drie punten.**
 >
@@ -34,12 +34,12 @@ Dit document legt uit wat de meldingen van verder doen: welke soorten er zijn, w
 
 ## Doel
 
-verder laat Martin weten wanneer iets hem nodig heeft, of wanneer er iets gebeurd is dat het weten waard is, zonder dat hij de app hoeft te openen om daarachter te komen. Het bedient alleen Martin, op zijn ene geregistreerde iPhone (en in de browser via de oude web-push, zolang die bestaat).
+Grip laat Martin weten wanneer iets hem nodig heeft, of wanneer er iets gebeurd is dat het weten waard is, zonder dat hij de app hoeft te openen om daarachter te komen. Het bedient alleen Martin, op zijn ene geregistreerde iPhone (en in de browser via de oude web-push, zolang die bestaat).
 
 Drie ideeën lopen door elke melding:
 
-- **Alleen voor wat voor hem telt, op het juiste volume.** Mail van Verder onderbreekt. Mail van een schuldeiser is een gewone melding. Wat verder zelf deed (opbergen) en het zondagsoverzicht zijn stil. Suggesties krijgen nooit een eigen push: ze bereiken hem via de badge en Voor jou (plan 3 Task 5 stap 3; de oude algemene push "Something new to review" is verwijderd).
-- **Een tik opent, hij verstuurt nooit.** Niets verlaat het huis vanuit een melding. De enige actie die iets uitvoert is het beantwoorden van een vraag, en die legt een antwoord vast binnen verder en verstuurt niets naar buiten.
+- **Alleen voor wat voor hem telt, op het juiste volume.** Mail van Verder onderbreekt. Mail van een schuldeiser is een gewone melding. Wat Grip zelf deed (opbergen) en het zondagsoverzicht zijn stil. Suggesties krijgen nooit een eigen push: ze bereiken hem via de badge en Voor jou (plan 3 Task 5 stap 3; de oude algemene push "Something new to review" is verwijderd).
+- **Een tik opent, hij verstuurt nooit.** Niets verlaat het huis vanuit een melding. De enige actie die iets uitvoert is het beantwoorden van een vraag, en die legt een antwoord vast binnen Grip en verstuurt niets naar buiten.
 - **De badge spreekt de waarheid.** Het getal op het icoon is hetzelfde aantal als de lijst Voor jou, uit één definitie op de server.
 
 Spec: §6.3 (push via APNs), §6.4 (mail van Verder), §7.2 (een vraag beantwoorden vanuit de melding), §7.3 (meldingen) in `docs/superpowers/specs/2026-10-28-iphone-app-design.md`. Plan 3 bouwt de telefoonkant in Task 5 (badge, antwoordopties bij een vraag, stille verversing) en Task 8 (meldingen op de telefoon), en Task GAP zorgt dat elke tik ergens landt.
@@ -77,14 +77,14 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 | `reminder` (`REMINDER`) | `proposals/clocks.ts`, een voorstel dat langer dan 24 u openstaat, één keer ooit | volgt de prioriteit van het voorstel | "Wacht nog: ‹ask›" / "Dit voorstel wacht al een dag op je." | `grip://proposal/<id>` |
 | `follow-up` (`FOLLOW_UP`) | `proposals/clocks.ts`, 7 dagen stilte na een uitgaand bericht (`PROPOSAL_FOLLOWUP_DAYS`), niet meer na 30 | volgt de prioriteit van de thread | "Herinneringsmail klaar" / "Tik om hem na te lezen en te versturen. ‹Naam› heeft sinds ‹d mmm› niet gereageerd." (bij een schuldeiser: "De schuldeiser") | `grip://proposal/<id>` (het navraagconcept) |
 | `task-due` (`TASK_DUE`) | `proposals/clocks.ts`, een taak `open` of `in-progress` met een deadline binnen 24 u, verlopen inbegrepen; één keer per taak per deadline (`due:<taskId>:<dueAt>`) | tijdgevoelig | "Te laat: ‹taak›", "Vandaag: ‹taak›" of "Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding." (een deadline met alleen een datum telt als het einde van die dag in Amsterdam) | `grip://task/<id>` (de actie Gedaan; een tik opent de taak bovenaan Voor jou) |
-| `filing` (`FILING`), dagelijks overzicht | `autofile-digest.ts`, 19:00 Amsterdam, alleen op dagen met acties van verder | passief | "Door verder gedaan" / bijvoorbeeld "2 documenten opgeborgen · 1 hernoemd" (alleen aantallen) | `grip://inbox` (de router stuurt het naar Door verder gedaan) |
+| `filing` (`FILING`), dagelijks overzicht | `autofile-digest.ts`, 19:00 Amsterdam, alleen op dagen met acties van Grip | passief | "Door Grip gedaan" / bijvoorbeeld "2 documenten opgeborgen · 1 hernoemd" (alleen aantallen) | `grip://inbox` (de router stuurt het naar Door Grip gedaan) |
 | `filing`, dubbelzijdig samengevoegd | `duplex.ts` | passief | "Dubbelzijdige scan samengevoegd" / "scanN.pdf + scanM.pdf → één document, …" | geen (opent Dossier) |
 | `filing`, loonstrook | `loondossier.ts` | passief | "Nieuwe loonstrook" / de documenttitel | geen (opent Dossier) |
 | `system` (`SYSTEM`), versturen mislukt | `proposals/send.ts` | tijdgevoelig | "Niet verstuurd: ‹ask›" / "‹reden›. Er is niets verzonden." | `grip://proposal/<id>` |
 | `system`, verstuurd maar niet gelogd | `proposals/send.ts`, na de derde mislukte poging | tijdgevoelig | "Mail VERSTUURD, logboek ontbreekt" / … | `grip://proposal/<id>` |
-| `system`, herstel door de watchdog | `ops/watchdog-run.ts` | actief | "verder hersteld" / "Automatisch hersteld: ‹diensten›." | geen (opent Overzicht) |
+| `system`, herstel door de watchdog | `ops/watchdog-run.ts` | actief | "Grip hersteld" / "Automatisch hersteld: ‹diensten›." | geen (opent Overzicht) |
 | `system`, hersteltest | `ops/mail-restore-drill.ts` | actief | "Hersteltest mail MISLUKT" / de eigen redenen van de test (technische tekst, niet vertaald) | geen (opent Overzicht) |
-| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week in verder" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `grip://inbox` (de router opent het Weekoverzicht) |
+| `weekly` (`WEEKLY`) | `weekly-summary.ts`, zondag 18:00 Amsterdam | passief | "Je week in Grip" / "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou" | `grip://inbox` (de router opent het Weekoverzicht) |
 
 **Status per soort.**
 
@@ -95,7 +95,7 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 - **Een voorstel wacht na 24 u nog** (één keer ooit). **Status:** Gebouwd — `apps/worker/src/proposals/clocks.ts`.
 - **Stilte na een uitgaande mail, met een navraagconcept.** **Status:** Gebouwd — `apps/worker/src/proposals/clocks.ts`.
 - **Een taak met een deadline binnen 24 u.** **Status:** Gebouwd — `apps/worker/src/proposals/clocks.ts`, met de link naar de taak die de actie "Gedaan" nodig heeft (zie hieronder).
-- **Wat verder zelf deed** (dagelijks overzicht, dubbelzijdig samenvoegen, nieuwe loonstrook). **Status:** Gebouwd — `apps/worker/src/autofile-digest.ts`, `duplex.ts`, `loondossier.ts`.
+- **Wat Grip zelf deed** (dagelijks overzicht, dubbelzijdig samenvoegen, nieuwe loonstrook). **Status:** Gebouwd — `apps/worker/src/autofile-digest.ts`, `duplex.ts`, `loondossier.ts`.
 - **Er ging iets kapot of werd hersteld** (versturen mislukt, verstuurd maar niet gelogd, herstel door de watchdog, hersteltest mislukt). **Status:** Gebouwd — `apps/worker/src/proposals/send.ts`, `ops/watchdog-run.ts`, `ops/mail-restore-drill.ts`.
 - **Het zondagsoverzicht.** **Status:** Gebouwd — `apps/worker/src/weekly-summary.ts`. Het gaat om 18:00, zoals de spec (§7.9) zegt; de 19:00 in het frame is van het frame.
 
@@ -123,9 +123,9 @@ De worker kent negen soorten, elk met een iOS-categorie van dezelfde naam (`CATE
 | follow-up | "Herinneringsmail klaar" / "… Gemeente Westerlaan heeft sinds 21 okt niet gereageerd." | dezelfde tekst, met de naam van de tegenpartij |
 | follow-up · aan een schuldeiser | "De schuldeiser heeft sinds 16 okt …" (anoniem) | dezelfde tekst: een schuldeiserthread wordt nooit bij naam genoemd |
 | task-due | "Morgen: bijstand tekenen" / "Uiterlijk di 3 nov: … Kies Gedaan bij deze melding." | "Te laat / Vandaag / Morgen: ‹taak›" / "Deadline dd-mm. Al gedaan? Kies Gedaan bij deze melding.", met de actie Gedaan |
-| filing · passief | "2 opgeborgen · 1 hernoemd" als titel | titel "Door verder gedaan", aantallen in de tekst |
+| filing · passief | "2 opgeborgen · 1 hernoemd" als titel | titel "Door Grip gedaan", aantallen in de tekst |
 | system | "Mislukt: hersteltest mail" / "Je hoeft nu niets te doen; je dossier is in orde. …" | "Hersteltest mail MISLUKT" / de redenen van de test, in technische tekst |
-| weekly · passief | "Je week in verder" om 19:00 / "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. …" | "Je week in verder" om **18:00** / "… verstuurd · … binnen · … opgeborgen · … taken klaar — … wachten op jou" |
+| weekly · passief | "Je week in Grip" om 19:00 / "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. …" | "Je week in Grip" om **18:00** / "… verstuurd · … binnen · … opgeborgen · … taken klaar — … wachten op jou" |
 
 ![Mail van Verder, tijdgevoelig (Figma final)](frames/Meldingen_verder-mail_tijdgevoelig.jpg)
 
@@ -137,11 +137,11 @@ Er valt niets naartoe te navigeren: meldingen komen binnen. Wat een melding **op
 |---|---|
 | Een push waarvan de `link` te parsen is (`DeepLink.parse`) | De bestemming van die link: `grip://proposal/<id>`, `…/suggestion/<id>` en `…/task/<id>` openen Voor jou met dat item bovenaan; `grip://inbox` opent de lijst Voor jou; `grip://document/<id>` opent het document in Dossier. De parser kent ook `done-by-grip`, `dossier`, `timeline`, `overzicht`, `weekly`, `money` en `voice`; de pushes van de worker gebruiken nu alleen `proposal/<id>` en `inbox`. |
 | `WEEKLY` (tik of "Bekijken") | Altijd het Weekoverzicht (Meer → Weekoverzicht), wat de link ook zegt. |
-| `FILING` met `grip://inbox` (het dagelijkse overzicht) | Door verder gedaan, op Voor jou. |
+| `FILING` met `grip://inbox` (het dagelijkse overzicht) | Door Grip gedaan, op Voor jou. |
 | Een push zonder bruikbare link | De plek van zijn categorie (`fallback`): mail, voorstel, herinnering, navraag en deadline → Voor jou; opbergen → Dossier; systeem → Overzicht; weekoverzicht → Weekoverzicht. Geen tik landt nergens. |
 | Wegvegen | Niets. |
 
-Het parsen van de link is strikt: precies het schema `verder`, een bekende host, geen gebruiker, poort, query of fragment, en precies één UUID waar er één verwacht wordt. Al het andere is `.none`. De app registreert **geen** `grip://`-URL-schema, dus geen webpagina of andere app kan deze links afvuren. Ze komen alleen binnen in een push, vanuit verders eigen widget, of vanuit de snelle actie op het beginscherm (`grip://voice`).
+Het parsen van de link is strikt: precies het schema `grip` (of het oude `verder`, voor links van vóór de hernoeming), een bekende host, geen gebruiker, poort, query of fragment, en precies één UUID waar er één verwacht wordt. Al het andere is `.none`. De app registreert **geen** `grip://`-URL-schema, dus geen webpagina of andere app kan deze links afvuren. Ze komen alleen binnen in een push, vanuit Grips eigen widget, of vanuit de snelle actie op het beginscherm (`grip://voice`).
 
 **Status:** Gebouwd — `apps/ios/Grip/Push/NotificationRouter.swift`, `apps/ios/Grip/Push/DeepLink.swift`.
 
@@ -154,7 +154,7 @@ Een tik die de app koud start, gaat niet verloren. De delegate wordt gezet voord
 
 ## Acties bij lang indrukken
 
-iOS legt de knoppen van een categorie vast wanneer de categorie geregistreerd wordt. verder registreert bij elke start negen vaste categorieën (`NotificationCategories.register`), plus één categorie per vraag, die de extension registreert wanneer de vraag binnenkomt.
+iOS legt de knoppen van een categorie vast wanneer de categorie geregistreerd wordt. Grip registreert bij elke start negen vaste categorieën (`NotificationCategories.register`), plus één categorie per vraag, die de extension registreert wanneer de vraag binnenkomt.
 
 ### "Bekijken" bij voorstel, herinnering en navraag
 
@@ -179,7 +179,7 @@ Een vraag is een `proposal` van soort `question`. De push ervan draagt op het ho
 
 **Status:** Gebouwd — `apps/ios/GripNotify/NotificationService.swift`, `apps/ios/Grip/Push/QuestionCategories.swift`, `NotificationRouter.swift`, `apps/web/src/app/api/mobile/v1/proposals/[id]/answer/route.ts`, `proposals.answer` in `packages/api/src/routers/proposals.ts`. Gemeten op de telefoon (zie hieronder).
 
-**Als het antwoord niet doorkomt**, verandert er niets op de server en wordt het antwoord **nooit opnieuw geprobeerd**. Dat geldt voor: geen revisie in de push, geen sessie, `409` (intussen op het web beantwoord, of een nieuwere revisie), `400`, en een netwerkfout. In elk geval zet de router `grip://proposal/<id>` in de wachtrij, zodat verder bij de volgende keer openen het voorstel toont en hoe het ervoor staat. Bij een netwerkfout en bij `409` zegt een lokale melding het ook: "Keuze kwam niet door" (met de categorie `q.<id>` en de payload van de vraag, zodat lang indrukken dezelfde opties weer aanbiedt) en "Vraag al afgehandeld" (opent Voor jou). Geen sessie, `400` en `5xx` blijven stil. Een vraag die zonder revisie binnenkomt wordt niet herschreven: hij houdt de vaste categorie `PROPOSAL`, toont dus alleen "Bekijken", en een tik opent hem.
+**Als het antwoord niet doorkomt**, verandert er niets op de server en wordt het antwoord **nooit opnieuw geprobeerd**. Dat geldt voor: geen revisie in de push, geen sessie, `409` (intussen op het web beantwoord, of een nieuwere revisie), `400`, en een netwerkfout. In elk geval zet de router `grip://proposal/<id>` in de wachtrij, zodat Grip bij de volgende keer openen het voorstel toont en hoe het ervoor staat. Bij een netwerkfout en bij `409` zegt een lokale melding het ook: "Keuze kwam niet door" (met de categorie `q.<id>` en de payload van de vraag, zodat lang indrukken dezelfde opties weer aanbiedt) en "Vraag al afgehandeld" (opent Voor jou). Geen sessie, `400` en `5xx` blijven stil. Een vraag die zonder revisie binnenkomt wordt niet herschreven: hij houdt de vaste categorie `PROPOSAL`, toont dus alleen "Bekijken", en een tik opent hem.
 
 **Gemeten op iOS 27.2 (2026-11-01):** een test-vraagpush toonde **Ja / Nee** bij lang indrukken, dus iOS gebruikt wel degelijk een categorie die binnen de extension geregistreerd is voor diezelfde melding. Een gewone tik erop opende Voor jou op "Dit voorstel bestaat niet (meer)." (de test verwees naar een voorstel dat niet bestaat).
 
@@ -187,7 +187,7 @@ Een vraag is een `proposal` van soort `question`. De push ervan draagt op het ho
 
 **Frame vs code (vragen).**
 - "Keuze kwam niet door" zegt in het frame "Brief van 14 okt: …". De push draagt geen onderwerp; de app gebruikt een optioneel `subject` in de payload als dat er is, anders "Er was geen verbinding." De worker stuurt (nog) geen `subject`.
-- "Na antwoord · Voor jou" toont een rij "Brief gekoppeld · beantwoord · zojuist" met "Ongedaan maken". De code toont geen beantwoorde rij, en een antwoord kan niet ongedaan gemaakt worden. "Ongedaan maken" bestaat alleen in Door verder gedaan, voor wat verder zelf opborg.
+- "Na antwoord · Voor jou" toont een rij "Brief gekoppeld · beantwoord · zojuist" met "Ongedaan maken". De code toont geen beantwoorde rij, en een antwoord kan niet ongedaan gemaakt worden. "Ongedaan maken" bestaat alleen in Door Grip gedaan, voor wat Grip zelf opborg.
 
 ### "Gedaan" bij een deadline
 
@@ -198,12 +198,12 @@ Als Gedaan niet doorkomt, wordt het **nooit vanzelf opnieuw geprobeerd** en zet 
 | Oorzaak | Melding | Lang indrukken |
 |---|---|---|
 | geen verbinding | "Gedaan kwam niet door" / "‹Taak› staat nog open: er was geen verbinding. Kies Gedaan nog een keer bij deze melding." | Gedaan, opnieuw |
-| `5xx` | "Gedaan kwam niet door" / "‹Taak› staat nog open: verder kon het nu niet opslaan. …" | Gedaan, opnieuw |
+| `5xx` | "Gedaan kwam niet door" / "‹Taak› staat nog open: Grip kon het nu niet opslaan. …" | Gedaan, opnieuw |
 | geen sessie of `401` | "Opnieuw inloggen nodig" / "Gedaan voor ‹taak› kwam niet door. Tik om in te loggen en kies daarna Gedaan opnieuw." | Gedaan, opnieuw |
 | `400`, en de takenlijst zegt `done` | "Taak al afgerond" / "‹Taak› stond al op klaar. Tik om je taken te openen." (opent Voor jou) | geen |
 | `400` met een andere status, `404` | geen melding; de taak opent de volgende keer | — |
 
-De taaknaam komt uit de titel van de push ("Morgen: bijstand tekenen" → "bijstand tekenen"), of uit `taskTitle` op een melding die verder zelf plaatste. Een deadline-push zonder taaklink (een oudere push met `grip://inbox`) heeft niets om af te vinken en opent Voor jou.
+De taaknaam komt uit de titel van de push ("Morgen: bijstand tekenen" → "bijstand tekenen"), of uit `taskTitle` op een melding die Grip zelf plaatste. Een deadline-push zonder taaklink (een oudere push met `grip://inbox`) heeft niets om af te vinken en opent Voor jou.
 **Status:** Gebouwd — `NotificationCategories.swift` (`doneAction`), `NotificationRouter.swift` (`markDone`), `NotificationFeedback.swift`, de link in `apps/worker/src/proposals/clocks.ts`; tests in `NotificationRouterTests`, `NotificationCategoriesTests.onlyQuestionAndDoneActionsWorkInBackground` (precies één statische achtergrondactie: `TASK_DUE.DONE`) en `clocks.test.ts`. Op de simulator vastgelegd, met de echte router en een fixture die de route laat falen.
 
 ![Deadline met een actie "Gedaan" (Figma final)](frames/Meldingen_task-due_lang_ingedrukt_Gedaan.jpg)
@@ -228,18 +228,18 @@ Gemeten 2026-10-31: 18:10 `sent: true, count 498, delivered 2`, 18:15 `sent: fal
 
 | Toestand | Wat er gebeurt |
 |---|---|
-| **Toestemming nog niet gevraagd** | De app vraagt nooit bij een koude start (de start is van de camera). Na de eerste keer inloggen of de eerste ontgrendeling met een sessie toont ze haar eigen voorvraag, "Meldingen aanzetten?" ("verder laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen."), met "Meldingen aanzetten" en "Niet nu". Het systeemvenster verschijnt alleen bij ja. De voorvraag wordt één keer per installatie aangeboden (`pushPrePromptShown`). "Niet nu" kost niets: Meer → Meldingen houdt een knop "Meldingen aanzetten", die meteen naar het systeemvenster gaat. |
+| **Toestemming nog niet gevraagd** | De app vraagt nooit bij een koude start (de start is van de camera). Na de eerste keer inloggen of de eerste ontgrendeling met een sessie toont ze haar eigen voorvraag, "Meldingen aanzetten?" ("Grip laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen."), met "Meldingen aanzetten" en "Niet nu". Het systeemvenster verschijnt alleen bij ja. De voorvraag wordt één keer per installatie aangeboden (`pushPrePromptShown`). "Niet nu" kost niets: Meer → Meldingen houdt een knop "Meldingen aanzetten", die meteen naar het systeemvenster gaat. |
 | **Toestemming geweigerd** | Er komt niets binnen. Meer → Meldingen zegt "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." met "Open Instellingen". |
-| **Toegestaan** | Elke start met een sessie registreert het token opnieuw (`registerForRemoteNotifications`, daarna `POST /api/mobile/v1/push/register`), omdat tokens veranderen; de server doet een upsert op het token. Een mislukte registratie zegt "Aanmelden voor meldingen lukte niet. verder probeert het bij de volgende start opnieuw."; een mislukte APNs-registratie op de telefoon zegt "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." plus het foutdomein en de foutcode. Een `401` van de registratieroute stuurt de app terug naar inloggen. |
-| **Telefoon vergrendeld, voorvertoning verborgen** | Elke categorie zet `hiddenPreviewsBodyPlaceholder` = "Nieuw bericht van verder" en zet `.hiddenPreviewsShowTitle` niet. Met iOS' "Toon voorvertoning" zo ingesteld dat voorvertoningen verborgen zijn zolang de telefoon vergrendeld is, toont het vergrendelscherm alleen de appnaam en "Nieuw bericht van verder": geen titel, geen afzender, geen regel uit het dossier. Dat is het eerste frame hierboven. (`NotificationCategoriesTests.everyCategoryHidesItsPreview`.) |
-| **Telefoon vergrendeld, voorvertoning zichtbaar** | Titel en tekst verschijnen zoals verstuurd. Daarin staan partijnamen ("Verder: ‹sender›", "Nog geen antwoord van ‹naam›") en taaktitels. Of voorvertoningen op het vergrendelscherm verschijnen, is een instelling van de iPhone, niet van verder. |
-| **verder op de voorgrond** | Een push verschijnt nog steeds als banner, in de lijst en met geluid (`willPresent`), omdat "a Verder question is worth the banner even mid-scan". |
+| **Toegestaan** | Elke start met een sessie registreert het token opnieuw (`registerForRemoteNotifications`, daarna `POST /api/mobile/v1/push/register`), omdat tokens veranderen; de server doet een upsert op het token. Een mislukte registratie zegt "Aanmelden voor meldingen lukte niet. Grip probeert het bij de volgende start opnieuw."; een mislukte APNs-registratie op de telefoon zegt "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." plus het foutdomein en de foutcode. Een `401` van de registratieroute stuurt de app terug naar inloggen. |
+| **Telefoon vergrendeld, voorvertoning verborgen** | Elke categorie zet `hiddenPreviewsBodyPlaceholder` = "Nieuw bericht van Grip" en zet `.hiddenPreviewsShowTitle` niet. Met iOS' "Toon voorvertoning" zo ingesteld dat voorvertoningen verborgen zijn zolang de telefoon vergrendeld is, toont het vergrendelscherm alleen de appnaam en "Nieuw bericht van Grip": geen titel, geen afzender, geen regel uit het dossier. Dat is het eerste frame hierboven. (`NotificationCategoriesTests.everyCategoryHidesItsPreview`.) |
+| **Telefoon vergrendeld, voorvertoning zichtbaar** | Titel en tekst verschijnen zoals verstuurd. Daarin staan partijnamen ("Verder: ‹sender›", "Nog geen antwoord van ‹naam›") en taaktitels. Of voorvertoningen op het vergrendelscherm verschijnen, is een instelling van de iPhone, niet van Grip. |
+| **Grip op de voorgrond** | Een push verschijnt nog steeds als banner, in de lijst en met geluid (`willPresent`), omdat "a Verder question is worth the banner even mid-scan". |
 | **App geforceerd gesloten** | Meldingen en de push met alleen de badge komen nog binnen. De achtergrondverversing niet; iOS wekt een geforceerd gesloten app nooit. |
 | **App vergrendeld van binnen (Face ID)** | Elke plek waar een link naar wijst (Voor jou, Dossier, Meer) zit achter het slot, dus wat een tik opent verschijnt pas na Face ID. De link naar het Weekoverzicht wacht op dezelfde manier. |
 | **Offline** | Zonder verbinding kan er geen push binnenkomen; APNs houdt meldingen tot 24 uur vast (`apns-expiration`). Een antwoordactie die mislukt door een ontbrekend netwerk wordt niet opnieuw geprobeerd (zie hierboven). |
 | **Sessie verlopen of ingetrokken** | De telefoon intrekken in `/settings/security` of uitloggen beëindigt zijn sessie. Vanaf de volgende melding ziet `notify()` dat de sessie weg is, trekt het apparaat in (`session-ended`) en stuurt het niets. Een antwoordactie zonder sessie beantwoordt niets en opent het voorstel; de app toont dan het inlogscherm. |
 | **Veel tegelijk** | iOS groepeert meldingen van één app. Pushes voor mail en brieven en hun voorstellen delen een `thread-id`; de andere hebben er geen. Zie de frames "gegroepeerde stapel". |
-| **Grote tekst (AX5)** | iOS zet de banner en het actiemenu op de toegankelijkheidsgrootte; de tekst van verder is platte tekst en wordt door de app nooit afgekapt. |
+| **Grote tekst (AX5)** | iOS zet de banner en het actiemenu op de toegankelijkheidsgrootte; de tekst van Grip is platte tekst en wordt door de app nooit afgekapt. |
 | **Kleine telefoon (iPhone SE)** | Zelfde inhoud, de eigen opmaak van iOS. |
 
 De toestanden hierboven komen neer op deze functies:
@@ -253,7 +253,7 @@ De toestanden hierboven komen neer op deze functies:
 **Niets uit het dossier op een vergrendelde telefoon met verborgen voorvertoning.**
 **Status:** Gebouwd — `hiddenPreviewsBodyPlaceholder` in `apps/ios/Grip/Push/NotificationCategories.swift`.
 
-**Een banner, ook terwijl verder op de voorgrond staat.**
+**Een banner, ook terwijl Grip op de voorgrond staat.**
 **Status:** Gebouwd — `willPresent` in `apps/ios/Grip/App/AppDelegate.swift`.
 
 **Een ingetrokken of verlopen sessie stopt de pushes.**
@@ -265,20 +265,20 @@ De toestanden hierboven komen neer op deze functies:
 
 Het instellingenscherm voor meldingen (`NotificationsScreen` in `MoreScreens.swift`, teksten in `NotificationsCopy`) toont:
 
-- de toestand van de toestemming: "Meldingen staan aan.", "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." met "Open Instellingen" (de meldingsinstellingen van iOS voor verder), of "Meldingen zijn nog niet aangezet." met "Meldingen aanzetten" (het systeemvenster);
+- de toestand van de toestemming: "Meldingen staan aan.", "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." met "Open Instellingen" (de meldingsinstellingen van iOS voor Grip), of "Meldingen zijn nog niet aangezet." met "Meldingen aanzetten" (het systeemvenster);
 - een registratiefout, als die er is;
-- "Wat verder je laat weten": één regel per categorie, in de volgorde van `NotificationCategories.ids`: "Mail van Verder", "Mail van een schuldeiser", "Voorstel", "Herinnering", "Navragen", "Deadline", "Opgeborgen", "Systeem", "Weekoverzicht", elk met een korte uitleg. De tekst belooft bewust niet dat een melding door een focus heen breekt ("per focus bepaalt iOS of hij doorkomt"), omdat dat nooit gemeten is;
+- "Wat Grip je laat weten": één regel per categorie, in de volgorde van `NotificationCategories.ids`: "Mail van Verder", "Mail van een schuldeiser", "Voorstel", "Herinnering", "Navragen", "Deadline", "Opgeborgen", "Systeem", "Weekoverzicht", elk met een korte uitleg. De tekst belooft bewust niet dat een melding door een focus heen breekt ("per focus bepaalt iOS of hij doorkomt"), omdat dat nooit gemeten is;
 - "Stille meldingen komen in je meldingencentrum zonder geluid of scherm aan."
 
-Er zijn in verder geen schakelaars per soort. Een soort uitzetten gebeurt in de iOS-instellingen.
+Er zijn in Grip geen schakelaars per soort. Een soort uitzetten gebeurt in de iOS-instellingen.
 
 **Status:** Gebouwd — `NotificationsScreen` in `apps/ios/Grip/More/MoreScreens.swift`, teksten in `NotificationsCopy` (`apps/ios/Grip/More/MoreMenu.swift`). De schakelaars per soort die de brief ontwerpt, staan onder "Ontworpen, nog niet gebouwd".
 
 ## Privacy en beveiliging
 
-- **Het vergrendelscherm met verborgen voorvertoning** toont alleen "Nieuw bericht van verder". Met zichtbare voorvertoning toont het titel en tekst zoals verstuurd, en die kunnen partijen en taken noemen. Het dagelijkse opbergoverzicht en het weekoverzicht bevatten alleen aantallen.
-- **Een antwoord vanaf het vergrendelscherm** vereist dat de telefoon ontgrendeld is (`.authenticationRequired`). Het vraagt **niet** om verders eigen Face ID, omdat het niets opent en niets naar buiten verstuurt (spec §7.2).
-- **"Bekijken" en een tik** openen de app, en de plek die ze openen zit achter verders Face ID-slot (één keer bij openen en bij heropenen na de respijtperiode). Overzicht is open terwijl de app vergrendeld is, maar toont alleen aantallen en geld.
+- **Het vergrendelscherm met verborgen voorvertoning** toont alleen "Nieuw bericht van Grip". Met zichtbare voorvertoning toont het titel en tekst zoals verstuurd, en die kunnen partijen en taken noemen. Het dagelijkse opbergoverzicht en het weekoverzicht bevatten alleen aantallen.
+- **Een antwoord vanaf het vergrendelscherm** vereist dat de telefoon ontgrendeld is (`.authenticationRequired`). Het vraagt **niet** om Grips eigen Face ID, omdat het niets opent en niets naar buiten verstuurt (spec §7.2).
+- **"Bekijken" en een tik** openen de app, en de plek die ze openen zit achter Grips Face ID-slot (één keer bij openen en bij heropenen na de respijtperiode). Overzicht is open terwijl de app vergrendeld is, maar toont alleen aantallen en geld.
 - **Opgeslagen op de telefoon:** de `q.*`-categorieën (de optielabels van tot 20 recente vragen, bewaard door iOS) en `push/q-order.json` in de App Group (alleen voorstel-id's, geen dossiertekst, standaardbescherming "tot de eerste ontgrendeling", omdat de extension draait terwijl de telefoon vergrendeld is). Het apparaattoken staat bij iOS en op de server.
 - **Opgeslagen op de server:** `push_devices` (token, omgeving, appversie, de sessie waaronder het registreerde, revoked-at). `notifications` en `notification_attempts` bevatten van elke melding de titel, tekst, link en uitkomst. Niets hiervan is bewijs, en er wordt geen ledger-event geschreven. De worker heeft SELECT op kolomniveau op alleen `session(id, expires_at)`, nooit op het sessietoken.
 - **Bij uitloggen:** de sessie eindigt op de server (zodat pushes bij de volgende melding stoppen), de badge wordt op 0 gezet, en de widget-snapshot en de gecachete dossierinhoud worden gewist. Meldingen die al op het vergrendelscherm staan en de geregistreerde `q.*`-categorieën worden door de app niet verwijderd.
@@ -289,11 +289,11 @@ Er zijn in verder geen schakelaars per soort. Een soort uitzetten gebeurt in de 
 - **De enige achtergrondactie is het antwoord op een vraag.** Die voert een bestaande procedure uit op Martins eigen caller. Waar die procedure in de ledger komt (een taakstatus), is het event van Martin, gemaakt door zijn keuze. De optie zelf was de suggestie van het model, en het antwoord legt `verdict = approved` vast.
 - **Nooit "nieuwe mail".** Elke push draagt Nederlandse tekst die zegt waar het over gaat (spec §6.4). Suggesties geven geen eigen push.
 - **De badge is gelijk aan wat op Martin wacht**, uit de ene definitie, en het amber elders volgt dezelfde lijst.
-- **De opberg-uitzondering** verschijnt alleen als het passieve overzicht "Door verder gedaan", met aantallen en zonder titels, dat de lijst opent waarin elke automatische opberging met één tik ongedaan gemaakt kan worden.
+- **De opberg-uitzondering** verschijnt alleen als het passieve overzicht "Door Grip gedaan", met aantallen en zonder titels, dat de lijst opent waarin elke automatische opberging met één tik ongedaan gemaakt kan worden.
 
 ## Haptiek
 
-verder speelt bij meldingen geen eigen haptiek af. Het geluid is het standaardgeluid van iOS voor `time-sensitive` en `active`; `passive` is stil. Dat is wat de haptiekkaart van de brief (§2.5) vraagt: het beantwoorden van een vraag krijgt `.success` in de app, maar "the notification action has no haptic of its own". De `.success` in de app hoort bij het vraagscherm (zie 05-vraag-suggestie-taak), niet bij dit scherm.
+Grip speelt bij meldingen geen eigen haptiek af. Het geluid is het standaardgeluid van iOS voor `time-sensitive` en `active`; `passive` is stil. Dat is wat de haptiekkaart van de brief (§2.5) vraagt: het beantwoorden van een vraag krijgt `.success` in de app, maar "the notification action has no haptic of its own". De `.success` in de app hoort bij het vraagscherm (zie 05-vraag-suggestie-taak), niet bij dit scherm.
 **Status:** Gebouwd — er wordt geen haptiek afgespeeld vanuit `NotificationRouter.swift`, `NotificationFeedback.swift` of de extension, bewust; een vervolgmelding heeft het gewone geluid van een actieve melding.
 
 ## Ontworpen, nog niet gebouwd
@@ -317,12 +317,12 @@ Het frame creditor-mail: "Tik om te kiezen bij welke vordering hij hoort. Hij st
 
 ### Het mailscherm achter een mail-push
 
-De drie frames "verder-mail · na tik": een tik op een push voor mail van Verder opent die mail ("Mail van Ilse", terug naar "Voor jou"), met de mail zelf en bovenaan één statuskaart die zegt hoe verder ervoor staat: **Voorstel in voorbereiding** (er wordt een concept geschreven), **Geen antwoord nodig** (ter informatie, niets gevraagd, het staat in het dossier) of **Geen voorstel gemaakt** (opstellen mislukt).
+De drie frames "verder-mail · na tik": een tik op een push voor mail van Verder opent die mail ("Mail van Ilse", terug naar "Voor jou"), met de mail zelf en bovenaan één statuskaart die zegt hoe Grip ervoor staat: **Voorstel in voorbereiding** (er wordt een concept geschreven), **Geen antwoord nodig** (ter informatie, niets gevraagd, het staat in het dossier) of **Geen voorstel gemaakt** (opstellen mislukt).
 **Status:** Nog te bouwen — de server houdt de statussen al bij (`proposals.status` `drafting` en `draft-failed`, `packages/db/src/schema.ts`; `draft-failed` geschreven door `ops/proposals-store.ts`), maar er is geen status "geen antwoord nodig", `proposals.list` verbergt `drafting`, en geen route geeft één mail terug met de status van zijn voorstel. Nodig: een mobiele route (`GET /api/mobile/v1/mail/<id>` of iets vergelijkbaars, met sessiecontrole), een manier om "niets gevraagd" vast te leggen, een maillink in de push (`grip://mail/<id>` in `DeepLink.parse` en `LinkDestinationTests`; de mail-push wordt verstuurd voordat er een voorstel bestaat, dus hij kan alleen naar de mail wijzen), het scherm, en tests.
 
 ### "Opnieuw proberen" en "Zelf antwoorden"
 
-Op "Geen voorstel gemaakt": **Opnieuw proberen** vraagt verder opnieuw een concept op te stellen; **Zelf antwoorden** laat Martin het antwoord zelf schrijven, dat daarna de gewone weg gaat (zijn definitieve tekst, een verse Face ID).
+Op "Geen voorstel gemaakt": **Opnieuw proberen** vraagt Grip opnieuw een concept op te stellen; **Zelf antwoorden** laat Martin het antwoord zelf schrijven, dat daarna de gewone weg gaat (zijn definitieve tekst, een verse Face ID).
 **Status:** Nog te bouwen — geen route zet een `draft-failed`-voorstel opnieuw in de rij voor `ops/proposal-drafter.sh`, en de telefoon heeft geen antwoord-vanaf-nul. Nodig: een route voor opnieuw proberen en een statusovergang (`draft-failed → drafting`), een antwoordeditor die leeg begint en het pad voor goedkeuren en versturen hergebruikt, en tests dat een zelfgeschreven antwoord nog steeds goedkeuring van de definitieve tekst vereist.
 
 ### "Bekijken" weghalen
@@ -358,7 +358,7 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 - **Niet gemeten:** of een tijdgevoelige push door een focusmodus heen breekt (Martins keuze om het niet te testen).
 - **Niet gemeten:** de vertraging van de badge na een echt besluit, en of die badge een geforceerd gesloten app bereikt. Dit wacht op een suggestie waarover Martin echt wil beslissen; er wordt niets goedgekeurd voor een test.
 - **Niet gemeten:** de latentie van een echte mail van Verder → push → voorstel, en een gescande brief van Verder. Beide wachten op echte exemplaren.
-- Een antwoord of Gedaan dat mislukt zonder sessie (antwoord), met `400` (antwoord) of `5xx` (antwoord) is stil; Martin merkt het door verder te openen.
+- Een antwoord of Gedaan dat mislukt zonder sessie (antwoord), met `400` (antwoord) of `5xx` (antwoord) is stil; Martin merkt het door Grip te openen.
 - Vragen ouder dan de 20 nieuwste verliezen hun knoppen (hun categorie vervalt) en worden in de app beantwoord.
 - Schuldeisers zonder bekend e-mailadres (KvK, CAK, PLM, CZ) worden op een gescande brief niet herkend, dus hun brieven geven geen schuldeiserspush.
 - De development-build praat alleen met de APNs-sandbox. Een production-ondertekende build zou `production` registreren, en de server zou per apparaat de productiehost kiezen.
@@ -397,7 +397,7 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 
 | Frame | Wat het toont | In de code? |
 |---|---|---|
-| [vergrendeld · verborgen voorvertoning](frames/Meldingen_vergrendeld_verborgen_voorvertoning.jpg) | Vergrendelde telefoon, voorvertoning verborgen: alleen "Nieuw bericht van verder" | Ja |
+| [vergrendeld · verborgen voorvertoning](frames/Meldingen_vergrendeld_verborgen_voorvertoning.jpg) | Vergrendelde telefoon, voorvertoning verborgen: alleen "Nieuw bericht van Grip" | Ja |
 | [verder-mail · tijdgevoelig](frames/Meldingen_verder-mail_tijdgevoelig.jpg) | Mail van Verder, tijdgevoelig, op het vergrendelscherm | Ja; de formulering verschilt |
 | [verder-mail · na tik · voorstel in voorbereiding](frames/Meldingen_verder-mail_na_tik_voorstel_in_voorbereiding.jpg) | Mailscherm na een tik, concept wordt nog geschreven | Nee: de tik opent de lijst Voor jou |
 | [verder-mail · na tik · geen antwoord nodig](frames/Meldingen_verder-mail_na_tik_geen_antwoord_nodig.jpg) | Mailscherm, mail ter informatie, niets gevraagd | Nee |
@@ -413,7 +413,7 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 | [task-due · Gedaan kwam niet door](frames/Meldingen_task-due_Gedaan_kwam_niet_door.jpg) | Terugkoppeling: "Gedaan" mislukte offline | Ja |
 | [sessie verlopen · opnieuw inloggen](frames/Meldingen_sessie_verlopen_opnieuw_inloggen.jpg) | Terugkoppeling: "Gedaan" mislukte, sessie verlopen | Ja |
 | [task-due · al afgerond](frames/Meldingen_task-due_al_afgerond.jpg) | Terugkoppeling: de taak was al afgerond | Ja |
-| [filing · passief](frames/Meldingen_filing_passief.jpg) | Het dagelijkse overzicht "Door verder gedaan", passief | Ja; de titel verschilt |
+| [filing · passief](frames/Meldingen_filing_passief.jpg) | Het dagelijkse overzicht "Door Grip gedaan", passief | Ja; de titel verschilt |
 | [system](frames/Meldingen_system.jpg) | Een mislukte hersteltest van de mail | Ja; de formulering verschilt |
 | [weekly · passief](frames/Meldingen_weekly_passief.jpg) | Het zondagsoverzicht, passief | Ja; 18:00 en de formulering verschillen |
 | [weekly · AX5](frames/Meldingen_weekly_AX5.jpg) | Hetzelfde op AX5 | Ja |
@@ -423,7 +423,7 @@ De bediening **Scan** voor het bedieningspaneel en de actieknop uit de brief, en
 | [vraag · lang ingedrukt · AX5 · doorgescrold](frames/Meldingen_vraag_lang_ingedrukt_AX5_doorgescrold.jpg) | Hetzelfde, doorgescrold naar de laatste optie | Ja |
 | [vraag · keuze kwam niet door](frames/Meldingen_vraag_keuze_kwam_niet_door.jpg) | Terugkoppeling: het antwoord mislukte offline | Ja; "Brief van 14 okt" alleen met een `subject` in de push |
 | [vraag · al afgehandeld](frames/Meldingen_vraag_al_afgehandeld.jpg) | Terugkoppeling: de vraag was al beantwoord | Ja |
-| [gegroepeerde stapel](frames/Meldingen_gegroepeerde_stapel.jpg) | Meerdere meldingen van verder gegroepeerd | Ja (groepering door iOS) |
+| [gegroepeerde stapel](frames/Meldingen_gegroepeerde_stapel.jpg) | Meerdere meldingen van Grip gegroepeerd | Ja (groepering door iOS) |
 | [gegroepeerde stapel · AX5](frames/Meldingen_gegroepeerde_stapel_AX5.jpg) | Hetzelfde op AX5 | Ja |
 | [na antwoord · Voor jou](frames/Meldingen_na_antwoord_Voor_jou.jpg) | Voor jou na een antwoord, met een rij "beantwoord" en "Ongedaan maken" | Nee: de beantwoorde vraag verdwijnt uit de lijst |
 | [vergrendeld · iPhone SE](frames/Meldingen_vergrendeld_iPhone_SE.jpg) | Vergrendelscherm op een telefoon van 375 × 667 | Ja (opmaak door iOS) |

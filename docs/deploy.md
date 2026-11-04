@@ -1,4 +1,4 @@
-# Deploying verder to the homelab
+# Deploying Grip to the homelab
 
 Production runs as three containers via `docker-compose.prod.yml` (postgres,
 web, worker), plus host-level pieces: Ollama, the cloudflared tunnel, a repo
@@ -733,7 +733,7 @@ for 11.5 GB of blobs — RocksDB lz4, which is the payoff for leaving Attachment
 File Storage on "Use data store" at the wizard's Storage screen.
 
 Ledger unchanged throughout: 129 events, head `e30067a9…`. Importing 146,270
-messages into Stalwart appends nothing to verder's chain, which is the point.
+messages into Stalwart appends nothing to Grip's chain, which is the point.
 
 **THE SETUP WIZARD, MEASURED END TO END 2026-08-30.** It was run twice; the
 first run had to be thrown away. Everything here is observed, not read:
@@ -1478,7 +1478,7 @@ rsync exclude list, so `--delete` would erase it on the next deploy — the exac
 accident CLAUDE.md records for `nightly.log`, whose whole history exists only on
 the homelab and is protected by one `--exclude` line. Adding a second protected
 name is a change to the safety mechanism; reusing the one that is already
-protected is not. One log for all scheduled verder ops work also means one file
+protected is not. One log for all scheduled Grip ops work also means one file
 to read when something went wrong overnight.
 
 That schedule is spelled in three places and they must move together: here, in
@@ -1590,7 +1590,10 @@ host steps below.
 `nas.scan` refuses to run unless `.verder-nas` exists in the scan directory.
 When the NAS mounts after the worker container started, the bind keeps showing
 the empty directory underneath, and without the marker "no scans" and "no NAS"
-look the same. Create it once, on the share itself:
+look the same. The marker keeps its pre-Grip name on purpose: it is a file on
+the share, not something the app is called, and renaming it would make every
+worker refuse the share until someone touched a new one. Create it once, on the
+share itself:
 
 ```bash
 touch /mnt/nas-workspace/.verder-nas
@@ -1619,7 +1622,7 @@ running-but-unhealthy one). It also recreates the worker when the host share has
 the marker and `/scans/.verder-nas` is missing inside the container, and tries
 `sudo -n mount` on `/mnt/nas-workspace` or `/mnt/nas-download` when they are not
 mounted. A heal writes a `watchdog` row with status `error` and sends the push
-"verder hersteld". A clean run writes `ok`. It skips the whole run while
+"Grip hersteld". A clean run writes `ok`. It skips the whole run while
 `nightly.sh`, `mail-backup.sh` or `mail-restore-drill.sh` is running.
 
 Install on the homelab (`crontab -e`; this host's crontab is `CRON_TZ=UTC`, which
@@ -1630,7 +1633,9 @@ does not matter for a 5-minute line):
 ```
 
 `mkdir -p ~/.local/state/grip-watchdog` first. Add to sudoers (`visudo -f
-/etc/sudoers.d/verder-watchdog`) so the mount attempts work without a password:
+/etc/sudoers.d/grip-watchdog`; the file that already exists on the homelab is
+still called `verder-watchdog`, and the name does not matter) so the mount
+attempts work without a password:
 
 ```
 martin ALL=(root) NOPASSWD: /usr/bin/mount /mnt/nas-workspace, /usr/bin/mount /mnt/nas-download

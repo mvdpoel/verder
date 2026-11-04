@@ -12,7 +12,7 @@ De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 1. **Een geschiedenis van eerdere weken.** `/weekly` levert alleen het nieuwste overzicht. Eén route die de laatste acht weken levert, één rij per week, maakt het totaal in de hero mogelijk, de grafiek van acht weken met het gemiddelde, de regel "vorige week: …" onder elke telling en het bemoedigende oordeel. De rij van elke zondag wordt al bewaard in `worker_runs` (niets ruimt die op), dus de gegevens stapelen zich op vanaf de eerste run op 8 november. Wat ontbreekt is de route, het ontdubbelen per week (een handmatige run voegt een tweede rij voor dezelfde week toe) en een besluit over wat "gemiddelde" betekent.
 2. **De offline kopie.** Het scherm bewaart niets tussen bezoeken, dus offline geopend toont het alleen een foutmelding. De frames bewaren het laatste overzicht, plus dat van vorige week, met een banner "geen verbinding · stand van …". Daarvoor is een beschermde kopie op de telefoon nodig, onder dezelfde regels als het zakdossier: bestandsbescherming, gewist bij afmelden en bij een 401.
-3. **"Door verder gedaan" voor de week, met de manier om het terug te draaien.** Het overzicht telt wat verder zelf heeft opgeborgen, maar niet de scans die het een naam gaf. Geen van beide tellingen linkt naar de lijst "Door verder gedaan", waar het terugdraaien zit. De lijst en de deep link (`grip://done-by-grip`) bestaan al. Nog te bouwen: een telling van hernoemingen in het contract, de kaart en de link.
+3. **"Door Grip gedaan" voor de week, met de manier om het terug te draaien.** Het overzicht telt wat Grip zelf heeft opgeborgen, maar niet de scans die het een naam gaf. Geen van beide tellingen linkt naar de lijst "Door Grip gedaan", waar het terugdraaien zit. De lijst en de deep link (`grip://done-by-grip`) bestaan al. Nog te bouwen: een telling van hernoemingen in het contract, de kaart en de link.
 
 ---
 
@@ -26,7 +26,7 @@ Dit document legt uit wat het Weekoverzicht doet: waar de getallen vandaan komen
 
 ## Doel
 
-Elke zondag om 18:00 (Amsterdamse tijd) stuurt verder Martin een stille push. Die zegt wat er die week in het dossier is bewogen en hoeveel er op hem wacht. Het Weekoverzicht is het scherm achter die push. Het toont dezelfde opgeslagen getallen die de push noemde en eindigt met één volgende stap: naar Voor jou, de live lijst van wat nu op hem wacht.
+Elke zondag om 18:00 (Amsterdamse tijd) stuurt Grip Martin een stille push. Die zegt wat er die week in het dossier is bewogen en hoeveel er op hem wacht. Het Weekoverzicht is het scherm achter die push. Het toont dezelfde opgeslagen getallen die de push noemde en eindigt met één volgende stap: naar Voor jou, de live lijst van wat nu op hem wacht.
 
 Het is er alleen voor Martin. Het leest alleen en schrijft nooit iets.
 
@@ -59,7 +59,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **7. Doorklikken vanaf "ontvangen" en "opgeborgen".** Een tik op een van beide tellingen opent de documenten en mail erachter, voor het venster van die week.
 **Status:** Nog te bouwen — vraagt een route of filter die documenten en mail toont binnen het `[from, to)`-venster van het overzicht (het Dossier op de telefoon heeft geen filter op datumvenster), een bestemmingsscherm, een link vanaf elke telling en een test dat de lengte van de lijst gelijk is aan de telling.
 
-**8. "Door verder gedaan" leidt naar terugdraaien.** Een tik op de rij "stukken opgeborgen" opent de lijst "Door verder gedaan", waar elk automatisch opgeborgen document met één tik terug te draaien is.
+**8. "Door Grip gedaan" leidt naar terugdraaien.** Een tik op de rij "stukken opgeborgen" opent de lijst "Door Grip gedaan", waar elk automatisch opgeborgen document met één tik terug te draaien is.
 **Status:** Deels gebouwd — de lijst, het terugdraaien met één tik en de deep link `grip://done-by-grip` bestaan (`Inbox/DoneByGripSection.swift`, `packages/api/src/routers/grip-actions.ts`). Het Weekoverzicht linkt er niet naar. De lijst beslaat een doorlopende 7 dagen (`sinceDays: 7`), niet het venster van het overzicht.
 
 **9. Vernieuwen.** Omlaag trekken om te vernieuwen leest het opgeslagen overzicht opnieuw. In de frames doet "Opnieuw proberen" in de offline-banner hetzelfde.
@@ -76,7 +76,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **12. "ontvangen", mail en scans.** Alles wat binnenkwam: mail van anderen, en brieven gescand op de NAS of met de telefoon.
 **Status:** Deels gebouwd — mail wordt geteld (`raw_emails`, Martins eigen adressen uitgezonderd). Scans niet. Vraagt een telling van documenten met een scanbron (`nas-scan`, `phone-scan`, `phone-share`) die binnen het venster binnenkomen, een contractveld of een herdefinieerde `received`, en een worker-test.
 
-**13. "opgeborgen", gesplitst naar wie.** Documenten die die week naar `filed` gingen, gesplitst in "door jou" en "door verder".
+**13. "opgeborgen", gesplitst naar wie.** Documenten die die week naar `filed` gingen, gesplitst in "door jou" en "door Grip".
 **Status:** Gebouwd — `filedByMartin`/`filedByGrip` in `apps/worker/src/weekly-summary.ts`, getoond door `WeeklyScreen`.
 
 **14. "taken klaar".** Taken die die week `done` bereikten.
@@ -88,7 +88,7 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **16. De hero: "N stappen door jou".** Martins eigen stappen die week: wat hij verstuurde, plus wat hij opborg, plus de taken die hij afrondde. Alle drie de frames tellen zo op (3 + 3 + 2 = 8, 0 + 0 + 1 = 1, 2 + 2 + 2 = 6). De onderdelen staan onder het getal.
 **Status:** Deels gebouwd — het overzicht bevat al `sent`, `filedByMartin` en `tasksDone`. Ontbreekt: een besluit dat de som de definitie is, de hero-rij en een test.
 
-**17. De oordeelszin.** Eén bemoedigende regel, afgezet tegen Martins eigen eerdere weken, nooit een rood tekort: "Meer dan je gemiddelde van 5 per week. Goed bezig.", "Een rustige week — en dat mag.", "Je tweede week met verder. Een gemiddelde volgt vanaf 3 weken."
+**17. De oordeelszin.** Eén bemoedigende regel, afgezet tegen Martins eigen eerdere weken, nooit een rood tekort: "Meer dan je gemiddelde van 5 per week. Goed bezig.", "Een rustige week — en dat mag.", "Je tweede week met Grip. Een gemiddelde volgt vanaf 3 weken."
 **Status:** Nog te bouwen — vraagt de geschiedenis (functie 18), een pure regel die de zin kiest (boven, rond of onder het gemiddelde, rustig, te weinig weken) en tests dat geen formulering als tekortkoming leest.
 
 **18. Grafiek "Jouw stappen · 8 weken" met een gemiddelde.** De stappen van de laatste acht weken, deze week uitgelicht, en een gestippelde gemiddeldelijn.
@@ -100,11 +100,11 @@ Elke functie wordt beschreven door wat ze doet, gevolgd door één statusregel. 
 **20. "vorige week: …" onder elke telling.** Elke telling noemt het cijfer van vorige week, en zegt "ook 2" als het gelijk is.
 **Status:** Nog te bouwen — vraagt het overzicht van vorige week uit de geschiedenisroute (functie 18) en de vergelijkingsregel in `WeeklyScreen`. De test `comparedWithNothingInvented` moet dan veranderen van "vergelijkt met niets" naar "vergelijkt alleen met een opgeslagen week".
 
-**21. "Door verder gedaan": stukken opgeborgen.** Een rij in een eigen kaart die zegt hoeveel documenten verder zelf opborg, met de herinnering dat één tik het terugdraait.
-**Status:** Deels gebouwd — het getal bestaat (`filedByGrip`). Het wordt alleen binnen "opgeborgen" getoond als "door verder zelf", niet als eigen kaart of rij. Automatisch opbergen staat bij oplevering uit, dus het getal is normaal 0.
+**21. "Door Grip gedaan": stukken opgeborgen.** Een rij in een eigen kaart die zegt hoeveel documenten Grip zelf opborg, met de herinnering dat één tik het terugdraait.
+**Status:** Deels gebouwd — het getal bestaat (`filedByGrip`). Het wordt alleen binnen "opgeborgen" getoond als "door Grip zelf", niet als eigen kaart of rij. Automatisch opbergen staat bij oplevering uit, dus het getal is normaal 0.
 
-**22. "Door verder gedaan": scans benoemd.** Een rij die zegt hoeveel scans auto-name die week hernoemde, en dat terugdraaien in de app niet kan omdat de naam ook op de NAS staat.
-**Status:** Nog te bouwen — vraagt een telling van auto-name-rijen met `actor = 'verder'` binnen het venster (`document_status_changes`; `verderActionKind` onderscheidt ze al), een contractveld in `packages/api/src/weekly-summary.ts` met de bijbehorende controles in `isWeeklySummary` en `WeeklyDTO`, de rij en tests.
+**22. "Door Grip gedaan": scans benoemd.** Een rij die zegt hoeveel scans auto-name die week hernoemde, en dat terugdraaien in de app niet kan omdat de naam ook op de NAS staat.
+**Status:** Nog te bouwen — vraagt een telling van auto-name-rijen met `actor = 'verder'` binnen het venster (`document_status_changes`; `gripActionKind` onderscheidt ze al), een contractveld in `packages/api/src/weekly-summary.ts` met de bijbehorende controles in `isWeeklySummary` en `WeeklyDTO`, de rij en tests.
 
 ### Wat er nu wacht
 
@@ -184,7 +184,7 @@ Elk woord komt uit `WeeklyScreen` in `WeeklyModels.swift`. `WeeklyView.swift` ze
 3. **Vier tellingen**:
    - "N verstuurd"
    - "N binnen"
-   - "N opgeborgen", met de detailregel "X door jou · Y door verder zelf". De detailregel vervalt als er niets is opgeborgen.
+   - "N opgeborgen", met de detailregel "X door jou · Y door Grip zelf". De detailregel vervalt als er niets is opgeborgen.
    - "1 taak klaar" of "N taken klaar".
 
    Nullen worden als 0 getoond.
@@ -200,7 +200,7 @@ Omlaag trekken om te vernieuwen leest `/weekly` opnieuw.
 - De kop van het frame leest `WEEK 44 · T/M ZO 1 NOV 18:00`. De code toont beide tijdstippen.
 - Het frame toont "8 stappen door jou" met een oordeel ("Meer dan je gemiddelde van 5 per week. Goed bezig."), de grafiek van acht weken en "vorige week: N" onder elke rij. De code vergelijkt met niets, met opzet: `/weekly` levert één week, en een vergelijking zou een getal zijn dat de server nooit heeft geteld. De test `comparedWithNothingInvented` doorzoekt elk woord op het scherm op verzonnen vergelijkingen.
 - "7 ontvangen · mail en scans" in het frame telt ook scans. "binnen" in de code is `received`, en dat telt **alleen mail** (`raw_emails`). Een scan telt niet mee.
-- De kaart "Door verder gedaan" in het frame heeft een rij voor automatisch opgeborgen documenten en een rij voor automatisch benoemde scans. De code toont alleen de splitsing "door verder zelf" onder opgeborgen. Hernoemingen worden helemaal niet geteld.
+- De kaart "Door Grip gedaan" in het frame heeft een rij voor automatisch opgeborgen documenten en een rij voor automatisch benoemde scans. De code toont alleen de splitsing "door Grip zelf" onder opgeborgen. Hernoemingen worden helemaal niet geteld.
 - Het frame suggereert doorklikken op "ontvangen" en "opgeborgen". De code heeft dat niet: geen enkele telling is aantikbaar.
 - De kaart "WACHT OP JE" in het frame ("4 wachten nog op je — de oudste sinds 31 okt.") en de knop "Open Voor jou" komen overeen met de ene volgende stap in de code, "Naar Voor jou" / "4 wachten nog op je". De code toont "de oudste sinds" niet.
 - Het frame toont de momentopname als een rij, "4 wachtten op je · momentopname zo 18:00". De momentopname in de code noemt ook tot drie titels.
@@ -217,7 +217,7 @@ pg-boss-queue `weekly.summary`, ingepland op `0 18 * * 0` met `tz: "Europe/Amste
 
 1. **Samenstellen.** `summaryWeek(now)` kiest het venster dat sluit op de nieuwste zondag 18:00 Amsterdam op of vóór `now`. `loadWeekly` leest de bronnen met een SQL-grens die aan beide kanten twee dagen is verruimd, en de pure `composeWeekly` beslist in JS.
 2. **Vastleggen.** Ze schrijft één `worker_runs`-rij, `weekly-summary` / `ok`, met `detail.summary`. Die rij is de opgeslagen kopie die het scherm leest. Er is geen nieuwe tabel.
-3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week in verder", body, link: "grip://inbox", dedupKey: "weekly:<ISO week>" })`.
+3. **Pushen.** `notify({ kind: "weekly", level: "passive", title: "Je week in Grip", body, link: "grip://inbox", dedupKey: "weekly:<ISO week>" })`.
 
 **Het venster** loopt van de vorige zondag 18:00 tot deze zondag 18:00 Amsterdam. Het is halfopen, `[from, to)`, en NIET maandag tot en met zondag. Opeenvolgende vensters raken elkaar op het moment dat de job draait, zodat activiteit op zondagavond precies één keer wordt geteld, in het volgende overzicht. Het venster hoort bij de week, niet bij het moment waarop de job draaide, dus een late run telt dezelfde rijen als een stipte.
 
@@ -227,11 +227,11 @@ Wat elke telling betekent:
 |---|---|
 | `sent` | Uitgaande `log_entries` die door geen andere entry worden vervangen. Elke wordt beoordeeld op de datums van de ROOT van haar keten (recursieve CTE over `supersedes_id`, dieptegrens 100), zodat een correctie die de week erna wordt vastgelegd niet nog eens wordt geteld. Een verstuurd voorstel heeft altijd zijn entry (`finishSent` schrijft beide in één transactie), dus het wordt via de entry geteld. Een vraag sluit zonder entry en is nooit "verstuurd". |
 | `received` | `raw_emails` waarvan de afzender niet een van Martins eigen adressen is (`ownMailboxAddresses()`). De afzender wordt GEPARSED met `senderAddress`, nooit op deeltekst vergeleken. Een header die `senderAddress` weigert, is niet aantoonbaar van hem en telt dus als ontvangen. |
-| `filedByMartin` / `filedByGrip` | Documenten die binnen het venster NAAR `filed` GINGEN: de vorige status van de `filed`-rij (de eerdere wijzigingsrij, of `documents.status` voor de eerste) was niet `filed`. Elk document telt één keer, toegeschreven aan de `actor` van zijn eerste zulke overgang. `actor = 'verder'` telt als verder; al het andere telt als Martin. Een hernoeming van een document dat al is opgeborgen, telt niet opnieuw. |
+| `filedByMartin` / `filedByGrip` | Documenten die binnen het venster NAAR `filed` GINGEN: de vorige status van de `filed`-rij (de eerdere wijzigingsrij, of `documents.status` voor de eerste) was niet `filed`. Elk document telt één keer, toegeschreven aan de `actor` van zijn eerste zulke overgang. `actor = 'verder'` telt als Grip; al het andere telt als Martin. Een hernoeming van een document dat al is opgeborgen, telt niet opnieuw. |
 | `tasksDone` | Verschillende taken met een `task_status_changes`-rij naar `done` binnen het venster. |
 | `waiting` / `topWaiting` | `loadWaiting()` op het moment dat de job draait (`packages/api/src/waiting.ts`), dezelfde definitie die Voor jou, de badge en het dashboard aanstuurt: de lengte ervan, en de eerste drie items. |
 
-**Laat vastleggen.** `raw_emails.sent_at` en `log_entries.occurred_at` zijn niet de momenten waarop verder van de rij hoorde: de Gmail-poll kan een mail van 17:55 om 18:10 ophalen. `arrivedAt` beoordeelt die rijen daarom op het latere van de datum en het vastlegmoment. De uitzondering is een verschil van meer dan zeven dagen (`LATE_RECORD_MS`, de eigen `newer_than:7d` van de Gmail-poll). Dat is een backfill, en die behoudt haar eigen datum.
+**Laat vastleggen.** `raw_emails.sent_at` en `log_entries.occurred_at` zijn niet de momenten waarop Grip van de rij hoorde: de Gmail-poll kan een mail van 17:55 om 18:10 ophalen. `arrivedAt` beoordeelt die rijen daarom op het latere van de datum en het vastlegmoment. De uitzondering is een verschil van meer dan zeven dagen (`LATE_RECORD_MS`, de eigen `newer_than:7d` van de Gmail-poll). Dat is een backfill, en die behoudt haar eigen datum.
 
 **Eén push per week.** De dedupKey `weekly:<ISO week>` maakt van een herhaalpoging of een tweede handmatige run voor dezelfde week een duplicaat, en `notify()` weigert die. De job schrijft zijn eigen fouten in een `error`-rij, dus pg-boss probeert hem nooit opnieuw. Een nieuwe run gaat met de hand:
 - `pnpm --filter worker weekly-summary` (`apps/worker/src/ops/weekly-summary.ts`);
@@ -263,7 +263,7 @@ Het contract (`WeeklySummary`) staat in `packages/api/src/weekly-summary.ts`, om
 | **Laden** | Elke keer dat het scherm opent: er wordt niets bewaard tussen bezoeken. | Twee plaatshouderpanelen in de vorm van de inhoud, geen spinner. Nog geen volgende stap (`WeeklyScreen.steps(.loading)` is leeg). |
 | **Geladen** | `200`. | Venster, tellingen, momentopname van zondag, "Naar Voor jou". Omlaag trekken om te vernieuwen. |
 | **Nog niet** | `404` (vóór de eerste zondag). Geen fout. | "Je eerste weekoverzicht komt zondag om 18:00" en "Daarna staat hier elke zondag wat er die week gebeurde.", dan "Naar Voor jou". |
-| **Offline / fout** | Een transportfout, een 5xx, een geweigerde decode. | Eén regel: "Geen verbinding met verder. Probeer het opnieuw." (transport) of "Dat lukte niet. Probeer het over een moment opnieuw." (al het andere), dan "Opnieuw proberen" en "Naar Voor jou". Voor jou leest zijn eigen gegevens, dus dat kan werken als dit scherm dat niet deed. Er wordt geen cijfer getoond (`offlineFailsWithoutAFigure`). |
+| **Offline / fout** | Een transportfout, een 5xx, een geweigerde decode. | Eén regel: "Geen verbinding met Grip. Probeer het opnieuw." (transport) of "Dat lukte niet. Probeer het over een moment opnieuw." (al het andere), dan "Opnieuw proberen" en "Naar Voor jou". Voor jou leest zijn eigen gegevens, dus dat kan werken als dit scherm dat niet deed. Er wordt geen cijfer getoond (`offlineFailsWithoutAFigure`). |
 | **Vernieuwen mislukt terwijl geladen** | Een vernieuwing door omlaag trekken mislukt. | Het al getoonde overzicht blijft staan, ongewijzigd (`aFailedRefreshKeepsWhatIsShown`). Een afgebroken vernieuwing (scherm gesloten) verandert niets. |
 | **Sessie verlopen** | `401`. | `auth.sessionRejected()`: lokale dossiergegevens worden vergeten en het aanmeldscherm zegt "Je sessie is verlopen." |
 | **Vergrendeld** | De app is voorbij de respijtperiode van 300 s (`LockPolicy.graceSeconds`). | Meer zit achter het slot (`.lockGated(by: lock)`), dus het Weekoverzicht is nooit zichtbaar tijdens vergrendeling. Een tik op een push of een deep link die binnenkomt tijdens vergrendeling wacht in `meerPath`, dat `RootView` vasthoudt, en opent na ontgrendelen. |
@@ -290,7 +290,7 @@ Het contract (`WeeklySummary`) staat in `packages/api/src/weekly-summary.ts`, om
 ## Privacy en beveiliging
 
 - **Face ID.** Het scherm zit achter het app-slot: Meer zit achter het slot, en alleen Overzicht (tellingen en geld) en Scan zijn open tijdens vergrendeling. De app vraagt uit zichzelf één keer om Face ID, bij openen of bij terugkeer na de respijtperiode van 300 s. Daarna is elk tabblad open tot de volgende vergrendeling.
-- **Vergrendelscherm.** De zondagse push bevat **alleen tellingen**, bijvoorbeeld `3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou`, met de titel "Je week in verder". De `topWaiting`-titels staan nooit in de push. Een titel op het vergrendelscherm zou het dossier hardop voorlezen aan wie de telefoon oppakt, dus de titels reizen alleen mee in het opgeslagen overzicht, achter Face ID.
+- **Vergrendelscherm.** De zondagse push bevat **alleen tellingen**, bijvoorbeeld `3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou`, met de titel "Je week in Grip". De `topWaiting`-titels staan nooit in de push. Een titel op het vergrendelscherm zou het dossier hardop voorlezen aan wie de telefoon oppakt, dus de titels reizen alleen mee in het opgeslagen overzicht, achter Face ID.
 - **Widgets.** Geen. Het Weekoverzicht voedt geen widget.
 - **Opgeslagen op de telefoon.** Niets. `WeeklyStore` houdt het overzicht in het geheugen zolang het scherm open is. Het staat niet in het zakdossier, de widget-momentopname of enig bestand. De sessiecookie waarmee het wordt opgehaald, is het gebruikelijke Keychain-item van de app (`AfterFirstUnlockThisDeviceOnly`).
 - **Afmelden / ingetrokken sessie.** Er blijft niets wekelijks over om te wissen. Een 401 hier beëindigt de sessie op dezelfde manier als overal elders (`sessionRejected` → `forgetLocally`).
@@ -302,12 +302,12 @@ De code handhaaft deze regels vandaag, en de hieronder genoemde tests controlere
 - **Amber alleen voor wat op Martin wacht, en alleen live.** Alles wat het opgeslagen overzicht zegt, is geschiedenis: de tellingen en de momentopname van zondag. Het scherm kan op elke dag van de week opengaan, en over een item dat zondag wachtte, kan sindsdien zijn beslist. De momentopname amber kleuren zou Voor jou, de badge en het dashboard tegenspreken, die één live definitie delen (`loadWaiting`). Het enige amber is de live telling van de volgende stap. De kleur wordt in het model bepaald (`WeeklyScreen.Tone`: `.history` / `.waitsOnMartin`), en tests lezen hem daar (`theSummaryIsHistoryAndNeverAmber`, `endsWithOneNextStepToVoorJouAmberOnlyOnTheLiveCount`). De eerste bouw kleurde de momentopname amber, en dat is gecorrigeerd.
 - **Geen verzonnen cijfer.** Het scherm vergelijkt niet met eerdere weken die het nooit kreeg, en het toont geen telling als het offline is. Als de live telling onbekend is, zegt de volgende stap dat in woorden.
 - **Het scherm toont de getallen die de push noemde.** Het leest de opgeslagen kopie, nooit een hertelling, zodat het tikdoel niet afwijkt van de melding. De enige uitzondering is een niet-droge handmatige run in dezelfde week (zie **Eén push per week** hierboven), die de opgeslagen kopie vervangt zonder een nieuwe push te sturen.
-- **De opberg-amendering verschijnt hier alleen als telling.** Documenten die verder zelf opborg (`actor = 'verder'`) worden apart geteld als "door verder zelf", nooit bij die van Martin opgeteld. Terugdraaien daarvan zit in "Door verder gedaan" op Voor jou, niet hier. Automatisch opbergen staat bij oplevering uit (`DOCMETA_AUTO_APPLY` niet gezet), dus `filedByGrip` is normaal 0.
+- **De opberg-amendering verschijnt hier alleen als telling.** Documenten die Grip zelf opborg (`actor = 'verder'`) worden apart geteld als "door Grip zelf", nooit bij die van Martin opgeteld. Terugdraaien daarvan zit in "Door Grip gedaan" op Voor jou, niet hier. Automatisch opbergen staat bij oplevering uit (`DOCMETA_AUTO_APPLY` niet gezet), dus `filedByGrip` is normaal 0.
 - **Hier wordt niets verstuurd en niets beslist.** Het scherm leest alleen.
 
 ## Meldingen en haptiek
 
-- **Eén push per ISO-week**, zondag 18:00 Amsterdam: soort `weekly`, categorie `WEEKLY`, onderbrekingsniveau **passive** (geen geluid; APNs-prioriteit 5), titel "Je week in verder", de body met alleen tellingen. Zoals elke melding gaat ze via `notify()`, dat ook de icoonbadge zet op basis van de live wachttelling en één `notification_attempts`-rij per kanaal schrijft.
+- **Eén push per ISO-week**, zondag 18:00 Amsterdam: soort `weekly`, categorie `WEEKLY`, onderbrekingsniveau **passive** (geen geluid; APNs-prioriteit 5), titel "Je week in Grip", de body met alleen tellingen. Zoals elke melding gaat ze via `notify()`, dat ook de icoonbadge zet op basis van de live wachttelling en één `notification_attempts`-rij per kanaal schrijft.
 - **Meer → Meldingen** beschrijft de categorie als "Weekoverzicht — Zondag om 18:00: wat er die week gebeurde. Stil."
 - **Haptiek:** geen. Het scherm geeft geen haptische feedback.
 
@@ -320,7 +320,7 @@ Er is geen synchronisatie. Het scherm haalt `/weekly` op elke keer dat het opent
 - **De frames lopen voor op de code.** Elk gat heeft zijn status in [de volledige functieset](#de-volledige-functieset):
   - geen geschiedenis (grafiek, gemiddelde, "vorige week");
   - geen totaal "stappen door jou";
-  - geen tellingen "Door verder gedaan" per week, en hernoemingen door auto-name worden niet geteld;
+  - geen tellingen "Door Grip gedaan" per week, en hernoemingen door auto-name worden niet geteld;
   - geen scans in "ontvangen";
   - geen offline kopie en geen oudere week om op terug te vallen;
   - geen datum in de nog-niet-tekst;
@@ -366,9 +366,9 @@ Er is geen synchronisatie. Het scherm haalt `/weekly` op elke keer dat het opent
 
 | Frame | Toestand die het toont |
 |---|---|
-| ![](frames/Weekoverzicht_normaal.jpg) `Weekoverzicht_normaal.jpg` | Een normale week: hero-telling, grafiek van acht weken, "Wat er gebeurde" met vergelijkingen met vorige week, "Door verder gedaan", de amber kaart "Wacht op je" en "Open Voor jou". |
+| ![](frames/Weekoverzicht_normaal.jpg) `Weekoverzicht_normaal.jpg` | Een normale week: hero-telling, grafiek van acht weken, "Wat er gebeurde" met vergelijkingen met vorige week, "Door Grip gedaan", de amber kaart "Wacht op je" en "Open Voor jou". |
 | ![](frames/Weekoverzicht_rustige_week.jpg) `Weekoverzicht_rustige_week.jpg` | Een rustige week: één stap, "Een rustige week — en dat mag.", niets wacht (pil "Niets wacht op je", geen knop). |
-| ![](frames/Weekoverzicht_tweede_week.jpg) `Weekoverzicht_tweede_week.jpg` | Martins tweede week met verder: twee staven, "geen data vóór week 43", nog geen gemiddelde. |
+| ![](frames/Weekoverzicht_tweede_week.jpg) `Weekoverzicht_tweede_week.jpg` | Martins tweede week met Grip: twee staven, "geen data vóór week 43", nog geen gemiddelde. |
 | ![](frames/Weekoverzicht_voor_de_eerste_zondag.jpg) `Weekoverzicht_voor_de_eerste_zondag.jpg` | Vóór de eerste zondag (de 404- / nog-niet-toestand). |
 | ![](frames/Weekoverzicht_laden.jpg) `Weekoverzicht_laden.jpg` | Laden: plaatshoudervormen. |
 | ![](frames/Weekoverzicht_geen_verbinding_bewaard.jpg) `Weekoverzicht_geen_verbinding_bewaard.jpg` | Offline met het laatste overzicht bewaard (niet gebouwd: de code bewaart niets tussen bezoeken). |

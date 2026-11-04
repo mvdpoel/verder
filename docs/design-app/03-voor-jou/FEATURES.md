@@ -1,4 +1,4 @@
-# Voor jou en "Door verder gedaan": functies
+# Voor jou en "Door Grip gedaan": functies
 
 ## Stand van de bouw
 
@@ -18,7 +18,7 @@ De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 ---
 
-Voor jou is de inbox van de iPhone-app: één lijst van alles wat op Martin wacht, gerangschikt door de server. Daaronder staat "Door verder gedaan", een lijst van wat verder zelf heeft gedaan, met ongedaan maken in één tik. Alleen Martin gebruikt de app.
+Voor jou is de inbox van de iPhone-app: één lijst van alles wat op Martin wacht, gerangschikt door de server. Daaronder staat "Door Grip gedaan", een lijst van wat Grip zelf heeft gedaan, met ongedaan maken in één tik. Alleen Martin gebruikt de app.
 
 Het visuele ontwerp valt hier buiten; dat staat in Figma (bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectie `voorjou · final`, node `339:12478`), en de frames in `frames/` zijn daaruit geëxporteerd op 2026-11-03 met de synthetische fixture-dataset, niet met echte dossiergegevens. UI-teksten staan in het Nederlands geciteerd, precies zoals de app ze toont (of, bij een nog niet gebouwde functie, zoals het frame ze toont).
 
@@ -27,23 +27,23 @@ Het visuele ontwerp valt hier buiten; dat staat in Figma (bestand `QDRL5zHNEOjPz
 - **Eén antwoord op "wat wacht er op mij?"** Voor jou toont openstaande voorstellen en vragen, open suggesties, de taken die Martin moet doen, en de huidige open halte van de kaart, in de volgorde van de server.
 - **Overal één aantal.** De lijst, de badge op het icoon, de widgets, Overzicht en het webdashboard lezen allemaal dezelfde definitie, `loadWaiting` in `packages/api/src/waiting.ts`. Het icoon kan nooit 3 zeggen boven een lijst van 2.
 - **Routinebeslissingen vanuit de lijst, de rest één stap dieper.** Zoals ontworpen wordt een ongewijzigde suggestie goedgekeurd en een taak afgerond met één veeg, en kunnen meerdere suggesties tegelijk worden beslist. Versturen hoort daar nooit bij: een voorstel wordt alleen vanaf zijn eigen scherm verstuurd, achter een verse Face ID. Vandaag wordt elke beslissing op het detailscherm genomen.
-- **"Door verder gedaan"** is er om te controleren, niet om op te handelen. Het toont wat verder in de afgelopen 7 dagen zelf heeft opgeborgen of hernoemd, en biedt ongedaan maken aan waar de server dat toestaat.
+- **"Door Grip gedaan"** is er om te controleren, niet om op te handelen. Het toont wat Grip in de afgelopen 7 dagen zelf heeft opgeborgen of hernoemd, en biedt ongedaan maken aan waar de server dat toestaat.
 
 ## Hoe je er komt, en waar het heen leidt
 
 ### 1. Ingangen
 
 - **De tabbalk:** het tweede tabblad, "Voor jou" (`TabID.voorJou`), na Overzicht, waarop de app opent.
-- **Overzicht:** de kop "Wacht op jou", "Alle N bekijken" en de takenrij openen Voor jou op het hoofdniveau. Een voorbeeldrij opent dat item. "Door verder gedaan · N" opent het scherm "Door verder gedaan". Zie `../02-overzicht/FEATURES.md`.
+- **Overzicht:** de kop "Wacht op jou", "Alle N bekijken" en de takenrij openen Voor jou op het hoofdniveau. Een voorbeeldrij opent dat item. "Door Grip gedaan · N" opent het scherm "Door Grip gedaan". Zie `../02-overzicht/FEATURES.md`.
 - **Meldingen.** Een tik of "Bekijken" levert de `link` van de push af (`NotificationRouter`, `DeepLink`):
   - `grip://inbox` opent Voor jou op het hoofdniveau;
   - `grip://proposal/<uuid>`, `grip://suggestion/<uuid>` en `grip://task/<uuid>` openen Voor jou met het scherm van dat item erbovenop;
-  - `grip://done-by-grip` opent het scherm "Door verder gedaan".
+  - `grip://done-by-grip` opent het scherm "Door Grip gedaan".
 
-  Een push zonder link valt terug op zijn categorie: `VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP` en `TASK_DUE` openen Voor jou. Een `FILING`-push met als link `grip://inbox` (de auto-file-samenvatting van 19:00) wordt in plaats daarvan naar "Door verder gedaan" geleid.
+  Een push zonder link valt terug op zijn categorie: `VERDER_MAIL`, `CREDITOR_MAIL`, `PROPOSAL`, `REMINDER`, `FOLLOW_UP` en `TASK_DUE` openen Voor jou. Een `FILING`-push met als link `grip://inbox` (de auto-file-samenvatting van 19:00) wordt in plaats daarvan naar "Door Grip gedaan" geleid.
 - **Widgets.** Een tik op de widget opent zijn `widgetURL` (`grip://inbox`); bij de varianten die items tonen is elke rij een `Link` naar de `grip://`-link van dat item. Beide komen uit bij `RootView.onOpenURL`, dat dezelfde strikte `DeepLink.parse` toepast.
 - **Het Weekoverzicht** (Meer) eindigt met "Naar Voor jou", dat de actuele lijst opent.
-- **Er is geen URL-schema geregistreerd.** `grip://`-links werken alleen binnen een push of vanuit verders eigen widget. Geen webpagina of andere app kan er een afvuren.
+- **Er is geen URL-schema geregistreerd.** `grip://`-links werken alleen binnen een push of vanuit Grips eigen widget. Geen webpagina of andere app kan er een afvuren.
 
 **Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift`, `Push/DeepLink.swift`, `Push/NotificationRouter.swift`, `Widget/WidgetContent.swift`.
 
@@ -63,7 +63,7 @@ De Voor jou-stack (`inboxPath: [InboxRoute]`) wordt in `RootView` bewaard, niet 
 | Een taakrij | `TaskScreen` (`TaskRowView.swift`) |
 | De huidige halte van de kaart | Niets. De rij wordt getekend zonder chevron en is geen knop (de frames openen hem: functie 10). |
 | Een soort die deze build niet kent | Niets. De rij wordt getekend, niet geopend. |
-| "Door verder gedaan · N" | Klapt ter plekke open (een `DisclosureGroup`). Het is een sectie, geen link. |
+| "Door Grip gedaan · N" | Klapt ter plekke open (een `DisclosureGroup`). Het is een sectie, geen link. |
 
 ## Functies
 
@@ -71,7 +71,7 @@ De Voor jou-stack (`inboxPath: [InboxRoute]`) wordt in `RootView` bewaard, niet 
 
 #### 3. Eén ophaalactie voedt de lijst
 
-`GET /api/mobile/v1/inbox`. De route roept `caller.inbox.list()` (→ `loadWaiting`) en `caller.verderActions.list({ sinceDays: 7 })` samen aan, en antwoordt met `{ count, items, doneByGrip }`. `count` is de lengte van `items` op de server. Dezelfde ophaalactie, in de ene `InboxStore`, voedt ook de badge en de widget-snapshot.
+`GET /api/mobile/v1/inbox`. De route roept `caller.inbox.list()` (→ `loadWaiting`) en `caller.gripActions.list({ sinceDays: 7 })` samen aan, en antwoordt met `{ count, items, doneByGrip }`. `count` is de lengte van `items` op de server. Dezelfde ophaalactie, in de ene `InboxStore`, voedt ook de badge en de widget-snapshot.
 
 **Status:** Gebouwd — `apps/web/src/app/api/mobile/v1/inbox/route.ts`, `apps/ios/Grip/Inbox/InboxStore.swift`.
 
@@ -79,7 +79,7 @@ De Voor jou-stack (`inboxPath: [InboxRoute]`) wordt in `RootView` bewaard, niet 
 
 Eén keer gedefinieerd in `waiting.ts` (spec §12.9):
 
-- alleen voorstellen met `status = 'pending'`. Drafting, draft-failed, approved en sending wachten op verder, niet op Martin;
+- alleen voorstellen met `status = 'pending'`. Drafting, draft-failed, approved en sending wachten op Grip, niet op Martin;
 - suggesties die `pending` of `needs-manual` zijn, en niet bij een weggegooid of vernietigd document horen;
 - taken waarvan de effectieve status `open` of `in-progress` is. Martin besliste op 2026-10-31 dat `in-progress` meetelt, omdat hij degene is die ermee bezig is. `waiting` betekent wachten op iemand anders en telt niet mee;
 - de huidige open halte van de kaart, tenzij een getoonde taak er al voor staat. In dat geval draagt de taakrij de titel van de halte als ondertitel, zodat één stuk werk één keer telt.
@@ -94,7 +94,7 @@ Eén keer gedefinieerd in `waiting.ts` (spec §12.9):
 
 #### 6. Titels komen van de server
 
-Een vraag gebruikt zijn prompt. Een voorstel gebruikt zijn `ask`, of valt terug op "Voorstel van verder" / "Vraag van verder". Een suggestie gebruikt de voorgestelde samenvatting, naam, schuldeiser of titel, en daarna de documenttitel of het onderwerp van de mail.
+Een vraag gebruikt zijn prompt. Een voorstel gebruikt zijn `ask`, of valt terug op "Voorstel van Grip" / "Vraag van Grip". Een suggestie gebruikt de voorgestelde samenvatting, naam, schuldeiser of titel, en daarna de documenttitel of het onderwerp van de mail.
 
 **Status:** Gebouwd — `packages/api/src/waiting.ts`, `apps/web/src/lib/mobile-dto.ts` (`toInboxDTO`).
 
@@ -233,29 +233,29 @@ Twee beslissingen binnen één venster smelten samen tot één toast: "2 besliss
 
 #### 26. "NIET OPGESLAGEN": een mislukte beslissing, ter plekke bewaard
 
-Wanneer een beslissing vanuit de lijst niet kan worden opgeslagen, blijft de rij staan waar hij stond, met een melding in de rij: "NIET OPGESLAGEN · Je goedkeuring is nog niet opgeslagen: de server van verder heeft een storing. Probeer het opnieuw zodra verder weer werkt." met "Opnieuw proberen" en "Goedkeuring intrekken". Haptiek bij mislukken `.error`.
+Wanneer een beslissing vanuit de lijst niet kan worden opgeslagen, blijft de rij staan waar hij stond, met een melding in de rij: "NIET OPGESLAGEN · Je goedkeuring is nog niet opgeslagen: de server van Grip heeft een storing. Probeer het opnieuw zodra Grip weer werkt." met "Opnieuw proberen" en "Goedkeuring intrekken". Haptiek bij mislukken `.error`.
 
 **Status:** Gebouwd — een mislukte post zet de rij terug met `VoorJouNotSavedNotice`: oorzaak, "Opnieuw proberen" en "… intrekken"; haptiek `.error`.
 
-### "Door verder gedaan"
+### "Door Grip gedaan"
 
-Onder het opbergamendement (CLAUDE.md, Project laws; spec §6.6) mag verder zelf een document opbergen: het past de soort uit een document-meta-suggestie toe en zet de status op opgeborgen, nooit de titel. Het mag ook een document hernoemen (auto-name). Elke zulke wijziging is een `document_status_changes`-rij met `actor = 'verder'` en wordt in de ledger vastgelegd. **Automatisch opbergen staat bij oplevering UIT.** `DOCMETA_AUTO_APPLY` is in productie niet gezet, omdat de gemeten drempel geen beslist verleden had om op te slagen (Plan 3 Task 13). Vandaag bevat deze lijst daarom auto-name-hernoemingen.
+Onder het opbergamendement (CLAUDE.md, Project laws; spec §6.6) mag Grip zelf een document opbergen: het past de soort uit een document-meta-suggestie toe en zet de status op opgeborgen, nooit de titel. Het mag ook een document hernoemen (auto-name). Elke zulke wijziging is een `document_status_changes`-rij met `actor = 'verder'` en wordt in de ledger vastgelegd. **Automatisch opbergen staat bij oplevering UIT.** `DOCMETA_AUTO_APPLY` is in productie niet gezet, omdat de gemeten drempel geen beslist verleden had om op te slagen (Plan 3 Task 13). Vandaag bevat deze lijst daarom auto-name-hernoemingen.
 
 #### 27. De sectie onderaan de lijst
 
-Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByGripIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByGrip` — `listGripActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
+Een ingeklapte sectie, "DOOR GRIP GEDAAN · N", onderaan de Voor jou-lijst, alleen getekend als er minstens één actie is. Nooit amber (`InboxRankingTests.doneByGripIsNeverAmber`). Bron: dezelfde `/inbox`-aanroep, veld `doneByGrip` — `listGripActions` over de afgelopen 7 dagen, nieuwste eerst, hooguit 200, gelezen uit de in de ledger vastgelegde wijzigingstabel, nooit uit de suggestie.
 
 **Status:** Gebouwd — `DoneByGripListSection`: kop met "BEKIJKEN ›" / "INKLAPPEN ⌄", in de lege lijst met samenvattingszin; nooit amber.
 
 #### 28. Een eigen scherm
 
-`InboxRoute.doneByGrip` (`DoneByGripScreen`), geopend vanuit Overzicht, vanuit `grip://done-by-grip` en vanuit de samenvattingspush van 19:00. Het draagt de uitleg "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan." Als er niets is gedaan, staat er "verder deed niets zelf."
+`InboxRoute.doneByGrip` (`DoneByGripScreen`), geopend vanuit Overzicht, vanuit `grip://done-by-grip` en vanuit de samenvattingspush van 19:00. Het draagt de uitleg "Wat Grip zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan." Als er niets is gedaan, staat er "Grip deed niets zelf."
 
 **Status:** Gebouwd — `Inbox/DoneByGripSection.swift`, `Inbox/VoorJouTab.swift`.
 
 #### 29. Wat elke rij zegt
 
-"Opgeborgen door verder" of "Hernoemd door verder" met de datum en tijd; de documenttitel; één regel per veld dat veranderde, afgeleid uit voor en na: "inbox → opgeborgen", "soort zonder soort → Brief", "naam … → …".
+"Opgeborgen door Grip" of "Hernoemd door Grip" met de datum en tijd; de documenttitel; één regel per veld dat veranderde, afgeleid uit voor en na: "inbox → opgeborgen", "soort zonder soort → Brief", "naam … → …".
 
 **Status:** Gebouwd — in de lijst als zin ("Opgeborgen als bankafschrift: …", "Hernoemd: … → …") met soort of "hernoemd" en de dag (`DoneByGripList`); het eigen scherm houdt `DoneByGripCopy`.
 
@@ -263,7 +263,7 @@ Een ingeklapte sectie, "DOOR VERDER GEDAAN · N", onderaan de Voor jou-lijst, al
 
 "Ongedaan maken" verschijnt alleen wanneer de server zegt dat de rij `undoable` is en hij nog niet ongedaan is gemaakt. Een tik roept `POST /api/mobile/v1/grip-actions/:changeId/undo` aan met een lege body, en de route weigert elk veld daarin. **Geen Face ID**, met opzet: een undo onthult niets en verstuurt niets. In één transactie, onder de vergrendeling per document, doet de server het volgende:
 
-- hij voegt een Martin-rij (actor NULL) toe aan `document_status_changes`, die de status, titel en soort van vóór de wijziging van verder herstelt;
+- hij voegt een Martin-rij (actor NULL) toe aan `document_status_changes`, die de status, titel en soort van vóór de wijziging van Grip herstelt;
 - hij voegt **+1 `document.updated`** ledger-event toe in de brede payloadvorm;
 - als de wijziging uit een suggestie kwam, markeert hij de undo op de `final_payload` van die suggestie, als leersignaal.
 
@@ -286,7 +286,7 @@ Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server bes
 
 Na "Ongedaan maken" toont het frame een toast "Terug in Kan wachten · Afschrift september" met "Ongedaan maken" en een aftelling, en verschijnt de suggestie van het document weer in Kan wachten. Haptiek `.impact(.light)` (brief §2.5).
 
-**Status:** Gebouwd (2026-11-04) — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Zolang die undo op de telefoon staat (vastgehouden of onderweg) staat het document in Kan wachten tussen de suggesties op zijn eigen datum (nieuwste eerst, waar de server het bij de volgende verversing zet), en volgen het hoofdgetal, het getal van Kan wachten en dat van "Door verder gedaan" mee (`VoorJouList.restoring` / `restoredItem` / `doneCount`), zoals het frame toont. Die rij heeft nog geen suggestie-id van de server en biedt dus geen beslissing aan (geen veeg, geen vinkje); een tik opent het document zelf (`InboxRoute.document`). De volgende verversing zet de rij van de server ervoor in de plaats. Haptiek `.impact(.light)`.
+**Status:** Gebouwd (2026-11-04) — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Zolang die undo op de telefoon staat (vastgehouden of onderweg) staat het document in Kan wachten tussen de suggesties op zijn eigen datum (nieuwste eerst, waar de server het bij de volgende verversing zet), en volgen het hoofdgetal, het getal van Kan wachten en dat van "Door Grip gedaan" mee (`VoorJouList.restoring` / `restoredItem` / `doneCount`), zoals het frame toont. Die rij heeft nog geen suggestie-id van de server en biedt dus geen beslissing aan (geen veeg, geen vinkje); een tik opent het document zelf (`InboxRoute.document`). De volgende verversing zet de rij van de server ervoor in de plaats. Haptiek `.impact(.light)`.
 
 ### Een item openen
 
@@ -313,11 +313,11 @@ Elke schrijfactie hieronder gaat door dezelfde tRPC-procedure die het web gebrui
   - debt: een `debts`-rij en **geen ledger-event** (schulden zijn geen bewijs);
   - task: een `tasks`-rij en geen ledger-event bij het aanmaken (alleen statuswijzigingen worden in de ledger vastgelegd).
 - **"Aanpassen"** opent de bewerkbare velden. "Klaar met aanpassen" sluit ze. Een verplicht veld moet tekst bevatten voordat "Klopt zo" beschikbaar wordt.
-- **"Niet relevant"** vraagt "Waarom? Niet verplicht — verder leert ervan." en roept daarna `POST …/suggestions/:id/reject` aan met een optionele reden van hooguit 2000 tekens. Het legt het oordeel `rejected` vast met de reden en voegt **geen ledger-event** toe.
+- **"Niet relevant"** vraagt "Waarom? Niet verplicht — Grip leert ervan." en roept daarna `POST …/suggestions/:id/reject` aan met een optionele reden van hooguit 2000 tekens. Het legt het oordeel `rejected` vast met de reden en voegt **geen ledger-event** toe.
 - Een schuldsuggestie draagt de regel "Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben."
-- Uitkomsten: "Vastgelegd.", "Afgewezen.", "Deze suggestie is al afgehandeld." (409, een elders gegeven oordeel blijft staan), "verder weigerde dit. Controleer de velden." (400) en "Deze suggestie bestaat niet (meer)."
+- Uitkomsten: "Vastgelegd.", "Afgewezen.", "Deze suggestie is al afgehandeld." (409, een elders gegeven oordeel blijft staan), "Grip weigerde dit. Controleer de velden." (400) en "Deze suggestie bestaat niet (meer)."
 
-**AI-uitvoer is een suggestie.** Niets wat een model voorstelde komt in de ledger voordat Martin op "Klopt zo" tikt (of verder een document opbergt onder het opbergamendement, hierboven).
+**AI-uitvoer is een suggestie.** Niets wat een model voorstelde komt in de ledger voordat Martin op "Klopt zo" tikt (of Grip een document opbergt onder het opbergamendement, hierboven).
 
 **Status:** Gebouwd — `Inbox/SuggestionDetailView.swift`, `apps/web/src/app/api/mobile/v1/suggestions/[id]/{route,approve,reject}`. (De markering "aangepast" uit de brief op bewerkte velden vóór het goedkeuren hoort in het eigen document van het suggestiescherm, `../05-vraag-suggestie-taak/`.)
 
@@ -355,9 +355,9 @@ De telefoon toont de laatst bekende lijst van schijf binnen 300 ms nadat het tab
 
 #### 39. Leeg: niets wacht
 
-"Niets wacht op je" als grote regel met een vinkzegel, dan "Goed bezig. Je rondde zaterdag 31 okt het laatste af. Komt er iets nieuws binnen, dan krijg je een melding." en "0 wachten · bijgewerkt 14:02". "Door verder gedaan" blijft bereikbaar, als samenvattingsregel ("3 dingen deed verder deze week zelf. …") met "Bekijken".
+"Niets wacht op je" als grote regel met een vinkzegel, dan "Goed bezig. Je rondde zaterdag 31 okt het laatste af. Komt er iets nieuws binnen, dan krijg je een melding." en "0 wachten · bijgewerkt 14:02". "Door Grip gedaan" blijft bereikbaar, als samenvattingsregel ("3 dingen deed Grip deze week zelf. …") met "Bekijken".
 
-**Status:** Deels gebouwd — `VoorJouEmptyState` met zegel, kop, "Goed bezig…", "0 wachten · bijgewerkt" en de samenvatting van Door verder gedaan. De zin "Je rondde … het laatste af" verschijnt alleen als de server `lastClearedAt` stuurt; `toInboxDTO` doet dat nog niet.
+**Status:** Deels gebouwd — `VoorJouEmptyState` met zegel, kop, "Goed bezig…", "0 wachten · bijgewerkt" en de samenvatting van Door Grip gedaan. De zin "Je rondde … het laatste af" verschijnt alleen als de server `lastClearedAt` stuurt; `toInboxDTO` doet dat nog niet.
 
 #### 40. Offline over de laatste lijst
 
@@ -367,13 +367,13 @@ Een kaart "OFFLINE · Je ziet je laatste stand. Goedkeuren en afronden kan weer 
 
 #### 41. Storing over de laatste lijst
 
-Een kaart "STORING · De server van verder heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan." met "Opnieuw proberen", en de kop met "laatste stand 14:02".
+Een kaart "STORING · De server van Grip heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan." met "Opnieuw proberen", en de kop met "laatste stand 14:02".
 
 **Status:** Gebouwd — kaart "STORING" met "Opnieuw proberen", kop "laatste stand".
 
 #### 42. Mislukken zonder iets om te tonen
 
-"Voor jou laadt nu niet · De server van verder heeft een storing. Er is niets verloren gegaan." met "Opnieuw proberen" en "laatste poging 14:02 · serverfout 502".
+"Voor jou laadt nu niet · De server van Grip heeft een storing. Er is niets verloren gegaan." met "Opnieuw proberen" en "laatste poging 14:02 · serverfout 502".
 
 **Status:** Gebouwd — `VoorJouFailurePage` met knop en "laatste poging 14:02 · serverfout 502".
 
@@ -419,16 +419,16 @@ Elke veeg- en contextmenuactie is ook een aangepaste VoiceOver-actie op de rij (
 
 #### 49. Face ID bewaakt het tabblad; alleen versturen vraagt opnieuw
 
-Voor jou is vergrendeld. De app vraagt om Face ID (of de toegangscode) bij een koude start en na meer dan 5 minuten op de achtergrond (`LockPolicy.graceSeconds = 300`). Overzicht en Scan openen zonder, maar Overzicht toont tot het ontgrendelen alleen aantallen en geld. Binnen Voor jou vraagt het versturen van een voorstel altijd om een **verse** Face ID (`ApprovalGate`), ook terwijl de app ontgrendeld is; een suggestie goedkeuren of afwijzen, een taakstatus wijzigen, een vraag beantwoorden en een actie van verder ongedaan maken vragen geen verdere Face ID. Geen van alle verstuurt iets naar buiten.
+Voor jou is vergrendeld. De app vraagt om Face ID (of de toegangscode) bij een koude start en na meer dan 5 minuten op de achtergrond (`LockPolicy.graceSeconds = 300`). Overzicht en Scan openen zonder, maar Overzicht toont tot het ontgrendelen alleen aantallen en geld. Binnen Voor jou vraagt het versturen van een voorstel altijd om een **verse** Face ID (`ApprovalGate`), ook terwijl de app ontgrendeld is; een suggestie goedkeuren of afwijzen, een taakstatus wijzigen, een vraag beantwoorden en een actie van Grip ongedaan maken vragen geen verdere Face ID. Geen van alle verstuurt iets naar buiten.
 
 **Status:** Gebouwd — `Auth/AppLock.swift`, `Proposals/ApprovalGate.swift`.
 
 #### 50. Vergrendelscherm, meldingen en widgets tonen geen dossierinhoud
 
-- Met verborgen voorvertoningen luidt een melding alleen "Nieuw bericht van verder": geen titel, geen afzender.
+- Met verborgen voorvertoningen luidt een melding alleen "Nieuw bericht van Grip": geen titel, geen afzender.
 - "Bekijken" (`OPEN`, op `PROPOSAL`, `REMINDER` en `FOLLOW_UP`) is `.foreground` en `.authenticationRequired`. Het opent het item achter de vergrendeling en verstuurt nooit.
 - De antwoordknoppen van een vraag (categorieën `q.<id>`) vereisen authenticatie. Ze draaien op de achtergrond, omdat een antwoord niets verstuurt.
-- De widgetvarianten voor het vergrendelscherm tonen alleen aantallen. Titels op het beginscherm zijn gemarkeerd als `.privacySensitive()`. De widget leest `widget/snapshot.json` in de App Group: het aantal, de bovenste vijf items (soort, id, titel), de kop van de kaart en de leeftijd van het oudste item. De app schrijft het na elke geslaagde verversing met `.completeFileProtectionUntilFirstUserAuthentication` (gemeten op het toestel: `NSFileProtectionCompleteUntilFirstUserAuthentication`). Een mislukte verversing laat de oude snapshot staan, en de widget laat die na 24 uur verlopen ("Open verder om bij te werken").
+- De widgetvarianten voor het vergrendelscherm tonen alleen aantallen. Titels op het beginscherm zijn gemarkeerd als `.privacySensitive()`. De widget leest `widget/snapshot.json` in de App Group: het aantal, de bovenste vijf items (soort, id, titel), de kop van de kaart en de leeftijd van het oudste item. De app schrijft het na elke geslaagde verversing met `.completeFileProtectionUntilFirstUserAuthentication` (gemeten op het toestel: `NSFileProtectionCompleteUntilFirstUserAuthentication`). Een mislukte verversing laat de oude snapshot staan, en de widget laat die na 24 uur verlopen ("Open Grip om bij te werken").
 
 **Status:** Gebouwd — `Push/NotificationCategories.swift`, `Push/QuestionCategories.swift`, `Shared/WidgetSnapshot.swift`, `Widget/WidgetContent.swift`.
 
@@ -441,14 +441,14 @@ Op de telefoon: de inboxlijst en de samenvatting staan alleen in het geheugen; d
 ## Regels waaraan dit scherm zich houdt
 
 - **Er wordt niets verstuurd zonder dat Martin de definitieve tekst goedkeurt,** achter een verse Face ID, en alleen op `ProposalScreen`. Geen lijstrij, veeg, menu of meldingsactie verstuurt. Er is geen bulkverzending. Het bulkgoedkeuren in het ontwerp is alleen voor suggesties.
-- **Amber alleen voor wat op Martin wacht.** "Door verder gedaan" is nooit amber.
+- **Amber alleen voor wat op Martin wacht.** "Door Grip gedaan" is nooit amber.
 - **Eén definitie van wachten,** op de server. De telefoon telt, filtert of herschikt nooit.
 - **AI-uitvoer is een suggestie.** Het wordt pas bewijs bij "Klopt zo" (of het "Goedkeuren" van de lijst, dat dezelfde route aanroept). Het voorstel van het model, het oordeel en de bewerkingsdiff worden allemaal vastgelegd.
-- **Het opbergamendement.** verder mag een document alleen zelf opbergen wanneer de gemeten drempel wordt gehaald. Dat staat vandaag uit. Elke zulke wijziging staat hier vermeld en is in één tik ongedaan te maken. Auto-name-hernoemingen staan er ook, maar worden op de server teruggedraaid.
+- **Het opbergamendement.** Grip mag een document alleen zelf opbergen wanneer de gemeten drempel wordt gehaald. Dat staat vandaag uit. Elke zulke wijziging staat hier vermeld en is in één tik ongedaan te maken. Auto-name-hernoemingen staan er ook, maar worden op de server teruggedraaid.
 - **Wat de telefoon niet mag:**
   - een taakovergang forceren;
   - een registry-item goedkeuren;
-  - beslissen of een actie van verder ongedaan kan worden gemaakt.
+  - beslissen of een actie van Grip ongedaan kan worden gemaakt.
 
 ## Meldingen, badge en haptiek
 
@@ -468,19 +468,19 @@ De achtergrondpush met `content-available` wekt `AppDelegate`, die dezelfde `Inb
 
 #### 54. De dagelijkse samenvatting
 
-`autofile.digest` (19:00 Amsterdamse tijd) stuurt één passieve `FILING`-push met alleen aantallen, en alleen op dagen waarop verder iets heeft gedaan. Een tik opent "Door verder gedaan".
+`autofile.digest` (19:00 Amsterdamse tijd) stuurt één passieve `FILING`-push met alleen aantallen, en alleen op dagen waarop Grip iets heeft gedaan. Een tik opent "Door Grip gedaan".
 
 **Status:** Gebouwd — `apps/worker/src/autofile-digest.ts`, `Push/NotificationRouter.swift`.
 
 #### 55. Haptiek
 
-Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg) `.success`; een afwijzing `.impact(.soft)`, omdat afwijzen geen mislukking is; een veeg die zijn drempel passeert `.selection`; een undo in "Door verder gedaan" `.impact(.light)`; een mislukte beslissing `.error`, met het opnieuw proberen in de rij. Allemaal overgeslagen wanneer systeemhaptiek uit staat; niets hangt ervan af.
+Brief §2.5: suggestie goedgekeurd of taakstatus gewijzigd (ook vanuit een veeg) `.success`; een afwijzing `.impact(.soft)`, omdat afwijzen geen mislukking is; een veeg die zijn drempel passeert `.selection`; een undo in "Door Grip gedaan" `.impact(.light)`; een mislukte beslissing `.error`, met het opnieuw proberen in de rij. Allemaal overgeslagen wanneer systeemhaptiek uit staat; niets hangt ervan af.
 
-**Status:** Gebouwd voor de lijst — `.success`, `.impact(.soft)` (afwijzen), `.error` (mislukt, en een mislukte verversing), `.impact(.light)` (undo in Door verder gedaan). Nog te bouwen: de drempeltik `.selection` (zie 20) en de detailschermen.
+**Status:** Gebouwd voor de lijst — `.success`, `.impact(.soft)` (afwijzen), `.error` (mislukt, en een mislukte verversing), `.impact(.light)` (undo in Door Grip gedaan). Nog te bouwen: de drempeltik `.selection` (zie 20) en de detailschermen.
 
 ## Offline gedrag en synchronisatie
 
-- Er is geen offline wachtrij voor beslissingen, en er is er ook geen ontworpen: goedkeuren, afwijzen, een taakstatus en een undo hebben allemaal de server nodig op het moment van de tik. Offline zegt het detailscherm "Geen verbinding met verder. Probeer het opnieuw." en wordt er niets vastgelegd. De ontworpen offlinestaat (functie 40) maakt dit zichtbaar door de acties uit te schakelen met de reden erbij; "Niet opgeslagen" (functie 26) dekt een beslissing die na de tik mislukte.
+- Er is geen offline wachtrij voor beslissingen, en er is er ook geen ontworpen: goedkeuren, afwijzen, een taakstatus en een undo hebben allemaal de server nodig op het moment van de tik. Offline zegt het detailscherm "Geen verbinding met Grip. Probeer het opnieuw." en wordt er niets vastgelegd. De ontworpen offlinestaat (functie 40) maakt dit zichtbaar door de acties uit te schakelen met de reden erbij; "Niet opgeslagen" (functie 26) dekt een beslissing die na de tik mislukte.
 - De lijst op het scherm is de laatste geslaagde ophaalactie in dit proces. Hij wordt niet over herstarts heen bewaard totdat functie 38 gebouwd is. Het zakdossier (tabblad Dossier) is de offline opslag. Voor jou is dat niet.
 
 ## Bekende beperkingen en wat niet gemeten is
@@ -542,7 +542,7 @@ Alle 26 frames uit `voorjou · final` (`339:12478`), opnieuw geëxporteerd op 20
 | Frame | Wat het toont | Functie | Code vandaag |
 |---|---|---|---|
 | ![](frames/Voor_jou_laden.jpg) `Voor_jou_laden.jpg` | Laden, vóór de eerste ophaalactie | 37 | Titel en een spinner |
-| ![](frames/Voor_jou_leeg.jpg) `Voor_jou_leeg.jpg` | Leeg: niets wacht, laatst afgehandeld, samenvatting "Door verder gedaan" | 39 | "Niets wacht op je." |
+| ![](frames/Voor_jou_leeg.jpg) `Voor_jou_leeg.jpg` | Leeg: niets wacht, laatst afgehandeld, samenvatting "Door Grip gedaan" | 39 | "Niets wacht op je." |
 | ![](frames/Voor_jou_n_item.jpg) `Voor_jou_n_item.jpg` | Eén item, enkelvoud "wacht op jou" | 11 | Eén rij, geen hoofdgetal |
 | ![](frames/Voor_jou_veel_498.jpg) `Voor_jou_veel_498.jpg` | 498 wachtend: Nu / Kan wachten, 20 getoond | 11, 13, 14, 15 | Platte lijst van alle rijen, geen secties of limiet |
 | ![](frames/Voor_jou_veel_gescrold.jpg) `Voor_jou_veel_gescrold.jpg` | Dezelfde lijst gescrold, compacte titel met aantal | 12 | Niet gebouwd |
@@ -558,12 +558,12 @@ Alle 26 frames uit `voorjou · final` (`339:12478`), opnieuw geëxporteerd op 20
 | ![](frames/Voor_jou_niet_opgeslagen.jpg) `Voor_jou_niet_opgeslagen.jpg` | Een beslissing niet opgeslagen, opnieuw proberen of intrekken in de rij | 26 | Niet gebouwd; het detailscherm toont de fout |
 | ![](frames/Voor_jou_selecteren.jpg) `Voor_jou_selecteren.jpg` | Selectiemodus voor bulkbeslissingen over suggesties | 21 | Niet gebouwd |
 | ![](frames/Voor_jou_selecteren_bevestigen.jpg) `Voor_jou_selecteren_bevestigen.jpg` | Bevestiging "3 suggesties goedkeuren?" | 21 | Niet gebouwd |
-| ![](frames/Voor_jou_door_verder_gedaan_ongedaan.jpg) `Voor_jou_door_verder_gedaan_ongedaan.jpg` | "Door verder gedaan" uitgeklapt, een undo met zijn toast | 27, 30, 32 | Sectie en undo gebouwd; geen toast |
-| ![](frames/Voor_jou_offline.jpg) `Voor_jou_offline.jpg` | Offline met de laatste lijst en zijn leeftijd | 38, 40 | Eén regel "Geen verbinding met verder…" boven de lijst in het geheugen |
+| ![](frames/Voor_jou_door_Grip_gedaan_ongedaan.jpg) `Voor_jou_door_Grip_gedaan_ongedaan.jpg` | "Door Grip gedaan" uitgeklapt, een undo met zijn toast | 27, 30, 32 | Sectie en undo gebouwd; geen toast |
+| ![](frames/Voor_jou_offline.jpg) `Voor_jou_offline.jpg` | Offline met de laatste lijst en zijn leeftijd | 38, 40 | Eén regel "Geen verbinding met Grip…" boven de lijst in het geheugen |
 | ![](frames/Voor_jou_storing_met_cache.jpg) `Voor_jou_storing_met_cache.jpg` | Serverstoring, kaart "STORING" boven de laatste lijst | 38, 41 | Eén regel "Dat lukte niet…" boven de lijst in het geheugen |
 | ![](frames/Voor_jou_fout_geen_cache.jpg) `Voor_jou_fout_geen_cache.jpg` | Mislukken zonder cache, "Opnieuw proberen" | 42 | Alleen de melding; trekken om te verversen |
 | ![](frames/Voor_jou_sessie_verlopen.jpg) `Voor_jou_sessie_verlopen.jpg` | Sessie verlopen, één weg terug naar inloggen | 43 | Gebouwd (`SessionExpiredView`) |
 | ![](frames/Voor_jou_iPhone_SE.jpg) `Voor_jou_iPhone_SE.jpg` | De lijst op een iPhone SE (375 × 667) | 46 | Zelfde layout als die van de code |
 | ![](frames/Voor_jou_AX5.jpg) `Voor_jou_AX5.jpg` | Grootste toegankelijkheidstekstgrootte | 45 | Dynamic Type schaalt; geen hoofdgetal, meta stapelt niet |
 | ![](frames/Voor_jou_AX5_gescrold.jpg) `Voor_jou_AX5_gescrold.jpg` | AX5 gescrold, met een toast | 24, 45 | Niet gebouwd (toast) |
-| ![](frames/Voor_jou_AX5_door_verder_gedaan.jpg) `Voor_jou_AX5_door_verder_gedaan.jpg` | AX5 met "Door verder gedaan" | 27, 45 | Sectie gebouwd |
+| ![](frames/Voor_jou_AX5_door_Grip_gedaan.jpg) `Voor_jou_AX5_door_Grip_gedaan.jpg` | AX5 met "Door Grip gedaan" | 27, 45 | Sectie gebouwd |

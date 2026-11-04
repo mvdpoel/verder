@@ -115,9 +115,9 @@ Het volledige gedrag van de kaart staat in [`02-overzicht/FEATURES.md`](../02-ov
 | complete | Kop "LEEFGELD" en de periode "26 OKT – 1 NOV". Hoofdbedrag "€ 37,60" met "over van € 100,00", een balk voor wat er over is, kolommen "UITGEGEVEN" / "ONTVANGEN", en de voetnoot "Alleen je leefgeldrekening." |
 | partial | Kop "ONVOLLEDIG · 26 OKT – 1 NOV". Het hoofdbedrag is wat er is **uitgegeven**: "€ 47,90" met "uitgegeven t/m do 29 okt". De gedekte dagen zijn effen en de rest gearceerd, met "VR–ZO: NOG GEEN AFSCHRIFT" (of "ZO: …" voor één dag). De enige kolom is "OVER" → "nog niet bekend". |
 | overspent | Hoofdbedrag "− € 12,40", met het bijschrift "boven het weekbedrag" eronder, en de balk gearceerd voorbij een streepje bij het punt van € 100. Niet amber. |
-| geen data | "Geen data voor deze week", de uitlezing "LAATSTE AFSCHRIFT T/M ZO 18 OKT", "Importeer een nieuw afschrift op de website. Daarna rekent verder deze week uit." en de link "Open op de website". Geen bedrag. De uitlezing is de nieuwste leesbare boeking **op de leefgeldrekening**, niet op een willekeurige rekening. |
+| geen data | "Geen data voor deze week", de uitlezing "LAATSTE AFSCHRIFT T/M ZO 18 OKT", "Importeer een nieuw afschrift op de website. Daarna rekent Grip deze week uit." en de link "Open op de website". Geen bedrag. De uitlezing is de nieuwste leesbare boeking **op de leefgeldrekening**, niet op een willekeurige rekening. |
 | niets geïmporteerd (`no-account` zonder leesbare boeking waar dan ook, of `geen-data` zonder leesbare boeking op de leefgeldrekening) | "Nog geen afschriften", "Importeer je eerste afschrift op de website. Daarna zie je hier wat er deze week over is." en "Open op de website". Dit is geen fout: er valt nog niets te herkennen. Het is de toestand van productie sinds 2026-11-01. |
-| niet herkend (`no-account` terwijl er afschriften zijn) | "Leefgeldrekening niet herkend", een van "Geen rekening krijgt wekelijks geld binnen." / "1 rekening krijgt wekelijks geld binnen." / "N rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een.", en "Kies hem op de website". |
+| niet herkend (`no-account` terwijl er afschriften zijn) | "Leefgeldrekening niet herkend", een van "Geen rekening krijgt wekelijks geld binnen." / "1 rekening krijgt wekelijks geld binnen." / "N rekeningen krijgen wekelijks geld binnen; Grip kiest er niet zelf een.", en "Kies hem op de website". |
 | geen budget | Geen Leefgeld-kaart. Zie F5. |
 
 ![Gedeeltelijke week (ontwerp)](frames/Money_glance_partial.jpg)
@@ -175,7 +175,7 @@ Het volledige gedrag van de kaart staat in [`02-overzicht/FEATURES.md`](../02-ov
 - een `none` maand zegt "geen data", zonder bedrag en zonder balk, nooit € 0,00;
 - onder de eigen maand (alleen voor een maand met data): "1 regel onleesbaar" / "N regels onleesbaar" voor regels met een parse-fout, daarna elke toegelichte regel: "19 aug · eenmalig · Zorgverzekeraar Duinzorg" met "€ 85,00" rechts (eenmalige bijschrijvingen die niet als inkomen tellen), en "… · eigen overboeking · …" (overboekingen tussen Martins eigen rekeningen). Deze regels zorgen dat de balken aansluiten op de bank.
 
-Zonder rekeningen toont Geld "Nog geen rekeningen" en "Afschriften lees je in via verder op de computer. Daarna staat hier per rekening wat er in en uit ging." (De ontworpen versie van deze toestand is F20.)
+Zonder rekeningen toont Geld "Nog geen rekeningen" en "Afschriften lees je in via Grip op de computer. Daarna staat hier per rekening wat er in en uit ging." (De ontworpen versie van deze toestand is F20.)
 
 ![Geld, volledig (ontwerp)](frames/Geld_complete_hele_pagina.jpg)
 
@@ -240,7 +240,7 @@ Elke rekeningkaart zegt wanneer haar eigen afschrift eindigt: "NIEUWSTE BOEKING 
 
 **Status:** Nog te bouwen — vereist dat `MoneyStore` bij succes `fetchedAt` vastlegt (`HomeSummary.eyebrow` op Overzicht doet hetzelfde al voor de inbox en is het patroon om te hergebruiken), de regel "BIJGEWERKT 08:14" (of "BIJGEWERKT GISTEREN 22:14", "BIJWERKEN…" tijdens het laden) onder de titel, en tests. Geen serverwijziging.
 
-Deze regel staat los van de leeftijd van de afschriften in F6: de een zegt wanneer de telefoon voor het laatst van verder hoorde, de ander hoe ver de bankafschriften reiken.
+Deze regel staat los van de leeftijd van de afschriften in F6: de een zegt wanneer de telefoon voor het laatst van Grip hoorde, de ander hoe ver de bankafschriften reiken.
 
 ### F15. Verversen
 
@@ -265,7 +265,7 @@ Deze regel staat los van de leeftijd van de afschriften in F6: de een zegt wanne
 | Laden, niets bewaard | `LeefgeldSkeleton`, in de vorm van de kaart. De geldkaart verschijnt pas op het bord van Overzicht zodra de **inbox** geladen is; als het ophalen van de inbox mislukt zonder iets bewaard, toont Overzicht zijn foutkaart en geen geldkaart, wat het ophalen van het geld ook deed | Twee lege panelen, VoiceOver-label "Laden" | Wachten; omlaagtrekken om te verversen |
 | Volledig / gedeeltelijk / overschreden / geen data / niets geïmporteerd / niet herkend / geen budget | Zie F3–F5 | Zie F6–F7 | Op de kaart tikken om Geld te openen; bij een meldingstoestand de website openen |
 | Fout, niets bewaard | De Leefgeld-kaart is **verborgen**, zodat Overzicht geen tweede fout toont; "Geld itself says why" | Een paneel met "Dat lukte niet. Probeer het over een moment opnieuw." en "Opnieuw proberen" | Opnieuw proberen |
-| Offline, niets bewaard | Verborgen, zoals hierboven | Hetzelfde paneel met "Geen verbinding met verder. Probeer het opnieuw." | Opnieuw proberen |
+| Offline, niets bewaard | Verborgen, zoals hierboven | Hetzelfde paneel met "Geen verbinding met Grip. Probeer het opnieuw." | Opnieuw proberen |
 | Fout of offline, antwoord bewaard | De bewaarde kaart, ongewijzigd | Het bewaarde scherm, **zonder enig teken dat het ophalen mislukte** | Omlaagtrekken om te verversen |
 | Sessie verlopen (401) | De tabbalk wordt vervangen door "Je sessie is verlopen." | Hetzelfde | Opnieuw inloggen |
 | Vergrendeld | De leefgeldkaart wordt getoond (alleen bedragen); de kaart "Geld" zonder budget niet, omdat haar regels een IBAN-staart bevatten | Niet bereikbaar: in plaats daarvan verschijnt het vergrendelscherm (F21) | Ontgrendelen met Face ID |
@@ -284,7 +284,7 @@ Deze regel staat los van de leeftijd van de afschriften in F6: de een zegt wanne
 
 **Status:** Deels gebouwd — het paneel en "Opnieuw proberen" bestaan, met de gedeelde tekst van Voor jou (`VoorJouTab.message`). Nog ontbrekend: Geld's eigen formulering, de diagnostische regel, en de automatische volgende poging. `APIError.server(Int)` draagt de statuscode al. De regel vereist het tijdstip van de fout in `MoneyStore`, een ingeplande nieuwe poging (zonder herhaallus bij een 429, volgens `APIError.rateLimited`), tekst in `MoneyGlance.swift`, en tests.
 
-Het frame "Geld / fout" leest "Geld is nu niet op te halen." / "De server van verder antwoordt niet. Je afschriften zijn niet weg; ze staan veilig op de server." met "SERVER 503 · 14:05 · VOLGENDE POGING 14:06" en "Opnieuw proberen". Een 401 zou "Log opnieuw in." lezen, maar het scherm voor een verlopen sessie vervangt de app eerst.
+Het frame "Geld / fout" leest "Geld is nu niet op te halen." / "De server van Grip antwoordt niet. Je afschriften zijn niet weg; ze staan veilig op de server." met "SERVER 503 · 14:05 · VOLGENDE POGING 14:06" en "Opnieuw proberen". Een 401 zou "Log opnieuw in." lezen, maar het scherm voor een verlopen sessie vervangt de app eerst.
 
 ![Geld fout (ontwerp)](frames/Geld_fout.jpg)
 

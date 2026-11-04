@@ -18,7 +18,7 @@ De drie belangrijkste dingen die op 2026-11-03 nog gebouwd moesten worden:
 2. **Het inlogscherm zoals ontworpen, met zijn eigen foutstaten (3.8–3.16).** Eerst de toegangssleutel, het wachtwoord als tweede stap. Aparte antwoorden voor "geen toegangssleutel op deze telefoon", "deze toegangssleutel hoort niet meer bij je account", "server reageert niet" tegenover "offline", en "te veel pogingen" met het tijdstip waarop het weer kan. Nu vallen die allemaal in een handvol algemene teksten.
 3. **Meldingen per soort aan of uit in Meer → Meldingen (3.28).** Dit is de enige functie in deze groep die een servermodel nodig heeft: een opgeslagen instelling per soort, een mobiele route om die te lezen en te schrijven, en een `notify()` die zich eraan houdt.
 
-Deze groep beschrijft hoe de iPhone-app een sessie krijgt, hoe hij het dossier dicht houdt wanneer iemand anders de telefoon vasthoudt, en hoe hij iOS om toestemming vraagt voor de camera, de microfoon, spraakherkenning en meldingen. Het is geschreven voor Martin en voor iedereen die later aan verder werkt. Het beschrijft wat de app **doet**. Het visuele ontwerp staat in de Figma-frames hieronder.
+Deze groep beschrijft hoe de iPhone-app een sessie krijgt, hoe hij het dossier dicht houdt wanneer iemand anders de telefoon vasthoudt, en hoe hij iOS om toestemming vraagt voor de camera, de microfoon, spraakherkenning en meldingen. Het is geschreven voor Martin en voor iedereen die later aan Grip werkt. Het beschrijft wat de app **doet**. Het visuele ontwerp staat in de Figma-frames hieronder.
 
 Elke bewering hier komt uit de code op branch `feat/iphone-app` (working tree van 2026-11-03), de spec `docs/superpowers/specs/2026-10-28-iphone-app-design.md`, de ontwerpbrief `docs/superpowers/specs/2026-11-01-iphone-design-brief.md`, plan 3 `docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md` en `CLAUDE.md`. De secties 3.1–3.7 beschrijven de **code**; de secties 3.8–3.30 beschrijven functies die de definitieve frames, de spec of de brief vastleggen, en de statusregel van elk zegt hoeveel ervan de code al doet. Verschillen in tekst staan onder **Ontwerp tegenover code**. De schermafbeeldingen gebruiken de synthetische fixture-dataset, geen echte dossiergegevens.
 
@@ -60,7 +60,7 @@ Na een geslaagde inlog gaat de app naar de tabbalk. Bij een verse start is dat *
 **Status:** Gebouwd — `apps/ios/Grip/Auth/PasskeyAuth.swift`, `AuthModel.signInWithPasskey()` in `Grip/Auth/AuthModel.swift`.
 
 1. `GET /api/auth/passkey/generate-authenticate-options`, verstuurd **zonder** opgeslagen cookie. De server antwoordt met de WebAuthn-opties en zet een ondertekende challenge-cookie voor eenmalig gebruik (`__Secure-better-auth.better-auth-passkey`, 300 s geldig).
-2. iOS toont het passkey-venster van het systeem (`ASAuthorizationPlatformPublicKeyCredentialProvider`, relying party `grip.vanderpoel.pro`). Zonder sessie is de allow-list leeg, dus iOS biedt elke passkey aan die het voor verder heeft. Daar hoort ook een passkey bij die op de Mac is gemaakt en via de iCloud-sleutelhanger is gesynchroniseerd.
+2. iOS toont het passkey-venster van het systeem (`ASAuthorizationPlatformPublicKeyCredentialProvider`, relying party `grip.vanderpoel.pro`). Zonder sessie is de allow-list leeg, dus iOS biedt elke passkey aan die het voor Grip heeft. Daar hoort ook een passkey bij die op de Mac is gemaakt en via de iCloud-sleutelhanger is gesynchroniseerd.
 3. `POST /api/auth/passkey/verify-authentication` met de assertion. De challenge-cookie uit stap 1 wordt **met de hand** meegestuurd, omdat de URLSession van de app helemaal geen cookies bewaart.
 4. De sessiecookie uit de `Set-Cookie` van het antwoord wordt in de Keychain opgeslagen. `isSignedIn` wordt true en `sessionGeneration` wordt opgehoogd. Die ophoging hervat de uploadwachtrij en start de controle voor de toestemmingsvraag voor meldingen.
 
@@ -85,13 +85,13 @@ Limiet: better-auth staat 10 per minuut toe op `/passkey/verify-authentication`,
 - **Handeling:**
   1. `GET /api/auth/passkey/generate-register-options?authenticatorAttachment=platform`.
   2. iOS maakt de credential aan.
-  3. `POST /api/auth/passkey/verify-registration` met `{ response, name: "verder op iPhone" }` en **beide** cookies (sessie plus challenge).
+  3. `POST /api/auth/passkey/verify-registration` met `{ response, name: "Grip op iPhone" }` en **beide** cookies (sessie plus challenge).
 
   De server schrijft één rij in `passkey`. Er wordt geen ledger-event toegevoegd.
 - **Tekst van de aanbodkaart:** "Passkey toevoegen?" / "Dan log je voortaan in met Face ID, zonder wachtwoord.", met "Passkey toevoegen" en "Niet nu".
 - **Uitkomsten:** bij succes staat er "Passkey toegevoegd. Voortaan log je in met Face ID." en wordt het aantal op Account ververst. Een geannuleerd venster zegt niets. Een 429 toont de tekst voor de limiet en geen verbinding toont de offline-tekst (beide zoals in sectie 4). Al het andere toont "Passkey toevoegen lukte niet. Probeer het over een moment opnieuw." met een regel over de oorzaak.
 - **Verse sessie vereist:** better-auth registreert alleen op een sessie die jonger is dan één dag (`freshAge`). Een oudere sessie krijgt een 403, die de app (net als een 401, of geen opgeslagen geldige sessie) toont als "Log eerst opnieuw in; daarna kun je een passkey toevoegen."
-- **Staat al op deze telefoon:** iOS antwoordt `ASAuthorizationError 1006` (`matchedExcludedCredential`) wanneer er al een gesynchroniseerde passkey bestaat. Dat is **geen fout**. De app zegt "Er staat al een passkey voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
+- **Staat al op deze telefoon:** iOS antwoordt `ASAuthorizationError 1006` (`matchedExcludedCredential`) wanneer er al een gesynchroniseerde passkey bestaat. Dat is **geen fout**. De app zegt "Er staat al een passkey voor Grip op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
 
 <img src="frames/Sign-in_Toegangssleutel_toevoegen.jpg" width="260" alt="Toegangssleutel toevoegen"> <img src="frames/Sign-in_Toegangssleutel_staat_al_op_je_telefoon.jpg" width="260" alt="Toegangssleutel staat al op je telefoon">
 
@@ -124,7 +124,7 @@ De uploadwachtrij heeft een eigen versie van deze regel. Een 401 op een upload z
 Meer → Account → "Uitloggen" vraagt eerst: "Uitloggen op deze iPhone?" / "Het dossier op deze iPhone wordt gewist. Daarna log je opnieuw in met Face ID of je wachtwoord." Daarna volgen deze stappen, in deze volgorde:
 
 1. Het sluit het spraaklogboek, vergeet het account en maakt de stapel van Meer leeg.
-2. `POST /api/auth/sign-out` wordt geprobeerd. Als de telefoon verder niet kan bereiken, **vergeet hij toch alles lokaal**. Een sessie die op de server blijft leven, verloopt vanzelf en kan worden ingetrokken in `/settings/security`.
+2. `POST /api/auth/sign-out` wordt geprobeerd. Als de telefoon Grip niet kan bereiken, **vergeet hij toch alles lokaal**. Een sessie die op de server blijft leven, verloopt vanzelf en kan worden ingetrokken in `/settings/security`.
 3. `forgetLocally()` wist het Keychain-item, beëindigt de `SessionEpoch`, wist de widget-momentopname en laadt de widget-tijdlijnen opnieuw.
 4. `dossier.wipe()` maakt het zakdossier leeg.
 
@@ -137,12 +137,12 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 **Status (vergrendeling bij koude start en na de respijttijd van 5 minuten, Face ID of toegangscode van het toestel, één automatische vraag per vergrendelperiode):** Gebouwd — `LockPolicy`, `PlatformOwnerAuthenticator` en `AppLock.autoPromptIfNeeded()` in `Grip/Auth/AppLock.swift`; `RootView.promptOnOpen()`; `GripTests/AppLockTests.swift`.
 
 - **Beleid (`LockPolicy`):** de app vergrendelt bij een koude start, en na **meer dan** 300 s in de achtergrond. Als de klok terugliep terwijl de app weg was, vergrendelt hij ook, omdat hij bij twijfel dichtgaat. Het Face ID-venster, het bedieningspaneel en een oproepbanner maken de scene alleen inactief, en worden niet als een keer weg beoordeeld. Anders zou ontgrendelen de app opnieuw vergrendelen.
-- **Authenticatie:** `LAPolicy.deviceOwnerAuthentication`, dus de **toegangscode van het toestel** werkt wanneer Face ID mislukt of niet beschikbaar is. Per poging wordt een nieuwe `LAContext` gemaakt. De redentekst is "Ontgrendel verder om je dossier te zien."
+- **Authenticatie:** `LAPolicy.deviceOwnerAuthentication`, dus de **toegangscode van het toestel** werkt wanneer Face ID mislukt of niet beschikbaar is. Per poging wordt een nieuwe `LAContext` gemaakt. De redentekst is "Ontgrendel Grip om je dossier te zien."
 - **Eén keer bij openen, niet per scherm:** Martin besloot op 2026-11-01 dat de app één keer per vergrendelperiode vanzelf vraagt, welk tabblad ook zichtbaar is, behalve Scan. Na een annulering vraagt alleen een knop het opnieuw, zodat een geannuleerd venster nooit door de volgende activering weer wordt geopend.
 - **Per gebied (`AppLock.Area`):**
   - `capture` (Scan) is open.
   - `glance` (Overzicht) is open, maar toont **alleen getallen en bedragen**. Geen titel, geen naam en geen notitie wordt zelfs maar opgebouwd zolang de app vergrendeld is. Overzicht biedt "Toon details" met een Face ID-pictogram en de voetnoot "Titels en de kaart verschijnen na Face ID."
-  - `dossier` dekt Voor jou, Dossier, Meer, het scherm Geld en het spraakvenster af. Die tonen `LockView`, het verder-woordmerk met "Ontgrendel met Face ID". De afgeschermde inhoud wordt achter de vergrendeling **helemaal niet getekend** (het is geen overlay), dus hij kan niets laden en niets aan VoiceOver melden.
+  - `dossier` dekt Voor jou, Dossier, Meer, het scherm Geld en het spraakvenster af. Die tonen `LockView`, het Grip-woordmerk met "Ontgrendel met Face ID". De afgeschermde inhoud wordt achter de vergrendeling **helemaal niet getekend** (het is geen overlay), dus hij kan niets laden en niets aan VoiceOver melden.
   - Een nieuw gebied is standaard afgeschermd. Open is de uitzondering, en die moet worden beargumenteerd.
 
   **Status (gebieden, en afgeschermde inhoud helemaal niet getekend):** Gebouwd — `AppLock.Area` / `isGated` in `Grip/Auth/AppLock.swift`, `.lockGated(by:)` in `Grip/Auth/LockView.swift`.
@@ -153,7 +153,7 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 - **Uitkomsten** — **Status:** Gebouwd — `AppLock.Copy` en `LockView.swift`; de haptiek in `HomeTab.swift` (`failedUnlocks`). De ontworpen vensters die de kale teksten vervangen na een annulering en wanneer er geen toegangscode is ingesteld, zijn aparte functies (3.18, 3.20).
   - Annuleren toont niets.
   - Een mislukking toont "Ontgrendelen lukte niet. Probeer het nog eens."
-  - Geen toegangscode ingesteld toont "Stel een toegangscode in op je iPhone; daarna kun je verder ontgrendelen."
+  - Geen toegangscode ingesteld toont "Stel een toegangscode in op je iPhone; daarna kun je Grip ontgrendelen."
   - Een ontgrendeling vanuit "Toon details" op Overzicht die de app vergrendeld laat, speelt een `.error`-haptiek. Dat geldt ook voor een **geannuleerd** venster, omdat de controle alleen is "daarna nog steeds vergrendeld". De foutteksten hierboven verschijnen alleen op `LockView`, niet op Overzicht.
 - **Los van versturen:** het goedkeuren van een voorstel vraagt via `ApprovalGate` een **verse** Face ID, ook als de app ontgrendeld is. Die poort hoort bij het voorstelscherm (een andere schermgroep) en wordt niet door deze vergrendeling beïnvloed. **Status:** Gebouwd — `Grip/Proposals/ApprovalGate.swift`, `GripTests/ApprovalGateTests.swift`.
 
@@ -163,11 +163,11 @@ Het beëindigen van de epoch laat elke store zijn dossierinhoud vergeten: de inb
 
 | Toestemming | Wanneer het wordt gevraagd (code) | Wat de app eerst toont |
 |---|---|---|
-| **Meldingen** | Na een inlog (`sessionGeneration` verandert) of na een ontgrendeling met een sessie. **Nooit bij een koude start.** | Een melding in de app, "Meldingen aanzetten?" / "verder laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen.", met "Meldingen aanzetten" of "Niet nu". Het wordt **één keer per installatie** aangeboden (`pushPrePromptShown`). Alleen een ja toont het systeemvenster (`.alert, .sound, .badge`). "Niet nu" kost niets, omdat Meer → Meldingen het opnieuw aanbiedt. |
-| **Camera** | De eerste tik op de schijf van Scan (of de eerste `grip://scan`) terwijl de status `notDetermined` is. | Een schermvullende vraag vooraf in de app, "Brieven scannen" / "verder gebruikt de camera om brieven voor je dossier te scannen.", twee beloften ("De camera gaat alleen aan als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding."), één knop "Ga verder" en "Daarna vraagt iOS om toestemming.", zonder sluitknop. Pas daarna de systeemvraag, waarvan de doeltekst in `project.yml` nu luidt "verder gebruikt de camera om brieven voor je dossier te scannen." Bij toestemming gaat de camera meteen open. |
-| **Microfoon** | Wanneer een spraakopname begint (`AVAudioApplication.requestRecordPermission`). | De systeemvraag, "verder neemt je stem op om een gesprek vast te leggen." Bij weigering zegt het spraakvenster "verder mag de microfoon niet gebruiken. Zet het aan in Instellingen." en toont het "Open Instellingen". |
-| **Spraakherkenning** | Niet gevraagd met een eigen aanroep. Transcriptie gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon, en de code controleert de *beschikbaarheid* (ready / needsDownload / unsupported) in plaats van een autorisatiestatus. | De plist bevat "verder zet je opname op je telefoon om in tekst." |
-| **Face ID** | De eerste `evaluatePolicy`. | "verder vraagt Face ID zodat alleen jij je dossier opent." |
+| **Meldingen** | Na een inlog (`sessionGeneration` verandert) of na een ontgrendeling met een sessie. **Nooit bij een koude start.** | Een melding in de app, "Meldingen aanzetten?" / "Grip laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen.", met "Meldingen aanzetten" of "Niet nu". Het wordt **één keer per installatie** aangeboden (`pushPrePromptShown`). Alleen een ja toont het systeemvenster (`.alert, .sound, .badge`). "Niet nu" kost niets, omdat Meer → Meldingen het opnieuw aanbiedt. |
+| **Camera** | De eerste tik op de schijf van Scan (of de eerste `grip://scan`) terwijl de status `notDetermined` is. | Een schermvullende vraag vooraf in de app, "Brieven scannen" / "Grip gebruikt de camera om brieven voor je dossier te scannen.", twee beloften ("De camera gaat alleen aan als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding."), één knop "Ga verder" en "Daarna vraagt iOS om toestemming.", zonder sluitknop. Pas daarna de systeemvraag, waarvan de doeltekst in `project.yml` nu luidt "Grip gebruikt de camera om brieven voor je dossier te scannen." Bij toestemming gaat de camera meteen open. |
+| **Microfoon** | Wanneer een spraakopname begint (`AVAudioApplication.requestRecordPermission`). | De systeemvraag, "Grip neemt je stem op om een gesprek vast te leggen." Bij weigering zegt het spraakvenster "Grip mag de microfoon niet gebruiken. Zet het aan in Instellingen." en toont het "Open Instellingen". |
+| **Spraakherkenning** | Niet gevraagd met een eigen aanroep. Transcriptie gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon, en de code controleert de *beschikbaarheid* (ready / needsDownload / unsupported) in plaats van een autorisatiestatus. | De plist bevat "Grip zet je opname op je telefoon om in tekst." |
+| **Face ID** | De eerste `evaluatePolicy`. | "Grip vraagt Face ID zodat alleen jij je dossier opent." |
 
 - **Toestemmingsvraag vooraf voor meldingen.** **Status:** Gebouwd (2026-11-04) — `NotificationPrePrompt` (volledig scherm, één "Ga verder", geen sluitknop) vervangt de `.alert`, op dezelfde momenten; de schakelaars per soort bestaan in Meer → Meldingen (`NotificationPrefs`), dus beide beloften kloppen. Eerder: gevraagd als melding in systeemstijl. Het ontwerp maakt er een volledig scherm van, gevraagd op hetzelfde moment: een voorbeeldmelding ("Voorstel klaar om te keuren"), twee beloften ("Geen schuldeisers of bedragen op je vergrendelscherm." / "Per soort uit te zetten in Meer → Meldingen.") en één "Ga verder" met "Daarna vraagt iOS om toestemming.", zonder sluitknop. De tweede belofte hangt af van 3.28; tot die gebouwd is, mag het scherm haar niet doen.
 - **Toestemmingsvraag vooraf voor de camera.** **Status:** Gebouwd — `CameraPrePrompt` in `Grip/Scan/ScanPermissionViews.swift`, `LiveCameraAccess` in `Grip/Scan/CameraAccess.swift`, aangesloten in `ScanTab.tapDisc()` / `openCamera()`. Niet gecommit in de working tree op 2026-11-03; nog geen unittest dekt de beslissing over de vraag vooraf.
@@ -183,7 +183,7 @@ Zodra er toestemming is, roept elke start met een sessie `registerForRemoteNotif
 - Hij doet een upsert van één rij in `push_devices`. Er wordt geen ledger-event toegevoegd.
 - `environment` komt uit het eigen ondertekende provisioning profile van de app (`aps-environment`), dus deze development-ondertekende build registreert `development` en krijgt zijn pushes via de APNs-sandbox.
 - Een 401 hier stuurt de app ook terug naar inloggen (`sessionRejected`, dus `SessionExpiredView`).
-- Elke andere mislukking wordt één keer geprobeerd en wacht dan op de volgende start, die opnieuw registreert. Meer → Meldingen toont "Aanmelden voor meldingen lukte niet. verder probeert het bij de volgende start opnieuw.", of, wanneer APNs zelf weigerde, "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." met het foutdomein en de foutcode.
+- Elke andere mislukking wordt één keer geprobeerd en wacht dan op de volgende start, die opnieuw registreert. Meer → Meldingen toont "Aanmelden voor meldingen lukte niet. Grip probeert het bij de volgende start opnieuw.", of, wanneer APNs zelf weigerde, "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." met het foutdomein en de foutcode.
 
 **Meer → Meldingen** toont de huidige stand: "Meldingen staan aan." / "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." / "Meldingen zijn nog niet aangezet.". Daarna biedt het naar gelang "Meldingen aanzetten" of "Open Instellingen" aan, en somt het de negen soorten meldingen op, elk met één regel uitleg.
 
@@ -211,7 +211,7 @@ Elke mislukte inlog verschijnt als één melding bovenaan het scherm, met een la
 
 ### 3.11 Geen toegangssleutel op deze telefoon
 
-Wanneer iOS op deze telefoon geen toegangssleutel voor verder heeft, zegt het scherm dat ("Geen toegangssleutel gevonden op deze iPhone." / "Log in met je wachtwoord. Daarna kun je er een toegangssleutel bij zetten."), toont het meteen de wachtwoordvelden, en houdt het "Probeer toegangssleutel opnieuw" als link. Na de inlog met wachtwoord volgt het eenmalige aanbod (3.3).
+Wanneer iOS op deze telefoon geen toegangssleutel voor Grip heeft, zegt het scherm dat ("Geen toegangssleutel gevonden op deze iPhone." / "Log in met je wachtwoord. Daarna kun je er een toegangssleutel bij zetten."), toont het meteen de wachtwoordvelden, en houdt het "Probeer toegangssleutel opnieuw" als link. Na de inlog met wachtwoord volgt het eenmalige aanbod (3.3).
 
 **Status:** Deels gebouwd (2026-11-04) — de toestand, het scherm en de fixture (`--signin no-passkey`) bestaan. Nog niet: de vertaling van een echte iOS-fout naar deze toestand, want welke `ASAuthorizationError` iOS geeft als er geen credential is, is nog steeds **niet gemeten**. Tot dan komt dit geval uit als "Inloggen met toegangssleutel lukte niet." met de oorzaakregel.
 
@@ -229,7 +229,7 @@ Een 429 zegt "Te veel pogingen." / "Wacht een minuut · daarna kun je het opnieu
 
 ### 3.14 De server reageert niet
 
-Wanneer de server van verder niet antwoordt (een 5xx, een foutpagina van de Cloudflare-tunnel, een time-out) terwijl de telefoon zelf online is, zegt het scherm "De server reageert niet." / "Het ligt niet aan jou · probeer het over een paar minuten opnieuw. Scans in de wachtrij blijven bewaard.", biedt het één "Probeer opnieuw" aan en toont het "Laatste poging 14:02".
+Wanneer de server van Grip niet antwoordt (een 5xx, een foutpagina van de Cloudflare-tunnel, een time-out) terwijl de telefoon zelf online is, zegt het scherm "De server reageert niet." / "Het ligt niet aan jou · probeer het over een paar minuten opnieuw. Scans in de wachtrij blijven bewaard.", biedt het één "Probeer opnieuw" aan en toont het "Laatste poging 14:02".
 
 **Status:** Gebouwd (2026-11-04) — `AuthModel.networkIsUp` (de `NWPathMonitor` van `UploadCenter`) onderscheidt offline van een server die niet antwoordt; "Probeer opnieuw" herhaalt de laatste methode, een toegangssleutel alleen op een tik.
 
@@ -247,7 +247,7 @@ Zolang de handeling met de toegangssleutel loopt, leest de knop "Wacht op Face I
 
 ### 3.17 De app-kiezer toont niets van het dossier
 
-Zolang de app niet op de voorgrond staat (scene `.inactive` of `.background`) en de vergrendeling geldt, is de momentopname van de app in de app-kiezer een effen afdekking met het verder-teken. Er verschijnt geen titel, geen aantal en geen bedrag.
+Zolang de app niet op de voorgrond staat (scene `.inactive` of `.background`) en de vergrendeling geldt, is de momentopname van de app in de app-kiezer een effen afdekking met het Grip-teken. Er verschijnt geen titel, geen aantal en geen bedrag.
 
 **Status:** Gebouwd (2026-11-04) — `PrivacyCover` in `Grip/Auth/LockView.swift`, over de hele app zodra de scene niet actief is (ook ontgrendeld: de veiligere lezing), behalve achter de eigen systeemvensters van de app (Face ID, toegangssleutel, toestemmingen; `SystemPrompts`). Fixture `--cover`. Hoe hij in de app-kiezer zelf staat, is niet vanuit de simulator vast te leggen.
 
@@ -265,7 +265,7 @@ Wanneer een aangetikte melding op de vergrendeling uitkomt (een koude start, of 
 
 ### 3.20 Geen toegangscode op het toestel: één manier om het op te lossen
 
-Wanneer de iPhone geen toegangscode heeft, kan Face ID in verder niet werken. Een venster zegt "Zet eerst een toegangscode aan" / "Zonder toegangscode werkt Face ID niet in deze app. Zet hem aan, dan werkt het meteen.", met "Open Instellingen" en "Bekijk alleen het overzicht".
+Wanneer de iPhone geen toegangscode heeft, kan Face ID in Grip niet werken. Een venster zegt "Zet eerst een toegangscode aan" / "Zonder toegangscode werkt Face ID niet in deze app. Zet hem aan, dan werkt het meteen.", met "Open Instellingen" en "Bekijk alleen het overzicht".
 
 **Status:** Gebouwd (2026-11-04) — `AppLock.unlockSheet == .noPasscode` toont "Zet eerst een toegangscode aan" met "Open Instellingen" (de eigen pagina van de app; er is geen deep link naar de toegangscode) en "Bekijk alleen het overzicht".
 
@@ -283,15 +283,15 @@ De camera, de wachtrij en de ontspanknop werken vóór Face ID; op Scan wordt no
 
 ### 3.23 Scannen rechtstreeks vanaf een vergrendelde telefoon
 
-Een brief scannen kost één handeling plus de pagina's, zonder eerst verder te openen en zonder Face ID (brief §3 Scan, R20): het pictogram lang indrukken → "Scan een brief", een bediening in het bedieningspaneel, of de Actieknop. Elk daarvan opent meteen de camera van Scan.
+Een brief scannen kost één handeling plus de pagina's, zonder eerst Grip te openen en zonder Face ID (brief §3 Scan, R20): het pictogram lang indrukken → "Scan een brief", een bediening in het bedieningspaneel, of de Actieknop. Elk daarvan opent meteen de camera van Scan.
 
 **Status (snelle actie op het beginscherm "Scan een brief"):** Gebouwd — `QuickAction.scanType` in `Grip/App/QuickAction.swift`, `DeepLink.scan` → `LinkDestination(opensCamera:)` in `Grip/Push/DeepLink.swift`, `cameraRequested` in `RootView` en `ScanTab`, het shortcut-item in `project.yml`. Niet gecommit in de working tree op 2026-11-03.
 
-**Status (bediening in het bedieningspaneel en Actieknop):** Nog te bouwen — er bestaat geen `ControlWidget` of `AppIntent`. `project.yml` noemt `Grip/Shared/ScanLetterIntent.swift` al in het widget-target, maar het bestand bestaat niet, dus dat target wordt pas gegenereerd als het er is. Nodig: een `OpenIntent`/`AppIntent` die `DeepLink.scan` aflevert (verder registreert geen URL-schema, dus het kan geen gewone URL-opening zijn), een `ControlWidgetButton` in `GripWidget`, het beschikbaar maken voor de Actieknop via dezelfde intent, en een test dat de intent naar `.scan` vertaalt.
+**Status (bediening in het bedieningspaneel en Actieknop):** Nog te bouwen — er bestaat geen `ControlWidget` of `AppIntent`. `project.yml` noemt `Grip/Shared/ScanLetterIntent.swift` al in het widget-target, maar het bestand bestaat niet, dus dat target wordt pas gegenereerd als het er is. Nodig: een `OpenIntent`/`AppIntent` die `DeepLink.scan` aflevert (Grip registreert geen URL-schema, dus het kan geen gewone URL-opening zijn), een `ControlWidgetButton` in `GripWidget`, het beschikbaar maken voor de Actieknop via dezelfde intent, en een test dat de intent naar `.scan` vertaalt.
 
 ### 3.24 Camera geweigerd: zeggen waar je hem aanzet
 
-Wanneer de camera voor verder uit staat, vervangt Scan de schijf door "Scannen kan nu niet" / "De camera staat uit in Instellingen → verder → Camera. Zet hem aan, dan kun je meteen scannen." en één "Open Instellingen". De tabbalk blijft staan, dus het is geen doodlopende straat.
+Wanneer de camera voor Grip uit staat, vervangt Scan de schijf door "Scannen kan nu niet" / "De camera staat uit in Instellingen → Grip → Camera. Zet hem aan, dan kun je meteen scannen." en één "Open Instellingen". De tabbalk blijft staan, dus het is geen doodlopende straat.
 
 **Status:** Gebouwd — `CameraDenied` in `Grip/Scan/ScanPermissionViews.swift`, met de titel en het doorgestreepte vel van het frame ("Scannen kan nu niet").
 
@@ -303,13 +303,13 @@ Het eerste spraaklogboek vraagt het, vóór iOS dat doet, met één scherm in de
 
 ### 3.26 Microfoon geweigerd
 
-Wanneer de microfoon voor verder uit staat, zegt het spraakvenster dat ("verder mag de microfoon niet gebruiken.", met waar in Instellingen je hem aanzet) en biedt het "Open Instellingen" en "Sluit" aan.
+Wanneer de microfoon voor Grip uit staat, zegt het spraakvenster dat ("Grip mag de microfoon niet gebruiken.", met waar in Instellingen je hem aanzet) en biedt het "Open Instellingen" en "Sluit" aan.
 
 **Status:** Gebouwd (2026-11-04) — `MicDeniedView` in een kort venster met de tekst van het frame, "Open Instellingen" en "Sluit". Fixture `--mic denied`.
 
 ### 3.27 Spraakherkenning: vraag vooraf en geweigerd
 
-Vóór de eerste transcriptie legt de app op één scherm uit dat iOS de opname omzet in tekst zodat Martin die kan lezen voordat hij opslaat ("Je stem omzetten in tekst"), met "Ga verder"; bij weigering zegt het spraakvenster "verder mag spraakherkenning niet gebruiken.", waar je het aanzet, en biedt het "Open Instellingen" aan.
+Vóór de eerste transcriptie legt de app op één scherm uit dat iOS de opname omzet in tekst zodat Martin die kan lezen voordat hij opslaat ("Je stem omzetten in tekst"), met "Ga verder"; bij weigering zegt het spraakvenster "Grip mag spraakherkenning niet gebruiken.", waar je het aanzet, en biedt het "Open Instellingen" aan.
 
 **Status:** Vervalt (beslist 2026-11-04, zie §10) — er is geen toestemming om te vragen. Eerder: nog te bouwen — en eerst een **meting**. De code gebruikt `SpeechAnalyzer` / `SpeechTranscriber` op de telefoon en controleert alleen de beschikbaarheid van het model, nooit een autorisatiestatus (`Grip/Voice/Transcriber.swift`). Of iOS 27 op dat pad überhaupt om toestemming voor spraakherkenning vraagt, is niet gemeten. Zo niet, dan zijn beide frames zinloos en moeten ze vervallen; zo ja, dan volgen de vraag vooraf en de weigeringsmelding de vorm van de microfoon. Let op: de belofte in het frame "De omzetting kan via de servers van Apple gaan." spreekt de transcriptie op het toestel tegen; de tekst moet overeenkomen met wat er gemeten wordt. **Gemeten in de SDK (2026-11-04):** de Swift-interface van `Speech` in de iOS 27.2-SDK geeft `SpeechAnalyzer` en `SpeechTranscriber` géén autorisatie-API; alleen `SFSpeechRecognizer` heeft er een, en die gebruikt de app niet. Er is dus niets om vooraf om te vragen of om te weigeren, en beide frames zijn daarom niet gebouwd en niet vast te leggen. Op het toestel is dit nog niet gemeten.
 
@@ -325,7 +325,7 @@ In Meer → Meldingen kan Martin elke soort melding aan- of uitzetten ("Voorstel
 
 ### 3.29 De telefoon wordt op het web bij naam herkend
 
-`/settings/security` noemt de telefoon ("verder op iPhone") in plaats van "Onbekend apparaat", zodat Martin kan zien welke sessie hij moet intrekken.
+`/settings/security` noemt de telefoon ("Grip op iPhone") in plaats van "Onbekend apparaat", zodat Martin kan zien welke sessie hij moet intrekken.
 
 **Status:** Nog te bouwen — de apparaatnaam-parser van het web herkent de user agent `Grip/1 CFNetwork/… Darwin/…` niet (CLAUDE.md, bekend en uitgesteld). Nodig is één geval in die parser en een test; geen iOS-wijziging.
 
@@ -349,7 +349,7 @@ Een sessie die de server verlengt, blijft op de telefoon verlengd, zodat "Deze i
 | Passkey mislukt | "Inloggen met passkey lukte niet. Probeer het opnieuw, of log in met je wachtwoord." Als de server de assertion weigerde (401), is dat alles. Als iOS of de handeling mislukte, volgt een korte oorzaakregel zonder geheimen (`AuthModel.diagnostic`), bijvoorbeeld `(PasskeyError.failed("com.apple.AuthenticationServices.AuthorizationError 1004: …"))`. Een 429 of geen verbinding tijdens een passkey-inlog toont in plaats daarvan de tekst voor de limiet of de offline-tekst hieronder. | Opnieuw proberen, of het wachtwoord gebruiken. |
 | Verkeerd wachtwoord (401) | "Dat werkte niet — controleer je e-mailadres en wachtwoord en probeer het nog eens." | Verbeteren en opnieuw proberen. |
 | Te veel pogingen (429) | "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw." | Een minuut wachten. |
-| Offline / geen HTTP-antwoord | "Geen verbinding met verder. Controleer je internet en probeer het opnieuw." | Opnieuw proberen zodra er verbinding is. Er wordt niets in de wachtrij gezet: een inlog wordt nooit automatisch herhaald. |
+| Offline / geen HTTP-antwoord | "Geen verbinding met Grip. Controleer je internet en probeer het opnieuw." | Opnieuw proberen zodra er verbinding is. Er wordt niets in de wachtrij gezet: een inlog wordt nooit automatisch herhaald. |
 | Serverfout / andere weigering | "Inloggen lukte niet. Probeer het over een moment opnieuw." | Later opnieuw proberen. |
 | Sessie verlopen (401 van de server) | `SessionExpiredView` (3.4). | Passkey, wachtwoord, of toch scannen. |
 
@@ -361,7 +361,7 @@ Een sessie die de server verlengt, blijft op de telefoon verlengd, zodat "Deze i
 | Vergrendeld, op een afgeschermd tabblad | `LockView`, met "Ontgrendel met Face ID". Het vraagt één keer per vergrendelperiode vanzelf, en alleen zolang de scene actief is. |
 | Vergrendeld, op Scan | De camera en de wachtrij werken gewoon. Er wordt niets gevraagd. |
 | Ontgrendelen mislukt | "Ontgrendelen lukte niet. Probeer het nog eens." |
-| Geen toegangscode op het toestel | "Stel een toegangscode in op je iPhone; daarna kun je verder ontgrendelen." Alleen Scan en de aantallen op Overzicht blijven bruikbaar. |
+| Geen toegangscode op het toestel | "Stel een toegangscode in op je iPhone; daarna kun je Grip ontgrendelen." Alleen Scan en de aantallen op Overzicht blijven bruikbaar. |
 
 ### Grote tekst en kleine telefoons
 
@@ -449,8 +449,8 @@ De Figma-frames in deze map zijn het **doel**. De huidige code wijkt op deze pun
 6. **Venster na geannuleerde Face ID.** De frames tonen een venster, "Ontgrendel je dossier", met "Bekijk alleen het overzicht" en "Scan een brief", en de varianten voor iPhone SE en AX5. De code toont niets na een annulering. Het vergrendelscherm blijft staan, met zijn ene knop.
 7. **Geen toegangscode.** Het frame toont een venster, "Zet eerst een toegangscode aan", met "Open Instellingen". De code toont één tekstregel op het vergrendelscherm en geen knop.
 8. **Vergrendeld Overzicht.** De knop in het frame leest "Ontgrendel met Face ID" met het onderschrift "Scan werkt altijd · titels na ontgrendelen". De code leest "Toon details" met "Titels en de kaart verschijnen na Face ID.".
-9. **Afdekking in de app-kiezer.** De frames, en de brief ("The app-switcher snapshot is covered while locked"), tonen het verder-teken in plaats van inhoud in de app-kiezer. **De code heeft zo'n afdekking niet**: niets reageert op de scenefase `.inactive`. In de praktijk is een afgeschermd tabblad al `LockView` zolang het vergrendeld is, maar de aantallen op Overzicht en een *ontgrendeld* scherm verschijnen in de app-kiezer zoals ze zijn.
-10. **Toestemmingsvragen vooraf voor camera, microfoon en spraak.** De frames tonen één scherm in de app per toestemming ("Brieven scannen" … "Ga verder" / "Daarna vraagt iOS om toestemming."), en voor elk een geweigerde toestand ("Scannen kan nu niet" met "Open Instellingen"). De **camera** heeft nu beide, in de niet-gecommitte working tree (3.7, 3.24); zijn beloften wijken af van het frame ("…als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding." tegenover "…als jij op Scan tikt." / "Wat je scant, gaat alleen naar je eigen dossier.") en zijn titel bij weigering luidt "De camera staat uit voor verder". De **microfoon** gaat nog rechtstreeks naar de systeemvraag en heeft een weigeringsmelding met "Open Instellingen" (3.25, 3.26). Om **spraak** wordt nooit als toestemming gevraagd (3.27).
+9. **Afdekking in de app-kiezer.** De frames, en de brief ("The app-switcher snapshot is covered while locked"), tonen het Grip-teken in plaats van inhoud in de app-kiezer. **De code heeft zo'n afdekking niet**: niets reageert op de scenefase `.inactive`. In de praktijk is een afgeschermd tabblad al `LockView` zolang het vergrendeld is, maar de aantallen op Overzicht en een *ontgrendeld* scherm verschijnen in de app-kiezer zoals ze zijn.
+10. **Toestemmingsvragen vooraf voor camera, microfoon en spraak.** De frames tonen één scherm in de app per toestemming ("Brieven scannen" … "Ga verder" / "Daarna vraagt iOS om toestemming."), en voor elk een geweigerde toestand ("Scannen kan nu niet" met "Open Instellingen"). De **camera** heeft nu beide, in de niet-gecommitte working tree (3.7, 3.24); zijn beloften wijken af van het frame ("…als jij op scannen tikt." / "Scannen werkt ook zonder Face ID en zonder verbinding." tegenover "…als jij op Scan tikt." / "Wat je scant, gaat alleen naar je eigen dossier.") en zijn titel bij weigering luidt "De camera staat uit voor Grip". De **microfoon** gaat nog rechtstreeks naar de systeemvraag en heeft een weigeringsmelding met "Open Instellingen" (3.25, 3.26). Om **spraak** wordt nooit als toestemming gevraagd (3.27).
 11. **Toestemmingsvraag vooraf voor meldingen.** Het frame toont een volledig scherm. De code toont een `.alert` in systeemstijl.
 12. **Meer → Meldingen.** Het frame "Meldingen uit" toont **schakelaars** per soort ("Voorstellen om te keuren", "Taken met een termijn", …). De code heeft geen instelling per soort: hij somt de negen soorten op als tekst ("Mail van Verder", …, "Deadline", …). De formulering "termijn" uit het frame staat niet in de code.
 13. **Respijttijd.** De respijttijd van 5 minuten in de code komt overeen met de tekst in het frame "Face ID geannuleerd" ("Ben je binnen 5 minuten terug, dan hoef je Face ID niet opnieuw te gebruiken."), en met spec §6.2.
@@ -459,7 +459,7 @@ De Figma-frames in deze map zijn het **doel**. De huidige code wijkt op deze pun
 
 Waar de frames van deze groep een scherm tekenen dat **een andere groep bezit**, en die groep een eigen, nieuwer definitief frame heeft dat al gebouwd is, volgt de app dat frame van de eigenaar. De frames hier zijn dan verouderd en moeten in Figma bijgewerkt worden; de code gaat niet terug.
 
-- **Het vergrendelde Overzicht** (`Lock_Alleen_overzicht`, ook de achtergrond van elk vergrendelvenster): de app volgt `02-overzicht/frames/Overzicht_vergrendeld` (het it6-ontwerp: datumregel, kaart "Wacht op jou" met amber aantal en "Toon details", "Waar het nu op wacht", leefgeld met balk, de regels voor taken, scans en Door verder gedaan). Het frame hier (kaart "Voor jou" met amber rand, "Ontgrendel met Face ID" onderaan) is een eerdere stand. Martins regel blijft gelden: alleen aantallen, één keer Face ID bij openen.
+- **Het vergrendelde Overzicht** (`Lock_Alleen_overzicht`, ook de achtergrond van elk vergrendelvenster): de app volgt `02-overzicht/frames/Overzicht_vergrendeld` (het it6-ontwerp: datumregel, kaart "Wacht op jou" met amber aantal en "Toon details", "Waar het nu op wacht", leefgeld met balk, de regels voor taken, scans en Door Grip gedaan). Het frame hier (kaart "Voor jou" met amber rand, "Ontgrendel met Face ID" onderaan) is een eerdere stand. Martins regel blijft gelden: alleen aantallen, één keer Face ID bij openen.
 - **Het label "Wacht op jou" bij AX5** is in gewone hoofd-/kleine letters, zoals `Overzicht_AX5` van de Overzicht-groep het tekent; bij de standaardgrootte in kapitalen.
 - **De afgebroken voetnoot bij AX5** ("verschij- / nen") was wel een fout: de voetnoot van de vergrendelde kaart gebruikt nu `wholeWords` in plaats van zachte koppeltekens (`HomeTab.lockedReveal`).
 - **Meldingen uit** (`Pre-prompt_Meldingen_uit`): de app volgt `10-meer-en-instellingen/frames/Meldingen_geweigerd`, het scherm Meer → Meldingen dat nu gebouwd is.
@@ -526,7 +526,7 @@ Alle frames zijn geëxporteerd uit Figma-sectie `auth · final` (321:5817) op 1�
 | `Sign-in_Wachtwoord_toetsenbord.jpg` | Inloggen met wachtwoord, met het toetsenbord omhoog en de velden ingevuld. |
 | `Sign-in_Toegangssleutel_bezig.jpg` | Handeling met de toegangssleutel bezig. |
 | `Sign-in_Toegangssleutel_geannuleerd.jpg` | Venster voor de toegangssleutel geannuleerd: rustig, geen fout. |
-| `Sign-in_Geen_toegangssleutel_gevonden.jpg` | Geen toegangssleutel voor verder op deze telefoon (alleen ontwerp; de code toont de algemene passkey-fout). |
+| `Sign-in_Geen_toegangssleutel_gevonden.jpg` | Geen toegangssleutel voor Grip op deze telefoon (alleen ontwerp; de code toont de algemene passkey-fout). |
 | `Sign-in_Geen_toegangssleutel_gevonden_AX5.jpg` | Hetzelfde bij tekstgrootte AX5. |
 | `Sign-in_Wachtwoord_klopt_niet.jpg` | Verkeerd e-mailadres of wachtwoord (401). |
 | `Sign-in_Te_veel_pogingen.jpg` | Limiet bereikt (429). |

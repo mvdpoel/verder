@@ -13,15 +13,15 @@ Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-04 (iOS in `a
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 1. **Ongedaan maken, en de serverroutes die daarvoor nodig zijn.** Het ontwerp biedt na bijna elk besluit een ongedaan maken: "Brief losmaken" en "Ongedaan maken" na het beantwoorden van een vraag, een toast met ongedaan maken na "Niet relevant", en "Ongedaan maken" nadat een taak op "gedaan" is gezet. Voor geen van deze bestaat een serverroute. Twee ervan botsen met bestaande regels: `proposals.answer` is definitief, en `done`/`dropped` zijn definitief in `TASK_EDGES`. Martin moet over elk ervan beslissen voordat er UI wordt gebouwd (zie [Waar ontwerp en code verschillen](#waar-ontwerp-en-code-verschillen)).
-2. **Wat de server nog moet meesturen.** De telefoon leest al `answer`/`decidedAt` bij een beantwoorde vraag, `question.why` ("Waarom verder het vraagt"), `origin` en `document.partyName` bij een suggestie, `collectorName` bij een vordering en `links` bij een taak, en valt eerlijk terug zolang ze ontbreken. Geen enkele route stuurt ze vandaag mee (`proposals.get`, `toSuggestionDTO`, `toTaskDTO`, de schrijver). "Van wie" en "Namens hen" bewerkbaar maken vraagt daarnaast nieuwe goedkeurinvoer.
+2. **Wat de server nog moet meesturen.** De telefoon leest al `answer`/`decidedAt` bij een beantwoorde vraag, `question.why` ("Waarom Grip het vraagt"), `origin` en `document.partyName` bij een suggestie, `collectorName` bij een vordering en `links` bij een taak, en valt eerlijk terug zolang ze ontbreken. Geen enkele route stuurt ze vandaag mee (`proposals.get`, `toSuggestionDTO`, `toTaskDTO`, de schrijver). "Van wie" en "Namens hen" bewerkbaar maken vraagt daarnaast nieuwe goedkeurinvoer.
 3. **Een detailcache en aanpassingen die een verlopen sessie overleven.** Een scherm dat al open is, toont offline "OFFLINE · BIJGEWERKT 14:02" met de besluiten uit en de reden erbij. Maar een scherm dat offline wordt geopend heeft geen kopie, en aanpassingen gaan verloren bij een 401.
 
 ---
 
 Dit zijn de drie detailschermen één niveau onder Voor jou. Op elk ervan neemt Martin één besluit over één item:
 
-- **Vraag**: verder vraagt iets over de zaak en biedt antwoorden aan. In de code is dit geen eigen scherm. Het is een voorstel van het soort vraag, getoond op het voorstelscherm (`ProposalScreen`).
-- **Suggestie**: iets wat verder vond in een mail, een document of een spraaknotitie. Het wordt pas een logboekregel, een documenttitel en -soort, een vordering of een taak als Martin het goedkeurt.
+- **Vraag**: Grip vraagt iets over de zaak en biedt antwoorden aan. In de code is dit geen eigen scherm. Het is een voorstel van het soort vraag, getoond op het voorstelscherm (`ProposalScreen`).
+- **Suggestie**: iets wat Grip vond in een mail, een document of een spraaknotitie. Het wordt pas een logboekregel, een documenttitel en -soort, een vordering of een taak als Martin het goedkeurt.
 - **Taak**: een van Martins taken, met de statusstappen die ze nog mag maken.
 
 Alleen Martin gebruikt de app. Dit document beschrijft wat de schermen doen: de **volledige functieset zoals ontworpen en gespecificeerd**, en per functie hoe ver de code is. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectie `detail · final`, node `326:6980`. De 44 frames in `frames/` zijn op 2026-11-03 opnieuw uit die sectie geëxporteerd, nadat de tabbalk centraal was gerepareerd. Elke schermafbeelding gebruikt de synthetische fixture-dataset (Kade & Partners, Stroomnet Energie, Woonstichting Lindehof, Gemeente Westerlaan, Duinzorg), geen echte zaakgegevens. UI-teksten zijn in het Nederlands geciteerd, precies zoals de app ze toont of zoals het frame ze toont.
@@ -31,7 +31,7 @@ Bronnen voor de ontworpen functies: de definitieve frames; de spec `docs/superpo
 ## Doel
 
 - **Eén item, één besluit.** De Voor jou-lijst geeft door aan een van deze schermen, en daar wordt het besluit genomen. De brief laat de lijst ook een ongewijzigd item met een veeg beslissen (zie [Beslissen zonder het scherm te openen](#beslissen-zonder-het-scherm-te-openen)).
-- **De vragen van verder beantwoorden** over de zaak, bijvoorbeeld "hoort deze brief bij die vordering?". Elke optie voert één bestaande, gevalideerde actie uit op de server. Martin kan ook een eigen antwoord schrijven.
+- **De vragen van Grip beantwoorden** over de zaak, bijvoorbeeld "hoort deze brief bij die vordering?". Elke optie voert één bestaande, gevalideerde actie uit op de server. Martin kan ook een eigen antwoord schrijven.
 - **AI-uitvoer beoordelen.** Een suggestie is het voorstel van het model, en er komt niets van in het dossier totdat Martin het goedkeurt. Goedkeuren, aanpassen-en-goedkeuren en afwijzen worden elk als oordeel vastgelegd, samen met wat er is veranderd (de gouden regel).
 - **Een taak verder brengen** langs hetzelfde gelogde statuspad dat de web-app gebruikt. De telefoon biedt alleen de stappen die de server toestaat.
 
@@ -63,7 +63,7 @@ Een tik op een vraagpush, of "Bekijken" op een push die de extensie niet in een 
 
 #### Een link die binnenkomt terwijl de app vergrendeld is, wacht
 
-`grip://` is geen geregistreerd URL-schema, dus deze links komen alleen van een push of van verders eigen widget. Voor jou en Dossier zijn allebei `.lockGated(by: lock)`, dus geen van deze schermen bestaat zolang de app vergrendeld is. Een link die binnenkomt op een vergrendelde app wacht in `RootView` en opent zodra Face ID slaagt.
+`grip://` is geen geregistreerd URL-schema, dus deze links komen alleen van een push of van Grips eigen widget. Voor jou en Dossier zijn allebei `.lockGated(by: lock)`, dus geen van deze schermen bestaat zolang de app vergrendeld is. Een link die binnenkomt op een vergrendelde app wacht in `RootView` en opent zodra Face ID slaagt.
 
 **Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift`.
 
@@ -85,11 +85,11 @@ Brief §3 (Voor jou-lijst): een ongewijzigde suggestie goedkeuren met één veeg
 
 **Status:** Nog te bouwen — geen `swipeActions` of `contextMenu` in `Inbox/VoorJouTab.swift`. De routes voor goedkeuren, afwijzen en status bestaan. Bulkgoedkeuren vraagt een route of een lus in de client, plus een test dat er nooit een voorstel bij kan zitten.
 
-## Vraag — een vraag van verder
+## Vraag — een vraag van Grip
 
 ![Vraag, normaal (ontwerp)](frames/Vraag_normaal.jpg)
 
-Een vraag is een voorstel met `kind = 'question'`. De voorstelschrijver (`ops/proposal-drafter.sh` → `storeDraft` in `apps/worker/src/ops/proposals-store.ts`) schrijft hem met een `prompt` en **2 tot 4 opties** (`validateDraft` in `apps/worker/src/proposals/validate-draft.ts` weigert elk ander aantal). Elke optie is een van vier acties, en `validateDraft` heeft ze al stuk voor stuk gecontroleerd tegen de context die verder verzamelde:
+Een vraag is een voorstel met `kind = 'question'`. De voorstelschrijver (`ops/proposal-drafter.sh` → `storeDraft` in `apps/worker/src/ops/proposals-store.ts`) schrijft hem met een `prompt` en **2 tot 4 opties** (`validateDraft` in `apps/worker/src/proposals/validate-draft.ts` weigert elk ander aantal). Elke optie is een van vier acties, en `validateDraft` heeft ze al stuk voor stuk gecontroleerd tegen de context die Grip verzamelde:
 
 | Optie-actie | Wat het beantwoorden ervan op de server uitvoert | Ledger |
 |---|---|---|
@@ -110,15 +110,15 @@ Naast "WACHT OP JOU", de leeftijd van de vraag.
 
 **Status:** Gebouwd — `DetailText.age` ("sinds 1 dag", in Amsterdamse kalenderdagen), in de kop van `ProposalScreen.questionContent`.
 
-#### Wat ze vragen, wanneer uiterlijk, wat ontbreekt, waar verder op leunde
+#### Wat ze vragen, wanneer uiterlijk, wat ontbreekt, waar Grip op leunde
 
-"Wat ze vragen" (de `ask`), "Uiterlijk <d-m>" (bijvoorbeeld "Uiterlijk 7-11", op de Amsterdamse kalender) in amber zolang het open staat, "Wat nog ontbreekt", en "Waar verder op leunt" als chips.
+"Wat ze vragen" (de `ask`), "Uiterlijk <d-m>" (bijvoorbeeld "Uiterlijk 7-11", op de Amsterdamse kalender) in amber zolang het open staat, "Wat nog ontbreekt", en "Waar Grip op leunt" als chips.
 
 **Status:** Gebouwd — `Proposals/ProposalScreen.swift`.
 
-#### "Waarom verder het vraagt"
+#### "Waarom Grip het vraagt"
 
-Een kaart die in gewoon Nederlands zegt waarom verder het vraagt, bijvoorbeeld "Op 1 nov kwam een brief van Kade & Partners binnen als scan. Kade & Partners int de vordering van Stroomnet Energie; het kenmerk lijkt op dat van de sommatie van 14 okt.". Een chevron opent de bron. De spec eist dat de schrijver zegt waar hij op leunde, zodat Martin kan zien waarom (§6.5).
+Een kaart die in gewoon Nederlands zegt waarom Grip het vraagt, bijvoorbeeld "Op 1 nov kwam een brief van Kade & Partners binnen als scan. Kade & Partners int de vordering van Stroomnet Energie; het kenmerk lijkt op dat van de sommatie van 14 okt.". Een chevron opent de bron. De spec eist dat de schrijver zegt waar hij op leunde, zodat Martin kan zien waarom (§6.5).
 
 **Status:** Deels gebouwd — de kaart is gebouwd (`QuestionBody.why`, `Proposals/QuestionViews.swift`) en opent de aanleiding (een brief opent het document, een mail het bronvel). Ze leest `payload.question.why`; zolang de schrijver die niet schrijft, staat de aanleidingskaart op haar plek. Nog nodig: een `why`-tekst in de payload van de vraag (`validate-draft.ts` en de prompt van de schrijver).
 
@@ -140,9 +140,9 @@ Een vrij tekstveld ("Iets anders…" in de code, "Typ je eigen antwoord" / "Geef
 
 **Status:** Gebouwd — `ProposalModel.answer(freeText:)`; vastgelegd door `ProposalModelTests.freeTextPostsFreeTextAndRevision`.
 
-#### verder pakt een vrij antwoord op
+#### Grip pakt een vrij antwoord op
 
-Het beantwoorde frame belooft "verder bekijkt je antwoord. Er is nog niets gekoppeld; stelt verder iets voor, dan zie je dat in Voor jou."
+Het beantwoorde frame belooft "Grip bekijkt je antwoord. Er is nog niets gekoppeld; stelt Grip iets voor, dan zie je dat in Voor jou."
 
 **Status:** Nog te bouwen — geen code leest `finalPayload.answer.freeText`. Nodig: een workerstap die het antwoord teruggeeft aan de schrijver en een nieuw voorstel of een nieuwe suggestie oplevert, en een test dat die nooit uit zichzelf handelt.
 
@@ -178,7 +178,7 @@ Het beantwoorde frame belooft "verder bekijkt je antwoord. Er is nog niets gekop
 
 Het scherm wordt een verslag: een badge "BEANTWOORD" met de tijd, "JE ANTWOORD" (de gekozen optie of de geciteerde eigen tekst), en "WAT ER IS GEBEURD" met een rij die het resultaat opent, bijvoorbeeld "Brief gekoppeld aan de vordering · VORDERING · STROOMNET ENERGIE".
 
-**Status:** Deels gebouwd — de badge "BEANTWOORD" met de tijd, "JE ANTWOORD" en "WAT ER IS GEBEURD" (`QuestionBody.answered`). Het antwoord komt uit `answer`/`decidedAt` als de server die meestuurt, anders uit het antwoord dat dit scherm zelf gaf (`ProposalModel.shownAnswer`). Na een eigen antwoord zegt het scherm eerlijk "Er is niets gekoppeld; je antwoord staat bij de vraag" (zie "verder pakt een vrij antwoord op"). Nog nodig: `proposals.get` die `answer` en `decidedAt` teruggeeft, en een rij die de vordering in Dossier opent.
+**Status:** Deels gebouwd — de badge "BEANTWOORD" met de tijd, "JE ANTWOORD" en "WAT ER IS GEBEURD" (`QuestionBody.answered`). Het antwoord komt uit `answer`/`decidedAt` als de server die meestuurt, anders uit het antwoord dat dit scherm zelf gaf (`ProposalModel.shownAnswer`). Na een eigen antwoord zegt het scherm eerlijk "Er is niets gekoppeld; je antwoord staat bij de vraag" (zie "Grip pakt een vrij antwoord op"). Nog nodig: `proposals.get` die `answer` en `decidedAt` teruggeeft, en een rij die de vordering in Dossier opent.
 
 #### Een antwoord ongedaan maken ("Brief losmaken", "Ongedaan maken")
 
@@ -196,7 +196,7 @@ Een vraagpush (`kind: "proposal"`) heeft de titel "Voorstel: <ask>" en de tekst 
 - Voor het indrukken van een antwoord moet het **toestel** ontgrendeld zijn (iOS vraagt Face ID of de toegangscode). De app opent niet en de app-vergrendeling speelt geen rol. `NotificationRouter` post dezelfde `POST …/answer { revision, option }` en ververst daarna de inbox en de badge.
 - **Er is geen bevestigingsstap** vanuit de melding, dus "Ja, koppel hem" koppelt het document op het moment dat het wordt ingedrukt. De hervalidatie van de server geldt nog steeds.
 - Een antwoord dat mislukt verandert niets en wordt **nooit opnieuw geprobeerd**: een push zonder revisie, geen sessie, een 409 (intussen op het web beantwoord, of een nieuwere revisie), een 400, geen netwerk. Het voorstel wordt dan als link afgeleverd, zodat de volgende keer openen laat zien hoe het ervoor staat.
-- Met verborgen voorvertoningen toont het vergrendelscherm alleen "Nieuw bericht van verder".
+- Met verborgen voorvertoningen toont het vergrendelscherm alleen "Nieuw bericht van Grip".
 
 **Status:** Gebouwd — `apps/ios/GripNotify/`, `Push/QuestionCategories.swift`, `Push/NotificationRouter.swift`, `App/AppDelegate.swift`. Gemeten op iOS 27.2 met één testpush op 2026-11-01. Er is nog geen echte vraag vanuit een melding beantwoord.
 
@@ -216,7 +216,7 @@ Het soort in hoofdletters: "LOGBOEKREGEL", "DOCUMENT", "VORDERING", "TAAK" of "V
 
 #### De eigen woorden van de suggestie als titel, en een gewone herkomstzin
 
-De frames zetten de suggestie zelf in de titel ("Telefoongesprek met Woonstichting Lindehof over de betalingsregeling") en zeggen in een zin waar ze vandaan kwam, voor elke bron: "Gevonden door verder in je spraaknotitie van za 31 okt.", "… in de scan van vr 30 okt.", "… in de sommatie van 14 okt.", gevolgd door "Tik op een veld om het aan te passen.".
+De frames zetten de suggestie zelf in de titel ("Telefoongesprek met Woonstichting Lindehof over de betalingsregeling") en zeggen in een zin waar ze vandaan kwam, voor elke bron: "Gevonden door Grip in je spraaknotitie van za 31 okt.", "… in de scan van vr 30 okt.", "… in de sommatie van 14 okt.", gevolgd door "Tik op een veld om het aan te passen.".
 
 **Status:** Deels gebouwd — de titel (`SuggestionDetailModel.title`, volgt de aanpassing) en de zin (`provenance()`) zijn gebouwd, uit `origin` als de server die meestuurt, anders uit de mail of het document. Nog nodig: `origin` (soort bron, van wie, wanneer) in `toSuggestionDTO`, zodat een spraaknotitie zichzelf noemt.
 
@@ -316,7 +316,7 @@ Brief §3: "Edit diff visible before approve (golden rule)." Een tik op één ve
 
 ![Niet relevant, met een reden (ontwerp)](frames/Suggestie_niet_relevant_met_reden.jpg)
 
-Een sheet met de titel "Niet relevant", met de regel "Waarom? Niet verplicht — verder leert ervan.", een veld "Reden", een knop "Niet relevant" en "Annuleren". Het post `POST /api/mobile/v1/suggestions/:id/reject { reason? }` (hoogstens 2000 tekens, strikte body). De suggestie wordt `rejected` met de reden in `finalPayload`, wat het leren voedt. Geen ledger-event, en verder verandert er niets. Het bericht luidt daarna "Afgewezen.".
+Een sheet met de titel "Niet relevant", met de regel "Waarom? Niet verplicht — Grip leert ervan.", een veld "Reden", een knop "Niet relevant" en "Annuleren". Het post `POST /api/mobile/v1/suggestions/:id/reject { reason? }` (hoogstens 2000 tekens, strikte body). De suggestie wordt `rejected` met de reden in `finalPayload`, wat het leren voedt. Geen ledger-event, en verder verandert er niets. Het bericht luidt daarna "Afgewezen.".
 
 **Status:** Gebouwd — `SuggestionDetailView.rejectSheet`, `suggestions/[id]/reject/route.ts`.
 
@@ -440,13 +440,13 @@ Vraag: de statusregel ("Verstuurd.", "Afgewezen.", "Vervangen door een nieuwer v
 
 De oorzaak in gewoon Nederlands.
 
-**Status:** Deels gebouwd — de suggestie zegt "verder weigerde dit. Controleer de velden.", en de taak laadt opnieuw met "Die stap kan niet (meer). De taak is bijgewerkt.". Een antwoord op een vraag hergebruikt de tekst van de antwoordmail, "verder weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel.", wat voor een vraag niet klopt (de oorzaak is een mislukte hervalidatie). Een niet-toegestane taakstap komt binnen als 500 en krijgt dus nooit de tekst van de taak.
+**Status:** Deels gebouwd — de suggestie zegt "Grip weigerde dit. Controleer de velden.", en de taak laadt opnieuw met "Die stap kan niet (meer). De taak is bijgewerkt.". Een antwoord op een vraag hergebruikt de tekst van de antwoordmail, "Grip weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel.", wat voor een vraag niet klopt (de oorzaak is een mislukte hervalidatie). Een niet-toegestane taakstap komt binnen als 500 en krijgt dus nooit de tekst van de taak.
 
 #### Een mislukte actie noemt haar oorzaak en biedt opnieuw proberen aan
 
 ![Antwoord niet aangekomen (ontwerp)](frames/Vraag_fout.jpg)
 
-Brief §2.4: één regel gewoon Nederlands plus een knop met een werkwoord. De frames tonen een kaart "NIET AANGEKOMEN" / "NIET OPGESLAGEN" ("Je antwoord kwam niet aan bij verder. Er is niets gekoppeld; je kunt het opnieuw proberen.") en een primaire knop "Opnieuw: Ja, koppel hem" / "Opnieuw goedkeuren" / "Opnieuw: zet op gedaan", met de andere opties onder "OF KIES OPNIEUW". De aanpassingen blijven bewaard. Een mislukte actie krijgt de `.error`-haptiek.
+Brief §2.4: één regel gewoon Nederlands plus een knop met een werkwoord. De frames tonen een kaart "NIET AANGEKOMEN" / "NIET OPGESLAGEN" ("Je antwoord kwam niet aan bij Grip. Er is niets gekoppeld; je kunt het opnieuw proberen.") en een primaire knop "Opnieuw: Ja, koppel hem" / "Opnieuw goedkeuren" / "Opnieuw: zet op gedaan", met de andere opties onder "OF KIES OPNIEUW". De aanpassingen blijven bewaard. Een mislukte actie krijgt de `.error`-haptiek.
 
 **Status:** Gebouwd — "NIET AANGEKOMEN" / "NIET VASTGELEGD" / "NIET OPGESLAGEN" met "Opnieuw: Ja, koppel hem" / "Opnieuw goedkeuren · 2 aangepast" / "Opnieuw: zet op gedaan", de andere opties onder "OF KIES OPNIEUW", aanpassingen bewaard, `.error`-haptiek (`failedOption`, `approveFailed`, `failedStatus`; getest). Een 400 of 409 is geen "niet aangekomen" en krijgt zijn eigen regel. Er wordt niets in een wachtrij gezet.
 
@@ -456,7 +456,7 @@ Brief §2.4: één regel gewoon Nederlands plus een knop met een werkwoord. De f
 
 Brief §2.4: gecachte inhoud met "offline · bijgewerkt 14:02" in een mono-uitlezing, en serveracties uitgeschakeld **met de reden**: "Je bent offline. Antwoorden kan weer zodra je verbinding hebt." / "Je bent offline. Goedkeuren of Niet relevant kiezen kan weer zodra je verbinding hebt; aanpassen kan nu al." / statuswijzigingen uitgeschakeld bij een taak.
 
-**Status:** Deels gebouwd — valt het netwerk weg terwijl een scherm open is, dan toont het "OFFLINE · BIJGEWERKT 14:02" (wanneer het geladen werd), schakelt het de besluiten uit met de reden erbij en laat het aanpassen toe (fixture `detail-offline`). Er is nog geen detailcache: een scherm dat offline wordt geopend toont alleen "Geen verbinding met verder. Probeer het opnieuw.".
+**Status:** Deels gebouwd — valt het netwerk weg terwijl een scherm open is, dan toont het "OFFLINE · BIJGEWERKT 14:02" (wanneer het geladen werd), schakelt het de besluiten uit met de reden erbij en laat het aanpassen toe (fixture `detail-offline`). Er is nog geen detailcache: een scherm dat offline wordt geopend toont alleen "Geen verbinding met Grip. Probeer het opnieuw.".
 
 #### Sessie verlopen, met de aanpassingen bewaard
 
@@ -506,7 +506,7 @@ Een vraag beantwoorden, een suggestie goedkeuren of afwijzen en een taakstatus v
 
 #### Het vergrendelscherm toont geen schuldeiser en geen bedrag
 
-Brief §3: "Lock-screen preview never shows a creditor or an amount; the hidden-preview placeholder 'Nieuw bericht van verder' stays."
+Brief §3: "Lock-screen preview never shows a creditor or an amount; the hidden-preview placeholder 'Nieuw bericht van Grip' stays."
 
 **Status:** Deels gebouwd — de plaatshouder voor verborgen voorvertoningen is gebouwd, en geen vraagpush bevat een bedragveld. Maar de titel is "Voorstel: <ask>", en de `ask` is vrije modeltekst die een schuldeiser kan noemen, zoals de eigen vraag van het frame doet ("Hoort deze brief bij Stroomnet Energie?"). Niets filtert dat. Nodig: een titel in `proposalPush` (`apps/worker/src/ops/proposals-store.ts`) die veilig is voor het vergrendelscherm, en een test.
 
@@ -526,7 +526,7 @@ De sessie is de cookie van better-auth in de Keychain, met de hand meegestuurd, 
 - **Amber alleen voor wat op Martin wacht:** een openstaande vraag, een `open`- of `in-progress`-taak en, volgens de frames, een openstaande suggestie. Nooit voor een `waiting`-taak.
 - **Een onbekend bedrag blijft onbekend:** een vordering zonder genoemd totaal leest "Gevorderd: onbekend", nooit € 0,00, en dat blijft zo zodra het bedrag bewerkbaar is.
 - **Weggegooide en definitief verwijderde documenten blijven erbuiten.** Een document-meta-goedkeuring op zo'n document wordt geweigerd, de bijlagen van een logboekregel worden bij goedkeuring opnieuw bepaald, en een vraagoptie die een weggegooid of definitief verwijderd document koppelt faalt bij de hervalidatie.
-- **De archiveringsuitzondering** (verder mag een document zelf archiveren) werkt niet op deze schermen. Een document-meta-suggestie die hier wordt beslist is Martins eigen besluit, geschreven zonder `actor = 'verder'`. Automatisch archiveren staat in productie sowieso uit (`DOCMETA_AUTO_APPLY` niet gezet).
+- **De archiveringsuitzondering** (Grip mag een document zelf archiveren) werkt niet op deze schermen. Een document-meta-suggestie die hier wordt beslist is Martins eigen besluit, geschreven zonder `actor = 'verder'`. Automatisch archiveren staat in productie sowieso uit (`DOCMETA_AUTO_APPLY` niet gezet).
 - **Ongedaan maken herschrijft nooit de ledger.** Elk ongedaan maken dat uit het ontwerp wordt gebouwd moet een nieuwe, gelogde wijziging zijn, nooit een verwijdering of bewerking van wat er al is geschreven.
 
 ## Waar ontwerp en code verschillen
@@ -538,7 +538,7 @@ Dit zijn de plekken waar de definitieve frames **serverwerk** of een besluit van
 3. **De vierdelige statusbesturing** laat elk segment aantikken. De server staat alleen `validNext` toe: "open" kan nooit meer worden gekozen zodra een taak die status heeft verlaten, en de besturing heeft geen "laten vallen".
 4. **Ongedaan maken na "Niet relevant"** (toast). `suggestions.reject` is definitief en er is geen route om een suggestie te heropenen.
 5. **Het bedrag van een vordering aanpassen en "Namens hen" toevoegen, en "Van wie" bij een document.** De goedkeurroute accepteert een bedrag (`debtFields.partial()`), maar geen incassopartij of documentafzender.
-6. **"verder bekijkt je antwoord"** na een vrij antwoord. Niets leest vandaag `finalPayload.answer.freeText`.
+6. **"Grip bekijkt je antwoord"** na een vrij antwoord. Niets leest vandaag `finalPayload.answer.freeText`.
 7. **Bevestigen bij elke optie of alleen bij opties met gevolgen.** De code bevestigt elke optie, `none` inbegrepen. Het ontwerp legt "Nee" direct vast, wat pas veilig is zodra het ongedaan maken ervan bestaat.
 8. **De titel van de vraag op het vergrendelscherm** kan een schuldeiser noemen, wat de brief verbiedt.
 
@@ -597,14 +597,14 @@ Alle 44 frames uit `detail · final` (`326:6980`), opnieuw geëxporteerd op 2026
 
 | Frame | Wat het toont | Code nu |
 |---|---|---|
-| ![](frames/Vraag_normaal.jpg) `Vraag_normaal.jpg` | Vraag, open: waarom verder het vraagt, drie opties, eigen antwoord | Opties met servertekst en "Iets anders…" op `ProposalScreen`; geen "Waarom"-kaart |
+| ![](frames/Vraag_normaal.jpg) `Vraag_normaal.jpg` | Vraag, open: waarom Grip het vraagt, drie opties, eigen antwoord | Opties met servertekst en "Iets anders…" op `ProposalScreen`; geen "Waarom"-kaart |
 | ![](frames/Vraag_eigen_antwoord.jpg) `Vraag_eigen_antwoord.jpg` | Een eigen antwoord typen, "Geef antwoord" | Gebouwd als "Iets anders…" + "Antwoorden" |
 | ![](frames/Vraag_bevestigen.jpg) `Vraag_bevestigen.jpg` | Bevestigingssheet "Brief koppelen aan de vordering?" | Een systeembevestigingsdialoog, bij **elke** optie |
 | ![](frames/Vraag_beantwoord.jpg) `Vraag_beantwoord.jpg` | "Ja" beantwoord: wat er gebeurde, "Brief losmaken", volgend item | Wat er gebeurde, "Brief losmaken" (opent de vordering op de website), volgend item |
-| ![](frames/Vraag_beantwoord_eigen_antwoord.jpg) `Vraag_beantwoord_eigen_antwoord.jpg` | Beantwoord met eigen tekst, "verder bekijkt je antwoord" | Alleen opgeslagen; er volgt niets |
+| ![](frames/Vraag_beantwoord_eigen_antwoord.jpg) `Vraag_beantwoord_eigen_antwoord.jpg` | Beantwoord met eigen tekst, "Grip bekijkt je antwoord" | Alleen opgeslagen; er volgt niets |
 | ![](frames/Vraag_beantwoord_Nee_of_Weet_ik_niet.jpg) `Vraag_beantwoord_Nee_of_Weet_ik_niet.jpg` | Terug op Voor jou met "Beantwoord: Nee · Ongedaan maken" | Niet gebouwd; geen ongedaan maken op de server |
 | ![](frames/Vraag_fout.jpg) `Vraag_fout.jpg` | Antwoord niet aangekomen, "Opnieuw: Ja, koppel hem" | Eén foutregel; opnieuw op de optie tikken |
-| ![](frames/Vraag_offline.jpg) `Vraag_offline.jpg` | Offlinebanner met tijd van laatste update, antwoorden uitgeschakeld | "Geen verbinding met verder…" na een mislukte lading of een mislukt antwoord |
+| ![](frames/Vraag_offline.jpg) `Vraag_offline.jpg` | Offlinebanner met tijd van laatste update, antwoorden uitgeschakeld | "Geen verbinding met Grip…" na een mislukte lading of een mislukt antwoord |
 | ![](frames/Vraag_iPhone_SE.jpg) `Vraag_iPhone_SE.jpg` | Vraag op een iPhone SE | Dezelfde enkele scrollende kolom |
 | ![](frames/Vraag_AX5.jpg) `Vraag_AX5.jpg` | Grootste toegankelijkheidstekst | Dynamic Type schaalt |
 | ![](frames/Vraag_AX5_gescrold.jpg) `Vraag_AX5_gescrold.jpg` | AX5 gescrold naar de opties | Scrolt |
@@ -625,7 +625,7 @@ Alle 44 frames uit `detail · final` (`326:6980`), opnieuw geëxporteerd op 2026
 | ![](frames/Suggestie_veld_aanpassen.jpg) `Suggestie_veld_aanpassen.jpg` | Eén veld aanpassen, "was:" getoond | "Aanpassen" maakt alle velden bewerkbaar; geen "was:" |
 | ![](frames/Suggestie_aangepast.jpg) `Suggestie_aangepast.jpg` | Twee velden veranderd, "Zet terug", "Goedkeuren · 2 aangepast" | Alleen veranderde velden verstuurd; knop blijft "Klopt zo" |
 | ![](frames/Suggestie_niet_relevant.jpg) `Suggestie_niet_relevant.jpg` | Afgewezen met één tik, toast om ongedaan te maken op Voor jou | Altijd via het redensheet; geen ongedaan maken |
-| ![](frames/Suggestie_niet_relevant_met_reden.jpg) `Suggestie_niet_relevant_met_reden.jpg` | Redensheet | Gebouwd ("Waarom? Niet verplicht — verder leert ervan.") |
+| ![](frames/Suggestie_niet_relevant_met_reden.jpg) `Suggestie_niet_relevant_met_reden.jpg` | Redensheet | Gebouwd ("Waarom? Niet verplicht — Grip leert ervan.") |
 | ![](frames/Suggestie_niet_relevant_met_reden_AX5.jpg) `Suggestie_niet_relevant_met_reden_AX5.jpg` | Redensheet bij AX5 | Sheet schaalt |
 | ![](frames/Suggestie_niet_relevant_met_reden_AX5_gescrold.jpg) `Suggestie_niet_relevant_met_reden_AX5_gescrold.jpg` | Redensheet bij AX5, gescrold | Sheet op middelhoge stand |
 | ![](frames/Suggestie_vastgelegd.jpg) `Suggestie_vastgelegd.jpg` | Goedgekeurd: link naar de logboekregel, "Correctie toevoegen" | Rij "In het logboek"; "Correctie toevoegen" in de dock (opent de website) |

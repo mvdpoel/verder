@@ -18,7 +18,7 @@ De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 ---
 
-Meer is het vijfde tabblad van de iPhone-app. Het is een lijst met instellingen: als wie de telefoon is ingelogd, hoe verder Martin bereikt, een paar extra's van de zaak (Geld, het snel inspreken van een gesprek, het Weekoverzicht) en feiten over de app zelf. Daarachter zitten de schermen Account, Meldingen, Widgets toevoegen, Over verder en Ontwikkelaar. Alleen Martin gebruikt de app.
+Meer is het vijfde tabblad van de iPhone-app. Het is een lijst met instellingen: als wie de telefoon is ingelogd, hoe Grip Martin bereikt, een paar extra's van de zaak (Geld, het snel inspreken van een gesprek, het Weekoverzicht) en feiten over de app zelf. Daarachter zitten de schermen Account, Meldingen, Widgets toevoegen, Over Grip en Ontwikkelaar. Alleen Martin gebruikt de app.
 
 Dit document beschrijft de **volledige functieset** van het scherm zoals de definitieve frames, de spec (`docs/superpowers/specs/2026-10-28-iphone-app-design.md`) en de ontwerpbrief (`docs/superpowers/specs/2026-11-01-iphone-design-brief.md`, §2.5 haptiek, §2.7 toegankelijkheid en de §3-rij "Meer + settings") die vastleggen. Elke functie heeft een statusregel die zegt hoe ver de code is. Het visuele ontwerp valt erbuiten; dat staat in Figma: bestand `QDRL5zHNEOjPzLZqzd19Ii`, sectienode `329:8524` ("meer · final"). De 29 frames in `frames/` zijn exports van die sectie. De frames gebruiken synthetische gegevens (het account `jij@thuis.example`, hetzelfde adres waarmee de DEBUG-fixture van de app antwoordt vanuit `apps/ios/Grip/FixtureData/_shared/me.json`), geen echte gegevens uit de zaak. UI-teksten staan tussen aanhalingstekens in het Nederlands, precies zoals de app ze toont of het frame ze tekent.
 
@@ -30,7 +30,7 @@ Dit document beschrijft de **volledige functieset** van het scherm zoals de defi
 
 - **Eén plek voor alles wat geen werk aan de zaak is.** De andere tabbladen zijn de zaak (Overzicht, Voor jou, Dossier) of de camera (Scan). Meer bevat het account, de instellingen voor meldingen, de uitleg over widgets, de versie van de app en de controles voor ontwikkelaars.
 - **Een tweede deur naar een paar extra's van de zaak.** Geld, Gesprek vastleggen en het Weekoverzicht hebben elk elders een eigen ingang (een kaart op Overzicht, een snelle actie op het beginscherm, de melding op zondag). Meer zet ze op een rij zodat ze altijd te vinden zijn, en de rijen zeggen hun huidige toestand.
-- **Kiezen waarvoor verder stoort.** Het doel van de brief voor dit scherm: één soort melding uitzetten kost twee tikken (Meer → Meldingen → schakelaar). De server bepaalt wat er wordt verstuurd, dus de schakelaar wordt daar opgeslagen.
+- **Kiezen waarvoor Grip stoort.** Het doel van de brief voor dit scherm: één soort melding uitzetten kost twee tikken (Meer → Meldingen → schakelaar). De server bepaalt wat er wordt verstuurd, dus de schakelaar wordt daar opgeslagen.
 - **De toestand zeggen, nooit raden.** De regel over de toegangssleutel is de telling van de server, de regel over toestemming is wat iOS antwoordt, en de versie wordt uit de bundle gelezen. Waar een waarde nog niet bekend is, zegt het scherm dat ("Account wordt opgehaald…", "Meldingen worden gecontroleerd…") in plaats van een standaardwaarde te tonen.
 
 ## Hoe je er komt, en waar het heen leidt
@@ -38,7 +38,7 @@ Dit document beschrijft de **volledige functieset** van het scherm zoals de defi
 **In:**
 
 - **Het tabblad Meer** (`RootView`, tab `ellipsis`, label "Meer").
-- **Deep link `grip://weekly`** opent Meer met `[.weekly]` op de stack, en **`grip://money`** opent Meer met `[.money]` (`DeepLink.destination`). De zondagse melding draagt `grip://inbox`, maar `NotificationRouter` stuurt een gewone tik of `OPEN` op de categorie `WEEKLY` toch naar het Weekoverzicht. Links komen alleen binnen via een melding of via verders eigen widget. De app registreert geen `grip://`-URL-schema, dus geen webpagina of andere app kan er een afvuren.
+- **Deep link `grip://weekly`** opent Meer met `[.weekly]` op de stack, en **`grip://money`** opent Meer met `[.money]` (`DeepLink.destination`). De zondagse melding draagt `grip://inbox`, maar `NotificationRouter` stuurt een gewone tik of `OPEN` op de categorie `WEEKLY` toch naar het Weekoverzicht. Links komen alleen binnen via een melding of via Grips eigen widget. De app registreert geen `grip://`-URL-schema, dus geen webpagina of andere app kan er een afvuren.
 - **Het eenmalige aanbod voor een toegangssleutel.** Na een interactieve inlog met wachtwoord op een account zonder enige passkey zet `AuthModel` `passkeyOfferPending`, en `RootView` springt naar het tabblad Meer, waar de aanbodkaart boven de lijst staat (zie [Aanbod toegangssleutel](#aanbod-toegangssleutel)).
 - **Fixture-opnames:** `-fixtures <name> -tab meer`, en `-route geld` / `-route weekly` (alleen DEBUG).
 
@@ -72,7 +72,7 @@ Het tabblad is vergrendeld (`.lockGated(by: lock)`), dus wie het opent terwijl d
 | Gesprek vastleggen | het spraakvel (een "+" in plaats van een chevron) |
 | Weekoverzicht | `WeeklyView` |
 | Widgets toevoegen | `WidgetGuideScreen` |
-| Over verder | `AboutScreen` |
+| Over Grip | `AboutScreen` |
 | Ontwikkelaar | `DeveloperScreen` |
 
 Het openen van Meer ververst twee dingen: het account (`GET /api/mobile/v1/me`) en de toestemming voor meldingen (`PushRegistrar.refresh()`, een lokale vraag aan iOS). Niets in de lijst schrijft iets.
@@ -81,9 +81,9 @@ Het openen van Meer ververst twee dingen: het account (`GET /api/mobile/v1/me`) 
 
 #### Indeling: accountkaart, Snel naar, Instellingen, Over
 
-Het ontwerp opent met een **accountkaart** (het e-mailadres en het einde van de sessie, tikbaar naar Account), gevolgd door drie groepen. "SNEL NAAR" bevat Geld, Gesprek vastleggen en Weekoverzicht. "INSTELLINGEN" bevat Meldingen en Widgets toevoegen. "OVER" bevat Over verder. **Ontwikkelaar staat niet op Meer**: het zit een niveau dieper, in Over verder onder "EXTRA", met de regel "meldingen-omgeving en uploadtest" (de Halide-regel van de brief: "advanced a few taps away").
+Het ontwerp opent met een **accountkaart** (het e-mailadres en het einde van de sessie, tikbaar naar Account), gevolgd door drie groepen. "SNEL NAAR" bevat Geld, Gesprek vastleggen en Weekoverzicht. "INSTELLINGEN" bevat Meldingen en Widgets toevoegen. "OVER" bevat Over Grip. **Ontwikkelaar staat niet op Meer**: het zit een niveau dieper, in Over Grip onder "EXTRA", met de regel "meldingen-omgeving en uploadtest" (de Halide-regel van de brief: "advanced a few taps away").
 
-**Status:** Deels gebouwd — elke rij bestaat, maar de groepen in de code zijn "Jij" (Account, Meldingen), "Dossier" (Geld, Gesprek vastleggen, Weekoverzicht) en "App" (Widgets toevoegen, Over verder, Ontwikkelaar). Er is geen accountkaart, en Ontwikkelaar is een rij op Meer zelf (`MoreMenu.sections`). De aanpassing raakt `MoreMenu.sections`, `AboutScreen` (een "EXTRA"-link naar `.developer`) en de tests `theMenuIsInTheBriefsOrder` en `developerIsLastAndOneLevelDown`.
+**Status:** Deels gebouwd — elke rij bestaat, maar de groepen in de code zijn "Jij" (Account, Meldingen), "Dossier" (Geld, Gesprek vastleggen, Weekoverzicht) en "App" (Widgets toevoegen, Over Grip, Ontwikkelaar). Er is geen accountkaart, en Ontwikkelaar is een rij op Meer zelf (`MoreMenu.sections`). De aanpassing raakt `MoreMenu.sections`, `AboutScreen` (een "EXTRA"-link naar `.developer`) en de tests `theMenuIsInTheBriefsOrder` en `developerIsLastAndOneLevelDown`.
 
 #### Statusregels op de rijen
 
@@ -97,7 +97,7 @@ Elke rij zegt onder de titel wat de huidige toestand is, en sommige tonen een wa
 | Weekoverzicht | "week 44 · 3 verstuurd · 5 opgeborgen" | geen; `GET /api/mobile/v1/weekly` geeft al `week`, `sent`, `filedByMartin` en `filedByGrip` terug (`WeeklyModels.swift`), dus Meer moet bij het openen het opgeslagen overzicht lezen; niets vóór de eerste zondag |
 | Meldingen | "8 van 9 soorten", rechts "aan"; als meldingen in iOS uit staan: "uit in iOS · zet ze aan via Instellingen" met rechts "uit" | "Aan", "Uit" of "Nog niet aangezet", niets zolang het onbekend is; de telling heeft [de schakelaars](#een-schakelaar-per-soort) nodig |
 | Widgets toevoegen | "beginscherm en toegangsscherm" | geen (vaste tekst) |
-| Over verder | "versie 1.0 · build 31", offline "versie 1.0 · server offline" | geen; de versie wordt al gelezen door `AboutInfo` |
+| Over Grip | "versie 1.0 · build 31", offline "versie 1.0 · server offline" | geen; de versie wordt al gelezen door `AboutInfo` |
 
 **Status:** Deels gebouwd — `MoreMenu.subtitle` geeft het e-mailadres en het woord voor de toestemming (test `rowSubtitlesSayTheState`). Ontbreekt: het einde van de sessie, het Geld-bedrag, de spraakregel, de weekregel, de telling van de soorten, de widgetregel, de versieregel en de waarden aan de rechterrand.
 
@@ -121,7 +121,7 @@ De rij opent het vel voor het snel inspreken van een gesprek, hetzelfde vel dat 
 
 #### Weekoverzicht
 
-`WeeklyView` leest `GET /api/mobile/v1/weekly`: het nieuwste overzicht dat de worker opsloeg bij zijn `weekly-summary`-run, of 404 vóór de eerste zondag. Het toont wat er gebeurde in de week die zondag 18:00 Amsterdamse tijd eindigt, wat verder zelf deed, wat er op zondag wachtte, en één volgende stap naar Voor jou. Het is geschiedenis en nooit amber, behalve de volgende stap, die alleen amber wordt op het actuele aantal dat wacht. Het schrijft niets.
+`WeeklyView` leest `GET /api/mobile/v1/weekly`: het nieuwste overzicht dat de worker opsloeg bij zijn `weekly-summary`-run, of 404 vóór de eerste zondag. Het toont wat er gebeurde in de week die zondag 18:00 Amsterdamse tijd eindigt, wat Grip zelf deed, wat er op zondag wachtte, en één volgende stap naar Voor jou. Het is geschiedenis en nooit amber, behalve de volgende stap, die alleen amber wordt op het actuele aantal dat wacht. Het schrijft niets.
 
 **Status:** Gebouwd — `apps/ios/Grip/Weekly/`, `apps/web/src/app/api/mobile/v1/weekly/route.ts` (zie `../12-weekoverzicht/FEATURES.md`).
 
@@ -161,13 +161,13 @@ Een mislukte verversing **behoudt** een eerder getoond account. Zonder iets in d
 
 #### Toegangssleutel toevoegen
 
-Registreert een passkey voor deze iPhone (de passkey-registratie van better-auth, met de naam "verder op iPhone") en leest daarna `/me` opnieuw, zodat de status bijwerkt. De uitkomst staat onder de regel:
+Registreert een passkey voor deze iPhone (de passkey-registratie van better-auth, met de naam "Grip op iPhone") en leest daarna `/me` opnieuw, zodat de status bijwerkt. De uitkomst staat onder de regel:
 
 - "Passkey toegevoegd. Voortaan log je in met Face ID."
-- iOS-fout 1006 (er is al een passkey voor verder hierheen gesynchroniseerd via de iCloud-sleutelhanger): "Er staat al een passkey voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen." Dit is geen fout.
+- iOS-fout 1006 (er is al een passkey voor Grip hierheen gesynchroniseerd via de iCloud-sleutelhanger): "Er staat al een passkey voor Grip op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen." Dit is geen fout.
 - 403, of geen verse sessie: "Log eerst opnieuw in; daarna kun je een passkey toevoegen."
 - Rate limit: "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw."
-- Offline: "Geen verbinding met verder. Controleer je internet en probeer het opnieuw."
+- Offline: "Geen verbinding met Grip. Controleer je internet en probeer het opnieuw."
 - Al het andere: "Passkey toevoegen lukte niet. Probeer het over een moment opnieuw." plus een korte oorzaak zonder geheimen, zoals `(ASAuthorizationError 1004)`.
 - Het iOS-vel sluiten zegt niets.
 
@@ -216,7 +216,7 @@ Als er nog scans wachten om te uploaden, zegt het uitlogvel dat: "Er staan nog 2
 
 #### Uitloggen terwijl de iPhone offline is
 
-Offline zegt het vel "Deze iPhone is offline · bijgewerkt 14:02." / "Hij logt nu uit en wist zijn kopie. verder trekt je sessie in zodra deze iPhone weer online is; tot dan kunnen er nog meldingen binnenkomen." met "Toch uitloggen" en "Annuleren". Als er ook scans in de wachtrij staan, noemt het vel beide feiten in één tekst ("De 2 scans worden verstuurd zodra je weer inlogt. Je sessie wordt ingetrokken zodra deze iPhone weer online is; …").
+Offline zegt het vel "Deze iPhone is offline · bijgewerkt 14:02." / "Hij logt nu uit en wist zijn kopie. Grip trekt je sessie in zodra deze iPhone weer online is; tot dan kunnen er nog meldingen binnenkomen." met "Toch uitloggen" en "Annuleren". Als er ook scans in de wachtrij staan, noemt het vel beide feiten in één tekst ("De 2 scans worden verstuurd zodra je weer inlogt. Je sessie wordt ingetrokken zodra deze iPhone weer online is; …").
 
 **Status:** Nog te bouwen — de dialoog noemt het netwerk nu nooit. Nodig: de offline-stand uit `UploadCenter.isOffline` (de `NWPathMonitor` draait al), beide varianten van het vel met hun tekst, en tests. Het hangt af van de volgende functie, want zonder het uitgestelde intrekken zou de belofte in de tekst onwaar zijn.
 
@@ -238,12 +238,12 @@ Een uitlog die de server niet kon bereiken, wordt later afgemaakt: de telefoon h
 |---|---|---|
 | toegestaan | "Meldingen staan aan." | geen |
 | nog niet bepaald | "Meldingen zijn nog niet aangezet." | "Meldingen aanzetten" opent het iOS-toestemmingsvel (`push.acceptPrePrompt()`); bij ja meldt de telefoon zich aan bij APNs |
-| geweigerd | "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." | "Open Instellingen" opent de meldingsinstellingen van verder in iOS |
+| geweigerd | "Meldingen staan uit. Zet ze aan in Instellingen om te horen wanneer Verder iets vraagt." | "Open Instellingen" opent de meldingsinstellingen van Grip in iOS |
 | nog niet gelezen | "Meldingen worden gecontroleerd…" | geen |
 
-Als de laatste aanmelding in deze sessie van de app mislukte, staat de reden in mono onder de regel. Dat is ofwel "Aanmelden voor meldingen lukte niet. verder probeert het bij de volgende start opnieuw." (verder accepteerde het token niet) ofwel "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." gevolgd door het foutdomein en de foutcode van iOS (APNs weigerde). Een tik op "Meldingen aanzetten" hier telt ook als het tonen van de voorvraag.
+Als de laatste aanmelding in deze sessie van de app mislukte, staat de reden in mono onder de regel. Dat is ofwel "Aanmelden voor meldingen lukte niet. Grip probeert het bij de volgende start opnieuw." (Grip accepteerde het token niet) ofwel "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen." gevolgd door het foutdomein en de foutcode van iOS (APNs weigerde). Een tik op "Meldingen aanzetten" hier telt ook als het tonen van de voorvraag.
 
-**Status:** Gebouwd — `NotificationsCopy.permissionLine` / `action`, `NotificationsScreen`, `apps/ios/Grip/Push/PushRegistrar.swift`; test `permissionStatesSayWhatToDo`. De tekst voor geweigerd uit het ontwerp ("verder kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan.") hangt af van de schakelaars en komt met ze mee.
+**Status:** Gebouwd — `NotificationsCopy.permissionLine` / `action`, `NotificationsScreen`, `apps/ios/Grip/Push/PushRegistrar.swift`; test `permissionStatesSayWhatToDo`. De tekst voor geweigerd uit het ontwerp ("Grip kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan.") hangt af van de schakelaars en komt met ze mee.
 
 #### Deze iPhone aanmelden voor meldingen
 
@@ -253,9 +253,9 @@ Bij elke start met een sessie en toestemming vraagt de app APNs om een token. `P
 
 #### Wat elke soort betekent
 
-Eén item per soort melding die de worker verstuurt, gegroepeerd naar waar het over gaat. "POST": "Post van je bewindvoerder" (tijdgevoelig, "elke mail of brief van je bewindvoerder") en "Post van een schuldeiser" (gewoon, "een schuldeiser of deurwaarder stuurde je iets"). "WAT OP JE WACHT": "Voorstel" ("er gaat niets weg zonder jou"), "Herinnering", "Navragen" en "Termijn". "WAT VERDER DEED": "Opgeborgen" (stil), "Weekoverzicht" (stil, "zondag 18:00") en "Systeem". Elk item noemt zijn niveau, tijdgevoelig, gewoon of stil, zoals de worker het werkelijk instelt. De tekst belooft niet dat een melding door een focus heen komt, omdat dat nooit gemeten is.
+Eén item per soort melding die de worker verstuurt, gegroepeerd naar waar het over gaat. "POST": "Post van je bewindvoerder" (tijdgevoelig, "elke mail of brief van je bewindvoerder") en "Post van een schuldeiser" (gewoon, "een schuldeiser of deurwaarder stuurde je iets"). "WAT OP JE WACHT": "Voorstel" ("er gaat niets weg zonder jou"), "Herinnering", "Navragen" en "Termijn". "WAT GRIP DEED": "Opgeborgen" (stil), "Weekoverzicht" (stil, "zondag 18:00") en "Systeem". Elk item noemt zijn niveau, tijdgevoelig, gewoon of stil, zoals de worker het werkelijk instelt. De tekst belooft niet dat een melding door een focus heen komt, omdat dat nooit gemeten is.
 
-**Status:** Deels gebouwd — `NotificationsCopy.kinds` is een alleen-lezen lijst in de volgorde van `NotificationCategories.ids` onder één kop, "WAT VERDER JE LAAT WETEN", met de namen uit de code ("Mail van Verder", "Mail van een schuldeiser", …, "Deadline"). De niveaus staan alleen in sommige uitleggen (tests `everyKindTheWorkerSendsIsExplained`, `verderMailClaimsNoFocusBreakthrough`). Ontbreekt: de drie groepen, een woord voor het niveau bij elke soort, en de namen uit het ontwerp ("Post van je bewindvoerder", "Post van een schuldeiser", "Termijn" voor `TASK_DUE`).
+**Status:** Deels gebouwd — `NotificationsCopy.kinds` is een alleen-lezen lijst in de volgorde van `NotificationCategories.ids` onder één kop, "WAT GRIP JE LAAT WETEN", met de namen uit de code ("Mail van Verder", "Mail van een schuldeiser", …, "Deadline"). De niveaus staan alleen in sommige uitleggen (tests `everyKindTheWorkerSendsIsExplained`, `verderMailClaimsNoFocusBreakthrough`). Ontbreekt: de drie groepen, een woord voor het niveau bij elke soort, en de namen uit het ontwerp ("Post van je bewindvoerder", "Post van een schuldeiser", "Termijn" voor `TASK_DUE`).
 
 #### Een schakelaar per soort
 
@@ -284,7 +284,7 @@ Onder de toestemmingsregel en op de rij op Meer: hoeveel soorten aan staan, mail
 
 #### Een wijziging die niet is opgeslagen
 
-Als het opslaan van een schakelaar mislukt, gaat de schakelaar terug naar zijn opgeslagen waarde en toont de soort "Niet opgeslagen · verder niet bereikbaar." met "Opnieuw proberen". Het scherm claimt nooit een keuze die de server niet heeft opgeslagen.
+Als het opslaan van een schakelaar mislukt, gaat de schakelaar terug naar zijn opgeslagen waarde en toont de soort "Niet opgeslagen · Grip niet bereikbaar." met "Opnieuw proberen". Het scherm claimt nooit een keuze die de server niet heeft opgeslagen.
 
 **Status:** Nog te bouwen — onderdeel van de schakelaars: een opslagtoestand per soort en een nieuwe poging, een `.error`-haptiek (zie [Haptiek](#haptiek)), en een test dat een mislukte `PUT` de opgeslagen waarde getoond laat.
 
@@ -312,7 +312,7 @@ Herinneringen, navragen en termijnen worden alleen tussen 08:00 en 22:00 Amsterd
 
 #### De uitleg
 
-Een uitleg in de app. "OP JE BEGINSCHERM" heeft genummerde stappen, "OP JE TOEGANGSSCHERM" heeft drie stappen, en "FORMATEN" geeft één regel per familie die de widget ondersteunt, met wat die familie tekent (Klein, Middel, Groot, Rond, Rechthoek, Regel). Alleen Groot en Rechthoek noemen de leeftijd van het oudste, in lijn met `WidgetContent.showsOldest`. Hij eindigt met "Op je toegangsscherm toont verder nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is." Er wordt niets gelezen of geschreven.
+Een uitleg in de app. "OP JE BEGINSCHERM" heeft genummerde stappen, "OP JE TOEGANGSSCHERM" heeft drie stappen, en "FORMATEN" geeft één regel per familie die de widget ondersteunt, met wat die familie tekent (Klein, Middel, Groot, Rond, Rechthoek, Regel). Alleen Groot en Rechthoek noemen de leeftijd van het oudste, in lijn met `WidgetContent.showsOldest`. Hij eindigt met "Op je toegangsscherm toont Grip nooit titels: alleen hoeveel er wacht, en in de rechthoek hoe oud het oudste is." Er wordt niets gelezen of geschreven.
 
 **Status:** Gebouwd — `WidgetGuide`, `WidgetGuideScreen`; tests `theWidgetGuideNamesEveryPlaceAWidgetGoes`, `theWidgetGuideIsTruePerFamily`. Het ontwerp heeft drie stappen voor het beginscherm waar de code er vier heeft, en geen lijst "FORMATEN".
 
@@ -322,19 +322,19 @@ Een uitleg in de app. "OP JE BEGINSCHERM" heeft genummerde stappen, "OP JE TOEGA
 
 **Status:** Nog te bouwen — hiervoor moeten de eigen views van de widget (`GripWidget`, `WidgetContent`) in de app worden getekend vanuit de huidige snapshot van de widget, zodat het voorbeeld niet kan afwijken van de echte widget. Het moet dezelfde regels volgen: geen titels in de familie van het toegangsscherm, amber alleen met de bijbehorende woorden. Nodig is een test dat de tekst van het voorbeeld gelijk is aan wat `WidgetContent` voor die familie tekent.
 
-### Over verder
+### Over Grip
 
-![Over verder (design)](frames/Over_verder_normaal.jpg)
+![Over Grip (design)](frames/Over_Grip_normaal.jpg)
 
-#### Versie, server en wat verder is
+#### Versie, server en wat Grip is
 
-"Versie" (`CFBundleShortVersionString (CFBundleVersion)`, of "onbekend") en "Server" (de host waarmee deze build praat), beide selecteerbaar, daarna "verder is gemaakt voor één dossier: het jouwe. Alles wat de app laat zien, komt van je eigen server." Deze worden lokaal gelezen, zonder verzoek.
+"Versie" (`CFBundleShortVersionString (CFBundleVersion)`, of "onbekend") en "Server" (de host waarmee deze build praat), beide selecteerbaar, daarna "Grip is gemaakt voor één dossier: het jouwe. Alles wat de app laat zien, komt van je eigen server." Deze worden lokaal gelezen, zonder verzoek.
 
 **Status:** Gebouwd — `AboutInfo`, `AboutScreen`; test `aboutReadsTheBundleAndTheServer`.
 
 #### Verbinding
 
-"Verbinding" zegt of deze telefoon verder op dit moment kan bereiken: "BEREIKBAAR", of niet. Op Meer toont de rij dan "server offline". Het beantwoordt "ligt het aan mij of aan de server?" zonder de ontwikkelaarstools te openen.
+"Verbinding" zegt of deze telefoon Grip op dit moment kan bereiken: "BEREIKBAAR", of niet. Op Meer toont de rij dan "server offline". Het beantwoordt "ligt het aan mij of aan de server?" zonder de ontwikkelaarstools te openen.
 
 **Status:** Nog te bouwen — de code doet hier geen verzoek. Nodig: één lichte, geauthenticeerde aanroep als het scherm opent (`GET /api/mobile/v1/me` bestaat al en schrijft niets), drie toestanden (bereikbaar / niet bereikbaar met de oorzaak / geen internet uit `UploadCenter.isOffline`), nooit een geraden toestand zolang het antwoord uitstaat, en tests per toestand. Een 401 beëindigt de sessie, zoals overal.
 
@@ -346,13 +346,13 @@ Controles voor ontwikkelaars, in elke build (niet alleen DEBUG), een niveau diep
 
 #### APNs-omgeving
 
-De omgeving die deze telefoon met zijn token meestuurde: "development", "production" of "nog niet aangemeld". Hij wordt getoond zodra verder die aanmelding in de huidige sessie van de app heeft geaccepteerd, in het geheugen vastgehouden en niet teruggelezen van de server, en hij gaat terug naar "nog niet aangemeld" na een 401. Het is het eerste om te lezen als een melding niet aankomt: een sandbox-token dat naar de productiehost wordt gestuurd, faalt stil.
+De omgeving die deze telefoon met zijn token meestuurde: "development", "production" of "nog niet aangemeld". Hij wordt getoond zodra Grip die aanmelding in de huidige sessie van de app heeft geaccepteerd, in het geheugen vastgehouden en niet teruggelezen van de server, en hij gaat terug naar "nog niet aangemeld" na een 401. Het is het eerste om te lezen als een melding niet aankomt: een sandbox-token dat naar de productiehost wordt gestuurd, faalt stil.
 
 **Status:** Gebouwd — `PushRegistrar.registeredEnvironment`, `DeveloperScreen`.
 
 #### Apparaat-token
 
-Het staartje van het APNs-token van deze telefoon en de dag waarop verder het accepteerde ("…a41f · 31 okt"). Dat is genoeg om de telefoon te koppelen aan zijn `push_devices`-rij en zijn `notification_attempts`, en het toont nooit het hele token.
+Het staartje van het APNs-token van deze telefoon en de dag waarop Grip het accepteerde ("…a41f · 31 okt"). Dat is genoeg om de telefoon te koppelen aan zijn `push_devices`-rij en zijn `notification_attempts`, en het toont nooit het hele token.
 
 **Status:** Nog te bouwen — `PushRegistrar` berekent het hex-token (`hexToken`) maar bewaart het niet, en ook het tijdstip van acceptatie niet. Nodig: de laatste vier hex-tekens en het tijdstip van acceptatie bewaard na een geslaagde aanmelding, getekend in `DeveloperScreen`, en een test dat er nooit meer dan het staartje wordt getoond.
 
@@ -364,7 +364,7 @@ De laatste fout bij het aanmelden voor meldingen in deze sessie van de app, of "
 
 #### Scan opnieuw uploaden (test)
 
-Stuurt de nieuwste verstuurde scan opnieuw, met dezelfde bytes en dezelfde `clientId`, naar `POST /api/mobile/v1/documents`. De server moet `duplicate: true` antwoorden en niets opslaan, dus er wordt geen `document.ingested`-event geschreven. Het is een echte upload naar het echte dossier, dus het wordt uitgelegd voordat het loopt. De code vraagt om bevestiging: "Laatste scan opnieuw versturen met dezelfde clientId?" / "verder hoort te antwoorden met duplicate: true, zonder een nieuw document.". Het ontwerp zet dezelfde uitleg onder de knop. "Laatste scan" noemt het bestand. Gemeten op het toestel op 2026-10-31: `phone-scan` bleef op 1 en het ledger op 549.
+Stuurt de nieuwste verstuurde scan opnieuw, met dezelfde bytes en dezelfde `clientId`, naar `POST /api/mobile/v1/documents`. De server moet `duplicate: true` antwoorden en niets opslaan, dus er wordt geen `document.ingested`-event geschreven. Het is een echte upload naar het echte dossier, dus het wordt uitgelegd voordat het loopt. De code vraagt om bevestiging: "Laatste scan opnieuw versturen met dezelfde clientId?" / "Grip hoort te antwoorden met duplicate: true, zonder een nieuw document.". Het ontwerp zet dezelfde uitleg onder de knop. "Laatste scan" noemt het bestand. Gemeten op het toestel op 2026-10-31: `phone-scan` bleef op 1 en het ledger op 549.
 
 **Status:** Gebouwd — `UploadCenter.lastSent` / `resendLastSent`, `DeveloperScreen`, `apps/web/src/app/api/mobile/v1/documents/route.ts`.
 
@@ -378,7 +378,7 @@ Het antwoord van de server op dat opnieuw versturen, leesbaar gemaakt: "duplicat
 
 #### Offline: gezegd, en uitgeschakeld met de reden
 
-Offline zegt elk scherm dat in een mono-weergave, "offline · bijgewerkt 14:02", met de leeftijd van wat er getoond wordt: in de accountkaart van Meer, bovenaan Account en bovenaan Meldingen. Elke actie die de server nodig heeft, is uitgeschakeld **met de reden**, nooit zonder iets te zeggen: "Toegangssleutel toevoegen · kan weer als je online bent", "Apparaten op het web · 3 ingelogd · kan weer als je online bent", en op Meldingen worden de schakelaars gewone waarden onder "wijzigen kan weer zodra je online bent". Account voegt toe: "Uitloggen werkt ook offline. Je sessie wordt ingetrokken zodra deze iPhone weer online is." De rij van Over verder toont "server offline".
+Offline zegt elk scherm dat in een mono-weergave, "offline · bijgewerkt 14:02", met de leeftijd van wat er getoond wordt: in de accountkaart van Meer, bovenaan Account en bovenaan Meldingen. Elke actie die de server nodig heeft, is uitgeschakeld **met de reden**, nooit zonder iets te zeggen: "Toegangssleutel toevoegen · kan weer als je online bent", "Apparaten op het web · 3 ingelogd · kan weer als je online bent", en op Meldingen worden de schakelaars gewone waarden onder "wijzigen kan weer zodra je online bent". Account voegt toe: "Uitloggen werkt ook offline. Je sessie wordt ingetrokken zodra deze iPhone weer online is." De rij van Over Grip toont "server offline".
 
 **Status:** Nog te bouwen — er is op deze schermen geen aanduiding dat de telefoon offline is. Een passkey die offline wordt toegevoegd, faalt achteraf met het offline-bericht. De onderdelen bestaan elders: `UploadCenter.isOffline` (een `NWPathMonitor`), en dezelfde formulering van de weergave in `HomeSummary.swift` en `DossierModel.swift`. Nodig: de offline-toestand doorgegeven aan `MoreTab` en zijn schermen, een tijdstip van het laatste goede antwoord voor `/me`, de uitgeschakelde toestanden met hun reden, en tests. De zin op Account over het intrekken moet wachten op [het uitgestelde intrekken](#de-sessie-intrekken-zodra-de-iphone-weer-online-is).
 
@@ -421,12 +421,12 @@ Meer biedt geen keuze tussen licht en donker (de app is alleen donker, brief §5
 | Laden (Account) | — | "Account wordt opgehaald…", "Passkeys worden opgehaald…" |
 | Account lezen mislukt, niets in de cache | "Account niet opgehaald." met "Opnieuw proberen" | De oorzaak en "Opnieuw proberen"; toegangssleutel "Niet bekend…" |
 | Account lezen mislukt, wel in de cache | — | Het account uit de cache, ongewijzigd |
-| Offline | "offline · bijgewerkt 14:02"; serveracties uitgeschakeld met de reden | Geen aanduiding. Meer, Meldingen, Widgets, Over verder en Ontwikkelaar werken volledig (alles lokaal); Account houdt wat het had of toont de transportfout; een passkey toevoegen faalt met het offline-bericht |
+| Offline | "offline · bijgewerkt 14:02"; serveracties uitgeschakeld met de reden | Geen aanduiding. Meer, Meldingen, Widgets, Over Grip en Ontwikkelaar werken volledig (alles lokaal); Account houdt wat het had of toont de transportfout; een passkey toevoegen faalt met het offline-bericht |
 | Uitloggen met scans in de wachtrij | De waarschuwing over de wachtrij met "Eerst uploaden" | De eenvoudige dialoog |
 | Uitloggen offline | Het offline-vel met het uitgestelde intrekken | De eenvoudige dialoog; de sessie op de server blijft leven |
 | Sessie verlopen (401) | — | De app vervangt de tabbladen door "Je sessie is verlopen."; scans in de wachtrij worden na de volgende inlog verstuurd |
 | Meldingen geweigerd | Meer "uit in iOS · zet ze aan via Instellingen"; Meldingen houdt de keuzes als waarden | Ondertitel op Meer "Uit"; Meldingen biedt "Open Instellingen" |
-| Voorkeur niet opgeslagen | "Niet opgeslagen · verder niet bereikbaar." met "Opnieuw proberen" | Bestaat niet (geen voorkeuren) |
+| Voorkeur niet opgeslagen | "Niet opgeslagen · Grip niet bereikbaar." met "Opnieuw proberen" | Bestaat niet (geen voorkeuren) |
 | Grote tekst (AX5) | Elke regel loopt door | Tekst schaalt; de ondertitels van de rijen op Meer worden afgekapt tot één regel |
 | Kleine telefoon (SE, 375 × 667) | Dezelfde lijst, scrollend | Dezelfde lay-out in één kolom in een scroll view |
 
@@ -461,8 +461,8 @@ Meer heeft geen eigen gegevens en synchroniseert niet. `/me` wordt gelezen bij e
 
 - `/settings/security` toont deze telefoon als "Onbekend apparaat": zijn user agent (`Grip/1 CFNetwork/… Darwin/…`) wordt niet herkend door de parser van het web. De telling "N ingelogd" telt hem onder die naam mee.
 - Of een tijdgevoelige melding door een focus heen komt, is op Martins eigen keuze niet gemeten, en de tekst belooft niets.
-- Het ontwikkelaarscertificaat en het profiel verlopen op 2027-10-31. Over verder toont die datum niet.
-- Open voor Martin: of "Toegangssleutel toevoegen" aangeboden blijft als het account er al een heeft (code: ja; ontwerp: nee), en of "Systeem" echt uitgezet mag kunnen worden, omdat systeemmeldingen de manier zijn waarop verder meldt dat het kapot is (het ontwerp tekent er een schakelaar voor).
+- Het ontwikkelaarscertificaat en het profiel verlopen op 2027-10-31. Over Grip toont die datum niet.
+- Open voor Martin: of "Toegangssleutel toevoegen" aangeboden blijft als het account er al een heeft (code: ja; ontwerp: nee), en of "Systeem" echt uitgezet mag kunnen worden, omdat systeemmeldingen de manier zijn waarop Grip meldt dat het kapot is (het ontwerp tekent er een schakelaar voor).
 
 ## Waar in de code
 
@@ -522,5 +522,5 @@ Meer heeft geen eigen gegevens en synchroniseert niet. `/me` wordt gelezen bij e
 | [Meldingen_AX5_onderaan](frames/Meldingen_AX5_onderaan.jpg) | AX5, einde | Tekst schaalt |
 | [Widgets_toevoegen_gids](frames/Widgets_toevoegen_gids.jpg) | Voorbeeld van de widget, privacyregel, stappen voor het beginscherm | Stappen, formaten en privacyregel; geen voorbeeld |
 | [Widgets_toevoegen_gids_stappen](frames/Widgets_toevoegen_gids_stappen.jpg) | Gescrold: voorbeeld op het toegangsscherm en beide lijsten met stappen | Gebouwd, iets andere formulering |
-| [Over_verder_normaal](frames/Over_verder_normaal.jpg) | Versie, Server, Verbinding, toelichting, Ontwikkelaar onder EXTRA | Versie, Server en toelichting; geen Verbinding; Ontwikkelaar staat op Meer |
+| [Over_Grip_normaal](frames/Over_Grip_normaal.jpg) | Versie, Server, Verbinding, toelichting, Ontwikkelaar onder EXTRA | Versie, Server en toelichting; geen Verbinding; Ontwikkelaar staat op Meer |
 | [Ontwikkelaar_normaal](frames/Ontwikkelaar_normaal.jpg) | APNs-omgeving, staartje van het token, laatste fout, laatste scan, laatste antwoord, opnieuw versturen | Omgeving, naam van de laatste scan, opnieuw versturen met het ruwe antwoord |

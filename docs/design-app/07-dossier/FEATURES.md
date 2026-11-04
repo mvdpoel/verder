@@ -62,7 +62,7 @@ Geparseerd door `DeepLink.swift` en toegepast in `RootView`, dat `dossierPath` b
 **Status:** Gebouwd (`Push/DeepLink.swift`, `App/RootView.swift`).
 
 #### 3. Meldingen komen hier uit
-Een `FILING`-push zonder bruikbare link komt uit op de basisweergave van Dossier (`NotificationRouter.fallback`). Nu geldt dat voor twee pushes: de samengevoegde duplexscan (`apps/worker/src/duplex.ts`) en "Nieuwe loonstrook" (`apps/worker/src/loondossier.ts`). Het nachtelijke overzicht "Door verder gedaan" is ook `FILING`, maar draagt `grip://inbox` en opent daarom "Door verder gedaan". Geen enkele worker-push linkt nu naar `grip://document/<id>`. De links die in gebruik zijn, zijn `grip://proposal/<id>` en `grip://inbox`.
+Een `FILING`-push zonder bruikbare link komt uit op de basisweergave van Dossier (`NotificationRouter.fallback`). Nu geldt dat voor twee pushes: de samengevoegde duplexscan (`apps/worker/src/duplex.ts`) en "Nieuwe loonstrook" (`apps/worker/src/loondossier.ts`). Het nachtelijke overzicht "Door Grip gedaan" is ook `FILING`, maar draagt `grip://inbox` en opent daarom "Door Grip gedaan". Geen enkele worker-push linkt nu naar `grip://document/<id>`. De links die in gebruik zijn, zijn `grip://proposal/<id>` en `grip://inbox`.
 
 **Status:** Gebouwd (`Push/NotificationRouter.swift`).
 
@@ -76,7 +76,7 @@ Het sheet van een halte toont het bijbehorende bewijs. Een gekoppeld bestand ope
 
 **Status:** Gebouwd (`Timeline/TimelineView.swift`).
 
-**Wat hier niet heen leidt:** geen widget en geen snelle actie leidt naar Dossier. De rijen van de widget openen `grip://proposal|suggestion|task/<id>`, en al het andere (de kop inbegrepen) opent `grip://inbox` (`WidgetContent.url(for:)`). De snelle acties op het beginscherm ("Scan een brief", "Gesprek vastleggen") en de App Shortcut voor de Actieknop (`App/GripShortcuts.swift`, "Scan een brief") leiden naar Scan en naar de spraaknotitie. verder registreert geen URL-schema voor andere apps. Noch de spec noch de frames vragen hier om een ingang naar Dossier.
+**Wat hier niet heen leidt:** geen widget en geen snelle actie leidt naar Dossier. De rijen van de widget openen `grip://proposal|suggestion|task/<id>`, en al het andere (de kop inbegrepen) opent `grip://inbox` (`WidgetContent.url(for:)`). De snelle acties op het beginscherm ("Scan een brief", "Gesprek vastleggen") en de App Shortcut voor de Actieknop (`App/GripShortcuts.swift`, "Scan een brief") leiden naar Scan en naar de spraaknotitie. Grip registreert geen URL-schema voor andere apps. Noch de spec noch de frames vragen hier om een ingang naar Dossier.
 
 **Naar buiten:**
 
@@ -190,7 +190,7 @@ Een link "Tijdlijn" rechts naast het label "WAAR HET NU OP WACHT" (zoals "Toon a
 - Nieuwste eerst (`receivedAt`, daarna id). Elke rij toont de titel (twee regels, daarna afgekapt) en een regel als "26 okt 2026 · loonstrook · opgeborgen".
 - De soort wordt vertaald uit het docmeta-vocabulaire (`letter` → "brief", `payslip` → "loonstrook", `bank-statement` → "bankafschrift", `id-document` → "identiteitsbewijs", enzovoort). Een soort die Martin zelf typte, blijft zoals getypt.
 - De status luidt "opgeborgen" voor `filed` en "in de inbox" voor al het andere.
-- Leeg: "Nog geen documenten op je telefoon. Ze komen binnen zodra verder bereikbaar is."
+- Leeg: "Nog geen documenten op je telefoon. Ze komen binnen zodra Grip bereikbaar is."
 - De rijen in het ontwerp bevatten meer:
   - een symbool per soort (envelop voor een brief, bank voor een bankafschrift, kaart voor een identiteitsbewijs);
   - het aantal pagina's ("2 BLZ");
@@ -228,7 +228,7 @@ Lang indrukken van een documentrij opent "Toon aan de balie", "Deel…" en "Open
 **Status:** Nog te bouwen — Nodig is de UI (`.contextMenu` op de documentrij, met een voorvertoning); het hangt af van [#45](#45-toon-aan-de-balie) en [#22](#22-een-document-delen-deel). Brief §2.7 vraagt bovendien dat de acties van het menu als aangepaste acties voor VoiceOver beschikbaar zijn.
 
 #### 22. Een document delen ("Deel…")
-Een document met het deelvenster van het systeem aan een andere app geven: mailen naar een medewerker, of via AirDrop naar een computer aan de balie. Het wordt aangeboden in het menu bij lang indrukken en als deelknop in de balk van de viewer (`Document_viewer`). Dit is Martins eigen handeling. Het is geen verzending door verder: geen voorstel, geen ledger-event, en er wordt niets vastgelegd.
+Een document met het deelvenster van het systeem aan een andere app geven: mailen naar een medewerker, of via AirDrop naar een computer aan de balie. Het wordt aangeboden in het menu bij lang indrukken en als deelknop in de balk van de viewer (`Document_viewer`). Dit is Martins eigen handeling. Het is geen verzending door Grip: geen voorstel, geen ledger-event, en er wordt niets vastgelegd.
 
 **Status:** Nog te bouwen — Er is nergens op het tabblad of in de viewer een deelactie. Nodig:
 - UI: `ShareLink` of `UIActivityViewController` over een tijdelijke kopie met de effectieve titel als naam, omdat het opgeslagen bestand naar het id heet;
@@ -267,7 +267,7 @@ Van begin tot eind (`DossierStore.sync`, serverkant `packages/api/src/routers/do
 #### 24. Elke download gecontroleerd; één slecht document houdt de synchronisatie nooit op
 - **Elke download wordt gecontroleerd tegen zijn `sha256`.** De kluis is content-addressed en een ongewijzigde sha wordt nooit opnieuw opgehaald, dus een slechte download die één keer is opgeslagen, zou blijvend zijn.
 - Een download waarvan de bytes niet op de sha uitkomen (een `file-hash-mismatch`, die /verify meldt), of een 5xx van de bestandsroute, maakt dat document *niet aanwezig*. Het id wordt in `state.json` bewaard, de rest van de pagina wordt toegepast, en de cursor gaat verder.
-- Niet-aanwezige documenten worden bij elke synchronisatie één keer opnieuw geprobeerd. De kop zegt dan "1 document staat nog niet op je telefoon. verder probeert het bij elke update opnieuw." (of "N documenten staan …"). Er wordt niets van Martin gevraagd.
+- Niet-aanwezige documenten worden bij elke synchronisatie één keer opnieuw geprobeerd. De kop zegt dan "1 document staat nog niet op je telefoon. Grip probeert het bij elke update opnieuw." (of "N documenten staan …"). Er wordt niets van Martin gevraagd.
 - Een 410 (definitief verwijderd) of 404 (weggegooid, of de bytes ontbreken in de kluis) van de bestandsroute laat het document vallen zoals een tombstone.
 - Fouten die niets over het document zeggen (geen netwerk, 401, 429, een geannuleerd verzoek) stoppen de synchronisatie met de oude cursor.
 
@@ -373,7 +373,7 @@ In het ontwerp heeft elke servertreffer een chevron, mails en logboekregels inbe
 #### 36. Mislukt zoeken op de server en opnieuw proberen
 - In de code:
   - Tijdens het laden staat er een skelet in de kaart.
-  - Een fout toont de melding met "Opnieuw proberen". Bij een 401 is de melding "Log opnieuw in." en eindigt de sessie. Zonder netwerk is die "Geen verbinding — je ziet wat je telefoon al had." en gaat het tabblad offline, zodat "Opnieuw proberen" niets doet tot een synchronisatie weer slaagt. Anders is die "verder is even niet bereikbaar. Je ziet wat je telefoon al had."
+  - Een fout toont de melding met "Opnieuw proberen". Bij een 401 is de melding "Log opnieuw in." en eindigt de sessie. Zonder netwerk is die "Geen verbinding — je ziet wat je telefoon al had." en gaat het tabblad offline, zodat "Opnieuw proberen" niets doet tot een synchronisatie weer slaagt. Anders is die "Grip is even niet bereikbaar. Je ziet wat je telefoon al had."
   - Een mislukte toestand blijft staan terwijl Martin doortypt. "Opnieuw proberen" zoekt dan wat er op dat moment in het veld staat.
   - Een zoekopdracht die onderbroken wordt door het tabblad te verlaten, gaat terug naar de knop, zonder fout.
 - Het ontwerp voegt een **limiet van 10 seconden** toe met een eigen melding: "SERVER NIET BEREIKBAAR · De server gaf binnen 10 seconden geen antwoord. Je zoekterm staat nog klaar.", en de knop om opnieuw te proberen luidt "Zoek opnieuw op de server".
@@ -402,7 +402,7 @@ Doortypen zet het zoeken op de server terug, en een antwoord op een zoekopdracht
 Wat getoond wordt, hangt af van het `Content-Type` dat de bestandsroute leverde (`ViewerKind`), niet van het opgeslagen mimetype:
 - **PDF:** PDFKit, met pagina's die verticaal in één kolom scrollen, geschaald op de breedte, en knijpen om te zoomen.
 - **Afbeelding:** `ZoomingImageScrollView`. Die opent passend en gecentreerd, en zoomt met knijpen tot 4× de passende grootte (nooit minder dan 2× de eigen pixels van de afbeelding). Dubbeltikken zoomt naar 2,5× de passende grootte rond het tikpunt, en weer terug (`ImageZoom`).
-- **Al het andere:** "Dit soort bestand kan de telefoon niet tonen. Open het in verder op de computer."
+- **Al het andere:** "Dit soort bestand kan de telefoon niet tonen. Open het in Grip op de computer."
 - Vegen vanaf de rand gaat terug (brief §3, iA Writer).
 
 **Status:** Gebouwd (`Dossier/DocumentViewer.swift`, `ImageZoomTests`).
@@ -511,11 +511,11 @@ De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthoude
 |---|---|---|
 | Laden (kopie nog niet gelezen, of eerste synchronisatie zonder iets binnen) | Skeletrijen in de vorm van de inhoud, nooit een spinner (`SkeletonLines`, VoiceOver "Laden"). De kaart voor de eerste synchronisatie uit het ontwerp is #26 | Wachten; van tabblad wisselen (de synchronisatie gaat de volgende keer verder) |
 | Gesynchroniseerd | Kop met "bijgewerkt HH:MM", kop van de kaart, Tijdlijn, open taken, documenten | Zoeken, een document of taak openen, omlaag trekken om te verversen |
-| Leeg dossier | "Nog geen documenten op je telefoon. Ze komen binnen zodra verder bereikbaar is." | Omlaag trekken om te verversen |
+| Leeg dossier | "Nog geen documenten op je telefoon. Ze komen binnen zodra Grip bereikbaar is." | Omlaag trekken om te verversen |
 | Offline | "offline · bijgewerkt …" plus "Geen verbinding — je ziet wat je telefoon al had."; documenten en lokaal zoeken werken; taken tonen "Taken zijn offline niet te zien." als er geen geladen waren; zoeken op de server uitgeschakeld met de reden | Alles wat de kopie op de telefoon leest, inclusief de viewer voor aanwezige documenten |
-| Serverfout | "verder is even niet bereikbaar. Je ziet wat je telefoon al had." | Omlaag trekken om te verversen |
+| Serverfout | "Grip is even niet bereikbaar. Je ziet wat je telefoon al had." | Omlaag trekken om te verversen |
 | Schrijven mislukt in ontgrendelde toestand | "Een document kwam niet goed binnen. Trek omlaag om het opnieuw te proberen." | Omlaag trekken om te verversen |
-| Documenten niet aanwezig | "N documenten staan nog niet op je telefoon. verder probeert het bij elke update opnieuw." | Niets nodig |
+| Documenten niet aanwezig | "N documenten staan nog niet op je telefoon. Grip probeert het bij elke update opnieuw." | Niets nodig |
 | Tabblad verlaten of telefoon vergrendeld tijdens synchronisatie | Niets: niet gemeld als offline of als fout; wat is toegepast blijft bewaard | Terugkomen; de volgende verversing op de voorgrond gaat verder |
 | Sessie verlopen (401) | Het tabblad wordt gewist en de app toont "Je sessie is verlopen." | Opnieuw inloggen; het dossier synchroniseert vanaf nul |
 | Vergrendeld | `LockView` in plaats van het tabblad | Ontgrendelen met Face ID |
@@ -529,7 +529,7 @@ De veegacties en het in één keer goedkeuren uit de brief (Voor jou), vasthoude
 - **Effectieve status, nooit de ruwe kolom.** De synchronisatie, de tekstenroute en de bestandsroute lossen allemaal op via `effectiveDocument` / `effective-status.ts`. `documents.status` leest na een weggooiactie voor altijd "inbox" (spec §7.5, CLAUDE.md).
 - **Tombstones zijn verplicht.** Definitief verwijderen of weggooien op het web haalt het document bij de volgende synchronisatie van de telefoon. Een 410 of 404 van de bestandsroute betekent hetzelfde.
 - **Amber alleen voor wat op Martin wacht.** In de code verschijnt amber op het label en de stippen van de open taken, die uit de ene definitie van wachten komen. Documenten, de kop en de serverresultaten zijn in de code nooit amber. Het ontwerp voegt amber toe op nog twee plekken die op Martin wachten: de kop ("wacht op jou", #15) en een servertreffer voor een taak die op hem wacht (#34). Beide altijd samen met de woorden.
-- **Alleen-lezen.** Dit scherm maakt geen suggestie, geen logboekregel en geen ledger-event, en verstuurt niets. (Het `TaskScreen` dat het opent, kan de status van een taak wijzigen, wat in het logboek wordt vastgelegd; dat is een functie van het taakscherm, niet van dit tabblad.) De regels voor AI-suggesties en opbergen gelden hier niet. Wat verder zelf opborg, komt op de telefoon binnen als een gewone upsert met de nieuwe status ("opgeborgen"). "Deel…" (#22) geeft een bestand aan een andere app op Martins eigen tik. Het is geen verzending door verder.
+- **Alleen-lezen.** Dit scherm maakt geen suggestie, geen logboekregel en geen ledger-event, en verstuurt niets. (Het `TaskScreen` dat het opent, kan de status van een taak wijzigen, wat in het logboek wordt vastgelegd; dat is een functie van het taakscherm, niet van dit tabblad.) De regels voor AI-suggesties en opbergen gelden hier niet. Wat Grip zelf opborg, komt op de telefoon binnen als een gewone upsert met de nieuwe status ("opgeborgen"). "Deel…" (#22) geeft een bestand aan een andere app op Martins eigen tik. Het is geen verzending door Grip.
 
 ## Meldingen, haptiek, offline
 

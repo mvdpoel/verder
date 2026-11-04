@@ -28,7 +28,7 @@ Elke functie heeft precies één statusregel: **Gebouwd** (bestaat en werkt in d
 
 ## Doel
 
-- Een alleen-lezen overzicht van de huidige stand van het dossier, in de volgorde "nu → straks → later". Van boven naar beneden: wat wacht op Martin, de leefgeldweek, taken, scans en "Door verder gedaan", en als laatste de kop van de kaart.
+- Een alleen-lezen overzicht van de huidige stand van het dossier, in de volgorde "nu → straks → later". Van boven naar beneden: wat wacht op Martin, de leefgeldweek, taken, scans en "Door Grip gedaan", en als laatste de kop van de kaart.
 - **Op Overzicht wordt niets besloten.** Geen enkele rij keurt goed, verstuurt, archiveert of draait iets terug. Elke handeling ligt één tik verder, op het scherm dat erover gaat (Voor jou, Scan, Geld, de Tijdlijn). Niets op dit scherm schrijft naar de server, en niets erop maakt een ledger-event aan.
 - **De telefoon rekent zelf geen enkel getal uit.** Het aantal wachtende items, de taakaantallen en de kop komen van de server. De geldbedragen zijn die van `leefgeld-week.ts`. De app verwoordt ze alleen en zet ze op het scherm (`HomeSummary`, `LeefgeldGlance`).
 
@@ -40,9 +40,9 @@ Elke functie heeft precies één statusregel: **Gebouwd** (bestaat en werkt in d
   **Status:** Gebouwd — `apps/ios/Grip/App/RootView.swift` (`@State private var tab: TabID = .home`).
 - **De tabbalk.** De tabs zijn Overzicht · Voor jou · Scan · Dossier · Meer. Alle vijf passen met hun labels op een iPhone SE (balk van 343 pt) en op 402 pt (frame `Overzicht_tab_bar_4_SE_en_402.jpg`).
   **Status:** Gebouwd — `RootView.swift` (systeem-`TabView` met vijf `Tab`s).
-- **`grip://overzicht`.** `DeepLink.overzicht` verwijst naar de starttab, zonder stack. verder registreert geen URL-schema, dus deze link komt alleen binnen via de eigen kanalen van de app (de link van een push of de terugval hieronder), nooit vanuit een andere app.
+- **`grip://overzicht`.** `DeepLink.overzicht` verwijst naar de starttab, zonder stack. Grip registreert geen URL-schema, dus deze link komt alleen binnen via de eigen kanalen van de app (de link van een push of de terugval hieronder), nooit vanuit een andere app.
   **Status:** Gebouwd — `apps/ios/Grip/Push/DeepLink.swift`.
-- **Meldingen.** Een tik (of "Bekijken") op een push in categorie `SYSTEM` zonder link (bijvoorbeeld "verder hersteld" van de watchdog) valt terug op Overzicht (`NotificationRouter.fallback`).
+- **Meldingen.** Een tik (of "Bekijken") op een push in categorie `SYSTEM` zonder link (bijvoorbeeld "Grip hersteld" van de watchdog) valt terug op Overzicht (`NotificationRouter.fallback`).
   **Status:** Gebouwd — `apps/ios/Grip/Push/NotificationRouter.swift`.
 - **Geen widget of snelactie opent Overzicht rechtstreeks.** De widgets openen `grip://inbox` of één item. De gecommitte snelactie ("Gesprek vastleggen") opent het spraakvenster. De werkkopie voegt een tweede toe, "Scan een brief", die Scan opent (zie "Gedeeld met de rest van de app").
 
@@ -57,7 +57,7 @@ Elke functie heeft precies één statusregel: **Gebouwd** (bestaat en werkt in d
 | Een berichtlink op de Leefgeld-kaart ("Open op de website", "Kies hem op de website") | `/money` van de webapp (`https://grip.vanderpoel.pro/money`), geopend buiten de app: de app claimt geen universal links (het associated domain is alleen `webcredentials:`) |
 | De takenrij | Voor jou, op het beginscherm. De rij ontbreekt tot `/dashboard/summary` één keer heeft geantwoord. |
 | De scansrij | De Scan-tab |
-| "Door verder gedaan · N" | Voor jou → het scherm "Door verder gedaan" (`InboxRoute.doneByGrip`). Als er niets gedaan is, is de rij geen knop. |
+| "Door Grip gedaan · N" | Voor jou → het scherm "Door Grip gedaan" (`InboxRoute.doneByGrip`). Als er niets gedaan is, is de rij geen knop. |
 | "Waar het nu op wacht" | De Tijdlijn onder Dossier (`dossierPath = [.timeline]`). Alleen zichtbaar als de app ontgrendeld is. |
 
 **Status:** Gebouwd — `apps/ios/Grip/Home/HomeTab.swift` (de tikken, het contextmenu) en `RootView.swift` (`openInbox`, `openScan`, `openTimeline`).
@@ -82,7 +82,7 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 ### "Wacht op jou"
 
 - **Eén definitie van "wacht op Martin".** `GET /api/mobile/v1/inbox` → `loadWaiting` in `packages/api/src/waiting.ts`. Die ene definitie omvat:
-  - voorstellen en vragen met status `pending` (niet `drafting`, `draft-failed`, `approved` of `sending`: die wachten op verder);
+  - voorstellen en vragen met status `pending` (niet `drafting`, `draft-failed`, `approved` of `sending`: die wachten op Grip);
   - suggesties die pending of needs-manual zijn en waarvan het document (als dat er is) niet weggegooid of definitief verwijderd is;
   - open taken en taken in uitvoering (naar effectieve status; `waiting` betekent wachten op iemand anders en telt niet mee);
   - de huidige halte van de kaart, als die `open` is en de taak ervan niet al in de lijst staat (één stuk werk telt één keer).
@@ -129,9 +129,9 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 | compleet | "€ 37,60 over van € 100,00", een balk voor wat er over is, kolommen "uitgegeven" / "ontvangen", voetnoot "Alleen je leefgeldrekening." |
 | gedeeltelijk | Kop "onvolledig · 26 okt – 1 nov". De hero is wat er **uitgegeven** is: "€ 47,90 uitgegeven t/m do 29 okt". De niet-gedekte dagen zijn gearceerd, met een notitie als "vr–zo: nog geen afschrift". De enige kolom is "over", met "nog niet bekend". Het toont nooit wat er over is, en nooit "overschreden". |
 | overschreden | "− € 12,40 boven het weekbedrag", de overschrijding gearceerd voorbij een streepje op 100 %. Niet amber. |
-| geen data (de afschriften dekken de eerste dag van deze week niet) | "Geen data voor deze week", "laatste afschrift t/m zo 18 okt", "Importeer een nieuw afschrift op de website. Daarna rekent verder deze week uit." en de link "Open op de website". Nergens een bedrag. |
+| geen data (de afschriften dekken de eerste dag van deze week niet) | "Geen data voor deze week", "laatste afschrift t/m zo 18 okt", "Importeer een nieuw afschrift op de website. Daarna rekent Grip deze week uit." en de link "Open op de website". Nergens een bedrag. |
 | geen rekening, niets geïmporteerd (ook geen data zonder leesbare boeking op de leefgeldrekening) | "Nog geen afschriften", "Importeer je eerste afschrift op de website. Daarna zie je hier wat er deze week over is." en "Open op de website". Dit wordt niet als fout getoond: er is nog niets om te herkennen. |
-| geen rekening, wel afschriften (`LEEFGELD_IBAN` niet gezet en niet precies één rekening met bekend IBAN en een wekelijkse inkomstenlijn) | "Leefgeldrekening niet herkend" en hoeveel rekeningen wekelijks geld ontvangen ("Geen rekening krijgt wekelijks geld binnen.", "1 rekening …" of "2 rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een.") plus "Kies hem op de website". |
+| geen rekening, wel afschriften (`LEEFGELD_IBAN` niet gezet en niet precies één rekening met bekend IBAN en een wekelijkse inkomstenlijn) | "Leefgeldrekening niet herkend" en hoeveel rekeningen wekelijks geld ontvangen ("Geen rekening krijgt wekelijks geld binnen.", "1 rekening …" of "2 rekeningen krijgen wekelijks geld binnen; Grip kiest er niet zelf een.") plus "Kies hem op de website". |
 
   **Status:** Gebouwd — `apps/ios/Grip/Home/LeefgeldGlance.swift`, `HomeTab.swift` (`LeefgeldGlanceView`, `LeefgeldBar`); tests in `GripTests/LeefgeldGlanceTests.swift`.
 
@@ -144,7 +144,7 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 - **De kaart houdt haar eigen dekking aan.** Een offline of verouderde eyebrow maakt een gedeeltelijke week nooit compleet.
   **Status:** Gebouwd — `LeefgeldGlance.swift`.
 
-### Taken, scans en "Door verder gedaan" (één kaart)
+### Taken, scans en "Door Grip gedaan" (één kaart)
 
 - **Taken.** De aantallen komen uit `GET /api/mobile/v1/dashboard/summary` (`tasks.stats`). Let op: `tasks.stats` telt taken met `open`, `in-progress` **en** `waiting`, dus "N taken voor jou" kan groter zijn dan het aantal taken in "Wacht op jou" (dat `waiting` weglaat). "te laat" telt elk van die taken waarvan de `dueAt` verstreken is.
   - Titel: "6 taken voor jou", "1 taak voor jou" of "Geen taken voor jou".
@@ -159,14 +159,14 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
   - "Vandaag nog niets gescand" als er niets te melden is.
 
   **Status:** Gebouwd — `HomeSummary.swift` (`scansRow`), `apps/ios/Grip/Upload/UploadQueue.swift` (`QueueSummary`).
-- **Door verder gedaan.** `doneByGrip` van de inbox-route omvat de laatste 7 dagen van wat verder zelf deed (`verderActions.list({ sinceDays: 7 })`).
-  - Het toont alleen aantallen, dus is zichtbaar als de app vergrendeld is: "Door verder gedaan · 3" en "2 opgeborgen · 1 hernoemd" ("overig" voor elke andere soort).
+- **Door Grip gedaan.** `doneByGrip` van de inbox-route omvat de laatste 7 dagen van wat Grip zelf deed (`gripActions.list({ sinceDays: 7 })`).
+  - Het toont alleen aantallen, dus is zichtbaar als de app vergrendeld is: "Door Grip gedaan · 3" en "2 opgeborgen · 1 hernoemd" ("overig" voor elke andere soort).
   - Het is nooit amber.
-  - Als er de laatste 7 dagen niets gedaan is, leest de rij "Door verder gedaan" met "verder deed niets zelf", en is ze geen knop.
+  - Als er de laatste 7 dagen niets gedaan is, leest de rij "Door Grip gedaan" met "Grip deed niets zelf", en is ze geen knop.
 
   **Status:** Gebouwd — `HomeSummary.swift` (`doneCard`), `packages/api/src/routers/grip-actions.ts`.
-- **Een verkeerde automatische archivering in twee tikken terugdraaien.** Het doel uit §3 van de brief is "Overzicht count → item → Ongedaan maken": de rij opent het scherm "Door verder gedaan", en elk item daar heeft een eigen "Ongedaan maken" (`POST /api/mobile/v1/grip-actions/[changeId]/undo`), alleen bij een automatische archivering. Een automatische naamgeving is daar nooit terug te draaien, omdat de naam ook op de NAS-share staat (`normalize-names --undo`). De brief vraagt daarnaast om een undo-toast van 5 s in plaats van een melding, en een `.impact(.light)`-haptic bij het terugdraaien.
-  **Status:** Deels gebouwd — het pad van twee tikken en het terugdraaien bestaan (`apps/ios/Grip/Inbox/DoneByGripSection.swift`, de undo-route). Ontbreekt: de undo-toast van 5 s (R24), want het scherm toont in plaats daarvan inline "Ongedaan gemaakt.", en de `.impact(.light)`-haptic. Beide horen bij het scherm "Door verder gedaan", niet bij Overzicht.
+- **Een verkeerde automatische archivering in twee tikken terugdraaien.** Het doel uit §3 van de brief is "Overzicht count → item → Ongedaan maken": de rij opent het scherm "Door Grip gedaan", en elk item daar heeft een eigen "Ongedaan maken" (`POST /api/mobile/v1/grip-actions/[changeId]/undo`), alleen bij een automatische archivering. Een automatische naamgeving is daar nooit terug te draaien, omdat de naam ook op de NAS-share staat (`normalize-names --undo`). De brief vraagt daarnaast om een undo-toast van 5 s in plaats van een melding, en een `.impact(.light)`-haptic bij het terugdraaien.
+  **Status:** Deels gebouwd — het pad van twee tikken en het terugdraaien bestaan (`apps/ios/Grip/Inbox/DoneByGripSection.swift`, de undo-route). Ontbreekt: de undo-toast van 5 s (R24), want het scherm toont in plaats daarvan inline "Ongedaan gemaakt.", en de `.impact(.light)`-haptic. Beide horen bij het scherm "Door Grip gedaan", niet bij Overzicht.
 
 ### "Waar het nu op wacht" (de kop van de kaart)
 
@@ -175,7 +175,7 @@ Voor jou, Dossier, Meer en Geld zitten achter de vergrendeling; Scan niet. Een t
 
 ### Verversen
 
-- **Automatisch.** Het scherm ververst bij verschijnen, en daarna **elke 60 s** zolang het op het scherm staat (`HomeSummary.pollInterval`). De fouttekst belooft dit ("verder probeert het elke minuut opnieuw").
+- **Automatisch.** Het scherm ververst bij verschijnen, en daarna **elke 60 s** zolang het op het scherm staat (`HomeSummary.pollInterval`). De fouttekst belooft dit ("Grip probeert het elke minuut opnieuw").
   **Status:** Gebouwd — `HomeTab.swift` (de `.task`-lus), `HomeSummary.swift` (`pollInterval = 60`).
 - **Met de hand.** Omlaag trekken om te verversen doet hetzelfde. Elke verversing haalt de inbox, de dashboardsamenvatting en de geldsamenvatting tegelijk op.
   **Status:** Gebouwd — `HomeTab.swift` (`.refreshable`, `refreshAll`).
@@ -205,9 +205,9 @@ Elke toestand die §2.4 van de brief vereist heeft een frame (zie Frames), behal
 | Niets wacht | De rustige kaart | — | **Status:** Gebouwd — `HomeTab.swift` (`calm`) |
 | Eén item / veel | Zie de sectie "Wacht op jou" | — | **Status:** Gebouwd — `HomeSummary.swift` |
 | Serverfout, overzicht bewaard | Een strook boven het bewaarde overzicht: "Overzicht nu niet op te halen.", een uitlezing als "server 503 · volgende poging 14:06" (of "te veel verzoeken" bij een 429), en "Opnieuw proberen". De eyebrow toont de leeftijd van het overzicht. | Opnieuw proberen, of wachten op de poll van de volgende minuut | **Status:** Gebouwd — `HomeSummary.swift` (foutmelding), `HomeTab.swift` |
-| Serverfout, niets bewaard | Foutkaart: "Het overzicht is nu niet op te halen.", "De server van verder werkt even niet. Er gaat niets verloren; verder probeert het elke minuut opnieuw.", de uitlezing, een knop "Opnieuw proberen", en "Lukt het na een paar minuten nog niet? Kijk dan of de server thuis aanstaat." De scansrij blijft eronder staan. | Opnieuw proberen. Scan openen. | **Status:** Gebouwd — `HomeSummary.swift`, `HomeTab.swift` |
+| Serverfout, niets bewaard | Foutkaart: "Het overzicht is nu niet op te halen.", "De server van Grip werkt even niet. Er gaat niets verloren; Grip probeert het elke minuut opnieuw.", de uitlezing, een knop "Opnieuw proberen", en "Lukt het na een paar minuten nog niet? Kijk dan of de server thuis aanstaat." De scansrij blijft eronder staan. | Opnieuw proberen. Scan openen. | **Status:** Gebouwd — `HomeSummary.swift`, `HomeTab.swift` |
 | Offline, overzicht bewaard | Het overzicht met de offline-eyebrow. Geen strook. Scans lezen "wacht op verbinding". | Alles opent nog steeds vanuit wat in het geheugen staat | **Status:** Gebouwd — `HomeSummary.swift` (`eyebrow`, `scansRow`) |
-| Offline, niets bewaard | Foutkaart "Je bent nu offline.", "Zodra er weer verbinding is, haalt verder het overzicht op. Er gaat niets verloren; scans in de wachtrij gaan daarna vanzelf mee.", uitlezing "offline · volgende poging …". Er is geen stappenregel. | Opnieuw proberen. Scan openen. | **Status:** Gebouwd — `HomeSummary.swift`, `HomeTab.swift` |
+| Offline, niets bewaard | Foutkaart "Je bent nu offline.", "Zodra er weer verbinding is, haalt Grip het overzicht op. Er gaat niets verloren; scans in de wachtrij gaan daarna vanzelf mee.", uitlezing "offline · volgende poging …". Er is geen stappenregel. | Opnieuw proberen. Scan openen. | **Status:** Gebouwd — `HomeSummary.swift`, `HomeTab.swift` |
 | Sessie verlopen (een 401 van een willekeurige store terwijl ingelogd) | De hele tabbalk wordt vervangen door `SessionExpiredView`: "Je sessie is verlopen." en "Log opnieuw in met je toegangssleutel en Face ID. Scans in de wachtrij blijven bewaard en gaan daarna vanzelf mee." | "Inloggen met toegangssleutel", "Inloggen met wachtwoord", of "Toch een brief scannen" (de camera in een schermvullende cover) | **Status:** Gebouwd — `Auth/SessionExpiredView.swift`, `RootView.swift` |
 | Grote tekst (AX-groottes) | Labels met een hoofdletter aan het begin in plaats van in hoofdletters. Eén voorbeeldrij. Meta opgesplitst in één feit per regel. Geen chevrons. Nederlandse zachte afbreekstreepjes in woorden van 10+ letters ("Bewind-kantoor"). Monolabels begrensd op AX3, het grote getal op AX4. | Scrollen | **Status:** Gebouwd — `HomeSummary.swift` (`hyphenated`, `previewMeta`), `HomeTab.swift` |
 | Kleine telefoon (iPhone SE, < 700 pt hoog) | Twee voorbeeldrijen | — | **Status:** Gebouwd — `HomeSummary.swift` (`previewLimit`), `HomeTab.swift` (`onGeometryChange`) |
@@ -225,7 +225,7 @@ Een mislukte geld-fetch zonder bewaard antwoord verbergt de Leefgeld-kaart in pl
 
 - **Open als de app vergrendeld is, alleen aantallen.** Overzicht is `AppLock.Area.glance` en zit niet in `.lockGated(by:)` (Martin, 2026-11-01). Tot `lock.revealsCaseContent` toont het alleen:
   - het aantal wachtende items;
-  - de aantallen voor taken, scans en "Door verder gedaan";
+  - de aantallen voor taken, scans en "Door Grip gedaan";
   - de leefgeldbedragen.
 
   Het toont nooit een titel, een partij, een notitie, de kop of een rekeningregel. De voorbeeldrijen worden zolang de app vergrendeld is niet eens opgebouwd. De Leefgeld-kaart noemt de *soort* rekening ("je leefgeldrekening"), nooit welke. De IBAN-regel hoort bij Geld.
@@ -238,7 +238,7 @@ Een mislukte geld-fetch zonder bewaard antwoord verbergt de Leefgeld-kaart in pl
 
   **Status:** Gebouwd — `RootView.swift` (`promptOnOpen`), `Auth/AppLock.swift` (`LockPolicy`, `unlock`).
 - **App-switcher-snapshot afgedekt zolang de app vergrendeld is.** De brief (§3, Lock) vraagt dat de snapshot die iOS voor de app-switcher maakt niets van het dossier laat zien zolang de app vergrendeld is, zodat een titel die vlak voor het naar de achtergrond gaan zichtbaar was, niet in de switcher te lezen is.
-  **Status:** Nog te bouwen — geen code in `apps/ios/Verder` dekt de scene af als die inactief wordt. Nodig: een `void`-afdekking in `RootView` bij `scenePhase == .inactive`/`.background` terwijl `lock.isLocked` (of op het punt staat te vergrendelen), weggehaald bij `.active`; ze mag de camera van Scan niet afdekken terwijl die in gebruik is; een test van de afdekregel naast `AppLockTests`.
+  **Status:** Nog te bouwen — geen code in `apps/ios/Grip` dekt de scene af als die inactief wordt. Nodig: een `void`-afdekking in `RootView` bij `scenePhase == .inactive`/`.background` terwijl `lock.isLocked` (of op het punt staat te vergrendelen), weggehaald bij `.active`; ze mag de camera van Scan niet afdekken terwijl die in gebruik is; een test van de afdekregel naast `AppLockTests`.
 - **Vergrendelscherm en widgets.** De verversing van Overzicht schrijft de widgetsnapshot:
   - de inhoud: aantal, bovenste titels, kop en leeftijd van het oudste item;
   - de bestandsbeveiliging: `completeFileProtectionUntilFirstUserAuthentication`, gemeten op het toestel.
@@ -264,11 +264,11 @@ Een mislukte geld-fetch zonder bewaard antwoord verbergt de Leefgeld-kaart in pl
 
 Dit zijn randvoorwaarden, geen functies. Ze hebben geen status en worden niet meegeteld.
 
-- **Amber alleen voor wat op Martin wacht.** `HomeSummary.cardAmber` staat amber toe op de kaart "Wacht op jou" als het aantal groter is dan nul, en bij te late taken ("te laat" en de stip). Niets anders is ooit amber: geen geld (zelfs niet overschreden), niet "Door verder gedaan", niet de kop, niet de scans.
+- **Amber alleen voor wat op Martin wacht.** `HomeSummary.cardAmber` staat amber toe op de kaart "Wacht op jou" als het aantal groter is dan nul, en bij te late taken ("te laat" en de stip). Niets anders is ooit amber: geen geld (zelfs niet overschreden), niet "Door Grip gedaan", niet de kop, niet de scans.
 - **Rekeningen worden nooit samengevoegd.** `MoneyGlance` heeft geen totaal over rekeningen heen. De "Geld"-kaart zonder budget toont één regel per rekening.
 - **Geen bedrag voor een niet-gedekte week.** `geen data` toont geen bedrag. Een gedeeltelijke week toont alleen wat er tot en met het laatste afschrift is uitgegeven, en "over" is "nog niet bekend".
 - **AI-uitvoer is een suggestie. Niets wordt verstuurd zonder dat Martin de definitieve tekst goedkeurt.** Overzicht linkt alleen naar voorstellen en suggesties. Goedkeuren gebeurt op hun eigen schermen, achter de goedkeuringspoort.
-- **De archiveringsuitzondering.** Wat verder zelf archiveerde of hernoemde, verschijnt als aantallen onder "Door verder gedaan". Archiveren zelf staat in productie uit (`DOCMETA_AUTO_APPLY` niet gezet), dus in de praktijk bevat het aantal de hernoemingen van de automatische naamgeving.
+- **De archiveringsuitzondering.** Wat Grip zelf archiveerde of hernoemde, verschijnt als aantallen onder "Door Grip gedaan". Archiveren zelf staat in productie uit (`DOCMETA_AUTO_APPLY` niet gezet), dus in de praktijk bevat het aantal de hernoemingen van de automatische naamgeving.
 
 ## Meldingen, haptics, beweging en toegankelijkheid
 
@@ -304,7 +304,7 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 - **Het overzicht wordt niet op schijf bewaard.** Zie "Laatst bekende overzicht na een koude start".
 - **Verschillen tussen de code en het plan:**
   - Plan 3 Task 19 beschreef een "GELD"-kaart ("Leefgeld over deze week: € 37,60") met een actualiteitsaanduiding bij elk bedrag. De code tekent een "Leefgeld"-kaart (`LeefgeldGlance`) waarvan de enige actualiteitsaanduiding in de toestand `geen data` zit; een gedeeltelijke week draagt die als "t/m <dag>".
-  - Het Task GAP-plan beschreef een kaart "Door verder gedaan" die na ontgrendelen de bovenste drie titels toont. De code toont in beide toestanden één rij met aantallen, en de definitieve frames ook.
+  - Het Task GAP-plan beschreef een kaart "Door Grip gedaan" die na ontgrendelen de bovenste drie titels toont. De code toont in beide toestanden één rij met aantallen, en de definitieve frames ook.
 - **Productie heeft nog geen bedragen.** Op 2026-11-01 bevatte productie 0 transacties en was `LEEFGELD_WEEKLY_CENTS` nog niet uitgerold (P3-D3 open), dus de live kaart is "Nog geen afschriften" of ontbreekt. `LEEFGELD_WEEK_START` blijft maandag tot een uitbetalingsweekdag gemeten kan worden.
 - **Niet gemeten op de telefoon:**
   - de vertraging van de badge na een echt besluit, en of die een geforceerd gesloten app bereikt;
@@ -324,7 +324,7 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 - `Money/MoneyGlance.swift`: `MoneyStore`, `MoneyGlance`, `LeefgeldCard`. `Money/MoneyGlanceView.swift` bevat `GeldScreen`. `Money/MoneyModels.swift` en `Money/MoneyFormat.swift` bevatten de DTO's en de opmaak.
 - `Inbox/InboxStore.swift`: ophalen van inbox en samenvatting, badge, widgetsnapshot
 - `Inbox/InboxModels.swift`, `Shared/KindLabel.swift`
-- `Inbox/DoneByGripSection.swift`: het scherm "Door verder gedaan" en het terugdraaien daarop
+- `Inbox/DoneByGripSection.swift`: het scherm "Door Grip gedaan" en het terugdraaien daarop
 - `Upload/UploadQueue.swift`: `QueueSummary`
 - `Auth/AppLock.swift`: `Area.glance`, `LockPolicy`
 - `Auth/AuthModel.swift`, `Auth/SessionEpoch.swift`, `Auth/SessionExpiredView.swift`
@@ -356,7 +356,7 @@ Deze functies horen bij de hele app, niet alleen bij Overzicht. Ze staan hier om
 | Frame | Toestand die het laat zien |
 |---|---|
 | [Overzicht_ontgrendeld.jpg](frames/Overzicht_ontgrendeld.jpg) | Ontgrendeld, 10 wachtend, drie voorbeeldrijen, complete leefgeldweek |
-| [Overzicht_ontgrendeld_hele_pagina.jpg](frames/Overzicht_ontgrendeld_hele_pagina.jpg) | Hetzelfde, hele pagina: taken met "1 te laat", scans, "Door verder gedaan · 3", de kop van de kaart |
+| [Overzicht_ontgrendeld_hele_pagina.jpg](frames/Overzicht_ontgrendeld_hele_pagina.jpg) | Hetzelfde, hele pagina: taken met "1 te laat", scans, "Door Grip gedaan · 3", de kop van de kaart |
 | [Overzicht_vergrendeld.jpg](frames/Overzicht_vergrendeld.jpg) | Vergrendeld: alleen aantallen en geld, "Toon details" |
 | [Overzicht_laden.jpg](frames/Overzicht_laden.jpg) | Eerste keer laden: skeletons |
 | [Overzicht_niets_wacht.jpg](frames/Overzicht_niets_wacht.jpg) | Rustig: "Niets wacht op je.", "jij was klaar · vandaag 11:20", "Geen taken voor jou" |

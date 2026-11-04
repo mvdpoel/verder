@@ -21,7 +21,7 @@ Conceptversies en de keuze tussen twee versies bij een 409 (F-34, F-35, F-36) zi
 
 Niet op dit scherm: de Scan-bediening in het Bedieningspaneel en op de Actieknop, de Live Activity, veegacties en alles-tegelijk-goedkeuren horen bij de schermen Scan en Voor jou (06, 03). De brief sluit voorstellen helemaal uit van bulkacties ("sending is never bulk").
 
-Een voorstel is iets waarvoor verder Martins goedkeuring vraagt. Er zijn drie soorten. Een **antwoord** reageert op een binnengekomen mail of brief. Een **opvolging** zit achter een draad aan waarin de andere kant stil is gevallen. Een **vraag** laat Martin kiezen uit twee tot vier opties. Het voorstelscherm is de enige plek op de telefoon waar een antwoord of opvolging voor verzending kan worden goedgekeurd. Martin is de enige gebruiker.
+Een voorstel is iets waarvoor Grip Martins goedkeuring vraagt. Er zijn drie soorten. Een **antwoord** reageert op een binnengekomen mail of brief. Een **opvolging** zit achter een draad aan waarin de andere kant stil is gevallen. Een **vraag** laat Martin kiezen uit twee tot vier opties. Het voorstelscherm is de enige plek op de telefoon waar een antwoord of opvolging voor verzending kan worden goedgekeurd. Martin is de enige gebruiker.
 
 Dit document beschrijft wat het scherm doet. Het visuele ontwerp staat er niet in; dat staat in Figma: sectie `proposal · final`, node `307:1047`, bestand `QDRL5zHNEOjPzLZqzd19Ii`. Elke uitspraak is gebaseerd op de code op branch `feat/iphone-app` per 2026-11-03. UI-teksten staan in het Nederlands geciteerd, precies zoals de app ze toont. Elke schermafbeelding gebruikt de synthetische dataset (Noordkust, Ilse, Kade & Partners, Duinzorg, Lindehof), geen echte dossiergegevens.
 
@@ -31,7 +31,7 @@ Dit document beschrijft wat het scherm doet. Het visuele ontwerp staat er niet i
 
 ## Doel
 
-- **Lezen wat verder voorstelt, en waarom.** Het scherm toont de aanleiding (wie schreef, wanneer, het onderwerp, een fragment), wat ze vragen ("Wat ze vragen"), de deadline, wat nog ontbreekt en de dossierstukken waar de opsteller op steunde ("Waar verder op leunt").
+- **Lezen wat Grip voorstelt, en waarom.** Het scherm toont de aanleiding (wie schreef, wanneer, het onderwerp, een fragment), wat ze vragen ("Wat ze vragen"), de deadline, wat nog ontbreekt en de dossierstukken waar de opsteller op steunde ("Waar Grip op leunt").
 - **Beslissen.** Bij een antwoord of opvolging kan Martin het versturen (na Face ID), aanpassen ("Aanpassen") of afwijzen ("Afwijzen"). Bij een vraag kiest hij een optie of typt hij zelf een antwoord.
 - **De voorgestelde taak aanmaken**, als het concept er een voorstelt ("Taak aanmaken: …"). Dat gebeurt alleen als hij erop tikt.
 - **De verzending volgen** tot de worker meldt dat ze verstuurd of mislukt is.
@@ -56,18 +56,18 @@ Het tabblad Voor jou is `.lockGated(by: lock)`. De stapel (`inboxPath`) wordt in
 
 **Eruit:** de terugknop gaat terug naar Voor jou, dat zijn lijst ververst zodra de stapel leeg is (`onChange(of: path)`). Een afgehandeld voorstel valt daardoor van de lijst. Niets op het scherm opent de oorspronkelijke mail, een document of een ander scherm.
 
-> **Ontworpen, niet gebouwd:** de oorspronkelijke mail of een document openen vanuit de aanleiding, een bijlagerij of een rij in "Waar verder op leunt", en een ⋯-menu met "Originele mail openen" en "Kopieer concepttekst". In de code is geen van die rijen een knop. De concepttekst is buiten de bewerkmodus `.textSelection(.enabled)`, dus hij is met de hand te selecteren en te kopiëren.
+> **Ontworpen, niet gebouwd:** de oorspronkelijke mail of een document openen vanuit de aanleiding, een bijlagerij of een rij in "Waar Grip op leunt", en een ⋯-menu met "Originele mail openen" en "Kopieer concepttekst". In de code is geen van die rijen een knop. De concepttekst is buiten de bewerkmodus `.textSelection(.enabled)`, dus hij is met de hand te selecteren en te kopiëren.
 
 ## Wat het scherm toont
 
 Van boven naar beneden, uit `GET /api/mobile/v1/proposals/<id>` (`proposals.get` in `packages/api/src/routers/proposals.ts`):
 
-1. **Kop.** "WACHT OP JOU" in amber, alleen zolang het voorstel `pending` is. Daarna de afzender (`trigger.from`, anders de naam van de partij, anders "Onbekend"), de soort ("antwoord", "opvolging", "vraag"), de datum van de aanleiding in Amsterdamse tijd ("30 okt 2026, 10:12"), het onderwerp en een fragment van maximaal 300 tekens (afgekapt met "…"). Wat de aanleiding vult, hangt af van het type (`triggerView`): bij mail de From-header, het onderwerp, de verzenddatum en de tekst; bij een gescande brief "Verder" of de partij, de effectieve titel van het document, de ontvangstdatum en de geëxtraheerde tekst (geen meer na definitief verwijderen); bij een opvolging "verder" en het onderwerp, de verzendtijd en de tekst van het eerder verstuurde voorstel, of de eerdere uitgaande mail zelf.
-2. **"lijkt van Verder — afzender niet bevestigd"** staat onder de afzender als de aanleiding een gescande brief is en de effectieve partij van die brief (gezet doordat Martin hem archiveerde) nog niet overeenkomt met de gok van verder — een gok op een schuldeiser vraagt precies die partij, een gok op Verder een partij op een Verder-domein. Mail wordt nooit als onbevestigd gemarkeerd (spec §12.5).
+1. **Kop.** "WACHT OP JOU" in amber, alleen zolang het voorstel `pending` is. Daarna de afzender (`trigger.from`, anders de naam van de partij, anders "Onbekend"), de soort ("antwoord", "opvolging", "vraag"), de datum van de aanleiding in Amsterdamse tijd ("30 okt 2026, 10:12"), het onderwerp en een fragment van maximaal 300 tekens (afgekapt met "…"). Wat de aanleiding vult, hangt af van het type (`triggerView`): bij mail de From-header, het onderwerp, de verzenddatum en de tekst; bij een gescande brief "Verder" of de partij, de effectieve titel van het document, de ontvangstdatum en de geëxtraheerde tekst (geen meer na definitief verwijderen); bij een opvolging "Grip" en het onderwerp, de verzendtijd en de tekst van het eerder verstuurde voorstel, of de eerdere uitgaande mail zelf.
+2. **"lijkt van Verder — afzender niet bevestigd"** staat onder de afzender als de aanleiding een gescande brief is en de effectieve partij van die brief (gezet doordat Martin hem archiveerde) nog niet overeenkomt met de gok van Grip — een gok op een schuldeiser vraagt precies die partij, een gok op Verder een partij op een Verder-domein. Mail wordt nooit als onbevestigd gemarkeerd (spec §12.5).
 3. **"Wat ze vragen"**, de `ask` van één regel van de opsteller.
 4. **"Uiterlijk 7-11"**, de deadline (`dueAt`) als kalenderdag in Amsterdam. Amber zolang het voorstel openstaat, gewoon zodra er besloten is.
 5. **"Wat nog ontbreekt"** noemt wat de opsteller niet in het dossier kon vinden.
-6. **"Waar verder op leunt"** toont elk aangehaald id als chip, gelabeld vanuit de context die de worker bij het voorstel opsloeg (het kale id als de context er geen label voor heeft). De `why` van de opsteller per bron wordt meegestuurd maar niet getoond. De opsteller moet aanhalen waar hij op steunde (spec §6.5).
+6. **"Waar Grip op leunt"** toont elk aangehaald id als chip, gelabeld vanuit de context die de worker bij het voorstel opsloeg (het kale id als de context er geen label voor heeft). De `why` van de opsteller per bron wordt meegestuurd maar niet getoond. De opsteller moet aanhalen waar hij op steunde (spec §6.5).
 7. **"Concept"** (alleen bij antwoord en opvolging) toont Aan, Cc (indien gezet), Onderwerp en de tekst.
 8. **"Bijlagen"** toont elke bijlage met effectieve titel en grootte, of "Geen bijlagen.". Na een besluit is de lijst die van de bijlagen in de goedgekeurde `final_payload`, niet die van het model.
 9. **"In het logboek als"** toont de samenvatting die de uitgaande logboekregel krijgt zodra de mail weg is. Die is bewerkbaar; de telefoon kapt af op 100 tekens en de server weigert meer dan 100.
@@ -79,7 +79,7 @@ Van boven naar beneden, uit `GET /api/mobile/v1/proposals/<id>` (`proposals.get`
 - **F-2 · Kop en aanleiding** (items 1, 13). **Status:** Gebouwd (`Proposals/ProposalScreen.swift` `header`; `packages/api/src/routers/proposals.ts` `triggerView`).
 - **F-3 · Afzender niet bevestigd** (item 2). **Status:** Gebouwd (`ProposalModel.senderNote`; `proposals.ts` `senderUnconfirmed`).
 - **F-4 · Wat ze vragen, de deadline, wat ontbreekt** (items 3–5). **Status:** Gebouwd (`ProposalScreen.content`, `ProposalModel.dueText` / `missing`).
-- **F-5 · Waar verder op steunde, als gelabelde chips** (item 6). **Status:** Gebouwd (`ProposalScreen.content` met `ChipFlow`; `proposals.ts` `get` bouwt `reliedOn`). Rijen met type, datum, reden en een manier om ze te openen zijn F-30 en F-31.
+- **F-5 · Waar Grip op steunde, als gelabelde chips** (item 6). **Status:** Gebouwd (`ProposalScreen.content` met `ChipFlow`; `proposals.ts` `get` bouwt `reliedOn`). Rijen met type, datum, reden en een manier om ze te openen zijn F-30 en F-31.
 - **F-6 · Het concept, de bijlagen en de logboeksamenvatting, alleen-lezen** (items 7–9, 11–12). **Status:** Gebouwd (`ProposalScreen.draftSection`, `ProposalModel.attachmentRows` / `statusLine`).
 
 ![Een opvolging (ontwerp)](frames/Proposal_opvolging.jpg)
@@ -133,13 +133,13 @@ Van boven naar beneden, uit `GET /api/mobile/v1/proposals/<id>` (`proposals.get`
 
 ![De editor-sheet (ontwerp)](frames/Aanpassen_editor_typen.jpg)
 
-> **Ontworpen, niet gebouwd:** een aparte editor, "Concept aanpassen", met "Annuleren" / "Klaar"; markeren wat Martin veranderde ("AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"); een bevestiging "Wijzigingen weggooien?" bij annuleren met wijzigingen; en de versie van verder naast die van Martin bewaren ("VERSIE 2 VAN VERDER BEWAARD"). Niets van die diff-markering bestaat op de telefoon. De diff wordt alleen op de server berekend, bij het goedkeuren, voor de vastlegging volgens de gouden regel (`proposalDiff`), en wordt niet getoond.
+> **Ontworpen, niet gebouwd:** een aparte editor, "Concept aanpassen", met "Annuleren" / "Klaar"; markeren wat Martin veranderde ("AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"); een bevestiging "Wijzigingen weggooien?" bij annuleren met wijzigingen; en de versie van Grip naast die van Martin bewaren ("VERSIE 2 VAN GRIP BEWAARD"). Niets van die diff-markering bestaat op de telefoon. De diff wordt alleen op de server berekend, bij het goedkeuren, voor de vastlegging volgens de gouden regel (`proposalDiff`), en wordt niet getoond.
 
 ### Afwijzen
 
-**F-14 · Afwijzen, met een optionele vrije reden waar verder van leert.** **Status:** Gebouwd (`ProposalScreen.rejectSheet`, `ProposalModel.reject`; `proposals.ts` `reject`; `…/[id]/reject/route.ts`). De vaste redenen zijn F-51.
+**F-14 · Afwijzen, met een optionele vrije reden waar Grip van leert.** **Status:** Gebouwd (`ProposalScreen.rejectSheet`, `ProposalModel.reject`; `proposals.ts` `reject`; `…/[id]/reject/route.ts`). De vaste redenen zijn F-51.
 
-- Opent een sheet op halve hoogte: "Afwijzen", "Waarom? Niet verplicht — verder leert ervan.", een vrij tekstveld "Reden", en de knoppen "Afwijzen" en "Annuleren".
+- Opent een sheet op halve hoogte: "Afwijzen", "Waarom? Niet verplicht — Grip leert ervan.", een vrij tekstveld "Reden", en de knoppen "Afwijzen" en "Annuleren".
 - `POST /api/mobile/v1/proposals/<id>/reject` met `{ reason? }` (bijgesneden, hooguit 1000 tekens op de server; leeg wordt geen reden).
 - De server zet het voorstel van `pending → rejected`, slaat oordeel `rejected` en de reden op, legt `decided_at`/`decided_by` vast en hoogt de revisie op. Afwijzen stuurt geen revisie mee en wordt niet op revisie gecontroleerd: het antwoordt alleen 409 als het voorstel niet meer `pending` is. **Geen ledger-gebeurtenis.** De uitvoer van het model blijft op de rij staan om van te leren.
 - Afwijzen wordt aangeboden voor elke openstaande soort, vragen inbegrepen.
@@ -186,8 +186,8 @@ Van boven naar beneden, uit `GET /api/mobile/v1/proposals/<id>` (`proposals.get`
 | `failed` | "Versturen mislukt: <reden>" (de Nederlandse reden van de worker, bijvoorbeeld "niet gevonden in Verzonden" of "Gmail weigerde het bericht (400): …"), "Versturen mislukt." als er geen reden is opgeslagen | Niets op de telefoon. `failed` is definitief, en een nieuwe poging moet een nieuw voorstel zijn (`proposal-state.ts`) |
 | `rejected` / `superseded` | "Afgewezen." / "Vervangen door een nieuwer voorstel." | Teruggaan |
 | 409 bij een besluit | Herlaadt. Toont "Er is intussen een nieuwere versie. Bekijk hem en verstuur opnieuw." als het nog openstaat, anders "Dit voorstel is al afgehandeld." Lokale wijzigingen worden vervangen door de versie van de server | Opnieuw lezen, opnieuw beslissen. **Een 409 wordt nooit opnieuw geprobeerd** |
-| 400 bij een besluit | "verder weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel." De telefoon toont dit bij ELKE 400, ook bij een vormweigering (een te lang onderwerp, een opnieuw gecontroleerde optie die niet meer klopt) | Ontvangers of bijlagen herstellen |
-| Offline / transportfout | "Geen verbinding met verder. Probeer het opnieuw." (als laadfout, of als bericht na een actie) | De actie opnieuw proberen. Wijzigingen blijven alleen bewaard zolang het scherm openblijft |
+| 400 bij een besluit | "Grip weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel." De telefoon toont dit bij ELKE 400, ook bij een vormweigering (een te lang onderwerp, een opnieuw gecontroleerde optie die niet meer klopt) | Ontvangers of bijlagen herstellen |
+| Offline / transportfout | "Geen verbinding met Grip. Probeer het opnieuw." (als laadfout, of als bericht na een actie) | De actie opnieuw proberen. Wijzigingen blijven alleen bewaard zolang het scherm openblijft |
 | Andere serverfout | "Dat lukte niet. Probeer het over een moment opnieuw." | Opnieuw proberen |
 | Niet gevonden (404) | "Dit voorstel bestaat niet (meer)." | Teruggaan. Gemeten op de telefoon op 2026-11-01 met een test-vraagpush voor een niet-bestaand id |
 | Sessie verlopen (401) | Roept `onUnauthorized` aan, dat de sessie beëindigt, lokale dossierinhoud wist en het inlogscherm toont ("Je sessie is verlopen."). De eigen regel van het scherm is "Log opnieuw in." | Opnieuw inloggen |
@@ -200,7 +200,7 @@ Van boven naar beneden, uit `GET /api/mobile/v1/proposals/<id>` (`proposals.get`
 - **F-19 · Het scherm zit achter de app-vergrendeling, en een link wacht op het ontgrendelen.** **Status:** Gebouwd (`.lockGated(by: lock)` en `inboxPath` in `App/RootView.swift`, `Auth/AppLock.swift`).
 - **F-20 · Dynamic Type tot AX5, alles in één scroll, niets afgekapt.** **Status:** Gebouwd (elk lettertype `relativeTo:` in `ProposalScreen.swift`).
 
-**Hoe de 409 van de code verschilt van de frames.** In de code hoogt `storeDraft` `revision` nooit op, en een nieuw concept is een nieuw voorstel dat het oude vervangt (`create.ts` `supersedeOlder`: een nieuwere inkomende mail in de draad, of Martin die zelf antwoordt). Een 409 betekent dus "elders besloten of vervangen", meestal op het web. Het betekent nooit "verder heeft het concept herschreven tot versie 3".
+**Hoe de 409 van de code verschilt van de frames.** In de code hoogt `storeDraft` `revision` nooit op, en een nieuw concept is een nieuw voorstel dat het oude vervangt (`create.ts` `supersedeOlder`: een nieuwere inkomende mail in de draad, of Martin die zelf antwoordt). Een 409 betekent dus "elders besloten of vervangen", meestal op het web. Het betekent nooit "Grip heeft het concept herschreven tot versie 3".
 
 ![Conflict: twee versies (ontwerp)](frames/Proposal_409_met_jouw_aanpassingen.jpg)
 
@@ -261,7 +261,7 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 **F-30 · Een bijlage of een aangehaald dossierdocument openen.** Elke bijlagerij en elke dossier-bronrij opent het document schermvullend.
 **Status:** Deels gebouwd — elke bijlagerij en elke dossierbron opent `DocumentViewer` via `InboxRoute.document`; een onbeschikbare bijlage wordt doorgestreept en opent niet. Nog nodig: een test dat een definitief verwijderd of weggegooid aangehaald document (een bronrij) niet opent.
 
-**F-31 · Bronnen als rijen: wat, wanneer, waarom, hoeveel.** "Waar verder op leunt · 3 BRONNEN" toont elke bron als rij met type en datum ("MAIL · 2 NOV 09:14", "DOSSIER · LOONSTROOK") en de reden van de opsteller.
+**F-31 · Bronnen als rijen: wat, wanneer, waarom, hoeveel.** "Waar Grip op leunt · 3 BRONNEN" toont elke bron als rij met type en datum ("MAIL · 2 NOV 09:14", "DOSSIER · LOONSTROOK") en de reden van de opsteller.
 **Status:** Deels gebouwd — bronnen zijn rijen met soort ("MAIL", "DOSSIER", "KAART · HALTE") en "3 BRONNEN"; de mail waarop het antwoordt heet "Mail van Ilse" met haar datum (`ProposalText.source`). Nog nodig: een datum per bron uit de server, en of `why` getoond wordt (de frames tonen het niet).
 
 **F-32 · Het ⋯-menu.** Aanpassen, Afwijzen, "Originele mail openen" en "Kopieer concepttekst" (kopieert onderwerp en tekst naar het klembord).
@@ -278,8 +278,8 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 **F-34 · Genummerde conceptversies.** "CONCEPT · VERSIE 2": een nieuw concept wordt een nieuwe versie van hetzelfde voorstel, en eerdere versies worden bewaard.
 **Status:** Nog te bouwen — vraagt eerst een besluit: vandaag is een nieuw concept een nieuw voorstel dat het oude vervangt (`create.ts` `supersedeOlder`), en `revision` is een besluitteller, geen conceptversie. Daarna: een kolom voor de conceptversie of een geschiedenistabel `proposal_drafts` (migratie; geen bewijs, geen ledger-gebeurtenis), `storeDraft` die versies schrijft, de versie in `GET`, en tests.
 
-**F-35 · Martins wijzigingen gemarkeerd.** Bewerkte regels worden gemarkeerd en samengevat ("AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"), met "VERSIE 2 VAN VERDER BEWAARD", zowel op het scherm als in de editor (brief §3: de gouden regel zichtbaar vóór het goedkeuren).
-**Status:** Deels gebouwd — Martins eigen wijzigingen tegen het concept van verder worden gemarkeerd en samengevat (`DraftChanges`, getest; "CONCEPT · AANGEPAST DOOR JOU", "AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"). "VERSIE 2 VAN VERDER" wacht op F-34; in de editor zelf wordt een toegevoegde zin niet gemarkeerd (alleen samengevat).
+**F-35 · Martins wijzigingen gemarkeerd.** Bewerkte regels worden gemarkeerd en samengevat ("AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"), met "VERSIE 2 VAN GRIP BEWAARD", zowel op het scherm als in de editor (brief §3: de gouden regel zichtbaar vóór het goedkeuren).
+**Status:** Deels gebouwd — Martins eigen wijzigingen tegen het concept van Grip worden gemarkeerd en samengevat (`DraftChanges`, getest; "CONCEPT · AANGEPAST DOOR JOU", "AANGEPAST DOOR JOU · 1 ZIN TOEGEVOEGD"). "VERSIE 2 VAN GRIP" wacht op F-34; in de editor zelf wordt een toegevoegde zin niet gemarkeerd (alleen samengevat).
 
 **F-36 · Een conflict biedt twee versies.** Als het concept onder Martin door veranderde: "Het concept is intussen gewijzigd. Er is niets verstuurd." met de wijzigingen van versie 3 gemarkeerd; met lokale wijzigingen een keuze "Jouw versie" / "Versie 3" ("Jouw versie houden", "Versie 3 gebruikt"), en een weggevallen zin vermeld als "JOUW ZIN NIET OPGENOMEN · BEWAARD IN DE GESCHIEDENIS".
 **Status:** Nog te bouwen — hangt af van F-34 (versies en hun geschiedenis) en F-35 (diff); vandaag betekent een 409 "elders besloten of vervangen" en toont één bericht (F-18). Nodig: een samenvoegmodel op de telefoon, een geschiedenis die de server bijhoudt, en tests dat geen van beide keuzes kan versturen zonder opnieuw vasthouden en een verse Face ID.
@@ -339,10 +339,10 @@ Elke functie die de definitieve frames, de spec of de brief vastleggen en die de
 ## Privacy en beveiliging
 
 - **Twee deuren.** De app-vergrendeling (gaat weer aan bij een koude start en na meer dan vijf minuten weg; Face ID wordt gevraagd wanneer Martin een afgeschermd tabblad opent) schermt het tabblad Voor jou af en daarmee dit scherm. De verzendpoort (`ApprovalGate`) is een tweede, verse Face ID bij **elke** verzending. Afwijzen, beantwoorden en de voorgestelde taak aanmaken vragen alleen een ontgrendelde app. Overzicht is niet afgeschermd, maar toont in vergrendelde toestand alleen het aantal en geen rijen, dus het kan geen voorstel openen tot de app ontgrendeld is.
-- **Beantwoorden vanuit een melding slaat de app-vergrendeling over.** De acties `answer.<n>` van een vraag zijn `.authenticationRequired`, niet `.foreground`: iOS vereist dat de TELEFOON ontgrendeld is, daarna wordt het antwoord gepost zonder dat de app opent en zonder de eigen Face ID van verder. Dat is aanvaardbaar omdat een antwoord niets naar buiten verstuurt, maar het is een zwakkere deur dan die van het scherm.
+- **Beantwoorden vanuit een melding slaat de app-vergrendeling over.** De acties `answer.<n>` van een vraag zijn `.authenticationRequired`, niet `.foreground`: iOS vereist dat de TELEFOON ontgrendeld is, daarna wordt het antwoord gepost zonder dat de app opent en zonder de eigen Face ID van Grip. Dat is aanvaardbaar omdat een antwoord niets naar buiten verstuurt, maar het is een zwakkere deur dan die van het scherm.
 - **De server kan Face ID niet zien.** Hij vertrouwt op het sessiecookie en de revisie (Plan 2, "Not grounded in code"). De poort bestaat zodat iemand die een opgepakte, ontgrendelde telefoon vasthoudt, niet met één tik namens Martin kan versturen.
 - **Ontvangers en bijlagen worden door de server afgebakend**, niet door de telefoon. Goedkeuren accepteert alleen adressen en documenten uit de context die de worker bij het opstellen opsloeg.
-- **Vergrendelscherm.** Voorstelpushes hebben een titel als "Voorstel: <ask>". Met verborgen voorvertoningen toont het vergrendelscherm alleen "Nieuw bericht van verder" (`hiddenPreviewsBodyPlaceholder`). Widgets op het vergrendelscherm tonen alleen aantallen. Widgets op het beginscherm kunnen titels van items tonen en het voorstel via zijn link openen, waarna de app-vergrendeling volgt.
+- **Vergrendelscherm.** Voorstelpushes hebben een titel als "Voorstel: <ask>". Met verborgen voorvertoningen toont het vergrendelscherm alleen "Nieuw bericht van Grip" (`hiddenPreviewsBodyPlaceholder`). Widgets op het vergrendelscherm tonen alleen aantallen. Widgets op het beginscherm kunnen titels van items tonen en het voorstel via zijn link openen, waarna de app-vergrendeling volgt.
 - **Opgeslagen op de telefoon:** niets van dit scherm. Het voorsteldetail en eventuele wijzigingen leven in het geheugen. Het sessiecookie staat in de Keychain (`AfterFirstUnlockThisDeviceOnly`). De widget-momentopname (App Group, `completeUntilFirstUserAuthentication`) bevat titels uit Voor jou, geen concepttekst. De extensie registreert per vraag een categorie `q.<id>` bij iOS (voorstel-id plus optielabels, hooguit 40 tekens elk) en houdt hun volgorde bij in `push/q-order.json` in de App Group, dat alleen categorie-id's bevat.
 - **Uitloggen** (Meer → Uitloggen, of elke 401) wist de sessie uit de Keychain, beëindigt het sessie-epoch zodat elke opslag zijn dossierinhoud vergeet, en wist de widget-momentopname.
 
@@ -426,7 +426,7 @@ Alle frames komen uit de Figma-sectie `proposal · final` (node `307:1047`), opn
 
 | Frame | Toestand die het toont | Gebouwd |
 |---|---|---|
-| [Proposal / wacht op jou](frames/Proposal_wacht_op_jou.jpg) | Een openstaand antwoord, gescrold, met de aanleiding, concept versie 2, één bijlage, "Waar verder op leunt" en de vasthoudbalk om te versturen | Ja (de systeemterugknop is een glazen chevron zonder "Voor jou") |
+| [Proposal / wacht op jou](frames/Proposal_wacht_op_jou.jpg) | Een openstaand antwoord, gescrold, met de aanleiding, concept versie 2, één bijlage, "Waar Grip op leunt" en de vasthoudbalk om te versturen | Ja (de systeemterugknop is een glazen chevron zonder "Voor jou") |
 | [Proposal / opvolging](frames/Proposal_opvolging.jpg) | Een openstaande opvolging: "25 DAGEN STIL", "Jouw vraag van 7 okt staat nog open bij Ilse." | Ja ("26 DAGEN STIL" op de klok van de fixture) |
 | [Proposal / vasthouden](frames/Proposal_vasthouden.jpg) | Vasthouden bezig: "Blijf vasthouden", "Loslaten stopt — er gaat dan niets weg." | Ja |
 | [Proposal / Face ID](frames/Proposal_Face_ID.jpg) | De Face ID-systeemsheet over het concept, balk "Bevestig met Face ID" | Balk ja; de systeemsheet is van iOS |

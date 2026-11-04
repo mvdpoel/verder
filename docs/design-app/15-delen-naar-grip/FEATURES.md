@@ -1,6 +1,6 @@
-# Delen naar verder: de deelextensie
+# Delen naar Grip: de deelextensie
 
-Dit document beschrijft wat de deelextensie van verder doet: wat ze accepteert, waar ze een gedeeld item in omzet, hoe het bestand in het dossier komt en wat elke toestand betekent. Het beschrijft de code op branch `feat/iphone-app` (`apps/ios`, target `GripShare`, bundle `pro.vanderpoel.grip.share`). Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `share · final` (node 348:16604) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
+Dit document beschrijft wat de deelextensie van Grip doet: wat ze accepteert, waar ze een gedeeld item in omzet, hoe het bestand in het dossier komt en wat elke toestand betekent. Het beschrijft de code op branch `feat/iphone-app` (`apps/ios`, target `GripShare`, bundle `pro.vanderpoel.grip.share`). Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `share · final` (node 348:16604) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
 
 > **De frames gaan verder dan de code.** Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals ontworpen (definitieve frames, spec §7.8, design brief §2 en §3) en zegt per functie of de code die heeft. Elke functie heeft precies één statusregel: **Gebouwd** (bestaat in de code, bestand genoemd), **Deels gebouwd** (wat ontbreekt wordt genoemd) of **Nog te bouwen** (wat ervoor nodig is wordt genoemd). De ontworpen functies en hun stand staan onder "Ontworpen: wat nu gebouwd is en wat niet". De status is bepaald door de code te lezen op 2026-11-03, inclusief de niet-gecommitte working tree op `feat/iphone-app`, en bijgewerkt op 2026-11-04 toen het scherm naar de definitieve frames is gebouwd (`ShareView` in `apps/ios/Grip/Upload/ShareView.swift`; captures via `scripts/capture.sh <fixture> share:<scene>`).
 
@@ -22,23 +22,23 @@ Wat nog openstaat:
 
 ## Doel
 
-Met de deelextensie zet Martin een document in zijn dossier **vanuit elke andere app**, zonder eerst verder te openen. Typische gevallen zijn een pdf-bijlage in Mail, foto's van een brief in Foto's, of een bestand in Bestanden of WhatsApp. Ze is er alleen voor Martin.
+Met de deelextensie zet Martin een document in zijn dossier **vanuit elke andere app**, zonder eerst Grip te openen. Typische gevallen zijn een pdf-bijlage in Mail, foto's van een brief in Foto's, of een bestand in Bestanden of WhatsApp. Ze is er alleen voor Martin.
 
 Ze doet één ding: ze zet de gedeelde items in **dezelfde uploadwachtrij** die een telefoonscan gebruikt, met bron `phone-share` (spec §7.8, plan 3 Task 22). Op het web verschijnt het resultaat onder Files, bron **"Gedeeld"** (`apps/web/src/components/files-tree.tsx`), en in labels als "gedeeld" (`apps/web/src/lib/entry-labels.ts`).
 
 De extensie beslist nooit iets over het document. Ze geeft het geen soort, archiveert het niet en koppelt het niet aan een schuld of logboekregel. Alles na de upload is de gewone serverpijplijn (zie "Wat er op de server gebeurt").
 
-![Het systeemdeelblad, met verder tussen de apps](frames/Share_extension_Deelblad_systeem.jpg)
+![Het systeemdeelblad, met Grip tussen de apps](frames/Share_extension_Deelblad_systeem.jpg)
 
 ---
 
 ## Hoe je er komt, en waar het heen leidt
 
-- **In:** het iOS-deelblad van elke app → **"verder"** (`CFBundleDisplayName` in `GripShare/Info.plist`). Er is geen tab, deep link, widget, melding of snelle actie die de extensie opent. Ze bestaat alleen binnen het deelblad van een andere app.
+- **In:** het iOS-deelblad van elke app → **"Grip"** (`CFBundleDisplayName` in `GripShare/Info.plist`). Er is geen tab, deep link, widget, melding of snelle actie die de extensie opent. Ze bestaat alleen binnen het deelblad van een andere app.
   **Status:** Gebouwd (`apps/ios/GripShare/Info.plist`, target `GripShare` in `apps/ios/project.yml`).
-- **Waardoor verder in het blad verschijnt:** de activatieregel in `project.yml`: `NSExtensionActivationSupportsFileWithMaxCount: 10` en `NSExtensionActivationSupportsImageWithMaxCount: 10`. iOS telt bestanden en afbeeldingen onder aparte sleutels, dus een gemengde deling kan meer dan 10 items aanleveren. Dat is niet gemeten (plan 3 Task 22). De regel heeft geen sleutel voor web-URL's, dus een deling van alleen een link zou verder helemaal niet moeten aanbieden.
+- **Waardoor Grip in het blad verschijnt:** de activatieregel in `project.yml`: `NSExtensionActivationSupportsFileWithMaxCount: 10` en `NSExtensionActivationSupportsImageWithMaxCount: 10`. iOS telt bestanden en afbeeldingen onder aparte sleutels, dus een gemengde deling kan meer dan 10 items aanleveren. Dat is niet gemeten (plan 3 Task 22). De regel heeft geen sleutel voor web-URL's, dus een deling van alleen een link zou Grip helemaal niet moeten aanbieden.
   **Status:** Gebouwd (`apps/ios/project.yml`, `NSExtensionActivationRule`). De ontworpen linktoestand (hieronder) vraagt om een ruimere regel.
-- **Het scherm:** één blad met de kop **"Naar verder"**, met "Annuleren" aan de beginkant en "Versturen" (later "Sluiten") aan de eindkant. Een pdf uit Mail staat er in **2 tikken na het deelblad** in (verder → Versturen), het doel uit §3 van de brief.
+- **Het scherm:** één blad met de kop **"Naar Grip"**, met "Annuleren" aan de beginkant en "Versturen" (later "Sluiten") aan de eindkant. Een pdf uit Mail staat er in **2 tikken na het deelblad** in (Grip → Versturen), het doel uit §3 van de brief.
   **Status:** Gebouwd (`ShareView` in `apps/ios/GripShare/ShareViewController.swift`).
 - **Uit:** de extensie sluit zichzelf, of Martin sluit haar. Ze opent nooit de app. Het bestand gaat door naar het dossier, rechtstreeks vanuit de extensie of later vanuit de wachtrij van de app; zie "Versturen, van begin tot eind".
   **Status:** Gebouwd (`ShareViewController.finish`).
@@ -70,7 +70,7 @@ Grenzen (`ShareModel`):
 
 | Grens | Waarde | Wat er daarboven gebeurt |
 |---|---|---|
-| Items per deling | 10 (`maxItems`; de activatieregel biedt verder aan tot 50) | De eerste 10 worden geladen en gaan mee; de rest wordt genoemd: "Dat zijn er 14; verder neemt de eerste 10 mee. Deel foto 11–14 daarna opnieuw." |
+| Items per deling | 10 (`maxItems`; de activatieregel biedt Grip aan tot 50) | De eerste 10 worden geladen en gaan mee; de rest wordt genoemd: "Dat zijn er 14; Grip neemt de eerste 10 mee. Deel foto 11–14 daarna opnieuw." |
 | Bytes per bestand | 48 MB (`maxFileBytes`, onder de 50 MB `MAX_UPLOAD_BYTES` van de server) | Dat bestand gaat niet mee en wordt bij naam genoemd ("Jaaropgaaf 2025 scan.pdf is te groot (62 MB, max. 48 MB)."); de andere gaan wel. Alleen als elk bestand te groot is, wordt de deling geweigerd ("Te groot om mee te nemen"). Het bestand wordt niet gekopieerd. |
 | Laden | 10 s (`loadTimeout`) | "Bestand laden lukt niet" met "Opnieuw proberen". |
 | Eigen upload van de extensie | 8 MB per bestand (`ShareSender.foregroundLimit`) | Niet geprobeerd vanuit de extensie. De wachtrij van de app verstuurt het. |
@@ -101,11 +101,11 @@ Grenzen (`ShareModel`):
 
 Een tik op **"Versturen"** (`ShareModel.commit`) doet drie dingen, in deze volgorde.
 
-1. **Ze schrijft een drop per bestand** in de App Group, in `<group>/uploads/incoming/` (`IncomingDrop.write`). Eerst de bytes (`<uuid>.bin`), als laatste de beschrijving (`<uuid>.json`), zodat de app nooit een halve drop ziet. Vanaf dat moment is de deling veilig: de app **gaat** hem versturen, wat er daarna ook gebeurt. Mislukt een schrijfactie, dan worden de al geschreven drops weer verwijderd en zegt het scherm "Opslaan lukte niet", met de oorzaak (te weinig ruimte, of een algemene regel) en "er is nog niets verstuurd", plus "Opnieuw proberen". Niets van die deling bereikt het dossier. Ontbreekt de App Group zelf (een verkeerd geconfigureerde build), dan weigert deze stap met "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
+1. **Ze schrijft een drop per bestand** in de App Group, in `<group>/uploads/incoming/` (`IncomingDrop.write`). Eerst de bytes (`<uuid>.bin`), als laatste de beschrijving (`<uuid>.json`), zodat de app nooit een halve drop ziet. Vanaf dat moment is de deling veilig: de app **gaat** hem versturen, wat er daarna ook gebeurt. Mislukt een schrijfactie, dan worden de al geschreven drops weer verwijderd en zegt het scherm "Opslaan lukte niet", met de oorzaak (te weinig ruimte, of een algemene regel) en "er is nog niets verstuurd", plus "Opnieuw proberen". Niets van die deling bereikt het dossier. Ontbreekt de App Group zelf (een verkeerd geconfigureerde build), dan weigert deze stap met "Grip kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
    **Status:** Gebouwd (`IncomingDrop.write` in `apps/ios/Grip/Upload/IncomingDrop.swift`, `ShareModel.commit`).
 2. **Ze doet één begrensde eigen uploadpoging** (`ShareSender.sendOne`, per drop, met een reden als hij niet lukt: `ShareSendResult`) voor elke drop tot 8 MB, de een na de ander. Ze gebruikt de sessiecookie van de app uit het gedeelde Keychain-item (`keychain-access-groups`). Het verzoek is hetzelfde dat de wachtrij bouwt (`UploadRequest.build`): `POST /api/mobile/v1/documents`, multipart met `clientId` = de UUID van de drop, `source` = `phone-share`, `capturedAt`, en het bestand met eigen naam en mime. Alleen een 2xx met de JSON van het endpoint schrijft `<uuid>.sent`. Al het andere (offline, geen sessie, een trage 4G-verbinding, de grens van 20 s) laat de drop over aan de app.
    **Status:** Gebouwd (`apps/ios/Grip/Upload/ShareSender.swift`). Of een bestand van 5 MB op 4G binnen de grens klaar is, is niet gemeten.
-3. **Ze meldt de uitkomst** op een eindscherm met een symbool, een kop, één uitlegregel en het bestand, met "Klaar" als enige knop. Heeft de server elk bestand bevestigd: "Staat in de wachtrij van verder". Anders "Bewaard in verder", met de reden ("offline · in wachtrij", "groot bestand · in wachtrij" met de grootte, "in wachtrij", of bij uitgelogd "Open verder en log in"). Zonder melding op het scherm sluit de extensie zichzelf na 3 s, maar nooit onder VoiceOver, Switch Control of een toegankelijkheidstekstmaat, en niet na "log in".
+3. **Ze meldt de uitkomst** op een eindscherm met een symbool, een kop, één uitlegregel en het bestand, met "Klaar" als enige knop. Heeft de server elk bestand bevestigd: "Staat in de wachtrij van Grip". Anders "Bewaard in Grip", met de reden ("offline · in wachtrij", "groot bestand · in wachtrij" met de grootte, "in wachtrij", of bij uitgelogd "Open Grip en log in"). Zonder melding op het scherm sluit de extensie zichzelf na 3 s, maar nooit onder VoiceOver, Switch Control of een toegankelijkheidstekstmaat, en niet na "log in".
    **Status:** Gebouwd (`ShareModel.closing`, `outcome`, `closesByItself`; `ShareViewController.send`).
 
 **`capturedAt` is het moment van Versturen**, niet de eigen datum van het bestand. Het wordt de `receivedAt` van het document, dus een pdf van vorig jaar die vandaag gedeeld wordt, staat in het dossier op vandaag.
@@ -138,8 +138,8 @@ Een tik op **"Versturen"** (`ShareModel.commit`) doet drie dingen, in deze volgo
 Daarna neemt de gewone pijplijn het over. Niets daarvan is specifiek voor delen:
 
 - `docmeta.sweep` (elke minuut, in porties van 5) vindt het document omdat het nog geen tekst heeft en zet `suggest.docmeta` in de rij. Die taak doet, in volgorde: de tekst uitlezen en bewaren (`pdf-parse`, OCR of `sheet`), auto-name uitvoeren, de documentmeta-suggestie schrijven en de briefcontrole uitvoeren.
-- Auto-name kan het hernoemen. Die hernoeming is verders eigen wijziging (`actor = 'verder'`, één `document.updated`-event), vermeld onder "Door verder gedaan".
-- Een documentmeta-**suggestie** (soort, naam) verschijnt in Voor jou. Het is alleen een suggestie. Automatisch archiveren zou verder het zelf laten archiveren, maar dat **staat bij levering uit** (`DOCMETA_AUTO_APPLY` niet gezet; zie CLAUDE.md, eval baselines).
+- Auto-name kan het hernoemen. Die hernoeming is Grips eigen wijziging (`actor = 'verder'`, één `document.updated`-event), vermeld onder "Door Grip gedaan".
+- Een documentmeta-**suggestie** (soort, naam) verschijnt in Voor jou. Het is alleen een suggestie. Automatisch archiveren zou Grip het zelf laten archiveren, maar dat **staat bij levering uit** (`DOCMETA_AUTO_APPLY` niet gezet; zie CLAUDE.md, eval baselines).
 - **Status:** Gebouwd (`apps/worker/src/docmeta-sweep.ts`, `suggest.docmeta` in `apps/worker/src/index.ts`, `apps/worker/src/auto-name.ts`). Niets daarin is specifiek voor delen.
 - `phone-share` is een van de **briefbronnen** (`LETTER_SOURCES` in `apps/worker/src/proposals/letters.ts`). Een gedeeld document waarvan de tekst eruitziet als een brief van Verder, krijgt een tijdgevoelige push "Brief lijkt van Verder" en een voorstel. Een document van een schuldeiser, alleen herkend aan het e-mailadres, krijgt een actieve push "Brief lijkt van <naam>" en een voorstel. De afzender is een gok op basis van de tekst en wordt op het voorstel bewaard, nooit op het document. De controle schrijft geen ledgerevent. Er wordt niets verstuurd zonder dat Martin de definitieve tekst goedkeurt.
   **Status:** Gebouwd (`LETTER_SOURCES` in `apps/worker/src/proposals/letters.ts` bevat `phone-share`).
@@ -157,12 +157,12 @@ Daarna neemt de gewone pijplijn het over. Niets daarvan is specifiek voor delen:
 | Laden | Een skeleton in de vorm van de thumbnail en twee regels, de uitlegkaart, "Versturen" uitgeschakeld | "Annuleren" |
 | Laden mislukt (10 s) | "Bestand laden lukt niet" met de oorzaak | "Opnieuw proberen", "Annuleren" |
 | Klaar | Thumbnail of fotostapel, naam, detail, uitlegkaart; "Versturen" actief | "Versturen" of "Annuleren" |
-| Deel gaat niet mee (onleesbaar, te groot, een link, meer dan 10) | Een melding ("verder neemt er 2 van de 3 mee." / "Dat zijn er 14; …") met de reden per geval, en bij meerdere bestanden een rij per bestand | De rest versturen, of annuleren |
+| Deel gaat niet mee (onleesbaar, te groot, een link, meer dan 10) | Een melding ("Grip neemt er 2 van de 3 mee." / "Dat zijn er 14; …") met de reden per geval, en bij meerdere bestanden een rij per bestand | De rest versturen, of annuleren |
 | Niet ingelogd | "Je bent niet ingelogd", de knop leest "Bewaar" | "Bewaar" (geen uploadpoging), of annuleren |
 | Versturen | Voortgangsbalk met "Versturen · bestand 1 van 3"; de knop wordt een uploadsymbool; "Annuleren" gedimd | Wachten (hoogstens ongeveer 20 s) |
 | Opslaan mislukt | "Opslaan lukte niet" met de oorzaak en "er is nog niets verstuurd"; de deling | "Opnieuw proberen", "Annuleren" |
-| Afgeleverd | "Staat in de wachtrij van verder", "Klaar" | Sluit zichzelf na 3 s (niet met een melding of hulptechnologie) |
-| Bewaard, nog niet afgeleverd | "Bewaard in verder" met de reden, "Klaar" | Idem; verder later openen |
+| Afgeleverd | "Staat in de wachtrij van Grip", "Klaar" | Sluit zichzelf na 3 s (niet met een melding of hulptechnologie) |
+| Bewaard, nog niet afgeleverd | "Bewaard in Grip" met de reden, "Klaar" | Idem; Grip later openen |
 | Alleen te groot | "Te groot om mee te nemen", het bestand gedimd met "62 MB · max. 48 MB" | "Sluiten" |
 | Een link | "Hier zit geen bestand in" met de link | "Sluiten" |
 | Niets / onleesbaar / geen App Group | "Niets om te bewaren" / "Niet te lezen" / "Opslaan lukte niet" | "Sluiten" |
@@ -201,7 +201,7 @@ Waarom een gedeeltelijke deling niet vanzelf sluit: een melding moet gelezen wor
 ## De regels die ze volgt
 
 - **Bewijs is alleen-toevoegen.** Een deling voegt precies één `document.ingested` toe per nieuw document, en geen voor een dubbel (dezelfde `clientId`, of bytes die al in de kluis staan). Niets in de extensie schrijft rechtstreeks naar de ledger.
-- **AI-uitvoer is een suggestie.** Over de suggestie voor soort en naam die volgt, beslist Martin in Voor jou. Automatisch archiveren (de archiveringsuitzondering) staat in productie uit. Hernoemingen door auto-name zijn verders eigen wijzigingen en staan onder "Door verder gedaan".
+- **AI-uitvoer is een suggestie.** Over de suggestie voor soort en naam die volgt, beslist Martin in Voor jou. Automatisch archiveren (de archiveringsuitzondering) staat in productie uit. Hernoemingen door auto-name zijn Grips eigen wijzigingen en staan onder "Door Grip gedaan".
 - **Er wordt niets verstuurd zonder dat Martin de definitieve tekst goedkeurt.** Een gedeelde brief die eruitziet als een brief van Verder of van een schuldeiser kan tot een voorstel leiden, maar versturen vraagt altijd Martins goedkeuring.
 - **Nooit stilletjes een item kwijtraken.** Van elk aangeleverd item wordt rekenschap gegeven: geweigerd met een reden, gemeld als niet meegenomen, of verstuurd.
 
@@ -213,8 +213,8 @@ Waarom een gedeeltelijke deling niet vanzelf sluit: een melding moet gelezen wor
 
 ## Offline gedrag en synchronisatie
 
-- Offline werkt "Versturen" nog steeds. De drop wordt geschreven, de poging mislukt en het scherm zegt "Bewaard. Het gaat mee zodra je verder opent."
-- **De drop beweegt alleen als de app draait.** Hij wordt geïmporteerd wanneer verder de volgende keer start of naar voren komt terwijl er ingelogd is. Een deling terwijl de app nooit geopend wordt, blijft op de telefoon. De extensie start zelf geen achtergrondupload.
+- Offline werkt "Versturen" nog steeds. De drop wordt geschreven, de poging mislukt en het scherm zegt "Bewaard. Het gaat mee zodra je Grip opent."
+- **De drop beweegt alleen als de app draait.** Hij wordt geïmporteerd wanneer Grip de volgende keer start of naar voren komt terwijl er ingelogd is. Een deling terwijl de app nooit geopend wordt, blijft op de telefoon. De extensie start zelf geen achtergrondupload.
 
 **Status:** Gebouwd (`ShareModel.commit`, `IncomingImport.swift`, `RootView`). Het leeglopen na de vliegtuigmodus is alleen met unittests getest.
 
@@ -225,7 +225,7 @@ Waarom een gedeeltelijke deling niet vanzelf sluit: een melding moet gelezen wor
 - **De optionele notitie van één regel uit de spec is uitgesteld** (spec §7.8). `POST /api/mobile/v1/documents` heeft geen notitieveld en `documents` heeft geen notitiekolom.
 - De paginavolgorde van een foto-pdf is de volgorde waarin iOS de bronnen aanlevert; of dat altijd de volgorde is waarin Martin ze koos, is niet gecontroleerd.
 - De bron-app wordt niet genoemd bij een mislukte lading: iOS heeft geen publieke API die een extensie vertelt welke app deelde.
-- De activatieregel biedt verder nu aan tot 50 bestanden/afbeeldingen en voor één web-link (om die met "Hier zit geen bestand in" te beantwoorden). Of een deling uit Safari ook tekst als bestand aanbiedt, is niet gemeten; de code behandelt een URL met alleen tekst ernaast als link.
+- De activatieregel biedt Grip nu aan tot 50 bestanden/afbeeldingen en voor één web-link (om die met "Hier zit geen bestand in" te beantwoorden). Of een deling uit Safari ook tekst als bestand aanbiedt, is niet gemeten; de code behandelt een URL met alleen tekst ernaast als link.
 - **De bytes van een definitief verwijderd document delen zet ze terug op schijf.** De route roept `storeFile` aan vóór de sha256-dedup van `ingestDocument`, dus het bestand wordt opnieuw geschreven onder de hash van de tombstone, terwijl er geen nieuwe rij of event geschreven wordt. `/verify` meldt het als restant van een verwijdering en een herhaalde verwijdering haalt het weg. Dit volgt uit de code en is niet getest; het geldt voor elke uploadroute, niet alleen voor delen.
 
 ## Ontworpen: wat nu gebouwd is en wat niet
@@ -246,7 +246,7 @@ De definitieve frames, de spec (§7.8) en de design brief (§2.4 toestanden, §2
 ### Gedeeltelijk meenemen in plaats van weigeren
 
 - **De eerste 10 van een grotere deling meenemen**, met het bereik om opnieuw te delen. [`Meer_dan_10`, `Meer_dan_10_AX5`]
-  **Status:** Gebouwd (`handedOver(count:)` geeft het aantal te laden; `loaded` houdt de eerste `maxItems`; de activatieregel biedt verder aan tot 50).
+  **Status:** Gebouwd (`handedOver(count:)` geeft het aantal te laden; `loaded` houdt de eerste `maxItems`; de activatieregel biedt Grip aan tot 50).
 - **De andere bestanden versturen als er één boven 48 MB zit**, het te grote bij naam en grootte. [`Meerdere_bestanden_deels`]
   **Status:** Gebouwd (`SharedInput.tooLarge(fileName:bytes:thumbnail:)`, `SharePreparation.TooLargeFile`, `ShareModel.notice`). Alleen als elk bestand te groot is, wordt geweigerd.
 
@@ -267,7 +267,7 @@ De definitieve frames, de spec (§7.8) en de design brief (§2.4 toestanden, §2
 
 ### Uitgelogd, en waarom een deling wacht
 
-- **Uitgelogd, herkend vóór Versturen**: "Je bent niet ingelogd", de knop "Bewaar" (schrijft de drop, geen uploadpoging), daarna "Bewaard in verder. Open verder en log in; …". [`Niet_ingelogd`, `Bewaard`]
+- **Uitgelogd, herkend vóór Versturen**: "Je bent niet ingelogd", de knop "Bewaar" (schrijft de drop, geen uploadpoging), daarna "Bewaard in Grip. Open Grip en log in; …". [`Niet_ingelogd`, `Bewaard`]
   **Status:** Gebouwd (`ShareModel.signedOut`, gezet uit `KeychainSessionStore().load()?.isLive()` in `ShareViewController`). Een verlopen maar aanwezige cookie eindigt in de 401 en leest daarna ook "log in".
 - **Het scherm voor later bewaren zegt waarom.** [`Bewaard_offline`, `Bewaard_groot_bestand`, `Bewaard`]
   **Status:** Gebouwd (`ShareSendResult`, `ShareModel.outcome`, `closing`).
@@ -290,7 +290,7 @@ De definitieve frames, de spec (§7.8) en de design brief (§2.4 toestanden, §2
   **Status:** Gebouwd (`ScrollView` in `ShareView`; onderaan 80 pt ruimte bij AX-maten zodat het einde nooit een half afgesneden regel onder de balk laat).
 - **iPhone SE.** [`E_n_PDF_iPhone_SE`]
   **Status:** Gebouwd en gecontroleerd in de SE-simulator (`ShareNavLayout` centreert de titel tussen de knoppen als het midden niet past).
-- **VoiceOver.** Kop "Naar verder" als kop, de deling als één element, thumbnails overgeslagen, gedimde knoppen met een hint.
+- **VoiceOver.** Kop "Naar Grip" als kop, de deling als één element, thumbnails overgeslagen, gedimde knoppen met een hint.
   **Status:** Gebouwd (`ShareView.swift`).
 
 ### Verwant, elders belegd
@@ -338,7 +338,7 @@ Elke toestand is gebouwd; de captures maakt `scripts/capture.sh empty share:<sce
 
 | Frame | Toestand die het toont |
 |---|---|
-| `Share_extension_Deelblad_systeem.jpg` | Het iOS-deelblad in Mail, met verder in de rij apps |
+| `Share_extension_Deelblad_systeem.jpg` | Het iOS-deelblad in Mail, met Grip in de rij apps |
 | `Share_extension_Laden.jpg` | Laden |
 | `Share_extension_Laden_fout.jpg` | Mislukt laden met opnieuw proberen |
 | `Share_extension_E_n_PDF.jpg` | Eén pdf, klaar om te versturen |
