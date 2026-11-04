@@ -66,6 +66,7 @@ describe("toInboxDTO", () => {
   it("inbox count equals items length", () => {
     const dto = toInboxDTO([item("a"), item("b"), item("c")]);
     expect(dto.count).toBe(3);
+    expect(dto.todo + dto.review).toBe(dto.count);
     expect(dto.items.map((i) => i.id)).toEqual(["a", "b", "c"]);
     expect(dto.doneByGrip).toEqual([]);
   });

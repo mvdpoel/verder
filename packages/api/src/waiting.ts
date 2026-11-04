@@ -208,6 +208,25 @@ export function waitingOnMartin(input: {
 }
 
 /**
+ * `todo` is work only Martin can do: proposals, questions, tasks and the
+ * current stop. `review` is the suggestion backlog, verder's reading of what
+ * arrived, waiting for his verdict. The badge counts `todo` only (Martin,
+ * 2026-11-04): a number that a backlog of 494 unread suggestions keeps at 500
+ * stops meaning "this is yours to do". `count` stays the list's length.
+ */
+export type WaitingBucket = "todo" | "review";
+
+export const waitingBucket = (item: WaitingItem): WaitingBucket =>
+  item.kind === "suggestion" ? "review" : "todo";
+
+export interface WaitingCounts { count: number; todo: number; review: number }
+
+export function waitingCounts(items: WaitingItem[]): WaitingCounts {
+  const todo = items.filter((i) => waitingBucket(i) === "todo").length;
+  return { count: items.length, todo, review: items.length - todo };
+}
+
+/**
  * The one loader. Every membership rule that needs the database lives here:
  *
  * - Requests (Vraag Grip): answered and not yet opened. Queued and working

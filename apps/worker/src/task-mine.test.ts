@@ -8,12 +8,12 @@ const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 async function insertEmail(
   db: ReturnType<typeof createDb>["db"],
-  over: { subject?: string; bodyText?: string } = {},
+  over: { subject?: string; bodyText?: string; fromAddr?: string } = {},
 ) {
   const [email] = await db.insert(schema.rawEmails).values({
     gmailMessageId: `task-mine-test-${crypto.randomUUID()}`,
     gmailThreadId: `thread-${crypto.randomUUID()}`,
-    fromAddr: "contact@verdergroep.nl",
+    fromAddr: over.fromAddr ?? "contact@verdergroep.nl",
     toAddr: "martin@vanderpoel.pro",
     subject: over.subject ?? "Documenten aanleveren",
     sentAt: new Date("2026-08-10T09:00:00Z"),
@@ -46,7 +46,7 @@ describe("suggestTask", () => {
     expect(s.kind).toBe("task");
     expect(s.status).toBe("pending");
     expect(s.rawEmailId).toBe(email.id);
-    expect(s.promptVersion).toBe("task-v1");
+    expect(s.promptVersion).toBe("task-v2");
     expect(s.model).toBeTruthy();
     const p = s.proposed as Record<string, unknown>;
     expect(p.title).toBe("Kopie paspoort opsturen 2026");
@@ -151,12 +151,36 @@ describe("suggestTask", () => {
     const email = await insertEmail(db);
     await suggestTask({ db,
       llm: fixedLlm({ isTask: true, title: "Formulier invullen", details: "",
-        dueAt: "zo snel mogelijk", assigneeHint: "onzin" }) }, email.id);
+        dueAt: "zo snel mogelijk", assigneeHint: "martin" }) }, email.id);
     const [s] = await taskSuggestionsFor(db, email.id);
     expect(s).toBeDefined();
-    const p = s.proposed as Record<string, unknown>;
-    expect(p.dueAt).toBeNull();
-    expect(p.assigneeHint).toBe("other");        // unknown hint degrades too
+    expect((s.proposed as Record<string, unknown>).dueAt).toBeNull();
+    await pool.end();
+  });
+
+  it("suggests nothing when the work is Verder's or someone else's, garbage hints included", async () => {
+    const { db, pool } = createDb(URL);
+    for (const assigneeHint of ["verdergroep", "other", "onzin"]) {
+      const email = await insertEmail(db);
+      await suggestTask({ db, llm: fixedLlm({ isTask: true, title: "Vordering CZ oppakken",
+        details: "", dueAt: null, assigneeHint }) }, email.id);
+      expect(await taskSuggestionsFor(db, email.id)).toHaveLength(0);
+    }
+    await pool.end();
+  });
+
+  it("never mines Martin's own sent mail, and never asks the model about it", async () => {
+    const { db, pool } = createDb(URL);
+    for (const fromAddr of ["Martin van der Poel <martin@vanderpoel.pro>", "martin@vanderpoel.pro"]) {
+      const email = await insertEmail(db, { fromAddr,
+        bodyText: "Kunnen jullie de vordering van CZ oppakken?" });
+      let asked = false;
+      await suggestTask({ db, llm: { chatJson: async () => { asked = true;
+        return { isTask: true, title: "CZ oppakken", details: "", dueAt: null, assigneeHint: "martin" }; } } },
+        email.id);
+      expect(asked).toBe(false);
+      expect(await taskSuggestionsFor(db, email.id)).toHaveLength(0);
+    }
     await pool.end();
   });
 

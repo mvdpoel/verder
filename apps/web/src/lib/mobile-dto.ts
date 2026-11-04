@@ -1,4 +1,4 @@
-import type { WaitingItem } from "@grip/api/src/waiting";
+import { waitingCounts, type WaitingItem } from "@grip/api/src/waiting";
 import type { GripActionDTO } from "@grip/api/src/routers/grip-actions";
 
 /**
@@ -28,6 +28,10 @@ export type { GripActionDTO };
 
 export interface InboxDTO {
   count: number;
+  /** Martin's own work; the number the app icon shows (`waitingBucket`). */
+  todo: number;
+  /** The suggestion backlog awaiting his verdict. `todo + review === count`. */
+  review: number;
   items: WaitingItem[];
   /**
    * "Door Grip gedaan". NOT part of `count`: what Grip already did is
@@ -36,9 +40,9 @@ export interface InboxDTO {
   doneByGrip: GripActionDTO[];
 }
 
-/** `count` is the list's own length, so the badge and the list cannot disagree. */
+/** All three counts come from the list itself, so they cannot disagree with it. */
 export function toInboxDTO(items: WaitingItem[], doneByGrip: GripActionDTO[] = []): InboxDTO {
-  return { count: items.length, items, doneByGrip };
+  return { ...waitingCounts(items), items, doneByGrip };
 }
 
 // --- suggestion --------------------------------------------------------------
