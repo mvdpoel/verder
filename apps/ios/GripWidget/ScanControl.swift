@@ -6,7 +6,7 @@ import WidgetKit
 /// One tap opens the camera without Face ID (R20).
 struct ScanControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "pro.vanderpoel.verder.scan") {
+        StaticControlConfiguration(kind: "pro.vanderpoel.grip.scan") {
             ControlWidgetButton(action: ScanLetterIntent()) {
                 Label(ScanLetterIntent.label, systemImage: ScanLetterIntent.symbol)
             }

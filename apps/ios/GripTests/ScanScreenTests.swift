@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UIKit
-@testable import Verder
+@testable import Grip
 
 /// The words of every "scan · final" frame, read from `ScanScreen` and
 /// `QueueSheet` without a simulator. The frames' clock: Sun 1 nov 2026.
@@ -214,8 +214,8 @@ struct UploadQueueScanTests {
 
 struct ScanLinkTests {
     @Test func scanLinkOpensTheCamera() {
-        #expect(DeepLink.parse("verder://scan") == .scan)
-        #expect(DeepLink.parse("verder://scan/x") == DeepLink.none)
+        #expect(DeepLink.parse("grip://scan") == .scan)
+        #expect(DeepLink.parse("grip://scan/x") == DeepLink.none)
         #expect(DeepLink.scan.destination == LinkDestination(tab: .scan, stack: nil, opensCamera: true))
         #expect(QuickAction.link(forType: QuickAction.scanType) == .scan)
     }

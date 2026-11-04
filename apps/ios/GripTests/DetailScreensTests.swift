@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The words and rules of the three detail screens (Figma "detail · final"):
 /// `DetailText`, `QuestionText`, "Volgende in Voor jou", the suggestion's

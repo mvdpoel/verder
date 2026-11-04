@@ -420,7 +420,7 @@ struct FixtureLaunch: Equatable, Sendable {
     static func parseRoute(_ raw: String) throws(ParseError) -> Route {
         if let screen = Screen(rawValue: raw) { return .screen(screen) }
         // The Weekoverzicht and Geld have links of their own (a tap on the
-        // Sunday push; `verder://money`), so a capture takes the tap's path.
+        // Sunday push; `grip://money`), so a capture takes the tap's path.
         if raw == "weekly" { return .link(.weekly) }
         if raw == "geld" { return .link(.money) }
         if raw == "timeline" { return .link(.timeline) }
@@ -443,7 +443,7 @@ struct FixtureLaunch: Equatable, Sendable {
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {
             throw .unknownRoute(raw)
         }
-        let link = DeepLink.parse("verder://\(parts[0])/\(parts[1])")
+        let link = DeepLink.parse("grip://\(parts[0])/\(parts[1])")
         guard link != .none else { throw .unknownRoute(raw) }
         return .link(link)
     }

@@ -135,7 +135,7 @@ final class CallSession {
         guard epoch.isCurrent(started) else { return }
     }
 
-    /// The Live Activity's tap (`verder://call`): the call in progress, if any.
+    /// The Live Activity's tap (`grip://call`): the call in progress, if any.
     func reopen() {
         if model != nil { isPresented = true }
     }
@@ -290,7 +290,7 @@ final class CallSession {
     /// call not yet registered, or already gone) — the dial is spent here as
     /// a cancelled prompt and that real call's end is never offered. The
     /// DEBUG build logs the scene phases and `CXCallObserver.calls` around
-    /// every dial (`traceDial`, subsystem `pro.vanderpoel.verder`, category
+    /// every dial (`traceDial`, subsystem `pro.vanderpoel.grip`, category
     /// `call-dial`) so one real call on Martin's phone can settle it.
     func reconcile() {
         #if DEBUG
@@ -328,7 +328,7 @@ final class CallSession {
     /// dial, so what happens AFTER the dial is spent is in the log too).
     @ObservationIgnored private var traceDialAt: Date?
     static let traceDialWindow: TimeInterval = 30 * 60
-    private static let dialLog = Logger(subsystem: "pro.vanderpoel.verder", category: "call-dial")
+    private static let dialLog = Logger(subsystem: "pro.vanderpoel.grip", category: "call-dial")
 
     /// DEBUG only: one line per scene phase, CallKit event and `reconcile`
     /// within half an hour of a "Bel", with what `CXCallObserver.calls`

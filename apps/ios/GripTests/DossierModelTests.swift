@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The Dossier tab's state (Plan 3 Task 21 review fixes): an interrupted sync
 /// is not "offline", and a server answer never lands under a query it was not

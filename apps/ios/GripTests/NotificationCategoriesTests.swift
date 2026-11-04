@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UserNotifications
-@testable import Verder
+@testable import Grip
 
 /// The drift guard for categories, as `TokensMatchWebTests` is for colours:
 /// the worker's `CATEGORY` map (apps/worker/src/notify/notify.ts) is the ONE
@@ -10,7 +10,7 @@ import UserNotifications
 struct NotificationCategoriesTests {
     static let notifyTS: String = {
         let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()          // VerderTests/
+            .deletingLastPathComponent()          // GripTests/
             .appendingPathComponent("../../worker/src/notify/notify.ts")
             .standardizedFileURL
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""

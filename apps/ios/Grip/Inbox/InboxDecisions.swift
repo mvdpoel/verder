@@ -36,7 +36,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case reject
         case task(String)
         /// Undo one thing verder did ("Door verder gedaan").
-        case undoVerder
+        case undoGrip
         /// A question's option that changes nothing, by its index, at the
         /// revision the screen showed; `label` is the option's own words.
         case answer(option: Int, revision: Int, label: String)
@@ -58,7 +58,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .approve: "/api/mobile/v1/suggestions/\(target)/approve"
         case .reject: "/api/mobile/v1/suggestions/\(target)/reject"
         case .task: "/api/mobile/v1/tasks/\(target)/status"
-        case .undoVerder: DoneByVerderModel.undoPath(target)
+        case .undoGrip: DoneByGripModel.undoPath(target)
         case .answer: "/api/mobile/v1/proposals/\(target)/answer"
         }
     }
@@ -68,12 +68,12 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .approve: .approve
         case .reject: .reject
         case .task(let s): .status(s)
-        case .undoVerder: .empty
+        case .undoGrip: .empty
         case .answer(let option, let revision, _): .answer(revision: revision, option: option)
         }
     }
 
-    static func key(verder changeId: String) -> String { "verder:\(changeId)" }
+    static func key(grip changeId: String) -> String { "grip:\(changeId)" }
 
     /// The toast's first word: what happened.
     var verb: String {
@@ -86,7 +86,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .task("dropped"): "Laten vallen"
         case .task("open"): "Weer open"
         case .task(let s): "Status: \(s)"
-        case .undoVerder: "Terug in Kan wachten"
+        case .undoGrip: "Terug in Kan wachten"
         case .answer(_, _, let label): "Beantwoord: \(label)"
         }
     }
@@ -99,7 +99,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .task("done"): "gedaan"
         case .task("dropped"): "laten vallen"
         case .task: "gewijzigd"
-        case .undoVerder: "teruggezet"
+        case .undoGrip: "teruggezet"
         case .answer: "beantwoord"
         }
     }
@@ -110,7 +110,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .approve: "Je goedkeuring"
         case .reject: "Je afwijzing"
         case .task: "Je statuswijziging"
-        case .undoVerder: "Je ongedaan maken"
+        case .undoGrip: "Je ongedaan maken"
         case .answer: "Je antwoord"
         }
     }
@@ -120,7 +120,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .approve: "Goedkeuring intrekken"
         case .reject: "Afwijzing intrekken"
         case .task: "Wijziging intrekken"
-        case .undoVerder: "Intrekken"
+        case .undoGrip: "Intrekken"
         case .answer: "Antwoord intrekken"
         }
     }
@@ -210,7 +210,7 @@ final class InboxDecisions {
 
     /// Rows the list does not draw: held, or posted and not yet refreshed away.
     var hiddenKeys: Set<String> { Set((held + posting).map(\.key)) }
-    var hiddenCount: Int { (held + posting).count { !$0.key.hasPrefix("verder:") } }
+    var hiddenCount: Int { (held + posting).count { !$0.key.hasPrefix("grip:") } }
 
     /// Seconds left in the window, rounded up ("nog 4 s").
     func remaining(at date: Date? = nil) -> Int {
@@ -362,7 +362,7 @@ enum DecisionToast {
         guard let last = held.last else { return nil }
         let lastTitle = short ? (last.short ?? VoorJouList.shortTitle(last.title)) : last.title
         if held.count == 1 {
-            return Content(title: last.verb, body: lastTitle, reviewAll: nil, undoGlyph: last.action == .undoVerder)
+            return Content(title: last.verb, body: lastTitle, reviewAll: nil, undoGlyph: last.action == .undoGrip)
         }
         var counts: [(String, Int)] = []
         for d in held.dropLast() {

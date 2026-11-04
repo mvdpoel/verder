@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 struct DetailWheelTests {
     static func date(_ s: String) -> Date { parseISODate(s)! }

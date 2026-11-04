@@ -140,7 +140,7 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
 /// it (packages/api/src/routers/verder-actions.ts): the document's state
 /// before and after, and whether — and why not — it can be undone. The phone
 /// never decides undoability itself; it shows the server's reason.
-struct VerderAction: Codable, Identifiable, Equatable, Sendable {
+struct GripAction: Codable, Identifiable, Equatable, Sendable {
     struct DocState: Codable, Equatable, Sendable {
         let status: String
         let title: String?
@@ -170,7 +170,7 @@ struct VerderAction: Codable, Identifiable, Equatable, Sendable {
 struct InboxDTO: Codable, Equatable, Sendable {
     let count: Int
     let items: [WaitingItem]
-    let doneByVerder: [VerderAction]
+    let doneByGrip: [GripAction]
     /// When the last item that waited on Martin was dealt with — the calm
     /// card's "jij was klaar · vandaag 08:20". Optional: absent, the card
     /// simply says nothing about when.

@@ -1,6 +1,6 @@
 import AuthenticationServices
 import Testing
-@testable import Verder
+@testable import Grip
 
 @Suite struct PasskeyErrorMappingTests {
     @Test func cancelIsCancelled() {

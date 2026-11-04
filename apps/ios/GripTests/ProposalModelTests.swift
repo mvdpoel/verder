@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// A proposal as `GET /api/mobile/v1/proposals/<id>` serves it
 /// (packages/api/src/routers/proposals.ts `get`).

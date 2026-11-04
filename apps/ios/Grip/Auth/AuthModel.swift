@@ -378,7 +378,7 @@ final class AuthModel {
 
 
     #if DEBUG
-    /// `-fixtures-signin <state>` (Verder/Fixtures): the state a frame draws
+    /// `-fixtures-signin <state>` (Grip/Fixtures): the state a frame draws
     /// that only a failure, a cancel or a gesture reaches. Times are the
     /// frames' 14:02 on the synthetic case's day.
     func fixtureSeed(_ state: FixtureLaunch.SignInState) {

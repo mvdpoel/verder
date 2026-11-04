@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The environment the server stores is the one the SIGNATURE says. A
 /// development token sent to the production APNs host answers

@@ -1,4 +1,4 @@
-// Generates apps/ios/VerderTests/Fixtures/letter-page.jpg: a synthetic stand-in
+// Generates apps/ios/GripTests/Fixtures/letter-page.jpg: a synthetic stand-in
 // for one page as VNDocumentCameraViewController hands it over — already
 // cropped and perspective-corrected, but still carrying what a phone photo of
 // paper carries: uneven lighting, a soft shadow across one side, a fold line,
@@ -14,7 +14,7 @@
 // same macOS. Run from the repo root:
 //
 //   swiftc -O apps/ios/scripts/make-letter-fixture.swift -o /tmp/make-letter-fixture \
-//     && /tmp/make-letter-fixture apps/ios/VerderTests/Fixtures/letter-page.jpg
+//     && /tmp/make-letter-fixture apps/ios/GripTests/Fixtures/letter-page.jpg
 //
 // Kept out of every Xcode target on purpose: scripts/ is not a source path in
 // project.yml, so this file is never compiled into the app or the tests.

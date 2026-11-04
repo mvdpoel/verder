@@ -546,7 +546,7 @@ struct SharedDocument: Transferable {
         }
     }
 
-    static let folder = URL.temporaryDirectory.appending(path: "verder-share", directoryHint: .isDirectory)
+    static let folder = URL.temporaryDirectory.appending(path: "grip-share", directoryHint: .isDirectory)
 
     /// The title as a file name: no path separators, the extension once.
     static func name(_ title: String, ext: String) -> String {

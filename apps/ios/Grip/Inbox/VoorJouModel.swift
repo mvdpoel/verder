@@ -74,7 +74,7 @@ enum VoorJouList {
     }
 
     struct DoneRow: Identifiable, Equatable {
-        let action: VerderAction
+        let action: GripAction
         let amber: Bool
         var id: String { action.id }
     }
@@ -105,7 +105,7 @@ enum VoorJouList {
     /// is never contradicted by the list under it; the next refresh puts the
     /// server's own row in its place.
     static func sections(_ inbox: InboxDTO, hiding hidden: Set<String> = [], expanded: Bool = false,
-                         restoring: [VerderAction] = []) -> [Section] {
+                         restoring: [GripAction] = []) -> [Section] {
         var all = rows(inbox, hiding: hidden)
         for a in restoring {
             let back = Row(item: restoredItem(a), route: .document(id: a.documentId, title: restoredItem(a).title),
@@ -138,18 +138,18 @@ enum VoorJouList {
 
     /// The undoable "Door verder gedaan" actions among `keys` (the held and
     /// posting decisions): the documents on their way back to Kan wachten.
-    static func restoring(_ inbox: InboxDTO, keys: Set<String>) -> [VerderAction] {
-        inbox.doneByVerder.filter { $0.undoable && !$0.undone && keys.contains(ListDecision.key(verder: $0.changeId)) }
+    static func restoring(_ inbox: InboxDTO, keys: Set<String>) -> [GripAction] {
+        inbox.doneByGrip.filter { $0.undoable && !$0.undone && keys.contains(ListDecision.key(grip: $0.changeId)) }
     }
 
     /// The document an undo puts back, as the suggestion it returns as.
-    static func restoredItem(_ a: VerderAction) -> WaitingItem {
+    static func restoredItem(_ a: GripAction) -> WaitingItem {
         WaitingItem(kind: .suggestion, id: "restored:\(a.changeId)", title: a.documentTitle ?? a.after.title ?? "Document",
                     subtitle: "Document", priority: 3, at: a.at, dueAt: nil, verder: false)
     }
 
     /// "Door verder gedaan"'s count, less what is on its way back.
-    static func doneCount(_ inbox: InboxDTO, restored: Int) -> Int { max(0, inbox.doneByVerder.count - restored) }
+    static func doneCount(_ inbox: InboxDTO, restored: Int) -> Int { max(0, inbox.doneByGrip.count - restored) }
 
     /// Selection mode pays off only on a list with several suggestions: with
     /// two, two swipes are quicker than Selecteer · tick · tick · Keur goed
@@ -163,7 +163,7 @@ enum VoorJouList {
     }
 
     static func doneRows(_ inbox: InboxDTO) -> [DoneRow] {
-        inbox.doneByVerder.map { DoneRow(action: $0, amber: false) }
+        inbox.doneByGrip.map { DoneRow(action: $0, amber: false) }
     }
 
     static func kindLabel(_ kind: WaitingKind) -> String {
@@ -461,7 +461,7 @@ enum VoorJouList {
 
 /// "Door verder gedaan" as the list draws it (Figma "voorjou · final"):
 /// a sentence per action, its soort or "hernoemd" and the day underneath.
-enum DoneByVerderList {
+enum DoneByGripList {
     /// The model's English soort vocabulary in the app's Dutch; a soort
     /// Martin typed himself is already Dutch and passes through.
     static func soort(_ docType: String?) -> String? {
@@ -480,7 +480,7 @@ enum DoneByVerderList {
 
     /// "Opgeborgen als bankafschrift: Afschrift september",
     /// "Hernoemd: Scan 2026-10-30 → Brief Gemeente Westerlaan 30 okt".
-    static func title(_ a: VerderAction) -> String {
+    static func title(_ a: GripAction) -> String {
         let doc = a.documentTitle ?? a.after.title ?? "Document"
         switch a.kind {
         case "auto-file":
@@ -492,22 +492,22 @@ enum DoneByVerderList {
             }
             return "Hernoemd: \(doc)"
         default:
-            return "\(DoneByVerderCopy.headline(a)): \(doc)"
+            return "\(DoneByGripCopy.headline(a)): \(doc)"
         }
     }
 
     /// "BANKAFSCHRIFT · 30 OKT" / "HERNOEMD · 30 OKT".
-    static func meta(_ a: VerderAction) -> [String] {
+    static func meta(_ a: GripAction) -> [String] {
         let what = a.kind == "auto-name" ? "hernoemd" : (soort(a.after.docType) ?? "opgeborgen")
         return [what, HomeSummary.day(a.at)]
     }
 
     /// Why there is no undo button, in the list's words.
-    static func note(_ a: VerderAction) -> String? {
+    static func note(_ a: GripAction) -> String? {
         if !a.undone, a.notUndoableReason == "naam staat ook op de NAS" {
             return "Hier niet terug te draaien: de naam staat ook op de NAS. Terugdraaien gaat op de server."
         }
-        return DoneByVerderCopy.note(a)
+        return DoneByGripCopy.note(a)
     }
 
     /// The collapsed section's sentence (and the empty list's).

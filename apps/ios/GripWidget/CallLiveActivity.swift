@@ -5,7 +5,7 @@ import WidgetKit
 /// The call's Live Activity (Added 2026-11-03): started by the app when
 /// Martin taps "Bel" or "Toon tijdens het gesprek", updated on every tick,
 /// ended when CallKit reports the call over. The faces live in
-/// Verder/Widget/CallActivityViews.swift; what they may say is
+/// Grip/Widget/CallActivityViews.swift; what they may say is
 /// `CallActivityFaces` — counts only on the lock screen.
 struct CallLiveActivity: Widget {
     var body: some WidgetConfiguration {

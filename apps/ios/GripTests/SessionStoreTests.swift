@@ -1,13 +1,13 @@
 import Testing
 import Foundation
 import Security
-@testable import Verder
+@testable import Grip
 
 struct SessionStoreTests {
     /// Each run gets its own service so a crashed run cannot leave an item that
     /// makes the next one pass for the wrong reason.
     static func scratchStore() -> KeychainSessionStore {
-        KeychainSessionStore(service: "pro.vanderpoel.verder.session.test-\(UUID().uuidString)")
+        KeychainSessionStore(service: "pro.vanderpoel.grip.session.test-\(UUID().uuidString)")
     }
 
     @Test func keychainRoundTrip() throws {
@@ -34,7 +34,7 @@ struct SessionStoreTests {
     /// would be a group no binary is entitled to.
     @Test func accessGroupIsTheEntitledGroup() throws {
         let group = try #require(KeychainSessionStore.entitledAccessGroup)
-        #expect(group.hasSuffix(".pro.vanderpoel.verder"))
+        #expect(group.hasSuffix(".pro.vanderpoel.grip"))
         #expect(!group.contains("$("))
     }
 

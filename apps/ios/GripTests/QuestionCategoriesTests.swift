@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UserNotifications
-@testable import Verder
+@testable import Grip
 
 /// The per-question categories the notification service extension registers
 /// (`q.<proposal id>`), and the merge that keeps Plan 2's static set alive:
@@ -9,7 +9,7 @@ import UserNotifications
 /// never write its own category alone.
 struct QuestionCategoriesTests {
     static let id = "6f9619ff-8b86-d011-b42d-00c04fc964ff"
-    static let link = "verder://proposal/6f9619ff-8b86-d011-b42d-00c04fc964ff"
+    static let link = "grip://proposal/6f9619ff-8b86-d011-b42d-00c04fc964ff"
 
     static func q(_ n: Int) -> UNNotificationCategory {
         QuestionCategories.make(proposalId: String(format: "00000000-0000-0000-0000-%012d", n), options: ["Ja", "Nee"])
@@ -107,7 +107,7 @@ struct QuestionCategoriesTests {
 
     @Test func questionIsReadFromAQuestionPush() throws {
         let q = try #require(QuestionCategories.Question(userInfo: [
-            "link": "verder://proposal/6F9619FF-8B86-D011-B42D-00C04FC964FF",
+            "link": "grip://proposal/6F9619FF-8B86-D011-B42D-00C04FC964FF",
             "options": ["Klaar", "Niets doen"], "revision": 4,
         ]))
         #expect(q.proposalId == Self.id)
@@ -128,8 +128,8 @@ struct QuestionCategoriesTests {
         #"{"link":"LINK","options":[1,2],"revision":1}"#,
         #"{"link":"LINK","options":"Ja","revision":1}"#,
         // not a proposal
-        #"{"link":"verder://inbox","options":["Ja"],"revision":1}"#,
-        #"{"link":"verder://document/6f9619ff-8b86-d011-b42d-00c04fc964ff","options":["Ja"],"revision":1}"#,
+        #"{"link":"grip://inbox","options":["Ja"],"revision":1}"#,
+        #"{"link":"grip://document/6f9619ff-8b86-d011-b42d-00c04fc964ff","options":["Ja"],"revision":1}"#,
         #"{"link":"LINK/x","options":["Ja"],"revision":1}"#,
         #"{"link":"LINK?x=1","options":["Ja"],"revision":1}"#,
         #"{"link":"https://proposal/6f9619ff-8b86-d011-b42d-00c04fc964ff","options":["Ja"],"revision":1}"#,
@@ -143,13 +143,13 @@ struct QuestionCategoriesTests {
 
     /// The control for the table above: the same JSON path accepts a real one.
     @Test func aJSONQuestionIsAQuestion() throws {
-        let data = Data(#"{"link":"verder://proposal/6f9619ff-8b86-d011-b42d-00c04fc964ff","options":["Ja","Nee"],"revision":3}"#.utf8)
+        let data = Data(#"{"link":"grip://proposal/6f9619ff-8b86-d011-b42d-00c04fc964ff","options":["Ja","Nee"],"revision":3}"#.utf8)
         let parsed = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(QuestionCategories.Question(userInfo: parsed)?.revision == 3)
     }
 
     @Test func revisionMustBeAnIntegerNotABool() {
-        let userInfo: [AnyHashable: Any] = ["link": "verder://proposal/\(Self.id)", "options": ["Ja"],
+        let userInfo: [AnyHashable: Any] = ["link": "grip://proposal/\(Self.id)", "options": ["Ja"],
                                             "revision": NSNumber(value: true)]
         #expect(QuestionCategories.Question(userInfo: userInfo) == nil)
     }

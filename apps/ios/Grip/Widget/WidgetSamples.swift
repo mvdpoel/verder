@@ -54,8 +54,8 @@ enum WidgetSamples {
         count: 4, topTitle: nil, topKind: nil, headline: headline,
         updatedAt: at(day: 31, month: 10, hour: 14, minute: 2), items: few.items, oldestAt: few.oldestAt)
 
-    static func entry(_ snapshot: WidgetSnapshot?, signedOut: Bool = false) -> VerderEntry {
-        VerderEntry(date: today, snapshot: snapshot, signedOut: signedOut)
+    static func entry(_ snapshot: WidgetSnapshot?, signedOut: Bool = false) -> GripEntry {
+        GripEntry(date: today, snapshot: snapshot, signedOut: signedOut)
     }
 }
 #endif

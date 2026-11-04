@@ -138,20 +138,20 @@
           "title": "Loonstroken en polissen sturen naar Team Startdossier",
           "status": "open",
           "dueAt": "2026-10-30T16:00:00.000Z",
-          "link": "verder://task/00000000-f1c5-4000-8000-300000000011"
+          "link": "grip://task/00000000-f1c5-4000-8000-300000000011"
         },
         "documents": [
           {
             "id": "00000000-f1c5-4000-8000-200000000104",
             "title": "Loonstrook 2026-10",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000104"
           },
           {
             "id": "00000000-f1c5-4000-8000-200000000303",
             "title": "Polis Duinzorg 2026",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000303"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000303"
           }
         ],
         "email": null
@@ -198,7 +198,7 @@
             "id": "00000000-f1c5-4000-8000-200000000307",
             "title": "Brief Gemeente Westerlaan 30 okt",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000307"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000307"
           }
         ],
         "email": null
@@ -245,7 +245,7 @@
             "id": "00000000-f1c5-4000-8000-200000000106",
             "title": "Sommatie Kade & Partners 14 okt",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000106"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000106"
           }
         ],
         "email": {
@@ -391,7 +391,7 @@
             "id": "00000000-f1c5-4000-8000-200000000300",
             "title": "Beschikking Rechtbank Westerlaan",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000300"
           }
         ],
         "email": null
@@ -418,7 +418,7 @@
             "id": "00000000-f1c5-4000-8000-200000000300",
             "title": "Beschikking Rechtbank Westerlaan",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000300"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000300"
           }
         ],
         "email": null
@@ -470,7 +470,7 @@
             "id": "00000000-f1c5-4000-8000-200000000310",
             "title": "Bevestiging aanmelding Noordkust",
             "mime": "application/pdf",
-            "link": "verder://document/00000000-f1c5-4000-8000-200000000310"
+            "link": "grip://document/00000000-f1c5-4000-8000-200000000310"
           }
         ],
         "email": null

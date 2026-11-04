@@ -10,7 +10,7 @@ import SwiftUI
 /// on Martin. Ticked points turn steel (done).
 struct CallPrepSheet: View {
     let session: CallSession
-    /// A source link (`verder://task/<id>`, `verder://dossier`, …): the sheet
+    /// A source link (`grip://task/<id>`, `grip://dossier`, …): the sheet
     /// steps aside and the link lands where a push's would.
     let open: (String) -> Void
 

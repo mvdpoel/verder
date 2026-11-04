@@ -144,9 +144,9 @@ enum CallCopy {
     static func link(type: String, id: String) -> String {
         switch type {
         case "task", "proposal", "document":
-            UUID(uuidString: id) == nil ? "verder://dossier" : "verder://\(type)/\(id.lowercased())"
-        case "stop": "verder://timeline"
-        default: "verder://dossier"
+            UUID(uuidString: id) == nil ? "grip://dossier" : "grip://\(type)/\(id.lowercased())"
+        case "stop": "grip://timeline"
+        default: "grip://dossier"
         }
     }
 

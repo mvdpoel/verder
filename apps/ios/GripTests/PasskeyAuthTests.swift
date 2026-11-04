@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The two-request ceremonies against a stub server, with the Face ID step
 /// replaced by a fake. What these pin is the part the server cannot forgive:
@@ -14,9 +14,9 @@ struct PasskeyAuthTests {
         "__Secure-better-auth.better-auth-passkey=vtok.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmUtc2lnbmF0dXI%3D"
     nonisolated static let sessionSetCookie =
         "__Secure-better-auth.session_token=stok.sig; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax"
-    nonisolated static let authOptions = Data(#"{"rpId":"verder.vanderpoel.pro","challenge":"Zm9v","userVerification":"preferred"}"#.utf8)
+    nonisolated static let authOptions = Data(#"{"rpId":"grip.vanderpoel.pro","challenge":"Zm9v","userVerification":"preferred"}"#.utf8)
     nonisolated static let registerOptions = Data(#"""
-    {"challenge":"Zm9v","rp":{"name":"Verder","id":"verder.vanderpoel.pro"},
+    {"challenge":"Zm9v","rp":{"name":"Grip","id":"grip.vanderpoel.pro"},
      "user":{"id":"Zg","name":"martin@vanderpoel.pro","displayName":"martin@vanderpoel.pro"},
      "excludeCredentials":[]}
     """#.utf8)
@@ -79,7 +79,7 @@ struct PasskeyAuthTests {
         #expect(response["type"] as? String == "public-key")
 
         #expect(fake.assertions.first?.challenge == Data("foo".utf8))
-        #expect(fake.assertions.first?.rpID == "verder.vanderpoel.pro")
+        #expect(fake.assertions.first?.rpID == "grip.vanderpoel.pro")
         #expect(store.load()?.value == "stok.sig")
     }
 
@@ -195,7 +195,7 @@ struct PasskeyAuthTests {
 @MainActor
 struct AuthModelPasskeyTests {
     static func defaults() -> UserDefaults {
-        UserDefaults(suiteName: "verder.tests.\(UUID().uuidString)")!
+        UserDefaults(suiteName: "grip.tests.\(UUID().uuidString)")!
     }
 
     @Test func passkeySignInSignsIn() async {

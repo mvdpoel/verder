@@ -249,7 +249,7 @@ enum MoreMenu {
     }
 
     static func weekly(_ dto: WeeklyDTO) -> State.WeeklyLine {
-        .loaded(week: weekNumber(dto.week), sent: dto.sent, filed: dto.filedByMartin + dto.filedByVerder)
+        .loaded(week: weekNumber(dto.week), sent: dto.sent, filed: dto.filedByMartin + dto.filedByGrip)
     }
 }
 
@@ -624,7 +624,7 @@ struct AboutInfo: Equatable {
     let build: String?
 
     /// `server` is the host shown, which a fixture run sets to the frames'
-    /// "verder.example" (`FixtureEnvironment.displayServer`).
+    /// "grip.example" (`FixtureEnvironment.displayServer`).
     init(info: [String: Any], server: URL) {
         version = info["CFBundleShortVersionString"] as? String
         build = info["CFBundleVersion"] as? String
@@ -640,7 +640,7 @@ struct AboutInfo: Equatable {
     }
 
     /// A host that may wrap breaks only after a dot, never inside a label:
-    /// "voorjou-few." / "fixtures." / "verder.invalid".
+    /// "voorjou-few." / "fixtures." / "grip.invalid".
     static func breakableHost(_ host: String) -> String {
         host.replacingOccurrences(of: ".", with: ".\u{200B}").replacingOccurrences(of: "-", with: "-\u{2060}")
     }

@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Morgen: bijstand tekenen",
@@ -10,5 +10,5 @@
     "badge": 4,
     "sound": "default"
   },
-  "link": "verder://task/00000000-f1c5-4000-8000-000000000004"
+  "link": "grip://task/00000000-f1c5-4000-8000-000000000004"
 }

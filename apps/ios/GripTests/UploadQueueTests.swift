@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// A fresh queue directory per test, so the tests run in parallel.
 func scratchDir() throws -> URL {

@@ -1,6 +1,6 @@
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// A URLProtocol that answers from a per-HOST table, so Swift Testing can run
 /// the network tests in parallel: every test invents its own host

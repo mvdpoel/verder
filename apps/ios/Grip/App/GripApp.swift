@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct VerderApp: App {
+struct GripApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var auth: AuthModel
     @State private var lock: AppLock
@@ -35,7 +35,7 @@ struct VerderApp: App {
     init() {
         #if DEBUG
         // `-fixtures <name>`: the same stores on the synthetic dataset, no
-        // server (Verder/Fixtures). Compiled out of Release.
+        // server (Grip/Fixtures). Compiled out of Release.
         if let launch = FixtureLaunch.current {
             self.init(services: FixtureEnvironment.services(for: launch))
             return

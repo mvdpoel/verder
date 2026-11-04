@@ -2,11 +2,11 @@ import Foundation
 import Observation
 
 /// Where a tapped notification leads, parsed from the push payload's `link`
-/// (`verder://proposal/<uuid>`, `verder://suggestion/<uuid>`,
-/// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`,
-/// `verder://weekly`, `verder://voice`, `verder://done-by-verder`,
-/// `verder://dossier`, `verder://timeline`, `verder://overzicht`, `verder://money`,
-/// `verder://call`).
+/// (`grip://proposal/<uuid>`, `grip://suggestion/<uuid>`,
+/// `grip://task/<uuid>`, `grip://document/<uuid>`, `grip://inbox`,
+/// `grip://weekly`, `grip://voice`, `grip://done-by-grip`,
+/// `grip://dossier`, `grip://timeline`, `grip://overzicht`, `grip://money`,
+/// `grip://call`).
 ///
 /// EVERY CASE BUT `.none` HAS A `destination` — a tab, a stack or the voice
 /// sheet — and `LinkDestinationTests` checks that every link the worker and
@@ -15,7 +15,12 @@ import Observation
 /// The payload comes off the wire, so the parse is strict: exactly the scheme,
 /// a known host, no user, port, query or fragment, and exactly one UUID path
 /// segment where one is expected. Anything else is `.none` — never a crash,
-/// never a guess. The app registers NO `verder://` URL scheme: these links
+/// never a guess. `grip://` is the scheme the app EMITS (widgets, the Live
+/// Activity) and the server sends; `verder://` — the app's name before the
+/// rename to Grip — is still ACCEPTED, with `done-by-verder` beside
+/// `done-by-grip`, because links already on the phone (delivered pushes,
+/// widget timelines written by the old build) carry it (`acceptedSchemes`).
+/// The app registers NO URL scheme: these links
 /// arrive only inside a push, or from verder's own widget (`widgetURL`, which
 /// reaches `RootView.onOpenURL` without a registered scheme), so no web page
 /// or other app can fire one.
@@ -25,30 +30,30 @@ enum DeepLink: Equatable, Sendable {
     case task(UUID)
     case document(UUID)
     case inbox
-    /// `verder://voice`: the voice quick-log (the home screen quick action,
+    /// `grip://voice`: the voice quick-log (the home screen quick action,
     /// plan 3 Task 25). A sheet over whatever tab is showing, never a tab.
     case voice
-    /// `verder://weekly`: the Weekoverzicht (plan 3 Task 26), on Meer. The
-    /// Sunday push itself carries `verder://inbox`; `NotificationRouter`
+    /// `grip://weekly`: the Weekoverzicht (plan 3 Task 26), on Meer. The
+    /// Sunday push itself carries `grip://inbox`; `NotificationRouter`
     /// sends a tap on its `WEEKLY` category here.
     case weekly
-    /// `verder://done-by-verder`: "Door verder gedaan" on Voor jou — what
+    /// `grip://done-by-grip`: "Door verder gedaan" on Voor jou — what
     /// verder filed or renamed by itself (Overzicht's card, the daily digest).
-    case doneByVerder
-    /// `verder://dossier`: the Dossier tab at its root (a link-less filing
+    case doneByGrip
+    /// `grip://dossier`: the Dossier tab at its root (a link-less filing
     /// push: a merged duplex scan, a new loonstrook).
     case dossier
-    /// `verder://timeline`: the Tijdlijn (the case map) on Dossier.
+    /// `grip://timeline`: the Tijdlijn (the case map) on Dossier.
     case timeline
-    /// `verder://overzicht`: the Overzicht tab (a link-less system push).
+    /// `grip://overzicht`: the Overzicht tab (a link-less system push).
     case overzicht
-    /// `verder://money`: Geld, on Meer.
+    /// `grip://money`: Geld, on Meer.
     case money
-    /// `verder://scan`: the camera on Scan, at once — the home screen quick
+    /// `grip://scan`: the camera on Scan, at once — the home screen quick
     /// action, the Control Center control and the Action button (R20). Scan
     /// is not lock-gated, so it opens without Face ID.
     case scan
-    /// `verder://call`: the call sheet in progress — the tap on the call's
+    /// `grip://call`: the call sheet in progress — the tap on the call's
     /// Live Activity (`CallActivityFaces.url`). A sheet, never a tab; with no
     /// call in progress it opens nothing more than the app.
     case call
@@ -59,9 +64,14 @@ enum DeepLink: Equatable, Sendable {
         self = Self.parse(link)
     }
 
+    /// The scheme the app emits.
+    static let scheme = "grip"
+    /// Every scheme `parse` accepts: `scheme` plus the pre-rename `verder`.
+    static let acceptedSchemes: Set<String> = [scheme, "verder"]
+
     static func parse(_ link: String) -> DeepLink {
         guard let parts = URLComponents(string: link),
-              parts.scheme == "verder",
+              let scheme = parts.scheme, acceptedSchemes.contains(scheme),
               parts.user == nil, parts.password == nil, parts.port == nil,
               parts.query == nil, parts.fragment == nil,
               let host = parts.host
@@ -75,8 +85,8 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .voice : .none
         case "weekly":
             return parts.path.isEmpty ? .weekly : .none
-        case "done-by-verder":
-            return parts.path.isEmpty ? .doneByVerder : .none
+        case "done-by-grip", "done-by-verder":
+            return parts.path.isEmpty ? .doneByGrip : .none
         case "dossier":
             return parts.path.isEmpty ? .dossier : .none
         case "timeline":
@@ -116,7 +126,7 @@ enum DeepLink: Equatable, Sendable {
         case .suggestion(let id): LinkDestination(tab: .voorJou, stack: .inbox([.suggestion(id.lowerString)]))
         case .task(let id): LinkDestination(tab: .voorJou, stack: .inbox([.task(id.lowerString)]))
         case .inbox: LinkDestination(tab: .voorJou, stack: .inbox([]))
-        case .doneByVerder: LinkDestination(tab: .voorJou, stack: .inbox([.doneByVerder]))
+        case .doneByGrip: LinkDestination(tab: .voorJou, stack: .inbox([.doneByGrip]))
         case .document(let id): LinkDestination(tab: .dossier, stack: .dossier([.document(id: id.lowerString, title: nil)]))
         case .dossier: LinkDestination(tab: .dossier, stack: .dossier([]))
         case .timeline: LinkDestination(tab: .dossier, stack: .dossier([.timeline]))

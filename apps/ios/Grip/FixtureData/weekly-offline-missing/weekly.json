@@ -5,7 +5,7 @@
   "sent": 1,
   "received": 9,
   "filedByMartin": 2,
-  "filedByVerder": 2,
+  "filedByGrip": 2,
   "tasksDone": 2,
   "waiting": 6,
   "topWaiting": [
@@ -46,7 +46,7 @@
       "sent": 2,
       "received": 6,
       "filedByMartin": 1,
-      "filedByVerder": 1,
+      "filedByGrip": 1,
       "tasksDone": 1,
       "waiting": 4
     },
@@ -55,7 +55,7 @@
       "sent": 1,
       "received": 5,
       "filedByMartin": 1,
-      "filedByVerder": 0,
+      "filedByGrip": 0,
       "tasksDone": 1,
       "waiting": 3
     },
@@ -64,7 +64,7 @@
       "sent": 2,
       "received": 8,
       "filedByMartin": 2,
-      "filedByVerder": 1,
+      "filedByGrip": 1,
       "tasksDone": 2,
       "waiting": 4
     },
@@ -73,7 +73,7 @@
       "sent": 1,
       "received": 6,
       "filedByMartin": 2,
-      "filedByVerder": 1,
+      "filedByGrip": 1,
       "tasksDone": 1,
       "waiting": 5
     },
@@ -82,7 +82,7 @@
       "sent": 2,
       "received": 7,
       "filedByMartin": 1,
-      "filedByVerder": 2,
+      "filedByGrip": 2,
       "tasksDone": 2,
       "waiting": 5
     },
@@ -91,7 +91,7 @@
       "sent": 3,
       "received": 10,
       "filedByMartin": 2,
-      "filedByVerder": 1,
+      "filedByGrip": 1,
       "tasksDone": 2,
       "waiting": 4
     },
@@ -100,10 +100,10 @@
       "sent": 1,
       "received": 6,
       "filedByMartin": 1,
-      "filedByVerder": 2,
+      "filedByGrip": 2,
       "tasksDone": 2,
       "waiting": 7
     }
   ],
-  "renamedByVerder": 0
+  "renamedByGrip": 0
 }

@@ -1,4 +1,4 @@
-name: Verder
+name: Grip
 options:
   bundleIdPrefix: pro.vanderpoel
   deploymentTarget:
@@ -16,23 +16,23 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_STRICT_CONCURRENCY: complete
 targets:
-  Verder:
+  Grip:
     type: application
     platform: iOS
     sources:
-      - path: Verder
+      - path: Grip
         excludes:
           - Info.plist
-          - Verder.entitlements
+          - Grip.entitlements
           - FixtureData
       # The synthetic dataset behind the DEBUG `-fixtures <name>` launch
-      # argument (Verder/Fixtures). A folder reference, so its tree arrives in
+      # argument (Grip/Fixtures). A folder reference, so its tree arrives in
       # the bundle as-is; excluded from Release below, with the Swift that reads it.
-      - path: Verder/FixtureData
+      - path: Grip/FixtureData
         type: folder
         buildPhase: resources
     info:
-      path: Verder/Info.plist
+      path: Grip/Info.plist
       properties:
         CFBundleDisplayName: verder
         CFBundleShortVersionString: "0.1"
@@ -55,21 +55,21 @@ targets:
         NSSpeechRecognitionUsageDescription: "verder zet je opname op je telefoon om in tekst."
         # Long-press the icon. Handled by App/QuickAction.swift.
         UIApplicationShortcutItems:
-          - UIApplicationShortcutItemType: pro.vanderpoel.verder.scan
+          - UIApplicationShortcutItemType: pro.vanderpoel.grip.scan
             UIApplicationShortcutItemTitle: "Scan een brief"
             UIApplicationShortcutItemIconSymbolName: doc.text.viewfinder
-          - UIApplicationShortcutItemType: pro.vanderpoel.verder.voice
+          - UIApplicationShortcutItemType: pro.vanderpoel.grip.voice
             UIApplicationShortcutItemTitle: "Gesprek vastleggen"
             UIApplicationShortcutItemIconSymbolName: mic
         UIBackgroundModes: [remote-notification]
-        # The call sheet's Live Activity (Call/, drawn by VerderWidget):
+        # The call sheet's Live Activity (Call/, drawn by GripWidget):
         # counts only on the lock screen — see Shared/CallActivity.swift.
         NSSupportsLiveActivities: true
         # The keychain-access-groups entitlement below, resolved by the same
         # build setting, so KeychainSessionStore names the group it is entitled to.
-        VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
+        GripKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.grip
     entitlements:
-      path: Verder/Verder.entitlements
+      path: Grip/Grip.entitlements
       properties:
         # Development-signed builds talk to the APNs SANDBOX; the environment
         # the server stores is read from the embedded profile at runtime
@@ -77,22 +77,22 @@ targets:
         aps-environment: development
         com.apple.developer.usernotifications.time-sensitive: true
         com.apple.developer.associated-domains:
-          - webcredentials:verder.vanderpoel.pro?mode=developer
+          - webcredentials:grip.vanderpoel.pro?mode=developer
         com.apple.security.application-groups:
-          - group.pro.vanderpoel.verder
+          - group.pro.vanderpoel.grip
         keychain-access-groups:
-          - $(AppIdentifierPrefix)pro.vanderpoel.verder
+          - $(AppIdentifierPrefix)pro.vanderpoel.grip
     dependencies:
       # Embedded in the app (the default for an app-extension dependency).
-      - target: VerderNotify
-      - target: VerderShare
-      - target: VerderWidget
+      - target: GripNotify
+      - target: GripShare
+      - target: GripWidget
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: "1"
-        PRODUCT_NAME: Verder
+        PRODUCT_NAME: Grip
       configs:
         # Fixtures never ship: the files are `#if DEBUG` AND left out of the
         # Release build entirely (FixtureIsolationTests pins both, and
@@ -101,20 +101,20 @@ targets:
           EXCLUDED_SOURCE_FILE_NAMES: "FixtureData Fixture*.swift"
   # The notification service extension: turns a question push's options into
   # answer buttons (a per-question `q.<id>` category) before it is shown. A
-  # fourth target beyond spec §7's three — see VerderNotify/NotificationService.swift.
-  VerderNotify:
+  # fourth target beyond spec §7's three — see GripNotify/NotificationService.swift.
+  GripNotify:
     type: app-extension
     platform: iOS
     sources:
-      - path: VerderNotify
+      - path: GripNotify
         excludes:
           - Info.plist
-          - VerderNotify.entitlements
-      - path: Verder/Push/NotificationCategories.swift
-      - path: Verder/Push/QuestionCategories.swift
-      - path: Verder/Shared/AppGroup.swift
+          - GripNotify.entitlements
+      - path: Grip/Push/NotificationCategories.swift
+      - path: Grip/Push/QuestionCategories.swift
+      - path: Grip/Shared/AppGroup.swift
     info:
-      path: VerderNotify/Info.plist
+      path: GripNotify/Info.plist
       properties:
         CFBundleDisplayName: verder
         CFBundleShortVersionString: "0.1"
@@ -123,48 +123,48 @@ targets:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
     entitlements:
-      path: VerderNotify/VerderNotify.entitlements
+      path: GripNotify/GripNotify.entitlements
       properties:
         # For push/q-order.json, the order of the registered question categories.
         com.apple.security.application-groups:
-          - group.pro.vanderpoel.verder
+          - group.pro.vanderpoel.grip
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.notify
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip.notify
         CURRENT_PROJECT_VERSION: "1"
-        PRODUCT_NAME: VerderNotify
+        PRODUCT_NAME: GripNotify
   # The share extension (spec §7.8, plan 3 Task 22): PDFs, photos and files
   # from any app become an IncomingDrop in the App Group, which the app imports
   # into its upload queue. It never writes the queue itself.
-  VerderShare:
+  GripShare:
     type: app-extension
     platform: iOS
     sources:
-      - path: VerderShare
+      - path: GripShare
         excludes:
           - Info.plist
-          - VerderShare.entitlements
-      - path: Verder/Shared/AppGroup.swift
-      - path: Verder/Upload/IncomingDrop.swift
-      - path: Verder/Upload/UploadItem.swift
-      - path: Verder/Upload/UploadRequest.swift
-      - path: Verder/Upload/Multipart.swift
-      - path: Verder/Upload/ShareSender.swift
-      - path: Verder/Upload/SharePreparation.swift
-      - path: Verder/Upload/ShareModel.swift
-      - path: Verder/Upload/ShareView.swift
-      - path: Verder/Scan/PDFAssembler.swift
-      - path: Verder/Scan/PageCleaner.swift
-      - path: Verder/Scan/ScanNaming.swift
-      - path: Verder/Net/APIClient.swift
-      - path: Verder/Net/APIError.swift
-      - path: Verder/Auth/SessionStore.swift
-      - path: Verder/Theme/Tokens.swift
-      - path: Verder/Theme/Fonts.swift
-      - path: Verder/Resources/Fonts
+          - GripShare.entitlements
+      - path: Grip/Shared/AppGroup.swift
+      - path: Grip/Upload/IncomingDrop.swift
+      - path: Grip/Upload/UploadItem.swift
+      - path: Grip/Upload/UploadRequest.swift
+      - path: Grip/Upload/Multipart.swift
+      - path: Grip/Upload/ShareSender.swift
+      - path: Grip/Upload/SharePreparation.swift
+      - path: Grip/Upload/ShareModel.swift
+      - path: Grip/Upload/ShareView.swift
+      - path: Grip/Scan/PDFAssembler.swift
+      - path: Grip/Scan/PageCleaner.swift
+      - path: Grip/Scan/ScanNaming.swift
+      - path: Grip/Net/APIClient.swift
+      - path: Grip/Net/APIError.swift
+      - path: Grip/Auth/SessionStore.swift
+      - path: Grip/Theme/Tokens.swift
+      - path: Grip/Theme/Fonts.swift
+      - path: Grip/Resources/Fonts
         buildPhase: resources
     info:
-      path: VerderShare/Info.plist
+      path: GripShare/Info.plist
       properties:
         CFBundleDisplayName: verder
         CFBundleShortVersionString: "0.1"
@@ -176,7 +176,7 @@ targets:
           - IBMPlexMono-SemiBold.ttf
         # KeychainSessionStore reads this from Bundle.main — which, in the
         # extension, is THIS Info.plist, not the app's.
-        VerderKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.verder
+        GripKeychainAccessGroup: $(AppIdentifierPrefix)pro.vanderpoel.grip
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -194,43 +194,43 @@ targets:
               NSExtensionActivationSupportsImageWithMaxCount: 50
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
     entitlements:
-      path: VerderShare/VerderShare.entitlements
+      path: GripShare/GripShare.entitlements
       properties:
         # uploads/incoming/, beside the app's queue.
         com.apple.security.application-groups:
-          - group.pro.vanderpoel.verder
+          - group.pro.vanderpoel.grip
         # The app's session cookie, for the one foreground upload attempt.
         keychain-access-groups:
-          - $(AppIdentifierPrefix)pro.vanderpoel.verder
+          - $(AppIdentifierPrefix)pro.vanderpoel.grip
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.share
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip.share
         CURRENT_PROJECT_VERSION: "1"
-        PRODUCT_NAME: VerderShare
+        PRODUCT_NAME: GripShare
   # The home- and lock-screen widget (plan 3 Task 23): reads the App Group
   # snapshot (widget/snapshot.json) and nothing else — no network, no session.
-  # Its model and faces live in Verder/Widget, compiled into the app too, so
+  # Its model and faces live in Grip/Widget, compiled into the app too, so
   # the unit tests (hosted in the app) render them.
-  VerderWidget:
+  GripWidget:
     type: app-extension
     platform: iOS
     sources:
-      - path: VerderWidget
+      - path: GripWidget
         excludes:
           - Info.plist
-          - VerderWidget.entitlements
-      - path: Verder/Widget
-      - path: Verder/Shared/CallActivity.swift
-      - path: Verder/Shared/ScanLetterIntent.swift
-      - path: Verder/Shared/WidgetSnapshot.swift
-      - path: Verder/Shared/AppGroup.swift
-      - path: Verder/Shared/KindLabel.swift
-      - path: Verder/Theme/Tokens.swift
-      - path: Verder/Theme/Fonts.swift
-      - path: Verder/Resources/Fonts
+          - GripWidget.entitlements
+      - path: Grip/Widget
+      - path: Grip/Shared/CallActivity.swift
+      - path: Grip/Shared/ScanLetterIntent.swift
+      - path: Grip/Shared/WidgetSnapshot.swift
+      - path: Grip/Shared/AppGroup.swift
+      - path: Grip/Shared/KindLabel.swift
+      - path: Grip/Theme/Tokens.swift
+      - path: Grip/Theme/Fonts.swift
+      - path: Grip/Resources/Fonts
         buildPhase: resources
     info:
-      path: VerderWidget/Info.plist
+      path: GripWidget/Info.plist
       properties:
         CFBundleDisplayName: verder
         CFBundleShortVersionString: "0.1"
@@ -244,52 +244,52 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: VerderWidget/VerderWidget.entitlements
+      path: GripWidget/GripWidget.entitlements
       properties:
         # widget/snapshot.json, written by the app.
         com.apple.security.application-groups:
-          - group.pro.vanderpoel.verder
+          - group.pro.vanderpoel.grip
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.widget
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip.widget
         CURRENT_PROJECT_VERSION: "1"
-        PRODUCT_NAME: VerderWidget
-  VerderTests:
+        PRODUCT_NAME: GripWidget
+  GripTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [VerderTests]
+    sources: [GripTests]
     dependencies:
-      - target: Verder
+      - target: Grip
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.tests
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip.tests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Verder.app/Verder
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Grip.app/Grip
         BUNDLE_LOADER: $(TEST_HOST)
   # scripts/capture.sh --press: a long press only a UI test can make. Its
-  # own scheme below, so the Verder test action never runs it.
-  VerderCapture:
+  # own scheme below, so the Grip test action never runs it.
+  GripCapture:
     type: bundle.ui-testing
     platform: iOS
-    sources: [VerderCapture]
+    sources: [GripCapture]
     dependencies:
-      - target: Verder
+      - target: Grip
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.verder.capture
+        PRODUCT_BUNDLE_IDENTIFIER: pro.vanderpoel.grip.capture
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Verder
+        TEST_TARGET_NAME: Grip
 schemes:
-  VerderCapture:
+  GripCapture:
     build:
       targets:
-        VerderCapture: [test]
+        GripCapture: [test]
     test:
-      targets: [VerderCapture]
-  Verder:
+      targets: [GripCapture]
+  Grip:
     build:
       targets:
-        Verder: all
-        VerderTests: [test]
+        Grip: all
+        GripTests: [test]
     test:
-      targets: [VerderTests]
+      targets: [GripTests]

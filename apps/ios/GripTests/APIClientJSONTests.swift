@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 struct APIClientJSONTests {
     struct Echo: Codable, Equatable { let name: String; let at: Date }

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// Plan 3 Task 19: money is integer cents end to end; the phone formats it
 /// and never does arithmetic in floating point.

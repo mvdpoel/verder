@@ -124,8 +124,8 @@ final class NotificationRouter {
 
     /// "Gedaan" on a deadline push: `POST /api/mobile/v1/tasks/<id>/status
     /// { status: "done" }`, the route the task screen uses. The push names the
-    /// task in its link (`verder://task/<id>`); one that does not (an older
-    /// push, `verder://inbox`) has nothing to mark, so it opens instead.
+    /// task in its link (`grip://task/<id>`); one that does not (an older
+    /// push, `grip://inbox`) has nothing to mark, so it opens instead.
     /// Never retried on its own: a notice says what happened, and where a
     /// second try is the next step it carries Gedaan again.
     private func markDone(userInfo: [AnyHashable: Any], title: String,
@@ -171,9 +171,9 @@ final class NotificationRouter {
     /// What a tap OPENS. The push's own link, except where its category
     /// knows better:
     /// - the Sunday summary (`WEEKLY`) opens the Weekoverzicht, whatever its
-    ///   link says (the worker sends `verder://inbox`);
+    ///   link says (the worker sends `grip://inbox`);
     /// - the daily "Door verder gedaan" digest is the one `FILING` push that
-    ///   carries `verder://inbox`, and opens that section;
+    ///   carries `grip://inbox`, and opens that section;
     /// - a push with NO usable link (a merged duplex scan, a new loonstrook,
     ///   the watchdog's "hersteld") opens its category's place
     ///   (`fallback`), never nothing.
@@ -183,7 +183,7 @@ final class NotificationRouter {
         guard action == UNNotificationDefaultActionIdentifier || action == NotificationCategories.openAction
         else { return link }
         if category == weeklyCategory { return .weekly }
-        if category == filingCategory, link == .inbox { return .doneByVerder }
+        if category == filingCategory, link == .inbox { return .doneByGrip }
         return link == .none ? fallback(category: category) : link
     }
 

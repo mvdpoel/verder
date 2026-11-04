@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The DEBUG fixtures (`-fixtures <name>`): every fixture decodes into the
 /// app's REAL DTOs, the money in them reconciles the way /money's does, the
@@ -240,7 +240,7 @@ struct FixtureTests {
         #expect(inbox.items.map(\.id) == [Self.reply, Self.question, Self.suggestion, Self.task])
         #expect(inbox.items.map(\.kind) == [.proposal, .question, .suggestion, .task])
         #expect(inbox.items[0].verder)
-        #expect(inbox.doneByVerder.count == 3)
+        #expect(inbox.doneByGrip.count == 3)
         let summary = try Self.decode(DashboardSummaryDTO.self, "voorjou-few", "dashboard/summary")
         #expect(summary.headline?.stopTitle == "Stukken aanleveren bij Team Startdossier")
         #expect(summary.tasks == .init(openCount: 6, overdueCount: 1, waitingOnOthersCount: 2))
@@ -273,7 +273,7 @@ struct FixtureTests {
 
     @Test func emptyHasNothingAndNoWeeklySummaryYet() throws {
         let inbox = try Self.decode(InboxDTO.self, "empty", "inbox")
-        #expect(inbox.count == 0 && inbox.items.isEmpty && inbox.doneByVerder.isEmpty)
+        #expect(inbox.count == 0 && inbox.items.isEmpty && inbox.doneByGrip.isEmpty)
         #expect(try Self.server("empty").reply(method: "GET", path: "/api/mobile/v1/weekly")
                 == FixtureServer.error(404, "fixture status"))
     }
@@ -310,7 +310,7 @@ struct FixtureTests {
 
     @Test func calmAndOneItemAreTheOverzichtFrames() throws {
         let calm = try Self.decode(InboxDTO.self, "calm", "inbox")
-        #expect(calm.count == 0 && calm.doneByVerder.count == 3)
+        #expect(calm.count == 0 && calm.doneByGrip.count == 3)
         #expect(calm.lastClearedAt == ISO8601DateFormatter().date(from: "2026-11-01T07:20:00Z"),
                 "the calm card's 'jij was klaar · vandaag 08:20'")
         #expect(try Self.decode(DashboardSummaryDTO.self, "calm", "dashboard/summary").tasks
@@ -466,13 +466,13 @@ struct FixtureTests {
         }
 
         let weekly = try Self.object("weekly", "weekly")
-        // `history` and `renamedByVerder` are the two fields the "weekly ·
+        // `history` and `renamedByGrip` are the two fields the "weekly ·
         // final" frames need beyond packages/api/src/weekly-summary.ts; the
         // phone treats them as optional (`WeeklyDTO`).
-        #expect(Set(weekly.keys) == ["week", "from", "to", "sent", "received", "filedByMartin", "filedByVerder",
-                                     "tasksDone", "waiting", "topWaiting", "history", "renamedByVerder"])
+        #expect(Set(weekly.keys) == ["week", "from", "to", "sent", "received", "filedByMartin", "filedByGrip",
+                                     "tasksDone", "waiting", "topWaiting", "history", "renamedByGrip"])
         #expect(weekly["week"]?.string == "2026-W44")
-        let top = try JSONDecoder.verder.decode([WaitingItem].self,
+        let top = try JSONDecoder.grip.decode([WaitingItem].self,
                                                 from: JSONEncoder().encode(weekly["topWaiting"] ?? .null))
         #expect(top.map(\.id) == [Self.reply, Self.question, Self.suggestion])
 
@@ -630,11 +630,11 @@ struct FixtureTests {
     // MARK: - Launch arguments
 
     @Test func withoutFixturesNothingElseApplies() throws {
-        #expect(try FixtureLaunch.parse(["Verder", "-tab", "meer", "-route", "geld"]) == nil)
+        #expect(try FixtureLaunch.parse(["Grip", "-tab", "meer", "-route", "geld"]) == nil)
     }
 
     @Test func parsesFixtureTabRouteAndLock() throws {
-        let l = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-partial", "-tab", "voorjou",
+        let l = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "money-partial", "-tab", "voorjou",
                                                       "-route", "proposal:\(Self.reply)", "-fixtures-locked"]))
         #expect(l.fixture == "money-partial")
         #expect(l.locked)
@@ -642,16 +642,16 @@ struct FixtureTests {
         #expect(l.tab?.tabID == .voorJou)
         #expect(l.route == .link(.proposal(UUID(uuidString: Self.reply)!)))
         #expect(l.scroll == nil && !l.scans)
-        let board = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "voorjou-few", "-fixtures-scroll", "end",
+        let board = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "voorjou-few", "-fixtures-scroll", "end",
                                                           "-fixtures-scans"]))
         #expect(board.scroll == .end && board.scans)
-        let geld = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-partial", "-fixtures-geld", "nov"]))
+        let geld = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "money-partial", "-fixtures-geld", "nov"]))
         #expect(geld.geld == .nov)
         #expect(FixtureLaunch.GeldState.allCases.map(\.rawValue) == ["open", "nov", "sep", "sheet"], "capture.sh's --geld grammar")
         #expect(throws: FixtureLaunch.ParseError.unknownValue("-fixtures-geld", "okt")) {
             try FixtureLaunch.parse(["-fixtures", "x", "-fixtures-geld", "okt"])
         }
-        let asking = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "money-complete", "-fixtures-locked",
+        let asking = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "money-complete", "-fixtures-locked",
                                                            "-fixtures-faceid", "asking"]))
         #expect(asking.faceID == .asking && asking.locked)
         #expect(FixtureLaunch.FaceIDState.allCases.map(\.rawValue) == ["asking", "idle", "nopasscode"], "capture.sh's --faceid grammar")
@@ -660,7 +660,7 @@ struct FixtureTests {
         }
         #expect(FixtureLaunch.Scroll.allCases.map(\.rawValue) == ["waiting", "leefgeld", "rest", "end", "middle"],
                 "capture.sh's --scroll grammar")
-        let meer = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "meer-offline", "-route", "meer:developer",
+        let meer = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "meer-offline", "-route", "meer:developer",
                                                          "-fixtures-push", "denied", "-fixtures-more", "signout"]))
         #expect(meer.route == .meer([.about, .developer]))
         #expect(meer.push == .denied && meer.more == .signOut)
@@ -690,7 +690,7 @@ struct FixtureTests {
         }
     }
 
-    /// The Dossier tab's viewer, opened the way a `verder://document/<id>` push would.
+    /// The Dossier tab's viewer, opened the way a `grip://document/<id>` push would.
     @Test func parsesADocumentRoute() throws {
         let id = "00000000-f1c5-4000-8000-200000000311"
         #expect(try FixtureLaunch.parseRoute("document:\(id)") == .link(.document(UUID(uuidString: id)!)))
@@ -705,5 +705,5 @@ struct FixtureTests {
 enum FixtureError: Error { case notAnObject(String) }
 
 private extension JSONDecoder {
-    static var verder: JSONDecoder { APIClient.jsonDecoder }
+    static var grip: JSONDecoder { APIClient.jsonDecoder }
 }

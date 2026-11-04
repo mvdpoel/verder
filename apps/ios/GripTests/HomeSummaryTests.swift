@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 struct HomeSummaryTests {
     private static func date(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
@@ -35,7 +35,7 @@ struct HomeSummaryTests {
     // MARK: - Wacht op jou
 
     @Test func previewKeepsTheServersOrderAndStopsAtTheLimit() {
-        let inbox = InboxDTO(count: 5, items: (1...5).map { item($0) }, doneByVerder: [])
+        let inbox = InboxDTO(count: 5, items: (1...5).map { item($0) }, doneByGrip: [])
         #expect(HomeSummary.preview(inbox, revealed: true).map(\.id) == ["t1", "t2", "t3"])
         #expect(HomeSummary.preview(inbox, revealed: true, limit: 1).map(\.id) == ["t1"])
     }
@@ -43,7 +43,7 @@ struct HomeSummaryTests {
     /// Locked, the glance shows the count and NO titles: the preview is empty,
     /// so no title exists in the view tree for VoiceOver to read either.
     @Test func lockedPreviewHoldsNoTitles() {
-        let inbox = InboxDTO(count: 5, items: (1...5).map { item($0) }, doneByVerder: [])
+        let inbox = InboxDTO(count: 5, items: (1...5).map { item($0) }, doneByGrip: [])
         #expect(HomeSummary.preview(inbox, revealed: false).isEmpty)
         #expect(HomeSummary.preview(inbox, revealed: false, limit: 1).isEmpty)
     }
@@ -153,7 +153,7 @@ struct HomeSummaryTests {
         let inbox = InboxDTO(count: 2, items: [
             item(1, dueAt: "2026-11-03T16:00:00.000Z"),
             item(2, dueAt: "2026-10-30T16:00:00.000Z"),
-        ], doneByVerder: [])
+        ], doneByGrip: [])
         let row = HomeSummary.tasksRow(.init(openCount: 6, overdueCount: 1, waitingOnOthersCount: 2), inbox: inbox, now: now)
         #expect(row.title == "6 taken voor jou")
         #expect(row.amberSuffix == "1 te laat")
@@ -186,8 +186,8 @@ struct HomeSummaryTests {
 
     // MARK: - Door verder gedaan
 
-    private func action(_ n: Int, kind: String = "auto-file") -> VerderAction {
-        VerderAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Brief \(n)",
+    private func action(_ n: Int, kind: String = "auto-file") -> GripAction {
+        GripAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Brief \(n)",
                      at: Date(timeIntervalSince1970: Double(n)), kind: kind,
                      before: .init(status: "inbox", title: nil, docType: nil),
                      after: .init(status: "filed", title: nil, docType: "brief"),
@@ -195,17 +195,17 @@ struct HomeSummaryTests {
     }
 
     /// Counts only — so it shows while locked — and it opens the section.
-    @Test func doneRowCountsWhatVerderDidByKind() {
-        let inbox = InboxDTO(count: 0, items: [], doneByVerder: [action(1), action(2, kind: "auto-name"), action(3)])
+    @Test func doneRowCountsWhatGripDidByKind() {
+        let inbox = InboxDTO(count: 0, items: [], doneByGrip: [action(1), action(2, kind: "auto-name"), action(3)])
         let row = HomeSummary.doneRow(inbox)
         #expect(row.title == "Door verder gedaan · 3")
         #expect(row.meta == ["2 opgeborgen", "1 hernoemd"])
         #expect(!row.accessibilityLabel.contains("Brief"), "no document title reaches the glance")
-        #expect(HomeSummary.doneOpens(inbox) == .doneByVerder)
+        #expect(HomeSummary.doneOpens(inbox) == .doneByGrip)
     }
 
     @Test func nothingDoneOpensNothing() {
-        let inbox = InboxDTO(count: 0, items: [], doneByVerder: [])
+        let inbox = InboxDTO(count: 0, items: [], doneByGrip: [])
         // lowercase: verder is the app; capital Verder is the bewindvoerder.
         #expect(HomeSummary.doneRow(inbox).meta == ["verder deed niets zelf"])
         #expect(HomeSummary.doneOpens(inbox) == nil)
@@ -213,7 +213,7 @@ struct HomeSummaryTests {
 
     /// What verder already did is never amber: it does not wait on Martin.
     @Test func doneRowIsNeverAmber() {
-        let inbox = InboxDTO(count: 3, items: (1...3).map { item($0) }, doneByVerder: [action(1)])
+        let inbox = InboxDTO(count: 3, items: (1...3).map { item($0) }, doneByGrip: [action(1)])
         #expect(HomeSummary.cardAmber(.waiting, inbox: inbox))
         #expect(!HomeSummary.cardAmber(.done, inbox: inbox))
         #expect(!HomeSummary.doneRow(inbox).dot)
@@ -223,8 +223,8 @@ struct HomeSummaryTests {
     /// Amber only for waiting on Martin: no other card, and not the waiting
     /// card either when nothing waits or the inbox has not loaded.
     @Test func onlyAWaitingCardWithSomethingWaitingIsAmber() {
-        let busy = InboxDTO(count: 2, items: (1...2).map { item($0) }, doneByVerder: [action(1)])
-        let empty = InboxDTO(count: 0, items: [], doneByVerder: [action(1)])
+        let busy = InboxDTO(count: 2, items: (1...2).map { item($0) }, doneByGrip: [action(1)])
+        let empty = InboxDTO(count: 0, items: [], doneByGrip: [action(1)])
         for c in HomeSummary.Card.allCases where c != .waiting {
             #expect(!HomeSummary.cardAmber(c, inbox: busy), "\(c)")
         }

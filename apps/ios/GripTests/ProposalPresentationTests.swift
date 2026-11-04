@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// What the proposal screen says (Figma "proposal · final"), its hold to
 /// send, the marks on Martin's edits and the bar's state per moment.
@@ -57,7 +57,7 @@ struct ProposalTextTests {
     @Test func triggerMetaNamesTheChannelAndTheMoment() {
         let now = Self.date("2026-11-02T08:41:00Z")
         #expect(ProposalText.triggerMeta(kind: "reply", trigger: Self.trigger, now: now) == "Aanleiding · Mail · 2 nov 09:14")
-        let earlier = ProposalDetail.Trigger(type: "proposal", id: "p", from: "verder", subject: "Kopie beschikking",
+        let earlier = ProposalDetail.Trigger(type: "proposal", id: "p", from: "grip", subject: "Kopie beschikking",
                                              date: Self.date("2026-10-07T09:02:00Z"), excerpt: nil)
         #expect(ProposalText.triggerMeta(kind: "follow-up", trigger: earlier, now: now) == "Aanleiding · 26 dagen stil")
     }
@@ -164,7 +164,7 @@ struct ProposalTextTests {
     }
 
     @Test func aFollowUpNamesThePersonTheDraftGreets() {
-        let t = ProposalDetail.Trigger(type: "proposal", id: "p", from: "verder", subject: "Kopie", date: Self.date("2026-10-07T09:02:00Z"), excerpt: nil)
+        let t = ProposalDetail.Trigger(type: "proposal", id: "p", from: "grip", subject: "Kopie", date: Self.date("2026-10-07T09:02:00Z"), excerpt: nil)
         let line = ProposalText.triggerLine(kind: "follow-up", ask: nil, trigger: t, partyName: "Bewindkantoor Noordkust",
                                             draftBody: "Beste Ilse,\n\nOp 7 oktober…")
         #expect(line?.lead == "Jouw vraag van 7 okt")

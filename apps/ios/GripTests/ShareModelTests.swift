@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import PDFKit
 import UIKit
-@testable import Verder
+@testable import Grip
 
 /// The share extension's screen as state (plan 3 Task 22; "share · final").
 @MainActor

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// Every sign-in failure as the screen names it (Figma "auth · final",
 /// Sign-in row; FEATURES 3.10–3.16): kind, time, cause, and what it offers.
@@ -122,7 +122,7 @@ import Testing
 
     @Test func retryAfterHeaders() {
         func response(_ headers: [String: String]) -> HTTPURLResponse {
-            HTTPURLResponse(url: URL(string: "https://verder.example")!, statusCode: 429, httpVersion: nil, headerFields: headers)!
+            HTTPURLResponse(url: URL(string: "https://grip.example")!, statusCode: 429, httpVersion: nil, headerFields: headers)!
         }
         #expect(AuthRefusal.retryAfter(response(["X-Retry-After": "37"])) == 37)
         #expect(AuthRefusal.retryAfter(response(["Retry-After": "12"])) == 12)
@@ -134,7 +134,7 @@ import Testing
 
 @MainActor
 struct SignInFlowTests {
-    static func defaults() -> UserDefaults { UserDefaults(suiteName: "verder.tests.\(UUID().uuidString)")! }
+    static func defaults() -> UserDefaults { UserDefaults(suiteName: "grip.tests.\(UUID().uuidString)")! }
 
     /// An attempt that never left the phone is sent ONCE more when the network
     /// returns — never a second time, and never for a toegangssleutel.

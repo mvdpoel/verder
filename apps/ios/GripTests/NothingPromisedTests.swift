@@ -7,10 +7,10 @@ import Foundation
 /// every target and the bundled fixtures and plists.
 struct NothingPromisedTests {
     static let ios = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()   // VerderTests/
+        .deletingLastPathComponent()   // GripTests/
         .deletingLastPathComponent()   // apps/ios/
 
-    static let shipped = ["Verder", "VerderWidget", "VerderNotify", "VerderShare"]
+    static let shipped = ["Grip", "GripWidget", "GripNotify", "GripShare"]
     static let extensions: Set<String> = ["swift", "json", "plist", "strings", "xcstrings"]
     // Spelled in two halves so this file is not its own match.
     static let promise = "binnen" + "kort"

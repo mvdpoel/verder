@@ -1,6 +1,6 @@
 import Testing
 import UIKit
-@testable import Verder
+@testable import Grip
 
 /// The document viewer's images zoom the way PDFKit's PDFs do: they open
 /// fitted, a pinch reads the small print (the counter, a letter held up to

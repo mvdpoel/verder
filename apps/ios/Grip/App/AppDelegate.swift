@@ -10,10 +10,10 @@ import UserNotifications
 /// holds it until `RootView` exists to take it.
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
-    /// The process's client and inbox store, handed over by `VerderApp.init`.
+    /// The process's client and inbox store, handed over by `GripApp.init`.
     /// STATIC, not attached from a view: a question answered from the lock
     /// screen or a silent refresh launches the app in the BACKGROUND, where no
-    /// scene connects and no `onAppear` ever runs. `VerderApp.init` does run
+    /// scene connects and no `onAppear` ever runs. `GripApp.init` does run
     /// (it builds the delegate), before any delegate callback.
     struct Services {
         let client: APIClient

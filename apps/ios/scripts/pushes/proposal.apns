@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Voorstel klaar om te lezen",
@@ -11,5 +11,5 @@
     "sound": "default",
     "thread-id": "mail:00000000-f1c5-4000-8000-500000000001"
   },
-  "link": "verder://proposal/00000000-f1c5-4000-8000-000000000001"
+  "link": "grip://proposal/00000000-f1c5-4000-8000-000000000001"
 }

@@ -6,7 +6,7 @@ import AppIntents
 ///
 /// Compiled into the app AND the widget extension: a control that opens its
 /// app must name an intent both know. It runs in the APP (`openAppWhenRun`),
-/// where `ScanLaunch.run` hands `verder://scan` to the screens.
+/// where `ScanLaunch.run` hands `grip://scan` to the screens.
 struct ScanLetterIntent: AppIntent {
     static let title: LocalizedStringResource = "Scan een brief"
     static let description = IntentDescription("Opent de camera van verder, zonder Face ID.")

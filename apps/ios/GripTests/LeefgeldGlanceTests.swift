@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// Overzicht's Leefgeld card (Figma "money · final", the Money glance frames):
 /// one shape per state of `leefgeld-week.ts`, and the coverage it states is its own.

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The "Voice quick-log · final" frames as rules: tap or hold to record,
 /// cancel by sliding off, the words read from the transcript, the picker's

@@ -6,7 +6,7 @@ import Foundation
 /// code out of one, straight off the source tree (the simulator test host can
 /// read it, as `TokensMatchWebTests` does):
 ///
-/// 1. every file in `Verder/Fixtures/` is wrapped whole in `#if DEBUG`, and
+/// 1. every file in `Grip/Fixtures/` is wrapped whole in `#if DEBUG`, and
 ///    every OTHER source line that names a `Fixture…` type sits inside an
 ///    `#if DEBUG` region — so a Release compile cannot even see them;
 /// 2. project.yml leaves `FixtureData` and `Fixture*.swift` out of the Release
@@ -15,9 +15,9 @@ import Foundation
 /// `scripts/check-release-fixtures.sh` checks the BUILT Release bundle.
 struct FixtureIsolationTests {
     static let ios = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()   // VerderTests/
+        .deletingLastPathComponent()   // GripTests/
         .deletingLastPathComponent()   // apps/ios/
-    static let app = ios.appending(path: "Verder")
+    static let app = ios.appending(path: "Grip")
 
     static func swiftFiles(under dir: URL) -> [URL] {
         (FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?

@@ -5,7 +5,7 @@ import UIKit
 // WHAT THE SERVER EXPECTS — read from @better-auth/passkey 1.7.0
 // (node_modules/.pnpm/@better-auth+passkey@1.7.0_…/node_modules/@better-auth/passkey/dist/index.mjs)
 // and better-auth 1.7.0 / better-call 1.4.0, 2026-10-31. packages/auth configures
-// the plugin with rpID = PASSKEY_RP_ID, rpName "Verder", origin = APP_URL.
+// the plugin with rpID = PASSKEY_RP_ID, rpName "Grip", origin = APP_URL.
 // All paths sit under better-auth's /api/auth mount.
 //
 // Sign in (no session needed):
@@ -54,7 +54,7 @@ import UIKit
 // Origin: verify-* compare clientDataJSON.origin against the plugin's `origin`
 // option (APP_URL), NOT the request's Origin header. For a native app with the
 // `webcredentials:` associated domain, iOS writes "https://<rpId>" there, so
-// APP_URL must be exactly https://verder.vanderpoel.pro (no trailing slash).
+// APP_URL must be exactly https://grip.vanderpoel.pro (no trailing slash).
 
 /// Every way a passkey ceremony ends short of a session.
 enum PasskeyError: Error, Equatable, Sendable {

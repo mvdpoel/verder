@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UserNotifications
-@testable import Verder
+@testable import Grip
 
 /// Every way into the app lands somewhere real (plan 3 Task GAP): every link
 /// the worker or the web can send, every notification category, every widget
@@ -14,12 +14,12 @@ struct LinkDestinationTests {
     nonisolated static let lower = "6f9619ff-8b86-d011-b42d-00c04fc964ff"
 
     static let repo = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()   // VerderTests/
+        .deletingLastPathComponent()   // GripTests/
         .deletingLastPathComponent()   // apps/ios/
         .deletingLastPathComponent()   // apps/
         .deletingLastPathComponent()   // repo root
 
-    /// Every `verder://…` literal in the non-test TypeScript under `dir`, with
+    /// Every `grip://…` literal in the non-test TypeScript under `dir`, with
     /// each `${…}` interpolation replaced by a UUID (the only thing the
     /// worker ever interpolates into a link is a row id).
     static func serverLinks(under dir: String) throws -> [(file: String, link: String)] {
@@ -37,24 +37,24 @@ struct LinkDestinationTests {
         return out
     }
 
-    /// The `verder://…` literals on one line of code, interpolations replaced
+    /// The `grip://…` literals on one line of code, interpolations replaced
     /// by a UUID. A `?query` or `#fragment` is KEPT: `DeepLink.parse` refuses
     /// both, so cutting them off would let a link that lands nowhere pass.
     static func literals(in line: String) throws -> [String] {
         // Doc comments describe links; only code sends them.
         let code = line.trimmingCharacters(in: .whitespaces)
         if code.hasPrefix("//") || code.hasPrefix("*") || code.hasPrefix("/*") { return [] }
-        let literal = try Regex(#"verder://[A-Za-z0-9_\-/${}.?#=&%+~:]*"#)
+        let literal = try Regex(#"grip://[A-Za-z0-9_\-/${}.?#=&%+~:]*"#)
         let interpolation = try Regex(#"\$\{[^}]*\}"#)
         return line.matches(of: literal).map { String(line[$0.range]).replacing(interpolation, with: lower) }
     }
 
     @Test func aLinkLiteralKeepsItsQueryAndFragment() throws {
-        #expect(try Self.literals(in: #"  link: `verder://inbox?tab=x#top`,"#) == ["verder://inbox?tab=x#top"])
-        #expect(try Self.literals(in: #"  link: `verder://task/${t.id}#a`"#) == ["verder://task/\(Self.lower)#a"])
-        #expect(try Self.literals(in: #"  // e.g. verder://inbox?x"#) == [])
+        #expect(try Self.literals(in: #"  link: `grip://inbox?tab=x#top`,"#) == ["grip://inbox?tab=x#top"])
+        #expect(try Self.literals(in: #"  link: `grip://task/${t.id}#a`"#) == ["grip://task/\(Self.lower)#a"])
+        #expect(try Self.literals(in: #"  // e.g. grip://inbox?x"#) == [])
         // …and what it keeps is exactly what the coverage tests then refuse.
-        #expect(DeepLink.parse("verder://inbox?tab=x#top") == .none)
+        #expect(DeepLink.parse("grip://inbox?tab=x#top") == .none)
     }
 
     /// The mobile routes and the shared API package can send links too; none
@@ -71,7 +71,7 @@ struct LinkDestinationTests {
         let links = try Self.serverLinks(under: "apps/worker/src")
         // The worker sends at least proposal and inbox links (notify callers).
         #expect(links.count >= 8, "found \(links.count) links; did the worker move?")
-        #expect(Set(links.map(\.link)).isSuperset(of: ["verder://inbox", "verder://proposal/\(Self.lower)"]))
+        #expect(Set(links.map(\.link)).isSuperset(of: ["grip://inbox", "grip://proposal/\(Self.lower)"]))
         for (file, link) in links {
             let parsed = DeepLink.parse(link)
             #expect(parsed != .none, "\(file): \(link) parses to nothing")
@@ -93,7 +93,7 @@ struct LinkDestinationTests {
         #expect(DeepLink.suggestion(Self.id).destination == .init(tab: .voorJou, stack: .inbox([.suggestion(Self.lower)])))
         #expect(DeepLink.task(Self.id).destination == .init(tab: .voorJou, stack: .inbox([.task(Self.lower)])))
         #expect(DeepLink.inbox.destination == .init(tab: .voorJou, stack: .inbox([])))
-        #expect(DeepLink.doneByVerder.destination == .init(tab: .voorJou, stack: .inbox([.doneByVerder])))
+        #expect(DeepLink.doneByGrip.destination == .init(tab: .voorJou, stack: .inbox([.doneByGrip])))
         #expect(DeepLink.document(Self.id).destination
                 == .init(tab: .dossier, stack: .dossier([.document(id: Self.lower, title: nil)])))
         #expect(DeepLink.dossier.destination == .init(tab: .dossier, stack: .dossier([])))
@@ -106,13 +106,13 @@ struct LinkDestinationTests {
     }
 
     @Test func theNewLinksParseStrictly() {
-        #expect(DeepLink.parse("verder://overzicht") == .overzicht)
-        #expect(DeepLink.parse("verder://dossier") == .dossier)
-        #expect(DeepLink.parse("verder://done-by-verder") == .doneByVerder)
-        #expect(DeepLink.parse("verder://money") == .money)
-        #expect(DeepLink.parse("verder://timeline") == .timeline)
-        for junk in ["verder://overzicht/x", "verder://dossier?x=1", "verder://done-by-verder/1", "verder://money#a",
-                     "verder://timeline/x", "verder://timeline?schuldeisers=verborgen"] {
+        #expect(DeepLink.parse("grip://overzicht") == .overzicht)
+        #expect(DeepLink.parse("grip://dossier") == .dossier)
+        #expect(DeepLink.parse("grip://done-by-grip") == .doneByGrip)
+        #expect(DeepLink.parse("grip://money") == .money)
+        #expect(DeepLink.parse("grip://timeline") == .timeline)
+        for junk in ["grip://overzicht/x", "grip://dossier?x=1", "grip://done-by-grip/1", "grip://money#a",
+                     "grip://timeline/x", "grip://timeline?schuldeisers=verborgen"] {
             #expect(DeepLink.parse(junk) == DeepLink.none, "\(junk)")
         }
     }
@@ -120,7 +120,7 @@ struct LinkDestinationTests {
     /// The tab is the destination's tab — one mapping, not two.
     @Test func theTabIsTheDestinationsTab() {
         let all: [DeepLink] = [.proposal(Self.id), .suggestion(Self.id), .task(Self.id), .document(Self.id),
-                               .inbox, .doneByVerder, .dossier, .timeline, .overzicht, .weekly, .money, .voice, .scan, .none]
+                               .inbox, .doneByGrip, .dossier, .timeline, .overzicht, .weekly, .money, .voice, .scan, .none]
         for link in all { #expect(link.tab == link.destination?.tab, "\(link)") }
     }
 
@@ -143,14 +143,14 @@ struct LinkDestinationTests {
     }
 
     /// The daily "Door verder gedaan" digest is a FILING push with
-    /// `verder://inbox`: a tap opens that section, not the top of Voor jou.
-    @Test func theDigestOpensDoorVerderGedaan() async {
+    /// `grip://inbox`: a tap opens that section, not the top of Voor jou.
+    @Test func theDigestOpensDoorGripGedaan() async {
         let links = DeepLinkInbox()
         let outcome = await NotificationRouter(links: links, client: { nil })
             .handle(action: UNNotificationDefaultActionIdentifier, category: "FILING",
-                    userInfo: ["link": "verder://inbox"])
-        #expect(outcome == .opened(.doneByVerder))
-        #expect(links.pending == .doneByVerder)
+                    userInfo: ["link": "grip://inbox"])
+        #expect(outcome == .opened(.doneByGrip))
+        #expect(links.pending == .doneByGrip)
     }
 
     @Test func aLinklessFilingPushOpensTheDossier() async {

@@ -6,12 +6,12 @@ import Synchronization
 /// URLSession `FixtureEnvironment` builds (its `protocolClasses`), never
 /// registered globally, so nothing else in the process is intercepted.
 ///
-/// The fixture's name rides in the host (`<name>.fixtures.verder.invalid`), so
+/// The fixture's name rides in the host (`<name>.fixtures.grip.invalid`), so
 /// the protocol holds no state and parallel tests on different fixtures never
 /// see each other. `.invalid` is reserved (RFC 2606): a request that somehow
 /// escaped the protocol could not resolve to anything real.
 final class FixtureProtocol: URLProtocol, @unchecked Sendable {
-    static let hostSuffix = ".fixtures.verder.invalid"
+    static let hostSuffix = ".fixtures.grip.invalid"
     /// "<fixture>|<path>" for every path answered once — the only state, and
     /// only `thenFail` fixtures act on it (`FixtureServer.reply(answeredBefore:)`).
     private static let answered = Mutex<Set<String>>([])

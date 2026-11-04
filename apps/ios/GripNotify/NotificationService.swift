@@ -6,7 +6,7 @@ import UserNotifications
 /// registration, and those titles are known only once the push is here.
 ///
 /// For a question push (`mutable-content`, a top-level `options` array, an
-/// integer `revision`, and `link: verder://proposal/<uuid>`) it registers
+/// integer `revision`, and `link: grip://proposal/<uuid>`) it registers
 /// `q.<uuid>` — through `QuestionCategories.merged`, because
 /// `setNotificationCategories` REPLACES the whole set and writing the one
 /// category alone would wipe Plan 2's nine — and points the notification at it.

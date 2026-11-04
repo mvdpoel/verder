@@ -11,7 +11,7 @@
       "source": {
         "type": "document",
         "id": "00000000-f1c5-4000-8000-200000000104",
-        "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+        "link": "grip://document/00000000-f1c5-4000-8000-200000000104"
       }
     },
     {
@@ -20,7 +20,7 @@
       "source": {
         "type": "document",
         "id": "00000000-f1c5-4000-8000-200000000105",
-        "link": "verder://document/00000000-f1c5-4000-8000-200000000105"
+        "link": "grip://document/00000000-f1c5-4000-8000-200000000105"
       }
     },
     {
@@ -29,7 +29,7 @@
       "source": {
         "type": "mail",
         "id": "00000000-f1c5-4000-8000-900000000003",
-        "link": "verder://dossier"
+        "link": "grip://dossier"
       }
     }
   ],
@@ -40,7 +40,7 @@
       "source": {
         "type": "mail",
         "id": "00000000-f1c5-4000-8000-900000000002",
-        "link": "verder://dossier"
+        "link": "grip://dossier"
       }
     },
     {
@@ -49,7 +49,7 @@
       "source": {
         "type": "stop",
         "id": "00000000-f1c5-4000-8000-500000000006",
-        "link": "verder://timeline"
+        "link": "grip://timeline"
       }
     }
   ],

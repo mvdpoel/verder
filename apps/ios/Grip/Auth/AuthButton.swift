@@ -125,7 +125,7 @@ struct AuthEyebrow: View {
 }
 
 /// The verder mark (the rail's): a ring, its axis and the curve.
-struct VerderGlyph: View {
+struct GripGlyph: View {
     var lineWidth: CGFloat = 1.6
 
     var body: some View {
@@ -147,7 +147,7 @@ struct VerderGlyph: View {
 /// The mark in its two rings, the centre of the sign-in screens and of the
 /// app-switcher cover. `confirmed` adds the okay check of "Je toegangssleutel
 /// werkt al" (a fact, so okay-green, never amber).
-struct VerderRings: View {
+struct GripRings: View {
     var size: CGFloat = 128
     var confirmed = false
 
@@ -161,7 +161,7 @@ struct VerderRings: View {
                 .fill(RadialGradient(colors: [Color.signal.opacity(0.16), .clear], center: .center,
                                      startRadius: 0, endRadius: size * 0.3))
                 .padding(size * 0.2)
-            VerderGlyph(lineWidth: 1.8)
+            GripGlyph(lineWidth: 1.8)
                 .frame(width: size * 0.36, height: size * 0.36)
                 .glow(Glow.signalDot)
         }

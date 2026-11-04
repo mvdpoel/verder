@@ -5,7 +5,7 @@ import XCTest
 /// "Wachtrij / rij-acties"). It launches the app with the very launch
 /// arguments capture.sh built (CAPTURE_ARGS, one per line), so the state is
 /// the one every other capture reaches. Lives in its own scheme
-/// (VerderCapture), never in `Verder`'s test action: it writes a file.
+/// (GripCapture), never in `Verder`'s test action: it writes a file.
 final class PressCapture: XCTestCase {
     /// The text itself, or — where a row reads as ONE element (Voor jou's
     /// rows combine kind, title and age into one sentence) — the element

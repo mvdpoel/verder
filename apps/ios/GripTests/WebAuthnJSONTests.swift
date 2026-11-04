@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 struct WebAuthnJSONTests {
     struct FakeAssertion: PasskeyAssertion {
@@ -87,25 +87,25 @@ struct WebAuthnJSONTests {
 
     @Test func parsesAuthenticationOptions() throws {
         let body = Data(#"""
-        {"rpId":"verder.vanderpoel.pro","challenge":"-_8","timeout":60000,"userVerification":"preferred",
+        {"rpId":"grip.vanderpoel.pro","challenge":"-_8","timeout":60000,"userVerification":"preferred",
          "allowCredentials":[{"id":"Afv_","type":"public-key","transports":["internal"]}]}
         """#.utf8)
         let o = try AssertionOptions.decode(body)
-        #expect(o.rpID == "verder.vanderpoel.pro")
+        #expect(o.rpID == "grip.vanderpoel.pro")
         #expect(o.challenge == Data([0xfb, 0xff]))
         #expect(o.allowCredentialIDs == [Data([0x01, 0xfb, 0xff])])
     }
 
     @Test func parsesRegistrationOptions() throws {
         let body = Data(#"""
-        {"challenge":"Zm9v","rp":{"name":"Verder","id":"verder.vanderpoel.pro"},
+        {"challenge":"Zm9v","rp":{"name":"Grip","id":"grip.vanderpoel.pro"},
          "user":{"id":"Zg","name":"martin@vanderpoel.pro","displayName":"martin@vanderpoel.pro"},
          "pubKeyCredParams":[{"alg":-7,"type":"public-key"}],"timeout":60000,"attestation":"none",
          "excludeCredentials":[{"id":"Av78","type":"public-key","transports":["internal"]}],
          "authenticatorSelection":{"residentKey":"preferred","userVerification":"preferred","requireResidentKey":false}}
         """#.utf8)
         let o = try RegistrationOptions.decode(body)
-        #expect(o.rpID == "verder.vanderpoel.pro")
+        #expect(o.rpID == "grip.vanderpoel.pro")
         #expect(o.challenge == Data("foo".utf8))
         #expect(o.userID == Data("f".utf8))
         #expect(o.userName == "martin@vanderpoel.pro")
@@ -113,7 +113,7 @@ struct WebAuthnJSONTests {
     }
 
     @Test func optionsWithBadChallengeAreRefused() {
-        let body = Data(#"{"rpId":"verder.vanderpoel.pro","challenge":"!!"}"#.utf8)
+        let body = Data(#"{"rpId":"grip.vanderpoel.pro","challenge":"!!"}"#.utf8)
         #expect(throws: PasskeyError.badOptions) { try AssertionOptions.decode(body) }
     }
 }

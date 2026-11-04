@@ -191,7 +191,7 @@ struct AccountCard: Equatable, Identifiable, Sendable {
 /// merged at any layer (Global Constraints; `cardsAreNeverSummed`).
 struct MoneyGlance: Equatable, Sendable {
     let leefgeld: LeefgeldCard?
-    /// Overzicht's shape of the same week (Verder/Home/LeefgeldGlance.swift).
+    /// Overzicht's shape of the same week (Grip/Home/LeefgeldGlance.swift).
     let leefgeldGlance: LeefgeldGlance?
     let previousWeek: String?
     let accounts: [AccountCard]

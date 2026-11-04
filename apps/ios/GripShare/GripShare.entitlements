@@ -4,11 +4,11 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.pro.vanderpoel.verder</string>
+		<string>group.pro.vanderpoel.grip</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)pro.vanderpoel.verder</string>
+		<string>$(AppIdentifierPrefix)pro.vanderpoel.grip</string>
 	</array>
 </dict>
 </plist>

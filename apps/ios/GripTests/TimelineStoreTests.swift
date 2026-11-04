@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The Tijdlijn's data: `GET /api/mobile/v1/case-map`, kept on the phone so
 /// it shows offline with its age, written `.completeFileProtection`, and

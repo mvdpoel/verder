@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Brief van een schuldeiser",
@@ -11,5 +11,5 @@
     "sound": "default",
     "thread-id": "letter:00000000-f1c5-4000-8000-200000000106"
   },
-  "link": "verder://inbox"
+  "link": "grip://inbox"
 }

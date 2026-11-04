@@ -67,7 +67,7 @@ struct NotificationFeedback: Equatable {
     static func taskAlreadyDone(task: String) -> Self {
         Self(title: "Taak al afgerond",
              body: "\(capitalised(task)) stond al op klaar. Tik om je taken te openen.",
-             category: "", userInfo: ["link": "verder://inbox"])
+             category: "", userInfo: ["link": "grip://inbox"])
     }
 
     // MARK: An answer to a question
@@ -88,7 +88,7 @@ struct NotificationFeedback: Equatable {
     /// A 409: answered on the web meanwhile, or a newer revision.
     static var questionHandled: Self {
         Self(title: "Vraag al afgehandeld", body: "Tik om Voor jou te openen. Hier hoeft niets meer.",
-             category: "", userInfo: ["link": "verder://inbox"])
+             category: "", userInfo: ["link": "grip://inbox"])
     }
 
     static func capitalised(_ s: String) -> String {

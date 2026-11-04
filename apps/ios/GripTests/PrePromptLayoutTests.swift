@@ -1,7 +1,7 @@
 import CoreGraphics
 import SwiftUI
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// The pre-prompts' two layouts (Figma "auth · final", Pre-prompts row):
 /// the 6.3-inch frames, and the SE frame's smaller picture, nearer title and

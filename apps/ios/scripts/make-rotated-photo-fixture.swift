@@ -1,4 +1,4 @@
-// Generates apps/ios/VerderTests/Fixtures/rotated-photo.jpg: a synthetic photo
+// Generates apps/ios/GripTests/Fixtures/rotated-photo.jpg: a synthetic photo
 // stored SIDEWAYS with EXIF Orientation = 6, the way an iPhone held upright
 // writes it (the sensor reads landscape; the tag says "turn 90 degrees
 // clockwise to show it"). The share extension must turn it upright.
@@ -16,7 +16,7 @@
 // repo root:
 //
 //   swiftc -O apps/ios/scripts/make-rotated-photo-fixture.swift -o /tmp/make-rotated-photo-fixture \
-//     && /tmp/make-rotated-photo-fixture apps/ios/VerderTests/Fixtures/rotated-photo.jpg
+//     && /tmp/make-rotated-photo-fixture apps/ios/GripTests/Fixtures/rotated-photo.jpg
 //
 // Kept out of every Xcode target: scripts/ is not a source path in project.yml.
 

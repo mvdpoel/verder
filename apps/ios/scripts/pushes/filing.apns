@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Door verder gedaan",
@@ -9,5 +9,5 @@
     "interruption-level": "passive",
     "badge": 4
   },
-  "link": "verder://inbox"
+  "link": "grip://inbox"
 }

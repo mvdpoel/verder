@@ -26,7 +26,7 @@ struct CallActivityAttributes: ActivityAttributes {
 /// Every string a face of the call's Live Activity shows. Pure.
 enum CallActivityFaces {
     /// A tap on the Live Activity reopens the call sheet (`DeepLink.call`).
-    static let url = URL(string: "verder://call")!
+    static let url = URL(string: "grip://call")!
 
     /// The expanded island has room for about two lines.
     static let nextPointMax = 90

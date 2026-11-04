@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 struct APIClientTests {
     // MARK: - Which cookie is the session
@@ -9,7 +9,7 @@ struct APIClientTests {
     /// https (no `cookiePrefix` or `useSecureCookies` is configured in
     /// packages/auth/src/index.ts, so the defaults decide).
     @Test func sessionCookiePrefersSecureName() throws {
-        let url = URL(string: "https://verder.vanderpoel.pro/api/auth/sign-in/email")!
+        let url = URL(string: "https://grip.vanderpoel.pro/api/auth/sign-in/email")!
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [
             "Set-Cookie": "better-auth.session_token=plain.sig; Path=/; HttpOnly, "
                 + "__Secure-better-auth.session_token=secure.sig; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax",
@@ -20,7 +20,7 @@ struct APIClientTests {
     }
 
     @Test func sessionCookieFallsBackToPlainName() throws {
-        let url = URL(string: "https://verder.vanderpoel.pro/api/auth/sign-in/email")!
+        let url = URL(string: "https://grip.vanderpoel.pro/api/auth/sign-in/email")!
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [
             "Set-Cookie": "better-auth.session_token=plain.sig; Max-Age=2592000; Path=/; HttpOnly",
         ])!
@@ -35,7 +35,7 @@ struct APIClientTests {
     /// Sign-out answers with the same cookie name, an empty value and Max-Age=0.
     /// That is a deletion, never a session.
     @Test func clearedCookieIsNoSession() {
-        let url = URL(string: "https://verder.vanderpoel.pro/api/auth/sign-out")!
+        let url = URL(string: "https://grip.vanderpoel.pro/api/auth/sign-out")!
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [
             "Set-Cookie": "__Secure-better-auth.session_token=; Max-Age=0; Path=/; HttpOnly; Secure",
         ])!
@@ -43,7 +43,7 @@ struct APIClientTests {
     }
 
     @Test func otherCookiesAreNoSession() {
-        let url = URL(string: "https://verder.vanderpoel.pro/api/auth/sign-in/email")!
+        let url = URL(string: "https://grip.vanderpoel.pro/api/auth/sign-in/email")!
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [
             "Set-Cookie": "__Secure-better-auth.dont_remember=x; Path=/",
         ])!
@@ -56,9 +56,9 @@ struct APIClientTests {
         let store = InMemorySessionStore(SessionCookie(name: "__Secure-better-auth.session_token", value: "tok.sig", expires: nil))
         let client = APIClient(session: APIClient.makeSession(), store: store)
         let req = client.request("/api/mobile/v1/ping", method: "GET", body: nil, contentType: nil)
-        #expect(req.url?.absoluteString == "https://verder.vanderpoel.pro/api/mobile/v1/ping")
+        #expect(req.url?.absoluteString == "https://grip.vanderpoel.pro/api/mobile/v1/ping")
         #expect(req.httpMethod == "GET")
-        #expect(req.value(forHTTPHeaderField: "Origin") == "https://verder.vanderpoel.pro")
+        #expect(req.value(forHTTPHeaderField: "Origin") == "https://grip.vanderpoel.pro")
         #expect(req.value(forHTTPHeaderField: "x-verder-trust-device") == "1")
         #expect(req.value(forHTTPHeaderField: "Cookie") == "__Secure-better-auth.session_token=tok.sig")
     }
@@ -147,12 +147,12 @@ struct APIClientTests {
     }
 
     @Test func noRedirectDelegateRefuses() async {
-        let url = URL(string: "https://verder.vanderpoel.pro/x")!
+        let url = URL(string: "https://grip.vanderpoel.pro/x")!
         let response = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: ["Location": "/login"])!
         let task = URLSession.shared.dataTask(with: url)
         let next = await NoRedirects().urlSession(URLSession.shared, task: task,
                                                   willPerformHTTPRedirection: response,
-                                                  newRequest: URLRequest(url: URL(string: "https://verder.vanderpoel.pro/login")!))
+                                                  newRequest: URLRequest(url: URL(string: "https://grip.vanderpoel.pro/login")!))
         #expect(next == nil)
     }
 

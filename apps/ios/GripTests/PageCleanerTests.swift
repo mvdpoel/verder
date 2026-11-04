@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import UIKit
 import Vision
-@testable import Verder
+@testable import Grip
 
 struct PageCleanerTests {
     @Test func everyVariantKeepsThePageSize() throws {

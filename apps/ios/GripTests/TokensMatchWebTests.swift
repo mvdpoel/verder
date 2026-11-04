@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UIKit
-@testable import Verder
+@testable import Grip
 
 /// The drift guard. The web's `globals.css` `@theme` is the ONE definition of
 /// the Holodek palette; `Tokens.swift` is a copy of it, and a copy is how a
@@ -12,7 +12,7 @@ struct TokensMatchWebTests {
     /// `apps/web/src/app/globals.css`, located relative to this source file.
     static let globalsCSS: String = {
         let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()          // VerderTests/
+            .deletingLastPathComponent()          // GripTests/
             .appendingPathComponent("../../web/src/app/globals.css")
             .standardizedFileURL
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""

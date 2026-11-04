@@ -6,17 +6,17 @@
 	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>webcredentials:verder.vanderpoel.pro?mode=developer</string>
+		<string>webcredentials:grip.vanderpoel.pro?mode=developer</string>
 	</array>
 	<key>com.apple.developer.usernotifications.time-sensitive</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.pro.vanderpoel.verder</string>
+		<string>group.pro.vanderpoel.grip</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)pro.vanderpoel.verder</string>
+		<string>$(AppIdentifierPrefix)pro.vanderpoel.grip</string>
 	</array>
 </dict>
 </plist>

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UserNotifications
-@testable import Verder
+@testable import Grip
 
 /// The Sunday summary on the phone (Plan 3 Task 26, iOS half): the `/weekly`
 /// contract decodes field for field, the window reads as the two Sunday 18:00
@@ -16,7 +16,7 @@ struct WeeklyDTOTests {
       "week": "2026-W44",
       "from": "2026-10-25T17:00:00.000Z",
       "to": "2026-11-01T17:00:00.000Z",
-      "sent": 3, "received": 7, "filedByMartin": 3, "filedByVerder": 2, "tasksDone": 2, "waiting": 4,
+      "sent": 3, "received": 7, "filedByMartin": 3, "filedByGrip": 2, "tasksDone": 2, "waiting": 4,
       "topWaiting": [
         { "kind": "task", "id": "00000000-f1c5-4000-8000-000000000004", "title": "Loonstrook oktober sturen",
           "subtitle": null, "priority": 3, "at": "2026-10-30T10:00:00.000Z", "dueAt": null, "verder": false }
@@ -28,12 +28,12 @@ struct WeeklyDTOTests {
         try APIClient.jsonDecoder.decode(WeeklyDTO.self, from: Data(json.utf8))
     }
 
-    static func dto(sent: Int = 3, received: Int = 7, filedByMartin: Int = 3, filedByVerder: Int = 2,
+    static func dto(sent: Int = 3, received: Int = 7, filedByMartin: Int = 3, filedByGrip: Int = 2,
                     tasksDone: Int = 2, waiting: Int = 4, top: Int = 1) throws -> WeeklyDTO {
         let item = #"{"kind":"suggestion","id":"x","title":"T","subtitle":null,"priority":3,"at":"2026-10-30T10:00:00.000Z","dueAt":null,"verder":false}"#
         return try decode("""
         {"week":"2026-W44","from":"2026-10-25T17:00:00.000Z","to":"2026-11-01T17:00:00.000Z",
-         "sent":\(sent),"received":\(received),"filedByMartin":\(filedByMartin),"filedByVerder":\(filedByVerder),
+         "sent":\(sent),"received":\(received),"filedByMartin":\(filedByMartin),"filedByGrip":\(filedByGrip),
          "tasksDone":\(tasksDone),"waiting":\(waiting),
          "topWaiting":[\(Array(repeating: item, count: top).joined(separator: ","))]}
         """)
@@ -46,7 +46,7 @@ struct WeeklyDTOTests {
         #expect(d.week == "2026-W44")
         #expect(d.from == Date(timeIntervalSince1970: 1_792_947_600)) // 2026-10-25T17:00:00Z
         #expect(d.to == Date(timeIntervalSince1970: 1_793_552_400))   // 2026-11-01T17:00:00Z
-        let counts: [Int] = [d.sent, d.received, d.filedByMartin, d.filedByVerder, d.tasksDone, d.waiting]
+        let counts: [Int] = [d.sent, d.received, d.filedByMartin, d.filedByGrip, d.tasksDone, d.waiting]
         #expect(counts == [3, 7, 3, 2, 2, 4])
         #expect(d.topWaiting.map(\.kind) == [.task])
         #expect(d.topWaiting.first?.title == "Loonstrook oktober sturen")
@@ -95,23 +95,23 @@ struct WeeklyDTOTests {
 
     /// Martin's seven earlier weeks as the fixture holds them: 3 6 4 5 7 4 5.
     nonisolated static let history = #"""
-    [{"week":"2026-W37","sent":1,"received":5,"filedByMartin":1,"filedByVerder":0,"tasksDone":1,"waiting":3},
-     {"week":"2026-W38","sent":2,"received":8,"filedByMartin":2,"filedByVerder":1,"tasksDone":2,"waiting":4},
-     {"week":"2026-W39","sent":1,"received":6,"filedByMartin":2,"filedByVerder":1,"tasksDone":1,"waiting":5},
-     {"week":"2026-W40","sent":2,"received":7,"filedByMartin":1,"filedByVerder":2,"tasksDone":2,"waiting":5},
-     {"week":"2026-W41","sent":3,"received":10,"filedByMartin":2,"filedByVerder":1,"tasksDone":2,"waiting":4},
-     {"week":"2026-W42","sent":1,"received":6,"filedByMartin":1,"filedByVerder":2,"tasksDone":2,"waiting":7},
-     {"week":"2026-W43","sent":1,"received":9,"filedByMartin":2,"filedByVerder":2,"tasksDone":2,"waiting":6}]
+    [{"week":"2026-W37","sent":1,"received":5,"filedByMartin":1,"filedByGrip":0,"tasksDone":1,"waiting":3},
+     {"week":"2026-W38","sent":2,"received":8,"filedByMartin":2,"filedByGrip":1,"tasksDone":2,"waiting":4},
+     {"week":"2026-W39","sent":1,"received":6,"filedByMartin":2,"filedByGrip":1,"tasksDone":1,"waiting":5},
+     {"week":"2026-W40","sent":2,"received":7,"filedByMartin":1,"filedByGrip":2,"tasksDone":2,"waiting":5},
+     {"week":"2026-W41","sent":3,"received":10,"filedByMartin":2,"filedByGrip":1,"tasksDone":2,"waiting":4},
+     {"week":"2026-W42","sent":1,"received":6,"filedByMartin":1,"filedByGrip":2,"tasksDone":2,"waiting":7},
+     {"week":"2026-W43","sent":1,"received":9,"filedByMartin":2,"filedByGrip":2,"tasksDone":2,"waiting":6}]
     """#
 
     static func withHistory(_ history: String = Self.history, renamed: Int? = 1, sent: Int = 3, received: Int = 7,
-                            filedByMartin: Int = 3, filedByVerder: Int = 2, tasksDone: Int = 2,
+                            filedByMartin: Int = 3, filedByGrip: Int = 2, tasksDone: Int = 2,
                             waiting: Int = 4) throws -> WeeklyDTO {
         try decode("""
         {"week":"2026-W44","from":"2026-10-25T17:00:00.000Z","to":"2026-11-01T17:00:00.000Z",
-         "sent":\(sent),"received":\(received),"filedByMartin":\(filedByMartin),"filedByVerder":\(filedByVerder),
+         "sent":\(sent),"received":\(received),"filedByMartin":\(filedByMartin),"filedByGrip":\(filedByGrip),
          "tasksDone":\(tasksDone),"waiting":\(waiting),"topWaiting":[],
-         "history":\(history)\(renamed.map { #","renamedByVerder":\#($0)"# } ?? "")}
+         "history":\(history)\(renamed.map { #","renamedByGrip":\#($0)"# } ?? "")}
         """)
     }
 
@@ -176,16 +176,16 @@ struct WeeklyDTOTests {
     }
 
     @Test func theSecondWeekWaitsForAnAverage() throws {
-        let s = WeeklyScreen(try Self.withHistory(#"[{"week":"2026-W43","sent":1,"received":3,"filedByMartin":2,"filedByVerder":0,"tasksDone":1,"waiting":3}]"#,
-                                                  renamed: 0, sent: 2, received: 5, filedByMartin: 2, filedByVerder: 1))
+        let s = WeeklyScreen(try Self.withHistory(#"[{"week":"2026-W43","sent":1,"received":3,"filedByMartin":2,"filedByGrip":0,"tasksDone":1,"waiting":3}]"#,
+                                                  renamed: 0, sent: 2, received: 5, filedByMartin: 2, filedByGrip: 1))
         let chart = try #require(s.chart)
         #expect(chart.title == "JOUW STAPPEN · 2 WEKEN")
         #expect(chart.bars.map(\.value) == [nil, nil, nil, nil, nil, nil, 4, 6])
         #expect(chart.average == nil)
         #expect(chart.caption == "geen data vóór week 43")
         #expect(s.sentence?.full == "Je tweede week met verder. Een gemiddelde volgt vanaf 3 weken.")
-        #expect(s.verder.map(\.title) == ["1 stuk opgeborgen"])
-        #expect(s.verder[0].lines == [["Klopt het niet? In de lijst maak je het met één tik ongedaan."]])
+        #expect(s.grip.map(\.title) == ["1 stuk opgeborgen"])
+        #expect(s.grip[0].lines == [["Klopt het niet? In de lijst maak je het met één tik ongedaan."]])
     }
 
     /// Each row compares with the week before only, from `history`; an equal
@@ -205,12 +205,12 @@ struct WeeklyDTOTests {
 
     /// What verder did on its own is stated plainly, and the rename says why
     /// it cannot be undone here.
-    @Test func whatVerderDidOnItsOwnIsStatedPlainly() throws {
+    @Test func whatGripDidOnItsOwnIsStatedPlainly() throws {
         let s = WeeklyScreen(try Self.withHistory())
-        #expect(s.verder.map(\.title) == ["2 stukken opgeborgen", "1 scan een naam gegeven"])
-        #expect(s.verder.map(\.destination) == [.doneByVerder, nil])
-        #expect(s.verder[1].lines == [["Die naam staat ook op de NAS, dus terugzetten kan niet in de app."]])
-        #expect(WeeklyScreen(try Self.dto(filedByVerder: 0)).verder.isEmpty)
+        #expect(s.grip.map(\.title) == ["2 stukken opgeborgen", "1 scan een naam gegeven"])
+        #expect(s.grip.map(\.destination) == [.doneByGrip, nil])
+        #expect(s.grip[1].lines == [["Die naam staat ook op de NAS, dus terugzetten kan niet in de app."]])
+        #expect(WeeklyScreen(try Self.dto(filedByGrip: 0)).grip.isEmpty)
     }
 
     /// AMBER IS LIVE OR NOT AT ALL: nothing in the stored summary carries a
@@ -304,7 +304,7 @@ struct WeeklyDTOTests {
         guard case .loaded(let s) = store.state else { Issue.record("\(store.state)"); return }
         #expect(s.hero.value == 8)
         #expect(s.chart?.average == 5)
-        #expect(s.verder.count == 2)
+        #expect(s.grip.count == 2)
     }
 
     /// 404 before the first Sunday is not an error.
@@ -411,30 +411,30 @@ struct WeeklyDTOTests {
     // MARK: - Getting there
 
     @Test func aWeeklyLinkOpensMeer() {
-        #expect(DeepLink.parse("verder://weekly") == .weekly)
-        #expect(DeepLink.parse("verder://weekly/2026-W44") == DeepLink.none)
+        #expect(DeepLink.parse("grip://weekly") == .weekly)
+        #expect(DeepLink.parse("grip://weekly/2026-W44") == DeepLink.none)
         #expect(DeepLink.weekly.tab == .meer)
     }
 
-    /// The Sunday push carries `verder://inbox` (the worker's link); its
+    /// The Sunday push carries `grip://inbox` (the worker's link); its
     /// CATEGORY says it is the summary, and a tap opens the summary.
     @Test func aTapOnTheWeeklyPushOpensTheSummary() async {
         let router = NotificationRouter(links: DeepLinkInbox(), client: { nil })
         for action in [UNNotificationDefaultActionIdentifier, "OPEN"] {
             let links = DeepLinkInbox()
             let r = NotificationRouter(links: links, client: { nil })
-            let outcome = await r.handle(action: action, category: "WEEKLY", userInfo: ["link": "verder://inbox"])
+            let outcome = await r.handle(action: action, category: "WEEKLY", userInfo: ["link": "grip://inbox"])
             #expect(outcome == .opened(.weekly))
             #expect(links.pending == .weekly)
         }
         #expect(await router.handle(action: UNNotificationDismissActionIdentifier, category: "WEEKLY",
-                                    userInfo: ["link": "verder://inbox"]) == .ignored)
+                                    userInfo: ["link": "grip://inbox"]) == .ignored)
         // Another category with the same link still opens Voor jou. (FILING's
-        // `verder://inbox` is the "Door verder gedaan" digest and opens that
-        // section: `LinkDestinationTests.theDigestOpensDoorVerderGedaan`.)
+        // `grip://inbox` is the "Door verder gedaan" digest and opens that
+        // section: `LinkDestinationTests.theDigestOpensDoorGripGedaan`.)
         let links = DeepLinkInbox()
         _ = await NotificationRouter(links: links, client: { nil })
-            .handle(action: UNNotificationDefaultActionIdentifier, category: "VERDER_MAIL", userInfo: ["link": "verder://inbox"])
+            .handle(action: UNNotificationDefaultActionIdentifier, category: "VERDER_MAIL", userInfo: ["link": "grip://inbox"])
         #expect(links.pending == .inbox)
     }
 

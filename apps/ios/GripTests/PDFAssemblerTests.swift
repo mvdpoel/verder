@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import PDFKit
 import UIKit
-@testable import Verder
+@testable import Grip
 
 /// The fixture: a 3024 x 4032 synthetic photographed page (uneven light,
 /// shadow, fold, sensor noise). How it is made: `apps/ios/scripts/make-letter-fixture.swift`.

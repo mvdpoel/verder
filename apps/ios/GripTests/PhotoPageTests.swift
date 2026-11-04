@@ -5,7 +5,7 @@ import PDFKit
 import UIKit
 import Synchronization
 import UniformTypeIdentifiers
-@testable import Verder
+@testable import Grip
 
 /// A file whose name says photo and whose bytes are not one.
 func notAnImage() throws -> URL {

@@ -286,22 +286,22 @@ enum HomeSummary {
     /// it shows while locked. NEVER AMBER: what verder already did does not
     /// wait on Martin.
     static func doneRow(_ inbox: InboxDTO) -> Row {
-        let all = inbox.doneByVerder
+        let all = inbox.doneByGrip
         guard !all.isEmpty else {
-            return Row(title: DoneByVerderCopy.title, amberSuffix: nil,
-                       meta: [String(DoneByVerderCopy.none.dropLast())])
+            return Row(title: DoneByGripCopy.title, amberSuffix: nil,
+                       meta: [String(DoneByGripCopy.none.dropLast())])
         }
         let filed = all.count { $0.kind == "auto-file" }
         let renamed = all.count { $0.kind == "auto-name" }
         let other = all.count - filed - renamed
         let meta = [filed > 0 ? "\(filed) opgeborgen" : nil, renamed > 0 ? "\(renamed) hernoemd" : nil,
                     other > 0 ? "\(other) overig" : nil].compactMap { $0 }
-        return Row(title: "\(DoneByVerderCopy.title) · \(all.count)", amberSuffix: nil, meta: meta)
+        return Row(title: "\(DoneByGripCopy.title) · \(all.count)", amberSuffix: nil, meta: meta)
     }
 
     /// Where a tap on "Door verder gedaan" leads; nil when there is nothing.
     static func doneOpens(_ inbox: InboxDTO) -> InboxRoute? {
-        inbox.doneByVerder.isEmpty ? nil : .doneByVerder
+        inbox.doneByGrip.isEmpty ? nil : .doneByGrip
     }
 
     /// The cards Overzicht draws, so their tint is decided in ONE place the

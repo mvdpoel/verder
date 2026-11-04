@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 struct WidgetSnapshotTests {
     static func tempDir() -> URL {

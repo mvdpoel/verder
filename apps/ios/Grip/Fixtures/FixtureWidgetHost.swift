@@ -162,7 +162,7 @@ struct WidgetHostView: View {
             AppIcon(app: .agenda, mode: scene.mode, size: m.icon).position(m.icon(col: 2, y: m.top))
             AppIcon(app: .fotos, mode: scene.mode, size: m.icon).position(m.icon(col: 3, y: m.top))
             AppIcon(app: .camera, mode: scene.mode, size: m.icon).position(m.icon(col: 2, y: m.top + m.pitch))
-            AppIcon(app: .verder, mode: scene.mode, size: m.icon).position(m.icon(col: 3, y: m.top + m.pitch))
+            AppIcon(app: .grip, mode: scene.mode, size: m.icon).position(m.icon(col: 3, y: m.top + m.pitch))
             widget(.systemMedium, CGSize(width: m.wide, height: m.small), radius: m.radius)
                 .offset(x: m.margin, y: m.mediumTop)
             iconRows(m, from: m.mediumTop + m.small + m.gap, rows: m.se ? [Self.row2] : [Self.row2, Self.row3, Self.row4])
@@ -180,7 +180,7 @@ struct WidgetHostView: View {
         }
     }
 
-    static let row1: [HostApp] = [.agenda, .fotos, .camera, .verder]
+    static let row1: [HostApp] = [.agenda, .fotos, .camera, .grip]
     static let row2: [HostApp] = [.klok, .notities, .instellingen, .mail]
     static let row3: [HostApp] = [.kaarten, .weer, .wallet, .gezondheid]
     static let row4: [HostApp] = [.rekenmachine, .podcasts, .bestanden, .herinneringen]
@@ -383,7 +383,7 @@ private struct Wallpaper: View {
 }
 
 enum HostApp: CaseIterable {
-    case agenda, fotos, camera, verder, klok, notities, instellingen, mail, kaarten, weer, wallet, gezondheid
+    case agenda, fotos, camera, grip, klok, notities, instellingen, mail, kaarten, weer, wallet, gezondheid
     case rekenmachine, podcasts, bestanden, herinneringen, telefoon, safari, berichten, muziek
 
     var name: String {
@@ -391,7 +391,7 @@ enum HostApp: CaseIterable {
         case .agenda: "Agenda"
         case .fotos: "Foto's"
         case .camera: "Camera"
-        case .verder: "verder"
+        case .grip: "verder"
         case .klok: "Klok"
         case .notities: "Notities"
         case .instellingen: "Instellingen"
@@ -416,7 +416,7 @@ enum HostApp: CaseIterable {
         case .agenda: "calendar"
         case .fotos: "camera.aperture"
         case .camera: "camera"
-        case .verder: ""
+        case .grip: ""
         case .klok: "clock"
         case .notities: "doc.text"
         case .instellingen: "gearshape"
@@ -450,7 +450,7 @@ enum HostApp: CaseIterable {
         case .kaarten, .telefoon, .berichten: return (Color(red: 0.4, green: 0.85, blue: 0.5), Color(red: 0.15, green: 0.65, blue: 0.3), .white)
         case .podcasts: return (Color(red: 0.75, green: 0.4, blue: 1), Color(red: 0.5, green: 0.2, blue: 0.85), .white)
         case .muziek: return (Color(red: 1, green: 0.4, blue: 0.45), Color(red: 0.95, green: 0.2, blue: 0.3), .white)
-        case .verder: return (.black, .black, .white)
+        case .grip: return (.black, .black, .white)
         }
     }
 }
@@ -485,7 +485,7 @@ private struct AppIcon: View {
     }
 
     @ViewBuilder private var tile: some View {
-        if app == .verder, let bundleIcon {
+        if app == .grip, let bundleIcon {
             Image(uiImage: bundleIcon).resizable()
         } else {
             let (a, b, fg) = app.colours

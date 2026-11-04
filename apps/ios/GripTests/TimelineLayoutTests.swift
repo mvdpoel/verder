@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The Tijdlijn's drawing, decided without SwiftUI: rows in the map's own
 /// order with their month bands, lane positions, the rails that pass through

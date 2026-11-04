@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The Voor jou list as the final frames draw it: sections that never
 /// re-rank, the server's count, honest words for age, deadline and freshness.
@@ -28,7 +28,7 @@ struct VoorJouListTests {
     }
 
     static func inbox(_ items: [WaitingItem], count: Int? = nil) -> InboxDTO {
-        InboxDTO(count: count ?? items.count, items: items, doneByVerder: [])
+        InboxDTO(count: count ?? items.count, items: items, doneByGrip: [])
     }
 
     @Test func sectionsSplitWithoutReranking() {
@@ -130,15 +130,15 @@ struct VoorJouListTests {
         #expect(VoorJouList.emptyBody(lastClearedAt: nil, now: Self.now).hasPrefix("Goed bezig. Komt"))
     }
 
-    @Test func doneByVerderReadsAsSentences() throws {
+    @Test func doneByGripReadsAsSentences() throws {
         let inbox = try APIClient.jsonDecoder.decode(InboxDTO.self, from: InboxRankingTests.inbox)
-        let file = try #require(inbox.doneByVerder.first { $0.kind == "auto-file" })
-        #expect(DoneByVerderList.title(file).hasPrefix("Opgeborgen"))
-        let name = try #require(inbox.doneByVerder.first { $0.kind == "auto-name" })
-        #expect(DoneByVerderList.title(name).hasPrefix("Hernoemd: "))
-        #expect(DoneByVerderList.meta(name).first == "hernoemd")
-        #expect(DoneByVerderList.soort("bank-statement") == "bankafschrift")
-        #expect(DoneByVerderList.summary(1).hasPrefix("1 ding deed"))
+        let file = try #require(inbox.doneByGrip.first { $0.kind == "auto-file" })
+        #expect(DoneByGripList.title(file).hasPrefix("Opgeborgen"))
+        let name = try #require(inbox.doneByGrip.first { $0.kind == "auto-name" })
+        #expect(DoneByGripList.title(name).hasPrefix("Hernoemd: "))
+        #expect(DoneByGripList.meta(name).first == "hernoemd")
+        #expect(DoneByGripList.soort("bank-statement") == "bankafschrift")
+        #expect(DoneByGripList.summary(1).hasPrefix("1 ding deed"))
     }
 }
 
@@ -230,8 +230,8 @@ struct InboxDecisionsTests {
 
     // MARK: - Fixes from the final frames (2026-11-04)
 
-    static func verder(_ n: Int, undoable: Bool = true) -> VerderAction {
-        VerderAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Afschrift \(n)",
+    static func grip(_ n: Int, undoable: Bool = true) -> GripAction {
+        GripAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Afschrift \(n)",
                      at: parseISODate("2026-10-30T09:00:00Z")!, kind: "auto-file",
                      before: .init(status: "inbox", title: nil, docType: nil),
                      after: .init(status: "filed", title: nil, docType: "bank-statement"),
@@ -241,10 +241,10 @@ struct InboxDecisionsTests {
     /// The undo of "Door verder gedaan" moves its document into Kan wachten
     /// AT ONCE: the hero, Kan wachten and the section's own count all follow
     /// it, so "Terug in Kan wachten" is never contradicted by the list.
-    @Test func anUndoOfVerderMovesTheDocumentBackAtOnce() {
+    @Test func anUndoOfGripMovesTheDocumentBackAtOnce() {
         let items = [VoorJouListTests.item(.proposal, "p"), VoorJouListTests.item(.suggestion, "s"), VoorJouListTests.item(.task, "t")]
-        let inbox = InboxDTO(count: 3, items: items, doneByVerder: [Self.verder(1), Self.verder(2), Self.verder(3, undoable: false)])
-        let keys: Set<String> = [ListDecision.key(verder: "c1"), ListDecision.key(verder: "c3")]
+        let inbox = InboxDTO(count: 3, items: items, doneByGrip: [Self.grip(1), Self.grip(2), Self.grip(3, undoable: false)])
+        let keys: Set<String> = [ListDecision.key(grip: "c1"), ListDecision.key(grip: "c3")]
         let restoring = VoorJouList.restoring(inbox, keys: keys)
         #expect(restoring.map(\.changeId) == ["c1"], "only what the server called undoable comes back")
         let sections = VoorJouList.sections(inbox, hiding: keys, restoring: restoring)
@@ -356,7 +356,7 @@ struct InboxCacheTests {
     @Test func roundTripsAndWipes() throws {
         let dir = URL.temporaryDirectory.appending(path: "inbox-cache-\(UUID().uuidString)")
         let cache = InboxCache(dir: dir)
-        let inbox = InboxDTO(count: 0, items: [], doneByVerder: [])
+        let inbox = InboxDTO(count: 0, items: [], doneByGrip: [])
         let at = Date(timeIntervalSince1970: 1_793_600_000)
         try cache.save(.init(savedAt: at, inbox: inbox))
         #expect(cache.load() == .init(savedAt: at, inbox: inbox))
@@ -370,7 +370,7 @@ struct InboxCacheTests {
         let dir = URL.temporaryDirectory.appending(path: "inbox-cache-\(UUID().uuidString)")
         let cache = InboxCache(dir: dir)
         let at = Date(timeIntervalSince1970: 1_793_600_000)
-        try cache.save(.init(savedAt: at, inbox: InboxDTO(count: 0, items: [], doneByVerder: [])))
+        try cache.save(.init(savedAt: at, inbox: InboxDTO(count: 0, items: [], doneByGrip: [])))
         let epoch = SessionEpoch()
         let store = InboxStore(client: FixtureEnvironment.client(fixture: "offline"), snapshotDir: nil,
                                setBadge: { _ in }, epoch: epoch, cache: cache)

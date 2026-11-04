@@ -602,7 +602,7 @@ struct AboutScreen: View {
     }
 
     /// The value beside its label on one line when it fits ("Server ·
-    /// verder.example"); otherwise under the label at the full row width,
+    /// grip.example"); otherwise under the label at the full row width,
     /// breaking only after a dot — never squeezed into a right-aligned
     /// column that splits a hostname mid-word.
     private func valueRow(_ line: AboutInfo.Line) -> some View {

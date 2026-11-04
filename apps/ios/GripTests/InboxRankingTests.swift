@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// Voor jou draws what the server ranked, in the server's order, and amber
 /// marks exactly the items waiting on Martin.
@@ -19,7 +19,7 @@ struct InboxRankingTests {
        "at":"2026-10-20T08:00:00.000Z","dueAt":"2026-10-31T23:00:00.000Z","verder":false},
       {"kind":"stop","id":"st1","title":"Stukken aanleveren","subtitle":null,"priority":3,
        "at":"2026-08-28T00:00:00.000Z","dueAt":null,"verder":false}
-    ],"doneByVerder":[\(DoneByVerderFixture.autoFile),\(DoneByVerderFixture.autoName)]}
+    ],"doneByGrip":[\(DoneByGripFixture.autoFile),\(DoneByGripFixture.autoName)]}
     """.utf8)
 
     func decode() throws -> InboxDTO {
@@ -33,7 +33,7 @@ struct InboxRankingTests {
         #expect(rows.map(\.item.priority) == [3, 1, 2, 1, 3], "the phone never re-ranks")
     }
 
-    @Test func doneByVerderIsNeverAmber() throws {
+    @Test func doneByGripIsNeverAmber() throws {
         let inbox = try decode()
         let done = VoorJouList.doneRows(inbox)
         #expect(done.count == 2)

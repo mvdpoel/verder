@@ -19,7 +19,7 @@ struct LockView: View {
             } else {
                 VStack(spacing: 24) {
                     Spacer()
-                    VerderRings()
+                    GripRings()
                     AuthEyebrow()
                     Spacer()
                     if let message = lock.message {
@@ -189,7 +189,7 @@ struct PrivacyCover: View {
         ZStack {
             Color.void.ignoresSafeArea()
             VStack(spacing: 24) {
-                VerderRings(size: 160)
+                GripRings(size: 160)
                 Text("VERDER")
                     .font(.mono(17, relativeTo: .headline, weight: .medium))
                     .tracking(2)

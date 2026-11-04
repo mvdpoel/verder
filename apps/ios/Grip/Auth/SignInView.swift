@@ -177,7 +177,7 @@ struct SignInView: View {
         if auth.isBusy && auth.lastMethod == .passkey {
             FaceIDTile(size: compact ? 128 : 156)
         } else {
-            VerderRings(size: compact ? Layout.compactRings : 128)
+            GripRings(size: compact ? Layout.compactRings : 128)
         }
     }
 

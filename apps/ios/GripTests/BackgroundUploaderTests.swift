@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The uploader end to end against a stub server. A background URLSession
 /// refuses custom URLProtocols, so these run the SAME uploader and delegate
@@ -120,7 +120,7 @@ struct BackgroundUploaderTests {
 
     // MARK: - Judging an answer
 
-    let sentTo = URL(string: "https://verder.vanderpoel.pro/api/mobile/v1/documents")!
+    let sentTo = URL(string: "https://grip.vanderpoel.pro/api/mobile/v1/documents")!
 
     func response(_ status: Int, url: URL? = nil) -> HTTPURLResponse {
         HTTPURLResponse(url: url ?? sentTo, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])!
@@ -136,7 +136,7 @@ struct BackgroundUploaderTests {
     /// asked), so a 307 → /login → 200 arrives as a 200 from another URL.
     /// That is a sign-in page, not a stored scan.
     @Test func a200FromAnotherUrlIsUnauthorized() {
-        let login = URL(string: "https://verder.vanderpoel.pro/login")!
+        let login = URL(string: "https://grip.vanderpoel.pro/login")!
         let r = UploadOutcome.judge(sentTo: sentTo, response: response(200, url: login),
                                     body: Data("<html>login</html>".utf8), error: nil)
         #expect(r == .failure(.unauthorized))

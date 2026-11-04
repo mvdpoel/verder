@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import UserNotifications
-@testable import Verder
+@testable import Grip
 
 /// What a notification response may do. A tap and "Bekijken" only OPEN; the
 /// one thing an action can run is answering a QUESTION, through Plan 2's
@@ -14,13 +14,13 @@ struct NotificationRouterTests {
     nonisolated static let answerPath = "/api/mobile/v1/proposals/\(id)/answer"
     static let questionCategory = "q.\(id)"
     static let questionInfo: [AnyHashable: Any] = [
-        "link": "verder://proposal/\(id)", "options": ["Klaar", "Niets doen"], "revision": 4,
+        "link": "grip://proposal/\(id)", "options": ["Klaar", "Niets doen"], "revision": 4,
     ]
-    static let replyInfo: [AnyHashable: Any] = ["link": "verder://proposal/\(id)"]
+    static let replyInfo: [AnyHashable: Any] = ["link": "grip://proposal/\(id)"]
 
     nonisolated static let taskId = "00000000-f1c5-4000-8000-0000000000d1"
     nonisolated static let taskPath = "/api/mobile/v1/tasks/\(taskId)/status"
-    static let taskInfo: [AnyHashable: Any] = ["link": "verder://task/\(taskId)"]
+    static let taskInfo: [AnyHashable: Any] = ["link": "grip://task/\(taskId)"]
     static let taskTitle = "Morgen: bijstand tekenen"
 
     final class Calls {
@@ -88,7 +88,7 @@ struct NotificationRouterTests {
         #expect(notice.content.title == "Gedaan kwam niet door")
         #expect(notice.content.body == "Bijstand tekenen staat nog open: er was geen verbinding. Kies Gedaan nog een keer bij deze melding.")
         #expect(notice.content.categoryIdentifier == "TASK_DUE")
-        #expect(notice.content.userInfo["link"] as? String == "verder://task/\(Self.taskId)")
+        #expect(notice.content.userInfo["link"] as? String == "grip://task/\(Self.taskId)")
         #expect(notice.content.userInfo["taskTitle"] as? String == "bijstand tekenen")
         #expect(r.calls.answered == 0)
 
@@ -127,7 +127,7 @@ struct NotificationRouterTests {
     /// A deadline push that names no task (an older push) opens Voor jou.
     @Test func doneWithoutATaskLinkOpens() async {
         let r = rig(Self.taskDone)
-        let outcome = await done(r, info: ["link": "verder://inbox"])
+        let outcome = await done(r, info: ["link": "grip://inbox"])
         #expect(outcome == .opened(.inbox))
         #expect(r.server.requests.isEmpty)
     }
@@ -159,7 +159,7 @@ struct NotificationRouterTests {
         let notice = try #require(r.calls.posted.only)
         #expect(notice.content.title == "Vraag al afgehandeld")
         #expect(notice.content.body == "Tik om Voor jou te openen. Hier hoeft niets meer.")
-        #expect(notice.content.userInfo["link"] as? String == "verder://inbox")
+        #expect(notice.content.userInfo["link"] as? String == "grip://inbox")
     }
 
     @Test func routerMapsReplyTapToDetailNotSend() async {
@@ -240,7 +240,7 @@ struct NotificationRouterTests {
     /// names another one is not answered for either.
     @Test func aCategoryAndLinkThatDisagreeAnswerNothing() async {
         var info = Self.questionInfo
-        info["link"] = "verder://proposal/00000000-0000-0000-0000-000000000001"
+        info["link"] = "grip://proposal/00000000-0000-0000-0000-000000000001"
         let r = rig()
         let outcome = await r.router.handle(action: "answer.0", category: Self.questionCategory, userInfo: info)
         #expect(outcome == .ignored)

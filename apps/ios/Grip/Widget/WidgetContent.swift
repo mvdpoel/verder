@@ -4,7 +4,7 @@ import WidgetKit
 
 /// One moment of the widget's timeline: the App Group snapshot as it was read.
 /// Nil when nothing was ever written (or the file does not decode).
-struct VerderEntry: TimelineEntry {
+struct GripEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
     /// The App Group's empty "signed out" marker (`WidgetSnapshot.isSignedOut`):
@@ -20,13 +20,13 @@ struct VerderEntry: TimelineEntry {
 /// running. THE WIDGET NEVER CALLS THE NETWORK: the app's refresh (foreground,
 /// or the silent `badge.sync` push) writes the snapshot and reloads timelines;
 /// this only re-reads the file every 30 minutes.
-enum VerderTimeline {
+enum GripTimeline {
     static let reloadAfter: TimeInterval = 30 * 60
 
     /// The entry for `now` and when WidgetKit should ask again.
     static func entry(now: Date, snapshot: WidgetSnapshot?, signedOut: Bool = false,
-                      displaySize: CGSize? = nil) -> (VerderEntry, Date) {
-        (VerderEntry(date: now, snapshot: snapshot, signedOut: signedOut, displaySize: displaySize),
+                      displaySize: CGSize? = nil) -> (GripEntry, Date) {
+        (GripEntry(date: now, snapshot: snapshot, signedOut: signedOut, displaySize: displaySize),
          now.addingTimeInterval(reloadAfter))
     }
 
@@ -34,12 +34,12 @@ enum VerderTimeline {
     /// next reload — an entry at that very moment, so a day-old count is never
     /// shown for up to half an hour past its 24 h.
     static func entries(now: Date, snapshot: WidgetSnapshot?, signedOut: Bool = false,
-                        displaySize: CGSize? = nil) -> [VerderEntry] {
+                        displaySize: CGSize? = nil) -> [GripEntry] {
         let (first, reload) = entry(now: now, snapshot: snapshot, signedOut: signedOut, displaySize: displaySize)
         guard let snapshot else { return [first] }
         let staleAt = snapshot.updatedAt.addingTimeInterval(WidgetContent.staleAfter)
         guard staleAt > now, staleAt < reload else { return [first] }
-        return [first, VerderEntry(date: staleAt, snapshot: snapshot, signedOut: signedOut, displaySize: displaySize)]
+        return [first, GripEntry(date: staleAt, snapshot: snapshot, signedOut: signedOut, displaySize: displaySize)]
     }
 }
 
@@ -119,9 +119,9 @@ struct WidgetContent: Equatable {
 
     static let staleAfter: TimeInterval = 24 * 3600
     // Literals that parse: force-unwrapping them can never fail at runtime.
-    static let inboxURL = URL(string: "verder://inbox")!
+    static let inboxURL = URL(string: "grip://inbox")!
     /// The footer's tap: the Tijdlijn on Dossier, at the open stop.
-    static let mapURL = URL(string: "verder://timeline")!
+    static let mapURL = URL(string: "grip://timeline")!
 
     static let staleText = "Open verder om bij te werken"
     static let emptyText = "Niets wacht op je"
@@ -228,7 +228,7 @@ struct WidgetContent: Equatable {
     /// 116 pt column, and the amber numeral and the words carry it there.
     var showsDot: Bool { !(family == .systemSmall && layout == .compact) }
 
-    /// Every family the widget offers (`VerderWidget.supportedFamilies`), in
+    /// Every family the widget offers (`GripWidget.supportedFamilies`), in
     /// the order the in-app guide lists them.
     static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge,
                                            .accessoryCircular, .accessoryRectangular, .accessoryInline]
@@ -396,7 +396,7 @@ struct WidgetContent: Equatable {
         case "task": host = "task"
         default: return inboxURL
         }
-        return URL(string: "verder://\(host)/\(id.uuidString.lowercased())") ?? inboxURL
+        return URL(string: "grip://\(host)/\(id.uuidString.lowercased())") ?? inboxURL
     }
 
     /// From two weeks on the age reads in whole weeks ("oudste 6 wk"): a

@@ -3,7 +3,7 @@ import Observation
 
 /// The words "Door verder gedaan" uses for one action. The web spells the same
 /// sentences in apps/web/src/lib/verder-action-copy.ts; keep the two in step.
-enum DoneByVerderCopy {
+enum DoneByGripCopy {
     static let title = "Door verder gedaan"
     static let explanation = "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
     /// Lowercase: verder is the app; capital Verder is the bewindvoerder.
@@ -26,12 +26,12 @@ enum DoneByVerderCopy {
         return trimmed.isEmpty ? "zonder soort" : trimmed
     }
 
-    static func headline(_ a: VerderAction) -> String {
+    static func headline(_ a: GripAction) -> String {
         a.kind == "auto-file" ? "Opgeborgen door verder" : "Hernoemd door verder"
     }
 
     /// What changed, before → after, one clause per field that moved.
-    static func changes(_ a: VerderAction) -> [String] {
+    static func changes(_ a: GripAction) -> [String] {
         var out: [String] = []
         if a.before.status != a.after.status { out.append("\(status(a.before.status)) → \(status(a.after.status))") }
         if soort(a.before.docType) != soort(a.after.docType) {
@@ -44,7 +44,7 @@ enum DoneByVerderCopy {
     }
 
     /// Why the button is off; an undo already done wins.
-    static func note(_ a: VerderAction) -> String? {
+    static func note(_ a: GripAction) -> String? {
         if a.undone { return "Ongedaan gemaakt" }
         switch a.notUndoableReason {
         case "al aangepast"?: return "Al aangepast — niet meer terug te draaien"
@@ -65,7 +65,7 @@ enum DoneByVerderCopy {
 /// already out of date.
 @MainActor
 @Observable
-final class DoneByVerderModel {
+final class DoneByGripModel {
     private(set) var busy: Set<String> = []
     private(set) var messages: [String: String] = [:]
 
@@ -84,10 +84,10 @@ final class DoneByVerderModel {
     nonisolated static func undoPath(_ changeId: String) -> String { "/api/mobile/v1/verder-actions/\(changeId)/undo" }
 
     /// Only a row the server called undoable is ever posted.
-    func canUndo(_ a: VerderAction) -> Bool { a.undoable && !a.undone && !busy.contains(a.changeId) }
+    func canUndo(_ a: GripAction) -> Bool { a.undoable && !a.undone && !busy.contains(a.changeId) }
 
     @discardableResult
-    func undo(_ a: VerderAction) async -> Bool {
+    func undo(_ a: GripAction) async -> Bool {
         guard canUndo(a) else { return false }
         busy.insert(a.changeId)
         defer { busy.remove(a.changeId) }
@@ -95,14 +95,14 @@ final class DoneByVerderModel {
         do {
             // `{}` (Plan 2's EmptyBody): the undo route takes no options.
             let _: Ignored = try await client.postJSON(Self.undoPath(a.changeId), EmptyBody())
-            messages[a.changeId] = DoneByVerderCopy.undone
+            messages[a.changeId] = DoneByGripCopy.undone
             await onChanged()
             return true
         } catch APIError.rejected(409) {
-            messages[a.changeId] = DoneByVerderCopy.changedSince
+            messages[a.changeId] = DoneByGripCopy.changedSince
             await onChanged()
         } catch APIError.rejected(400) {
-            messages[a.changeId] = DoneByVerderCopy.refused
+            messages[a.changeId] = DoneByGripCopy.refused
         } catch APIError.unauthorized {
             onUnauthorized()
             messages[a.changeId] = "Log opnieuw in."
@@ -123,28 +123,28 @@ final class DoneByVerderModel {
 ///
 /// The list's undo is HELD like every other decision on it (`InboxDecisions`,
 /// a toast with its own "Ongedaan maken"); the screen of its own posts at once.
-struct DoneByVerderListSection: View {
-    let actions: [VerderAction]
+struct DoneByGripListSection: View {
+    let actions: [GripAction]
     let total: Int
     @Binding var open: Bool
     /// The empty list: the closed section says what is behind it.
     let summary: Bool
     let ax: Bool
-    let undo: (VerderAction) -> Void
+    let undo: (GripAction) -> Void
 
     var body: some View {
         Section {
             Button { open.toggle() } label: { header }
                 .buttonStyle(.plain)
                 .voorJouRow()
-                .accessibilityLabel("\(DoneByVerderCopy.title), \(total)")
+                .accessibilityLabel("\(DoneByGripCopy.title), \(total)")
                 .accessibilityHint(open ? "Klapt in" : "Klapt open")
                 // On the header ROW: a List scrolls to a row's id, not a Section's.
                 .id("done")
             // At the accessibility sizes the explanation would fill a screen
             // above the rows it explains; the frame goes straight to them.
             if (open && !ax) || (summary && !open) {
-                Text(open ? DoneByVerderCopy.explanation : DoneByVerderList.summary(total))
+                Text(open ? DoneByGripCopy.explanation : DoneByGripList.summary(total))
                     .font(VoorJouMetrics.body)
                     .foregroundStyle(Color.inkMute)
                     .fixedSize(horizontal: false, vertical: true)
@@ -153,9 +153,9 @@ struct DoneByVerderListSection: View {
             }
             if open {
                 ForEach(actions) { a in
-                    DoneByVerderListRow(action: a, ax: ax, undo: { undo(a) })
+                    DoneByGripListRow(action: a, ax: ax, undo: { undo(a) })
                         .voorJouRow()
-                        .id(ListDecision.key(verder: a.changeId))
+                        .id(ListDecision.key(grip: a.changeId))
                 }
             }
         }
@@ -164,7 +164,7 @@ struct DoneByVerderListSection: View {
     private var header: some View {
         let label = HStack(spacing: 8) {
             Image(systemName: "checkmark.seal").font(.system(size: 12))
-            Text(DoneByVerderCopy.title.uppercased())
+            Text(DoneByGripCopy.title.uppercased())
             Text("\(total)").padding(.leading, 4)
         }
         .foregroundStyle(Color.inkSoft)
@@ -176,7 +176,7 @@ struct DoneByVerderListSection: View {
         return Group {
             if ax {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(DoneByVerderCopy.title.uppercased())\u{00A0}\u{00A0}\(total)").foregroundStyle(Color.inkSoft)
+                    Text("\(DoneByGripCopy.title.uppercased())\u{00A0}\u{00A0}\(total)").foregroundStyle(Color.inkSoft)
                     action
                 }
             } else {
@@ -193,8 +193,8 @@ struct DoneByVerderListSection: View {
 /// One thing verder did, as the list draws it: the sentence, its soort (or
 /// "hernoemd") and day, and "Ongedaan maken" where the server allows it —
 /// otherwise the server's reason why not.
-struct DoneByVerderListRow: View {
-    let action: VerderAction
+struct DoneByGripListRow: View {
+    let action: GripAction
     let ax: Bool
     let undo: () -> Void
 
@@ -211,21 +211,21 @@ struct DoneByVerderListRow: View {
                         .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(DoneByVerderList.title(a))
-                        .wholeWords(DoneByVerderList.title(a), font: VoorJouMetrics.title)
+                    Text(DoneByGripList.title(a))
+                        .wholeWords(DoneByGripList.title(a), font: VoorJouMetrics.title)
                         .lineHeight(.multiple(factor: ax ? 1.15 : VoorJouMetrics.lineFactor))
                         .foregroundStyle(Color.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                     if ax {
                         VStack(alignment: .leading, spacing: 2) {
-                            ForEach(DoneByVerderList.meta(a), id: \.self) { Text($0.uppercased()) }
+                            ForEach(DoneByGripList.meta(a), id: \.self) { Text($0.uppercased()) }
                         }
                         .font(VoorJouMetrics.label)
                         .foregroundStyle(Color.inkLabel)
                         if a.undoable && !a.undone { undoButton }
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(HomeSummary.metaLine(DoneByVerderList.meta(a).map { $0.uppercased() }))
+                            Text(HomeSummary.metaLine(DoneByGripList.meta(a).map { $0.uppercased() }))
                                 .font(VoorJouMetrics.label)
                                 .tracking(VoorJouMetrics.metaTracking)
                                 .foregroundStyle(Color.inkLabel)
@@ -233,7 +233,7 @@ struct DoneByVerderListRow: View {
                             if a.undoable && !a.undone { undoButton }
                         }
                     }
-                    if !(a.undoable && !a.undone), let note = DoneByVerderList.note(a) {
+                    if !(a.undoable && !a.undone), let note = DoneByGripList.note(a) {
                         Text(note)
                             .font(VoorJouMetrics.body)
                             .foregroundStyle(Color.inkMute)
@@ -274,32 +274,32 @@ struct RowHairlineShape: View {
     }
 }
 
-/// The same list, open, on a screen of its own (`InboxRoute.doneByVerder`):
+/// The same list, open, on a screen of its own (`InboxRoute.doneByGrip`):
 /// where Overzicht's card and the daily digest push lead. Read from the one
 /// `InboxStore`, so it is the list the section shows.
-struct DoneByVerderScreen: View {
+struct DoneByGripScreen: View {
     let store: InboxStore
-    let model: DoneByVerderModel
+    let model: DoneByGripModel
 
     var body: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(DoneByVerderCopy.title)
+                    Text(DoneByGripCopy.title)
                         .font(.display(28, relativeTo: .title, weight: .regular))
                         .foregroundStyle(Color.inkBright)
-                    Text(DoneByVerderCopy.explanation)
+                    Text(DoneByGripCopy.explanation)
                         .font(.display(15, relativeTo: .subheadline, weight: .regular))
                         .foregroundStyle(Color.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let actions = store.inbox?.doneByVerder {
+                    if let actions = store.inbox?.doneByGrip {
                         if actions.isEmpty {
-                            Text(DoneByVerderCopy.none)
+                            Text(DoneByGripCopy.none)
                                 .font(.display(15, relativeTo: .subheadline, weight: .regular))
                                 .foregroundStyle(Color.inkMute)
                         }
-                        ForEach(actions) { DoneByVerderRow(action: $0, model: model) }
+                        ForEach(actions) { DoneByGripRow(action: $0, model: model) }
                     } else if store.lastError == nil {
                         ProgressView().tint(Color.signal)
                     } else if let error = store.lastError {
@@ -319,21 +319,21 @@ struct DoneByVerderScreen: View {
 }
 
 /// One thing verder did, with its one-tap undo when the server allows it.
-struct DoneByVerderRow: View {
-    let action: VerderAction
-    let model: DoneByVerderModel
+struct DoneByGripRow: View {
+    let action: GripAction
+    let model: DoneByGripModel
 
     var body: some View {
         let a = action
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(DoneByVerderCopy.headline(a)) · \(ProposalFormat.dateTime(a.at))")
+            Text("\(DoneByGripCopy.headline(a)) · \(ProposalFormat.dateTime(a.at))")
                 .font(.mono(11, relativeTo: .caption2))
                 .foregroundStyle(Color.inkDim)
             Text(a.documentTitle ?? "Document")
                 .font(.display(15, relativeTo: .body, weight: .regular))
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
-            ForEach(DoneByVerderCopy.changes(a), id: \.self) { line in
+            ForEach(DoneByGripCopy.changes(a), id: \.self) { line in
                 Text(line)
                     .font(.mono(11, relativeTo: .caption2))
                     .foregroundStyle(Color.inkSoft)
@@ -344,7 +344,7 @@ struct DoneByVerderRow: View {
                         .font(.mono(12, relativeTo: .footnote, weight: .medium))
                         .foregroundStyle(Color.signalLink)
                         .buttonStyle(.plain)
-                } else if let note = DoneByVerderCopy.note(a) {
+                } else if let note = DoneByGripCopy.note(a) {
                     Text(note)
                         .font(.display(12, relativeTo: .footnote, weight: .light))
                         .foregroundStyle(Color.inkDim)

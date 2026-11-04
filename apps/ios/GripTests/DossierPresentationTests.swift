@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// What the Dossier tab and the viewer say ("dossier · final"): soort chips,
 /// readout lines, sync progress, the server's hits by kind, the counter's

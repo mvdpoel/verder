@@ -9,7 +9,7 @@ import Foundation
 /// storage and does not set cookies, so a Set-Cookie can only become a session
 /// by passing through `sessionCookie(from:url:)` and a `SessionStore`.
 struct APIClient: Sendable {
-    static let production = URL(string: "https://verder.vanderpoel.pro")!
+    static let production = URL(string: "https://grip.vanderpoel.pro")!
 
     /// `TRUST_HEADER` in packages/auth/src/session-trust.ts. Exactly "1" gives a
     /// 30-day session instead of 12 hours; the phone is a trusted device.

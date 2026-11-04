@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// ONE sign-out epoch for every store: a refresh or sync suspended at an
 /// await when the session ends resumes into a later epoch and writes nothing

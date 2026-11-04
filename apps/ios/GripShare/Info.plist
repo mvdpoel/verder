@@ -46,7 +46,7 @@
 		<string>IBMPlexMono-Medium.ttf</string>
 		<string>IBMPlexMono-SemiBold.ttf</string>
 	</array>
-	<key>VerderKeychainAccessGroup</key>
-	<string>$(AppIdentifierPrefix)pro.vanderpoel.verder</string>
+	<key>GripKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)pro.vanderpoel.grip</string>
 </dict>
 </plist>

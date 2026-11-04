@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// On-device search over the pocket dossier, and the pieces of the Dossier
 /// tab that are decided outside the view.

@@ -6,7 +6,7 @@ import SwiftUI
 ///
 /// Reach it from Xcode's canvas (`#Preview` below) or, in a DEBUG build, by
 /// launching the app with the argument `-tokenPreview`
-/// (`xcrun simctl launch booted pro.vanderpoel.verder -tokenPreview`).
+/// (`xcrun simctl launch booted pro.vanderpoel.grip -tokenPreview`).
 struct TokenPreview: View {
     /// The order globals.css declares them in.
     static let order = [

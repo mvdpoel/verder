@@ -32,17 +32,17 @@ struct KeychainError: Error, Equatable {
 /// restored onto another device.
 ///
 /// The access group is the app's `keychain-access-groups` entitlement
-/// (`$(AppIdentifierPrefix)pro.vanderpoel.verder`, project.yml). Its resolved
-/// value reaches the code through the Info.plist key `VerderKeychainAccessGroup`,
+/// (`$(AppIdentifierPrefix)pro.vanderpoel.grip`, project.yml). Its resolved
+/// value reaches the code through the Info.plist key `GripKeychainAccessGroup`,
 /// which Xcode expands from the same build setting — so the group named in code
 /// cannot drift from the group the binary is entitled to. The share extension
 /// (spec §7.8) adds the same entitlement to read the same item.
 struct KeychainSessionStore: SessionStore {
-    static let defaultService = "pro.vanderpoel.verder.session"
+    static let defaultService = "pro.vanderpoel.grip.session"
     private static let account = "better-auth"
 
     static var entitledAccessGroup: String? {
-        guard let group = Bundle.main.object(forInfoDictionaryKey: "VerderKeychainAccessGroup") as? String,
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "GripKeychainAccessGroup") as? String,
               !group.isEmpty, !group.contains("$(") else { return nil }
         return group
     }

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 struct ScanNamingTests {
     static func date(_ iso: String) -> Date {

@@ -31,7 +31,7 @@ struct TalkingPointsDTO: Codable, Equatable, Sendable {
         /// task | proposal | debt | mail | document | stop
         let type: String
         let id: String
-        /// A link `DeepLink.parse` accepts (`verder://task/<id>`, `verder://dossier`, …).
+        /// A link `DeepLink.parse` accepts (`grip://task/<id>`, `grip://dossier`, …).
         let link: String
     }
 

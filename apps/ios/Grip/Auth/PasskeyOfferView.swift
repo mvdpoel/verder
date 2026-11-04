@@ -47,7 +47,7 @@ struct PasskeyOfferView: View {
                         .padding(.top, 4)
                     Spacer(minLength: 32)
                     Group {
-                        if auth.isBusy { FaceIDTile() } else { VerderRings(confirmed: works) }
+                        if auth.isBusy { FaceIDTile() } else { GripRings(confirmed: works) }
                     }
                     .frame(maxWidth: .infinity)
                     Spacer(minLength: 32)

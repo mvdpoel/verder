@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// Answers for the system permission sheet.
 final class FakePermission: NotificationPermission, @unchecked Sendable {
@@ -81,7 +81,7 @@ struct PushRegistrarTests {
         #expect(Set(body.keys) == ["token", "environment", "bundleId", "appVersion"])
         #expect(body["token"] as? String == hexToken(Self.token))
         #expect(body["environment"] as? String == "development")
-        #expect(body["bundleId"] as? String == "pro.vanderpoel.verder")
+        #expect(body["bundleId"] as? String == "pro.vanderpoel.grip")
         #expect(body["appVersion"] as? String == "0.1 (1)")
 
         #expect(r.registrar.registeredEnvironment == "development")

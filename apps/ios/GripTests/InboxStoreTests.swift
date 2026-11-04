@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The read routes as `apps/web/src/lib/mobile-dto.ts` serves them.
 enum InboxFixture {
@@ -19,10 +19,10 @@ enum InboxFixture {
        "at":"2026-10-29T08:00:00.000Z","dueAt":null,"verder":false},
       {"kind":"task","id":"t1","title":"Polis opvragen","subtitle":null,"priority":1,
        "at":"2026-10-20T08:00:00.000Z","dueAt":"2026-10-31T23:00:00.000Z","verder":false}
-    ],"doneByVerder":[]}
+    ],"doneByGrip":[]}
     """.utf8)
 
-    static let emptyInbox = Data(#"{"count":0,"items":[],"doneByVerder":[]}"#.utf8)
+    static let emptyInbox = Data(#"{"count":0,"items":[],"doneByGrip":[]}"#.utf8)
 
     static let summary = Data("""
     {"headline":{"stopTitle":"Stukken aanleveren","trackTitle":"Opstart en stukken",
@@ -102,7 +102,7 @@ struct InboxStoreTests {
         let rows = (0..<7).map { n in
             #"{"kind":"task","id":"t\#(n)","title":"Taak \#(n)","subtitle":null,"priority":3,"at":"2026-10-2\#(6 - n)T08:00:00Z","dueAt":null,"verder":false}"#
         }
-        let body = Data(#"{"count":7,"items":[\#(rows.joined(separator: ","))],"doneByVerder":[]}"#.utf8)
+        let body = Data(#"{"count":7,"items":[\#(rows.joined(separator: ","))],"doneByGrip":[]}"#.utf8)
         let r = rig(Self.serving(inbox: .status(200, body: body)))
         await r.store.refresh()
         let snap = try #require(WidgetSnapshot.read(from: r.dir))
@@ -154,7 +154,7 @@ struct InboxStoreTests {
     @Test func anUnknownKindStillDecodes() async throws {
         let body = Data("""
         {"count":1,"items":[{"kind":"reminder","id":"x","title":"Iets nieuws","subtitle":null,"priority":3,
-          "at":"2026-10-30T09:20:01Z","dueAt":null,"verder":false}],"doneByVerder":[]}
+          "at":"2026-10-30T09:20:01Z","dueAt":null,"verder":false}],"doneByGrip":[]}
         """.utf8)
         let r = rig(Self.serving(inbox: .status(200, body: body)))
         await r.store.refresh()

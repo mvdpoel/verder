@@ -92,7 +92,7 @@ final class UploadCenter {
                 if !offline { await self.drain() }
             }
         }
-        monitor.start(queue: DispatchQueue(label: "verder.network"))
+        monitor.start(queue: DispatchQueue(label: "grip.network"))
         pathMonitor = monitor
     }
 
@@ -146,7 +146,7 @@ final class UploadCenter {
         guard !pages.isEmpty else { return }
         let capturedAt = now()
         let pageCount = pages.count
-        let background = UIApplication.shared.beginBackgroundTask(withName: "verder.scan")
+        let background = UIApplication.shared.beginBackgroundTask(withName: "grip.scan")
         preparing += 1
         message = nil
         Task {

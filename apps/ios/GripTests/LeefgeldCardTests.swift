@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// Plan 3 Task 19: the leefgeld card's five states and the per-account month
 /// cards. The figure is the SERVER's (leefgeld-week.ts); the phone only says it.

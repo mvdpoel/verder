@@ -29,7 +29,7 @@ struct MoreTab: View {
     /// The Weekoverzicht's "ontvangen" / "opgeborgen" rows.
     var openDossier: () -> Void = {}
     /// The Weekoverzicht's "Door verder gedaan" row.
-    var openDoneByVerder: () -> Void = {}
+    var openDoneByGrip: () -> Void = {}
     /// The case's clock (`AppServices.now`): "bijgewerkt 14:02".
     var now: @Sendable () -> Date = { Date() }
 
@@ -42,7 +42,7 @@ struct MoreTab: View {
     init(auth: AuthModel, center: UploadCenter, push: PushRegistrar, money: MoneyStore, dossier: DossierModel,
          path: Binding<[MoreRoute]>, openVoice: @escaping () -> Void, forgetVoice: @escaping () -> Void,
          weekly: WeeklyStore, inbox: InboxStore, openVoorJou: @escaping () -> Void,
-         openDossier: @escaping () -> Void = {}, openDoneByVerder: @escaping () -> Void = {},
+         openDossier: @escaping () -> Void = {}, openDoneByGrip: @escaping () -> Void = {},
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.auth = auth
         self.center = center
@@ -56,7 +56,7 @@ struct MoreTab: View {
         self.inbox = inbox
         self.openVoorJou = openVoorJou
         self.openDossier = openDossier
-        self.openDoneByVerder = openDoneByVerder
+        self.openDoneByGrip = openDoneByGrip
         self.now = now
         let rejected: @MainActor () -> Void = { auth.sessionRejected() }
         self._account = State(initialValue: AccountModel(client: auth.client, onUnauthorized: rejected, now: now))
@@ -66,7 +66,7 @@ struct MoreTab: View {
     private var about: AboutInfo { AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: shownServer) }
 
     /// The server Over verder names: the real one, or in a fixture run the
-    /// frames' "verder.example" rather than the fixture's own host.
+    /// frames' "grip.example" rather than the fixture's own host.
     private var shownServer: URL {
         #if DEBUG
         if let shown = FixtureEnvironment.displayServer { return shown }
@@ -105,7 +105,7 @@ struct MoreTab: View {
                     switch route {
                     case .weekly:
                         WeeklyView(store: weekly, inbox: inbox, now: now, openVoorJou: openVoorJou,
-                                   openDossier: openDossier, openDoneByVerder: openDoneByVerder)
+                                   openDossier: openDossier, openDoneByGrip: openDoneByGrip)
                     case .money:
                         GeldScreen(store: money)
                     case .account:

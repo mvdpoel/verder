@@ -12,7 +12,7 @@ enum InboxRoute: Hashable, Sendable {
     case document(id: String, title: String)
     /// "Door verder gedaan" on a screen of its own, open: where Overzicht's
     /// card and the daily digest lead.
-    case doneByVerder
+    case doneByGrip
 
     /// Nil for the map's current stop and for a kind this build does not know:
     /// those are shown, not opened.
@@ -46,7 +46,7 @@ struct VoorJouTab: View {
     let onUnauthorized: @MainActor () -> Void
     let now: @Sendable () -> Date
 
-    @State private var done: DoneByVerderModel
+    @State private var done: DoneByGripModel
     @State private var decisions: InboxDecisions
     @State private var showAll = false
     @State private var doneOpen = false
@@ -55,7 +55,7 @@ struct VoorJouTab: View {
     @State private var confirming = false
     @State private var reviewing = false
     @State private var scrolled = false
-    @State private var verderUndos = 0
+    @State private var gripUndos = 0
     @State private var fixtureApplied = false
     @Namespace private var zoom
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -75,7 +75,7 @@ struct VoorJouTab: View {
         self.now = now
         // An undo moves a document back into the inbox, and a refusal means
         // the row is stale: either way the one store refreshes.
-        self._done = State(initialValue: DoneByVerderModel(
+        self._done = State(initialValue: DoneByGripModel(
             client: client, onChanged: { await store.refresh() }, onUnauthorized: onUnauthorized))
         self._decisions = State(initialValue: InboxDecisions(
             client: client, now: now, onPosted: { await store.refresh() }, onUnauthorized: onUnauthorized))
@@ -113,7 +113,7 @@ struct VoorJouTab: View {
         .sensoryFeedback(.success, trigger: decisions.successes)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: decisions.softs)
         .sensoryFeedback(.error, trigger: decisions.errors)
-        .sensoryFeedback(.impact(weight: .light), trigger: verderUndos)
+        .sensoryFeedback(.impact(weight: .light), trigger: gripUndos)
         .sensoryFeedback(.error, trigger: store.failures)
     }
 
@@ -167,8 +167,8 @@ struct VoorJouTab: View {
         case .task(let id):
             TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized, now: now)
                 .environment(\.voorJouNext, nextUp)
-        case .doneByVerder:
-            DoneByVerderScreen(store: store, model: done)
+        case .doneByGrip:
+            DoneByGripScreen(store: store, model: done)
         case .document(let id, let title):
             DocumentViewer(id: id, title: title, store: dossier, client: client, onUnauthorized: onUnauthorized)
         }
@@ -202,7 +202,7 @@ struct VoorJouTab: View {
         let selectable = sections.flatMap(\.rows).filter(\.selectable)
         let canSelect = VoorJouList.canSelect(selectable: selectable.count, readOnly: readOnly,
                                               holding: !decisions.held.isEmpty)
-        let doneActions = inbox.doneByVerder.filter { !decisions.hiddenKeys.contains(ListDecision.key(verder: $0.changeId)) }
+        let doneActions = inbox.doneByGrip.filter { !decisions.hiddenKeys.contains(ListDecision.key(grip: $0.changeId)) }
 
         return ScrollViewReader { proxy in
             List {
@@ -269,16 +269,16 @@ struct VoorJouTab: View {
                         }
                     }
                 }
-                if !inbox.doneByVerder.isEmpty {
-                    DoneByVerderListSection(actions: doneActions,
+                if !inbox.doneByGrip.isEmpty {
+                    DoneByGripListSection(actions: doneActions,
                                             total: VoorJouList.doneCount(inbox, restored: restoring.count),
                                             open: $doneOpen, summary: sections.isEmpty, ax: ax,
                                             undo: { action in
-                                                verderUndos += 1
+                                                gripUndos += 1
                                                 decisions.decide(ListDecision(
-                                                    id: UUID(), key: ListDecision.key(verder: action.changeId),
+                                                    id: UUID(), key: ListDecision.key(grip: action.changeId),
                                                     title: action.documentTitle ?? action.after.title ?? "Document",
-                                                    action: .undoVerder, target: action.changeId))
+                                                    action: .undoGrip, target: action.changeId))
                                             })
                 }
                 Color.clear.frame(height: 24).voorJouRow()
@@ -515,10 +515,10 @@ struct VoorJouTab: View {
                 doneOpen = true
             case .ongedaan:
                 doneOpen = true
-                if let a = inbox.doneByVerder.first(where: { $0.undoable && !$0.undone }) {
-                    decisions.fixtureHold([ListDecision(id: UUID(), key: ListDecision.key(verder: a.changeId),
+                if let a = inbox.doneByGrip.first(where: { $0.undoable && !$0.undone }) {
+                    decisions.fixtureHold([ListDecision(id: UUID(), key: ListDecision.key(grip: a.changeId),
                                                         title: a.documentTitle ?? "Document",
-                                                        action: .undoVerder, target: a.changeId)],
+                                                        action: .undoGrip, target: a.changeId)],
                                           remaining: 4)
                 }
             case .scroll(let raw):

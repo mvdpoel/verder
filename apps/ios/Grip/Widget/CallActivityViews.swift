@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 
 /// The call's Live Activity, drawn. Every string comes from
-/// `CallActivityFaces` (Verder/Shared/CallActivity.swift), which is where the
+/// `CallActivityFaces` (Grip/Shared/CallActivity.swift), which is where the
 /// privacy rule is kept and tested: the lock screen and the compact/minimal
 /// Dynamic Island show COUNTS ONLY; only the expanded island may show the next
 /// point's text, and draws it `.privacySensitive()`. The party's name appears

@@ -7,7 +7,7 @@ import VisionKit
 /// (tested); this file only lays it out.
 ///
 /// The camera opens on a tap on the disc — or at once from the quick action,
-/// the Control Center control or the Action button (`verder://scan`, R20).
+/// the Control Center control or the Action button (`grip://scan`, R20).
 /// ✓ and ✗ close it and land back here; a finished capture flies into the
 /// queue (CapWords, brief §2.6) with one `.impact(.medium)`.
 ///
@@ -18,7 +18,7 @@ struct ScanTab: View {
     let center: UploadCenter
     let auth: AuthModel
     var camera: any CameraAccess = LiveCameraAccess()
-    /// Set by a `verder://scan` link; cleared here once the camera opened.
+    /// Set by a `grip://scan` link; cleared here once the camera opened.
     @Binding var cameraRequested: Bool
     /// The app lock is closed. Scan only ever READS this one boolean (never
     /// `AppLock`, which could start a prompt): it says, once, that scanning
@@ -324,7 +324,7 @@ struct ScanTab: View {
     }
 
     #if DEBUG
-    /// `-fixtures-scan <handoff|queue|note|preprompt>` (Verder/Fixtures): the
+    /// `-fixtures-scan <handoff|queue|note|preprompt>` (Grip/Fixtures): the
     /// state a frame draws that only a gesture reaches.
     private func applyFixtureScan() async {
         guard let launch = FixtureLaunch.current, let state = launch.scanState else { return }

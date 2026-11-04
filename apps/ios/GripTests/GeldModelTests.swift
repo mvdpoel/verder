@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// The Geld screen's words and numbers (GeldModel.swift), on the synthetic
 /// fixtures the Figma "money · final" Geld frames draw.

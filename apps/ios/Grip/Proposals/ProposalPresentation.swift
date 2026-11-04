@@ -137,7 +137,7 @@ enum ProposalText {
         return days
     }
 
-    /// "Ilse" from "Ilse <ilse@noordkust.example>"; nil for a bare address or "verder".
+    /// "Ilse" from "Ilse <ilse@noordkust.example>"; nil for a bare address or "grip".
     static func displayName(_ from: String?) -> String? {
         guard let from else { return nil }
         guard let lt = from.firstIndex(of: "<") else { return nil }

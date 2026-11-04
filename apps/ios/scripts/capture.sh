@@ -10,7 +10,7 @@
 #                      [--proposal <state>] [--detail <state>] [--dossier <state[,state…]>]
 #                      [--voice <state>] [--notify <state>]
 #
-#   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
+#   fixture  a folder in Grip/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
 #            server-error-cached, offline-cached, money-complete, money-partial,
@@ -130,13 +130,13 @@
 #            voorbeeld); --locked with voorbeeld is "vergrendeld"
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
-#            it held open; runs through the VerderCapture UI test, as --press does
+#            it held open; runs through the GripCapture UI test, as --press does
 #   --tap    tap the BUTTON whose accessibility label is exactly <label> and
 #            shoot what it opens (the Tijdlijn's filter menu: --tap Filter);
-#            runs through the VerderCapture UI test, as --press does
+#            runs through the GripCapture UI test, as --press does
 #   --notify a notification as iOS draws it ("notifications · final"): the
 #            payloads in scripts/pushes/ are sent with `xcrun simctl push` while
-#            the VerderCapture UI test holds the phone in place (lock screen,
+#            the GripCapture UI test holds the phone in place (lock screen,
 #            in the app, or home screen) and presses. The app runs on <fixture>
 #            (meldingen, or meldingen-offline / -verlopen / -afgerond /
 #            -afgehandeld for the notices an action leads to) and asks iOS for
@@ -152,7 +152,7 @@
 #   --press  long-press the text that reads exactly <text> and shoot what that
 #            opens (with --scan queue: the row menu, "Wachtrij / rij-acties").
 #            A simulator cannot be long-pressed from the shell, so the app is
-#            launched and pressed by the VerderCapture UI test instead.
+#            launched and pressed by the GripCapture UI test instead.
 #
 # A DEBUG build (the fixtures are compiled out of Release), installed on the
 # "iPhone 17" simulator, booted if it is not. Nothing reaches a server: every
@@ -297,9 +297,9 @@ case "$OUT" in /*) ;; *) OUT="$PWD/$OUT" ;; esac
 
 cd "$(dirname "$0")/.."
 DEVICE="${DEVICE:-iPhone 17}"
-BUNDLE=pro.vanderpoel.verder
-[ -d "Verder/FixtureData/$FIXTURE" ] && [ "$FIXTURE" != "_shared" ] || {
-  echo "capture.sh: no fixture '$FIXTURE'; known: $(ls Verder/FixtureData | grep -v '^_' | tr '\n' ' ')" >&2; exit 2; }
+BUNDLE=pro.vanderpoel.grip
+[ -d "Grip/FixtureData/$FIXTURE" ] && [ "$FIXTURE" != "_shared" ] || {
+  echo "capture.sh: no fixture '$FIXTURE'; known: $(ls Grip/FixtureData | grep -v '^_' | tr '\n' ' ')" >&2; exit 2; }
 
 # The app's own grammar (FixtureLaunch.Tab, .Screen, DeepLink.parse's UUID ids),
 # so a typo stops here rather than in a crashed app.
@@ -378,10 +378,10 @@ UDID="$(xcrun simctl list devices available | grep -F "    $DEVICE (" | head -1 
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
   [ -f Local.xcconfig ] || { echo "capture.sh: copy Local.xcconfig.example to Local.xcconfig" >&2; exit 1; }
   xcodegen -q
-  env -u NODE_ENV xcodebuild build -scheme Verder -configuration Debug \
+  env -u NODE_ENV xcodebuild build -scheme Grip -configuration Debug \
     -destination "id=$UDID" -derivedDataPath build/DD -quiet
 fi
-APP=build/DD/Build/Products/Debug-iphonesimulator/Verder.app
+APP=build/DD/Build/Products/Debug-iphonesimulator/Grip.app
 [ -d "$APP/FixtureData" ] || { echo "capture.sh: $APP has no FixtureData (not a Debug build?)" >&2; exit 1; }
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
@@ -404,7 +404,7 @@ if [ -n "$NOTIFY" ]; then
     verborgen) PUSHES=(verder-mail); PREVIEWS=never ;;
     # The LAST push lands on top. The frames put what waits longest on Martin
     # first: the proposal reminder over the follow-up, the time-sensitive
-    # Verder mail over the passive filing digest.
+    # Grip mail over the passive filing digest.
     stapel) PUSHES=(follow-up reminder) ;;
     se) PUSHES=(filing verder-mail); WAKE=1 ;;
     banner) PUSHES=(verder-mail); SCENE=app ;;
@@ -442,8 +442,8 @@ if [ -n "$NOTIFY" ]; then
     TEST_RUNNER_CAPTURE_PREVIEWS="$PREVIEWS" TEST_RUNNER_CAPTURE_WAIT="$WAIT" \
     TEST_RUNNER_CAPTURE_GESTURE="$GESTURE" TEST_RUNNER_CAPTURE_RESULT="$RESULT" TEST_RUNNER_CAPTURE_WAKE="$WAKE" \
     TEST_RUNNER_CAPTURE_OUT="$OUT.partial.png" \
-    env -u NODE_ENV xcodebuild test -scheme VerderCapture -destination "id=$UDID" \
-    -only-testing:VerderCapture/NotificationCapture -derivedDataPath build/DD -quiet >"$OUT.log" 2>&1 &
+    env -u NODE_ENV xcodebuild test -scheme GripCapture -destination "id=$UDID" \
+    -only-testing:GripCapture/NotificationCapture -derivedDataPath build/DD -quiet >"$OUT.log" 2>&1 &
   TEST_PID=$!
   for _ in $(seq 1 600); do
     [ -e "$OUT.partial.png.ready" ] && break
@@ -472,7 +472,7 @@ if [ -n "$PRESS" ] || [ -n "$TAP" ] || [ -n "$SWIPE" ]; then
   TEST_RUNNER_CAPTURE_ARGS="$(printf '%s\n' "${ALL_ARGS[@]}")" TEST_RUNNER_CAPTURE_PRESS="$PRESS" \
     TEST_RUNNER_CAPTURE_TAP="$TAP" TEST_RUNNER_CAPTURE_SWIPE="$SWIPE" \
     TEST_RUNNER_CAPTURE_OUT="$OUT.partial.png" \
-    env -u NODE_ENV xcodebuild test -scheme VerderCapture -destination "id=$UDID" \
+    env -u NODE_ENV xcodebuild test -scheme GripCapture -destination "id=$UDID" \
     -derivedDataPath build/DD -quiet >/dev/null \
     || { echo "capture.sh: the --press/--tap/--swipe capture failed — not writing $OUT." >&2; rm -f "$OUT.partial.png"; exit 1; }
   [ -s "$OUT.partial.png" ] || { echo "capture.sh: the --press capture wrote no PNG." >&2; exit 1; }
@@ -488,11 +488,11 @@ alive() { kill -0 "$PID" 2>/dev/null; }
 died() {
   echo "capture.sh: the app exited $1 (pid $PID) — not writing $OUT." >&2
   echo "  A launch argument it cannot read is a fatalError; see the simulator log:" >&2
-  echo "  xcrun simctl spawn $UDID log show --last 2m --predicate 'process == \"Verder\"'" >&2
+  echo "  xcrun simctl spawn $UDID log show --last 2m --predicate 'process == \"Grip\"'" >&2
   exit 1
 }
 DEFAULT_SETTLE=3
-grep -q '"thenFail"' "Verder/FixtureData/$FIXTURE/fixture.json" && DEFAULT_SETTLE=68
+grep -q '"thenFail"' "Grip/FixtureData/$FIXTURE/fixture.json" && DEFAULT_SETTLE=68
 sleep "${SETTLE:-$DEFAULT_SETTLE}"
 alive || died "before the screenshot"
 mkdir -p "$(dirname "$OUT")"

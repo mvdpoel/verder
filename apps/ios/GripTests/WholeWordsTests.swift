@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// Martin's rule that no word breaks in the middle, as the steps the
 /// sign-in, lock and pre-prompt screens take at the accessibility sizes.

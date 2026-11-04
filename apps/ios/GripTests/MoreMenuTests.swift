@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import WidgetKit
-@testable import Verder
+@testable import Grip
 
 /// Meer is a settings screen (Figma "meer · final"): the account card, Snel
 /// naar (Geld, Gesprek vastleggen, Weekoverzicht), Instellingen (Meldingen,
@@ -186,10 +186,10 @@ struct MoreMenuTests {
     }
 
     @Test func devicesLiveOnTheWeb() {
-        let url = AccountCopy.devicesURL(base: URL(string: "https://verder.example")!)
-        #expect(url.absoluteString == "https://verder.example/settings/security")
+        let url = AccountCopy.devicesURL(base: URL(string: "https://grip.example")!)
+        #expect(url.absoluteString == "https://grip.example/settings/security")
         #expect(AccountCopy.devicesURL(base: APIClient.production).absoluteString
-                == "https://verder.vanderpoel.pro/settings/security")
+                == "https://grip.vanderpoel.pro/settings/security")
     }
 
     /// Signing out asks first, and says what it costs — in that moment's words.
@@ -339,12 +339,12 @@ struct MoreMenuTests {
 
     @Test func aboutReadsTheBundleAndTheServer() {
         let about = AboutInfo(info: ["CFBundleShortVersionString": "0.1", "CFBundleVersion": "7"],
-                              server: URL(string: "https://verder.vanderpoel.pro")!)
-        #expect(about.lines.map(\.value) == ["0.1 (7)", "verder.vanderpoel.pro"])
+                              server: URL(string: "https://grip.vanderpoel.pro")!)
+        #expect(about.lines.map(\.value) == ["0.1 (7)", "grip.vanderpoel.pro"])
         #expect(about.version == "0.1" && about.build == "7")
         // A hostname that must wrap breaks after a dot, never at its hyphen.
-        #expect(AboutInfo.breakableHost("voorjou-few.fixtures.verder.invalid")
-                == "voorjou-\u{2060}few.\u{200B}fixtures.\u{200B}verder.\u{200B}invalid")
+        #expect(AboutInfo.breakableHost("voorjou-few.fixtures.grip.invalid")
+                == "voorjou-\u{2060}few.\u{200B}fixtures.\u{200B}grip.\u{200B}invalid")
         let bare = AboutInfo(info: [:], server: URL(string: "https://x.example")!)
         #expect(bare.lines.first?.value == "onbekend")
         #expect(AboutInfo.connection(offline: true, accountLoaded: true, lastError: nil) == .offline)

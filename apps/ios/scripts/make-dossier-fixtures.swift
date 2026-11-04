@@ -1,9 +1,9 @@
 // Generates the pocket dossier's synthetic fixture (fixture `dossier`, see
 // docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md):
 //
-//   Verder/FixtureData/_shared/documents/<id>/file.pdf   one tiny one-page PDF per document
-//   Verder/FixtureData/_shared/documents/sync.json       the delta, with each PDF's OWN sha256 and size
-//   Verder/FixtureData/_shared/documents/texts.json      the extracted text of every document that has one
+//   Grip/FixtureData/_shared/documents/<id>/file.pdf   one tiny one-page PDF per document
+//   Grip/FixtureData/_shared/documents/sync.json       the delta, with each PDF's OWN sha256 and size
+//   Grip/FixtureData/_shared/documents/texts.json      the extracted text of every document that has one
 //
 // This file is the ONE source of all three, so they cannot drift: the phone
 // checks every download against the delta's sha256 (the vault is
@@ -17,7 +17,7 @@
 // Run from the repo root:
 //
 //   swiftc -O apps/ios/scripts/make-dossier-fixtures.swift -o /tmp/make-dossier-fixtures \
-//     && /tmp/make-dossier-fixtures apps/ios/Verder/FixtureData/_shared
+//     && /tmp/make-dossier-fixtures apps/ios/Grip/FixtureData/_shared
 //
 // Kept out of every Xcode target: scripts/ is not a source path in project.yml.
 

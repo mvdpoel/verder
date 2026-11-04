@@ -17,7 +17,7 @@ struct WeeklyView: View {
     /// "7 ontvangen" / "5 opgeborgen" ›: the Dossier.
     var openDossier: () -> Void = {}
     /// "2 stukken opgeborgen" ›: Voor jou's "Door verder gedaan".
-    var openDoneByVerder: () -> Void = {}
+    var openDoneByGrip: () -> Void = {}
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -202,7 +202,7 @@ struct WeeklyView: View {
             }
             VStack(alignment: .leading, spacing: 16) {
                 card(WeeklyScreen.happenedLabel, s.rows)
-                if !s.verder.isEmpty { card(WeeklyScreen.verderLabel, s.verder) }
+                if !s.grip.isEmpty { card(WeeklyScreen.gripLabel, s.grip) }
                 if !ax, let live { liveBlock(live) }
                 if ax, case .waiting? = live {
                     Button(LiveCard.open, action: openVoorJou)
@@ -324,8 +324,8 @@ struct WeeklyView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(row.accessibilityLabel)
                 .accessibilityAddTraits(.isButton)
-        case .doneByVerder?:
-            Button(action: openDoneByVerder) { content }
+        case .doneByGrip?:
+            Button(action: openDoneByGrip) { content }
                 .buttonStyle(MoreRowButtonStyle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(row.accessibilityLabel)

@@ -14,7 +14,7 @@ import Foundation
 ///
 /// TWO OPTIONAL FIELDS the "weekly · final" frames need and the route does
 /// not serve yet: `history` (the previous ≤ 7 stored summaries, the chart and
-/// every "vorige week: N") and `renamedByVerder` (auto-name's renames that
+/// every "vorige week: N") and `renamedByGrip` (auto-name's renames that
 /// week, "1 scan een naam gegeven"). ABSENT MEANS NOT KNOWN, and the screen
 /// then draws no chart, no comparison and no rename row — it never invents a
 /// figure. Present, they are checked as strictly as the rest.
@@ -25,18 +25,18 @@ struct WeeklyDTO: Codable, Equatable, Sendable {
     let sent: Int
     let received: Int
     let filedByMartin: Int
-    let filedByVerder: Int
+    let filedByGrip: Int
     let tasksDone: Int
     let waiting: Int
     let topWaiting: [WaitingItem]
     /// The earlier summaries, any order; nil when the server sent none.
     let history: [WeeklyPastWeek]?
     /// Scans auto-name renamed in the window; nil when not served.
-    let renamedByVerder: Int?
+    let renamedByGrip: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case week, from, to, sent, received, filedByMartin, filedByVerder, tasksDone, waiting, topWaiting
-        case history, renamedByVerder
+        case week, from, to, sent, received, filedByMartin, filedByGrip, tasksDone, waiting, topWaiting
+        case history, renamedByGrip
     }
 
     init(from decoder: Decoder) throws {
@@ -57,14 +57,14 @@ struct WeeklyDTO: Codable, Equatable, Sendable {
         sent = try count(.sent)
         received = try count(.received)
         filedByMartin = try count(.filedByMartin)
-        filedByVerder = try count(.filedByVerder)
+        filedByGrip = try count(.filedByGrip)
         tasksDone = try count(.tasksDone)
         waiting = try count(.waiting)
         topWaiting = try c.decode([WaitingItem].self, forKey: .topWaiting)
         history = try c.decodeIfPresent([WeeklyPastWeek].self, forKey: .history)
-        renamedByVerder = try c.decodeIfPresent(Int.self, forKey: .renamedByVerder)
-        if let r = renamedByVerder, r < 0 {
-            throw DecodingError.dataCorruptedError(forKey: .renamedByVerder, in: c, debugDescription: "a count is never negative")
+        renamedByGrip = try c.decodeIfPresent(Int.self, forKey: .renamedByGrip)
+        if let r = renamedByGrip, r < 0 {
+            throw DecodingError.dataCorruptedError(forKey: .renamedByGrip, in: c, debugDescription: "a count is never negative")
         }
     }
 
@@ -78,20 +78,20 @@ struct WeeklyPastWeek: Codable, Equatable, Sendable {
     let sent: Int
     let received: Int
     let filedByMartin: Int
-    let filedByVerder: Int
+    let filedByGrip: Int
     let tasksDone: Int
     let waiting: Int
 
     private enum CodingKeys: String, CodingKey {
-        case week, sent, received, filedByMartin, filedByVerder, tasksDone, waiting
+        case week, sent, received, filedByMartin, filedByGrip, tasksDone, waiting
     }
 
-    init(week: String, sent: Int, received: Int, filedByMartin: Int, filedByVerder: Int, tasksDone: Int, waiting: Int) {
+    init(week: String, sent: Int, received: Int, filedByMartin: Int, filedByGrip: Int, tasksDone: Int, waiting: Int) {
         self.week = week
         self.sent = sent
         self.received = received
         self.filedByMartin = filedByMartin
-        self.filedByVerder = filedByVerder
+        self.filedByGrip = filedByGrip
         self.tasksDone = tasksDone
         self.waiting = waiting
     }
@@ -112,13 +112,13 @@ struct WeeklyPastWeek: Codable, Equatable, Sendable {
         sent = try count(.sent)
         received = try count(.received)
         filedByMartin = try count(.filedByMartin)
-        filedByVerder = try count(.filedByVerder)
+        filedByGrip = try count(.filedByGrip)
         tasksDone = try count(.tasksDone)
         waiting = try count(.waiting)
     }
 
     var steps: Int { sent + filedByMartin + tasksDone }
-    var filed: Int { filedByMartin + filedByVerder }
+    var filed: Int { filedByMartin + filedByGrip }
 }
 
 /// How the summary's week reads. Locale-free, like `MoneyFormat`: the words
@@ -339,7 +339,7 @@ struct WeeklyScreen: Equatable, Sendable {
             /// The Dossier (mail, scans, filed documents).
             case dossier
             /// Voor jou's "Door verder gedaan" list.
-            case doneByVerder
+            case doneByGrip
         }
         let id: String
         let title: String
@@ -356,7 +356,7 @@ struct WeeklyScreen: Equatable, Sendable {
     var title: String { Self.title }
     static let retry = "Opnieuw proberen"
     static let happenedLabel = "WAT ER GEBEURDE"
-    static let verderLabel = "DOOR VERDER GEDAAN"
+    static let gripLabel = "DOOR VERDER GEDAAN"
 
     let week: String
     let closesAt: Date
@@ -367,7 +367,7 @@ struct WeeklyScreen: Equatable, Sendable {
     let sentence: Sentence?
     let chart: Chart?
     let rows: [Row]
-    let verder: [Row]
+    let grip: [Row]
     /// Meer's Weekoverzicht row: "week 44 · 3 verstuurd · 5 opgeborgen".
     let meer: MoreMenu.State.WeeklyLine
 
@@ -438,8 +438,8 @@ struct WeeklyScreen: Equatable, Sendable {
         func before(_ value: Int, _ old: Int?) -> String? {
             old.map { $0 == value ? "vorige week: ook \($0)" : "vorige week: \($0)" }
         }
-        let filed = d.filedByMartin + d.filedByVerder
-        let filedLines: [[String]] = filed == 0 ? [] : [["\(d.filedByMartin) door jou", "\(d.filedByVerder) door verder"]]
+        let filed = d.filedByMartin + d.filedByGrip
+        let filedLines: [[String]] = filed == 0 ? [] : [["\(d.filedByMartin) door jou", "\(d.filedByGrip) door verder"]]
         rows = [
             Row(id: "sent", title: d.sent == 0 ? "Niets verstuurd" : "\(d.sent) verstuurd",
                 lines: [before(d.sent, previous?.sent)].compactMap { $0 }.map { [$0] }, destination: nil),
@@ -459,22 +459,22 @@ struct WeeklyScreen: Equatable, Sendable {
                 destination: nil),
         ]
 
-        var verder: [Row] = []
-        if d.filedByVerder > 0 {
-            verder.append(Row(id: "verder-filed",
-                              title: d.filedByVerder == 1 ? "1 stuk opgeborgen" : "\(d.filedByVerder) stukken opgeborgen",
-                              lines: [[d.filedByVerder == 1
+        var grip: [Row] = []
+        if d.filedByGrip > 0 {
+            grip.append(Row(id: "grip-filed",
+                              title: d.filedByGrip == 1 ? "1 stuk opgeborgen" : "\(d.filedByGrip) stukken opgeborgen",
+                              lines: [[d.filedByGrip == 1
                                        ? "Klopt het niet? In de lijst maak je het met één tik ongedaan."
                                        : "Klopt er één niet? In de lijst maak je het met één tik ongedaan."]],
-                              destination: .doneByVerder))
+                              destination: .doneByGrip))
         }
-        if let renamed = d.renamedByVerder, renamed > 0 {
-            verder.append(Row(id: "verder-renamed",
+        if let renamed = d.renamedByGrip, renamed > 0 {
+            grip.append(Row(id: "grip-renamed",
                               title: renamed == 1 ? "1 scan een naam gegeven" : "\(renamed) scans een naam gegeven",
                               lines: [["Die naam staat ook op de NAS, dus terugzetten kan niet in de app."]],
                               destination: nil))
         }
-        self.verder = verder
+        self.grip = grip
     }
 
     private static func tasks(_ n: Int, zero: String) -> String {
@@ -486,7 +486,7 @@ struct WeeklyScreen: Equatable, Sendable {
     var allText: String {
         (eyebrow + [title, hero.accessibilityLabel, sentence?.full, chart?.title, chart?.caption]
             .compactMap { $0 }
-         + rows.map(\.accessibilityLabel) + verder.map(\.accessibilityLabel)).joined(separator: "\n")
+         + rows.map(\.accessibilityLabel) + grip.map(\.accessibilityLabel)).joined(separator: "\n")
     }
 }
 

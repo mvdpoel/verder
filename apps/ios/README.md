@@ -9,8 +9,8 @@ Native SwiftUI app (iOS 27, iPhone only, dark only). Spec:
 ```sh
 brew install xcodegen
 cp Local.xcconfig.example Local.xcconfig      # Team ID 7RKC7FRL24, gitignored
-xcodegen                                      # Verder.xcodeproj is generated, never committed
-env -u NODE_ENV xcodebuild test -scheme Verder \
+xcodegen                                      # Grip.xcodeproj is generated, never committed
+env -u NODE_ENV xcodebuild test -scheme Grip \
   -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath build/DD
 ```
 
@@ -35,7 +35,7 @@ scripts/capture.sh dossier document:00000000-f1c5-4000-8000-200000000311 out/vie
 ```
 
 A Debug build launched with `-fixtures <name>` answers every `/api/mobile/v1` call
-from `Verder/FixtureData/<name>` (falling back to `_shared/`) through the real stores,
+from `Grip/FixtureData/<name>` (falling back to `_shared/`) through the real stores,
 signed in and unlocked, with no server. Also `-tab`, `-route` and `-fixtures-locked`;
 the fixtures and their data are listed in
 `docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`, the ONLY data a fixture
@@ -44,7 +44,7 @@ may hold (screenshots leave this machine). None of it is in a Release build:
 
 The `dossier` fixture's documents are real tiny PDFs. Regenerate them (with the
 `sync.json` and `texts.json` that name their hashes) only together, from the repo root:
-`swiftc -O apps/ios/scripts/make-dossier-fixtures.swift -o /tmp/mdf && /tmp/mdf apps/ios/Verder/FixtureData/_shared`.
+`swiftc -O apps/ios/scripts/make-dossier-fixtures.swift -o /tmp/mdf && /tmp/mdf apps/ios/Grip/FixtureData/_shared`.
 
 `capture.sh` refuses a target the app would not read (exit 2) and never writes the
 PNG if the app is not running before and after the shot (exit 1) — a dead app would
@@ -64,7 +64,7 @@ plugged in, unlocked and trusted, and Developer Mode on. The launch step fails w
 
 ## Passkeys
 
-The entitlement is `webcredentials:verder.vanderpoel.pro?mode=developer`. In developer
+The entitlement is `webcredentials:grip.vanderpoel.pro?mode=developer`. In developer
 mode iOS fetches the association file from the device itself, and ONLY when
 **Settings → Developer → Associated Domains Development** is on; it checks at install
 time, so reinstall after flipping it. Without it every passkey call fails with

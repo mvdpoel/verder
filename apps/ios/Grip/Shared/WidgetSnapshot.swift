@@ -123,14 +123,14 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// `Library/` ("outside the directories the container access policy
     /// allows"), so the file cannot be inspected from the Mac; the app reads the
     /// attribute back itself. Prints ONLY when launched with
-    /// `VERDER_REPORT_SNAPSHOT_PROTECTION=1` (`devicectl device process launch
+    /// `GRIP_REPORT_SNAPSHOT_PROTECTION=1` (`devicectl device process launch
     /// --console --environment-variables …`), so normal use never logs. It
     /// prints the protection class, never the snapshot's contents.
     static func reportProtectionIfAsked(in dir: URL) {
-        guard ProcessInfo.processInfo.environment["VERDER_REPORT_SNAPSHOT_PROTECTION"] == "1" else { return }
+        guard ProcessInfo.processInfo.environment["GRIP_REPORT_SNAPSHOT_PROTECTION"] == "1" else { return }
         let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL(in: dir).path)
         let value = (attrs?[.protectionKey] as? FileProtectionType)?.rawValue ?? "unreadable"
-        print("verder: widget/snapshot.json protection = \(value)")
+        print("grip: widget/snapshot.json protection = \(value)")
     }
 
     /// Removes the snapshot: its titles, their ids and the map headline. Sign-out

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// A call RECORDING into the voice quick-log (Added 2026-11-03, Martin: "it
 /// would be perfect if i can also record phone calls and transcribe them").

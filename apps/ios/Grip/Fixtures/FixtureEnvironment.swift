@@ -42,12 +42,12 @@ enum FixtureEnvironment {
     }
 
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
-    static let defaultsSuite = "pro.vanderpoel.verder.fixtures"
+    static let defaultsSuite = "pro.vanderpoel.grip.fixtures"
 
     /// The host Over verder shows in a fixture run: the frames'
-    /// "verder.example", not the fixture's `<name>.fixtures.verder.invalid`.
+    /// "grip.example", not the fixture's `<name>.fixtures.grip.invalid`.
     nonisolated static let displayServer: URL? =
-        FixtureLaunch.current == nil ? nil : URL(string: "https://verder.example")
+        FixtureLaunch.current == nil ? nil : URL(string: "https://grip.example")
 
     /// `-route meer:developer`: Ontwikkelaar as the frame draws it — a phone
     /// registered for development pushes on 31 okt, a last scan, and an
@@ -115,7 +115,7 @@ enum FixtureEnvironment {
         defaults.removePersistentDomain(forName: defaultsSuite)
         if !launch.pushPrePrompt { defaults.set(true, forKey: PushRegistrar.askedKey) }
 
-        let dir = URL.temporaryDirectory.appending(path: "verder-fixture-uploads", directoryHint: .isDirectory)
+        let dir = URL.temporaryDirectory.appending(path: "grip-fixture-uploads", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dir)
         if launch.scans { seedUploads(sentToday: 2, pending: 1, in: dir) }
         if let preset = launch.queue { seedQueue(preset, in: dir) }
@@ -141,17 +141,17 @@ enum FixtureEnvironment {
         // A fresh, temporary dossier per launch: synthetic documents never
         // land in the real Application Support folder, and every capture
         // starts from an empty phone.
-        let dossierDir = URL.temporaryDirectory.appending(path: "verder-fixture-dossier", directoryHint: .isDirectory)
+        let dossierDir = URL.temporaryDirectory.appending(path: "grip-fixture-dossier", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: dossierDir)
-        let timelineDir = URL.temporaryDirectory.appending(path: "verder-fixture-timeline", directoryHint: .isDirectory)
+        let timelineDir = URL.temporaryDirectory.appending(path: "grip-fixture-timeline", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: timelineDir)
         if let at = server.manifest.timelineCachedAt, let data = server.body("case-map"),
            let map = try? APIClient.jsonDecoder.decode(CaseMapDTO.self, from: data) {
             try? TimelineCache(dir: timelineDir).save(.init(savedAt: at, map: map), hidingDebts: false)
         }
-        let weeklyDir = URL.temporaryDirectory.appending(path: "verder-fixture-weekly", directoryHint: .isDirectory)
+        let weeklyDir = URL.temporaryDirectory.appending(path: "grip-fixture-weekly", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: weeklyDir)
-        let inboxDir = URL.temporaryDirectory.appending(path: "verder-fixture-inbox", directoryHint: .isDirectory)
+        let inboxDir = URL.temporaryDirectory.appending(path: "grip-fixture-inbox", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: inboxDir)
         if let at = server.manifest.inboxCachedAt, let data = server.body("inbox"),
            let inbox = try? APIClient.jsonDecoder.decode(InboxDTO.self, from: data) {
@@ -175,7 +175,7 @@ enum FixtureEnvironment {
         services.inboxDir = inboxDir
         services.camera = FixtureCamera(state: launch.camera ?? .authorized)
         // The call sheet's copy of the synthetic points, never the real folder.
-        let callDir = URL.temporaryDirectory.appending(path: "verder-fixture-calls", directoryHint: .isDirectory)
+        let callDir = URL.temporaryDirectory.appending(path: "grip-fixture-calls", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: callDir)
         services.callCacheDir = callDir
         return services

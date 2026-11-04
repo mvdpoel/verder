@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import SwiftUI
 import WidgetKit
-@testable import Verder
+@testable import Grip
 
 /// The widget's model: what each family shows, what is sensitive, when it is
 /// amber, where a tap goes. The views only paint what this decides.
@@ -283,7 +283,7 @@ struct WidgetEntryTests {
     // MARK: - The timeline
 
     @Test func timelineReloadsInThirtyMinutesAndReadsOnlyTheFile() {
-        let (entry, reload) = VerderTimeline.entry(now: Self.now, snapshot: Self.snapshot())
+        let (entry, reload) = GripTimeline.entry(now: Self.now, snapshot: Self.snapshot())
         #expect(entry.date == Self.now)
         #expect(entry.snapshot == Self.snapshot())
         #expect(reload == Self.now.addingTimeInterval(30 * 60))
@@ -294,7 +294,7 @@ struct WidgetEntryTests {
     /// half an hour.
     @Test func timelineFlipsToStaleOnTime() {
         let snap = Self.snapshot(age: 24 * 3600 - 60)
-        let entries = VerderTimeline.entries(now: Self.now, snapshot: snap)
+        let entries = GripTimeline.entries(now: Self.now, snapshot: snap)
         #expect(entries.count == 2)
         #expect(entries[1].date == snap.updatedAt.addingTimeInterval(24 * 3600))
     }

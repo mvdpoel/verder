@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// Suggestions as `GET /api/mobile/v1/suggestions/:id` serves them
 /// (apps/web/src/lib/mobile-dto.ts `toSuggestionDTO`).

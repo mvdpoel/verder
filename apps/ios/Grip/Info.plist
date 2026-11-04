@@ -50,7 +50,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Scan een brief</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>pro.vanderpoel.verder.scan</string>
+			<string>pro.vanderpoel.grip.scan</string>
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
@@ -58,7 +58,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>Gesprek vastleggen</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>pro.vanderpoel.verder.voice</string>
+			<string>pro.vanderpoel.grip.voice</string>
 		</dict>
 	</array>
 	<key>UIBackgroundModes</key>
@@ -76,7 +76,7 @@
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
-	<key>VerderKeychainAccessGroup</key>
-	<string>$(AppIdentifierPrefix)pro.vanderpoel.verder</string>
+	<key>GripKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)pro.vanderpoel.grip</string>
 </dict>
 </plist>

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// "Gesprek voorbereiden" (Added 2026-11-03, Martin): the talking points for
 /// one party, ticked off during the call, mirrored as COUNTS on the lock
@@ -125,10 +125,10 @@ struct CallPrepTests {
 
     @Test func aSourceLinksToItsScreen() {
         #expect(CallCopy.link(type: "task", id: "6f9619ff-8b86-d011-b42d-00c04fc964ff")
-                == "verder://task/6f9619ff-8b86-d011-b42d-00c04fc964ff")
-        #expect(CallCopy.link(type: "debt", id: "x") == "verder://dossier")
-        #expect(CallCopy.link(type: "stop", id: "x") == "verder://timeline")
-        #expect(CallCopy.link(type: "unknown", id: "x") == "verder://dossier")
+                == "grip://task/6f9619ff-8b86-d011-b42d-00c04fc964ff")
+        #expect(CallCopy.link(type: "debt", id: "x") == "grip://dossier")
+        #expect(CallCopy.link(type: "stop", id: "x") == "grip://timeline")
+        #expect(CallCopy.link(type: "unknown", id: "x") == "grip://dossier")
     }
 
     // MARK: - The Live Activity: counts only where anyone can see it
@@ -179,7 +179,7 @@ struct CallPrepTests {
     @Test func aLongPointIsShortenedForTheIsland() {
         let long = String(repeating: "a", count: 300)
         let dto = TalkingPointsDTO(party: .init(id: "p", name: "X", phone: nil),
-                                   tell: [.init(id: "t", text: long, source: .init(type: "task", id: "t", link: "verder://dossier"))],
+                                   tell: [.init(id: "t", text: long, source: .init(type: "task", id: "t", link: "grip://dossier"))],
                                    ask: [], summary: nil)
         let next = CallChecklist(dto).activityState.nextPoint ?? ""
         #expect(next.count <= CallActivityFaces.nextPointMax)
@@ -855,14 +855,14 @@ struct CallPrepTests {
     @Test func theCallRouteOpensTheSheetForAParty() throws {
         #expect(try FixtureLaunch.parseRoute("call:\(Self.noordkust)") == .call(Self.noordkust))
         #expect(throws: FixtureLaunch.ParseError.unknownRoute("call:nope")) { try FixtureLaunch.parseRoute("call:nope") }
-        let l = try #require(try FixtureLaunch.parse(["Verder", "-fixtures", "call", "-route", "call:\(Self.kade)"]))
+        let l = try #require(try FixtureLaunch.parse(["Grip", "-fixtures", "call", "-route", "call:\(Self.kade)"]))
         #expect(l.route == .call(Self.kade))
     }
 
     /// The Live Activity's tap reopens the call sheet.
     @Test func theCallLinkReopensTheSheet() {
-        #expect(DeepLink.parse("verder://call") == .call)
-        #expect(DeepLink.parse("verder://call/x") == DeepLink.none)
+        #expect(DeepLink.parse("grip://call") == .call)
+        #expect(DeepLink.parse("grip://call/x") == DeepLink.none)
         #expect(DeepLink.call.destination == .init(tab: nil, stack: nil, opensCall: true))
         #expect(DeepLink.parse(CallActivityFaces.url.absoluteString).destination?.opensCall == true)
     }

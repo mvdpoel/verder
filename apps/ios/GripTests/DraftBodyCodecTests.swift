@@ -1,5 +1,5 @@
 import Testing
-@testable import Verder
+@testable import Grip
 
 /// The editor's body: paragraphs a line apart on screen, a blank line apart
 /// in the draft, and opening the editor never changes a draft by itself.

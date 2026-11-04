@@ -1,6 +1,6 @@
 import UIKit
 
-/// What `VerderApp` builds its stores on: the client, where the session lives,
+/// What `GripApp` builds its stores on: the client, where the session lives,
 /// the lock, the upload queue, the pocket dossier's folder, and the edges to the system (notification
 /// permission, APNs registration, the widget snapshot, the icon badge).
 ///

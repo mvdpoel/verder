@@ -29,7 +29,7 @@ struct RootView: View {
     var now: @Sendable () -> Date = { Date() }
     var camera: any CameraAccess = LiveCameraAccess()
     @Environment(\.scenePhase) private var scenePhase
-    /// A `verder://scan` (quick action, control, Action button) waiting for
+    /// A `grip://scan` (quick action, control, Action button) waiting for
     /// Scan to open its camera. ScanTab clears it once it has.
     @State private var cameraRequested = false
     /// Scan's page-into-the-queue flight, drawn above the TabView.
@@ -54,7 +54,7 @@ struct RootView: View {
     /// push opens the Weekoverzicht once the app is unlocked.
     @State private var meerPath: [MoreRoute] = []
     #if DEBUG
-    /// `-route voice` (Verder/Fixtures), and whether the launch's
+    /// `-route voice` (Grip/Fixtures), and whether the launch's
     /// `-tab`/`-route` has been applied — once, not on every re-appearance.
     @State private var fixtureScreen: FixtureLaunch.Screen?
     @State private var fixtureStartApplied = false
@@ -306,8 +306,8 @@ struct RootView: View {
                             dossierPath = []
                             tab = .dossier
                         },
-                        openDoneByVerder: {
-                            inboxPath = [.doneByVerder]
+                        openDoneByGrip: {
+                            inboxPath = [.doneByGrip]
                             tab = .voorJou
                         }, now: now).lockGated(by: lock)
             }

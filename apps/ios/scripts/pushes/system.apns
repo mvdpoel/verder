@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Mislukt: hersteltest mail",

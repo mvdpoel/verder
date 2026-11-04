@@ -2,8 +2,8 @@
 import SwiftUI
 import WidgetKit
 
-/// Previews on the synthetic case (`WidgetSamples`, Verder/Widget).
-#Preview("Klein", as: .systemSmall) { VerderWidget() } timeline: {
+/// Previews on the synthetic case (`WidgetSamples`, Grip/Widget).
+#Preview("Klein", as: .systemSmall) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)
@@ -12,7 +12,7 @@ import WidgetKit
     WidgetSamples.entry(nil)
     WidgetSamples.entry(nil, signedOut: true)
 }
-#Preview("Middel", as: .systemMedium) { VerderWidget() } timeline: {
+#Preview("Middel", as: .systemMedium) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)
@@ -21,7 +21,7 @@ import WidgetKit
     WidgetSamples.entry(nil)
     WidgetSamples.entry(nil, signedOut: true)
 }
-#Preview("Groot", as: .systemLarge) { VerderWidget() } timeline: {
+#Preview("Groot", as: .systemLarge) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)
@@ -30,7 +30,7 @@ import WidgetKit
     WidgetSamples.entry(nil)
     WidgetSamples.entry(nil, signedOut: true)
 }
-#Preview("Rond", as: .accessoryCircular) { VerderWidget() } timeline: {
+#Preview("Rond", as: .accessoryCircular) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)
@@ -39,7 +39,7 @@ import WidgetKit
     WidgetSamples.entry(nil)
     WidgetSamples.entry(nil, signedOut: true)
 }
-#Preview("Rechthoek", as: .accessoryRectangular) { VerderWidget() } timeline: {
+#Preview("Rechthoek", as: .accessoryRectangular) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)
@@ -48,7 +48,7 @@ import WidgetKit
     WidgetSamples.entry(nil)
     WidgetSamples.entry(nil, signedOut: true)
 }
-#Preview("Regel", as: .accessoryInline) { VerderWidget() } timeline: {
+#Preview("Regel", as: .accessoryInline) { GripWidget() } timeline: {
     WidgetSamples.entry(WidgetSamples.few)
     WidgetSamples.entry(WidgetSamples.many)
     WidgetSamples.entry(WidgetSamples.one)

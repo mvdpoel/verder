@@ -456,8 +456,8 @@ struct PhraseFlow: Layout {
 /// Glyphs the frames draw that SF Symbols has no outline form of: SF's
 /// "calendar" is a filled grid and "person.crop.circle" a filled bust.
 enum MoreGlyphName {
-    static let calendar = "verder.calendar"
-    static let personCircle = "verder.person.circle"
+    static let calendar = "grip.calendar"
+    static let personCircle = "grip.person.circle"
 }
 
 /// The 18 pt glyph beside a Meer row: an SF Symbol, or one of

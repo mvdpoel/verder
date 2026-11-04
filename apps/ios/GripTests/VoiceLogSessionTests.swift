@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// Who owns a voice log, and when it is thrown away (review of plan 3 Task 25).
 ///

@@ -6,9 +6,9 @@ import UIKit
 /// `DeepLink`, the one path every outside entry point takes into the screens.
 enum QuickAction {
     /// "Gesprek vastleggen" (plan 3 Task 25).
-    static let voiceType = "pro.vanderpoel.verder.voice"
+    static let voiceType = "pro.vanderpoel.grip.voice"
     /// "Scan een brief": the camera, at once, without Face ID (R20).
-    static let scanType = "pro.vanderpoel.verder.scan"
+    static let scanType = "pro.vanderpoel.grip.scan"
 
     static func link(forType type: String) -> DeepLink {
         switch type {

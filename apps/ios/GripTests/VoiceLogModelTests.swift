@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The voice quick-log as state (plan 3 Task 25): hold to record, transcribe
 /// ON the phone, edit, pick a party, send as a log-entry SUGGESTION. No audio

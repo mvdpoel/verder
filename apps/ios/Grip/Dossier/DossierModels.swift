@@ -88,7 +88,7 @@ struct SearchHit: Codable, Equatable, Identifiable, Sendable {
     /// decoding it as a Date would fail every hit on the first odd value.
     let occurredAt: String?
     let status: String?
-    /// `verder://document/<id>` or `verder://task/<id>`; nil for a kind the
+    /// `grip://document/<id>` or `grip://task/<id>`; nil for a kind the
     /// phone has no screen for.
     let link: String?
     /// A mail's sender as the frames name it ("Ilse, Noordkust"), a task's

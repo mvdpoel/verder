@@ -16,7 +16,7 @@ import UIKit
 /// Tests run the same class on a foreground configuration (a background
 /// session refuses custom URLProtocols).
 final class BackgroundUploader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    static let identifier = "pro.vanderpoel.verder.upload"
+    static let identifier = "pro.vanderpoel.grip.upload"
 
     let queue: UploadQueue
     let client: APIClient

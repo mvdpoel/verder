@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 struct LockPolicyTests {
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)

@@ -1,5 +1,5 @@
 {
-  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
       "title": "Klopt deze koppeling?",
@@ -11,7 +11,7 @@
     "sound": "default",
     "mutable-content": 1
   },
-  "link": "verder://proposal/00000000-f1c5-4000-8000-000000000002",
+  "link": "grip://proposal/00000000-f1c5-4000-8000-000000000002",
   "options": [
     "Ja, koppel hem",
     "Nee",

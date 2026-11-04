@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
 /// attempt of its own (`ShareModel`). It never writes the app's queue.json.
 ///
 /// The session comes from the shared Keychain item (`keychain-access-groups`,
-/// with `VerderKeychainAccessGroup` in THIS bundle's Info.plist, because
+/// with `GripKeychainAccessGroup` in THIS bundle's Info.plist, because
 /// `KeychainSessionStore` reads `Bundle.main`, which here is the extension).
 /// Signed out, the attempt simply fails and the app's queue sends it later.
 ///

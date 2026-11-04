@@ -5,7 +5,7 @@ import UserNotifications
 ///
 /// iOS fixes a category's action titles when the category is registered, and a
 /// question's options are known only once its push arrives. So the
-/// notification service extension (VerderNotify) reads the push's `options`,
+/// notification service extension (GripNotify) reads the push's `options`,
 /// builds `q.<id>` here, registers it, and points the notification at it.
 ///
 /// An option is answered IN THE BACKGROUND (`.authenticationRequired`, NOT
@@ -39,7 +39,7 @@ enum QuestionCategories {
         /// Nil for anything that is not a well-formed, answerable question: a
         /// reply (no options), a question WITHOUT a revision (the answer route
         /// requires one, so it stays a plain "Bekijken" notification), or a link
-        /// that is not exactly `verder://proposal/<uuid>`.
+        /// that is not exactly `grip://proposal/<uuid>`.
         init?(userInfo: [AnyHashable: Any]) {
             guard let link = userInfo["link"] as? String,
                   let id = QuestionCategories.proposalId(fromLink: link),
@@ -79,11 +79,16 @@ enum QuestionCategories {
         return n
     }
 
-    /// `verder://proposal/<uuid>` exactly → the lowercased id. Same strictness
+    /// `grip://proposal/<uuid>` exactly → the lowercased id. Same strictness
     /// as `DeepLink.parse`: no user, port, query, fragment or extra segment.
+    /// `grip`, plus the pre-rename `verder` — the same pair `DeepLink.parse`
+    /// accepts (`DeepLink.acceptedSchemes`; this file is also compiled into
+    /// GripNotify, which does not carry DeepLink.swift).
+    static let linkSchemes: Set<String> = ["grip", "verder"]
+
     static func proposalId(fromLink link: String) -> String? {
         guard let parts = URLComponents(string: link),
-              parts.scheme == "verder", parts.host == "proposal",
+              let scheme = parts.scheme, linkSchemes.contains(scheme), parts.host == "proposal",
               parts.user == nil, parts.password == nil, parts.port == nil,
               parts.query == nil, parts.fragment == nil
         else { return nil }

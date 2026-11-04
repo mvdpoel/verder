@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Synchronization
-@testable import Verder
+@testable import Grip
 
 /// The pocket dossier's sync (Plan 3 Task 21) against a stub of the three
 /// routes Task 20 built: `/documents/sync`, `/documents/:id/file`,

@@ -1,20 +1,20 @@
 import Testing
 import Foundation
-@testable import Verder
+@testable import Grip
 
 /// The home screen quick action "Gesprek vastleggen" (plan 3 Task 25) and the
-/// `verder://voice` link it rides on.
+/// `grip://voice` link it rides on.
 struct QuickActionTests {
     @Test func theVoiceActionOpensTheVoiceLog() {
         #expect(QuickAction.link(forType: QuickAction.voiceType) == .voice)
-        #expect(QuickAction.link(forType: "pro.vanderpoel.verder.unknown") == DeepLink.none)
+        #expect(QuickAction.link(forType: "pro.vanderpoel.grip.unknown") == DeepLink.none)
         #expect(QuickAction.link(forType: "") == DeepLink.none)
     }
 
     @Test func voiceLinkParsesStrictly() {
-        #expect(DeepLink.parse("verder://voice") == .voice)
-        #expect(DeepLink.parse("verder://voice/x") == DeepLink.none)
-        #expect(DeepLink.parse("verder://voice?x=1") == DeepLink.none)
+        #expect(DeepLink.parse("grip://voice") == .voice)
+        #expect(DeepLink.parse("grip://voice/x") == DeepLink.none)
+        #expect(DeepLink.parse("grip://voice?x=1") == DeepLink.none)
         // A sheet over whatever tab is showing, not a tab of its own.
         #expect(DeepLink.voice.tab == nil)
     }

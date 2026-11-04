@@ -51,7 +51,7 @@ struct InboxCache: Sendable {
 
 /// Voor jou's data: everything waiting on Martin, as the server ranks it.
 ///
-/// Made ONCE, in `VerderApp`, beside `PushRegistrar`: the tab reads it, and the
+/// Made ONCE, in `GripApp`, beside `PushRegistrar`: the tab reads it, and the
 /// background refresh (a silent push, Task 8) calls the same `refresh`, so the
 /// list, the icon badge and the widget are fed by one fetch and cannot drift.
 ///

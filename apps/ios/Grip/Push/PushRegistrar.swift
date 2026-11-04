@@ -39,7 +39,7 @@ struct SystemNotificationPermission: NotificationPermission {
 /// schema (packages/api/src/routers/push.ts). No session id: the route takes
 /// it from the validated cookie, never from a body.
 struct PushRegistration: Encodable, Equatable {
-    static let bundleId = "pro.vanderpoel.verder"
+    static let bundleId = "pro.vanderpoel.grip"
 
     let token: String
     let environment: String
