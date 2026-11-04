@@ -35,10 +35,12 @@ struct VoorJouListTests {
         let items = [Self.item(.proposal, "p"), Self.item(.question, "q"), Self.item(.suggestion, "s"),
                      Self.item(.task, "t"), Self.item(.stop, "st")]
         let sections = VoorJouList.sections(Self.inbox(items))
-        #expect(sections.map(\.kind) == [.nu, .kanWachten])
-        #expect(sections[0].rows.map(\.item.id) == ["p", "q"])
-        #expect(sections[1].rows.map(\.item.id) == ["s", "t", "st"])
-        #expect(sections[0].rows.allSatisfy { $0.amber })
+        // The todo/review split: Nu is Martin's own work (tasks and the stop
+        // too); the suggestion backlog is Te beoordelen.
+        #expect(sections.map(\.kind) == [.nu, .review])
+        #expect(sections[0].rows.map(\.item.id) == ["p", "q", "t", "st"])
+        #expect(sections[1].rows.map(\.item.id) == ["s"])
+        #expect(sections[0].rows.filter(\.amber).map(\.item.id) == ["p", "q"], "amber asks a decision")
         #expect(!sections[1].rows.contains { $0.amber })
     }
 
@@ -249,9 +251,9 @@ struct InboxDecisionsTests {
         #expect(restoring.map(\.changeId) == ["c1"], "only what the server called undoable comes back")
         let sections = VoorJouList.sections(inbox, hiding: keys, restoring: restoring)
         let kan = sections[1]
-        #expect(kan.rows.map(\.item.title) == ["T s", "Afschrift 1", "T t"],
+        #expect(kan.rows.map(\.item.title) == ["T s", "Afschrift 1"],
                 "among the suggestions by its own date (30 okt after 1 nov), where the server will put it")
-        #expect(kan.total == 3)
+        #expect(kan.total == 2)
         #expect(VoorJouList.count(inbox, hidden: 0, restored: restoring.count) == 4)
         #expect(VoorJouList.doneCount(inbox, restored: restoring.count) == 2)
         let back = kan.rows[1]
@@ -289,7 +291,8 @@ struct InboxDecisionsTests {
     /// A newer restored document goes first; with no suggestions it opens Kan wachten.
     @Test func aRestoredDocumentSortsAmongTheSuggestionsByDate() {
         let rows = VoorJouList.rows(VoorJouListTests.inbox([VoorJouListTests.item(.proposal, "p"), VoorJouListTests.item(.task, "t")]))
-        #expect(VoorJouList.restoredIndex(parseISODate("2026-10-30T09:00:00Z")!, in: rows) == 1)
+        #expect(VoorJouList.restoredIndex(parseISODate("2026-10-30T09:00:00Z")!, in: rows) == 2,
+                "after Nu: the review group starts where Nu ends")
         let withS = VoorJouList.rows(VoorJouListTests.inbox([VoorJouListTests.item(.suggestion, "s", at: "2026-10-29T10:00:00Z")]))
         #expect(VoorJouList.restoredIndex(parseISODate("2026-10-30T09:00:00Z")!, in: withS) == 0)
         #expect(VoorJouList.restoredIndex(parseISODate("2026-10-28T09:00:00Z")!, in: withS) == 1)

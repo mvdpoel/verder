@@ -24,7 +24,11 @@ struct FixtureTests {
         "voice", "voice-geen-partijen", "voice-offline", "voice-partijen-fout", "voice-te-groot", "voice-verlopen",
         "voice-verstuurd", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
         "voorjou-leeg", "voorjou-long", "voorjou-many", "voorjou-offline", "voorjou-selecteren", "voorjou-storing",
-        "voorjou-veel", "voorjou-vijf", "voorstel", "voorstel-offline", "weekly", "weekly-eerste", "weekly-fout",
+        "voorjou-veel", "voorjou-vijf", "voorstel", "voorstel-offline",
+        "vraag-bezig", "vraag-bijgewerkt", "vraag-eerdere", "vraag-gelezen", "vraag-gestopt", "vraag-gift",
+        "vraag-gift-klaar", "vraag-laatmaar", "vraag-mislukt", "vraag-netwerk", "vraag-ongelezen", "vraag-overzicht",
+        "vraag-verstuurd", "vraag-vervolg", "vraag-wachtrij",
+        "weekly", "weekly-eerste", "weekly-fout",
         "weekly-loading", "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"

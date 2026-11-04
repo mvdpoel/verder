@@ -87,13 +87,26 @@ struct InboxStoreTests {
     }
 
     /// The widget's rows (Task 23): the server's top five in server order,
-    /// each with its id for the deep link, and the oldest `at` over ALL items.
+    /// each with its id for the deep link, and the oldest `at` — over Martin's
+    /// own work only (the todo/review split): the suggestion backlog never
+    /// reaches the home screen, so the widget agrees with the icon.
+    /// The icon, the widget and Voor jou's headline are TODO (merged in
+    /// 51feb0a): a backlog of suggestions never moves the badge.
+    @Test func theBadgeAndTheWidgetCountTodo() async throws {
+        let body = String(decoding: InboxFixture.inbox, as: UTF8.self)
+            .replacingOccurrences(of: #"{"count":3,"items""#, with: #"{"count":3,"todo":2,"review":1,"items""#)
+        let r = rig(Self.serving(inbox: .status(200, body: Data(body.utf8))))
+        await r.store.refresh()
+        #expect(r.badges.values == [2])
+        #expect(try #require(WidgetSnapshot.read(from: r.dir)).count == 2)
+    }
+
     @Test func refreshWritesTheItemsAndTheOldestForTheWidget() async throws {
         let r = rig(Self.serving())
         await r.store.refresh()
         let snap = try #require(WidgetSnapshot.read(from: r.dir))
-        #expect(snap.items.map(\.id) == ["6f9619ff-8b86-d011-b42d-00c04fc964ff", "s1", "t1"])
-        #expect(snap.items.map(\.kind) == ["proposal", "suggestion", "task"])
+        #expect(snap.items.map(\.id) == ["6f9619ff-8b86-d011-b42d-00c04fc964ff", "t1"])
+        #expect(snap.items.map(\.kind) == ["proposal", "task"])
         #expect(snap.items.first?.title == "Loonstrook oktober aanleveren")
         #expect(snap.oldestAt == ISO8601DateFormatter().date(from: "2026-10-20T08:00:00Z"))
     }
