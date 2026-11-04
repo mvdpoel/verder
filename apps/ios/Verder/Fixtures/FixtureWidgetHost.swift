@@ -129,8 +129,11 @@ struct WidgetHostView: View {
             .padding(16)
             .frame(width: size.width, height: size.height)
             .environment(\.widgetRenderingMode, renderingMode)
+            .environment(\.accentImitation, scene.mode == .tinted ? Recolour.tint : nil)
             .redacted(reason: scene.locked ? .privacy : [])
-            .modifier(Recolour(mode: scene.mode))
+            // Tinted: the tint goes on the accent group alone (`accentGroup()`),
+            // the rest stays white, as iOS draws it — never over the whole face.
+            .modifier(Recolour(mode: scene.mode == .tinted ? .fullColor : scene.mode))
             .background(plate(radius))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
@@ -312,11 +315,12 @@ struct WidgetHostView: View {
 /// tint back over.
 private struct Recolour: ViewModifier {
     let mode: WidgetHostScene.Mode
+    static let tint = Color(red: 0.55, green: 0.93, blue: 0.62)
 
     func body(content: Content) -> some View {
         switch mode {
         case .fullColor: content
-        case .tinted: content.grayscale(1).brightness(0.08).colorMultiply(Color(red: 0.55, green: 0.93, blue: 0.62))
+        case .tinted: content.grayscale(1).brightness(0.08).colorMultiply(Self.tint)
         case .clear: content.grayscale(1).brightness(0.18)
         case .night: content.grayscale(1).brightness(0.25).colorMultiply(Color(red: 1, green: 0.22, blue: 0.18))
         }

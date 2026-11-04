@@ -74,6 +74,41 @@ extension View {
     }
 }
 
+// MARK: - Accent group
+
+/// The accent group of the home-screen faces: the count, its dot and the
+/// state glyph, and NOTHING else — titles, words and bodies stay in the
+/// default group, which a tinted home screen draws white. WidgetKit does the
+/// tinting itself; outside it (the DEBUG widget host behind the captures)
+/// `widgetAccentable()` draws nothing, so the host sets `accentImitation` and
+/// this lays the tint over exactly these pieces instead of over the whole face.
+private struct AccentImitationKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    var accentImitation: Color? {
+        get { self[AccentImitationKey.self] }
+        set { self[AccentImitationKey.self] = newValue }
+    }
+}
+
+private struct AccentGroup: ViewModifier {
+    @Environment(\.accentImitation) private var tint
+
+    func body(content: Content) -> some View {
+        if let tint {
+            content.widgetAccentable().grayscale(1).brightness(0.08).colorMultiply(tint)
+        } else {
+            content.widgetAccentable()
+        }
+    }
+}
+
+extension View {
+    func accentGroup() -> some View { modifier(AccentGroup()) }
+}
+
 // MARK: - Pieces
 
 /// The hero count: Saira Regular, amber only in full colour while something
@@ -93,7 +128,7 @@ private struct CountText: View {
                 .contentTransition(.numericText())
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-                .widgetAccentable()
+                .accentGroup()
         }
     }
 }
@@ -112,7 +147,7 @@ private struct WaitLine: View {
                 Circle()
                     .fill(content.countIsAmber(in: mode) ? Color.attn : Color.inkBright)
                     .frame(width: 8, height: 8)
-                    .widgetAccentable()
+                    .accentGroup()
                     .accessibilityHidden(true)
             }
             Text(content.words)
@@ -184,7 +219,7 @@ private struct StateGlyph: View {
         Image(systemName: glyph.rawValue)
             .font(.system(size: size, weight: .light))
             .foregroundStyle(glyph == .check ? Color.okay : Color.inkLabel)
-            .widgetAccentable()
+            .accentGroup()
             .accessibilityHidden(true)
     }
 }
