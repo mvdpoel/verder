@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkerKind, WorkerState } from "@verder/api/src/worker-health";
+import type { WorkerKind, WorkerState } from "@grip/api/src/worker-health";
 import { workerRowLabel, type WorkerRow } from "./worker-row-label";
 
 // A fixed instant, late enough in the Amsterdam evening that the UTC day and

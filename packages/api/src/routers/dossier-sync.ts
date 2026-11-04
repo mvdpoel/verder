@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, inArray, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { notDiscardedSql, notPurgedSql } from "../effective-status";
 import { effectiveDocument } from "./documents";

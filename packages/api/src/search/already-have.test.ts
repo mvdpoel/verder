@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import type { EmbedPort } from "./embed";
 import type { RerankPort } from "./rerank";
 import { alreadyHave } from "./already-have";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 // Ollama-down embed port: retrieval stays lexical, so this test asserts
 // ranking and shape without a GPU and without admitting foreign chunks from

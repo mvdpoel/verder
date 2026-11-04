@@ -1,8 +1,8 @@
 import { inArray, isNull, eq, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
-import { notPurgedSql } from "@verder/api/src/effective-status";
-import { UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME } from "@verder/parsers";
+import { schema, type Db } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
+import { notPurgedSql } from "@grip/api/src/effective-status";
+import { UNINFORMATIVE_MIMES, XLS_MIME, XLSX_MIME } from "@grip/parsers";
 import { readFile } from "node:fs/promises";
 import { storeDocumentText } from "./document-text";
 

@@ -41,4 +41,4 @@ CREATE TABLE "party_brief_drafts" (
   CONSTRAINT "party_brief_drafts_ready_ck" CHECK ("verdict" <> 'ready' OR ("summary" IS NOT NULL AND "model_output" IS NOT NULL))
 );--> statement-breakpoint
 CREATE INDEX "party_brief_drafts_party_idx" ON "party_brief_drafts" ("party_id", "created_at");--> statement-breakpoint
-GRANT SELECT, INSERT ON "party_brief_drafts" TO verder_worker;
+GRANT SELECT, INSERT ON "party_brief_drafts" TO grip_worker;

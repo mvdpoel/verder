@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import {
   isOwnOutbound, letterSender, mailPriority, prioritySets, type PrioritySets,
 } from "./priority";
 import { operatorAddresses, relevanceFilter } from "./relevance";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 const sets: PrioritySets = {
   verder: ["@verdergroep.nl", "@verderbewindmidden.nl"],

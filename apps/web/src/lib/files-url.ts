@@ -1,4 +1,4 @@
-import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
+import { DOC_SOURCES, type DocSource } from "@grip/db/doc-sources";
 
 /**
  * Everything /files shows comes from the URL and is rendered on the server, so

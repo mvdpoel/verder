@@ -37,10 +37,10 @@ export function CommandPalette() {
     // hand state out to the shell around it.
     const onSummon = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("verder:palette", onSummon);
+    window.addEventListener("grip:palette", onSummon);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("verder:palette", onSummon);
+      window.removeEventListener("grip:palette", onSummon);
     };
   }, []);
 

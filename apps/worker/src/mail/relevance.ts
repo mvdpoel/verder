@@ -1,4 +1,4 @@
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 
 /**
  * WHO THE DOSSIER IS INTERESTED IN — one definition, both ports.

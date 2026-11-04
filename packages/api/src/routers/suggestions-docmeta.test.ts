@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
@@ -9,10 +9,10 @@ import { createContext } from "../trpc";
 // so an approve that always wrote "approved" — even when Martin retyped the
 // title — would have made the model look better than it is.
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // Only to give a fixture document its extractor-`none` text row, which the app
 // role cannot write (it would otherwise grow pendingDocMeta's backlog).
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
 describe("suggestions.approveDocumentMeta verdict", () => {
   let db: Db; let admin: Db; let userId: string;

@@ -1,6 +1,6 @@
 import { and, eq, or } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { effectiveTitleSql } from "@verder/api/src/effective-status";
+import { schema, type Db } from "@grip/db";
+import { effectiveTitleSql } from "@grip/api/src/effective-status";
 
 /**
  * Recognise an already-ingested file from its stat alone. The dedup that

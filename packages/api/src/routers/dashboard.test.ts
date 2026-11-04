@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { desc, eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 /*
  * WORKER NAMES THIS FILE MAY WRITE. Three rules produced these four strings,
@@ -25,8 +25,8 @@ const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
  *    on the display side.
  *
  * 2. THE NAMES ARE STABLE, NOT `${Date.now()}`-SUFFIXED, and this is the
- *    deliberate half. worker_runs has no DELETE grant for verder_app or
- *    verder_worker (0001_grants.sql, 0004_worker_role.sql), so every distinct
+ *    deliberate half. worker_runs has no DELETE grant for grip_app or
+ *    grip_worker (0001_grants.sql, 0004_worker_role.sql), so every distinct
  *    name a test invents is on the dev dashboard FOREVER — there is no role in
  *    the app that can clean it up. Measured on the dev database: 10 931 rows
  *    under 2 746 distinct worker names, 60 of them minted by the three

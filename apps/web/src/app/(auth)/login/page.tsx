@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TRUST_HEADER } from "@verder/auth/session-trust";
+import { TRUST_HEADER } from "@grip/auth/session-trust";
 import { authClient } from "@/lib/auth-client";
 import { Button, Checkbox, cx, Field, Input, Notice, Panel } from "@/components/ui";
 

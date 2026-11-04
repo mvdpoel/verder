@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CHANNEL_LABEL, CLARITY_LABEL, DIRECTION_LABEL, DOC_SOURCE_LABEL, ENTRY_SOURCE_LABEL,
 } from "@/lib/entry-labels";
-import { DOC_SOURCES } from "@verder/db/doc-sources";
-import { ENTRY_SOURCES } from "@verder/db/entry-sources";
+import { DOC_SOURCES } from "@grip/db/doc-sources";
+import { ENTRY_SOURCES } from "@grip/db/entry-sources";
 
 // The enum members as the database declares them (packages/db/src/schema.ts).
 // Spelled out here on purpose: if a value is added there and not here, this

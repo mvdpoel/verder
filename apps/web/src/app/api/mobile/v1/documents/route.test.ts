@@ -13,7 +13,7 @@ vi.mock("@/lib/trpc-server", () => ({
     documents: { registerUpload: mocks.registerUpload, bySourceRef: mocks.bySourceRef },
   }),
 }));
-vi.mock("@verder/api/src/storage", () => ({ storeFile: mocks.storeFile }));
+vi.mock("@grip/api/src/storage", () => ({ storeFile: mocks.storeFile }));
 
 import { POST } from "./route";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";

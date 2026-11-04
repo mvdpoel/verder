@@ -7,8 +7,8 @@ import * as schema from "./schema";
 // generated tsvector, the pgvector round-trip, the denormalized status column,
 // the uniqueness constraint and the outbox sequence. Grants are a separate
 // concern and are checked with the app and worker roles in search-grants.test.ts
-// (Task 2), which is why this file connects as the owner and not as verder_app.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+// (Task 2), which is why this file connects as the owner and not as grip_app.
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 describe("knowledge-base index schema", () => {
   let db: Db;

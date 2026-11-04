@@ -1,12 +1,12 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
-import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@grip/core";
 import { effectiveTaskStatus, setTaskStatus, taskStatusPayload } from "./task-decide";
 import { makeLedgerRecompute, taskStatusPayloadHash } from "./verification";
 
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("task status changes", () => {
   let db: Db;

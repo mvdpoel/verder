@@ -7,7 +7,7 @@
  * out of here one to one and decides nothing else.
  *
  * The input shapes are declared here and matched structurally against
- * `MapStop` / `MapTrack`, so this module imports nothing from `@verder/api`.
+ * `MapStop` / `MapTrack`, so this module imports nothing from `@grip/api`.
  *
  * The three stop marks are visually distinct on purpose:
  *   solid   → it happened

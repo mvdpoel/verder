@@ -1,7 +1,7 @@
 // The mime vocabulary comes from the parsers package so the browser and the
 // server agree on what counts as a spreadsheet; the subpath keeps SheetJS and
 // Buffer out of this client bundle.
-import { isSpreadsheetMime, UNINFORMATIVE_MIMES } from "@verder/parsers/sheet-mimes";
+import { isSpreadsheetMime, UNINFORMATIVE_MIMES } from "@grip/parsers/sheet-mimes";
 
 export type PreviewKind = "image" | "pdf" | "sheet" | "file";
 

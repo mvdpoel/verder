@@ -69,7 +69,7 @@ function tree() {
     writeFileSync(join(root, "bin", name), body);
     chmodSync(join(root, "bin", name), 0o755);
   }
-  const backup = join(root, "backup/verder-backups");
+  const backup = join(root, "backup/grip-backups");
   writeFileSync(join(root, ".env.prod"), [
     `BACKUP_DIR=${backup}`, `VAULT_HOST_DIR=${join(root, "vault")}`,
     `NAS_SCAN_HOST_DIR=${join(root, "scan")}`, `WATCHDOG_BACKUP_MOUNT=${join(root, "dl")}`,
@@ -342,7 +342,7 @@ exit "\${CLAUDE_RC:-0}"
     writeFileSync(tokenFile, TOKEN, { mode: 0o600 });
     writeFileSync(join(root, "stub.log"), "");
     const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
-    const stateDir = join(root, "home/.local/state/verder-drafter");
+    const stateDir = join(root, "home/.local/state/grip-drafter");
     return {
       root, tokenFile,
       log: () => read(join(root, "stub.log")),

@@ -5,7 +5,7 @@
  * so neither can be imported from a browser bundle. The queue card and the
  * vault preview are client components that need to know *which* mimes are
  * spreadsheets and nothing else, so that question lives here and is published
- * as its own subpath — the same split `@verder/core` makes for the ⌘K palette.
+ * as its own subpath — the same split `@grip/core` makes for the ⌘K palette.
  */
 
 export const XLS_MIME = "application/vnd.ms-excel";

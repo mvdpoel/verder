@@ -27,7 +27,7 @@ BEGIN
   -- A database whose map was never seeded (or was truncated away) has nothing
   -- to add stations to. ensureCaseMap is how it comes back; this stays quiet.
   IF root_id IS NULL THEN
-    RAISE NOTICE '0024: no root track, skipping — run pnpm --filter @verder/db seed-map';
+    RAISE NOTICE '0024: no root track, skipping — run pnpm --filter @grip/db seed-map';
     RETURN;
   END IF;
 

@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { effectiveMime, isSpreadsheetMime, readWorkbook } from "@verder/parsers";
+import { effectiveMime, isSpreadsheetMime, readWorkbook } from "@grip/parsers";
 import { looksLikeProse, stopwordShare, worthRotating } from "./text-quality";
 
 const run = promisify(execFile);
@@ -137,7 +137,7 @@ export async function ocrPageUpright(
 export async function rasterizePdf(
   pdf: Buffer, opts: { dpi?: number; maxPages?: number } = {},
 ): Promise<Buffer[]> {
-  const dir = await mkdtemp(join(tmpdir(), "verder-raster-"));
+  const dir = await mkdtemp(join(tmpdir(), "grip-raster-"));
   try {
     const input = join(dir, "in.pdf");
     await writeFile(input, pdf);

@@ -11,12 +11,12 @@
 //
 // Writing document_texts fires the migration-0019 trigger, so each extracted
 // document re-enters search_outbox and the drain re-indexes it with its text.
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { recordRun } from "../heartbeat";
 import { extractMissingTexts } from "../extract-texts";
 
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const vaultDir = process.env.VAULT_DIR ?? "./vault-files";
 
 const { db, pool } = createDb(url);

@@ -1,5 +1,5 @@
 /**
- * The /timeline map. PURE: no database, no I/O, no imports from @verder/db.
+ * The /timeline map. PURE: no database, no I/O, no imports from @grip/db.
  * Rows in, a drawable map out — the same discipline as money-series.ts.
  *
  * TOTAL: any input renders. A corrupt map is reported through `problems` and

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { decide, effectiveStatus } from "../registry-decide";
 import { DEBT_STATUSES, ITEM_STATUSES, isValidTransition } from "../registry-status";

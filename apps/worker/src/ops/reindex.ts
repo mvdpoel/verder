@@ -9,13 +9,13 @@
 // In production it runs inside the worker container, like nightly-verify:
 //   docker compose --env-file .env.prod -f docker-compose.prod.yml \
 //     exec -T worker pnpm --filter worker reindex
-import { createDb } from "@verder/db";
-import { realEmbedPort } from "@verder/api/src/search/embed";
+import { createDb } from "@grip/db";
+import { realEmbedPort } from "@grip/api/src/search/embed";
 import { recordRun } from "../heartbeat";
 import { parseReindexArgs, runReindex } from "../reindex";
 
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 const { db, pool } = createDb(url);
 try {

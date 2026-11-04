@@ -89,9 +89,11 @@ export function SessionManager() {
 function describeAgent(ua: string | null | undefined): string {
   if (!ua) return "Onbekend apparaat";
   // The native app (apps/ios) sends CFNetwork's agent, e.g.
-  // "Verder/1 CFNetwork/3896.200.61 Darwin/27.2.0", which names no device.
+  // "Grip/1 CFNetwork/3896.200.61 Darwin/27.2.0", which names no device.
   // It is installed on exactly one phone, so it gets that phone's name.
-  if (/^Verder\/\S+ CFNetwork\//.test(ua)) return "Martin's iPhone";
+  // "Verder/" is the same app before the rename to Grip: sessions it created
+  // keep that agent in the database until they expire.
+  if (/^(?:Grip|Verder)\/\S+ CFNetwork\//.test(ua)) return "Martin's iPhone";
   if (/iPhone/i.test(ua)) return "iPhone";
   if (/iPad/i.test(ua)) return "iPad";
   if (/Android/i.test(ua)) return "Android-toestel";

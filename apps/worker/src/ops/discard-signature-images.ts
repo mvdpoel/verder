@@ -13,9 +13,9 @@
 // documents.update does when Martin clicks the button himself, and every one of
 // these stays individually undoable from its vault page.
 import { and, eq, lt, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { createDb, schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
 import { recordRun } from "../heartbeat";
 
 /**
@@ -124,7 +124,7 @@ export async function discardSignatureImages(
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     console.log("discard-signature-images: start");

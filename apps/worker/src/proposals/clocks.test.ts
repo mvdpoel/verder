@@ -3,21 +3,21 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { desc, eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { storeFile } from "@verder/api/src/storage";
-import { setTaskStatus } from "@verder/api/src/task-decide";
-import { PROPOSAL_CLOCK_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { storeFile } from "@grip/api/src/storage";
+import { setTaskStatus } from "@grip/api/src/task-decide";
+import { PROPOSAL_CLOCK_WORKER_NAME } from "@grip/api/src/worker-names";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
 import type { RetrieveRefsFn } from "../retrieval-refs";
 import {
   dueAlert, followUpCreator, followUpDue, isAlertHour, runClocks, silentFor, type ClockDeps, type ThreadState,
 } from "./clocks";
 
-// Runs as verder_worker, the role the proposals.clock job meets in production.
+// Runs as grip_worker, the role the proposals.clock job meets in production.
 // Every test is a transaction that is ROLLED BACK: the shared dev database is
 // never truncated. NOTHING is sent: notify is a fake that records and dedups on
 // the key exactly as notify() does.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 const vaultDir = mkdtempSync(join(tmpdir(), "proposal-clocks-vault-"));
 const retrieveRefs: RetrieveRefsFn = async () => [];
@@ -134,7 +134,7 @@ async function sentProposal(db: Db, o: {
     triggerRawEmailId: o.triggerRawEmailId, threadKey: `gmail:${o.threadId}`,
     context: {}, payload: { ask: "Loonstrook oktober aanleveren" },
     finalPayload: { subject: "Re: Informatie over uw dossier", body: "Hierbij." },
-    messageId: o.messageId ?? `<${uid()}@verder.vanderpoel.pro>`,
+    messageId: o.messageId ?? `<${uid()}@grip.vanderpoel.pro>`,
     gmailMessageId: o.gmailMessageId ?? `gm-${uid()}`, gmailThreadId: o.threadId,
     sendingAt: o.sentAt, sentAt: o.sentAt,
   }).returning();
@@ -343,7 +343,7 @@ describe("runClocks: the 24 h reminder", () => {
       const mine = n.mine(`reminder:${p.id}`);
       expect(mine).toHaveLength(1);
       expect(mine[0]).toMatchObject({ kind: "reminder", level: "time-sensitive",
-        title: "Wacht nog: Stuur de loonstrook van oktober", link: `verder://proposal/${p.id}` });
+        title: "Wacht nog: Stuur de loonstrook van oktober", link: `grip://proposal/${p.id}` });
       expect((await byId(db, p.id)).remindedAt).toEqual(c.now());
 
       // Once, ever: a later tick does not even ask notify again.
@@ -503,7 +503,7 @@ describe("runClocks: the follow-up clock", () => {
       expect(follow).toHaveLength(1);
       expect(follow[0]).toMatchObject({ kind: "follow-up", status: "drafting", priority: "verder",
         triggerRawEmailId: null, threadKey: `gmail:${th}` });
-      expect(mine[0].link).toBe(`verder://proposal/${follow[0].id}`);
+      expect(mine[0].link).toBe(`grip://proposal/${follow[0].id}`);
       expect(follow[0].prompt).toMatch(/follow-up/i);
     });
   });
@@ -530,7 +530,7 @@ describe("runClocks: the follow-up clock", () => {
       const th = `th-${uid()}`;
       const vAddr = verderAddr();
       const inbound = await mail(db, { threadId: th, from: verder(vAddr), sentAt: c.at(-10 * DAY) });
-      const mid = `${uid()}@verder.vanderpoel.pro`;
+      const mid = `${uid()}@grip.vanderpoel.pro`;
       const p = await sentProposal(db, { triggerRawEmailId: inbound.id, threadId: th,
         sentAt: c.at(-8 * DAY), messageId: `<${mid}>` });
       const { deps, n, f } = depsFor(db, c);
@@ -554,7 +554,7 @@ describe("runClocks: the follow-up clock", () => {
       const [p] = await db.insert(schema.proposals).values({
         kind: "reply", status: "sent", priority: "creditor",
         triggerExternal: { gmailId: `x-${uid()}` }, context: {},
-        gmailThreadId: th, messageId: `<${uid()}@verder.vanderpoel.pro>`, gmailMessageId: `gm-${uid()}`,
+        gmailThreadId: th, messageId: `<${uid()}@grip.vanderpoel.pro>`, gmailMessageId: `gm-${uid()}`,
         sendingAt: c.at(-9 * DAY), sentAt: c.at(-9 * DAY),
       }).returning();
       const { deps, n } = depsFor(db, c);
@@ -603,7 +603,7 @@ describe("runClocks: due within 24 h", () => {
       expect(first[0]).toMatchObject({ kind: "task-due", level: "time-sensitive",
         dedupKey: `due:${t.id}:${c.at(5 * HOUR).toISOString()}` });
       expect(first[0].title).toMatch(new RegExp(`^(Vandaag|Morgen): ${t.title}$`));
-      expect(first[0].link).toBe(`verder://task/${t.id}`);
+      expect(first[0].link).toBe(`grip://task/${t.id}`);
       expect(first[0].body).toMatch(/^Deadline \d\d-\d\d\. Al gedaan\? Kies Gedaan\.$/);
 
       const moved = c.at(20 * HOUR);

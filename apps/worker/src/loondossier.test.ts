@@ -4,8 +4,8 @@ import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, desc, eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, schema } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import {
   amsterdamToDate, createPortalClient, fetchLoondossier, parsePortalFiles, selectNew, titleFor,
   type PortalFile,
@@ -13,7 +13,7 @@ import {
 import { settleDocumentTexts } from "./test-support/document-texts";
 import { fakeNotify } from "./test-support/fake-notify";
 
-const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const SECRETS = { username: "martin-secret-user", password: "hunter2-secret-pass" };
 const CSRF = "csrf-secret-value";
 const COOKIE = "cookie-secret-value";

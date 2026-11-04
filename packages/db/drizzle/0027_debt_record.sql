@@ -49,4 +49,4 @@ ALTER TABLE "debts" ALTER COLUMN "claimed_cents" DROP NOT NULL;
 -- and a registry whose mistakes are permanent is worse than the rule it would
 -- uphold. registry_decisions keeps SELECT, INSERT and nothing more.
 GRANT SELECT, INSERT, UPDATE, DELETE ON "debt_parties", "debt_documents"
-  TO verder_app, verder_worker;
+  TO grip_app, grip_worker;

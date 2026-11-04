@@ -1,5 +1,5 @@
 import { and, eq, inArray, or } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { normaliseMessageId } from "../mail/message-id";
 
 type RawRow = typeof schema.rawEmails.$inferSelect;

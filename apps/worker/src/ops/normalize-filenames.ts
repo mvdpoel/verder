@@ -20,11 +20,11 @@ import { readFile, rename, writeFile, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { schema, createDb } from "@verder/db";
-import { effectiveTitleSql } from "@verder/api/src/effective-status";
+import { schema, createDb } from "@grip/db";
+import { effectiveTitleSql } from "@grip/api/src/effective-status";
 import { looksLikeProse } from "../text-quality";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
 
 /** Filenames the archive already answers for itself. */
 const OPAQUE = /^(scan|img|image|doc|document|untitled|foto|photo|dsc|pdf)[-_ ]?\d*\.[a-z0-9]+$/i;

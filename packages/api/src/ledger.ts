@@ -1,6 +1,6 @@
 import { desc, sql } from "drizzle-orm";
-import { canonicalJson, computeEventHash, GENESIS_HASH, sha256Hex } from "@verder/core";
-import { schema, type Db } from "@verder/db";
+import { canonicalJson, computeEventHash, GENESIS_HASH, sha256Hex } from "@grip/core";
+import { schema, type Db } from "@grip/db";
 
 const LEDGER_LOCK_KEY = 42;
 

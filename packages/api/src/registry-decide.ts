@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { appendLedgerEvent } from "./ledger";
 import { isValidTransition } from "./registry-status";
 

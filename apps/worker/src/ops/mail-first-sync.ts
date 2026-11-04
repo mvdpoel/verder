@@ -39,8 +39,8 @@
 // message already known by id, fails nothing, and writes the cursor the
 // scheduled poll then continues from. The script says so in its own output.
 import { desc, eq, inArray, sql } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
+import { sha256Hex } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
 import { openMailPort } from "../mail/from-env";
 import { MAIL_WORKER, messageIdsAlreadyHeld, pollMail } from "../mail/poll";
 import { isRelevantMessage, relevanceFilter, type RejectedAddress } from "../mail/relevance";
@@ -779,7 +779,7 @@ export const FIRST_SYNC_BYPASS = {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { commit } = parseFirstSyncArgs(process.argv.slice(2));
   const firstSyncPages = parseFirstSyncPages(process.env.MAIL_FIRST_SYNC_PAGES);
 

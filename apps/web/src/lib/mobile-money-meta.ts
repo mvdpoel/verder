@@ -12,7 +12,7 @@
  * never describe a bar it is not under. Accounts are never merged: an account
  * only ever names ANOTHER account as a source, it never adds one to itself.
  */
-import { monthKey, type AccountSeries, type MoneyTx } from "@verder/api/src/money-series";
+import { monthKey, type AccountSeries, type MoneyTx } from "@grip/api/src/money-series";
 
 export interface InSource {
   /** The counterparty as the bank wrote it most often this month, or null. */

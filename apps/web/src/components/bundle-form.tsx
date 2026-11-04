@@ -1,7 +1,7 @@
 "use client";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
+import { DOC_SOURCES, type DocSource } from "@grip/db/doc-sources";
 import { trpc } from "@/lib/trpc-client";
 import {
   Button, Dialog, Field, FormError, Input, Micro, Notice, Select, Textarea,

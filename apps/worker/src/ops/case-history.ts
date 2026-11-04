@@ -30,9 +30,9 @@
 //                    exactly as tasks.create leaves it.
 //   - tracks/stops → NONE, ever. Neither table is evidence (migration 0023).
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { createDb, ensureCaseMap, schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { setTaskStatus } from "@verder/api/src/task-decide";
+import { createDb, ensureCaseMap, schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { setTaskStatus } from "@grip/api/src/task-decide";
 import { recordRun } from "../heartbeat";
 import { applyCaseDebts } from "./case-debts";
 import { documentIdsByTitle } from "./seed-documents";
@@ -974,7 +974,7 @@ export async function applyCaseHistory(
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.DATABASE_URL
-    ?? "postgres://verder:verder@localhost:5432/verder";
+    ?? "postgres://grip:grip@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     // Everything recorded here is recorded AS Martin: these are his tasks and

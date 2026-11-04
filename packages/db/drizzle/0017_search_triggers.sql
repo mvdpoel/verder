@@ -8,7 +8,7 @@
 -- catches every path, manual psql included.
 --
 -- SECURITY DEFINER: the function runs as its owner (the `verder` admin role
--- that runs migrations), so verder_app and verder_worker need no INSERT grant
+-- that runs migrations), so grip_app and grip_worker need no INSERT grant
 -- on search_outbox and no grant on its sequence — they can never write junk
 -- into the outbox directly, only by touching a real record. search_path is
 -- pinned so the function can never be tricked into resolving `search_outbox`

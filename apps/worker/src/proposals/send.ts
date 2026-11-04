@@ -1,9 +1,9 @@
 import { and, asc, eq, lt, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { insertEntry } from "@verder/api/src/routers/entries";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
-import { readFilePath } from "@verder/api/src/storage";
-import { PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { schema, type Db } from "@grip/db";
+import { insertEntry } from "@grip/api/src/routers/entries";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
+import { readFilePath } from "@grip/api/src/storage";
+import { PROPOSAL_SEND_WORKER_NAME } from "@grip/api/src/worker-names";
 import { readFile } from "node:fs/promises";
 import { rateLimitedUntil, retryAfterFrom } from "../gmail";
 import { ownMailboxAddresses } from "../mail/relevance";
@@ -319,7 +319,7 @@ export async function sendApproved(deps: SendDeps): Promise<SendResult> {
     if (rows.length === 0) return;
     result.failed++;
     await notify({ kind: "system", level: "time-sensitive", title, body,
-      link: `verder://proposal/${p.id}`, dedupKey: dedup });
+      link: `grip://proposal/${p.id}`, dedupKey: dedup });
   };
   const notSent = (p: Proposal, reason: string) => markFailed(p, reason,
     `Niet verstuurd: ${askOf(p)}`, `${reason}. Er is niets verzonden.`,
@@ -348,7 +348,7 @@ export async function sendApproved(deps: SendDeps): Promise<SendResult> {
         await notify({ kind: "system", level: "time-sensitive",
           title: "Mail VERSTUURD, logboek ontbreekt",
           body: `${askOf(p)} — de mail is verzonden (Gmail ${sent.id}), maar de logboekregel kon niet worden geschreven: ${message}`,
-          link: `verder://proposal/${p.id}`, dedupKey: `finish-failed:${p.id}` });
+          link: `grip://proposal/${p.id}`, dedupKey: `finish-failed:${p.id}` });
       }
       return false;
     }

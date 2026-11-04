@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { briefSummary, buildTalkingPoints, type TalkingPointsInput } from "@verder/api/src/talking-points";
+import { briefSummary, buildTalkingPoints, type TalkingPointsInput } from "@grip/api/src/talking-points";
 import { toTalkingPointsDTO } from "./mobile-talking-points";
 
 /**
@@ -15,7 +15,7 @@ import { toTalkingPointsDTO } from "./mobile-talking-points";
  * Regenerate with `WRITE_FIXTURES=1 pnpm --filter web test mobile-talking-points.fixture`.
  */
 
-const FIXTURES = fileURLToPath(new URL("../../../ios/Verder/FixtureData/_shared/parties/", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("../../../ios/Grip/FixtureData/_shared/parties/", import.meta.url));
 const NOORDKUST = "00000000-f1c5-4000-8000-600000000002";
 const KADE = "00000000-f1c5-4000-8000-600000000003";
 const file = (party: string) => `${FIXTURES}${party}/talking-points.json`;

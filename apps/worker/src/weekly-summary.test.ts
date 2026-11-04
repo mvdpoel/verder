@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { WEEKLY_SUMMARY_WORKER_NAME } from "@verder/api/src/worker-names";
-import type { WaitingItem } from "@verder/api/src/waiting";
-import type { WeeklySummary } from "@verder/api/src/weekly-summary";
-import { addDays, amsterdamAt } from "@verder/api/src/amsterdam";
+import { createDb, schema, type Db } from "@grip/db";
+import { WEEKLY_SUMMARY_WORKER_NAME } from "@grip/api/src/worker-names";
+import type { WaitingItem } from "@grip/api/src/waiting";
+import type { WeeklySummary } from "@grip/api/src/weekly-summary";
+import { addDays, amsterdamAt } from "@grip/api/src/amsterdam";
 import {
   composeWeekly, loadWeekly, runWeeklySummary, summaryWeek, weeklyBody, WEEKLY_SUMMARY_HOUR,
   type WeeklyInput,
@@ -172,7 +172,7 @@ describe("composeWeekly (pure)", () => {
         { id: "4", documentId: "d", status: "filed", actor: null, createdAt: at("20") },
       ],
     }));
-    expect(s).toMatchObject({ filedByMartin: 1, filedByVerder: 2 });
+    expect(s).toMatchObject({ filedByMartin: 1, filedByGrip: 2 });
   });
 
   it("renaming an already-filed document does not count as filed again", () => {
@@ -189,7 +189,7 @@ describe("composeWeekly (pure)", () => {
         { id: "5", documentId: "b", status: "filed", actor: null, createdAt: at("29") },
       ],
     }));
-    expect(s).toMatchObject({ filedByMartin: 0, filedByVerder: 1 });
+    expect(s).toMatchObject({ filedByMartin: 0, filedByGrip: 1 });
   });
 
   it("tasks done counts each task once, inside the week", () => {
@@ -213,7 +213,7 @@ describe("composeWeekly (pure)", () => {
   it("body holds counts only", () => {
     const s: WeeklySummary = {
       week: "2026-W44", from: W44.from.toISOString(), to: W44.to.toISOString(), sent: 3, received: 7,
-      filedByMartin: 2, filedByVerder: 3, tasksDone: 2, waiting: 4,
+      filedByMartin: 2, filedByGrip: 3, tasksDone: 2, waiting: 4,
       topWaiting: [item(1), item(2), item(3)],
     };
     const body = weeklyBody(s);
@@ -226,11 +226,11 @@ describe("composeWeekly (pure)", () => {
   });
 });
 
-// ---- against the database, as verder_worker --------------------------------
+// ---- against the database, as grip_worker --------------------------------
 // Every test is a transaction that is ROLLED BACK (the shared dev database is
 // never truncated). The week is a random ISO week in the 1990s, so its window
 // holds only this test's fixtures.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let worker: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { worker = createDb(WORKER_URL); });
 afterAll(() => worker.pool.end());
@@ -314,7 +314,7 @@ describe("loadWeekly and the job (database)", () => {
       const loaded = await loadWeekly(db, week, { waiting: noWaiting, ownAddresses: () => OWN });
       const s = composeWeekly(loaded);
       expect(s).toMatchObject({ week: week.key, sent: 1, received: 1, filedByMartin: 1,
-        filedByVerder: 0, tasksDone: 1, waiting: 0 });
+        filedByGrip: 0, tasksDone: 1, waiting: 0 });
     });
   });
 
@@ -379,7 +379,7 @@ describe("loadWeekly and the job (database)", () => {
       const key = summaryWeek(now).key;
       expect(fake.sent).toEqual([{
         kind: "weekly", level: "passive", title: "Je week in verder", body: weeklyBody(out.summary),
-        link: "verder://inbox", dedupKey: `weekly:${key}`,
+        link: "grip://inbox", dedupKey: `weekly:${key}`,
       }]);
       const rows = await db.select().from(schema.workerRuns)
         .where(eq(schema.workerRuns.worker, WEEKLY_SUMMARY_WORKER_NAME));

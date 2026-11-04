@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { asMailMessage, ingestRawEmail, type GmailPort } from "./gmail";
 import { recordRun } from "./heartbeat";
 import { buildReceiptPrompt, RECEIPT_PROMPT_VERSION } from "./prompts";

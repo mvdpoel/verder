@@ -20,11 +20,11 @@ import { appendFile, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
-import { effectiveTitleSql } from "@verder/api/src/effective-status";
-import { documentStatusChangePayloadByVerder } from "@verder/api/src/verification";
+import { APP_ACTOR, schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
+import { effectiveTitleSql } from "@grip/api/src/effective-status";
+import { documentStatusChangePayloadByGrip } from "@grip/api/src/verification";
 import { buildNamePrompt, validateName } from "./ops/normalize-filenames";
 import { looksLikeProse } from "./text-quality";
 import { recordRun } from "./heartbeat";
@@ -108,10 +108,10 @@ export async function autoNameDocument(
       documentId, status: fresh.effectiveStatus, title: to,
       docType: fresh.effectiveDocType ?? undefined,
       partyId: fresh.effectivePartyId ?? undefined,
-      actor: "verder", suggestionId: null }).returning();
+      actor: APP_ACTOR, suggestionId: null }).returning();
     await appendLedgerEvent(tx, {
       eventType: "document.updated", entityType: "document", entityId: documentId,
-      payload: documentStatusChangePayloadByVerder(row) });
+      payload: documentStatusChangePayloadByGrip(row) });
   });
   log(`  ${from}  ->  ${to}`);
   return { renamed: true, from, to };

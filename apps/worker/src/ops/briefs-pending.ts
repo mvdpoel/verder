@@ -10,12 +10,12 @@
 // Exit 3 when the brief is no longer draftable or there is nothing to say.
 //
 // NOT EVIDENCE: no ledger event, here or anywhere.
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { pendingBriefs, promptForBrief } from "../briefs/store";
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const args = process.argv.slice(2);
   const { db, pool } = createDb(url);
   try {

@@ -4,19 +4,19 @@ import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { relPathFor, readFilePath } from "../storage";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // document_texts/search_chunks are worker-owned (0016_search_grants.sql):
-// verder_app holds SELECT and, since 0034, DELETE — never INSERT. In
+// grip_app holds SELECT and, since 0034, DELETE — never INSERT. In
 // production the worker's extractor and search drain write these rows;
 // makeDoc below simulates that with the same WORKER_URL connection
 // search.test.ts already uses for the identical reason.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const RUN_REF = `documents-purge-test-${crypto.randomUUID()}`;
 
 const exists = (p: string) => access(p).then(() => true, () => false);

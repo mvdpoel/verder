@@ -56,12 +56,12 @@ describe("GET /api/mobile/v1/search", () => {
     const body = await res.json();
     expect(body.nextCursor).toBe("MjA=");
     expect(body.hits.map((h: { link: string | null }) => h.link)).toEqual([
-      `verder://document/${DOC}`, `verder://task/${TASK}`, null]);
+      `grip://document/${DOC}`, `grip://task/${TASK}`, null]);
     for (const h of body.hits) expect(h).not.toHaveProperty("href");
     expect(body.hits[0]).toEqual({
       entityType: "document", entityId: DOC, title: "document titel",
       snippet: "… «beschikking» …", occurredAt: "2026-07-14T08:00:00.000Z", status: null,
-      link: `verder://document/${DOC}`,
+      link: `grip://document/${DOC}`,
     });
   });
 

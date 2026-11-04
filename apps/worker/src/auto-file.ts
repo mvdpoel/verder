@@ -33,11 +33,11 @@
  * says verder did this, and `/verify` matches the row through that shape only.
  */
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
-import { documentStatusChangePayloadByVerder } from "@verder/api/src/verification";
-import { AUTO_FILE_WORKER_NAME } from "@verder/api/src/worker-names";
+import { APP_ACTOR, schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
+import { documentStatusChangePayloadByGrip } from "@grip/api/src/verification";
+import { AUTO_FILE_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 
 /**
@@ -101,10 +101,10 @@ export async function autoApplyDocMeta(
     const [row] = await tx.insert(schema.documentStatusChanges).values({
       documentId, status: "filed", title: current.effectiveTitle, docType,
       partyId: current.effectivePartyId ?? undefined,
-      actor: "verder", suggestionId: s.id }).returning();
+      actor: APP_ACTOR, suggestionId: s.id }).returning();
     await appendLedgerEvent(tx, {
       eventType: "document.updated", entityType: "document", entityId: documentId,
-      payload: documentStatusChangePayloadByVerder(row) });
+      payload: documentStatusChangePayloadByGrip(row) });
     await tx.update(schema.suggestions).set({
       status: "auto-applied", verdictAt: new Date(),
       finalPayload: { title: current.effectiveTitle, docType, before, changeId: row.id },

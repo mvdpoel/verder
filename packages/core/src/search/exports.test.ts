@@ -4,7 +4,7 @@ import {
   chunkBody, rrfFuse, sourceHash,
 } from "../index";
 
-describe("@verder/core public surface", () => {
+describe("@grip/core public surface", () => {
   it("re-exports every search primitive consumers import by package name", () => {
     expect(SEARCH_ENTITY_TYPES).toHaveLength(9);
     expect(SEARCH_STATUSES).toHaveLength(17);

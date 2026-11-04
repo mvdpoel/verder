@@ -20,8 +20,8 @@
 // row carries the counts, one per tick whether or not anything was sent,
 // because this is a watcher and its silence must mean failure.
 import { and, desc, eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { BADGE_SYNC_WORKER_NAME } from "@verder/api/src/worker-names";
+import { schema, type Db } from "@grip/db";
+import { BADGE_SYNC_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import type { ApnsRaw } from "./notify/apns";
 import { countWaiting, type PushCounts } from "./notify/notify";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
 
 /**
@@ -11,7 +11,7 @@ import { protectedProcedure, publicProcedure, router } from "../trpc";
 export const registerDeviceInput = z.object({
   token: z.string().regex(/^[0-9a-f]{64,200}$/),
   environment: z.enum(["development", "production"]),
-  bundleId: z.literal("pro.vanderpoel.verder"),
+  bundleId: z.literal("pro.vanderpoel.grip"),
   appVersion: z.string().min(1).max(40),
   // REQUIRED, unlike the plan's `.optional()`: `push_devices.session_id` is
   // NOT NULL and notify() delivers only to a device whose session is live, so

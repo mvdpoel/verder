@@ -15,10 +15,10 @@
  * worker-health.ts tells a quiet day from a digest that stopped running.
  */
 import { and, eq, gt, lte } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { dayKey } from "@verder/api/src/amsterdam";
-import { verderActionKind } from "@verder/api/src/routers/verder-actions";
-import { AUTOFILE_DIGEST_WORKER_NAME } from "@verder/api/src/worker-names";
+import { APP_ACTOR, schema, type Db } from "@grip/db";
+import { dayKey } from "@grip/api/src/amsterdam";
+import { gripActionKind } from "@grip/api/src/routers/grip-actions";
+import { AUTOFILE_DIGEST_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import type { NotifyFn } from "./notify/notify";
 
@@ -47,17 +47,17 @@ export async function runAutofileDigest(deps: AutofileDigestDeps): Promise<Autof
   const since = new Date(now.getTime() - DAY_MS);
   const c = schema.documentStatusChanges;
   // The same source and the same kind rule as "Door verder gedaan" itself
-  // (routers/verder-actions.ts), so the push never counts what the list omits.
+  // (routers/grip-actions.ts), so the push never counts what the list omits.
   const rows = await deps.db.select({ suggestionId: c.suggestionId }).from(c)
-    .where(and(eq(c.actor, "verder"), gt(c.createdAt, since), lte(c.createdAt, now)));
-  const filed = rows.filter((r) => verderActionKind(r) === "auto-file").length;
+    .where(and(eq(c.actor, APP_ACTOR), gt(c.createdAt, since), lte(c.createdAt, now)));
+  const filed = rows.filter((r) => gripActionKind(r) === "auto-file").length;
   const named = rows.length - filed;
 
   let sent = false;
   if (rows.length > 0) {
     const r = await deps.notify({
       kind: "filing", level: "passive", title: "Door verder gedaan",
-      body: digestBody(filed, named), link: "verder://inbox",
+      body: digestBody(filed, named), link: "grip://inbox",
       dedupKey: `autofile:${dayKey(now)}`,
     });
     sent = !r.duplicate;

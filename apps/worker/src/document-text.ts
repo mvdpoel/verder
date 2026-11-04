@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { recordRun } from "./heartbeat";
 import { extractDocumentText, type Extractor } from "./extract";
 

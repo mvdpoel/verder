@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { NOTIFY_WORKER_NAME } from "@grip/api/src/worker-names";
 import type { ApnsAlert, ApnsEnvironment, ApnsRaw, ApnsResult, ApnsSender } from "./apns";
 import type { PushTransport } from "../push";
 import { CATEGORY, notify, pushToDevices, type NotifyInput } from "./notify";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { loadWaiting } from "@grip/api/src/waiting";
 
-// notify() runs as verder_worker, the role it meets in production — which also
+// notify() runs as grip_worker, the role it meets in production — which also
 // proves the column-level SELECT on "session" (0037) is enough for the session
 // check. The better-auth user and sessions it checks against are fixtures the
 // worker cannot write, so they are made on the ADMIN connection and committed.
@@ -17,8 +17,8 @@ import { loadWaiting } from "@verder/api/src/waiting";
 // inside a transaction that first revokes every existing destination and is
 // ROLLED BACK at the end: notify sees only this test's fixtures, and nothing
 // it writes — notifications, attempts, worker_runs, revocations — survives.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 let worker: { db: Db; pool: { end(): Promise<void> } };
 let admin: { db: Db; pool: { end(): Promise<void> } };
@@ -68,7 +68,7 @@ const hexToken = () => crypto.randomUUID().replace(/-/g, "").repeat(2);
 async function device(db: Db, opts: { environment?: ApnsEnvironment; sessionId?: string; revoked?: boolean } = {}) {
   const [d] = await db.insert(schema.pushDevices).values({
     token: hexToken(), environment: opts.environment ?? "development",
-    bundleId: "pro.vanderpoel.verder", appVersion: "1.0 (1)",
+    bundleId: "pro.vanderpoel.grip", appVersion: "1.0 (1)",
     sessionId: opts.sessionId ?? await liveSession(),
     revokedAt: opts.revoked ? new Date() : null, revokedReason: opts.revoked ? "earlier" : null,
   }).returning();
@@ -135,12 +135,12 @@ describe("notify", () => {
       const apns = fakeApns();
       const web = fakeWebPush();
       const r = await notify({ db, apns: apns.factory, webPush: web.factory },
-        { ...N, kind: "verder-mail", level: "time-sensitive", link: "verder://document/x", threadId: "t1" });
+        { ...N, kind: "verder-mail", level: "time-sensitive", link: "grip://document/x", threadId: "t1" });
 
       expect(r).toMatchObject({ duplicate: false, delivered: 3, failed: 0, skipped: 0 });
       const [row] = await db.select().from(schema.notifications)
         .where(eq(schema.notifications.id, r.notificationId!));
-      expect(row).toMatchObject({ kind: "verder-mail", level: "time-sensitive", link: "verder://document/x" });
+      expect(row).toMatchObject({ kind: "verder-mail", level: "time-sensitive", link: "grip://document/x" });
 
       const rows = await attempts(db, r.notificationId!);
       expect(rows).toHaveLength(3);
@@ -152,7 +152,7 @@ describe("notify", () => {
       // The host is chosen per device, and the alert carries level and category.
       expect(apns.calls.map((c) => [c.token, c.env]).sort()).toEqual([[dev.token, "development"], [prod.token, "production"]].sort());
       expect(apns.calls[0].alert).toMatchObject({
-        level: "time-sensitive", category: CATEGORY["verder-mail"], threadId: "t1", link: "verder://document/x" });
+        level: "time-sensitive", category: CATEGORY["verder-mail"], threadId: "t1", link: "grip://document/x" });
       expect(web.calls).toEqual([sub.endpoint]);
 
       const run = await lastRun(db);
@@ -395,7 +395,7 @@ describe("notify", () => {
       await device(db);
       const apns = fakeApns();
       await notify({ db, apns: apns.factory, webPush: () => null },
-        { ...N, kind: "proposal", link: "verder://proposal/x", options: ["Ja", "Nee"], revision: 2 });
+        { ...N, kind: "proposal", link: "grip://proposal/x", options: ["Ja", "Nee"], revision: 2 });
       expect(apns.calls[0].alert).toMatchObject({ category: "PROPOSAL", options: ["Ja", "Nee"], revision: 2 });
       await notify({ db, apns: apns.factory, webPush: () => null }, N);
       expect("options" in apns.calls[1].alert).toBe(false);

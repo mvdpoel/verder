@@ -29,7 +29,7 @@ export async function reorderPdf(pdf: Buffer, order: number[]): Promise<Buffer> 
   if (seen.size !== n || order.some((v) => !Number.isInteger(v) || v < 0 || v >= n)) {
     throw new Error("reorderPdf: order is not a permutation");
   }
-  const dir = await mkdtemp(join(tmpdir(), "verder-reorder-"));
+  const dir = await mkdtemp(join(tmpdir(), "grip-reorder-"));
   try {
     const input = join(dir, "in.pdf");
     await (await import("node:fs/promises")).writeFile(input, pdf);
@@ -56,7 +56,7 @@ export async function reorderPdf(pdf: Buffer, order: number[]): Promise<Buffer> 
  * ledger. A file that is not yet a document must not become one.
  */
 export async function pdfPageCount(pdf: Buffer): Promise<number | null> {
-  const dir = await mkdtemp(join(tmpdir(), "verder-pdfinfo-"));
+  const dir = await mkdtemp(join(tmpdir(), "grip-pdfinfo-"));
   try {
     const input = join(dir, "in.pdf");
     await (await import("node:fs/promises")).writeFile(input, pdf);

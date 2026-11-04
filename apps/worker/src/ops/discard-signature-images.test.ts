@@ -1,13 +1,13 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { asc, eq } from "drizzle-orm";
-import { verifyChain, type ChainEvent } from "@verder/core";
-import { createDb, schema } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument, ingestDocument } from "@verder/api/src/routers/documents";
+import { verifyChain, type ChainEvent } from "@grip/core";
+import { createDb, schema } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument, ingestDocument } from "@grip/api/src/routers/documents";
 import { settleDocumentTexts } from "../test-support/document-texts";
 import { discardSignatureImages, SIGNATURE_IMAGE_INGESTED_BEFORE } from "./discard-signature-images";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 // Tags every fixture this run ingests, so the guard at the bottom can ask "did
 // this run leave anything owing?" about THIS run and nothing else. New per run,
 // because `documents` is append-only and the dev database is never truncated.

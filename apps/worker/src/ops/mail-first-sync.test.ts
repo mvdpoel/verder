@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { MAIL_MAX_DELTA } from "../mail/poll";
 import {
   messageIdCoverage, parseFirstSyncArgs, parseFirstSyncPages, summarisePreview,
   FIRST_SYNC_BYPASS,
 } from "./mail-first-sync";
 
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 /** n distinct attachment shas, spelled so a test reads as "n new files". */
 const shas = (prefix: string, n: number) =>

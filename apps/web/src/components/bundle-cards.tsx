@@ -1,4 +1,4 @@
-import { describeRule } from "@verder/api/src/bundle-rule";
+import { describeRule } from "@grip/api/src/bundle-rule";
 import { serverCaller } from "@/lib/trpc-server";
 import { Empty, Label, Micro, Notice, Panel, buttonClass } from "@/components/ui";
 import { BundleCardActions, BundleForm } from "@/components/bundle-form";

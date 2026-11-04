@@ -1,4 +1,4 @@
-import type { IndexHealth } from "@verder/api/src/search/health";
+import type { IndexHealth } from "@grip/api/src/search/health";
 import { indexHealthState, type IndexHealthTone } from "@/lib/index-health-state";
 import { Callout, cx, Label, Panel } from "@/components/ui";
 

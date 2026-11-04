@@ -1,5 +1,5 @@
-import type { DocSource } from "@verder/db/doc-sources";
-import type { EntrySource } from "@verder/db/entry-sources";
+import type { DocSource } from "@grip/db/doc-sources";
+import type { EntrySource } from "@grip/db/entry-sources";
 
 /**
  * The logbook's enum values, in Dutch.

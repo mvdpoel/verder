@@ -1,4 +1,4 @@
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { eq } from "drizzle-orm";
 import { createAuth } from "./index";
 
@@ -6,7 +6,7 @@ const email = process.env.SEED_EMAIL ?? "martin@vanderpoel.pro";
 const password = process.env.SEED_PASSWORD;
 if (!password) { console.error("Set SEED_PASSWORD"); process.exit(1); }
 
-const { db, pool } = createDb(process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder");
+const { db, pool } = createDb(process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip");
 process.env.ALLOW_SIGNUP = "1";
 const auth = createAuth({
   db,

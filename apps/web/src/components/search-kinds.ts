@@ -1,6 +1,6 @@
 import {
   SEARCH_STATUSES, type SearchEntityType, type SearchStatus,
-} from "@verder/core/search/entity-types";
+} from "@grip/core/search/entity-types";
 import type { ChipTone } from "./ui/chip";
 
 // Shared search constants. Deliberately NOT a "use client" module: both the
@@ -8,7 +8,7 @@ import type { ChipTone } from "./ui/chip";
 // exports of a client module reach server components as client references
 // instead of their values (same reason as components/money-format.ts).
 //
-// The import is the /search/entity-types subpath, not the @verder/core barrel:
+// The import is the /search/entity-types subpath, not the @grip/core barrel:
 // the barrel re-exports hash.ts, whose node:crypto import cannot be resolved in
 // the browser bundle the ⌘K palette pulls this module into.
 //
@@ -70,7 +70,7 @@ export const MATCH_BADGE: Record<"keyword" | "semantic" | "both", ChipTone> = {
 
 // Statuses are per entity type, so picking one implicitly narrows the results
 // to the types that carry it — the labels say which. Typing this as a full
-// Record<SearchStatus, string> means adding a status in @verder/core without a
+// Record<SearchStatus, string> means adding a status in @grip/core without a
 // label here is a compile error, not a blank <option>.
 const STATUS_LABEL: Record<SearchStatus, string> = {
   inbox: "Document — postvak",

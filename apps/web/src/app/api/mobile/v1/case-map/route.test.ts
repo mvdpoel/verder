@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTrackMap, filterDebtEpisodes, type StopRow, type TrackRow,
-} from "@verder/api/src/track-map";
+} from "@grip/api/src/track-map";
 
 const mocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn<() => Promise<string | null>>(),

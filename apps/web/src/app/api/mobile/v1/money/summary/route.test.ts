@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { buildMoneySeries, type MoneyTx } from "@verder/api/src/money-series";
+import { buildMoneySeries, type MoneyTx } from "@grip/api/src/money-series";
 
 const mocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn<() => Promise<string | null>>(),

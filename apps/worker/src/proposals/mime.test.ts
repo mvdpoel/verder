@@ -6,7 +6,7 @@ const base = (o: Partial<MimeInput> = {}): MimeInput => ({
   to: ["opstart@verdergroep.nl"], cc: [],
   subject: "Re: Informatie over uw dossier",
   body: "Beste Team Opstart,\n\nHierbij de loonstroken.\n\nMet vriendelijke groet,\nMartin",
-  messageId: "<11111111-2222-3333-4444-555555555555@verder.vanderpoel.pro>",
+  messageId: "<11111111-2222-3333-4444-555555555555@grip.vanderpoel.pro>",
   date: new Date("2026-10-31T10:00:00Z"),
   attachments: [],
   ...o,
@@ -66,7 +66,7 @@ describe("buildMime", () => {
 
   it("Message-ID is the generated one", () => {
     const mid = newMessageId();
-    expect(mid).toMatch(/^<[0-9a-f-]{36}@verder\.vanderpoel\.pro>$/);
+    expect(mid).toMatch(/^<[0-9a-f-]{36}@grip\.vanderpoel\.pro>$/);
     expect(headers(buildMime(base({ messageId: mid }))).get("message-id")).toBe(mid);
   });
 

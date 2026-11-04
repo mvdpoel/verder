@@ -1,8 +1,8 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { dayKey } from "@verder/api/src/amsterdam";
-import { effectiveTaskStatuses } from "@verder/api/src/task-decide";
-import { PROPOSAL_CLOCK_WORKER_NAME } from "@verder/api/src/worker-names";
+import { schema, type Db } from "@grip/db";
+import { dayKey } from "@grip/api/src/amsterdam";
+import { effectiveTaskStatuses } from "@grip/api/src/task-decide";
+import { PROPOSAL_CLOCK_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 import { resolveSenderPartyId, senderAddress } from "../gmail";
 import { normaliseMessageId } from "../mail/message-id";
@@ -205,7 +205,7 @@ async function remind(deps: ClockDeps, now: Date): Promise<number> {
       kind: "reminder", level: LEVEL[p.priority as MailPriority] ?? "active",
       title: `Wacht nog: ${typeof ask === "string" && ask ? ask : "een voorstel"}`,
       body: "Dit voorstel wacht al een dag op je.",
-      link: `verder://proposal/${p.id}`, dedupKey: `reminder:${p.id}`,
+      link: `grip://proposal/${p.id}`, dedupKey: `reminder:${p.id}`,
     });
     // Once, ever: a later tick no longer selects it.
     await db.update(schema.proposals).set({ remindedAt: now })
@@ -398,7 +398,7 @@ async function chaseOne(deps: ClockDeps, sets: PrioritySets, t: ThreadState): Pr
     kind: "follow-up", level: LEVEL[t.priority],
     title: "Herinneringsmail klaar",
     body: `Tik om hem na te lezen en te versturen. ${who.charAt(0).toUpperCase()}${who.slice(1)} heeft sinds ${dayMonthWords(t.lastOutboundAt)} niet gereageerd.`,
-    link: `verder://proposal/${proposalId}`, dedupKey,
+    link: `grip://proposal/${proposalId}`, dedupKey,
   });
   return !existing || !r.duplicate;
 }
@@ -450,7 +450,7 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
       // melding." was cut mid-word above the Gedaan button (measured on the
       // simulator 2026-11-04).
       body: `Deadline ${dayMonth(dueAt)}. Al gedaan? Kies Gedaan.`,
-      link: `verder://task/${r.id}`, dedupKey,
+      link: `grip://task/${r.id}`, dedupKey,
     });
     if (!res.duplicate) alerted++;
   }

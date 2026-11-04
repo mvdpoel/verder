@@ -13,9 +13,9 @@
 // (a watchdog heal, a suggest.entry run): every failure is recorded where it
 // can be and logged with console.error where it cannot.
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { schema, type Db } from "@grip/db";
+import { NOTIFY_WORKER_NAME } from "@grip/api/src/worker-names";
+import { loadWaiting } from "@grip/api/src/waiting";
 import { recordRun } from "../heartbeat";
 import { realTransport, type PushTransport } from "../push";
 import {

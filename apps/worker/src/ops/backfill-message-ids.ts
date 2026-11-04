@@ -31,8 +31,8 @@
 // stored `.eml`, and this touches none of it.
 import { readFile } from "node:fs/promises";
 import { eq, isNull, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
+import { createDb, schema, type Db } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
 import { recordRun } from "../heartbeat";
 import { extractMessageId } from "../mail/message-id";
 
@@ -196,7 +196,7 @@ export async function backfillMessageIds(
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const vaultDir = process.env.VAULT_DIR ?? "./vault-files";
   const { db, pool } = createDb(url);
   try {

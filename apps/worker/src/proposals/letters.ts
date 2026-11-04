@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { schema } from "@verder/db";
-import { effectiveTitleSql, notDiscardedSql, notPurgedSql } from "@verder/api/src/effective-status";
+import { schema } from "@grip/db";
+import { effectiveTitleSql, notDiscardedSql, notPurgedSql } from "@grip/api/src/effective-status";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
 import { creditorParties, letterSender, prioritySets, type LetterSender } from "../mail/priority";
 import { createProposal, type CreateDeps } from "./create";
@@ -78,7 +78,7 @@ export async function proposalForLetter(
   // Before the proposal exists, so it links to the Voor jou tab; the
   // "Voorstel" push for this letter reuses the collapse id and replaces it.
   await deps.notify({
-    ...push, link: "verder://inbox", dedupKey: key, threadId: key, collapseId: key,
+    ...push, link: "grip://inbox", dedupKey: key, threadId: key, collapseId: key,
   });
 
   const { id, created } = await createProposal(

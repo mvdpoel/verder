@@ -4,8 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { and, eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { relPathFor } from "../storage";
@@ -22,8 +22,8 @@ function fakeEmbed(): EmbedPort {
 
 // The WORKER role: indexEntity runs on the worker connection in production,
 // and search_chunks is the worker's table (0016).
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 const RUN_REF = `index-entity-purge-test-${crypto.randomUUID()}`;
 
 describe("indexEntity on a purged document", () => {

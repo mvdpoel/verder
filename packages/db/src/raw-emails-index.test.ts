@@ -5,7 +5,7 @@ import { createDb } from "./client";
 
 // Not named URL: the global URL constructor is what resolves the migration
 // paths below, and a module-level `const URL` shadows it.
-const DEV_URL = "postgres://verder:verder@localhost:5432/verder";
+const DEV_URL = "postgres://grip:grip@localhost:5432/grip";
 
 /**
  * The migrations the migrator will actually run, in order, as source text.
@@ -22,7 +22,7 @@ const DEV_URL = "postgres://verder:verder@localhost:5432/verder";
  * WHY THE SOURCE AND NOT AN ISOLATED DATABASE. run-retrieval-eval.ts does have
  * the CREATE DATABASE / migrate / DROP pattern and it would be the strongest
  * possible answer — but its localhost guard is assertSafeToTruncate in
- * @verder/api, and @verder/api depends on @verder/db, so importing it here
+ * @grip/api, and @grip/api depends on @grip/db, so importing it here
  * inverts the dependency; the alternative is a second copy of a guard whose
  * whole job is to never be subtly different. It would also put a full
  * twenty-nine-migration build in front of every `vitest run` in this package.

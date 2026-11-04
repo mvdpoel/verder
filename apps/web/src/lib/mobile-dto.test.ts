@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WaitingItem } from "@verder/api/src/waiting";
+import type { WaitingItem } from "@grip/api/src/waiting";
 import {
   toDashboardSummaryDTO, toInboxDTO, toSuggestionDTO, toTaskDTO,
   type SuggestionSource,
@@ -67,7 +67,7 @@ describe("toInboxDTO", () => {
     const dto = toInboxDTO([item("a"), item("b"), item("c")]);
     expect(dto.count).toBe(3);
     expect(dto.items.map((i) => i.id)).toEqual(["a", "b", "c"]);
-    expect(dto.doneByVerder).toEqual([]);
+    expect(dto.doneByGrip).toEqual([]);
   });
 });
 

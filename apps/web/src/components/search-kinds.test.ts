@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@verder/core";
+import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@grip/core";
 import {
   ENTITY_BADGE, ENTITY_LABEL, MATCH_BADGE, MATCH_LABEL, STATUS_FILTERS,
 } from "./search-kinds";

@@ -18,7 +18,7 @@ const ID = "5d1e2f3a-4b5c-4d6e-8f70-8192a3b4c5d6";
 const ctx = { params: Promise.resolve({ changeId: ID }) };
 
 function jsonRequest(payload: unknown): Request & { bodyReads: () => number } {
-  const real = new Request(`http://localhost/api/mobile/v1/verder-actions/${ID}/undo`, {
+  const real = new Request(`http://localhost/api/mobile/v1/grip-actions/${ID}/undo`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: typeof payload === "string" ? payload : JSON.stringify(payload),
   });
@@ -36,11 +36,11 @@ function jsonRequest(payload: unknown): Request & { bodyReads: () => number } {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getSessionUserId.mockResolvedValue("user-1");
-  mocks.serverCaller.mockResolvedValue({ verderActions: { undo: mocks.undo } });
+  mocks.serverCaller.mockResolvedValue({ gripActions: { undo: mocks.undo } });
   mocks.undo.mockResolvedValue({ documentId: "d1", undoChangeId: "u1" });
 });
 
-describe("POST /api/mobile/v1/verder-actions/[changeId]/undo", () => {
+describe("POST /api/mobile/v1/grip-actions/[changeId]/undo", () => {
   it("401 first: before the body and before any router call", async () => {
     mocks.getSessionUserId.mockResolvedValue(null);
     const r = jsonRequest({});

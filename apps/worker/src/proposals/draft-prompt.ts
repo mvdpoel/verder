@@ -1,4 +1,4 @@
-import type { ProposalKind } from "@verder/api/src/proposal-state";
+import type { ProposalKind } from "@grip/api/src/proposal-state";
 import type { ContextItem, ProposalContext } from "./context";
 
 /**

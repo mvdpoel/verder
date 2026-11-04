@@ -11,7 +11,7 @@ import { PARTY_BRIEF_VERDICTS } from "./schema";
 // `party_brief_drafts`, one row per attempt. That history is APPEND-ONLY: the
 // worker (the only writer) holds SELECT and INSERT, never UPDATE or DELETE;
 // the web app holds nothing. Still NOT evidence: no ledger event.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 describe("party_brief_drafts (0043)", () => {
   let db: Db; let close: () => Promise<void>;
@@ -25,13 +25,13 @@ describe("party_brief_drafts (0043)", () => {
   }
 
   it("the worker appends and reads, and can never rewrite or remove an attempt", async () => {
-    for (const p of ["SELECT", "INSERT"]) expect(await can("verder_worker", p), p).toBe(true);
-    for (const p of ["UPDATE", "DELETE", "TRUNCATE"]) expect(await can("verder_worker", p), p).toBe(false);
+    for (const p of ["SELECT", "INSERT"]) expect(await can("grip_worker", p), p).toBe(true);
+    for (const p of ["UPDATE", "DELETE", "TRUNCATE"]) expect(await can("grip_worker", p), p).toBe(false);
   });
 
   it("the app holds nothing on it", async () => {
     for (const p of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]) {
-      expect(await can("verder_app", p), p).toBe(false);
+      expect(await can("grip_app", p), p).toBe(false);
     }
   });
 

@@ -1,5 +1,5 @@
-import { dayKey } from "@verder/api/src/amsterdam";
-import type { WorkerKind, WorkerState } from "@verder/api/src/worker-health";
+import { dayKey } from "@grip/api/src/amsterdam";
+import type { WorkerKind, WorkerState } from "@grip/api/src/worker-health";
 
 /**
  * One served row of dashboard.stats().lastWorkerRuns, minus its name.

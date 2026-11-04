@@ -23,9 +23,9 @@
 // NOT EVIDENCE: a proposal appends no ledger event, here or anywhere.
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { createDb, schema, type Db } from "@verder/db";
-import { canTransition, type ProposalKind, type ProposalStatus } from "@verder/api/src/proposal-state";
-import { PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { canTransition, type ProposalKind, type ProposalStatus } from "@grip/api/src/proposal-state";
+import { PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_DRAFT_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 import { closeNotify, notifier, type NotifyFn, type NotifyInput } from "../notify/notify";
 import type { ExternalMail, ProposalContext } from "../proposals/context";
@@ -85,7 +85,7 @@ function proposalPush(row: Row, ctx: ProposalContext, payload: DraftPayload): No
     body: payload.question
       ? `Een vraag over ${who}. Kies een antwoord.`
       : `Tik om het na te lezen en te versturen. Het is een antwoord aan ${who}.`,
-    link: `verder://proposal/${row.id}`,
+    link: `grip://proposal/${row.id}`,
     dedupKey: `proposal:${row.id}`,
     // Same thread and collapse id as the mail or letter push, so this one
     // REPLACES it on the lock screen instead of stacking a second alert.
@@ -300,7 +300,7 @@ async function readStdin(): Promise<string> {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   let args: StoreArgs;
   try { args = parseStoreArgs(process.argv.slice(2)); }
   catch (err) {

@@ -144,12 +144,12 @@ export async function ensureCaseMap(db: Db): Promise<EnsureCaseMapResult> {
   return created;
 }
 
-// `pnpm --filter @verder/db seed-map` — puts the skeleton back after a suite
+// `pnpm --filter @grip/db seed-map` — puts the skeleton back after a suite
 // (or a hand) has truncated it away. Idempotent, so running it on a healthy
 // database is a no-op that prints zeros.
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.DATABASE_URL
-    ?? "postgres://verder:verder@localhost:5432/verder";
+    ?? "postgres://grip:grip@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     const created = await ensureCaseMap(db);

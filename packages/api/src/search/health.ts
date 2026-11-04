@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 import { cadenceMs, declFor } from "../worker-health";
 import { DRAIN_WORKER_NAME } from "../worker-names";
 

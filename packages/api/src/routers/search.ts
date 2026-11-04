@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { alreadyHave as runAlreadyHave, realAlreadyHaveDeps } from "../search/already-have";
-import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@verder/core";
+import { SEARCH_ENTITY_TYPES, SEARCH_STATUSES } from "@grip/core";
 import { protectedProcedure, router } from "../trpc";
 import { recentEntities } from "../search/recent";
 import { readIndexHealth } from "../search/health";

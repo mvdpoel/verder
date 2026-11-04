@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildTrackMap, filterDebtEpisodes, type StopRow, type TrackRow,
-} from "@verder/api/src/track-map";
-import type { StopEvidence } from "@verder/api/src/track-evidence";
+} from "@grip/api/src/track-map";
+import type { StopEvidence } from "@grip/api/src/track-evidence";
 import { toCaseMapDTO } from "./mobile-case-map";
 
 /**
@@ -16,11 +16,11 @@ import { toCaseMapDTO } from "./mobile-case-map";
  * Regenerate with `WRITE_FIXTURES=1 pnpm --filter web test mobile-case-map.fixture`.
  */
 
-const FIXTURES = fileURLToPath(new URL("../../../ios/Verder/FixtureData/", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("../../../ios/Grip/FixtureData/", import.meta.url));
 const SHOWN = `${FIXTURES}_shared/case-map.json`;
 const HIDDEN = `${FIXTURES}_shared/case-map~schuldeisers=verborgen.json`;
 const EMPTY = `${FIXTURES}empty/case-map.json`;
-const LAYOUT = fileURLToPath(new URL("../../../ios/VerderTests/Fixtures/", import.meta.url));
+const LAYOUT = fileURLToPath(new URL("../../../ios/GripTests/Fixtures/", import.meta.url));
 
 const id = (prefix: string, n: number) =>
   `00000000-f1c5-4000-8000-${prefix}${String(n).padStart(12 - prefix.length, "0")}`;

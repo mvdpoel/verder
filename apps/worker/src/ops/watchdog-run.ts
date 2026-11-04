@@ -5,8 +5,8 @@
 //
 // Every list item comes from a closed vocabulary and is validated here, so the
 // row (and the notification body) can only ever contain names this file knows.
-import { createDb, type Db } from "@verder/db";
-import { WATCHDOG_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, type Db } from "@grip/db";
+import { WATCHDOG_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 import { closeNotify, notifier, type NotifyFn, type NotifyInput } from "../notify/notify";
 
@@ -74,7 +74,7 @@ export async function runWatchdogReport(
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     await runWatchdogReport(db, buildReport(process.argv.slice(2)));

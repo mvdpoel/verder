@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { and, count, eq, gt } from "drizzle-orm";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import { getAuth } from "./auth";
 import { getDb } from "./db";
 

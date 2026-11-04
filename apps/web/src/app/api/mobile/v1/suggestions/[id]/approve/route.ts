@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { mobilePost } from "@/lib/mobile-route";
 import { fail } from "@/lib/mobile-json";
-import { entryFromProposed } from "@verder/api/src/entry-from-proposed";
-import { debtFields } from "@verder/api/src/routers/registry";
-import { taskFields } from "@verder/api/src/routers/tasks";
+import { entryFromProposed } from "@grip/api/src/entry-from-proposed";
+import { debtFields } from "@grip/api/src/routers/registry";
+import { taskFields } from "@grip/api/src/routers/tasks";
 
 /**
  * The phone never sends a whole procedure input, only the fields Martin

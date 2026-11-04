@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 
 export interface Context { db: Db; userId: string | null }
 export function createContext(input: Context): Context { return input; }

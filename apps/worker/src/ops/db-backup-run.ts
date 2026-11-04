@@ -8,8 +8,8 @@
 // the shell cannot mint a tile that no code path will ever clear. The reason is
 // a closed code mapped to Dutch text here, so nothing free-form from a shell can
 // reach `worker_runs.detail` (which the nightly pg_dump copies off-box).
-import { createDb } from "@verder/db";
-import { DB_BACKUP_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb } from "@grip/db";
+import { DB_BACKUP_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 
 export const DB_BACKUP_REASONS = {
@@ -42,7 +42,7 @@ export function parseOutcome(args: string[]): DbBackupOutcome {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     const outcome = parseOutcome(process.argv.slice(2));

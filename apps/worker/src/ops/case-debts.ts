@@ -14,8 +14,8 @@
  * case-history's existing one. Debts and both link tables are not evidence.
  */
 import { asc, eq, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
+import { schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
 import { documentIdsByTitle } from "./seed-documents";
 
 export interface DebtSeed {

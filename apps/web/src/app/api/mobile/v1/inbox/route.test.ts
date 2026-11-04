@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getSessionUserId.mockResolvedValue("user-1");
   mocks.serverCaller.mockResolvedValue({
-    inbox: { list: mocks.list }, verderActions: { list: mocks.done } });
+    inbox: { list: mocks.list }, gripActions: { list: mocks.done } });
   mocks.list.mockResolvedValue([item("a"), item("b")]);
   mocks.done.mockResolvedValue([]);
 });
@@ -48,10 +48,10 @@ describe("GET /api/mobile/v1/inbox", () => {
     const body = await res.json();
     expect(body.count).toBe(2);
     expect(body.items).toHaveLength(2);
-    expect(body.doneByVerder).toEqual([]);
+    expect(body.doneByGrip).toEqual([]);
   });
 
-  it("doneByVerder carries the last week of verder's actions and never counts", async () => {
+  it("doneByGrip carries the last week of verder's actions and never counts", async () => {
     const action = {
       changeId: "c1", documentId: "d1", documentTitle: "Loonstrook juli.pdf",
       at: "2026-10-31T17:00:00.000Z", kind: "auto-file",
@@ -62,7 +62,7 @@ describe("GET /api/mobile/v1/inbox", () => {
     mocks.done.mockResolvedValue([action]);
     const body = await (await GET(req(), ctx)).json();
     expect(mocks.done).toHaveBeenCalledWith({ sinceDays: 7 });
-    expect(body.doneByVerder).toEqual([action]);
+    expect(body.doneByGrip).toEqual([action]);
     expect(body.count).toBe(2);
   });
 

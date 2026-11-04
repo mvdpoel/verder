@@ -1,13 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { DRAIN_STALE_MS, DRAIN_WORKER_NAME, readIndexHealth } from "./health";
 import { cadenceMs, declFor, workerState } from "../worker-health";
 
 // APP role: the same grants the web app runs with, so a missing SELECT on
 // search_outbox fails here rather than in production. Fixtures go in as the
 // worker role, which is the only role holding INSERT on search_chunks.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 // The dev postgres is shared by every test file, so every assertion below is a
 // delta around rows THIS file creates — never an absolute count.

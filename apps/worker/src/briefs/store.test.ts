@@ -3,14 +3,14 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { asc, eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { ingestRawEmail } from "../gmail";
 import type { BriefContext } from "./context";
 import { pendingBriefs, promptForBrief, storeBrief, storeBriefFailure, STALE_DRAFTING_MS } from "./store";
 
 // The WORKER role: it is the one that marks, prompts and stores in production
 // (the app role holds SELECT only on party_briefs — 0042).
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("party briefs: ingest → pending → prompt → store", () => {
   let db: Db; let close: () => Promise<void>; let vaultDir: string;

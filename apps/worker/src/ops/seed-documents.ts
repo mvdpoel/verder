@@ -1,6 +1,6 @@
 import { asc } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { notDiscardedSql } from "@verder/api/src/effective-status";
+import { schema, type Db } from "@grip/db";
+import { notDiscardedSql } from "@grip/api/src/effective-status";
 
 /**
  * The vault's documents keyed by the filename they arrived under, for the

@@ -23,7 +23,7 @@ describe("buildTalkingPoints — ask", () => {
     const r = buildTalkingPoints(input({ tasks: [task("t1", { title: "Beschikking toesturen" })] }));
     expect(r.ask).toEqual([{
       id: "ask:task:t1", text: "Vraag naar: Beschikking toesturen",
-      source: { type: "task", id: "t1", link: "verder://task/t1" },
+      source: { type: "task", id: "t1", link: "grip://task/t1" },
     }]);
     expect(r.tell).toEqual([]);
   });
@@ -50,11 +50,11 @@ describe("buildTalkingPoints — ask", () => {
     ] }));
     expect(r.ask).toEqual([{
       id: "ask:proposal:p-old", text: "Nog geen antwoord op je mail van 29 okt: Loonstrook oktober",
-      source: { type: "proposal", id: "p-old", link: "verder://proposal/p-old" },
+      source: { type: "proposal", id: "p-old", link: "grip://proposal/p-old" },
     }]);
     expect(r.tell).toEqual([{
       id: "tell:mail:m-new", text: "Gemaild op 2 nov: Huurcontract",
-      source: { type: "mail", id: "m-new", link: "verder://dossier" },
+      source: { type: "mail", id: "m-new", link: "grip://dossier" },
     }]);
   });
 
@@ -74,7 +74,7 @@ describe("buildTalkingPoints — ask", () => {
     ] }));
     expect(r.ask).toEqual([{
       id: "ask:debt:d1", text: "Vraag het gevorderde bedrag: Stroomnet Energie (INC-2026-114)",
-      source: { type: "debt", id: "d1", link: "verder://dossier" },
+      source: { type: "debt", id: "d1", link: "grip://dossier" },
     }]);
   });
 
@@ -82,7 +82,7 @@ describe("buildTalkingPoints — ask", () => {
     const r = buildTalkingPoints(input({ openStops: [{ id: "s1", title: "Regeling afspreken", at: null }] }));
     expect(r.ask).toEqual([{
       id: "ask:stop:s1", text: "Bespreek: Regeling afspreken",
-      source: { type: "stop", id: "s1", link: "verder://timeline" },
+      source: { type: "stop", id: "s1", link: "grip://timeline" },
     }]);
   });
 
@@ -118,11 +118,11 @@ describe("buildTalkingPoints — tell", () => {
     }));
     expect(r.tell).toEqual([
       { id: "tell:document:doc-filed", text: "Ontvangen en opgeborgen: Brief.pdf",
-        source: { type: "document", id: "doc-filed", link: "verder://document/doc-filed" } },
+        source: { type: "document", id: "doc-filed", link: "grip://document/doc-filed" } },
       { id: "tell:task:done-after", text: "Gedaan: Formulier ingevuld",
-        source: { type: "task", id: "done-after", link: "verder://task/done-after" } },
+        source: { type: "task", id: "done-after", link: "grip://task/done-after" } },
       { id: "tell:document:doc-sent", text: "Opgestuurd op 31 okt: Loonstrook.2026-10.pdf",
-        source: { type: "document", id: "doc-sent", link: "verder://document/doc-sent" } },
+        source: { type: "document", id: "doc-sent", link: "grip://document/doc-sent" } },
     ]);
   });
 

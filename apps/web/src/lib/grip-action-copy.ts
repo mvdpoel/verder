@@ -1,4 +1,4 @@
-import type { VerderActionDTO } from "@verder/api/src/routers/verder-actions";
+import type { GripActionDTO } from "@grip/api/src/routers/grip-actions";
 
 /**
  * The words "Door verder gedaan" uses for one action, on the web. Pure, so the
@@ -11,7 +11,7 @@ const status = (s: string) => STATUS[s] ?? s;
 const soort = (t: string | null) => (t && t.trim() ? t.trim() : "zonder soort");
 
 /** What changed, before → after, one clause per field that moved. */
-export function verderActionChanges(a: Pick<VerderActionDTO, "before" | "after">): string[] {
+export function gripActionChanges(a: Pick<GripActionDTO, "before" | "after">): string[] {
   const out: string[] = [];
   if (a.before.status !== a.after.status)
     out.push(`${status(a.before.status)} → ${status(a.after.status)}`);
@@ -22,7 +22,7 @@ export function verderActionChanges(a: Pick<VerderActionDTO, "before" | "after">
   return out;
 }
 
-export function verderActionHeadline(a: Pick<VerderActionDTO, "kind">): string {
+export function gripActionHeadline(a: Pick<GripActionDTO, "kind">): string {
   return a.kind === "auto-file" ? "Opgeborgen door verder" : "Hernoemd door verder";
 }
 
@@ -30,7 +30,7 @@ export function verderActionHeadline(a: Pick<VerderActionDTO, "kind">): string {
  * Why the button is off. An auto-name is reversed on the host with
  * `normalize-names --undo`, because the name also lives on the NAS share.
  */
-export function verderActionNote(a: Pick<VerderActionDTO, "undone" | "notUndoableReason">): string | null {
+export function gripActionNote(a: Pick<GripActionDTO, "undone" | "notUndoableReason">): string | null {
   if (a.undone) return "Ongedaan gemaakt";
   switch (a.notUndoableReason) {
     case "al aangepast": return "Al aangepast — niet meer terug te draaien";

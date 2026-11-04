@@ -7,9 +7,9 @@ import * as schema from "./schema";
 // and /verify never reads it. So unlike every evidence table in this project,
 // the app role is allowed to DELETE — removing a credential has to actually
 // remove it. The worker has no business here at all.
-const OWNER_URL = "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const OWNER_URL = "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("passkey table", () => {
   let owner: Db, app: Db, worker: Db;

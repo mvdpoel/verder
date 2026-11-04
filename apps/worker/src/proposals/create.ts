@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { SUPERSEDABLE_STATUSES, type ProposalKind } from "@verder/api/src/proposal-state";
+import { schema, type Db } from "@grip/db";
+import { SUPERSEDABLE_STATUSES, type ProposalKind } from "@grip/api/src/proposal-state";
 import { isOwnOutbound, mailPriority, prioritySets, type MailPriority } from "../mail/priority";
 import { proposalForOwnSentMail } from "./own-sent";
 import { gatherContext, type ContextDeps, type ProposalContext, type ProposalTrigger } from "./context";

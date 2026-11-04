@@ -3,14 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { storeFile } from "../storage";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
-// Fixtures live in @verder/parsers (source of truth for the formats). The
+// Fixtures live in @grip/parsers (source of truth for the formats). The
 // shared dev DB is never truncated, so every run must produce fresh
 // statement sha256s: we swap a constant token in the fixture for a per-run
 // unique one. The swapped token is in ignored/free-text columns only, so

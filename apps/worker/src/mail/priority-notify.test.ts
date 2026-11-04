@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { notify, type NotifyFn, type NotifyInput } from "../notify/notify";
 import { notifyForMail } from "./priority-notify";
 
-// Runs as verder_worker, the role suggest.entry meets in production. Every test
+// Runs as grip_worker, the role suggest.entry meets in production. Every test
 // is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated, and raw_emails/notifications have no DELETE grant.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 
 beforeAll(() => { conn = createDb(URL); });
@@ -149,7 +149,7 @@ describe("notifyForMail", () => {
       expect(r.calls).toHaveLength(1);
       expect(r.calls[0]).toMatchObject({ kind: "creditor-mail", level: "active",
         title: "Mail van een schuldeiser", body: "Tik om hem te bekijken. Hij staat al in je dossier.",
-        dedupKey: `mail:${e.id}`, link: "verder://inbox" });
+        dedupKey: `mail:${e.id}`, link: "grip://inbox" });
       expect(`${r.calls[0]?.title} ${r.calls[0]?.body}`).not.toContain("Incasso");
       expect(r.calls[0]?.body).not.toContain("Aanmaning");
     });
@@ -214,7 +214,7 @@ describe("notifyForMail", () => {
       const r = recorder();
       await notifyForMail({ db, notify: r.fn }, e.id);
       expect(r.calls[0]).toMatchObject({
-        link: "verder://inbox", collapseId: `mail:${e.id}`, threadId: `mail:${e.id}`,
+        link: "grip://inbox", collapseId: `mail:${e.id}`, threadId: `mail:${e.id}`,
       });
     });
   });

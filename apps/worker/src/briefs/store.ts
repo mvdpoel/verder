@@ -1,6 +1,6 @@
 import { and, asc, eq, lt, or, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { PARTY_BRIEF_WORKER_NAME } from "@verder/api/src/worker-names";
+import { schema, type Db } from "@grip/db";
+import { PARTY_BRIEF_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 import { gatherBriefContext, type BriefContext } from "./context";
 import { BRIEF_PROMPT_VERSION, buildBriefPrompt } from "./prompt";

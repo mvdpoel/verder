@@ -3,13 +3,13 @@
 // Records what happened to worker_runs so the dashboard heartbeat list shows
 // when a model last changed. Covers the chat model AND the embedding model:
 // stale embedding weights silently degrade search recall.
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { recordRun } from "../heartbeat";
 import { modelTargets } from "./model-targets";
 
 const base = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 const { db, pool } = createDb(url);
 try {

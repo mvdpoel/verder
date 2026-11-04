@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq, gte } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { PROPOSAL_DRAFT_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { PROPOSAL_DRAFT_WORKER_NAME } from "@grip/api/src/worker-names";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
 import { fixtureContext } from "../proposals/draft-fixture";
 import { pendingDrafts, promptForDraft } from "./proposals-pending";
 import { recordDrafterHeartbeat, storeDraft, storeDrafterFailure } from "./proposals-store";
 
-// Runs as verder_worker, the role `proposals-store` meets in production. Every
+// Runs as grip_worker, the role `proposals-store` meets in production. Every
 // test is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated. Nothing is sent: notify is a fake that only records its input.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { conn = createDb(URL); });
 afterAll(async () => { await conn.pool.end(); });
@@ -123,7 +123,7 @@ describe("storeDraft", () => {
         kind: "proposal", level: "time-sensitive",
         title: "Voorstel klaar om te lezen",
         body: "Tik om het na te lezen en te versturen. Het is een antwoord aan Team Opstart (Verder).",
-        link: `verder://proposal/${p.id}`, dedupKey: `proposal:${p.id}`,
+        link: `grip://proposal/${p.id}`, dedupKey: `proposal:${p.id}`,
         threadId: `mail:${triggerRawEmailId}`, collapseId: `mail:${triggerRawEmailId}`,
       });
       const runs = await runsSince(db, since);
@@ -231,7 +231,7 @@ describe("storeDraft", () => {
       await storeDraft({ db, notify: fake.notify }, { id: p.id, model: MODEL, answer: questionAnswer(ctx) });
       const row = await byId(db, p.id);
       expect(fake.calls[0]).toMatchObject({
-        kind: "proposal", link: `verder://proposal/${p.id}`,
+        kind: "proposal", link: `grip://proposal/${p.id}`,
         options: ["Ja, klaar", "Nee"], revision: row.revision,
       });
       // Storing the draft does not bump it: this IS the revision the answer is checked against.

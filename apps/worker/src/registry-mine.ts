@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { inArray, isNotNull, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { detectRecurring, normalizeName, type RecurringCandidate } from "@verder/parsers";
+import { schema, type Db } from "@grip/db";
+import { detectRecurring, normalizeName, type RecurringCandidate } from "@grip/parsers";
 import { recordRun } from "./heartbeat";
 import { buildRegistryPrompt, REGISTRY_PROMPT_VERSION } from "./prompts";
 import type { LlmPort } from "./ollama";

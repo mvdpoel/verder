@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { notDiscardedSql, notPurgedSql } from "@verder/api/src/effective-status";
+import { schema, type Db } from "@grip/db";
+import { notDiscardedSql, notPurgedSql } from "@grip/api/src/effective-status";
 
 /**
  * Documents whose text has never been extracted.

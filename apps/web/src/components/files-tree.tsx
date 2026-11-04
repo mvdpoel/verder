@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
-import type { DocSource } from "@verder/db/doc-sources";
+import type { DocSource } from "@grip/db/doc-sources";
 import { buildFilesHref, encodeBranch, type Branch, type ParsedFiles } from "@/lib/files-url";
 
 const NL_SOURCE: Record<DocSource, string> = {

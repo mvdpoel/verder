@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { briefSummary, buildTalkingPoints, type BriefRow, type TalkingPointsInput } from "@verder/api/src/talking-points";
+import { briefSummary, buildTalkingPoints, type BriefRow, type TalkingPointsInput } from "@grip/api/src/talking-points";
 
 const mocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn<() => Promise<string | null>>(),
@@ -73,15 +73,15 @@ describe("GET /api/mobile/v1/parties/[id]/talking-points", () => {
     expect(body.party).toEqual({ id: PARTY, name: "Bewindkantoor Noordkust", phone: "06 0000 0002" });
     expect(body.ask).toEqual([
       { id: "ask:task:t1", text: "Vraag naar: Beschikking toesturen",
-        source: { type: "task", id: "t1", link: "verder://task/t1" } },
+        source: { type: "task", id: "t1", link: "grip://task/t1" } },
       { id: "ask:proposal:p1", text: "Nog geen antwoord op je mail van 30 okt: Loonstrook oktober",
-        source: { type: "proposal", id: "p1", link: "verder://proposal/p1" } },
+        source: { type: "proposal", id: "p1", link: "grip://proposal/p1" } },
       { id: "ask:debt:d1", text: "Vraag het gevorderde bedrag: Stroomnet Energie",
-        source: { type: "debt", id: "d1", link: "verder://dossier" } },
+        source: { type: "debt", id: "d1", link: "grip://dossier" } },
     ]);
     expect(body.tell).toEqual([
       { id: "tell:document:doc-ok", text: "Opgestuurd op 2 nov: Huurcontract.pdf",
-        source: { type: "document", id: "doc-ok", link: "verder://document/doc-ok" } },
+        source: { type: "document", id: "doc-ok", link: "grip://document/doc-ok" } },
     ]);
     expect(body.summary).toEqual({
       text: "Ilse vroeg op 29 okt om je loonstrook; die is nog onderweg.", model: "claude-cli 2.1.0",

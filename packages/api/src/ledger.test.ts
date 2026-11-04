@@ -1,11 +1,11 @@
 import { asc } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
-import { verifyChain } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { verifyChain } from "@grip/core";
 import { appendLedgerEvent } from "./ledger";
 
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("ledger + append-only enforcement", () => {
   let db: Db;

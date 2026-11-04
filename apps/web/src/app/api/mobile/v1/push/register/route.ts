@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     const caller = await serverCaller();
     const { id } = await caller.push.registerDevice({
       token: b.token as string, environment: b.environment as "development" | "production",
-      bundleId: b.bundleId as "pro.vanderpoel.verder", appVersion: b.appVersion as string,
+      bundleId: b.bundleId as "pro.vanderpoel.grip", appVersion: b.appVersion as string,
       sessionId: identity.sessionId,
     });
     return NextResponse.json({ id });

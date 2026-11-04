@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 export const SEND_MAX_BYTES = 20 * 1024 * 1024;
 
 /** The domain verder's generated Message-IDs live under. */
-export const MESSAGE_ID_DOMAIN = "verder.vanderpoel.pro";
+export const MESSAGE_ID_DOMAIN = "grip.vanderpoel.pro";
 
 /** A fresh RFC 5322 Message-ID, angle brackets included. Generated and STORED
  *  on the proposal before the Gmail call, so recovery can look for it. */
@@ -123,7 +123,7 @@ export function buildMime(m: MimeInput): Buffer {
   if (m.attachments.length === 0) {
     lines = [...head, ...textPart(m.body)];
   } else {
-    const boundary = `verder-${randomUUID()}`;
+    const boundary = `grip-${randomUUID()}`;
     lines = [...head, `Content-Type: multipart/mixed; boundary="${boundary}"`, "",
       `--${boundary}`, ...textPart(m.body)];
     for (const a of m.attachments) {

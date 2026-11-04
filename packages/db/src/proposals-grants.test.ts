@@ -11,9 +11,9 @@ import { ENTRY_SOURCES } from "./entry-sources";
 //   ledgered outbound log entry. Both roles therefore hold full CRUD.
 // - log_entries stays evidence: SELECT, INSERT only, for both roles. 0038
 //   widens the enum the entries table reads, and must not widen its grants.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
-const ROLES = ["verder_app", "verder_worker"] as const;
+const ROLES = ["grip_app", "grip_worker"] as const;
 
 describe("proposals grants and the entry_source enum", () => {
   let db: Db; let close: () => Promise<void>;

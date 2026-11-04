@@ -14,7 +14,7 @@ describe("GET /.well-known/apple-app-site-association", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/^application\/json/);
     expect(await res.json()).toEqual({
-      webcredentials: { apps: ["ABCDE12345.pro.vanderpoel.verder"] },
+      webcredentials: { apps: ["ABCDE12345.pro.vanderpoel.grip"] },
     });
   });
 

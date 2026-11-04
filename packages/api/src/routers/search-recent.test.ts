@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 // Shared dev postgres: assert only about the shape and the cap, never about
 // rows other test files happen to have indexed.

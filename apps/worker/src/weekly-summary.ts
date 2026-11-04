@@ -37,11 +37,11 @@
  * a backfill of old mail, judged on its own date, never dumped into one week.
  */
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
-import { addDays, amsterdamAt, dayKey, isoWeekKey, weekBounds } from "@verder/api/src/amsterdam";
-import { loadWaiting, type WaitingItem } from "@verder/api/src/waiting";
-import type { WeeklySummary } from "@verder/api/src/weekly-summary";
-import { WEEKLY_SUMMARY_WORKER_NAME } from "@verder/api/src/worker-names";
+import { APP_ACTOR, type Db } from "@grip/db";
+import { addDays, amsterdamAt, dayKey, isoWeekKey, weekBounds } from "@grip/api/src/amsterdam";
+import { loadWaiting, type WaitingItem } from "@grip/api/src/waiting";
+import type { WeeklySummary } from "@grip/api/src/weekly-summary";
+import { WEEKLY_SUMMARY_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { senderAddress } from "./gmail";
 import { ownMailboxAddresses } from "./mail/relevance";
@@ -155,13 +155,13 @@ export function composeWeekly(input: WeeklyInput): WeeklySummary {
     byDoc.set(c.documentId, list);
   }
   let filedByMartin = 0;
-  let filedByVerder = 0;
+  let filedByGrip = 0;
   for (const [docId, rows] of byDoc) {
     rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     let previous = input.documentStatus[docId] ?? "inbox";
     for (const r of rows) {
       if (r.status === "filed" && previous !== "filed" && inWeek(r.createdAt)) {
-        if (r.actor === "verder") filedByVerder++; else filedByMartin++;
+        if (r.actor === APP_ACTOR) filedByGrip++; else filedByMartin++;
         break;
       }
       previous = r.status;
@@ -172,7 +172,7 @@ export function composeWeekly(input: WeeklyInput): WeeklySummary {
 
   return {
     week: key, from: from.toISOString(), to: to.toISOString(),
-    sent, received, filedByMartin, filedByVerder, tasksDone,
+    sent, received, filedByMartin, filedByGrip, tasksDone,
     waiting: input.waiting.length,
     topWaiting: input.waiting.slice(0, TOP_WAITING),
   };
@@ -180,7 +180,7 @@ export function composeWeekly(input: WeeklyInput): WeeklySummary {
 
 /** "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou". Counts only. */
 export function weeklyBody(s: WeeklySummary): string {
-  const filed = s.filedByMartin + s.filedByVerder;
+  const filed = s.filedByMartin + s.filedByGrip;
   const tasks = `${s.tasksDone} ${s.tasksDone === 1 ? "taak" : "taken"} klaar`;
   const waiting = s.waiting === 0 ? "niets wacht op jou"
     : `${s.waiting} ${s.waiting === 1 ? "wacht" : "wachten"} op jou`;
@@ -283,7 +283,7 @@ export async function runWeeklySummary(
   await recordRun(deps.db, WEEKLY_SUMMARY_WORKER_NAME, "ok", { summary });
   const r = await deps.notify({
     kind: "weekly", level: "passive", title: "Je week in verder", body,
-    link: "verder://inbox", dedupKey: `weekly:${week.key}`,
+    link: "grip://inbox", dedupKey: `weekly:${week.key}`,
   });
   return { summary, body, sent: !r.duplicate };
 }

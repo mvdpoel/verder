@@ -33,15 +33,15 @@ CREATE TABLE "document_purges" (
 );
 --> statement-breakpoint
 
-GRANT SELECT, INSERT ON "document_purges" TO verder_app, verder_worker;
+GRANT SELECT, INSERT ON "document_purges" TO grip_app, grip_worker;
 --> statement-breakpoint
 
--- THE ONE GRANT WIDENING, and the reason it is lawful. verder_app holds SELECT
+-- THE ONE GRANT WIDENING, and the reason it is lawful. grip_app holds SELECT
 -- only on these two (0016, deliberately: "the web app searches the index and
 -- never maintains it"). Without DELETE, a purge leaves the document's full
 -- OCR'd text in the database and in search, and the button is a lie. Both
 -- tables are DERIVED and documented as non-evidence — "they hold no facts:
--- only a rebuildable lookup" — and verder_worker already holds DELETE on them.
+-- only a rebuildable lookup" — and grip_worker already holds DELETE on them.
 -- Widening the app's grant on two rebuildable tables is not the same act as
 -- widening it on `documents`.
-GRANT DELETE ON "document_texts", "search_chunks" TO verder_app;
+GRANT DELETE ON "document_texts", "search_chunks" TO grip_app;

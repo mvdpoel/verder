@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("push.registerDevice", () => {
   let db: Db; let userId: string;
@@ -20,7 +20,7 @@ describe("push.registerDevice", () => {
   const token = () => (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", "");
   const input = (t: string, over: Partial<{ appVersion: string; sessionId: string;
     environment: "development" | "production" }> = {}) => ({
-    token: t, environment: "development" as const, bundleId: "pro.vanderpoel.verder" as const,
+    token: t, environment: "development" as const, bundleId: "pro.vanderpoel.grip" as const,
     appVersion: "1.0 (1)", sessionId: `sess-${crypto.randomUUID()}`, ...over });
   const rows = (t: string) => db.select().from(schema.pushDevices).where(eq(schema.pushDevices.token, t));
 

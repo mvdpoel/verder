@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 const sha = (seed: string) =>
   seed.repeat(64).slice(0, 64).toLowerCase().replace(/[^0-9a-f]/g, "0");

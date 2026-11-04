@@ -31,7 +31,7 @@ export interface WeeklySummary {
   received: number;
   /** Documents that moved INTO filed this week, by who moved them. */
   filedByMartin: number;
-  filedByVerder: number;
+  filedByGrip: number;
   /** Tasks that got a `done` status change this week. */
   tasksDone: number;
   /** `loadWaiting().length` when the summary was composed. */
@@ -47,7 +47,7 @@ const isInstant = (v: unknown) => typeof v === "string" && INSTANT.test(v) && !N
 export function isWeeklySummary(v: unknown): v is WeeklySummary {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
-  const ints = ["sent", "received", "filedByMartin", "filedByVerder", "tasksDone", "waiting"];
+  const ints = ["sent", "received", "filedByMartin", "filedByGrip", "tasksDone", "waiting"];
   return typeof o.week === "string" && /^\d{4}-W\d{2}$/.test(o.week)
     && isInstant(o.from) && isInstant(o.to)
     && ints.every((k) => Number.isInteger(o[k]) && (o[k] as number) >= 0)

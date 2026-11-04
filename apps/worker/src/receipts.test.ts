@@ -3,13 +3,13 @@ import { eq, sql } from "drizzle-orm";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, schema } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
+import { createDb, schema } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
 import type { GmailMessage, GmailPort } from "./gmail";
 import type { LlmPort } from "./ollama";
 import { resolveAggregator } from "./receipts";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 // Three monthly Apple/PayPal charge dates; the resolver searches around the
 // last <=3 of these.

@@ -9,7 +9,7 @@
  * final text on his phone: the outbound entry written once Gmail has the
  * message, with `source_ref` = `proposal:<id>`.
  *
- * A leaf module with no imports, published as `@verder/db/entry-sources`,
+ * A leaf module with no imports, published as `@grip/db/entry-sources`,
  * because client components need the vocabulary and the package barrel
  * reaches `pg`.
  */

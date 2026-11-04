@@ -1,5 +1,5 @@
-import type { CaseMap } from "@verder/api/src/track-map";
-import type { StopEvidence } from "@verder/api/src/track-evidence";
+import type { CaseMap } from "@grip/api/src/track-map";
+import type { StopEvidence } from "@grip/api/src/track-evidence";
 import { trackTerminus, type Terminus } from "./track-marks";
 
 /**
@@ -13,7 +13,7 @@ import { trackTerminus, type Terminus } from "./track-marks";
  * spread of a router row, because a row is whatever the table holds today —
  * and turns every date into an ISO string.
  *
- * Evidence links are APP routes (`verder://document/<id>`, `verder://task/<id>`,
+ * Evidence links are APP routes (`grip://document/<id>`, `grip://task/<id>`,
  * the kinds `DeepLink.swift` parses). A logbook entry and an e-mail have no
  * phone screen, so they travel as text; the Gmail message id and the
  * raw-email row id never leave the server.
@@ -107,10 +107,10 @@ function toEvidenceDTO(e: StopEvidence): CaseMapEvidenceDTO {
       : null,
     task: e.task
       ? { id: e.task.id, title: e.task.title, status: e.task.status,
-          dueAt: isoOrNull(e.task.dueAt), link: `verder://task/${e.task.id}` }
+          dueAt: isoOrNull(e.task.dueAt), link: `grip://task/${e.task.id}` }
       : null,
     documents: e.documents.map((d) => ({
-      id: d.id, title: d.title, mime: d.mime, link: `verder://document/${d.id}`,
+      id: d.id, title: d.title, mime: d.mime, link: `grip://document/${d.id}`,
     })),
     email: e.email
       ? { subject: e.email.subject, fromAddr: e.email.fromAddr, sentAt: iso(e.email.sentAt) }

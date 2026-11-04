@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
-import { AUTO_FILE_WORKER_NAME } from "@verder/api/src/worker-names";
+import { schema, type Db } from "@grip/db";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
+import { AUTO_FILE_WORKER_NAME } from "@grip/api/src/worker-names";
 import { autoApplyDocMeta } from "./auto-file";
 import { recordRun } from "./heartbeat";
 import { proposalForOwnSentMail } from "./proposals/own-sent";
@@ -58,7 +58,7 @@ export async function suggestEntry(
   // or crashed finishSent.
   const sentBy = await proposalForOwnSentMail(deps.db, email);
   if (sentBy) {
-    await recordRun(deps.db, "ollama", "ok", { rawEmailId, skipped: "sent-by-verder", proposalId: sentBy });
+    await recordRun(deps.db, "ollama", "ok", { rawEmailId, skipped: "sent-by-grip", proposalId: sentBy });
     return;
   }
   const attachmentDocs = await deps.db.select().from(schema.documents)

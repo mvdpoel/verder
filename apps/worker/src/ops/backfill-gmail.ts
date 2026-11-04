@@ -5,12 +5,12 @@
 // BACKFILL_QUERY is the TIME WINDOW only — the sender filter is applied for
 // you now, so a wide backfill no longer drags in unrelated business mail.
 import PgBoss from "pg-boss";
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { pollGmail } from "../gmail";
 import { realGmailPort } from "../gmail-auth";
 
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const window = process.env.BACKFILL_QUERY ?? "newer_than:1y";
 
 const { db, pool } = createDb(url);

@@ -1,8 +1,8 @@
 import { mobileGet } from "@/lib/mobile-route";
 import { dashboardMoneySlice } from "@/lib/dashboard-money-slice";
-import { addDays, dayKey, weekBounds } from "@verder/api/src/amsterdam";
-import { leefgeldWeek, type LeefgeldWeek } from "@verder/api/src/leefgeld-week";
-import type { MonthSeries } from "@verder/api/src/money-series";
+import { addDays, dayKey, weekBounds } from "@grip/api/src/amsterdam";
+import { leefgeldWeek, type LeefgeldWeek } from "@grip/api/src/leefgeld-week";
+import type { MonthSeries } from "@grip/api/src/money-series";
 import { monthMeta, type MonthMeta } from "@/lib/mobile-money-meta";
 
 /**

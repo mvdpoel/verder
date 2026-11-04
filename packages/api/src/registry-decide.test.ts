@@ -1,14 +1,14 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
-import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { canonicalJson, sha256Hex, verifyChain, type ChainEvent } from "@grip/core";
 import {
   decide, effectiveStatus, effectiveStatuses, registryDecisionPayload,
 } from "./registry-decide";
 import { registryDecisionPayloadHash } from "./verification";
 
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("registry decisions", () => {
   let db: Db;

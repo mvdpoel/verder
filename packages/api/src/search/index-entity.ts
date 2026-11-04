@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, sql } from "drizzle-orm";
-import { chunkBody, sourceHash, type SearchEntityType } from "@verder/core";
-import { schema, type Db } from "@verder/db";
+import { chunkBody, sourceHash, type SearchEntityType } from "@grip/core";
+import { schema, type Db } from "@grip/db";
 import { asDocument, type EmbedPort } from "./embed";
 import { effectiveStatus } from "../registry-decide";
 import { effectiveTaskStatus } from "../task-decide";

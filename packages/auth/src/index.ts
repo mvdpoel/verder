@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { passkey } from "@better-auth/passkey";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 import { TRUSTED_SESSION_SECONDS, sessionExpiryFor } from "./session-trust";
 
 export function createAuth(opts: {

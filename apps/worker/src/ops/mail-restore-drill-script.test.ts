@@ -55,7 +55,7 @@ describe("mail-restore-drill.sh", () => {
   /*
    * THE OVERLAY TRAP, and it is the one that could take the dossier offline.
    * The scratch service is defined as an overlay ON the production project so it
-   * joins verder_default and the worker can resolve it by name. The price is
+   * joins grip_default and the worker can resolve it by name. The price is
    * that `docker compose -f prod -f overlay down` means DOWN THE WHOLE PROJECT:
    * postgres, web, worker and the production stalwart. A cleanup path that used
    * it would end the drill by stopping the mail server and print a successful
@@ -88,7 +88,7 @@ describe("mail-restore-drill.sh", () => {
    * AND VERIFIES THE CONTAINER IS GONE, which is the half with production blast
    * radius. `rm -sf` renders BOTH compose files, so it fails whenever the merged
    * config fails to render or the daemon hiccups; discarding its exit code left
-   * a full second Stalwart on `verder_default` serving a month-old copy of the
+   * a full second Stalwart on `grip_default` serving a month-old copy of the
    * whole dossier, with its store deleted out from under it, while the drill
    * printed PASS. The check does NOT go back through compose — the case that
    * matters is a compose invocation that cannot run, and asking the broken tool
@@ -146,8 +146,8 @@ describe("mail-restore-drill.sh", () => {
     expect(code).toMatch(/MAIL_DRILL_SCRATCH/);
     // The drill's own paths are never production's.
     expect(code).toMatch(/mail-drill-tmp/);
-    expect(code).not.toMatch(/SCRATCH_ROOT:-\/mnt\/data\/verder\/stalwart/);
-    expect(code).not.toMatch(/STORE="\/mnt\/data\/verder\/stalwart/);
+    expect(code).not.toMatch(/SCRATCH_ROOT:-\/mnt\/data\/grip\/stalwart/);
+    expect(code).not.toMatch(/STORE="\/mnt\/data\/grip\/stalwart/);
   });
 
   /*
@@ -439,7 +439,7 @@ describe("mail-restore-drill.sh", () => {
     expect(deploy).toContain("8.12");
     /*
      * The log goes to nightly.log, and that is a SAFETY property rather than a
-     * tidiness one: `~/apps/verder/nightly.log` is in the canonical rsync
+     * tidiness one: `~/apps/grip/nightly.log` is in the canonical rsync
      * exclude list and a `drill.log` beside it would not be, so `--delete`
      * would erase the drill's history on the next deploy. CLAUDE.md records
      * that exact near-miss for nightly.log itself.
@@ -599,9 +599,9 @@ describe("mail-drill.compose.yml", () => {
    * `up -d stalwart-drill` with an empty environment would aim at.
    */
   it("defaults its binds to the drill scratch root, never the live store", () => {
-    expect(ymlCode).not.toMatch(/\/mnt\/data\/verder\/stalwart\//);
+    expect(ymlCode).not.toMatch(/\/mnt\/data\/grip\/stalwart\//);
     for (const d of ["etc", "data", "blobs"]) {
-      expect(ymlCode).toContain(`/mnt/data/verder/mail-drill-tmp/store/${d}`);
+      expect(ymlCode).toContain(`/mnt/data/grip/mail-drill-tmp/store/${d}`);
     }
   });
 });
@@ -629,7 +629,7 @@ describe("worker package.json", () => {
  * month, in the one worker whose errors deliberately never age out.
  */
 const INSPECT_OUTPUT_2026_09_01 = [
-  "Archive: /mnt/data/verder/mail-drill-probe/archive.sqlite",
+  "Archive: /mnt/data/grip/mail-drill-probe/archive.sqlite",
   "Source:  jmap http://stalwart:8080 (account c / martin@vanderpoel.pro)",
   "",
   "  mailbox                   21",

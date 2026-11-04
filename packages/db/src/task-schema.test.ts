@@ -4,7 +4,7 @@ import { createDb, type Db } from "./client";
 import * as schema from "./schema";
 
 // APP role: exercises the real grants (no UPDATE/DELETE on evidence tables).
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("task schema", () => {
   let db: Db;

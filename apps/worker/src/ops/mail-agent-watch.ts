@@ -4,7 +4,7 @@
 //
 // Replaces the homelab's gwatch.mts. It reads Martin's WATCHLIST (Statiegeld
 // Nederland, Bungas, Tikkie, Hanneke — senders the dossier does NOT ingest) from
-// STDIN, because the worker has no mount for /mnt/data/verder/mail-agent and
+// STDIN, because the worker has no mount for /mnt/data/grip/mail-agent and
 // stdin needs no compose change, asks Gmail READ-ONLY for their recent mail, and
 // prints one JSON line per new thread. The host script hands each line to
 // `proposals-store --external`, which makes a `drafting` proposal of it; the host
@@ -48,8 +48,8 @@
 // stdout goes into the host's cron log and into a proposal row.
 import { inArray, sql } from "drizzle-orm";
 import { google } from "googleapis";
-import { createDb, schema, type Db } from "@verder/db";
-import { MAIL_AGENT_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { MAIL_AGENT_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 import { rateLimitedUntil, senderAddress } from "../gmail";
 import { listAllMessageIds, oauthClient } from "../gmail-auth";
@@ -370,7 +370,7 @@ export async function realWatchPort(): Promise<WatchPort> {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const chunks: Buffer[] = [];
   for await (const c of process.stdin) chunks.push(c as Buffer);
   const { db, pool } = createDb(url);

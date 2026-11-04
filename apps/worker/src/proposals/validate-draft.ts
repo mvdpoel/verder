@@ -1,5 +1,5 @@
-import { isValidTaskTransition, TASK_STATUSES } from "@verder/api/src/task-status";
-import type { ReplyPayload } from "@verder/api/src/proposal-state";
+import { isValidTaskTransition, TASK_STATUSES } from "@grip/api/src/task-status";
+import type { ReplyPayload } from "@grip/api/src/proposal-state";
 import type { ContextItem, ProposalContext } from "./context";
 
 /**

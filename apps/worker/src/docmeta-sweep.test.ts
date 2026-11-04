@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { makeEnqueueGuard, pendingDocMeta } from "./docmeta-sweep";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 // The worker role, not the app role: document_texts is the worker's table
-// (0016 grants verder_app SELECT only, deliberately — the web app searches the
+// (0016 grants grip_app SELECT only, deliberately — the web app searches the
 // index and never maintains it), and the sweep itself runs on this connection
 // in production, so the test exercises the grants it will actually meet.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 /**
  * One source_ref for every fixture this run creates, so afterAll can settle

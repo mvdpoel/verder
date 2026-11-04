@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import {
   rrfFuse, SEARCH_ENTITY_TYPES, type SearchEntityType, type SearchStatus,
-} from "@verder/core";
+} from "@grip/core";
 import { asQuery, type EmbedPort } from "./embed";
 import { RERANK_PROMPT_VERSION, type RerankPort } from "./rerank";
 import { RERANK_WORKER_NAME } from "../worker-names";
@@ -14,7 +14,7 @@ import { RERANK_WORKER_NAME } from "../worker-names";
  *
  * Postgres full text ('dutch') and pgvector cosine ANN run as two independent
  * candidate queries; the fusion arithmetic is done in TypeScript by rrfFuse (a pure,
- * unit-tested function in @verder/core) rather than in SQL, and the result is
+ * unit-tested function in @grip/core) rather than in SQL, and the result is
  * collapsed to the best chunk per entity so one long document cannot fill the page.
  *
  * Read-only: the index is derived, so this path appends no ledger events and mutates

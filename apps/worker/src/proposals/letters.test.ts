@@ -3,10 +3,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import type { DocSource } from "@verder/db/doc-sources";
-import { appRouter } from "@verder/api/src/root";
-import { createContext } from "@verder/api/src/trpc";
+import { createDb, schema, type Db } from "@grip/db";
+import type { DocSource } from "@grip/db/doc-sources";
+import { appRouter } from "@grip/api/src/root";
+import { createContext } from "@grip/api/src/trpc";
 import { notify, type NotifyFn, type NotifyInput } from "../notify/notify";
 import type { RetrieveRefsFn } from "../retrieval-refs";
 import type { ProposalContext } from "./context";
@@ -14,10 +14,10 @@ import { buildProposalPrompt } from "./draft-prompt";
 import { proposalForLetter } from "./letters";
 import { validateDraft } from "./validate-draft";
 
-// Runs as verder_worker, the role suggest.docmeta meets in production. Every
+// Runs as grip_worker, the role suggest.docmeta meets in production. Every
 // test is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated, and a fixture document can never grow pendingDocMeta's backlog.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 const vaultDir = mkdtempSync(join(tmpdir(), "proposal-letters-vault-"));
 const retrieveRefs: RetrieveRefsFn = async () => [];
@@ -102,7 +102,7 @@ describe("proposalForLetter", () => {
       expect(calls[0]).toMatchObject({
         kind: "verder-mail", level: "time-sensitive", title: "Brief lijkt van Verder",
         body: "Brief Verder loonstrook.pdf", dedupKey: `letter:${d.id}`, collapseId: `letter:${d.id}`,
-        link: "verder://inbox",
+        link: "grip://inbox",
       });
       expect(results.map((r) => r.duplicate)).toEqual([false, true]);
       expect(await db.select().from(schema.notifications)

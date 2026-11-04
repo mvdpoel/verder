@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 
 // The ⌘K palette's empty state. Parties and e-mails are deliberately absent
 // from this list: neither has a screen of its own, and a row you cannot open is

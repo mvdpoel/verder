@@ -3,15 +3,15 @@ import { desc, eq } from "drizzle-orm";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, schema } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
+import { createDb, schema } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
 import {
   pollGmail, rateLimitedUntil, retryAfterFrom, buildQueries, ingestRawEmail, type GmailPort,
 } from "./gmail";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 function makeMsg(id: string) {
   return {

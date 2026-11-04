@@ -1,5 +1,5 @@
 import { isNotNull, eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { senderAddress } from "../gmail";
 import {
   asciiLower, operatorAddresses, ownMailboxAddresses, sanitizeAddresses,

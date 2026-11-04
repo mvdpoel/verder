@@ -3,14 +3,14 @@ import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
-import { canonicalJson, sha256Hex } from "@verder/core";
-import { createDb, schema } from "@verder/db";
-import { ingestDocument } from "@verder/api/src/routers/documents";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
-import { documentStatusChangePayloadByVerder } from "@verder/api/src/verification";
+import { canonicalJson, sha256Hex } from "@grip/core";
+import { createDb, schema } from "@grip/db";
+import { ingestDocument } from "@grip/api/src/routers/documents";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
+import { documentStatusChangePayloadByGrip } from "@grip/api/src/verification";
 import { autoNameDocument } from "./auto-name";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const PROSE = ("Geachte heer Van der Poel wij bevestigen de ontvangst van uw verzoek "
   + "en wij hebben dat in behandeling genomen bij de rechtbank in het arrondissement ").repeat(3);
 
@@ -139,7 +139,7 @@ describe("autoNameDocument, the verder actor", () => {
     const [ev] = await db.select().from(schema.ledgerEvents)
       .where(and(eq(schema.ledgerEvents.entityId, doc.id),
         eq(schema.ledgerEvents.eventType, "document.updated")));
-    expect(ev.payloadHash).toBe(sha256Hex(canonicalJson(documentStatusChangePayloadByVerder(row))));
+    expect(ev.payloadHash).toBe(sha256Hex(canonicalJson(documentStatusChangePayloadByGrip(row))));
     await pool.end();
   });
 });

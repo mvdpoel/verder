@@ -11,9 +11,9 @@ import { appendFile, readFile, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { createDb, schema } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
 import { normalizeFilenames } from "./normalize-filenames";
 
 const argv = process.argv.slice(2);

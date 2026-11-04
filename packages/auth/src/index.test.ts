@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { desc, eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { createAuth } from "./index";
 import { TRUST_HEADER } from "./session-trust";
 
-const url = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const url = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 const email = `trust-test-${crypto.randomUUID()}@example.test`;
 const password = "a-long-enough-password";
 

@@ -11,7 +11,7 @@ import {
 const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
 const CFG: ApnsConfig = {
   keyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
-  keyId: "TESTKEY123", teamId: "TESTTEAM12", topic: "pro.vanderpoel.verder",
+  keyId: "TESTKEY123", teamId: "TESTTEAM12", topic: "pro.vanderpoel.grip",
 };
 const TOKEN = "ab".repeat(32);
 const ALERT: ApnsAlert = { title: "Titel", body: "Tekst", level: "active", category: "proposal" };
@@ -60,12 +60,12 @@ describe("providerToken", () => {
 
 describe("apnsPayload", () => {
   it("passive alert has no sound and priority 5", async () => {
-    const p = apnsPayload({ ...ALERT, level: "passive", threadId: "t1", link: "verder://x" }) as {
+    const p = apnsPayload({ ...ALERT, level: "passive", threadId: "t1", link: "grip://x" }) as {
       aps: Record<string, unknown>; link: string };
     expect(p.aps.sound).toBeUndefined();
     expect(p.aps["interruption-level"]).toBe("passive");
     expect(p.aps["thread-id"]).toBe("t1");
-    expect(p.link).toBe("verder://x");
+    expect(p.link).toBe("grip://x");
     const active = apnsPayload(ALERT) as { aps: Record<string, unknown> };
     expect(active.aps.sound).toBe("default");
 
@@ -86,7 +86,7 @@ describe("apnsPayload", () => {
     expect(seen[1]["apns-priority"]).toBe("10");
     expect(seen[1]["apns-collapse-id"]).toBe("c1");
     expect(seen[0][":path"]).toBe(`/3/device/${TOKEN}`);
-    expect(seen[0]["apns-topic"]).toBe("pro.vanderpoel.verder");
+    expect(seen[0]["apns-topic"]).toBe("pro.vanderpoel.grip");
     expect(seen[0]["apns-push-type"]).toBe("alert");
     expect(String(seen[0].authorization)).toMatch(/^bearer [\w-]+\.[\w-]+\.[\w-]+$/);
     const exp = Number(seen[0]["apns-expiration"]);
@@ -98,13 +98,13 @@ describe("apnsPayload — badge and question options (Plan 3 Task 5)", () => {
   type P = { aps: Record<string, unknown>; link?: string; options?: string[]; revision?: number };
 
   it("proposal with options carries options, revision and mutable-content", () => {
-    const p = apnsPayload({ ...ALERT, category: "PROPOSAL", link: "verder://proposal/abc",
+    const p = apnsPayload({ ...ALERT, category: "PROPOSAL", link: "grip://proposal/abc",
       options: ["Ja, klaar", "Nee"], revision: 3 }) as P;
     expect(p.aps["mutable-content"]).toBe(1);
     expect(p.options).toEqual(["Ja, klaar", "Nee"]);
     expect(p.revision).toBe(3);
     // The deep link stays Plan 2's, beside aps.
-    expect(p.link).toBe("verder://proposal/abc");
+    expect(p.link).toBe("grip://proposal/abc");
     expect(p.aps.category).toBe("PROPOSAL");
   });
 
@@ -157,7 +157,7 @@ describe("http2ApnsSender", () => {
     } finally { sender.close(); }
     expect(seen[0].headers["apns-push-type"]).toBe("background");
     expect(seen[0].headers["apns-priority"]).toBe("5");
-    expect(seen[0].headers["apns-topic"]).toBe("pro.vanderpoel.verder");
+    expect(seen[0].headers["apns-topic"]).toBe("pro.vanderpoel.grip");
     expect(seen[0].headers[":path"]).toBe(`/3/device/${TOKEN}`);
     expect(seen[0].headers["apns-collapse-id"]).toBeUndefined();
     expect(JSON.parse(seen[0].body)).toEqual({ aps: { "content-available": 1 } });
@@ -231,7 +231,7 @@ describe("loadApnsConfig", () => {
       const path = join(dir, "k.p8");
       await writeFile(path, CFG.keyPem, { mode: 0o600 });
       expect(await loadApnsConfig({ APNS_KEY_ID: "K", APPLE_TEAM_ID: "T", APNS_KEY_PATH: path }))
-        .toEqual({ keyPem: CFG.keyPem, keyId: "K", teamId: "T", topic: "pro.vanderpoel.verder" });
+        .toEqual({ keyPem: CFG.keyPem, keyId: "K", teamId: "T", topic: "pro.vanderpoel.grip" });
       await writeFile(path, "not a key");
       expect(await loadApnsConfig({ APNS_KEY_ID: "K", APNS_TEAM_ID: "T", APNS_KEY_PATH: path })).toBeNull();
     } finally { await rm(dir, { recursive: true, force: true }); }

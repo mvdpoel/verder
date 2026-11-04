@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import PgBoss from "pg-boss";
 import { eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
+import { createDb, schema } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
 import { recordRun } from "./heartbeat";
 import { pollGmail } from "./gmail";
 import { realGmailPort } from "./gmail-auth";
@@ -24,7 +24,7 @@ import { notifyForMail } from "./mail/priority-notify";
 import { proposalsForMail } from "./proposals/create";
 import { proposalForLetter } from "./proposals/letters";
 import { buildProposalPrompt } from "./proposals/draft-prompt";
-import { AUTOFILE_DIGEST_WORKER_NAME, BADGE_SYNC_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { AUTOFILE_DIGEST_WORKER_NAME, BADGE_SYNC_WORKER_NAME, WEEKLY_SUMMARY_WORKER_NAME, PROPOSAL_CLOCK_WORKER_NAME, PROPOSAL_CREATE_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@grip/api/src/worker-names";
 import { sendApproved } from "./proposals/send";
 import { followUpCreator, runClocks } from "./proposals/clocks";
 import { realSendPort } from "./gmail-send";
@@ -33,11 +33,11 @@ import { notifier, pushToDevices } from "./notify/notify";
 import { syncBadge } from "./badge-sync";
 import { runAutofileDigest } from "./autofile-digest";
 import { runWeeklySummary } from "./weekly-summary";
-import { realEmbedPort } from "@verder/api/src/search/embed";
+import { realEmbedPort } from "@grip/api/src/search/embed";
 import { drainOnce } from "./search-drain";
 
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 export const { db } = createDb(url);
 const boss = new PgBoss(url);
 

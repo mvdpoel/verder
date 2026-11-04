@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { senderAddress } from "../gmail";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
 import { mailPriority, prioritySets } from "./priority";
@@ -65,7 +65,7 @@ export async function notifyForMail(
       body: "Tik om hem te bekijken. Hij staat al in je dossier.",
     };
   await deps.notify({
-    ...push, link: "verder://inbox", dedupKey: key, threadId: key, collapseId: key,
+    ...push, link: "grip://inbox", dedupKey: key, threadId: key, collapseId: key,
   });
 }
 

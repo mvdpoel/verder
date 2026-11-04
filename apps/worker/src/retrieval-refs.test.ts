@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SearchHit } from "@verder/api/src/search/retrieve";
+import type { SearchHit } from "@grip/api/src/search/retrieve";
 import { refsFromHits, retrieveRefsWith } from "./retrieval-refs";
 
 const hit = (over: Partial<SearchHit> = {}): SearchHit => ({

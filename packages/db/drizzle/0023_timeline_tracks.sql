@@ -83,7 +83,7 @@ CREATE INDEX "stops_track_order_idx" ON "stops" ("track_id", "order_index");
 --> statement-breakpoint
 -- Editable display aids (a typo is a typo), but nothing is ever deleted — the
 -- same grant shape milestones and timeline_events carry.
-GRANT SELECT, INSERT, UPDATE ON "tracks", "stops" TO verder_app, verder_worker;
+GRANT SELECT, INSERT, UPDATE ON "tracks", "stops" TO grip_app, grip_worker;
 --> statement-breakpoint
 -- Search outbox triggers, using the function migration 0017 installed.
 CREATE OR REPLACE TRIGGER "tracks_search_outbox_trg" AFTER INSERT OR UPDATE ON "tracks"

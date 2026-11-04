@@ -6,8 +6,8 @@ import { createDb, schema, type Db } from "./index";
 // document_status_changes. The two CHECKs are what keep the new columns from
 // becoming a way to relabel Martin's own rows as verder's work, so each is
 // exercised through the APP role, the one that actually writes this table.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 const RUN_REF = `auto-applied-test-${crypto.randomUUID()}`;
 // Derived per run: documents.sha256 is UNIQUE and the dev DB is never truncated.
 const FIXTURE_SHA = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
@@ -64,12 +64,12 @@ describe("migration 0040: auto-applied and the verder actor", () => {
     expect(rows[1].suggestionId).toBe(suggestionId);
   });
 
-  it("verder_app still has no UPDATE on document_status_changes", async () => {
+  it("grip_app still has no UPDATE on document_status_changes", async () => {
     const r = await admin.execute(sql`SELECT
-        has_table_privilege('verder_app', 'document_status_changes', 'UPDATE') AS app_upd,
-        has_table_privilege('verder_worker', 'document_status_changes', 'UPDATE') AS worker_upd,
-        has_table_privilege('verder_app', 'document_status_changes', 'DELETE') AS app_del,
-        has_table_privilege('verder_app', 'document_status_changes', 'INSERT') AS app_ins`);
+        has_table_privilege('grip_app', 'document_status_changes', 'UPDATE') AS app_upd,
+        has_table_privilege('grip_worker', 'document_status_changes', 'UPDATE') AS worker_upd,
+        has_table_privilege('grip_app', 'document_status_changes', 'DELETE') AS app_del,
+        has_table_privilege('grip_app', 'document_status_changes', 'INSERT') AS app_ins`);
     expect(r.rows[0]).toEqual({ app_upd: false, worker_upd: false, app_del: false, app_ins: true });
   });
 });

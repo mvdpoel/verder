@@ -4,8 +4,8 @@ import { readdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { desc, eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, schema } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import { scanNasFolder } from "./nas";
 
 /**
@@ -24,7 +24,7 @@ const scanShare = (prefix: string) => {
   return dir;
 };
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("scanNasFolder", () => {
   it("ingests settled files once and enqueues docmeta suggestions", async () => {

@@ -12,9 +12,9 @@ import { createDb, type Db } from "./index";
 //   writes them, the app reads them, and NOBODY edits or deletes them — that is
 //   what keeps "sent but never arrived" diagnosable.
 // - the worker may read a session's id and expiry, never its token.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
-const ROLES = ["verder_app", "verder_worker"] as const;
+const ROLES = ["grip_app", "grip_worker"] as const;
 
 describe("push and notification grants", () => {
   let db: Db; let close: () => Promise<void>;
@@ -48,19 +48,19 @@ describe("push and notification grants", () => {
 
   it("app may not insert notifications", async () => {
     for (const t of ["notifications", "notification_attempts"]) {
-      expect(await can("verder_app", t, "SELECT"), `app SELECT ${t}`).toBe(true);
+      expect(await can("grip_app", t, "SELECT"), `app SELECT ${t}`).toBe(true);
       for (const p of ["INSERT", "UPDATE", "DELETE"]) {
-        expect(await can("verder_app", t, p), `app ${p} ${t}`).toBe(false);
+        expect(await can("grip_app", t, p), `app ${p} ${t}`).toBe(false);
       }
     }
   });
 
   it("worker may not update or delete notifications or notification_attempts", async () => {
     for (const t of ["notifications", "notification_attempts"]) {
-      expect(await can("verder_worker", t, "SELECT"), `worker SELECT ${t}`).toBe(true);
-      expect(await can("verder_worker", t, "INSERT"), `worker INSERT ${t}`).toBe(true);
-      expect(await can("verder_worker", t, "UPDATE"), `worker UPDATE ${t}`).toBe(false);
-      expect(await can("verder_worker", t, "DELETE"), `worker DELETE ${t}`).toBe(false);
+      expect(await can("grip_worker", t, "SELECT"), `worker SELECT ${t}`).toBe(true);
+      expect(await can("grip_worker", t, "INSERT"), `worker INSERT ${t}`).toBe(true);
+      expect(await can("grip_worker", t, "UPDATE"), `worker UPDATE ${t}`).toBe(false);
+      expect(await can("grip_worker", t, "DELETE"), `worker DELETE ${t}`).toBe(false);
     }
   });
 
@@ -78,9 +78,9 @@ describe("push and notification grants", () => {
   // COLUMN-level on purpose: notify() needs to know a device's session was
   // revoked or expired (a lost phone), and it never needs a bearer token.
   it("worker may read session id and expires_at but not token", async () => {
-    expect(await canColumn("verder_worker", "session", "id", "SELECT")).toBe(true);
-    expect(await canColumn("verder_worker", "session", "expires_at", "SELECT")).toBe(true);
-    expect(await canColumn("verder_worker", "session", "token", "SELECT")).toBe(false);
-    expect(await can("verder_worker", "session", "SELECT")).toBe(false);
+    expect(await canColumn("grip_worker", "session", "id", "SELECT")).toBe(true);
+    expect(await canColumn("grip_worker", "session", "expires_at", "SELECT")).toBe(true);
+    expect(await canColumn("grip_worker", "session", "token", "SELECT")).toBe(false);
+    expect(await can("grip_worker", "session", "SELECT")).toBe(false);
   });
 });

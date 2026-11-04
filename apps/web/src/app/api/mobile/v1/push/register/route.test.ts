@@ -13,11 +13,11 @@ vi.mock("@/lib/trpc-server", () => ({
 
 import { POST } from "./route";
 import { MAX_REGISTER_BODY_BYTES } from "@/lib/upload-limit";
-import { registerDeviceInput } from "@verder/api/src/routers/push";
+import { registerDeviceInput } from "@grip/api/src/routers/push";
 
 const TOKEN = "0a1b2c3d".repeat(8);
 const body = (over: Record<string, unknown> = {}) => ({
-  token: TOKEN, environment: "development", bundleId: "pro.vanderpoel.verder",
+  token: TOKEN, environment: "development", bundleId: "pro.vanderpoel.grip",
   appVersion: "1.0 (1)", ...over });
 
 /** A Request whose body reads are counted, so "before the body" is measurable. */
@@ -75,7 +75,7 @@ describe("POST /api/mobile/v1/push/register", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "device-1" });
     expect(mocks.registerDevice).toHaveBeenCalledWith({
-      token: TOKEN, environment: "development", bundleId: "pro.vanderpoel.verder",
+      token: TOKEN, environment: "development", bundleId: "pro.vanderpoel.grip",
       appVersion: "1.0 (1)", sessionId: "sess-cookie" });
   });
 

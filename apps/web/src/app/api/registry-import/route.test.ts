@@ -10,7 +10,7 @@ vi.mock("@/lib/trpc-server", () => ({
   getSessionUserId: mocks.getSessionUserId,
   serverCaller: async () => ({ registry: { import: { ingest: mocks.ingest } } }),
 }));
-vi.mock("@verder/api/src/storage", () => ({ storeFile: mocks.storeFile }));
+vi.mock("@grip/api/src/storage", () => ({ storeFile: mocks.storeFile }));
 
 import { POST } from "./route";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";

@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { setTaskStatus } from "../task-decide";
 import { documentStatusChangePayload } from "../verification";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 // Scoped to the tracks this suite creates. The seeded root is shared with every
 // other suite, so nothing here asserts a total.

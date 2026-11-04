@@ -26,7 +26,7 @@ describe("buildZip", () => {
       { name: "inhoudsopgave.txt", bytes: bytes("een\ntwee\n"), at: AT },
       { name: "Beschikking.pdf", bytes: bytes("%PDF-1.4 fake"), at: AT },
     ]);
-    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const dir = mkdtempSync(join(tmpdir(), "grip-zip-"));
     const path = join(dir, "t.zip");
     writeFileSync(path, zip);
     expect(() => execFileSync("unzip", ["-t", path])).not.toThrow();
@@ -37,7 +37,7 @@ describe("buildZip", () => {
 
   it("round-trips the bytes", () => {
     const zip = buildZip([{ name: "a.txt", bytes: bytes("hallo"), at: AT }]);
-    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const dir = mkdtempSync(join(tmpdir(), "grip-zip-"));
     const path = join(dir, "t.zip");
     writeFileSync(path, zip);
     expect(execFileSync("unzip", ["-p", path, "a.txt"]).toString()).toBe("hallo");
@@ -61,7 +61,7 @@ describe("buildZip", () => {
       { name: nonAscii, bytes: bytes("niet-ascii"), at: AT },
       { name: "leeg.txt", bytes: new Uint8Array(), at: AT },
     ]);
-    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const dir = mkdtempSync(join(tmpdir(), "grip-zip-"));
     const path = join(dir, "t.zip");
     writeFileSync(path, zip);
     expect(() => execFileSync("unzip", ["-t", path])).not.toThrow();
@@ -83,7 +83,7 @@ describe("buildZip", () => {
 
   it("builds and reads back a single-entry archive", () => {
     const zip = buildZip([{ name: "enkel.txt", bytes: bytes("solo"), at: AT }]);
-    const dir = mkdtempSync(join(tmpdir(), "verder-zip-"));
+    const dir = mkdtempSync(join(tmpdir(), "grip-zip-"));
     const path = join(dir, "t.zip");
     writeFileSync(path, zip);
     expect(() => execFileSync("unzip", ["-t", path])).not.toThrow();

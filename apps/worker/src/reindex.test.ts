@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseReindexArgs } from "./reindex";
 import { eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import type { EmbedPort } from "@verder/api/src/search/embed";
+import { createDb, schema, type Db } from "@grip/db";
+import type { EmbedPort } from "@grip/api/src/search/embed";
 import { runReindex } from "./reindex";
 
 describe("parseReindexArgs", () => {
@@ -35,7 +35,7 @@ describe("parseReindexArgs", () => {
   });
 });
 
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 /** Records every text handed to the embedder; returns a valid 768-dim vector so the
  * chunks really do get embeddings and the second pass has something to skip. */

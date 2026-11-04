@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { effectiveTaskStatuses } from "./task-decide";
 import { effectiveDocStatusSql, effectivePartyIdSql, effectiveTitleSql, notDiscardedSql, notPurgedSql, purgedSql } from "./effective-status";
 import {

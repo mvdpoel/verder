@@ -3,8 +3,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
-import { createDb, schema } from "@verder/db";
+import { sha256Hex } from "@grip/core";
+import { createDb, schema } from "@grip/db";
 import { ingestRawEmail } from "../gmail";
 import { MAIL_MAX_DELTA, MAIL_WORKER, makeRepairBackoff, pollMail } from "./poll";
 import { readCursor, writeCursor } from "./cursor";
@@ -14,7 +14,7 @@ import {
 } from "./port";
 import { settleDocumentTexts } from "../test-support/document-texts";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const vault = () => mkdtempSync(join(tmpdir(), "jmap-vault-"));
 
 /**
@@ -293,7 +293,7 @@ describe("pollMail", () => {
     expect(enqueued).not.toContain(bySha[0].id);
 
     // FINDING 11, and the reason every assertion above it is not enough. They
-    // are ALL satisfied by a poller that never dedups at all: verder_worker's
+    // are ALL satisfied by a poller that never dedups at all: grip_worker's
     // UPDATE on raw_emails is COLUMN-SCOPED to suggest_queued_at, so a poller
     // that "corrected" the historic row's gmail_message_id is refused by
     // Postgres, falls into the per-message catch, and leaves the row untouched

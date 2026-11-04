@@ -48,12 +48,12 @@ vi.mock("@/lib/trpc-server", () => ({
   }),
 }));
 
-import { storeFile } from "@verder/api/src/storage";
+import { storeFile } from "@grip/api/src/storage";
 import { GET, POST } from "./route";
 
 let vaultDir: string;
 beforeEach(async () => {
-  vaultDir = await mkdtemp(join(tmpdir(), "verder-zip-route-"));
+  vaultDir = await mkdtemp(join(tmpdir(), "grip-zip-route-"));
   process.env.VAULT_DIR = vaultDir;
   docs.clear();
   bundles.clear();

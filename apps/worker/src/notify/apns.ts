@@ -23,7 +23,7 @@ export const APNS_HOSTS: Record<ApnsEnvironment, string> = {
 
 export interface ApnsConfig { keyPem: string; keyId: string; teamId: string; topic: string }
 
-const DEFAULT_TOPIC = "pro.vanderpoel.verder";
+const DEFAULT_TOPIC = "pro.vanderpoel.grip";
 
 /** null when APNS_KEY_ID / APNS_TEAM_ID (falls back to APPLE_TEAM_ID) / APNS_KEY_PATH are unset or the file is unreadable — never throws. */
 export async function loadApnsConfig(env: NodeJS.ProcessEnv = process.env): Promise<ApnsConfig | null> {

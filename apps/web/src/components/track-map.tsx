@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@verder/api";
+import type { AppRouter } from "@grip/api";
 import {
   TRACK_STATUS_LABEL, stopHref, stopMark, stopWhenLabel, trackTerminus,
 } from "@/lib/track-marks";

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { scanNasFolder } from "./nas";
 import { pdfPageCount } from "./reorder-pdf";
 import type { OcrPort } from "./extract";
@@ -15,7 +15,7 @@ import { settleDocumentTexts } from "./test-support/document-texts";
 import { fakeNotify } from "./test-support/fake-notify";
 
 const run = promisify(execFile);
-const DB = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 const age = async (file: string, m: number) => { const d = minutesAgo(m); await utimes(file, d, d); };

@@ -4,7 +4,7 @@ import { createDb, type Db } from "./client";
 import * as schema from "./schema";
 
 // APP role: exercises the real grants (fact tables edit, never delete).
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("timeline_events schema", () => {
   let db: Db;

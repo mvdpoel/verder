@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex, type SearchEntityType } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { sha256Hex, type SearchEntityType } from "@grip/core";
 import { appendLedgerEvent } from "../ledger";
 import { ingestDocument } from "../routers/documents";
 import { insertEntry } from "../routers/entries";
@@ -11,10 +11,10 @@ import { setTaskStatus } from "../task-decide";
 import { EMBED_DIMENSIONS, type EmbedPort } from "./embed";
 import { indexEntity, loadAndRender } from "./index-entity";
 
-// verder_worker, not verder_app: the derived-index grants give the app role
+// grip_worker, not grip_app: the derived-index grants give the app role
 // SELECT only on document_texts and search_chunks — writing them is the
 // worker's job, and this loader runs inside the worker.
-const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 let db: Db;
 let userId: string;

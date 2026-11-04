@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
-import { readFilePath } from "@verder/api/src/storage";
-import { effectiveMime } from "@verder/parsers";
+import { readFilePath } from "@grip/api/src/storage";
+import { effectiveMime } from "@grip/parsers";
 import { mobileGet } from "@/lib/mobile-route";
 import { fail } from "@/lib/mobile-json";
 import { rfc5987, safeMime } from "@/lib/safe-mime";

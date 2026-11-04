@@ -6,7 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
  * port with one real implementation reading env — so the indexer, the drain and
  * the search router are all testable without a GPU.
  *
- * It lives in @verder/api rather than the worker because three consumers need
+ * It lives in @grip/api rather than the worker because three consumers need
  * it: the indexer (packages/api/src/search/index-entity.ts), the query pipeline
  * (packages/api/src/search/retrieve.ts) and the drain job in apps/worker.
  *

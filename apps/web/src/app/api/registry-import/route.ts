@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { TRPCError } from "@trpc/server";
-import { storeFile } from "@verder/api/src/storage";
+import { storeFile } from "@grip/api/src/storage";
 import { getSessionUserId, serverCaller } from "@/lib/trpc-server";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";
 

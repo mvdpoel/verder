@@ -3,18 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { asc, eq, sql } from "drizzle-orm";
-import { verifyChain, type ChainEvent } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
+import { verifyChain, type ChainEvent } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { storeFile } from "../storage";
 import { appendLedgerEvent } from "../ledger";
 import { documentStatusChangePayload, makeLedgerRecompute, resolveDocumentUpdatedHashes } from "../verification";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // The admin role is the only one that CAN update an evidence table — the app
 // and worker grants forbid it. Tamper tests need it to prove verification bites.
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
 describe("documents router", () => {
   let db: Db; let userId: string; let vaultDir: string;
@@ -64,7 +64,7 @@ describe("documents router", () => {
       receivedAt: new Date() });
     // Keep pendingDocMeta's backlog on the shared dev DB from growing: an
     // ingested fixture gets the row storeDocumentText writes for an unreadable
-    // file. Admin connection, because verder_app holds SELECT only there.
+    // file. Admin connection, because grip_app holds SELECT only there.
     const admin = createDb(ADMIN_URL).db;
     await admin.insert(schema.documentTexts).values({ documentId: doc.id, sha256: doc.sha256,
       text: "", extractor: "none", charCount: 0 });

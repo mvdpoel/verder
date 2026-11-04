@@ -13,7 +13,7 @@ import { PARTY_BRIEF_STATUSES } from "./schema";
 // INSERT, UPDATE — and no role holds DELETE: a brief is overwritten by the
 // next draft, never removed. The row holds only the LATEST model output; the
 // record of every earlier one is the append-only `party_brief_drafts` (0043).
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 describe("party_briefs (0042)", () => {
   let db: Db; let close: () => Promise<void>;
@@ -27,15 +27,15 @@ describe("party_briefs (0042)", () => {
   }
 
   it("app reads only", async () => {
-    expect(await can("verder_app", "SELECT")).toBe(true);
+    expect(await can("grip_app", "SELECT")).toBe(true);
     for (const p of ["INSERT", "UPDATE", "DELETE", "TRUNCATE"]) {
-      expect(await can("verder_app", p), p).toBe(false);
+      expect(await can("grip_app", p), p).toBe(false);
     }
   });
 
   it("worker reads, inserts and updates, and never deletes", async () => {
-    for (const p of ["SELECT", "INSERT", "UPDATE"]) expect(await can("verder_worker", p), p).toBe(true);
-    for (const p of ["DELETE", "TRUNCATE"]) expect(await can("verder_worker", p), p).toBe(false);
+    for (const p of ["SELECT", "INSERT", "UPDATE"]) expect(await can("grip_worker", p), p).toBe(true);
+    for (const p of ["DELETE", "TRUNCATE"]) expect(await can("grip_worker", p), p).toBe(false);
   });
 
   // The TypeScript list is what the pgEnum is built from; order too.

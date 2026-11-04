@@ -5,7 +5,7 @@ import { createDb, schema, type Db } from "./index";
 // Both application roles, because both must obey the same law: document_purges
 // is EVIDENCE. INSERT records a purge; UPDATE would rewrite one and DELETE
 // would launder one, and neither may be possible through an app connection.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 const RUN_REF = `purge-grants-test-${crypto.randomUUID()}`;
 
 // Derived per run, never a constant: this dev database is NEVER truncated and
@@ -61,7 +61,7 @@ describe("document_purges grants", () => {
   });
 
   // The one widening this whole sub-project permits: both tables are DERIVED
-  // and rebuildable by `reindex`, and verder_worker already holds DELETE here.
+  // and rebuildable by `reindex`, and grip_worker already holds DELETE here.
   // Without it a purge leaves the document's full OCR'd text in the database.
   it("lets the app role DELETE from document_texts and search_chunks", async () => {
     await expect(db.execute(

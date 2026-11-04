@@ -3,10 +3,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import type { ChainEvent } from "@verder/core";
-import { storeFile } from "@verder/api/src/storage";
-import { makeLedgerRecompute } from "@verder/api/src/verification";
+import { createDb, schema, type Db } from "@grip/db";
+import type { ChainEvent } from "@grip/core";
+import { storeFile } from "@grip/api/src/storage";
+import { makeLedgerRecompute } from "@grip/api/src/verification";
 import { pollGmail, rateLimitedUntil } from "../gmail";
 import { suggestEntry, type LlmPort } from "../ollama";
 import { suggestTask } from "../task-mine";
@@ -16,12 +16,12 @@ import {
   type FinalReply, type SendDeps, type SendPort, type SentMatch,
 } from "./send";
 
-// Runs as verder_worker, the role the send job meets in production. Every test
+// Runs as grip_worker, the role the send job meets in production. Every test
 // but one is a transaction that is ROLLED BACK: the shared dev database is
 // never truncated, and no ledger event a test appends survives it. NOTHING is
 // sent anywhere: the port is a fake Sent folder in memory.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 let admin: { db: Db; pool: { end(): Promise<void> } };
 const vaultDir = mkdtempSync(join(tmpdir(), "proposal-send-vault-"));
@@ -235,7 +235,7 @@ describe("sendApproved", () => {
       const { deps } = depsFor(db, g, c);
       expect(await sendApproved(deps)).toEqual({ sent: 1, recovered: 0, failed: 0 });
       expect(seenAtSend!.status).toBe("sending");
-      expect(seenAtSend!.messageId).toMatch(/^<[0-9a-f-]{36}@verder\.vanderpoel\.pro>$/);
+      expect(seenAtSend!.messageId).toMatch(/^<[0-9a-f-]{36}@grip\.vanderpoel\.pro>$/);
       expect(threadAtSend).toBe("th-gmail-1");
       const done = await byId(db, p.id);
       expect(done.status).toBe("sent");
@@ -633,7 +633,7 @@ describe("the sent mail coming back through the poll", () => {
   it("re-ingest during sending creates no suggestion", async () => {
     await isolated(async (db) => {
       const u = await user(db);
-      const mid = `<${uid()}@verder.vanderpoel.pro>`;
+      const mid = `<${uid()}@grip.vanderpoel.pro>`;
       const p = await approved(db, { userId: u.id, status: "sending", messageId: mid, sendingAt: new Date() });
       const row = await reingest(db, { messageId: mid, gmailMessageId: `gm-${uid()}` });
       await suggestEntry({ db, llm: llmMustNotRun }, row.id);
@@ -643,7 +643,7 @@ describe("the sent mail coming back through the poll", () => {
         inArray(schema.workerRuns.worker, ["ollama", "task-mine"]),
         sql`${schema.workerRuns.detail} ->> 'proposalId' = ${p.id}`));
       expect(runs.map((r) => [r.worker, r.status, (r.detail as { skipped: string }).skipped]).sort())
-        .toEqual([["ollama", "ok", "sent-by-verder"], ["task-mine", "ok", "sent-by-verder"]]);
+        .toEqual([["ollama", "ok", "sent-by-grip"], ["task-mine", "ok", "sent-by-grip"]]);
     });
   });
 

@@ -3,15 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
-import { ingestDocument } from "@verder/api/src/routers/documents";
-import { storeFile } from "@verder/api/src/storage";
+import { createDb, schema, type Db } from "@grip/db";
+import { sha256Hex } from "@grip/core";
+import { ingestDocument } from "@grip/api/src/routers/documents";
+import { storeFile } from "@grip/api/src/storage";
 import { extractMissingTexts } from "./extract-texts";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 // NOT named URL: the fixture helper constructs a real URL below.
-const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 // Every fixture this file ingests is tagged with it, so the guard at the bottom
 // can ask "did this run leave anything owing?" about THIS run and nothing else.
@@ -35,7 +35,7 @@ async function seedDoc(db: Db, vaultDir: string, buf: Buffer) {
 describe("extractMissingTexts", () => {
   it("extracts documents that have no text, and re-reads nothing on a second pass", async () => {
     const { db, pool } = createDb(DB_URL);
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-backfill-"));
     const doc = await seedDoc(db, vaultDir, await fixture("text-letter.pdf"));
 
     // The dev database is shared and full of documents whose bytes live in the
@@ -67,7 +67,7 @@ describe("extractMissingTexts", () => {
     // invisible to search forever — and docs/deploy.md tells the operator this
     // command is what fixes it.
     const { db, pool } = createDb(DB_URL);
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-sheet-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-backfill-sheet-"));
     const raw = await readFile(
       new URL("../../../packages/parsers/fixtures/abn.xlsx", import.meta.url));
     // Unique bytes per run, in the ZIP's end-of-central-directory comment.
@@ -96,7 +96,7 @@ describe("extractMissingTexts", () => {
 
   it("counts a missing vault file as failed and keeps going", async () => {
     const { db, pool } = createDb(DB_URL);
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-backfill-"));
     // Ingested, but its bytes were never written to THIS vault directory: one
     // unreadable scan must never strand the rest of the corpus.
     const orphan = await db.transaction((tx) => ingestDocument(tx, {
@@ -134,7 +134,7 @@ describe("extractMissingTexts", () => {
    */
   it("never offers a purged document to the extractor", async () => {
     const { db, pool } = createDb(DB_URL);
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-backfill-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-backfill-"));
     // No document in the shared dev database has bytes in this throwaway vault,
     // so a run changes nothing and `scanned` is a stable population count —
     // which is what makes the assertion below about the QUERY and not about

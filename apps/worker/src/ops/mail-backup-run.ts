@@ -38,8 +38,8 @@
 // nothing can ever clear, because no code path will ever write that name again.
 // So the name is a compile-time constant here and the caller can only choose the
 // STATUS. There is no argument that reaches `recordRun`'s `worker` parameter.
-import { createDb } from "@verder/db";
-import { MAIL_BACKUP_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb } from "@grip/db";
+import { MAIL_BACKUP_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "../heartbeat";
 
 /**
@@ -131,7 +131,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   // that write a row from inside the worker image agree on where the connection
   // comes from.
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     const outcome = parseOutcome(process.argv.slice(2));

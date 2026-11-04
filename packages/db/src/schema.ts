@@ -92,12 +92,24 @@ export const documents = pgTable("documents", {
   status: docStatusEnum("status").notNull().default("inbox"),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  // The sender, resolved at INGEST and never updated: verder_app and
-  // verder_worker hold SELECT, INSERT on this table and no UPDATE, which is
+  // The sender, resolved at INGEST and never updated: grip_app and
+  // grip_worker hold SELECT, INSERT on this table and no UPDATE, which is
   // the append-only law. A correction rides document_status_changes.party_id
   // and is resolved by effectiveDocument, exactly as title and docType are.
   partyId: uuid("party_id").references(() => parties.id),
 });
+
+/**
+ * The stored `document_status_changes.actor` value for a change the APP made on
+ * its own (auto-file, auto-name). It reads "verder" because the app was called
+ * verder when migration 0040 shipped, and it is KEPT on purpose after the
+ * rename to Grip: the value is hashed into ledgered payloads
+ * (`documentStatusChangePayloadByGrip` in packages/api/src/verification.ts) and
+ * pinned by `dsc_actor_ck`, so changing it would rewrite history and make
+ * /verify report tampering. It is NOT Verder the bewindvoerder. Write it only
+ * through this constant; the UI renders it as "Grip".
+ */
+export const APP_ACTOR = "verder" as const;
 
 export const documentStatusChanges = pgTable("document_status_changes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -108,11 +120,11 @@ export const documentStatusChanges = pgTable("document_status_changes", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   partyId: uuid("party_id").references(() => parties.id),
   // Migration 0040. NULL = Martin (or a pre-0040 machine row, never
-  // backfilled); 'verder' = verder acted on its own and the row's event hashes
-  // in documentStatusChangePayloadByVerder's shape. suggestionId names the
+  // backfilled); APP_ACTOR ('verder') = the app acted on its own and the row's event hashes
+  // in documentStatusChangePayloadByGrip's shape. suggestionId names the
   // suggestion it applied (NULL for auto-name) and requires actor
   // (dsc_suggestion_needs_actor_ck), because a Martin row's hash never reads it.
-  actor: text("actor").$type<"verder">(),
+  actor: text("actor").$type<typeof APP_ACTOR>(),
   suggestionId: uuid("suggestion_id").references((): AnyPgColumn => suggestions.id),
 }, (t) => [
   check("dsc_actor_ck", sql`${t.actor} IS NULL OR ${t.actor} = 'verder'`),

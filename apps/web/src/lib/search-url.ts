@@ -1,7 +1,7 @@
 import {
   SEARCH_ENTITY_TYPES, SEARCH_STATUSES,
   type SearchEntityType, type SearchStatus,
-} from "@verder/core";
+} from "@grip/core";
 
 // Everything /search needs comes from the URL, so a bookmarked or shared search
 // renders identically with JavaScript disabled. Unknown types, malformed dates

@@ -50,7 +50,7 @@ type StopData = {
  * It is passed in only so a link that sits outside the picker's page of
  * candidates still shows its own name instead of looking unset — saving a form
  * that silently dropped a link Martin could not see would be the worst kind of
- * quiet edit. Structural, so this file imports nothing from @verder/api.
+ * quiet edit. Structural, so this file imports nothing from @grip/api.
  */
 type StopLinks = {
   entry: { id: string; summary: string } | null;

@@ -39,7 +39,7 @@ CREATE TABLE "push_devices" (
 -- path still revokes by UPDATE, so the attempt history keeps its device row;
 -- a hand DELETE leaves those attempts with push_device_id NULL (ON DELETE SET
 -- NULL below) and their outcome intact.
-GRANT SELECT, INSERT, UPDATE, DELETE ON "push_devices" TO verder_app, verder_worker;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "push_devices" TO grip_app, grip_worker;
 --> statement-breakpoint
 
 CREATE TABLE "notifications" (
@@ -51,7 +51,7 @@ CREATE TABLE "notifications" (
   "level"      text NOT NULL CHECK ("level" IN ('time-sensitive', 'active', 'passive')),
   "title"      text NOT NULL,
   "body"       text NOT NULL,
-  -- verder://proposal/<id>, verder://document/<id>, …
+  -- grip://proposal/<id>, grip://document/<id>, …
   "link"       text,
   -- Nullable UNIQUE: NULL means never deduplicated (Postgres treats NULLs as
   -- distinct). The clocks and at-least-once jobs (suggest.entry) key on it so a
@@ -88,13 +88,13 @@ CREATE INDEX "notification_attempts_notification_idx" ON "notification_attempts"
 -- deletes it. A record that can be rewritten cannot diagnose anything, and no
 -- reader needs DELETE. Only the worker sends (the web app holds no pg-boss
 -- connection and cannot read secrets/), so the app gets no INSERT either.
-GRANT SELECT, INSERT ON "notifications", "notification_attempts" TO verder_worker;
+GRANT SELECT, INSERT ON "notifications", "notification_attempts" TO grip_worker;
 --> statement-breakpoint
 
-GRANT SELECT ON "notifications", "notification_attempts" TO verder_app;
+GRANT SELECT ON "notifications", "notification_attempts" TO grip_app;
 --> statement-breakpoint
 
 -- COLUMN-LEVEL, NEVER `token`. notify() must skip a device whose session was
 -- revoked (lost phone) or expired; that needs the session's id and expiry and
 -- nothing else. The worker gains no way to read a bearer token.
-GRANT SELECT ("id", "expires_at") ON "session" TO verder_worker;
+GRANT SELECT ("id", "expires_at") ON "session" TO grip_worker;

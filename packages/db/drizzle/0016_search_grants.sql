@@ -18,11 +18,11 @@
 
 -- The web app SEARCHES the index and never maintains it: SELECT only, on all
 -- three tables. (search_outbox too — /verify reports outbox depth.)
-GRANT SELECT ON "document_texts", "search_chunks", "search_outbox" TO verder_app;
+GRANT SELECT ON "document_texts", "search_chunks", "search_outbox" TO grip_app;
 --> statement-breakpoint
 -- The worker OWNS the index: extraction writes document_texts, the drain
 -- upserts and prunes search_chunks.
-GRANT SELECT, INSERT, UPDATE, DELETE ON "document_texts", "search_chunks" TO verder_worker;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "document_texts", "search_chunks" TO grip_worker;
 --> statement-breakpoint
 -- The worker CLAIMS from the outbox and deletes what it has processed — but it
 -- may not enqueue. Nothing may: rows arrive only through the SECURITY DEFINER
@@ -30,4 +30,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "document_texts", "search_chunks" TO ver
 -- triggers call. That is why there is no INSERT here for either role, and why
 -- search_outbox_id_seq needs no USAGE grant either — the only inserter is the
 -- owner, who already has it.
-GRANT SELECT, DELETE ON "search_outbox" TO verder_worker;
+GRANT SELECT, DELETE ON "search_outbox" TO grip_worker;

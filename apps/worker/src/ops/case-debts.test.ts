@@ -51,10 +51,10 @@ describe("case debts seed", () => {
 // debt_documents in one run).
 import { beforeAll, describe as describeDb, expect as expectDb, it as itDb } from "vitest";
 import { asc, eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { applyCaseDebts, findPartyByNameCI } from "./case-debts";
 
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 describeDb("applyCaseDebts (database)", () => {
   let db: Db;

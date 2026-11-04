@@ -15,6 +15,6 @@ const undoBody = z.object({}).strict();
  */
 export const POST = mobilePost(async (caller, body, { changeId }) => {
   undoBody.parse(body);
-  const out = await caller.verderActions.undo({ changeId });
+  const out = await caller.gripActions.undo({ changeId });
   return { ok: true, documentId: out.documentId };
 });

@@ -16,7 +16,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 import { isKnownNasFile } from "./nas-known";
 import { ocrPageUpright, rasterizePdf, type OcrPort } from "./extract";
 import { recordRun } from "./heartbeat";
@@ -104,7 +104,7 @@ export function pairCandidates<T extends ScanCandidate>(cands: T[]): [T, T][] {
 
 /** pdfunite of arbitrary pages of two PDFs; `order` indexes [a pages, b pages]. */
 export async function mergePdfPages(a: Buffer, b: Buffer, pages: number, order: number[]): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), "verder-duplex-"));
+  const dir = await mkdtemp(join(tmpdir(), "grip-duplex-"));
   try {
     await writeFile(join(dir, "a.pdf"), a);
     await writeFile(join(dir, "b.pdf"), b);

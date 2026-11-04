@@ -4,20 +4,20 @@ import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { sql } from "drizzle-orm";
-import { createDb, ensureCaseMap, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, ensureCaseMap, schema, type Db } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { relPathFor } from "../storage";
 import { runFullVerification } from "../verification";
 import { assertSafeToTruncate } from "../test-db-guard";
 
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-// document_texts and search_chunks are worker-owned (0016): verder_app holds
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+// document_texts and search_chunks are worker-owned (0016): grip_app holds
 // SELECT and, since 0034, DELETE — never INSERT. The leftover test below has to
 // write them the way the racing production writers do.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("verify router", () => {
   let db: Db; let userId: string; let vaultDir: string;
@@ -263,7 +263,7 @@ describe("verify router", () => {
 
   /**
    * THE COUNT IS LEDGER-DRIVEN ALL THE WAY DOWN, not only in the id set it is
-   * handed. `verder_app` holds INSERT on document_purges, so a row vouching for
+   * handed. `grip_app` holds INSERT on document_purges, so a row vouching for
    * a purge that never happened is one INSERT away — the same attack the
    * "refuses to treat an orphan purge row as a purge" test below covers for the
    * chain, aimed at the leftover count instead.
@@ -371,7 +371,7 @@ describe("verify router", () => {
   });
 
   // IMPORTANT (Task 3 review): verification must be driven by the LEDGER,
-  // never by the presence of a document_purges row. `verder_app` holds
+  // never by the presence of a document_purges row. `grip_app` holds
   // INSERT on that table, so an attacker could destroy a vault file and
   // INSERT a matching tombstone row with no ledger event at all — the row
   // alone must never be trusted, because an orphan row is never visited by
@@ -414,7 +414,7 @@ describe("verify router", () => {
    * ledger-driven guard by DELETING a genuine purge's event, which only works
    * because that event happens to be the chain head — a coincidence of
    * ordering, not the shape an attacker produces. This is the real one:
-   * `verder_app` holds INSERT on document_purges, so destroying a vault file
+   * `grip_app` holds INSERT on document_purges, so destroying a vault file
    * and vouching for it with a tombstone row that no ledger event backs is one
    * INSERT away. It must buy nothing.
    */

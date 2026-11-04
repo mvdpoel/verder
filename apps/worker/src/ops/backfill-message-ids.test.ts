@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
-import { storeFile } from "@verder/api/src/storage";
+import { sha256Hex } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { storeFile } from "@grip/api/src/storage";
 import { backfillMessageIds, classifyBackfillRow } from "./backfill-message-ids";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 /**
  * Every fixture below is made unique per run, and the Message-IDs especially.
@@ -86,7 +86,7 @@ describe("backfillMessageIds", () => {
   };
 
   it("fills what it can, counts the rest apart, and converges on a second run", async () => {
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-message-id-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-message-id-"));
     const run = stamp();
     const wanted = `filled.${run}@mail.verdergroep.nl`;
     const already = `already.${run}@mail.verdergroep.nl`;
@@ -145,7 +145,7 @@ describe("backfillMessageIds", () => {
     // operator wants to know before trusting the dedup, and failing the run
     // over it would leave the remaining rows unfilled for a fact that is
     // already true in the table.
-    const vaultDir = await mkdtemp(join(tmpdir(), "verder-message-id-dup-"));
+    const vaultDir = await mkdtemp(join(tmpdir(), "grip-message-id-dup-"));
     const run = stamp();
     const shared = `shared.${run}@mail.verdergroep.nl`;
     const takeout = await seed(db, vaultDir, { raw: eml(shared, `mbox-${run}`) });

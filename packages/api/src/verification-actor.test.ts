@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asc, sql } from "drizzle-orm";
-import { type ChainEvent } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
+import { type ChainEvent } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
 import { appendLedgerEvent } from "./ledger";
 import {
-  documentStatusChangePayloadByVerder, documentStatusChangePayloadWithParty,
+  documentStatusChangePayloadByGrip, documentStatusChangePayloadWithParty,
   makeLedgerRecompute, resolveDocumentUpdatedHashes,
 } from "./verification";
 
@@ -15,9 +15,9 @@ import {
 // document.updated. These tests drive every tamper through makeLedgerRecompute
 // — the real dispatch /verify and nightly-verify use — never the resolver
 // alone, because an untested dispatch line is the sub-project 2 lesson.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // Only the admin role can UPDATE an evidence table; tamper tests need it.
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
 describe("document.updated with the verder actor", () => {
   let db: Db; let admin: Db; let close: () => Promise<void>;
@@ -56,7 +56,7 @@ describe("document.updated with the verder actor", () => {
   }
 
   /** Writes a verder row and its event the way Task 14's writers will. */
-  async function writeVerderChange(documentId: string, suggestionId: string | null) {
+  async function writeGripChange(documentId: string, suggestionId: string | null) {
     return db.transaction(async (tx) => {
       const [row] = await tx.insert(schema.documentStatusChanges).values({
         documentId, status: "filed", title: "Loonstrook 2026-10", docType: "loonstrook",
@@ -64,7 +64,7 @@ describe("document.updated with the verder actor", () => {
       }).returning();
       await appendLedgerEvent(tx, {
         eventType: "document.updated", entityType: "document", entityId: documentId,
-        payload: documentStatusChangePayloadByVerder(row),
+        payload: documentStatusChangePayloadByGrip(row),
       });
       return row.id;
     });
@@ -100,21 +100,21 @@ describe("document.updated with the verder actor", () => {
 
   it("the verder shape is the wide shape plus actor and suggestionId, always present", () => {
     const base = { documentId: "d", status: "filed", title: "t", docType: null, partyId: null };
-    expect(documentStatusChangePayloadByVerder({ ...base, suggestionId: null })).toEqual({
+    expect(documentStatusChangePayloadByGrip({ ...base, suggestionId: null })).toEqual({
       id: "d", status: "filed", title: "t", docType: null, partyId: null,
       actor: "verder", suggestionId: null });
   });
 
   it("verder row verifies", async () => {
     const doc = await seedDocument();
-    await writeVerderChange(doc, await seedSuggestion(doc));
+    await writeGripChange(doc, await seedSuggestion(doc));
     const { got, stored } = await recompute(doc);
     expect(got).toBe(stored);
   });
 
   it("verder row without a suggestion (auto-name) verifies", async () => {
     const doc = await seedDocument();
-    await writeVerderChange(doc, null);
+    await writeGripChange(doc, null);
     const { got, stored } = await recompute(doc);
     expect(got).toBe(stored);
   });
@@ -146,7 +146,7 @@ describe("document.updated with the verder actor", () => {
     const doc = await seedDocument();
     // An auto-name row (no suggestion): the only verder row the second CHECK
     // allows to lose its actor, so it is the one an attacker could relabel.
-    const id = await writeVerderChange(doc, null);
+    const id = await writeGripChange(doc, null);
     try {
       await admin.execute(sql`UPDATE document_status_changes SET actor = NULL WHERE id = ${id}`);
       const { got, stored } = await recompute(doc);
@@ -162,7 +162,7 @@ describe("document.updated with the verder actor", () => {
     const doc = await seedDocument();
     const original = await seedSuggestion(doc);
     const other = await seedSuggestion(doc);
-    const id = await writeVerderChange(doc, original);
+    const id = await writeGripChange(doc, original);
     try {
       await admin.execute(sql`UPDATE document_status_changes SET suggestion_id = ${other} WHERE id = ${id}`);
       expect((await recompute(doc)).got).not.toBe((await recompute(doc)).stored);

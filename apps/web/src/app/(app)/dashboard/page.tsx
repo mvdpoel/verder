@@ -5,7 +5,7 @@ import { DashboardMoney } from "@/components/dashboard-money";
 import { formatEuro } from "@/components/registry-list";
 import { caseTopRows, noOpenTracksLine } from "@/lib/track-marks";
 import { workerRowLabel } from "@/lib/worker-row-label";
-import type { WorkerState } from "@verder/api/src/worker-health";
+import type { WorkerState } from "@grip/api/src/worker-health";
 import {
   buttonClass,
   cx,

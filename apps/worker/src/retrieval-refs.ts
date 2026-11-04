@@ -1,6 +1,6 @@
-import type { Db } from "@verder/db";
-import { realEmbedPort } from "@verder/api/src/search/embed";
-import { retrieve, type SearchHit } from "@verder/api/src/search/retrieve";
+import type { Db } from "@grip/db";
+import { realEmbedPort } from "@grip/api/src/search/embed";
+import { retrieve, type SearchHit } from "@grip/api/src/search/retrieve";
 
 /**
  * Retrieval citations for a suggestion: what the index put in front of the

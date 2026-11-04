@@ -1,19 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { BADGE_SYNC_WORKER_NAME } from "@verder/api/src/worker-names";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { createDb, schema, type Db } from "@grip/db";
+import { BADGE_SYNC_WORKER_NAME } from "@grip/api/src/worker-names";
+import { loadWaiting } from "@grip/api/src/waiting";
 import type { ApnsRaw } from "./notify/apns";
 import type { PushCounts } from "./notify/notify";
 import { syncBadge } from "./badge-sync";
 
-// Runs as verder_worker, the role badge.sync meets in production — which also
+// Runs as grip_worker, the role badge.sync meets in production — which also
 // proves that role may read everything loadWaiting reads. Every test is a
 // transaction that is ROLLED BACK (the shared dev database is never truncated),
 // and it first renames any committed badge-sync row out of the way, so the
 // "previous count" is only what the test itself put there. Nothing is sent:
 // `push` is a fake that records its input.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { conn = createDb(URL); });
 afterAll(async () => { await conn.pool.end(); });

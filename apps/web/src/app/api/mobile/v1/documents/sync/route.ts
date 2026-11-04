@@ -1,6 +1,6 @@
 import { mobileGet } from "@/lib/mobile-route";
 import { fail } from "@/lib/mobile-json";
-import { DOSSIER_PAGE_MAX } from "@verder/api/src/routers/dossier-sync";
+import { DOSSIER_PAGE_MAX } from "@grip/api/src/routers/dossier-sync";
 
 /** A non-negative integer as a query parameter, or null. Digits only: "1.5",
  *  "1e3" and "-1" are refused, never rounded into a cursor the phone did not send. */

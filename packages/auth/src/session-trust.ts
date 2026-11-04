@@ -1,10 +1,10 @@
 /**
  * How long a session lives, decided per sign-in.
  *
- * This is its own module, published as the `@verder/auth/session-trust`
+ * This is its own module, published as the `@grip/auth/session-trust`
  * subpath, because the login page needs the header name and the barrel reaches
  * better-auth's server code and the drizzle adapter — fine on the server,
- * dead weight in a browser bundle. Same reason `@verder/parsers/sheet-mimes`
+ * dead weight in a browser bundle. Same reason `@grip/parsers/sheet-mimes`
  * exists.
  *
  * Nothing here touches a database or a request; it is a decision about a
@@ -12,7 +12,7 @@
  */
 
 /** Set by the login page when Martin ticks "trust this device for 30 days". */
-export const TRUST_HEADER = "x-verder-trust-device";
+export const TRUST_HEADER = "x-grip-trust-device";
 
 export const TRUSTED_SESSION_SECONDS = 60 * 60 * 24 * 30;
 export const UNTRUSTED_SESSION_SECONDS = 60 * 60 * 12;

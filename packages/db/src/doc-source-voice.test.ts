@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { createDb } from "./client";
 import { DOC_SOURCES } from "./doc-sources";
 
-const URL = "postgres://verder:verder@localhost:5432/verder";
+const URL = "postgres://grip:grip@localhost:5432/grip";
 
 /**
  * Migration M-B (0041): a recording Martin chose to keep with a voice

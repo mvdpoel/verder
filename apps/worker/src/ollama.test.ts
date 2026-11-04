@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { desc, eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { sha256Hex } from "@verder/core";
+import { createDb, schema } from "@grip/db";
+import { sha256Hex } from "@grip/core";
 import { settleDocumentTexts } from "./test-support/document-texts";
 import { suggestDocMeta, suggestEntry, type LlmPort } from "./ollama";
 
@@ -13,7 +13,7 @@ const alerts = vi.hoisted(() => ({ notify: vi.fn(async () => ({
   notificationId: null, duplicate: false, delivered: 0, failed: 0, skipped: 0 })) }));
 vi.mock("./notify/notify", async (orig) => ({ ...(await orig<object>()), notify: alerts.notify }));
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 async function insertEmail(db: ReturnType<typeof createDb>["db"]) {
   const [raw] = await db.insert(schema.rawEmails).values({

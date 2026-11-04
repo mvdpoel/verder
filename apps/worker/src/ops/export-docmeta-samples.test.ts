@@ -2,10 +2,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { loadDocMetaSamples, writeDocMetaSamples } from "./export-docmeta-samples";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const RUN = crypto.randomUUID();
 
 describe("loadDocMetaSamples", () => {

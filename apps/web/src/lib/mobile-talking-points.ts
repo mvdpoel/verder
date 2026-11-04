@@ -1,4 +1,4 @@
-import type { PartyTalkingPoints } from "@verder/api/src/talking-points-load";
+import type { PartyTalkingPoints } from "@grip/api/src/talking-points-load";
 
 /**
  * The phone's talking points, HAND-SHAPED: every field is named here, so a

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDb } from "./client";
 import * as schema from "./schema";
 
-const url = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const url = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
 describe("schema", () => {
   it("inserts and reads a party", async () => {
@@ -32,5 +32,15 @@ describe("schema", () => {
     // diffed against `final_payload` to record Martin's edits (golden rule).
     expect((s.proposed as Record<string, unknown>).retrievedRefs).toBeUndefined();
     await pool.end();
+  });
+});
+
+describe("APP_ACTOR", () => {
+  // The app was renamed verder → Grip on 2026-11-04, but this stored value is
+  // hashed into ledgered `document.updated` payloads and pinned by
+  // dsc_actor_ck. Changing it would make /verify report every auto-file and
+  // auto-name change as tampering. It must stay "verder".
+  it("is the historic stored value 'verder', not the app's new name", () => {
+    expect(schema.APP_ACTOR).toBe("verder");
   });
 });

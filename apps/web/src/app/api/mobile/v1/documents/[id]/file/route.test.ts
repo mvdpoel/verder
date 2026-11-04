@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { TRPCError } from "@trpc/server";
-import { relPathFor } from "@verder/api/src/storage";
+import { relPathFor } from "@grip/api/src/storage";
 
 const mocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn<() => Promise<string | null>>(),

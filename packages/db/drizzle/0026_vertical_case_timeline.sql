@@ -62,7 +62,7 @@ DECLARE
 BEGIN
   SELECT id INTO root_id FROM tracks WHERE parent_track_id IS NULL;
   IF root_id IS NULL THEN
-    RAISE NOTICE '0026: no root track, skipping — run pnpm --filter @verder/db seed-map';
+    RAISE NOTICE '0026: no root track, skipping — run pnpm --filter @grip/db seed-map';
     RETURN;
   END IF;
 

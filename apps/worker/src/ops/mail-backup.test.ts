@@ -52,7 +52,7 @@ describe("mail-backup.sh", () => {
    */
   it("defaults the store paths exactly as the compose file does", () => {
     for (const d of ["etc", "data", "blobs"]) {
-      expect(sh).toContain(`/mnt/data/verder/stalwart/${d}`);
+      expect(sh).toContain(`/mnt/data/grip/stalwart/${d}`);
     }
     expect(code).not.toMatch(/STALWART_(ETC|DATA|BLOB)_DIR:\?/);
   });
@@ -171,7 +171,7 @@ describe("mail-backup.sh", () => {
   });
 
   /*
-   * /mnt/data/verder is root-owned 0755, so the cron user cannot mkdir inside
+   * /mnt/data/grip is root-owned 0755, so the cron user cannot mkdir inside
    * it — measured, and only AFTER tier 1 had already succeeded, which is the
    * shape that matters: a script needing a manual mkdir before it fully works
    * does half its job in silence on a rebuilt machine, and a rebuilt machine is

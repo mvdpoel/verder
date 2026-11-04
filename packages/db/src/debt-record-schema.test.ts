@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { createDb, schema, type Db } from "./index";
 
 // APP role: exercises the real grants (no UPDATE/DELETE on evidence tables).
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 let db: Db; let close: () => Promise<void>;
 let appDb: Db; let appClose: () => Promise<void>;
 beforeAll(() => {
   const c = createDb(process.env.DATABASE_URL
-    ?? "postgres://verder:verder@localhost:5432/verder");
+    ?? "postgres://grip:grip@localhost:5432/grip");
   db = c.db; close = () => c.pool.end();
   const a = createDb(APP_URL);
   appDb = a.db; appClose = () => a.pool.end();
@@ -94,7 +94,7 @@ describe("debt record", () => {
     // unreadable file would have earned is the append-only way to settle it;
     // apps/worker's settleDocumentTexts carries the reasoning and cannot be
     // imported here, because the dependency runs the other way. This runs on
-    // the ADMIN connection — 0016 gives verder_app SELECT only on
+    // the ADMIN connection — 0016 gives grip_app SELECT only on
     // document_texts, and extraction is the worker's job.
     await db.insert(schema.documentTexts).values({
       documentId: doc.id, sha256: `test-${d.id}`, text: "", charCount: 0,

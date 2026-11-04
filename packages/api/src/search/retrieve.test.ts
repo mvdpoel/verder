@@ -1,17 +1,17 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { createDb, type Db } from "@verder/db";
+import { createDb, type Db } from "@grip/db";
 import { retrieve } from "./retrieve";
 import type { EmbedPort } from "./embed";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import { and, eq } from "drizzle-orm";
 import type { RerankPort } from "./rerank";
 
-// Fixtures are INSERTed as verder_worker — in production only the worker writes the
-// index (migration 0016 gives verder_app SELECT and nothing else). Queries run as
-// verder_app, exactly as the router does, so this file also proves the grant split.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+// Fixtures are INSERTed as grip_worker — in production only the worker writes the
+// index (migration 0016 gives grip_app SELECT and nothing else). Queries run as
+// grip_app, exactly as the router does, so this file also proves the grant split.
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 /**
  * The dev database is shared and is never truncated, so every assertion below about

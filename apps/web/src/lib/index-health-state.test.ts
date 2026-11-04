@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DRAIN_STALE_MS } from "@verder/api/src/search/health";
+import { DRAIN_STALE_MS } from "@grip/api/src/search/health";
 import { indexHealthState } from "./index-health-state";
 
 const now = new Date("2026-08-20T12:00:00Z").getTime();

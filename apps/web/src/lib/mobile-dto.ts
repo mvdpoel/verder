@@ -1,5 +1,5 @@
-import type { WaitingItem } from "@verder/api/src/waiting";
-import type { VerderActionDTO } from "@verder/api/src/routers/verder-actions";
+import type { WaitingItem } from "@grip/api/src/waiting";
+import type { GripActionDTO } from "@grip/api/src/routers/grip-actions";
 
 /**
  * The phone's wire shapes for the read routes under /api/mobile/v1.
@@ -20,11 +20,11 @@ const isoOrNull = (d: Date | string | null | undefined): string | null =>
 // --- inbox -------------------------------------------------------------------
 
 /**
- * One thing verder did on its own, offered for undo: `verderActions.list`'s
+ * One thing verder did on its own, offered for undo: `gripActions.list`'s
  * row, which is already hand-shaped (dates as ISO strings, the effective
  * title, the reason an undo is refused) and is published as it stands.
  */
-export type { VerderActionDTO };
+export type { GripActionDTO };
 
 export interface InboxDTO {
   count: number;
@@ -33,12 +33,12 @@ export interface InboxDTO {
    * "Door verder gedaan". NOT part of `count`: what verder already did is
    * there to check, not waiting on Martin, so it never reaches the badge.
    */
-  doneByVerder: VerderActionDTO[];
+  doneByGrip: GripActionDTO[];
 }
 
 /** `count` is the list's own length, so the badge and the list cannot disagree. */
-export function toInboxDTO(items: WaitingItem[], doneByVerder: VerderActionDTO[] = []): InboxDTO {
-  return { count: items.length, items, doneByVerder };
+export function toInboxDTO(items: WaitingItem[], doneByGrip: GripActionDTO[] = []): InboxDTO {
+  return { count: items.length, items, doneByGrip };
 }
 
 // --- suggestion --------------------------------------------------------------
@@ -196,13 +196,13 @@ export interface SearchHitDTO {
 export interface SearchDTO { hits: SearchHitDTO[]; nextCursor: string | null }
 
 /**
- * The phone opens exactly the kinds `DeepLink` knows (apps/ios/Verder/Push/
+ * The phone opens exactly the kinds `DeepLink` knows (apps/ios/Grip/Push/
  * DeepLink.swift). The web `href` is never passed on: it names a web page
  * the app cannot open, and a client that followed it would land on /login.
  */
 const APP_ROUTE: Partial<Record<string, (id: string) => string>> = {
-  document: (id) => `verder://document/${id}`,
-  task: (id) => `verder://task/${id}`,
+  document: (id) => `grip://document/${id}`,
+  task: (id) => `grip://task/${id}`,
 };
 
 export function toSearchDTO(src: SearchSource): SearchDTO {

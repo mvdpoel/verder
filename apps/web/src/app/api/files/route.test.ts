@@ -24,7 +24,7 @@ vi.mock("@/lib/trpc-server", () => ({
   }),
 }));
 
-import { storeFile } from "@verder/api/src/storage";
+import { storeFile } from "@grip/api/src/storage";
 import { GET } from "./[sha256]/route";
 
 let vaultDir: string;

@@ -2,10 +2,10 @@ import { access, readFile, unlink } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
-import { sha256Hex } from "@verder/core";
-import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@verder/parsers";
+import { schema, type Db } from "@grip/db";
+import { DOC_SOURCES, type DocSource } from "@grip/db/doc-sources";
+import { sha256Hex } from "@grip/core";
+import { effectiveMime, isSpreadsheetMime, readWorkbook, type SheetData } from "@grip/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import {

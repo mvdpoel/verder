@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { access, readFile } from "node:fs/promises";
-import { canonicalJson, sha256Hex, verifyChain, type ChainEvent, type VerifyResult } from "@verder/core";
-import { schema, type Db } from "@verder/db";
+import { canonicalJson, sha256Hex, verifyChain, type ChainEvent, type VerifyResult } from "@grip/core";
+import { APP_ACTOR, schema, type Db } from "@grip/db";
 import { readFilePath } from "./storage";
 import { entryEventPayload } from "./routers/entries";
 import { registryDecisionPayload } from "./registry-decide";
@@ -119,18 +119,18 @@ export function documentStatusChangePayloadWithParty(c: {
 /**
  * The THIRD shape (migration 0040): a change verder made on its own — an
  * auto-file applying a document-meta suggestion, or an auto-name rename. The
- * wide shape plus `actor: "verder"` and `suggestionId`, both always present as
+ * wide shape plus `actor: APP_ACTOR` (the stored "verder") and `suggestionId`, both always present as
  * keys (`suggestionId` is null for an auto-name row, which applies no
  * suggestion). This is how "verder did this" is recorded in the ledger itself
  * (spec §12.4): an ADDITIVE shape for NEW rows only. Rows with `actor IS NULL`
  * keep hashing in the narrow or wide shape exactly as before — see the
  * dispatch in `resolveDocumentUpdatedHashes`.
  */
-export function documentStatusChangePayloadByVerder(c: {
+export function documentStatusChangePayloadByGrip(c: {
   documentId: string; status: string; title: string | null; docType: string | null;
   partyId: string | null; suggestionId: string | null;
 }) {
-  return { ...documentStatusChangePayloadWithParty(c), actor: "verder" as const,
+  return { ...documentStatusChangePayloadWithParty(c), actor: APP_ACTOR,
     suggestionId: c.suggestionId };
 }
 
@@ -152,8 +152,8 @@ export function documentStatusChangePayloadByVerder(c: {
  * Any other actor value matches nothing (dsc_actor_ck forbids it anyway).
  */
 function documentStatusChangeCandidates(c: typeof schema.documentStatusChanges.$inferSelect): string[] {
-  if (c.actor === "verder")
-    return [sha256Hex(canonicalJson(documentStatusChangePayloadByVerder(c)))];
+  if (c.actor === APP_ACTOR)
+    return [sha256Hex(canonicalJson(documentStatusChangePayloadByGrip(c)))];
   if (c.actor !== null) return [];
   const wide = sha256Hex(canonicalJson(documentStatusChangePayloadWithParty(c)));
   return c.partyId === null
@@ -249,7 +249,7 @@ export interface LedgerRecomputeContext {
   onFilePurged?: (stillOnDisk: boolean) => void;
   /**
    * entityIds with a document.purged event actually present IN THE LEDGER —
-   * never derived from the document_purges table alone. `verder_app` holds
+   * never derived from the document_purges table alone. `grip_app` holds
    * INSERT on document_purges, so a row by itself proves nothing: without
    * this, destroying a vault file and INSERTing a matching tombstone row (no
    * ledger event at all) would turn a genuine file-missing into a disclosed,
@@ -320,7 +320,7 @@ export async function runFullVerification(db: Db, vaultDir: string): Promise<Ful
  *
  * Driven by the LEDGER-derived id set, never by `document_purges` alone — the
  * same discipline the document.ingested branch follows, and for the same
- * reason: `verder_app` holds INSERT on that table, so a row by itself proves
+ * reason: `grip_app` holds INSERT on that table, so a row by itself proves
  * nothing about whether a purge happened.
  *
  * One query rather than a per-event check: this is a property of the store as

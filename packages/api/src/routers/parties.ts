@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { asc, eq, sql } from "drizzle-orm";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { loadTalkingPoints } from "../talking-points-load";

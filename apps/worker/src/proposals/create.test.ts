@@ -3,15 +3,15 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { storeFile } from "@verder/api/src/storage";
+import { createDb, schema, type Db } from "@grip/db";
+import { storeFile } from "@grip/api/src/storage";
 import type { RetrieveRefsFn } from "../retrieval-refs";
 import { createProposal, proposalsForMail, supersedeOnOwnReply } from "./create";
 
-// Runs as verder_worker, the role suggest.entry meets in production. Every test
+// Runs as grip_worker, the role suggest.entry meets in production. Every test
 // is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 const vaultDir = mkdtempSync(join(tmpdir(), "proposal-create-vault-"));
 const retrieveRefs: RetrieveRefsFn = async () => [];
@@ -271,7 +271,7 @@ describe("supersedeOnOwnReply", () => {
 
       const m1 = await mail(db, { threadId, from: verder(), sentAt: new Date(now - 4 * HOUR) });
       const sent = await createProposal(deps(db), { rawEmailId: m1.id }, "verder");
-      const mid = `${uid()}@verder.vanderpoel.pro`;
+      const mid = `${uid()}@grip.vanderpoel.pro`;
       await db.update(schema.proposals).set({ status: "sent", messageId: `<${mid}>`, sentAt: new Date() })
         .where(eq(schema.proposals.id, sent.id));
       // Still `sending` counts too: the re-ingest can overtake finishSent.

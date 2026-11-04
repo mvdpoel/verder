@@ -2,11 +2,11 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { desc, eq, sql } from "drizzle-orm";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import {
   detectSource, parseAbnSheet, parseAbnTsv, parseCamt053, parsePaypalCsv, sniffContainer,
   XLS_MIME, type ParseResult, type StatementSource,
-} from "@verder/parsers";
+} from "@grip/parsers";
 import { protectedProcedure, router } from "../trpc";
 import { readFilePath } from "../storage";
 import { ingestDocument } from "./documents";

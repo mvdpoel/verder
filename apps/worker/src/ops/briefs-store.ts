@@ -9,7 +9,7 @@
 // Prints the outcome and the validator's reason only — never the answer.
 //
 // NOT EVIDENCE: no ledger event, here or anywhere.
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { MAX_BRIEF_ANSWER_CHARS, storeBrief, storeBriefFailure } from "../briefs/store";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,7 +54,7 @@ async function readStdin(): Promise<string> {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   let args: BriefStoreArgs;
   try { args = parseBriefStoreArgs(process.argv.slice(2)); }
   catch (err) {

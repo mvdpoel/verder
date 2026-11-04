@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
-import { schema } from "@verder/db";
+import { schema } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { runFullVerification } from "../verification";
 

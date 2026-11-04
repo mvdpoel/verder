@@ -1,4 +1,4 @@
-import { DRAIN_STALE_MS, type IndexHealth } from "@verder/api/src/search/health";
+import { DRAIN_STALE_MS, type IndexHealth } from "@grip/api/src/search/health";
 
 export type IndexHealthTone = "ok" | "warn" | "bad";
 

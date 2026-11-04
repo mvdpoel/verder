@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { effectiveTaskStatus, setTaskStatus } from "../task-decide";
 import { TASK_STATUSES, isValidTaskTransition, type TaskStatus } from "../task-status";

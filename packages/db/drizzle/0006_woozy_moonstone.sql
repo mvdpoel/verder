@@ -10,4 +10,4 @@ CREATE TABLE "push_subscriptions" (
 --> statement-breakpoint
 -- Operational table: both roles may insert/select/update (revocation is an
 -- UPDATE of `revoked`, never a DELETE).
-GRANT SELECT, INSERT, UPDATE ON "push_subscriptions" TO verder_app, verder_worker;
+GRANT SELECT, INSERT, UPDATE ON "push_subscriptions" TO grip_app, grip_worker;

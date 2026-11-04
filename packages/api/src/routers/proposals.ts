@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { createCallerFactory, protectedProcedure, router } from "../trpc";
 import {
   canTransition, proposalDiff, verdictFor,
@@ -255,7 +255,7 @@ async function triggerView(db: Db, p: ProposalRow, partyName: string | null): Pr
     ? await db.select().from(schema.proposals).where(eq(schema.proposals.id, p.parentProposalId))
     : [];
   const sent = (parent?.finalPayload ?? null) as Partial<StoredReply> | null;
-  return { type: "proposal", id: p.parentProposalId ?? "", from: "verder", subject: sent?.subject ?? null,
+  return { type: "proposal", id: p.parentProposalId ?? "", from: "grip", subject: sent?.subject ?? null,
     date: parent?.sentAt ?? null, excerpt: clip(sent?.body) };
 }
 

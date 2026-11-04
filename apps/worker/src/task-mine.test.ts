@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { eq, sql, and } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import type { LlmPort } from "./ollama";
 import { suggestTask } from "./task-mine";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 async function insertEmail(
   db: ReturnType<typeof createDb>["db"],

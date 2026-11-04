@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { effectiveStatuses } from "../registry-decide";
 import { monthlyCents } from "./registry";

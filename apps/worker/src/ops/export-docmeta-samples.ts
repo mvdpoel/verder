@@ -2,9 +2,9 @@ import { chmod, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { notDiscardedSql, notPurgedSql } from "@verder/api/src/effective-status";
-import { docTypeKey } from "@verder/api/src/doc-type";
+import { createDb, schema, type Db } from "@grip/db";
+import { notDiscardedSql, notPurgedSql } from "@grip/api/src/effective-status";
+import { docTypeKey } from "@grip/api/src/doc-type";
 
 /**
  * The docmeta eval's samples: Martin's real verdicts on document-meta
@@ -14,7 +14,7 @@ import { docTypeKey } from "@verder/api/src/doc-type";
  * holds SELECT on every table read here. Output goes to $DOCMETA_EVAL_SAMPLES.
  *
  * THE FILE HOLDS MARTIN'S REAL DOCUMENT TEXT AND IS NEVER COMMITTED. It lives
- * at /srv/verder/eval/docmeta-samples.json, outside ~/apps/verder, so neither
+ * at /srv/grip/eval/docmeta-samples.json, outside ~/apps/grip, so neither
  * git nor `rsync --delete` can reach it; writeDocMetaSamples refuses any path
  * inside this repository and writes the file 0600.
  */
@@ -103,11 +103,11 @@ export async function writeDocMetaSamples(path: string, samples: DocMetaSample[]
 if (import.meta.url === `file://${process.argv[1]}`) {
   const out = process.env.DOCMETA_EVAL_SAMPLES;
   if (!out) {
-    console.error("export-docmeta-samples: set DOCMETA_EVAL_SAMPLES (e.g. /srv/verder/eval/docmeta-samples.json)");
+    console.error("export-docmeta-samples: set DOCMETA_EVAL_SAMPLES (e.g. /srv/grip/eval/docmeta-samples.json)");
     process.exit(1);
   }
   const { db, pool } = createDb(process.env.DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder");
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip");
   try {
     const samples = await loadDocMetaSamples(db);
     await writeDocMetaSamples(out, samples);

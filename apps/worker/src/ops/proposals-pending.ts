@@ -14,8 +14,8 @@
 // the stored context and WRITTEN BACK, so `proposals.prompt` always records the
 // exact prompt the drafter saw (golden rule).
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import type { ProposalKind } from "@verder/api/src/proposal-state";
+import { createDb, schema, type Db } from "@grip/db";
+import type { ProposalKind } from "@grip/api/src/proposal-state";
 import type { ProposalContext } from "../proposals/context";
 import { buildProposalPrompt } from "../proposals/draft-prompt";
 
@@ -53,7 +53,7 @@ export async function promptForDraft(db: Db, id: string): Promise<string | null>
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const args = process.argv.slice(2);
   const { db, pool } = createDb(url);
   try {

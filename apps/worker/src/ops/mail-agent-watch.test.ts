@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { MAIL_AGENT_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { MAIL_AGENT_WORKER_NAME } from "@grip/api/src/worker-names";
 import { rateLimitedUntil } from "../gmail";
 import { fixtureContext } from "../proposals/draft-fixture";
 import {
@@ -9,10 +9,10 @@ import {
 } from "./mail-agent-watch";
 import { storeExternal } from "./proposals-store";
 
-// Runs as verder_worker, the role the watcher meets in production. Every test
+// Runs as grip_worker, the role the watcher meets in production. Every test
 // is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated. Gmail is a fake port: nothing is fetched, nothing is sent.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { conn = createDb(URL); });
 afterAll(async () => { await conn.pool.end(); });

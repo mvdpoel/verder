@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DOC_SOURCES, type DocSource } from "@verder/db/doc-sources";
+import { DOC_SOURCES, type DocSource } from "@grip/db/doc-sources";
 
 /**
  * A rule bundle's membership, in the same vocabulary the tree filters on.

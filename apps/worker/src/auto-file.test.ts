@@ -3,16 +3,16 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { type ChainEvent } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument, ingestDocument } from "@verder/api/src/routers/documents";
-import { makeLedgerRecompute, resolveDocumentUpdatedHashes } from "@verder/api/src/verification";
+import { type ChainEvent } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument, ingestDocument } from "@grip/api/src/routers/documents";
+import { makeLedgerRecompute, resolveDocumentUpdatedHashes } from "@grip/api/src/verification";
 import { settleDocumentTexts } from "./test-support/document-texts";
 import { autoApplyDocMeta } from "./auto-file";
 
 // Worker role: the role suggest.docmeta meets in production.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const RUN = crypto.randomUUID();
 const ON = { DOCMETA_AUTO_APPLY: "on" } as NodeJS.ProcessEnv;
 
@@ -66,7 +66,7 @@ describe("autoApplyDocMeta", () => {
   }
 
   /** auto-name's row: the verder actor, no suggestion. */
-  async function verderRenames(documentId: string, title: string) {
+  async function gripRenames(documentId: string, title: string) {
     await db.transaction(async (tx) => {
       await tx.insert(schema.documentStatusChanges).values({
         documentId, status: "inbox", title, actor: "verder", suggestionId: null });
@@ -163,7 +163,7 @@ describe("autoApplyDocMeta", () => {
   it("keeps the effective title and applies only status and soort", async () => {
     const d = await doc();
     const named = `Loonstrook.mp.2026-07.Saurens.${RUN.slice(0, 8)}.pdf`;
-    await verderRenames(d.id, named);
+    await gripRenames(d.id, named);
     const s = await suggestion(d.id, {
       proposed: { title: "Loonstrook van juli", docType: "Loonstrook", confident: true } });
     expect((await autoApplyDocMeta(db, s.id, ON)).applied).toBe(true);

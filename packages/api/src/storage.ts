@@ -1,7 +1,7 @@
 import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
-import { sha256Hex } from "@verder/core";
+import { sha256Hex } from "@grip/core";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 

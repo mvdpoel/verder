@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 
-// Runs as verder_app, the role the phone's routes meet in production. Every
+// Runs as grip_app, the role the phone's routes meet in production. Every
 // test is ONE transaction that is ROLLED BACK at the end: the shared dev
 // database is never truncated, and a rolled-back fixture document can never
 // grow pendingDocMeta's backlog. The router's own transactions nest as
 // savepoints inside it.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { conn = createDb(APP_URL); });
 afterAll(async () => { await conn.pool.end(); });

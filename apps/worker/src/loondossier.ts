@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { inArray, and, eq } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
-import { schema, type Db } from "@verder/db";
-import { ingestDocument } from "@verder/api/src/routers/documents";
-import { storeFile } from "@verder/api/src/storage";
+import { sha256Hex } from "@grip/core";
+import { schema, type Db } from "@grip/db";
+import { ingestDocument } from "@grip/api/src/routers/documents";
+import { storeFile } from "@grip/api/src/storage";
 import { recordRun } from "./heartbeat";
 import type { NotifyFn } from "./notify/notify";
 

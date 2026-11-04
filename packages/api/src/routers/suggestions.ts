@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { canonicalJson } from "@verder/core";
-import { schema, type Db } from "@verder/db";
+import { canonicalJson } from "@grip/core";
+import { schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { insertEntry } from "./entries";

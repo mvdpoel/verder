@@ -6,11 +6,11 @@ import * as schema from "./schema";
 // APP role: the triggers must work for the role the web app actually uses, and
 // that role has NO INSERT grant on search_outbox (Task 2) — the SECURITY
 // DEFINER function is the only thing that makes these rows land.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // WORKER role: document_texts is the one table below that the app role cannot
 // write (migration 0016 gives it SELECT only) because extraction is the
 // worker's job. Its trigger therefore has to be exercised as the worker.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("search_outbox triggers", () => {
   let db: Db;
@@ -33,7 +33,7 @@ describe("search_outbox triggers", () => {
   const settleLater: { id: string; sha256: string }[] = [];
 
   afterAll(async () => {
-    // The WORKER connection, because 0016 grants verder_app SELECT only on
+    // The WORKER connection, because 0016 grants grip_app SELECT only on
     // document_texts — which is exactly why this suite already holds one.
     // onConflictDoNothing: a test that stored its own text has already settled.
     if (settleLater.length > 0) {

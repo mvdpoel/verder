@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { eq, desc } from "drizzle-orm";
-import { DB_BACKUP_WORKER_NAME, WATCHDOG_WORKER_NAME } from "@verder/api/src/worker-names";
-import { declFor } from "@verder/api/src/worker-health";
+import { DB_BACKUP_WORKER_NAME, WATCHDOG_WORKER_NAME } from "@grip/api/src/worker-names";
+import { declFor } from "@grip/api/src/worker-health";
 import { parseOutcome } from "./db-backup-run";
 import { buildReport, runWatchdogReport } from "./watchdog-run";
 import { fakeNotify } from "../test-support/fake-notify";
@@ -53,7 +53,7 @@ describe("watchdog-run", () => {
 
   it("writes the row, then notifies system/active", async () => {
     const { db, pool } = createDb(
-      process.env.WORKER_DATABASE_URL ?? "postgres://verder_worker:verder_worker@localhost:5432/verder");
+      process.env.WORKER_DATABASE_URL ?? "postgres://grip_worker:grip_worker@localhost:5432/grip");
     const { notify, sent } = fakeNotify();
     await runWatchdogReport(db, buildReport(["--restarted", "web"]), notify);
     const [row] = await db.select().from(schema.workerRuns)
@@ -68,7 +68,7 @@ describe("watchdog-run", () => {
 
   it("a throwing notify still writes the watchdog row", async () => {
     const { db, pool } = createDb(
-      process.env.WORKER_DATABASE_URL ?? "postgres://verder_worker:verder_worker@localhost:5432/verder");
+      process.env.WORKER_DATABASE_URL ?? "postgres://grip_worker:grip_worker@localhost:5432/grip");
     const marker = `web-${crypto.randomUUID()}`;
     const report = buildReport(["--restarted", "web"]);
     // A unique reason, so the row found is this test's and not a parallel one's.

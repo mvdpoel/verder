@@ -1,7 +1,7 @@
 import { desc, eq, inArray, or, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { addressesIn } from "@verder/api/src/talking-points-load";
-import { effectiveTaskStatuses } from "@verder/api/src/task-decide";
+import { schema, type Db } from "@grip/db";
+import { addressesIn } from "@grip/api/src/talking-points-load";
+import { effectiveTaskStatuses } from "@grip/api/src/task-decide";
 
 /**
  * WHAT THE BRIEF DRAFTER MAY SEE about one party: the newest mail to and from

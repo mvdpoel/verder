@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
-import { entryFromProposed } from "@verder/api/src/entry-from-proposed";
+import { entryFromProposed } from "@grip/api/src/entry-from-proposed";
 import { formatEuro } from "@/components/registry-list";
 import { RetrievedRefs } from "@/components/retrieved-refs";
 import { AlreadyHaveThis } from "@/components/already-have-this";

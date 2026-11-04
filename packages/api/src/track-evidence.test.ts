@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appendLedgerEvent } from "./ledger";
 import { setTaskStatus } from "./task-decide";
 import { documentStatusChangePayload } from "./verification";
 import { resolveStopEvidence } from "./track-evidence";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 // The dev postgres is shared: every assertion is scoped to rows this suite made.
 describe("resolveStopEvidence", () => {

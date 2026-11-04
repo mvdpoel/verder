@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createDb } from "./client";
 
-const URL = "postgres://verder:verder@localhost:5432/verder";
+const URL = "postgres://grip:grip@localhost:5432/grip";
 
 describe("raw_emails.source", () => {
   it("defaults existing rows to gmail so no historical id is rewritten", async () => {

@@ -3,7 +3,7 @@ import { isWeeklySummary } from "./weekly-summary";
 
 const good = {
   week: "2026-W44", from: "2026-10-25T17:00:00.000Z", to: "2026-11-01T17:00:00.000Z", sent: 3, received: 7,
-  filedByMartin: 2, filedByVerder: 3, tasksDone: 2, waiting: 4, topWaiting: [],
+  filedByMartin: 2, filedByGrip: 3, tasksDone: 2, waiting: 4, topWaiting: [],
 };
 
 describe("isWeeklySummary", () => {

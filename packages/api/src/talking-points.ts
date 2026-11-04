@@ -91,11 +91,11 @@ function short(text: string): string {
  */
 function linkFor(type: PointSourceType, id: string): string {
   switch (type) {
-    case "task": return `verder://task/${id}`;
-    case "proposal": return `verder://proposal/${id}`;
-    case "document": return `verder://document/${id}`;
-    case "debt": case "mail": return "verder://dossier";
-    case "stop": return "verder://timeline";
+    case "task": return `grip://task/${id}`;
+    case "proposal": return `grip://proposal/${id}`;
+    case "document": return `grip://document/${id}`;
+    case "debt": case "mail": return "grip://dossier";
+    case "stop": return "grip://timeline";
   }
 }
 

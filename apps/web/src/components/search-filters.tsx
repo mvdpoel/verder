@@ -1,4 +1,4 @@
-import { SEARCH_ENTITY_TYPES } from "@verder/core";
+import { SEARCH_ENTITY_TYPES } from "@grip/core";
 import { Button, Field, Input, Label, Panel, Select } from "@/components/ui";
 import { ENTITY_LABEL, STATUS_FILTERS } from "./search-kinds";
 import type { ParsedSearch } from "@/lib/search-url";

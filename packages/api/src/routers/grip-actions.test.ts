@@ -1,24 +1,24 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asc, eq, sql } from "drizzle-orm";
-import { canonicalJson, sha256Hex } from "@verder/core";
-import { createDb, schema, type Db } from "@verder/db";
+import { canonicalJson, sha256Hex } from "@grip/core";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { docTypeKeySql } from "../effective-status";
-import { documentStatusChangePayloadByVerder, documentStatusChangePayloadWithParty } from "../verification";
+import { documentStatusChangePayloadByGrip, documentStatusChangePayloadWithParty } from "../verification";
 import { effectiveDocument } from "./documents";
-import { stateAfter } from "./verder-actions";
+import { stateAfter } from "./grip-actions";
 
 // Plan 3 Task 15: "Door verder gedaan" and its one-tap undo. Every fixture is
 // a fresh document with a random title on the shared dev DB, and every count
 // is scoped to that document, because other suites append concurrently.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // Only to give a fixture document its extractor-`none` text row, which the app
 // role cannot write (it would otherwise grow pendingDocMeta's backlog).
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
-describe("verderActions", () => {
+describe("gripActions", () => {
   let db: Db; let admin: Db; let userId: string; let close: () => Promise<void>;
   beforeAll(async () => {
     const a = createDb(APP_URL); const b = createDb(ADMIN_URL);
@@ -56,7 +56,7 @@ describe("verderActions", () => {
         documentId, status: "filed", title: current.effectiveTitle, docType,
         actor: "verder", suggestionId: s.id }).returning();
       await appendLedgerEvent(tx, { eventType: "document.updated", entityType: "document",
-        entityId: documentId, payload: documentStatusChangePayloadByVerder(row) });
+        entityId: documentId, payload: documentStatusChangePayloadByGrip(row) });
       await tx.update(schema.suggestions).set({ finalPayload: {
         title: current.effectiveTitle, docType, changeId: row.id } })
         .where(eq(schema.suggestions.id, s.id));
@@ -72,13 +72,13 @@ describe("verderActions", () => {
         documentId, status: current.effectiveStatus, title: to,
         actor: "verder", suggestionId: null }).returning();
       await appendLedgerEvent(tx, { eventType: "document.updated", entityType: "document",
-        entityId: documentId, payload: documentStatusChangePayloadByVerder(row) });
+        entityId: documentId, payload: documentStatusChangePayloadByGrip(row) });
       return row;
     });
   }
 
   const listed = async (changeId: string) =>
-    (await caller().verderActions.list({ sinceDays: 7 })).find((a) => a.changeId === changeId);
+    (await caller().gripActions.list({ sinceDays: 7 })).find((a) => a.changeId === changeId);
   const ledgerCount = async (documentId: string) => (await db.select()
     .from(schema.ledgerEvents).where(eq(schema.ledgerEvents.entityId, documentId))).length;
   const changeCount = async (documentId: string) => (await db.select()
@@ -115,7 +115,7 @@ describe("verderActions", () => {
     const { change, suggestionId } = await autoFile(doc.id, "Loonstrook");
     const events = await ledgerCount(doc.id);
 
-    await caller().verderActions.undo({ changeId: change.id });
+    await caller().gripActions.undo({ changeId: change.id });
 
     const after = await effectiveDocument(db, doc.id);
     expect(after.effectiveStatus).toBe("inbox");
@@ -153,7 +153,7 @@ describe("verderActions", () => {
     const events = await ledgerCount(doc.id);
     const rows = await changeCount(doc.id);
 
-    await expect(caller().verderActions.undo({ changeId: change.id }))
+    await expect(caller().gripActions.undo({ changeId: change.id }))
       .rejects.toMatchObject({ code: "CONFLICT", message: "al aangepast" });
     expect(await ledgerCount(doc.id)).toBe(events);
     expect(await changeCount(doc.id)).toBe(rows);
@@ -170,7 +170,7 @@ describe("verderActions", () => {
     const events = await ledgerCount(doc.id);
     const rows = await changeCount(doc.id);
 
-    await expect(caller().verderActions.undo({ changeId: change.id }))
+    await expect(caller().gripActions.undo({ changeId: change.id }))
       .rejects.toMatchObject({ code: "CONFLICT", message: "vernietigd" });
     expect(await ledgerCount(doc.id)).toBe(events);
     expect(await changeCount(doc.id)).toBe(rows);
@@ -187,7 +187,7 @@ describe("verderActions", () => {
       proposedTitle: null, undoable: false, notUndoableReason: "naam staat ook op de NAS",
     });
     const events = await ledgerCount(doc.id);
-    await expect(caller().verderActions.undo({ changeId: row.id }))
+    await expect(caller().gripActions.undo({ changeId: row.id }))
       .rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(await ledgerCount(doc.id)).toBe(events);
   });
@@ -199,13 +199,13 @@ describe("verderActions", () => {
     // Two taps landing together: the advisory lock serialises them, and the
     // second sees the first's row as newer.
     const results = await Promise.allSettled([
-      caller().verderActions.undo({ changeId: change.id }),
-      caller().verderActions.undo({ changeId: change.id }),
+      caller().gripActions.undo({ changeId: change.id }),
+      caller().gripActions.undo({ changeId: change.id }),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
     expect(await ledgerCount(doc.id)).toBe(events + 1);
-    await expect(caller().verderActions.undo({ changeId: change.id }))
+    await expect(caller().gripActions.undo({ changeId: change.id }))
       .rejects.toMatchObject({ code: "CONFLICT" });
     expect(await ledgerCount(doc.id)).toBe(events + 1);
   });
@@ -213,7 +213,7 @@ describe("verderActions", () => {
   it("undo of null soort writes empty soort and the tree shows Zonder soort", async () => {
     const doc = await makeDocument(null);
     const { change } = await autoFile(doc.id, "Loonstrook");
-    await caller().verderActions.undo({ changeId: change.id });
+    await caller().gripActions.undo({ changeId: change.id });
     const rows = await db.select().from(schema.documentStatusChanges)
       .where(eq(schema.documentStatusChanges.documentId, doc.id))
       .orderBy(asc(schema.documentStatusChanges.createdAt));
@@ -230,7 +230,7 @@ describe("verderActions", () => {
     const [row] = await db.select().from(schema.documentStatusChanges)
       .where(eq(schema.documentStatusChanges.documentId, doc.id));
     expect(await listed(row.id)).toBeUndefined();
-    await expect(caller().verderActions.undo({ changeId: row.id }))
+    await expect(caller().gripActions.undo({ changeId: row.id }))
       .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
-import { SEARCH_ENTITY_TYPES, type SearchEntityType } from "@verder/core";
-import { indexEntity } from "@verder/api/src/search/index-entity";
-import type { EmbedPort } from "@verder/api/src/search/embed";
+import type { Db } from "@grip/db";
+import { SEARCH_ENTITY_TYPES, type SearchEntityType } from "@grip/core";
+import { indexEntity } from "@grip/api/src/search/index-entity";
+import type { EmbedPort } from "@grip/api/src/search/embed";
 import { recordRun } from "./heartbeat";
 
 /**
@@ -11,7 +11,7 @@ import { recordRun } from "./heartbeat";
  * by source_hash — unchanged text is never re-embedded. Every entity is committed on its
  * own, so a kill -9 loses at most one entity and a rerun picks up where it stopped.
  *
- * The indexing itself is indexEntity() from @verder/api: the same loader the search.drain
+ * The indexing itself is indexEntity() from @grip/api: the same loader the search.drain
  * job uses, so a backfilled record and a trigger-refreshed record are byte-identical.
  */
 

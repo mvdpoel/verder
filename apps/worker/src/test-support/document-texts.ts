@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { notPurgedSql } from "@verder/api/src/effective-status";
+import { schema, type Db } from "@grip/db";
+import { notPurgedSql } from "@grip/api/src/effective-status";
 
 /**
  * Leave every document a test ingested under `sourceRef` the `document_texts`
@@ -23,7 +23,7 @@ import { notPurgedSql } from "@verder/api/src/effective-status";
  * have written is the append-only way to settle the debt.
  *
  * Runs on whatever connection the caller hands it, which must be the WORKER
- * role: 0016 grants verder_app SELECT only on document_texts, deliberately, and
+ * role: 0016 grants grip_app SELECT only on document_texts, deliberately, and
  * the sweep meets the same grants in production.
  *
  * Returns the number of rows written, so a caller can assert it actually had

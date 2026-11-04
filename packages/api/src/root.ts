@@ -15,7 +15,7 @@ import { moneyRouter } from "./routers/money";
 import { bundlesRouter } from "./routers/bundles";
 import { proposalsRouter } from "./routers/proposals";
 import { inboxRouter } from "./routers/inbox";
-import { verderActionsRouter } from "./routers/verder-actions";
+import { gripActionsRouter } from "./routers/grip-actions";
 import { dossierSyncRouter } from "./routers/dossier-sync";
 
 export const appRouter = router({
@@ -36,7 +36,7 @@ export const appRouter = router({
   bundles: bundlesRouter,
   proposals: proposalsRouter,
   inbox: inboxRouter,
-  verderActions: verderActionsRouter,
+  gripActions: gripActionsRouter,
   dossierSync: dossierSyncRouter,
 });
 export type AppRouter = typeof appRouter;

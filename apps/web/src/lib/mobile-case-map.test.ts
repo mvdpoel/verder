@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTrackMap, filterDebtEpisodes, type StopRow, type TrackRow,
-} from "@verder/api/src/track-map";
-import type { StopEvidence } from "@verder/api/src/track-evidence";
+} from "@grip/api/src/track-map";
+import type { StopEvidence } from "@grip/api/src/track-evidence";
 import { toCaseMapDTO, type CaseMapSource } from "./mobile-case-map";
 
 /**
@@ -111,14 +111,14 @@ describe("toCaseMapDTO", () => {
     const beschikking = dto.stops.find((s) => s.id === "s-beschikking")!;
     expect(beschikking.evidence.documents).toEqual([
       { id: DOC, title: "Beschikking rechtbank", mime: "application/pdf",
-        link: `verder://document/${DOC}` },
+        link: `grip://document/${DOC}` },
     ]);
     expect(beschikking.evidence.email).toEqual({
       subject: "Uw beschikking", fromAddr: "post@noordkust.example",
       sentAt: "2026-06-03T10:00:00.000Z" });
     const stukken = dto.stops.find((s) => s.id === "s-stukken")!;
     expect(stukken.evidence.task).toEqual({ id: TASK, title: "Loonstroken sturen", status: "open",
-      dueAt: "2026-11-05T10:00:00.000Z", link: `verder://task/${TASK}` });
+      dueAt: "2026-11-05T10:00:00.000Z", link: `grip://task/${TASK}` });
     const intake = dto.stops.find((s) => s.id === "s-intake")!;
     expect(intake.evidence.entry).toEqual({ summary: "Intakegesprek",
       occurredAt: "2026-05-19T10:00:00.000Z", channel: "call", direction: "inbound" });

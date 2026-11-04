@@ -17,8 +17,8 @@
  */
 import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { readFilePath } from "@verder/api/src/storage";
+import { createDb, schema } from "@grip/db";
+import { readFilePath } from "@grip/api/src/storage";
 import { storeDocumentText } from "../document-text";
 import { looksLikeProse, stopwordShare, wordCount, MIN_WORDS } from "../text-quality";
 
@@ -70,7 +70,7 @@ export async function reExtractGarbled(deps: {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   const argv = process.argv.slice(2);
   const i = argv.indexOf("--limit");

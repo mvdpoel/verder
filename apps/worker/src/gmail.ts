@@ -1,9 +1,9 @@
 import { asc, desc, eq } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { ingestDocument } from "@verder/api/src/routers/documents";
-import { storeFile } from "@verder/api/src/storage";
+import { schema, type Db } from "@grip/db";
+import { ingestDocument } from "@grip/api/src/routers/documents";
+import { storeFile } from "@grip/api/src/storage";
 import { markBriefPending } from "./briefs/mark";
-import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@verder/api/src/worker-names";
+import { MAIL_AGENT_WORKER_NAME, PROPOSAL_SEND_WORKER_NAME } from "@grip/api/src/worker-names";
 import { recordRun } from "./heartbeat";
 import { asciiLower, isRelevantMessage, relevantAddresses } from "./mail/relevance";
 import { extractMessageId } from "./mail/message-id";

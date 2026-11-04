@@ -1,15 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { sha256Hex } from "@verder/core";
-import { ingestDocument } from "@verder/api/src/routers/documents";
+import { createDb, schema, type Db } from "@grip/db";
+import { sha256Hex } from "@grip/core";
+import { ingestDocument } from "@grip/api/src/routers/documents";
 import { storeDocumentText } from "./document-text";
 import { settleDocumentTexts } from "./test-support/document-texts";
 
 // NOT named URL: the fixture helper below constructs a real URL, and a const
 // named URL would shadow the global and blow up with "URL is not a constructor".
-const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 // Tags every fixture this run ingests, so the guard at the bottom can ask about
 // THIS run and nothing else. New per run: `documents` is append-only and the

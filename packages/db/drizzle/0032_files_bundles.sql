@@ -3,7 +3,7 @@
 -- All additive. Nothing is dropped, no grant is weakened, no ledger event is
 -- appended by anything in this file.
 
--- THE GRANT TRAP. verder_app and verder_worker hold SELECT, INSERT on
+-- THE GRANT TRAP. grip_app and grip_worker hold SELECT, INSERT on
 -- `documents` and no UPDATE (0001, 0004) — the append-only law. So party_id is
 -- writable at INGEST and never again, and every correction rides
 -- document_status_changes, which is the table title and doc_type already
@@ -58,4 +58,4 @@ CREATE TABLE "bundle_documents" (
 -- the debt link tables: these carry no ledger event and are not evidence, and
 -- a bundle whose mistakes are permanent is worse than the rule it would uphold.
 GRANT SELECT, INSERT, UPDATE, DELETE ON "bundles", "bundle_documents"
-  TO verder_app, verder_worker;
+  TO grip_app, grip_worker;

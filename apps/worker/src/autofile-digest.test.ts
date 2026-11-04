@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { AUTOFILE_DIGEST_WORKER_NAME } from "@verder/api/src/worker-names";
+import { createDb, schema, type Db } from "@grip/db";
+import { AUTOFILE_DIGEST_WORKER_NAME } from "@grip/api/src/worker-names";
 import { digestBody, runAutofileDigest } from "./autofile-digest";
 import { notify, type NotifyFn } from "./notify/notify";
 import { fakeNotify } from "./test-support/fake-notify";
 
-// Runs as verder_worker, the role the digest meets in production. Every test
+// Runs as grip_worker, the role the digest meets in production. Every test
 // runs inside a transaction that is ROLLED BACK: the shared dev DB is never
 // truncated, and a committed `autofile:<day>` notification would make the
 // next run of this suite a duplicate. `now` is a random day long ago, so the
 // 24 h window holds only this test's fixtures.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 let worker: { db: Db; pool: { end(): Promise<void> } };
 beforeAll(() => { worker = createDb(WORKER_URL); });
@@ -32,7 +32,7 @@ function eveningLongAgo(): Date {
   return d;
 }
 
-async function verderChanges(db: Db, at: Date, n: { filed: number; named: number }) {
+async function gripChanges(db: Db, at: Date, n: { filed: number; named: number }) {
   for (let i = 0; i < n.filed + n.named; i++) {
     const [doc] = await db.insert(schema.documents).values({
       sha256: (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", ""), sizeBytes: 1,
@@ -77,15 +77,15 @@ describe("autofile digest", () => {
   it("a day with verder actions sends one passive filing push, counts only", async () => {
     await isolated(async (db) => {
       const now = eveningLongAgo();
-      await verderChanges(db, now, { filed: 2, named: 1 });
+      await gripChanges(db, now, { filed: 2, named: 1 });
       // Outside the window: 25 h before. Never counted.
-      await verderChanges(db, new Date(now.getTime() - 24 * 60 * 60 * 1000), { filed: 1, named: 0 });
+      await gripChanges(db, new Date(now.getTime() - 24 * 60 * 60 * 1000), { filed: 1, named: 0 });
       const fake = fakeNotify();
       const out = await runAutofileDigest({ db, notify: fake.notify, now: () => now });
       expect(out).toMatchObject({ count: 3, filed: 2, named: 1, sent: true });
       expect(fake.sent).toEqual([{
         kind: "filing", level: "passive", title: "Door verder gedaan",
-        body: "2 documenten opgeborgen · 1 hernoemd", link: "verder://inbox",
+        body: "2 documenten opgeborgen · 1 hernoemd", link: "grip://inbox",
         dedupKey: expect.stringMatching(/^autofile:199\d-07-\d\d$/),
       }]);
     });
@@ -94,7 +94,7 @@ describe("autofile digest", () => {
   it("digest retry on the same day sends one push", async () => {
     await isolated(async (db) => {
       const now = eveningLongAgo();
-      await verderChanges(db, now, { filed: 1, named: 0 });
+      await gripChanges(db, now, { filed: 1, named: 0 });
       // The REAL notify(), with no APNs key and no VAPID keys: the dedup is
       // the notifications table's, and that is what a retry meets.
       const real: NotifyFn = (n) => notify({ db, apns: async () => null, webPush: () => null,

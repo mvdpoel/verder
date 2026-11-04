@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { inArray, sql } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import type { LlmPort } from "./ollama";
 import { mineRegistry } from "./registry-mine";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 // Unique LETTERS only: normalizeName strips digits, so a numeric suffix would
 // collide with earlier test runs (dedup keys live in the shared dev DB).

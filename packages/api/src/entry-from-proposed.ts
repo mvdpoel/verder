@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ENTRY_SOURCES, type EntrySource } from "@verder/db/entry-sources";
+import { ENTRY_SOURCES, type EntrySource } from "@grip/db/entry-sources";
 
 /**
  * How a `log-entry` suggestion becomes the input of `suggestions.approveEntry`.
@@ -10,7 +10,7 @@ import { ENTRY_SOURCES, type EntrySource } from "@verder/db/entry-sources";
  * needed a second copy, and two copies is how they come to disagree.
  *
  * Pure and client-safe on purpose (zod plus the `entry-sources` leaf, never the
- * `@verder/db` barrel, which reaches `pg`): `suggestion-card.tsx` is a client
+ * `@grip/db` barrel, which reaches `pg`): `suggestion-card.tsx` is a client
  * component and imports this file.
  */
 

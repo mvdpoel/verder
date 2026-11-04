@@ -5,12 +5,12 @@ import { CASE_MAP_SPINE_SEED, createDb, ensureCaseMap, schema, type Db } from ".
 // ADMIN role: this suite is about the CONSTRAINTS and TRIGGERS the map depends
 // on (one root, no poisoned index queue) and about what the seed puts back
 // after a truncation — not about grants, whose shape is unchanged.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 // APP role: the rename below is what the web app actually does, and that role
 // has NO INSERT grant on search_outbox — only the SECURITY DEFINER function
 // search_enqueue_track_stops() makes those rows land. Under the admin role a
 // missing SECURITY DEFINER would pass unnoticed and 500 in production.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 
 describe("tracks and stops", () => {
   let db: Db;

@@ -4,7 +4,7 @@
  * are built from this list, so adding a source is one edit here plus one
  * migration, and a label map that forgets the new value fails to typecheck.
  *
- * A leaf module with no imports, published as `@verder/db/doc-sources`,
+ * A leaf module with no imports, published as `@grip/db/doc-sources`,
  * because client components need the vocabulary and the package barrel
  * reaches `pg`.
  */

@@ -1,14 +1,14 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "../root";
 import { createContext } from "../trpc";
 import { entryFromProposed } from "../entry-from-proposed";
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // Only to give a fixture document its extractor-`none` text row, which the app
 // role cannot write (it would otherwise grow pendingDocMeta's backlog).
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
 /**
  * The voice quick-log (Plan 3 Task 24): a call Martin dictates on the phone

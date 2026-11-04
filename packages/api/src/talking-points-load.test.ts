@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { appRouter } from "./root";
 import { createContext } from "./trpc";
 import { addressesIn, loadTalkingPoints } from "./talking-points-load";
@@ -18,10 +18,10 @@ vi.mock("./talking-points", async (importOriginal) => {
   return { ...orig, buildTalkingPoints: vi.fn(orig.buildTalkingPoints) };
 });
 
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // raw_emails, document_texts and party_briefs are written by the WORKER in
 // production, so the fixture writes them on that role too.
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const RUN = crypto.randomUUID().slice(0, 8);
 const DAY = 24 * 3600 * 1000;
 

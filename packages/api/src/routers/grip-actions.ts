@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { APP_ACTOR, schema, type Db } from "@grip/db";
 import { protectedProcedure, router } from "../trpc";
 import { appendLedgerEvent } from "../ledger";
 import { documentStatusChangePayloadWithParty } from "../verification";
@@ -18,7 +18,7 @@ import { effectiveDocument } from "./documents";
  *
  * TWO KINDS, told apart by one column: an auto-file applies a document-meta
  * suggestion and names it (`suggestion_id` set); an auto-name applies none
- * (`suggestion_id` NULL). `verderActionKind` is the one spelling of that rule,
+ * (`suggestion_id` NULL). `gripActionKind` is the one spelling of that rule,
  * and the 19:00 digest counts through it too.
  *
  * UNDO IS AN APPEND, never a delete or an update: a Martin row (actor NULL)
@@ -27,9 +27,9 @@ import { effectiveDocument } from "./documents";
  * typed the old values back himself.
  */
 
-export type VerderActionKind = "auto-file" | "auto-name";
+export type GripActionKind = "auto-file" | "auto-name";
 
-export function verderActionKind(c: { suggestionId: string | null }): VerderActionKind {
+export function gripActionKind(c: { suggestionId: string | null }): GripActionKind {
   return c.suggestionId !== null ? "auto-file" : "auto-name";
 }
 
@@ -80,7 +80,7 @@ export type NotUndoableReason = "al aangepast" | "vernietigd" | "naam staat ook 
  * append `inbox` onto destroyed content.
  */
 export function notUndoableReason(input: {
-  kind: VerderActionKind; purged: boolean; newerExists: boolean;
+  kind: GripActionKind; purged: boolean; newerExists: boolean;
 }): NotUndoableReason | null {
   if (input.kind === "auto-name") return "naam staat ook op de NAS";
   if (input.purged) return "vernietigd";
@@ -88,13 +88,13 @@ export function notUndoableReason(input: {
   return null;
 }
 
-export interface VerderActionDTO {
+export interface GripActionDTO {
   changeId: string;
   documentId: string;
   /** The document's CURRENT effective title. */
   documentTitle: string | null;
   at: string;
-  kind: VerderActionKind;
+  kind: GripActionKind;
   before: DocState;
   after: DocState;
   /** The title docmeta proposed; information only — auto-file never applies it. */
@@ -114,11 +114,11 @@ function undoMark(finalPayload: unknown): UndoMark | null {
 
 const LIST_LIMIT = 200;
 
-export async function listVerderActions(db: Db, sinceDays: number, now = new Date()): Promise<VerderActionDTO[]> {
+export async function listGripActions(db: Db, sinceDays: number, now = new Date()): Promise<GripActionDTO[]> {
   const since = new Date(now.getTime() - sinceDays * 24 * 60 * 60 * 1000);
   const c = schema.documentStatusChanges;
   const actions = await db.select().from(c)
-    .where(and(eq(c.actor, "verder"), gte(c.createdAt, since)))
+    .where(and(eq(c.actor, APP_ACTOR), gte(c.createdAt, since)))
     .orderBy(desc(c.createdAt), desc(c.id)).limit(LIST_LIMIT);
   if (actions.length === 0) return [];
 
@@ -147,13 +147,13 @@ export async function listVerderActions(db: Db, sinceDays: number, now = new Dat
     changesByDoc.set(row.documentId, list);
   }
 
-  return actions.flatMap((a): VerderActionDTO[] => {
+  return actions.flatMap((a): GripActionDTO[] => {
     const doc = docById.get(a.documentId);
     if (!doc) return [];
     const base: DocState = { status: doc.status, title: doc.title, docType: doc.docType };
     const rows = changesByDoc.get(a.documentId) ?? [];
     const older = rows.filter((r) => r.id !== a.id && !isNewer(r, a));
-    const kind = verderActionKind(a);
+    const kind = gripActionKind(a);
     const reason = notUndoableReason({ kind, purged: purged.has(a.documentId),
       newerExists: rows.some((r) => isNewer(r, a)) });
     const s = a.suggestionId ? suggestionById.get(a.suggestionId) : undefined;
@@ -171,10 +171,10 @@ export async function listVerderActions(db: Db, sinceDays: number, now = new Dat
   });
 }
 
-export const verderActionsRouter = router({
+export const gripActionsRouter = router({
   list: protectedProcedure
     .input(z.object({ sinceDays: z.number().int().min(1).max(90).default(7) }).default({}))
-    .query(({ ctx, input }) => listVerderActions(ctx.db, input.sinceDays)),
+    .query(({ ctx, input }) => listGripActions(ctx.db, input.sinceDays)),
 
   /**
    * One tap, one transaction. A double tap is harmless: the first undo's own
@@ -185,14 +185,14 @@ export const verderActionsRouter = router({
     .mutation(({ ctx, input }) => ctx.db.transaction(async (tx) => {
       const c = schema.documentStatusChanges;
       const [change] = await tx.select().from(c).where(eq(c.id, input.changeId));
-      if (!change || change.actor !== "verder")
+      if (!change || change.actor !== APP_ACTOR)
         throw new TRPCError({ code: "NOT_FOUND", message: "Not a change verder made" });
       const documentId = change.documentId;
       // The per-document lock every writer of change rows takes, so the
       // newer-row check below is not a TOCTOU against a rename landing now.
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${documentId}::text, 0))`);
-      const kind = verderActionKind(change);
+      const kind = gripActionKind(change);
       const current = await effectiveDocument(tx, documentId);
       const rows = await tx.select().from(c).where(eq(c.documentId, documentId))
         .orderBy(asc(c.createdAt), asc(c.id));

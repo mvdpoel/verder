@@ -1,6 +1,6 @@
 /**
  * Derivation for the /money page. PURE: no database, no I/O, no imports from
- * @verder/db. Everything the page shows is a function of rows already in the
+ * @grip/db. Everything the page shows is a function of rows already in the
  * ledger, which is why this sub-project appends no evidence of its own.
  *
  * All money is integer cents. Amounts arrive signed (debits negative) and are
@@ -13,7 +13,7 @@
 import { dayKey, monthKey } from "./amsterdam";
 export { dayKey, monthKey };
 
-import { detectRecurring, type RecurringCandidate } from "@verder/parsers";
+import { detectRecurring, type RecurringCandidate } from "@grip/parsers";
 
 export interface MoneyTx {
   id: string; accountIban: string | null; bookedAt: Date; amountCents: number;

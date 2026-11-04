@@ -3,20 +3,20 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { asc, eq, isNull, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { createDb, schema, type Db } from "@verder/db";
-import { assertSafeToTruncate } from "@verder/api/src/test-db-guard";
-import { asDocument, realEmbedPort, EMBED_DIMENSIONS } from "@verder/api/src/search/embed";
-import { indexEntity } from "@verder/api/src/search/index-entity";
-import { realRerankPort, RERANK_PROMPT_VERSION } from "@verder/api/src/search/rerank";
-import { retrieve } from "@verder/api/src/search/retrieve";
-import type { SearchEntityType } from "@verder/core";
+import { createDb, schema, type Db } from "@grip/db";
+import { assertSafeToTruncate } from "@grip/api/src/test-db-guard";
+import { asDocument, realEmbedPort, EMBED_DIMENSIONS } from "@grip/api/src/search/embed";
+import { indexEntity } from "@grip/api/src/search/index-entity";
+import { realRerankPort, RERANK_PROMPT_VERSION } from "@grip/api/src/search/rerank";
+import { retrieve } from "@grip/api/src/search/retrieve";
+import type { SearchEntityType } from "@grip/core";
 
 // Golden-rule eval for hybrid retrieval. Mirrors run-registry-eval.ts and
 // run-task-eval.ts: fixed samples, one PASS/FAIL line each, a final score line
 // naming model and prompt version, no non-zero exit.
 //
 // ONE deliberate difference: this eval owns a DATABASE. recall@5 and MRR are
-// only meaningful against a known corpus, so it creates verder_retrieval_eval,
+// only meaningful against a known corpus, so it creates grip_retrieval_eval,
 // migrates it, seeds 40 fixture records (12 expected hits + 28 distractors),
 // indexes them with the real indexEntity, measures, and drops the database in a
 // finally. Measuring against the shared dev database and filtering afterwards
@@ -29,7 +29,7 @@ import type { SearchEntityType } from "@verder/core";
 // Usage (from the Mac, dev postgres + homelab GPU):
 //   OLLAMA_URL=http://192.168.188.148:11434 pnpm --filter worker retrieval-eval
 
-const EVAL_DB = "verder_retrieval_eval";
+const EVAL_DB = "grip_retrieval_eval";
 const K = 5;
 
 const fileSchema = z.object({
@@ -51,7 +51,7 @@ const { corpus, samples } = fileSchema.parse(JSON.parse(
   await readFile(new URL("./samples-retrieval.json", import.meta.url), "utf8")));
 
 const ADMIN_URL = process.env.EVAL_ADMIN_URL
-  ?? "postgres://verder:verder@localhost:5432/postgres";
+  ?? "postgres://grip:grip@localhost:5432/postgres";
 // Same guard the destructive API tests use: CREATE/DROP DATABASE only ever
 // runs against localhost, never against the homelab deployment.
 assertSafeToTruncate(ADMIN_URL);
@@ -205,7 +205,7 @@ try {
       + `— LEXICAL ONLY, semantic samples will fail\n`);
 
   const [user] = await db.insert(schema.users)
-    .values({ email: "eval@verder.local", name: "Retrieval eval" }).returning();
+    .values({ email: "eval@grip.local", name: "Retrieval eval" }).returning();
 
   let indexed = 0;
   for (const c of corpus) {
@@ -250,7 +250,7 @@ try {
   // the only honest place to measure ranking behaviour by hand.
   if (process.env.EVAL_KEEP === "1") {
     console.log(`\nkept ${EVAL_DB} (EVAL_KEEP=1) — drop it with:`
-      + `\n  docker exec verder-postgres-1 psql -U verder -d postgres -c 'DROP DATABASE ${EVAL_DB} WITH (FORCE)'`);
+      + `\n  docker exec grip-postgres-1 psql -U grip -d postgres -c 'DROP DATABASE ${EVAL_DB} WITH (FORCE)'`);
   } else {
     const cleanup = createDb(ADMIN_URL);
     await cleanup.db.execute(sql.raw(`DROP DATABASE IF EXISTS ${EVAL_DB} WITH (FORCE)`));

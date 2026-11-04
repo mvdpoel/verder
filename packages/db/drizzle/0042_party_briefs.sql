@@ -41,5 +41,5 @@ CREATE TABLE "party_briefs" (
   CONSTRAINT "party_briefs_ready_ck" CHECK ("status" <> 'ready' OR ("summary" IS NOT NULL AND "generated_at" IS NOT NULL))
 );--> statement-breakpoint
 CREATE INDEX "party_briefs_status_idx" ON "party_briefs" ("status");--> statement-breakpoint
-GRANT SELECT ON "party_briefs" TO verder_app;--> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE ON "party_briefs" TO verder_worker;
+GRANT SELECT ON "party_briefs" TO grip_app;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON "party_briefs" TO grip_worker;

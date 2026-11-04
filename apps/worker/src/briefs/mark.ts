@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "@verder/db";
+import type { Db } from "@grip/db";
 
 /**
  * A relevant mail from this party was just ingested: its brief is out of date.

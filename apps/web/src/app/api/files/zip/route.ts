@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { TRPCError } from "@trpc/server";
-import { buildZip, zipEntryName, ZIP_MAX_ENTRIES } from "@verder/core";
-import { readFilePath } from "@verder/api/src/storage";
+import { buildZip, zipEntryName, ZIP_MAX_ENTRIES } from "@grip/core";
+import { readFilePath } from "@grip/api/src/storage";
 import { serverCaller } from "@/lib/trpc-server";
 import { buildManifest, type ManifestRow } from "@/lib/zip-manifest";
 

@@ -114,4 +114,4 @@ CREATE INDEX "proposals_thread_key_idx" ON "proposals" ("thread_key");
 -- NOTE the FKs to raw_emails, documents, tasks and log_entries mean
 -- verify.test.ts's `TRUNCATE … CASCADE` wipes proposals too. That is harmless:
 -- nothing seeds it.
-GRANT SELECT, INSERT, UPDATE, DELETE ON "proposals" TO verder_app, verder_worker;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "proposals" TO grip_app, grip_worker;

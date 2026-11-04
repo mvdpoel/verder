@@ -3,7 +3,7 @@
 // otherwise surface as a thrown script halfway through a production run — or,
 // worse, as a map that renders but points the wrong way.
 import { describe, expect, it } from "vitest";
-import { CASE_MAP_SPINE_SEED } from "@verder/db";
+import { CASE_MAP_SPINE_SEED } from "@grip/db";
 import {
   PARTY_SEED, SPINE_SEED, STOP_RENAMES, TASK_SEED, TRACK_RENAMES, TRACK_SEED,
   trackPointerPatch,

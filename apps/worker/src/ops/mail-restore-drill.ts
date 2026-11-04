@@ -35,9 +35,9 @@
 // same bytes for comparison. The single write anywhere in this file is one
 // `worker_runs` row, and one push — on failure only.
 import { readFileSync } from "node:fs";
-import { sha256Hex } from "@verder/core";
-import { createDb, type Db } from "@verder/db";
-import { MAIL_DRILL_WORKER_NAME } from "@verder/api/src/worker-names";
+import { sha256Hex } from "@grip/core";
+import { createDb, type Db } from "@grip/db";
+import { MAIL_DRILL_WORKER_NAME } from "@grip/api/src/worker-names";
 import {
   basic, call, download, openSession,
   type JmapCredential, type JmapSession,
@@ -924,7 +924,7 @@ export function shellFailureFrom(env: NodeJS.ProcessEnv): string | null {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   const alert = { notify: notifier(db), close: closeNotify };
   const probeErrors: { where: string; message: string }[] = [];

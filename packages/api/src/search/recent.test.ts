@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
+import { createDb, schema, type Db } from "@grip/db";
 import { LINKABLE_ENTITY_TYPES, entityHref, recentEntities } from "./recent";
 
 const ID = "11111111-1111-1111-1111-111111111111";
@@ -26,8 +26,8 @@ describe("entityHref", () => {
 // The app role only holds SELECT on search_chunks (migration 0016), so fixtures
 // are written with the worker role and read back with the app role — the same
 // split production runs with.
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("recentEntities", () => {
   let app: Db; let worker: Db;

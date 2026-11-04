@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { BACKUP_WORKER, parseOutcome } from "./mail-backup-run";
-import { MAIL_BACKUP_WORKER_NAME } from "@verder/api/src/worker-names";
+import { MAIL_BACKUP_WORKER_NAME } from "@grip/api/src/worker-names";
 
 // NO DATABASE IN THIS FILE, deliberately — the same rule mail-restore-drill.test
 // keeps. parseOutcome is pure, and the whole contract worth pinning is what

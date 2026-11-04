@@ -1,13 +1,13 @@
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createDb, schema } from "@verder/db";
-import { EMBED_DIMENSIONS, type EmbedPort } from "@verder/api/src/search/embed";
-import { DRAIN_WORKER_NAME } from "@verder/api/src/search/health";
+import { createDb, schema } from "@grip/db";
+import { EMBED_DIMENSIONS, type EmbedPort } from "@grip/api/src/search/embed";
+import { DRAIN_WORKER_NAME } from "@grip/api/src/search/health";
 import { drainOnce } from "./search-drain";
 
-const DB_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const DB_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 // Only ever used to plant a row the worker role is not allowed to write.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 const vec = (n: number) => Array.from({ length: EMBED_DIMENSIONS }, () => n);
 
@@ -195,7 +195,7 @@ describe("drainOnce", () => {
     // row and index health is red forever. The migration cleaned the known
     // ones; the drain must survive the next kind that is retired.
     //
-    // Inserted through the ADMIN role on purpose: verder_worker has SELECT and
+    // Inserted through the ADMIN role on purpose: grip_worker has SELECT and
     // DELETE on search_outbox and no INSERT (migration 0016), so nothing the
     // worker can do produces this row any more. That is the point — it is a row
     // that should not exist.

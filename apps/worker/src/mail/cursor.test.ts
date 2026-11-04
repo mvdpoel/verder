@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
+import { createDb, schema } from "@grip/db";
 import { readCursor, writeCursor } from "./cursor";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("JMAP cursor", () => {
   it("is null before the first run, so the first poll is a full sync", async () => {

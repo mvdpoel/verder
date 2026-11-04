@@ -15,7 +15,7 @@
  */
 
 import { and, inArray } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { effectiveTitleSql, notDiscardedSql } from "./effective-status";
 import { effectiveTaskStatuses } from "./task-decide";
 

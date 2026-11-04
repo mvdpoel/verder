@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import {
   isRelevantMessage, ownMailboxAddresses, relevanceFilter, relevantAddresses,
   sanitizeAddresses,
 } from "./relevance";
 
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("isRelevantMessage", () => {
   const addrs = ["@verdergroep.nl", "incasso@stam.nl"];

@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { dayKey } from "@verder/api/src/amsterdam";
+import { schema, type Db } from "@grip/db";
+import { dayKey } from "@grip/api/src/amsterdam";
 import {
   effectivePartyIdSql, effectiveTitleSql, notDiscardedSql, notPurgedSql,
-} from "@verder/api/src/effective-status";
-import { readFilePath } from "@verder/api/src/storage";
-import { effectiveTaskStatuses } from "@verder/api/src/task-decide";
+} from "@grip/api/src/effective-status";
+import { readFilePath } from "@grip/api/src/storage";
+import { effectiveTaskStatuses } from "@grip/api/src/task-decide";
 import { resolveSenderPartyId, senderAddress } from "../gmail";
 import { matchesList, type LetterSender } from "../mail/priority";
 import { normaliseMessageId } from "../mail/message-id";

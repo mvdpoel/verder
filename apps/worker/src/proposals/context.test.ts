@@ -3,16 +3,16 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq, isNull } from "drizzle-orm";
-import { createDb, schema, type Db } from "@verder/db";
-import { storeFile } from "@verder/api/src/storage";
-import { setTaskStatus } from "@verder/api/src/task-decide";
+import { createDb, schema, type Db } from "@grip/db";
+import { storeFile } from "@grip/api/src/storage";
+import { setTaskStatus } from "@grip/api/src/task-decide";
 import type { RetrieveRefsFn } from "../retrieval-refs";
 import { gatherContext, type ProposalContext } from "./context";
 
-// Runs as verder_worker, the role suggest.entry meets in production. Every test
+// Runs as grip_worker, the role suggest.entry meets in production. Every test
 // is a transaction that is ROLLED BACK: the shared dev database is never
 // truncated, and most of these tables have no DELETE grant.
-const URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 let conn: { db: Db; pool: { end(): Promise<void> } };
 const vaultDir = mkdtempSync(join(tmpdir(), "proposal-context-vault-"));
 

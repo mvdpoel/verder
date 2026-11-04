@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { sha256Hex } from "@verder/core";
-import { schema, type Db } from "@verder/db";
+import { sha256Hex } from "@grip/core";
+import { schema, type Db } from "@grip/db";
 import { ingestRawEmail } from "../gmail";
 import { readCursor, writeCursor } from "./cursor";
 import {

@@ -10,11 +10,11 @@ import { createDb, schema, type Db } from "./index";
 // migration changes no schema at all — it is one UPDATE, and what needs
 // pinning is the extraction rule inside it, not a table shape.
 //
-// Admin role, not verder_app: this file inserts and deletes `parties` rows
+// Admin role, not grip_app: this file inserts and deletes `parties` rows
 // directly, and parties is an evidence table (INSERT + SELECT only for the
 // app/worker roles) — the same reason debt-record-schema.test.ts and
 // raw-emails-source.test.ts run their fixture cleanup as `verder`.
-const ADMIN_URL = "postgres://verder:verder@localhost:5432/verder";
+const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 
 // Read 0033's exact CASE/substring extraction straight out of the migration
 // file, between its SENDER-EXTRACT markers, instead of keeping a hand-copied

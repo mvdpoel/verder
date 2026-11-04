@@ -1,5 +1,5 @@
 {
-  "name": "verder",
+  "name": "grip",
   "private": true,
   "packageManager": "pnpm@10.18.1",
   "engines": { "node": ">=22" },

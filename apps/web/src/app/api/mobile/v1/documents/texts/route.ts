@@ -1,6 +1,6 @@
 import { mobileGet } from "@/lib/mobile-route";
 import { fail } from "@/lib/mobile-json";
-import { DOSSIER_TEXTS_MAX } from "@verder/api/src/routers/dossier-sync";
+import { DOSSIER_TEXTS_MAX } from "@grip/api/src/routers/dossier-sync";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -8,7 +8,7 @@ const MAX_Q = 500;
 /**
  * "Zoek op de server" from the Dossier tab: `search.query` in FAST mode only —
  * deep mode costs an Ollama rerank and is for agent surfaces, never a text
- * box. Hits carry an app route (`verder://document/<id>`, `verder://task/<id>`)
+ * box. Hits carry an app route (`grip://document/<id>`, `grip://task/<id>`)
  * in place of the web `href`, or `null` for a kind the phone has no screen for.
  */
 export const GET = mobileGet(async (caller, req) => {

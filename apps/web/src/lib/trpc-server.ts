@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
-import { appRouter, createContext } from "@verder/api";
-import { schema } from "@verder/db";
+import { appRouter, createContext } from "@grip/api";
+import { schema } from "@grip/db";
 import { eq } from "drizzle-orm";
 import { getAuth } from "./auth";
 import { getDb } from "./db";

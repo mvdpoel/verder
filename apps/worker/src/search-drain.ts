@@ -1,9 +1,9 @@
 import { asc, inArray } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
-import { SEARCH_ENTITY_TYPES, type SearchEntityType } from "@verder/core";
-import { type EmbedPort } from "@verder/api/src/search/embed";
-import { indexEntity } from "@verder/api/src/search/index-entity";
-import { DRAIN_WORKER_NAME } from "@verder/api/src/search/health";
+import { schema, type Db } from "@grip/db";
+import { SEARCH_ENTITY_TYPES, type SearchEntityType } from "@grip/core";
+import { type EmbedPort } from "@grip/api/src/search/embed";
+import { indexEntity } from "@grip/api/src/search/index-entity";
+import { DRAIN_WORKER_NAME } from "@grip/api/src/search/health";
 import { recordRun } from "./heartbeat";
 
 /**

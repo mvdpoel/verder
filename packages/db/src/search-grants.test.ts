@@ -11,9 +11,9 @@ import * as schema from "./schema";
 //
 // The owner connection stands in for that trigger function, which does not
 // exist yet (Task 6): it is the only thing allowed to put rows in the outbox.
-const OWNER_URL = "postgres://verder:verder@localhost:5432/verder";
-const APP_URL = "postgres://verder_app:verder_app@localhost:5432/verder";
-const WORKER_URL = "postgres://verder_worker:verder_worker@localhost:5432/verder";
+const OWNER_URL = "postgres://grip:grip@localhost:5432/grip";
+const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
+const WORKER_URL = "postgres://grip_worker:grip_worker@localhost:5432/grip";
 
 describe("knowledge-base index grants", () => {
   let owner: Db;

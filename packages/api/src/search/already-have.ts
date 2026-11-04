@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { eq, inArray } from "drizzle-orm";
-import { schema, type Db } from "@verder/db";
+import { schema, type Db } from "@grip/db";
 import { realEmbedPort, type EmbedPort } from "./embed";
 import { realRerankPort, type RerankPort } from "./rerank";
 import { retrieve } from "./retrieve";

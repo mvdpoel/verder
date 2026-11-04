@@ -1,15 +1,15 @@
 /*
  * The apple-app-site-association file: the public fact that lets the iOS app
- * (`<team>.pro.vanderpoel.verder`) use passkeys bound to this hostname.
+ * (`<team>.pro.vanderpoel.grip`) use passkeys bound to this hostname.
  *
  * Read per request, never at build time, so the team id comes from
  * `.env.prod` on the running container. With no team configured the route
- * answers 404: publishing `undefined.pro.vanderpoel.verder` would tell iOS a
+ * answers 404: publishing `undefined.pro.vanderpoel.grip` would tell iOS a
  * wrong app owns the domain's credentials.
  */
 export const dynamic = "force-dynamic";
 
-const BUNDLE_ID = "pro.vanderpoel.verder";
+const BUNDLE_ID = "pro.vanderpoel.grip";
 
 export async function GET(): Promise<Response> {
   const team = process.env.APPLE_TEAM_ID?.trim();

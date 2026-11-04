@@ -11,9 +11,9 @@
  *   pnpm --filter worker discard-documents <uuid> [uuid...]
  */
 import { eq, sql } from "drizzle-orm";
-import { createDb, schema } from "@verder/db";
-import { appendLedgerEvent } from "@verder/api/src/ledger";
-import { effectiveDocument } from "@verder/api/src/routers/documents";
+import { createDb, schema } from "@grip/db";
+import { appendLedgerEvent } from "@grip/api/src/ledger";
+import { effectiveDocument } from "@grip/api/src/routers/documents";
 
 export async function discardDocuments(
   db: ReturnType<typeof createDb>["db"],
@@ -59,7 +59,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ids = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   if (ids.length === 0) { console.error("usage: discard-documents <uuid>..."); process.exit(1); }
   const url = process.env.WORKER_DATABASE_URL
-    ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+    ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
   const { db, pool } = createDb(url);
   try {
     const res = await discardDocuments(db, ids, (l) => console.log(l));

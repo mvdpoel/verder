@@ -18,7 +18,7 @@ const req = () => new Request("http://localhost/api/mobile/v1/weekly");
 
 const summary = {
   week: "2026-W44", from: "2026-10-25T17:00:00.000Z", to: "2026-11-01T17:00:00.000Z",
-  sent: 3, received: 7, filedByMartin: 2, filedByVerder: 3, tasksDone: 2, waiting: 4,
+  sent: 3, received: 7, filedByMartin: 2, filedByGrip: 3, tasksDone: 2, waiting: 4,
   topWaiting: [{ kind: "task", id: "t1", title: "Loonstrook sturen", subtitle: null,
     priority: 3, at: "2026-10-30T10:00:00.000Z", dueAt: null, verder: false }],
 };

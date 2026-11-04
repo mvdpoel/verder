@@ -13,7 +13,7 @@
 // push already went out, so the push is a refused duplicate — but a non-dry run
 // still records a newest `ok` row with that week's counts. `waiting` and
 // `topWaiting` are a snapshot taken when it runs, not on Sunday.
-import { createDb } from "@verder/db";
+import { createDb } from "@grip/db";
 import { closeNotify, notifier } from "../notify/notify";
 import { runWeeklySummary } from "../weekly-summary";
 
@@ -26,7 +26,7 @@ if (unknown.length > 0) {
 const dry = args.includes("--dry");
 
 const url = process.env.WORKER_DATABASE_URL
-  ?? "postgres://verder_worker:verder_worker@localhost:5432/verder";
+  ?? "postgres://grip_worker:grip_worker@localhost:5432/grip";
 const { db, pool } = createDb(url);
 try {
   const out = await runWeeklySummary({ db, notify: notifier(db) }, { dry });
