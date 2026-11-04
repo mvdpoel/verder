@@ -1,11 +1,11 @@
 import Foundation
 
-/// Every way a call to verder can fail, as the app needs to tell them apart.
+/// Every way a call to Grip can fail, as the app needs to tell them apart.
 enum APIError: Error, Equatable, Sendable {
     /// 401, OR ANY 3xx. The client never follows a redirect: an expired session
     /// on a page route answers 307 → /login and /login answers 200, so a
     /// followed redirect reads as success and would mark a scan sent that never
-    /// arrived. A redirect from verder's API therefore means "not signed in".
+    /// arrived. A redirect from Grip's API therefore means "not signed in".
     case unauthorized
     /// 429 — better-auth's own limit or the Cloudflare WAF rule on /api/auth/*
     /// (10/min/IP). Never retried in a loop: every retry re-arms the limit.

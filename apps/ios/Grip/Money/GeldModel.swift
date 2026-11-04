@@ -409,11 +409,11 @@ enum GeldCopy {
         switch error {
         case .transport:
             return Failure(headline: "Je bent nu offline.",
-                           body: "Zodra er weer verbinding is, haalt verder Geld op. Je afschriften zijn niet weg; ze staan veilig op de server.",
+                           body: "Zodra er weer verbinding is, haalt Grip Geld op. Je afschriften zijn niet weg; ze staan veilig op de server.",
                            readout: (["offline", at, next].compactMap { $0 }).joined(separator: " · "))
         case .server(let code), .rejected(let code):
             return Failure(headline: "Geld is nu niet op te halen.",
-                           body: "De server van verder antwoordt niet. Je afschriften zijn niet weg; ze staan veilig op de server.",
+                           body: "De server van Grip antwoordt niet. Je afschriften zijn niet weg; ze staan veilig op de server.",
                            readout: (["server \(code)", at, next].compactMap { $0 }).joined(separator: " · "))
         case .rateLimited:
             return Failure(headline: "Geld is nu niet op te halen.",

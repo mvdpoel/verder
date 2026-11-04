@@ -429,7 +429,7 @@ struct WidgetGuideScreen: View {
                 .padding(16)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Voorbeeld: verder op je beginscherm, 4 wachten op jou, \(WidgetGuide.sampleOldest), en op je toegangsscherm, 4 wachten, \(WidgetGuide.sampleOldest). \(WidgetGuide.privacy)")
+            .accessibilityLabel("Voorbeeld: Grip op je beginscherm, 4 wachten op jou, \(WidgetGuide.sampleOldest), en op je toegangsscherm, 4 wachten, \(WidgetGuide.sampleOldest). \(WidgetGuide.privacy)")
             MoreGroup(label: WidgetGuide.homeLabel) { steps(WidgetGuide.homeSteps) }
             MoreGroup(label: WidgetGuide.lockLabel) { steps(WidgetGuide.lockSteps) }
         }
@@ -437,12 +437,12 @@ struct WidgetGuideScreen: View {
 
     private static let mockShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
-    /// A home screen: verder's small widget beside its icon and three
+    /// A home screen: Grip's small widget beside its icon and three
     /// neighbouring apps (ghost tiles).
     private var homeMock: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("verder").font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.inkMute)
+                Text("Grip").font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.inkMute)
                 Spacer(minLength: 4)
                 Text(WidgetGuide.sampleCount)
                     .font(.display(40, relativeTo: .largeTitle, weight: .light))
@@ -467,13 +467,13 @@ struct WidgetGuideScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.edge, lineWidth: 1))
     }
 
-    /// A lock screen: the date, the clock and verder's rectangular widget.
+    /// A lock screen: the date, the clock and Grip's rectangular widget.
     private var lockMock: some View {
         VStack(spacing: 4) {
             Text(WidgetGuide.sampleDate).font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.ink)
             Text("9:41").font(.display(64, relativeTo: .largeTitle, weight: .light)).foregroundStyle(Color.inkBright)
             VStack(alignment: .leading, spacing: 2) {
-                Text("verder").font(MoreType.rowTitle).foregroundStyle(Color.inkBright)
+                Text("Grip").font(MoreType.rowTitle).foregroundStyle(Color.inkBright)
                 Text(WidgetGuide.sampleLock).font(.mono(13, relativeTo: .caption)).foregroundStyle(Color.ink)
             }
             .padding(.horizontal, 12)
@@ -521,7 +521,7 @@ struct WidgetGuideScreen: View {
     }
 }
 
-/// verder's own icon in the home-screen mock: the app's AppIcon.
+/// Grip's own icon in the home-screen mock: the app's AppIcon.
 struct AppIconTile: View {
     var size: CGFloat = 58
 
@@ -555,7 +555,7 @@ private struct GhostTile: View {
     }
 }
 
-// MARK: - Over verder
+// MARK: - Over Grip
 
 struct AboutScreen: View {
     let server: URL
@@ -630,7 +630,7 @@ struct AboutScreen: View {
 
 // MARK: - Ontwikkelaar
 
-/// The developer tools, one level down: the APNs environment verder stored
+/// The developer tools, one level down: the APNs environment Grip stored
 /// for this phone (the first thing to read when a push does not arrive — a
 /// sandbox token on the production host is the classic silent failure, spec
 /// §6.3), and Plan 1 Task 12's resend check.
@@ -685,7 +685,7 @@ struct DeveloperScreen: View {
             Button("Opnieuw versturen") { Task { await center.resendLastSent() } }
             Button("Annuleren", role: .cancel) {}
         } message: {
-            Text("verder hoort te antwoorden met duplicate: true, zonder een nieuw document.")
+            Text("Grip hoort te antwoorden met duplicate: true, zonder een nieuw document.")
         }
     }
 

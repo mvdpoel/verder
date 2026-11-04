@@ -59,7 +59,7 @@ struct APIClientTests {
         #expect(req.url?.absoluteString == "https://grip.vanderpoel.pro/api/mobile/v1/ping")
         #expect(req.httpMethod == "GET")
         #expect(req.value(forHTTPHeaderField: "Origin") == "https://grip.vanderpoel.pro")
-        #expect(req.value(forHTTPHeaderField: "x-verder-trust-device") == "1")
+        #expect(req.value(forHTTPHeaderField: "x-grip-trust-device") == "1")
         #expect(req.value(forHTTPHeaderField: "Cookie") == "__Secure-better-auth.session_token=tok.sig")
     }
 

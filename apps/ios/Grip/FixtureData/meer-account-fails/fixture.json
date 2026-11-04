@@ -1,5 +1,5 @@
 {
-  "description": "The base case, but /me answers 503 (verder down behind the tunnel) from the first request: Account has nothing to show and says why.",
+  "description": "The base case, but /me answers 503 (Grip down behind the tunnel) from the first request: Account has nothing to show and says why.",
   "statuses": {
     "me": 503
   }

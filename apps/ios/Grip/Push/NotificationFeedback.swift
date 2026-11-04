@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-/// The local notification verder posts when an action taken FROM a
+/// The local notification Grip posts when an action taken FROM a
 /// notification did not go through ("notifications · final": "Gedaan kwam
 /// niet door", "Opnieuw inloggen nodig", "Taak al afgerond", "Keuze kwam niet
 /// door", "Vraag al afgehandeld").
@@ -27,7 +27,7 @@ struct NotificationFeedback: Equatable {
 
     // MARK: Gedaan on a deadline push
 
-    /// The task's own title, for the notice's sentence. A notice verder posted
+    /// The task's own title, for the notice's sentence. A notice Grip posted
     /// itself carries it (`taskTitle`); the worker's push spells it into its
     /// title after the day ("Morgen: bijstand tekenen").
     static func taskTitle(pushTitle: String, userInfo: [AnyHashable: Any]) -> String {
@@ -47,15 +47,15 @@ struct NotificationFeedback: Equatable {
              userInfo: ["link": link, "taskTitle": task])
     }
 
-    /// No answer from verder (a 5xx): the same retry, with the honest cause.
+    /// No answer from Grip (a 5xx): the same retry, with the honest cause.
     static func taskServer(task: String, link: String) -> Self {
         Self(title: "Gedaan kwam niet door",
-             body: "\(capitalised(task)) staat nog open: verder kon het nu niet opslaan. Kies Gedaan nog een keer bij deze melding.",
+             body: "\(capitalised(task)) staat nog open: Grip kon het nu niet opslaan. Kies Gedaan nog een keer bij deze melding.",
              category: NotificationCategories.taskDueCategory,
              userInfo: ["link": link, "taskTitle": task])
     }
 
-    /// The session has ended: a tap opens verder, which asks to sign in.
+    /// The session has ended: a tap opens Grip, which asks to sign in.
     static func taskSignIn(task: String, link: String) -> Self {
         Self(title: "Opnieuw inloggen nodig",
              body: "Gedaan voor \(task) kwam niet door. Tik om in te loggen en kies daarna Gedaan opnieuw.",

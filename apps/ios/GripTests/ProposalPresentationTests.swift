@@ -152,15 +152,15 @@ struct ProposalTextTests {
         #expect(ProposalText.conceptLabel(status: "failed", edited: false, version: 2) == "Concept · Versie 2")
     }
 
-    @Test func editSummaryKeepsVerdersVersion() {
+    @Test func editSummaryKeepsGripsVersion() {
         let o = ReplyDraft(to: ["a@b.nl"], cc: [], subject: "S", body: "Beste Ilse,\n\nGroet,", attachmentDocumentIds: [], entrySummary: "x")
         var c = o
         c.body = "Beste Ilse,\n\nExcuses.\n\nGroet,"
         let s = ProposalText.editSummary(DraftChanges(original: o, current: c), version: 2)
         #expect(s?.what == "1 zin toegevoegd door jou")
-        #expect(s?.kept == "Versie 2 van verder bewaard")
+        #expect(s?.kept == "Versie 2 van Grip bewaard")
         #expect(ProposalText.editSummary(DraftChanges(original: o, current: o), version: 2) == nil)
-        #expect(ProposalText.editSummary(DraftChanges(original: o, current: c), version: nil)?.kept == "Het concept van verder blijft bewaard")
+        #expect(ProposalText.editSummary(DraftChanges(original: o, current: c), version: nil)?.kept == "Het concept van Grip blijft bewaard")
     }
 
     @Test func aFollowUpNamesThePersonTheDraftGreets() {

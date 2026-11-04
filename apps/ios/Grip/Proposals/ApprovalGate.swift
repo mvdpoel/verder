@@ -7,7 +7,7 @@ import Foundation
 /// never rides on it. `PlatformOwnerAuthenticator` makes a FRESH `LAContext`
 /// for every call, and a fresh context's `touchIDAuthenticationAllowableReuseDuration`
 /// is 0, so the system cannot reuse the unlock either. The reason names the
-/// recipients, because the sheet is the last thing Martin reads before verder
+/// recipients, because the sheet is the last thing Martin reads before Grip
 /// sends for him.
 ///
 /// The server cannot see this gate (Plan 2, "Not grounded in code"): it relies

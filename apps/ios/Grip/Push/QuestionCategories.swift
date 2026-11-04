@@ -11,7 +11,7 @@ import UserNotifications
 /// An option is answered IN THE BACKGROUND (`.authenticationRequired`, NOT
 /// `.foreground`): answering runs a ledgered action on the server but sends
 /// nothing outward, which is why spec §7.2 allows it from the notification.
-/// Every OTHER action verder registers only opens the app
+/// Every OTHER action Grip registers only opens the app
 /// (`NotificationCategoriesTests.onlyQuestionActionsWorkInBackground`).
 ///
 /// Compiled into the app AND the extension, so Foundation + UserNotifications

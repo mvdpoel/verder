@@ -8,9 +8,9 @@ import WidgetKit
 final class AuthModel {
     enum Copy {
         static let rateLimited = "Even wachten — te veel pogingen. Probeer het over een minuut opnieuw."
-        static let offline = "Geen verbinding met verder. Controleer je internet en probeer het opnieuw."
+        static let offline = "Geen verbinding met Grip. Controleer je internet en probeer het opnieuw."
         // The UI says "toegangssleutel", never the English "passkey" (design brief).
-        static let passkeyAlreadyOnDevice = "Er staat al een toegangssleutel voor verder op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
+        static let passkeyAlreadyOnDevice = "Er staat al een toegangssleutel voor Grip op deze iPhone, via je iCloud-sleutelhanger. Je kunt er meteen mee inloggen."
         static let passkeyAdded = "Toegangssleutel toegevoegd. Voortaan log je in met Face ID."
         static let passkeyAddFailed = "Toegangssleutel toevoegen lukte niet. Probeer het over een moment opnieuw."
         /// better-auth registers a passkey only on a session younger than a day.
@@ -24,7 +24,7 @@ final class AuthModel {
 
     /// Default label for a passkey registered on the phone, as
     /// /settings/security lists it.
-    static let passkeyName = "verder op iPhone"
+    static let passkeyName = "Grip op iPhone"
     private static let offerShownKey = "passkeyOfferShown"
 
     private(set) var isSignedIn: Bool
@@ -61,7 +61,7 @@ final class AuthModel {
     /// (`networkReturned`); this is that one.
     @ObservationIgnored private var offlineRetryUsed = false
     /// Whether the phone has a network path (`UploadCenter.isOffline`'s
-    /// monitor), so a missing answer can be told apart: offline, or verder down.
+    /// monitor), so a missing answer can be told apart: offline, or Grip down.
     @ObservationIgnored var networkIsUp: @MainActor () -> Bool = { true }
     @ObservationIgnored let now: @Sendable () -> Date
     /// The outcome of adding a passkey, for the signed-in screen.
@@ -69,7 +69,7 @@ final class AuthModel {
     /// Bumped when a toegangssleutel was registered: the `.success` haptic.
     private(set) var passkeyAddedCount = 0
     /// A sign-out that reached no server: its session is still alive there
-    /// and is revoked the moment the phone reaches verder again
+    /// and is revoked the moment the phone reaches Grip again
     /// (`retryPendingSignOut`). Meer's offline sheet promises exactly that.
     private(set) var signOutPending: Bool
 
@@ -276,13 +276,13 @@ final class AuthModel {
     }
 
     /// Ends the session on the server when it can, and ALWAYS forgets it here:
-    /// a phone that could not reach verder must still drop what Martin asked
+    /// a phone that could not reach Grip must still drop what Martin asked
     /// it to drop. A session left alive server-side expires on its own and
     /// can be revoked from /settings/security.
     ///
     /// When NO HTTP answer came back (offline), the cookie is kept aside in
     /// `pendingSignOut` and the sign-out is sent again by
-    /// `retryPendingSignOut` once verder answers — until then the session
+    /// `retryPendingSignOut` once Grip answers — until then the session
     /// lives on the server and its pushes still arrive, which is what the
     /// offline sheet says. Any HTTP answer (even an error) ends the wait: the
     /// server either revoked it or never knew it.

@@ -3,7 +3,7 @@ import UserNotifications
 
 /// The UIKit callbacks SwiftUI does not offer: the APNs token, the silent
 /// refresh push, and the notification delegate (a tap, an answer button, and a
-/// push arriving while verder is open).
+/// push arriving while Grip is open).
 ///
 /// The delegate is set in `didFinishLaunching`, before the launch returns, so a
 /// tap that launched the app cold is still delivered — into `links`, which
@@ -111,7 +111,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         }
     }
 
-    /// While verder is in front, still show it: a Verder question is worth
+    /// While Grip is in front, still show it: a Verder question is worth
     /// the banner even mid-scan. Main thread, for the same reason as above.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,

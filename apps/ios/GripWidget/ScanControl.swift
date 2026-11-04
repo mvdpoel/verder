@@ -2,7 +2,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The Control Center (and Lock Screen) control: "Scan een brief · verder".
+/// The Control Center (and Lock Screen) control: "Scan een brief · Grip".
 /// One tap opens the camera without Face ID (R20).
 struct ScanControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
@@ -12,6 +12,6 @@ struct ScanControl: ControlWidget {
             }
         }
         .displayName(LocalizedStringResource(stringLiteral: ScanLetterIntent.label))
-        .description("Opent de camera van verder, zonder Face ID.")
+        .description("Opent de camera van Grip, zonder Face ID.")
     }
 }

@@ -111,14 +111,14 @@ struct LeefgeldGlanceTests {
         #expect(nothing == empty, "no statements at all reads the same whether or not an IBAN is set")
         #expect(nothing.range == "26 okt – 1 nov", "the week is named even with no account")
         #expect(Self.msg(nothing) == .init(
-            display: false, title: "Nog geen afschriften", meta: "0 boekingen in verder",
+            display: false, title: "Nog geen afschriften", meta: "0 boekingen in Grip",
             text: "Lees je eerste afschrift in op de computer, onder Register → Afschrift inlezen. Daarna staat hier wat er deze week over is."))
 
         let unrecognised = try Self.fixture("money-unrecognised")
         #expect(unrecognised.range == "26 okt – 1 nov")
         #expect(Self.msg(unrecognised) == .init(
             display: false, title: "Leefgeldrekening niet herkend", meta: "2 rekeningen krijgen wekelijks geld binnen",
-            text: "verder kiest er niet zelf een. Welke je leefgeldrekening is, stel je in bij de installatie van verder.\nTik om beide rekeningen te bekijken."))
+            text: "Grip kiest er niet zelf een. Welke je leefgeldrekening is, stel je in bij de installatie van Grip.\nTik om beide rekeningen te bekijken."))
         #expect(!unrecognised.accessibilityLabel(revealed: true).contains("website"))
     }
 

@@ -38,7 +38,7 @@ import Foundation
 ///     -fixtures-voorjou <state[,state…]>  Voor jou in a state only a gesture reaches:
 ///                              toast (one decision held, "nog 4 s") · twee (two held) ·
 ///                              nietopgeslagen (a decision that failed to save) · selecteren ·
-///                              bevestigen ("3 suggesties goedkeuren?") · gedaan ("Door verder
+///                              bevestigen ("3 suggesties goedkeuren?") · gedaan ("Door Grip
 ///                              gedaan" open) · ongedaan (open, an undo held) · scroll:<row key|done|more>
 ///     -fixtures-proposal <state>  the proposal screen in a state only a gesture reaches:
 ///                              hold (Versturen held, part-way) · faceid (the Face ID sheet up) ·

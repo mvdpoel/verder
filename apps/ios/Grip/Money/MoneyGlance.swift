@@ -70,7 +70,7 @@ struct LeefgeldCard: Equatable, Sendable {
             let why = switch candidates.count {
             case 0: "Geen rekening krijgt wekelijks geld binnen."
             case 1: "1 rekening krijgt wekelijks geld binnen."
-            default: "\(candidates.count) rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een."
+            default: "\(candidates.count) rekeningen krijgen wekelijks geld binnen; Grip kiest er niet zelf een."
             }
             return LeefgeldCard(headline: "Leefgeldrekening niet herkend", hero: nil, heroCaption: nil,
                                 lines: [why], accountLine: nil, hatched: false, overspent: false, rows: [])

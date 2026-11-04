@@ -1,6 +1,6 @@
 import AVFoundation
 
-/// Whether verder may use the camera, asked at first use and never on launch
+/// Whether Grip may use the camera, asked at first use and never on launch
 /// (brief R25: a pre-prompt screen with one button, then iOS's own alert).
 enum CameraAuthorization: Equatable, Sendable {
     case notDetermined, authorized, denied

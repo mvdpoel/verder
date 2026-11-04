@@ -20,7 +20,7 @@ struct AuthModelTests {
         #expect(req.httpMethod == "POST")
         #expect(req.url?.path() == "/api/auth/sign-in/email")
         #expect(req.value(forHTTPHeaderField: "Content-Type") == "application/json")
-        #expect(req.value(forHTTPHeaderField: "x-verder-trust-device") == "1")
+        #expect(req.value(forHTTPHeaderField: "x-grip-trust-device") == "1")
         let body = try #require(try JSONSerialization.jsonObject(with: req.httpBody ?? Data()) as? [String: Any])
         #expect(body["email"] as? String == "martin@vanderpoel.pro")
         #expect(body["password"] as? String == "devpassdevpass")

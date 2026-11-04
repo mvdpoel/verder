@@ -3,13 +3,13 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// The share extension (spec §7.8, plan 3 Task 22): PDFs, photos and files from
-/// any app go into verder's upload queue with source `phone-share`.
+/// any app go into Grip's upload queue with source `phone-share`.
 ///
 /// A CALL RECORDING (Added 2026-11-03) does not: shared from any app — a
 /// call-recording app, Voice Memos, Files, AirDrop (iOS lets no app record a
 /// call on the same iPhone, and the iPhone's built-in call recording is not
 /// available in the Netherlands, so a recording is always made elsewhere) — it
-/// becomes an audio drop for the voice log and this screen says "Open verder om het
+/// becomes an audio drop for the voice log and this screen says "Open Grip om het
 /// gesprek uit te schrijven." (`ShareModel.handedToApp`). Nothing is uploaded.
 ///
 /// It loads what the share sheet handed over, shows ONE screen (thumbnail,
@@ -113,7 +113,7 @@ final class ShareViewController: UIViewController {
     /// (`ShareStaging`).
     static func load(_ provider: NSItemProvider, staging: URL) async -> SharedInput? {
         let types = provider.registeredContentTypes
-        // A web link (Safari, a link in Mail) is answered as a link: verder
+        // A web link (Safari, a link in Mail) is answered as a link: Grip
         // keeps files only. A text rendering offered beside it is not a file
         // Martin chose, so it does not travel as one.
         if types.contains(where: { $0.conforms(to: .url) && !$0.conforms(to: .fileURL) }),

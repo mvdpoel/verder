@@ -3,7 +3,7 @@ import SwiftUI
 /// The tab the app opens on: the current state of the case at a glance, in
 /// the board's order (brief §3, Mercury's now → soon → later): what waits on
 /// Martin and the map's headline (both now), the leefgeld week, then tasks ·
-/// scans · Door verder gedaan. Read-only: every action lives one tap further, on the
+/// scans · Door Grip gedaan. Read-only: every action lives one tap further, on the
 /// screen that owns it. Every word and number comes from `HomeSummary` and
 /// `LeefgeldGlance` (tested); this file only lays them out (Figma
 /// "overzicht · final").
@@ -14,7 +14,7 @@ import SwiftUI
 /// a gated screen, which asks for Face ID there.
 ///
 /// It asks the server again every minute while it is on screen — the error
-/// copy promises "verder probeert het elke minuut opnieuw" — and a failed
+/// copy promises "Grip probeert het elke minuut opnieuw" — and a failed
 /// refresh keeps the board it had, with its age in the eyebrow.
 struct HomeTab: View {
     let store: InboxStore
@@ -392,7 +392,7 @@ struct HomeTab: View {
         showGeld = true
     }
 
-    // MARK: Tasks · scans · Door verder gedaan
+    // MARK: Tasks · scans · Door Grip gedaan
 
     private func restCard(_ inbox: InboxDTO) -> some View {
         card {

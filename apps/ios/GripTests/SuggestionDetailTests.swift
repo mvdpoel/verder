@@ -41,7 +41,7 @@ enum SuggestionFixture {
     """.utf8)
 }
 
-/// A fake verder for one suggestion.
+/// A fake Grip for one suggestion.
 final class SuggestionServer: Sendable {
     let stub = StubServer()
     let detail: Mutex<Data>

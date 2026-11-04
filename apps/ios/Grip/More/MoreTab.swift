@@ -28,7 +28,7 @@ struct MoreTab: View {
     let openVoorJou: () -> Void
     /// The Weekoverzicht's "ontvangen" / "opgeborgen" rows.
     var openDossier: () -> Void = {}
-    /// The Weekoverzicht's "Door verder gedaan" row.
+    /// The Weekoverzicht's "Door Grip gedaan" row.
     var openDoneByGrip: () -> Void = {}
     /// The case's clock (`AppServices.now`): "bijgewerkt 14:02".
     var now: @Sendable () -> Date = { Date() }
@@ -65,7 +65,7 @@ struct MoreTab: View {
 
     private var about: AboutInfo { AboutInfo(info: Bundle.main.infoDictionary ?? [:], server: shownServer) }
 
-    /// The server Over verder names: the real one, or in a fixture run the
+    /// The server Over Grip names: the real one, or in a fixture run the
     /// frames' "grip.example" rather than the fixture's own host.
     private var shownServer: URL {
         #if DEBUG

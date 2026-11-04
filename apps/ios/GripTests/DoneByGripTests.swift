@@ -3,8 +3,8 @@ import Foundation
 import Synchronization
 @testable import Grip
 
-/// "Door verder gedaan" rows as `verderActions.list` serves them
-/// (packages/api/src/routers/verder-actions.ts).
+/// "Door Grip gedaan" rows as `gripActions.list` serves them
+/// (packages/api/src/routers/grip-actions.ts).
 enum DoneByGripFixture {
     static let fileId = "5d1e2f3a-4b5c-4d6e-8f70-8192a3b4c5d6"
     static let nameId = "6e2f3a4b-5c6d-4e7f-8a81-92a3b4c5d6e7"
@@ -50,7 +50,7 @@ struct DoneByGripTests {
         #expect(a.after.docType == "Loonstrook")
         #expect(a.undoable)
         #expect(DoneByGripCopy.changes(a) == ["inbox → opgeborgen", "soort zonder soort → Loonstrook"])
-        #expect(DoneByGripCopy.headline(a) == "Opgeborgen door verder")
+        #expect(DoneByGripCopy.headline(a) == "Opgeborgen door Grip")
     }
 
     @Test func undoPostsAnEmptyBodyToTheChangeRouteAndRefreshes() async throws {
@@ -64,7 +64,7 @@ struct DoneByGripTests {
         let a = try DoneByGripFixture.action(DoneByGripFixture.autoFile)
         #expect(await m.undo(a))
         let req = try #require(stub.requests.first)
-        #expect(req.url?.path() == "/api/mobile/v1/verder-actions/\(DoneByGripFixture.fileId)/undo")
+        #expect(req.url?.path() == "/api/mobile/v1/grip-actions/\(DoneByGripFixture.fileId)/undo")
         #expect(req.httpBody == Data("{}".utf8))
         #expect(m.messages[a.changeId] == DoneByGripCopy.undone)
         #expect(refreshes.count == 1)

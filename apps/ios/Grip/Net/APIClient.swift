@@ -1,6 +1,6 @@
 import Foundation
 
-/// verder's HTTP client. Sign-in is better-auth's ordinary session cookie, kept
+/// Grip's HTTP client. Sign-in is better-auth's ordinary session cookie, kept
 /// in the Keychain and attached here by hand — no bearer plugin, no change to
 /// the server's session handling, and the session shows up in
 /// /settings/security as one more device that can be revoked there.
@@ -13,7 +13,7 @@ struct APIClient: Sendable {
 
     /// `TRUST_HEADER` in packages/auth/src/session-trust.ts. Exactly "1" gives a
     /// 30-day session instead of 12 hours; the phone is a trusted device.
-    static let trustHeader = "x-verder-trust-device"
+    static let trustHeader = "x-grip-trust-device"
 
     let base: URL
     let session: URLSession
@@ -25,7 +25,7 @@ struct APIClient: Sendable {
         self.store = store
     }
 
-    /// The configuration every verder session starts from.
+    /// The configuration every Grip session starts from.
     static func sessionConfiguration() -> URLSessionConfiguration {
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil

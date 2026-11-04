@@ -200,7 +200,7 @@ enum ResendProbe {
         let page = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             UIColor.white.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
-            let text = "verder — herhaalde verzending\nclientId \(item.clientId)"
+            let text = "Grip — herhaalde verzending\nclientId \(item.clientId)"
             text.draw(in: CGRect(x: 40, y: 40, width: 520, height: 200),
                       withAttributes: [.font: UIFont.systemFont(ofSize: 16), .foregroundColor: UIColor.black])
         }

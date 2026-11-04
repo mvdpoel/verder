@@ -1,6 +1,6 @@
 import Foundation
 
-/// One capture or shared file waiting to reach verder, or that has.
+/// One capture or shared file waiting to reach Grip, or that has.
 ///
 /// `id` IS the upload's `clientId`: the server stores it as
 /// `sourceRef = "phone:<clientId>"` and answers a second upload with the same

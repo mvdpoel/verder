@@ -95,7 +95,7 @@ struct LeefgeldCardTests {
         let card = try #require(LeefgeldCard.make(
             .noAccount(candidates: ["NL00TEST0123456789", "NL00TEST9876543210"]), newestBooking: "2026-10-30"))
         #expect(card.headline == "Leefgeldrekening niet herkend")
-        #expect(card.lines.contains("2 rekeningen krijgen wekelijks geld binnen; verder kiest er niet zelf een."))
+        #expect(card.lines.contains("2 rekeningen krijgen wekelijks geld binnen; Grip kiest er niet zelf een."))
     }
 
     @Test func previousWeekLineOnlyForAFigure() {

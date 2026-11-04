@@ -279,7 +279,7 @@ private struct WidgetRule: View {
 }
 
 /// The statement block of every face with nothing to count: the glyph, "Niets
-/// wacht op je" / "Open verder om bij te werken" / "Log in bij verder", the
+/// wacht op je" / "Open Grip om bij te werken" / "Log in bij Grip", the
 /// explanation and the mono line.
 private struct StatementBlock: View {
     let content: WidgetContent
@@ -595,7 +595,7 @@ struct HeadlineFace: View {
             if !standBy {
                 HStack(spacing: 6) {
                     Image(systemName: "map")
-                    Text("verder").textCase(.uppercase).tracking(1)
+                    Text("Grip").textCase(.uppercase).tracking(1)
                 }
                 .font(.mono(12, relativeTo: .caption))
                 .foregroundStyle(Color.inkLabel)
@@ -712,7 +712,7 @@ private struct WidgetRectangular: View {
     }
 }
 
-/// The whole of the inline line: its glyph and "verder · 4 voor jou". iOS
+/// The whole of the inline line: its glyph and "Grip · 4 voor jou". iOS
 /// sets the font; only the text and one image survive.
 private struct WidgetInline: View {
     let content: WidgetContent

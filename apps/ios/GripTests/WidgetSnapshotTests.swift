@@ -31,7 +31,7 @@ struct WidgetSnapshotTests {
     }
 
     /// Sign-out leaves ONE empty file, so the widget can say "Log in bij
-    /// verder" — and nothing of the case.
+    /// Grip" — and nothing of the case.
     @Test func theSignedOutMarkerIsEmpty() throws {
         let dir = Self.tempDir()
         try WidgetSnapshot.write(Self.sample, to: dir)

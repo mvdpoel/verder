@@ -37,7 +37,7 @@ final class AccountModel {
     private(set) var account: AccountDTO?
     /// When `account` was fetched: the "bijgewerkt 14:02" of an offline Meer.
     private(set) var fetchedAt: Date?
-    /// When the last attempt failed: "verder was niet bereikbaar · 14:02".
+    /// When the last attempt failed: "Grip was niet bereikbaar · 14:02".
     private(set) var failedAt: Date?
 
     var email: String? { account?.email }

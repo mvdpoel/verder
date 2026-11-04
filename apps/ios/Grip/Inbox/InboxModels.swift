@@ -136,8 +136,8 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     var partyId: String? = nil
 }
 
-/// One thing verder did on its own (spec §6.6), as `verderActions.list` builds
-/// it (packages/api/src/routers/verder-actions.ts): the document's state
+/// One thing Grip did on its own (spec §6.6), as `gripActions.list` builds
+/// it (packages/api/src/routers/grip-actions.ts): the document's state
 /// before and after, and whether — and why not — it can be undone. The phone
 /// never decides undoability itself; it shows the server's reason.
 struct GripAction: Codable, Identifiable, Equatable, Sendable {
@@ -197,7 +197,7 @@ struct SuggestionDTO: Codable, Equatable, Sendable, Identifiable {
         var partyName: String? = nil
     }
 
-    /// Where verder found it, in words: "spraaknotitie" of za 31 okt, the
+    /// Where Grip found it, in words: "spraaknotitie" of za 31 okt, the
     /// "brief" from Gemeente Westerlaan. Not yet served by `toSuggestionDTO`
     /// (a voice note has neither a mail nor a document): absent, the
     /// sentence is built from the mail or the document.

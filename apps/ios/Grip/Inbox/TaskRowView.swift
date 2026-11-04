@@ -193,11 +193,11 @@ final class TaskModel {
         }
     }
 
-    /// "Gedaan is niet opgeslagen: je telefoon kreeg geen antwoord van verder.
+    /// "Gedaan is niet opgeslagen: je telefoon kreeg geen antwoord van Grip.
     /// De status staat nog op open."
     var failureText: String? {
         guard let failedStatus, let t = task else { return nil }
-        return "\(DetailText.capitalised(Self.segmentLabel(failedStatus))) is niet opgeslagen: je telefoon kreeg geen antwoord van verder. De status staat nog op \(Self.segmentLabel(t.status))."
+        return "\(DetailText.capitalised(Self.segmentLabel(failedStatus))) is niet opgeslagen: je telefoon kreeg geen antwoord van Grip. De status staat nog op \(Self.segmentLabel(t.status))."
     }
 
     /// "Opnieuw: zet op gedaan".
@@ -208,7 +208,7 @@ final class TaskModel {
         status == "done" ? "Taak op gedaan zetten?" : "Taak laten vallen?"
     }
 
-    static let confirmText = "Je kunt het nog even ongedaan maken; daarna kan het niet meer terug: de taak verlaat Voor jou, en verder legt de stap vast."
+    static let confirmText = "Je kunt het nog even ongedaan maken; daarna kan het niet meer terug: de taak verlaat Voor jou, en Grip legt de stap vast."
 
     func setStatus(_ status: String) async -> Bool {
         guard let t = task, !isBusy, t.validNext.contains(status) else { return false }

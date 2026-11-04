@@ -53,7 +53,7 @@ enum ProposalFixture {
     }
 }
 
-/// A fake verder that answers the proposal routes and remembers what it was asked.
+/// A fake Grip that answers the proposal routes and remembers what it was asked.
 final class ProposalServer: Sendable {
     let stub = StubServer()
     final class State: Sendable {

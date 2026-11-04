@@ -28,22 +28,22 @@ enum DossierCopy {
     static let serverNeedsNetwork = "Zoeken op de server kan niet offline."
     static let noLocalHits = "Niets gevonden op je telefoon."
     static let noServerHits = "Ook op de server niets gevonden."
-    static let noDocuments = "Nog geen documenten op je telefoon. Ze komen binnen zodra verder bereikbaar is."
+    static let noDocuments = "Nog geen documenten op je telefoon. Ze komen binnen zodra Grip bereikbaar is."
     static let noTasks = "Geen open taken."
     static let tasksOffline = "Taken zijn offline niet te zien."
     static let noHeadline = "Geen open halte op de kaart."
     static let offline = "Geen verbinding — je ziet wat je telefoon al had."
-    static let serverError = "verder is even niet bereikbaar. Je ziet wat je telefoon al had."
+    static let serverError = "Grip is even niet bereikbaar. Je ziet wat je telefoon al had."
     static let badDownload = "Een document kwam niet goed binnen. Trek omlaag om het opnieuw te proberen."
 
     /// The documents the server lists that the phone could not take in; nil
-    /// when there are none. verder retries them itself on every sync, so the
+    /// when there are none. Grip retries them itself on every sync, so the
     /// line asks Martin to do nothing.
     static func notHeldLine(_ count: Int) -> String? {
         switch count {
         case ..<1: return nil
-        case 1: return "1 document staat nog niet op je telefoon. verder probeert het bij elke update opnieuw."
-        default: return "\(count) documenten staan nog niet op je telefoon. verder probeert het bij elke update opnieuw."
+        case 1: return "1 document staat nog niet op je telefoon. Grip probeert het bij elke update opnieuw."
+        default: return "\(count) documenten staan nog niet op je telefoon. Grip probeert het bij elke update opnieuw."
         }
     }
     static let retry = "Opnieuw proberen"

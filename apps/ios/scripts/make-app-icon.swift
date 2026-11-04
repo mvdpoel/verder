@@ -1,4 +1,4 @@
-// Renders the app icon (1024x1024, opaque) from the verder mark used in the
+// Renders the app icon (1024x1024, opaque) from the Grip mark used in the
 // web's nav rail (apps/web/src/components/nav-rail.tsx: a 26-unit viewBox with
 // a circle r=11, a 45%-opacity vertical, and a curve), in `signal` on `void`.
 //   swift scripts/make-app-icon.swift Grip/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png

@@ -2,7 +2,7 @@
   "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
-      "title": "Je week in verder",
+      "title": "Je week in Grip",
       "body": "3 verstuurd · 7 binnen · 5 opgeborgen · 2 taken klaar — 4 wachten op jou"
     },
     "category": "WEEKLY",

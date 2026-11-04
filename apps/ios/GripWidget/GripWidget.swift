@@ -10,7 +10,7 @@ struct GripProvider: TimelineProvider {
         AppGroup.containerURL.flatMap { WidgetSnapshot.read(from: $0) }
     }
 
-    /// The empty marker sign-out leaves (no case content): "Log in bij verder".
+    /// The empty marker sign-out leaves (no case content): "Log in bij Grip".
     private func signedOut() -> Bool {
         AppGroup.containerURL.map { WidgetSnapshot.isSignedOut(in: $0) } ?? false
     }

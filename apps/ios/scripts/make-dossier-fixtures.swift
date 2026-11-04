@@ -179,7 +179,7 @@ func pdf(for doc: Doc) -> Data {
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
         "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
     ]
-    objects[2] = "<< /Producer (verder fixtures) >>"
+    objects[2] = "<< /Producer (Grip fixtures) >>"
     for (i, stream) in pages.enumerated() {
         objects.append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font \(fonts) >> /Contents \(8 + 2 * i) 0 R >>")
         objects.append("<< /Length \(stream.utf8.count) >>\nstream\n\(stream)endstream")

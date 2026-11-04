@@ -6,7 +6,7 @@ import Synchronization
 /// A call RECORDING into the voice quick-log (Added 2026-11-03, Martin: "it
 /// would be perfect if i can also record phone calls and transcribe them").
 ///
-/// verder cannot record a call itself: iOS gives no third-party app the call
+/// Grip cannot record a call itself: iOS gives no third-party app the call
 /// audio, and the iPhone's built-in call recording is not available in the
 /// Netherlands (Martin, 2026-11-03), so a recording is made elsewhere. It comes
 /// IN: shared from any app — a call-recording app, Voice Memos, Files, AirDrop
@@ -14,7 +14,7 @@ import Synchronization
 /// NOT upload it), or picked in the voice sheet ("Opname kiezen"). It is
 /// transcribed on the phone, edited, and sent as a SUGGESTION through the
 /// same `POST /entries/voice` — never an entry. The audio leaves the phone
-/// only when "bewaar opname" is on; otherwise verder's copy is deleted after
+/// only when "bewaar opname" is on; otherwise Grip's copy is deleted after
 /// sending or cancelling.
 @MainActor
 struct CallRecordingImportTests {
@@ -141,7 +141,7 @@ struct CallRecordingImportTests {
 
         #expect(share.phase == .handedToApp)
         #expect(share.closing?.body == ShareModel.Copy.openToTranscribe)
-        #expect(ShareModel.Copy.openToTranscribe == "Open verder om het gesprek uit te schrijven.")
+        #expect(ShareModel.Copy.openToTranscribe == "Open Grip om het gesprek uit te schrijven.")
         #expect(sends.withLock { $0 } == 0)
         #expect(!share.canCancel)
         #expect(!share.closesByItself())  // Martin reads what to do next
@@ -232,7 +232,7 @@ struct CallRecordingImportTests {
 
     /// The case a recording is built for: the call sheet comes back after the
     /// call ("Niet nu" keeps it up), Martin shares the recording from another app and
-    /// returns to verder. Nothing opens over the call sheet — two sheets cannot
+    /// returns to Grip. Nothing opens over the call sheet — two sheets cannot
     /// show at once — and the recording opens the moment that sheet goes, not
     /// at the next return to the foreground.
     @Test func aRecordingWaitingBehindTheCallSheetOpensWhenItGoes() async throws {
@@ -246,7 +246,7 @@ struct CallRecordingImportTests {
         r.session.dismissEnded() // "Niet nu": the sheet stays
         #expect(r.session.isPresented)
 
-        // Back in verder with the call sheet up: nothing opens.
+        // Back in Grip with the call sheet up: nothing opens.
         #expect(SharedRecordingGate.open(signedIn: true, call: r.session, voice: session) == nil)
         #expect(session.model == nil)
 
@@ -406,7 +406,7 @@ struct CallRecordingImportTests {
         #expect(!m.canRecordAgain)  // an imported call is not re-recorded
     }
 
-    @Test func theTranscriberReadsVerdersOwnCopyNeverTheOriginal() async throws {
+    @Test func theTranscriberReadsGripsOwnCopyNeverTheOriginal() async throws {
         let group = try group()
         let drop = try audioDrop(group)
         let t = ProgressTranscriber(text: Self.transcript)
@@ -551,7 +551,7 @@ struct CallRecordingImportTests {
         return body[r.upperBound...].split(whereSeparator: \.isNewline).first.map(String.init)
     }
 
-    @Test func cancellingDeletesTheDropAndVerdersCopy() async throws {
+    @Test func cancellingDeletesTheDropAndGripsCopy() async throws {
         let group = try group()
         let drop = try audioDrop(group)
         let dir = try scratchDir()

@@ -8,8 +8,8 @@ struct GripEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
     /// The App Group's empty "signed out" marker (`WidgetSnapshot.isSignedOut`):
-    /// with no snapshot, the widget says "Log in bij verder" rather than
-    /// "Open verder om bij te werken".
+    /// with no snapshot, the widget says "Log in bij Grip" rather than
+    /// "Open Grip om bij te werken".
     var signedOut = false
     /// The widget's box as WidgetKit reported it (`context.displaySize`): the
     /// iPhone SE's 148 pt small and 321 pt medium take the compact faces.
@@ -64,7 +64,7 @@ struct WidgetContent: Equatable {
         case empty
         /// A snapshot older than `staleAfter`, or none that reads: no count at all.
         case stale
-        /// Signed out (the App Group's marker, no snapshot): "Log in bij verder".
+        /// Signed out (the App Group's marker, no snapshot): "Log in bij Grip".
         case signedOut
     }
 
@@ -123,9 +123,9 @@ struct WidgetContent: Equatable {
     /// The footer's tap: the Tijdlijn on Dossier, at the open stop.
     static let mapURL = URL(string: "grip://timeline")!
 
-    static let staleText = "Open verder om bij te werken"
+    static let staleText = "Open Grip om bij te werken"
     static let emptyText = "Niets wacht op je"
-    static let signedOutText = "Log in bij verder"
+    static let signedOutText = "Log in bij Grip"
     static let headlineLabel = "waar het nu op wacht"
     static let emptyFooter = "Nergens op. Je bent helemaal bij."
 
@@ -134,7 +134,7 @@ struct WidgetContent: Equatable {
     let family: WidgetFamily
     let layout: Layout
     let glyph: Glyph
-    /// "voor jou", or "verder" when signed out (the view sets it in capitals).
+    /// "voor jou", or "Grip" when signed out (the view sets it in capitals).
     let eyebrow: String
     /// Nil unless something waits: a stale count is a guess, and "0" is
     /// replaced by the check and "Niets wacht op je".
@@ -168,7 +168,7 @@ struct WidgetContent: Equatable {
     let footer: Footer?
     /// The large empty face's header readout: "bijgewerkt 08:12".
     let updatedText: String?
-    /// The whole of `accessoryInline`: "verder · 3 voor jou".
+    /// The whole of `accessoryInline`: "Grip · 3 voor jou".
     let inlineText: String
     /// The widget's own tap (`widgetURL`); rows and the footer carry their own.
     let url: URL
@@ -260,7 +260,7 @@ struct WidgetContent: Equatable {
                      oldest: (String, String)? = nil, footer: Footer? = nil, updated: String? = nil,
                      inline: String) -> WidgetContent {
             WidgetContent(state: state, family: family, layout: layout, glyph: glyph,
-                          eyebrow: state == .signedOut ? "verder" : "voor jou",
+                          eyebrow: state == .signedOut ? "Grip" : "voor jou",
                           countText: countText, caption: caption, words: words, body: body, readout: readout,
                           rows: rows, count: count, oldestText: oldest?.0, oldestSpoken: oldest?.1,
                           footer: footer, updatedText: updated, inlineText: inline, url: inboxURL)
@@ -270,8 +270,8 @@ struct WidgetContent: Equatable {
         if snapshot == nil, signedOut {
             let words: String = switch family {
             case .accessoryCircular: "log in"
-            case .accessoryInline: "verder · log in"
-            default: standBy ? "Log in\nbij verder" : signedOutText
+            case .accessoryInline: "Grip · log in"
+            default: standBy ? "Log in\nbij Grip" : signedOutText
             }
             let readout: String? = switch family {
             case .systemSmall: standBy ? "afgemeld\nniets bewaard op dit toestel" : "tik en log in"
@@ -280,9 +280,9 @@ struct WidgetContent: Equatable {
             default: nil
             }
             let body: String? = switch family {
-            case .systemMedium: "Open verder om je lijst te zien."
+            case .systemMedium: "Open Grip om je lijst te zien."
             case .systemLarge, .systemExtraLarge:
-                "Open verder om je lijst te zien. Na het inloggen staat hier wat er op je wacht."
+                "Open Grip om je lijst te zien. Na het inloggen staat hier wat er op je wacht."
             default: nil
             }
             return content(.signedOut, glyph: .person, caption: signedOutText, words: words, body: body,
@@ -290,15 +290,15 @@ struct WidgetContent: Equatable {
                            footer: large ? Footer(label: "afgemeld", text: "Niets bewaard op dit toestel",
                                                   sensitive: false, url: inboxURL,
                                                   spoken: "Afgemeld. Niets bewaard op dit toestel.") : nil,
-                           inline: "verder · log in")
+                           inline: "Grip · log in")
         }
 
         guard let snapshot, now.timeIntervalSince(snapshot.updatedAt) < staleAfter else {
             let at = snapshot?.updatedAt
             let words: String = switch family {
             case .accessoryCircular: "oud"
-            case .accessoryInline: "verder · open de app"
-            default: standBy ? "Open verder\nom bij te werken" : staleText
+            case .accessoryInline: "Grip · open de app"
+            default: standBy ? "Open Grip\nom bij te werken" : staleText
             }
             // Without a snapshot there is no time to give: the line stays away.
             let readout: String? = at.flatMap { at in
@@ -310,9 +310,9 @@ struct WidgetContent: Equatable {
                 }
             }
             let body: String? = switch family {
-            case .systemMedium: "verder toont bewust geen oud aantal."
+            case .systemMedium: "Grip toont bewust geen oud aantal."
             case .systemLarge, .systemExtraLarge:
-                "verder toont bewust geen oud aantal en geen oude titels. Wat er nu wacht, zie je zodra verder weer bij is."
+                "Grip toont bewust geen oud aantal en geen oude titels. Wat er nu wacht, zie je zodra Grip weer bij is."
             default: nil
             }
             let footer = large ? at.map {
@@ -320,7 +320,7 @@ struct WidgetContent: Equatable {
                        spoken: "Laatst bijgewerkt \(DutchDate.spoken($0))")
             } : nil
             return content(.stale, glyph: .refresh, caption: staleText, words: words, body: body,
-                           readout: readout, footer: footer, inline: "verder · open de app")
+                           readout: readout, footer: footer, inline: "Grip · open de app")
         }
 
         let count = max(snapshot.count, 0)
@@ -328,7 +328,7 @@ struct WidgetContent: Equatable {
             let updated = DutchDate.updated(snapshot.updatedAt, now: now)
             let words: String = switch family {
             case .accessoryCircular: "niets"
-            case .accessoryInline: "verder · niets voor jou"
+            case .accessoryInline: "Grip · niets voor jou"
             default: emptyText
             }
             let readout: String? = switch family {
@@ -336,7 +336,7 @@ struct WidgetContent: Equatable {
             default: nil
             }
             let body: String? = (family == .systemMedium || large)
-                ? "Goed bezig. verder laat het weten zodra er iets binnenkomt." : nil
+                ? "Goed bezig. Grip laat het weten zodra er iets binnenkomt." : nil
             // Nothing waits, so the map has no open stop either (the open stop
             // is one of the waiting items); the footer still answers.
             let footer = large ? Footer(label: headlineLabel, text: snapshot.headline ?? emptyFooter,
@@ -344,7 +344,7 @@ struct WidgetContent: Equatable {
                                         url: snapshot.headline == nil ? inboxURL : mapURL,
                                         spoken: "Waar het nu op wacht: \(snapshot.headline ?? emptyFooter)") : nil
             return content(.empty, glyph: .check, caption: emptyText, words: words, body: body, readout: readout,
-                           footer: footer, updated: large ? updated : nil, inline: "verder · niets voor jou")
+                           footer: footer, updated: large ? updated : nil, inline: "Grip · niets voor jou")
         }
 
         let rows = snapshot.items.prefix(rowLimit(family, layout: layout)).map(line(for:))
@@ -361,11 +361,11 @@ struct WidgetContent: Equatable {
         case .systemMedium: rows.count < count ? "en nog \(count - rows.count)" : nil
         default: nil
         }
-        let words = family == .accessoryInline ? "verder · \(count) voor jou"
+        let words = family == .accessoryInline ? "Grip · \(count) voor jou"
             : family == .accessoryCircular ? "\(count) \(caption)" : caption
         return content(.waiting, glyph: .tray, count: count, countText: String(count), caption: caption,
                        words: words, readout: readout, rows: Array(rows), oldest: shownOldest, footer: footer,
-                       inline: "verder · \(count) voor jou")
+                       inline: "Grip · \(count) voor jou")
     }
 
     /// A row: the title, "VOORSTEL · 2 NOV" (a task with a deadline: "TAAK ·
@@ -443,7 +443,7 @@ struct HeadlineContent: Equatable {
     static func make(snapshot: WidgetSnapshot?, now: Date, signedOut: Bool = false) -> HeadlineContent {
         let label = WidgetContent.headlineLabel
         if snapshot == nil, signedOut {
-            return HeadlineContent(label: "verder", text: WidgetContent.signedOutText, sub: "om je lijst te zien",
+            return HeadlineContent(label: "Grip", text: WidgetContent.signedOutText, sub: "om je lijst te zien",
                                    sensitive: false, quiet: false, url: WidgetContent.inboxURL,
                                    spoken: WidgetContent.signedOutText)
         }

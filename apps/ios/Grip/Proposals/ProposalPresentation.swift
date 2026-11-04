@@ -226,10 +226,10 @@ enum ProposalText {
     }
 
     /// The two lines under an edited draft: "1 ZIN TOEGEVOEGD DOOR JOU" over
-    /// "VERSIE 2 VAN VERDER BEWAARD". Nil when nothing changed.
+    /// "VERSIE 2 VAN GRIP BEWAARD". Nil when nothing changed.
     static func editSummary(_ changes: DraftChanges?, version: Int?) -> (what: String, kept: String)? {
         guard let summary = changes?.summary else { return nil }
-        let kept = version.map { "Versie \($0) van verder bewaard" } ?? "Het concept van verder blijft bewaard"
+        let kept = version.map { "Versie \($0) van Grip bewaard" } ?? "Het concept van Grip blijft bewaard"
         return ("\(summary) door jou", kept)
     }
 
@@ -397,7 +397,7 @@ enum ProposalText {
     }
 }
 
-/// What Martin changed against verder's draft, paragraph by paragraph — the
+/// What Martin changed against Grip's draft, paragraph by paragraph — the
 /// golden rule made visible before approving (brief §3). The server keeps its
 /// own diff at approval (`proposalDiff`); this one only draws.
 struct DraftChanges: Equatable {
@@ -568,7 +568,7 @@ enum SendCopy {
     static let sending = "Wordt verstuurd…"
     static let failed = "Versturen mislukt."
     static let failedNothingSent = "Versturen mislukt. Er is niets verstuurd."
-    static let failedDetail = "verder kon de mail niet versturen."
+    static let failedDetail = "Grip kon de mail niet versturen."
     static let unknown = "Nog onbekend of het is aangekomen."
     static let unknownDetail = "Gmail gaf geen antwoord. In je Verzonden mail wordt nu gekeken; dit scherm werkt zichzelf bij."
     static let resendNotYet = "Opnieuw versturen kan nog niet"

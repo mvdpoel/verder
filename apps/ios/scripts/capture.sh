@@ -434,7 +434,7 @@ if [ -n "$NOTIFY" ]; then
   LAST=""; [ "${#PUSHES[@]}" -eq 0 ] || LAST="${PUSHES[${#PUSHES[@]}-1]}"
   WAIT=""
   [ -z "$LAST" ] || WAIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["aps"]["alert"]["title"])' "scripts/pushes/$LAST.apns")"
-  [ "$PREVIEWS" != never ] || WAIT="Nieuw bericht van verder"
+  [ "$PREVIEWS" != never ] || WAIT="Nieuw bericht van Grip"
   ALL_ARGS=(-fixtures "$FIXTURE" "${ARGS[@]}" -fixtures-notify-allow)
   mkdir -p "$(dirname "$OUT")"
   rm -f "$OUT.partial.png" "$OUT.partial.png.ready"

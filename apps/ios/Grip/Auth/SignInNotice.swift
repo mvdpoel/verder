@@ -20,7 +20,7 @@ struct SignInNotice: Equatable, Sendable {
     enum Cause: Equatable, Sendable {
         /// 401 on the password path.
         case wrongPassword
-        /// iOS holds no toegangssleutel for verder on this phone. NOT mapped
+        /// iOS holds no toegangssleutel for Grip on this phone. NOT mapped
         /// from any iOS error yet: which `ASAuthorizationError` an empty
         /// allow-list with no credential produces is unmeasured, and a wrong
         /// mapping would hide a real failure behind "use your password".
@@ -32,7 +32,7 @@ struct SignInNotice: Equatable, Sendable {
         case passkeyFailed(String?)
         /// 429; the button comes back by itself at `until`.
         case rateLimited(until: Date)
-        /// The phone is online, verder is not answering (5xx, a timeout).
+        /// The phone is online, Grip is not answering (5xx, a timeout).
         case serverDown
         /// The phone itself has no network.
         case offline

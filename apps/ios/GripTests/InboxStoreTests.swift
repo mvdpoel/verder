@@ -189,7 +189,7 @@ struct InboxStoreTests {
     /// A revoked session (a lost phone, revoked in /settings/security) must not
     /// leave the widget drawing the case: the 401 erases the snapshot — its
     /// titles, ids and headline — and reloads the widget, which then reads
-    /// "Open verder om bij te werken". The pocket dossier is wiped for the same
+    /// "Open Grip om bij te werken". The pocket dossier is wiped for the same
     /// reason; the widget's copy of the same content may not outlive it.
     @Test func unauthorizedErasesTheWidgetSnapshotAndReloads() async throws {
         let r = rig(Self.serving())

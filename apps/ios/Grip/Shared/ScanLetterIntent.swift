@@ -9,7 +9,7 @@ import AppIntents
 /// where `ScanLaunch.run` hands `grip://scan` to the screens.
 struct ScanLetterIntent: AppIntent {
     static let title: LocalizedStringResource = "Scan een brief"
-    static let description = IntentDescription("Opent de camera van verder, zonder Face ID.")
+    static let description = IntentDescription("Opent de camera van Grip, zonder Face ID.")
     static let openAppWhenRun = true
 
     /// The words and glyph all three ways in share (frame "Scan · snelstart"):

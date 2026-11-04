@@ -29,7 +29,7 @@ enum MoreMenu {
     }
 
     /// Who you are first, then the case's shortcuts, the settings, and the
-    /// app. Ontwikkelaar is one level further down, inside Over verder
+    /// app. Ontwikkelaar is one level further down, inside Over Grip
     /// (Halide: "advanced a few taps away").
     static let sections: [Section] = [
         Section(label: nil, items: [.account]),
@@ -46,7 +46,7 @@ enum MoreMenu {
         case .voice: "Gesprek vastleggen"
         case .weekly: WeeklyScreen.title
         case .widgets: "Widgets toevoegen"
-        case .about: "Over verder"
+        case .about: "Over Grip"
         case .developer: "Ontwikkelaar"
         }
     }
@@ -326,12 +326,12 @@ enum AccountCopy {
 
     /// Why /me has no answer, with the minute it was asked.
     static func failureCause(_ error: APIError?, at: Date?, now: Date) -> String {
-        // 502–504 is the tunnel answering for a verder that is down.
+        // 502–504 is the tunnel answering for a Grip that is down.
         let why = switch error {
-        case .transport?, .server(502)?, .server(503)?, .server(504)?: "verder was niet bereikbaar"
-        case .server?: "verder gaf een fout"
+        case .transport?, .server(502)?, .server(503)?, .server(504)?: "Grip was niet bereikbaar"
+        case .server?: "Grip gaf een fout"
         case .rateLimited?: "te veel pogingen"
-        default: "verder gaf geen antwoord"
+        default: "Grip gaf geen antwoord"
         }
         return [why, at.map { HomeSummary.stamp($0, now: now) }].compactMap { $0 }.joined(separator: " · ")
     }
@@ -374,7 +374,7 @@ enum AccountCopy {
     /// the website, as the row's own line says.
     static func offersPasskey(_ state: PasskeyState) -> Bool { state == .off }
 
-    /// Adding a toegangssleutel and the web's device list both need verder:
+    /// Adding a toegangssleutel and the web's device list both need Grip:
     /// offline they are drawn unavailable (muted title, glyph and arrow) and
     /// cannot be tapped, while their line says when they come back.
     static func onlineOnlyAvailable(offline: Bool) -> Bool { !offline }
@@ -435,7 +435,7 @@ struct SignOutSheet: Equatable, Sendable {
                 .joined(separator: " · ")
             return SignOutSheet(
                 title: AccountCopy.signOutQuestion, leads: [Lead(symbol: "wifi.slash", text: line)],
-                body: "Hij logt nu uit en wist zijn kopie. verder trekt je sessie in zodra deze iPhone weer online is; tot dan kunnen er nog meldingen binnenkomen.",
+                body: "Hij logt nu uit en wist zijn kopie. Grip trekt je sessie in zodra deze iPhone weer online is; tot dan kunnen er nog meldingen binnenkomen.",
                 uploadFirst: nil, confirm: AccountCopy.signOutAnyway)
         case (true, true):
             let these = queued == 1 ? "De scan wordt" : "De \(queued) scans worden"
@@ -499,7 +499,7 @@ enum NotificationsCopy {
     /// The sentence under a permission that keeps pushes away.
     static func permissionDetail(_ p: PushPermission?) -> String? {
         switch p {
-        case .denied?: "verder kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan."
+        case .denied?: "Grip kan je nu niets laten weten. Zet ze aan in Instellingen; je keuzes hieronder gelden weer zodra ze aanstaan."
         case .notDetermined?: "Zet ze aan om te horen wanneer Verder iets vraagt; je keuzes hieronder gelden zodra ze aanstaan."
         case .allowed?, nil: nil
         }
@@ -515,9 +515,9 @@ enum NotificationsCopy {
         }
     }
 
-    /// "Niet opgeslagen · verder niet bereikbaar."
+    /// "Niet opgeslagen · Grip niet bereikbaar."
     static func saveFailed(offline: Bool) -> String {
-        offline ? "\(notSaved) · je bent offline." : "\(notSaved) · verder niet bereikbaar."
+        offline ? "\(notSaved) · je bent offline." : "\(notSaved) · Grip niet bereikbaar."
     }
 
     /// The levels are the ones the worker sets. Verder's mail is
@@ -539,17 +539,17 @@ enum NotificationsCopy {
             Kind(category: "REMINDER", name: "Herinnering", symbol: "clock",
                  level: "gewoon", explanation: [], detail: "een voorstel wacht al een tijd op je"),
             Kind(category: "FOLLOW_UP", name: "Navragen", symbol: "arrow.triangle.2.circlepath",
-                 level: "gewoon", explanation: ["iemand antwoordde nog niet", "verder stelt navragen voor"]),
+                 level: "gewoon", explanation: ["iemand antwoordde nog niet", "Grip stelt navragen voor"]),
             Kind(category: "TASK_DUE", name: "Termijn", symbol: "checkmark.square",
                  level: "tijdgevoelig", explanation: ["de uiterste datum van een taak komt eraan"]),
         ], footnote: "Herinneringen, navragen en termijnen komen alleen tussen 08:00 en 22:00. Gaat het om post van je bewindvoerder, dan zijn ze tijdgevoelig."),
-        Group(label: "Wat verder deed", kinds: [
+        Group(label: "Wat Grip deed", kinds: [
             Kind(category: "FILING", name: "Opgeborgen", symbol: "archivebox",
-                 level: "stil", explanation: ["wat verder zelf opborg, samenvoegde of ophaalde"]),
+                 level: "stil", explanation: ["wat Grip zelf opborg, samenvoegde of ophaalde"]),
             Kind(category: "WEEKLY", name: "Weekoverzicht", symbol: MoreGlyphName.calendar,
                  level: "stil", explanation: ["zondag 18:00"], detail: "wat er die week gebeurde"),
             Kind(category: "SYSTEM", name: "Systeem", symbol: "sun.max",
-                 level: "gewoon", explanation: ["als er in verder iets hapert, of weer hersteld is"]),
+                 level: "gewoon", explanation: ["als er in Grip iets hapert, of weer hersteld is"]),
         ], footnote: "Stille meldingen komen in je meldingencentrum, zonder geluid en zonder dat je scherm aangaat. Lukt het versturen van een antwoord niet, dan meldt Systeem dat tijdgevoelig."),
     ]
 
@@ -584,13 +584,13 @@ enum WidgetGuide {
     static let homeSteps = [
         "Houd een lege plek op je beginscherm vast tot de apps bewegen.",
         "Tik op **Wijzig** en kies **Voeg widget toe**.",
-        "Zoek **verder** en kies een formaat.",
+        "Zoek **Grip** en kies een formaat.",
     ]
 
     static let lockSteps = [
         "Houd je toegangsscherm vast en tik op **Pas aan**.",
         "Kies **Toegangsscherm** en tik op het vak onder de klok.",
-        "Kies **verder**.",
+        "Kies **Grip**.",
     ]
 
     /// The illustration's numbers: an example, drawn the way the real
@@ -608,9 +608,9 @@ enum WidgetGuide {
     static let privacy = "Op je toegangsscherm staan nooit titels: alleen hoeveel er wacht en hoe lang al."
 }
 
-// MARK: - Over verder
+// MARK: - Over Grip
 
-/// Meer → Over verder: version, build, the server this build talks to, and
+/// Meer → Over Grip: version, build, the server this build talks to, and
 /// whether it answers.
 struct AboutInfo: Equatable {
     struct Line: Equatable, Hashable, Sendable {
@@ -668,7 +668,7 @@ struct AboutInfo: Equatable {
         }
     }
 
-    static let note = "verder is gemaakt voor één dossier: het jouwe. Alles wat de app laat zien, komt van je eigen server."
+    static let note = "Grip is gemaakt voor één dossier: het jouwe. Alles wat de app laat zien, komt van je eigen server."
 }
 
 // MARK: - Ontwikkelaar

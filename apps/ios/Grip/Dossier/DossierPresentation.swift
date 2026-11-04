@@ -200,7 +200,7 @@ enum DossierProgressCopy {
     static let interruptedLabel = "dossier ophalen · onderbroken"
     static let promise = "Daarna staat alles op deze iPhone, ook zonder verbinding — handig aan de balie."
     static let kept = "De verbinding viel weg. Wat al binnen is, blijft op deze iPhone staan."
-    static let keptNoServer = "verder was even niet bereikbaar. Wat al binnen is, blijft op deze iPhone staan."
+    static let keptNoServer = "Grip was even niet bereikbaar. Wat al binnen is, blijft op deze iPhone staan."
     static let resume = "Haal de rest op"
     static let waiting = "wacht op verbinding"
 

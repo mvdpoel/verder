@@ -16,7 +16,7 @@ struct WeeklyView: View {
     let openVoorJou: () -> Void
     /// "7 ontvangen" / "5 opgeborgen" ›: the Dossier.
     var openDossier: () -> Void = {}
-    /// "2 stukken opgeborgen" ›: Voor jou's "Door verder gedaan".
+    /// "2 stukken opgeborgen" ›: Voor jou's "Door Grip gedaan".
     var openDoneByGrip: () -> Void = {}
 
     @Environment(\.dynamicTypeSize) private var typeSize

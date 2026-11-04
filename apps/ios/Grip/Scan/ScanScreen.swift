@@ -92,10 +92,10 @@ struct ScanScreen: Equatable {
             let left = Self.duplexWindow - input.now.timeIntervalSince(recent.capturedAt)
             let minutes = max(1, Int((left / 60).rounded(.up)))
             duplex = Duplex(label: "Dubbelzijdig · nog \(minutes) min",
-                            text: "Achterkanten van deze brief? Draai de stapel om over de lange kant en scan ze nu. verder legt ze samen.")
+                            text: "Achterkanten van deze brief? Draai de stapel om over de lange kant en scan ze nu. Grip legt ze samen.")
         } else {
             duplex = Duplex(label: "Dubbelzijdig",
-                            text: "Draai de stapel om over de lange kant en scan binnen 10 minuten de achterkanten. verder legt ze samen.")
+                            text: "Draai de stapel om over de lange kant en scan binnen 10 minuten de achterkanten. Grip legt ze samen.")
         }
 
         accessory = QueueAccessory(input)
@@ -247,7 +247,7 @@ struct QueueSheet: Equatable {
             sections.append(Section(kind: .failed, title: "Niet verstuurd · \(failed.count)", rows: failed.map { item in
                 Row(id: item.id, title: Self.title(item), meta: Self.failureMeta(item), badge: .failed,
                     detail: item.failure == .refused
-                        ? "verder nam dit bestand niet aan. Opnieuw proberen stuurt het nog eens."
+                        ? "Grip nam dit bestand niet aan. Opnieuw proberen stuurt het nog eens."
                         : "Staat veilig op dit toestel. Tik Opnieuw proberen om het nog eens te versturen.",
                     note: item.note, documentId: nil, canRetry: true, canNote: true, canRemove: true)
             }, hidden: 0))

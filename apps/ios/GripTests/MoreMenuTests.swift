@@ -5,7 +5,7 @@ import WidgetKit
 
 /// Meer is a settings screen (Figma "meer · final"): the account card, Snel
 /// naar (Geld, Gesprek vastleggen, Weekoverzicht), Instellingen (Meldingen,
-/// Widgets toevoegen), Over (Over verder, with Ontwikkelaar one level down).
+/// Widgets toevoegen), Over (Over Grip, with Ontwikkelaar one level down).
 /// Every word is decided here, outside the views.
 @MainActor
 struct MoreMenuTests {
@@ -35,7 +35,7 @@ struct MoreMenuTests {
     }
 
     /// Every row goes somewhere: a screen on the Meer stack, or (voice) the
-    /// sheet RootView holds. Ontwikkelaar is reached from Over verder.
+    /// sheet RootView holds. Ontwikkelaar is reached from Over Grip.
     @Test func everyRowLeadsSomewhere() {
         for item in MoreMenu.Item.allCases {
             if item == .voice { #expect(MoreMenu.route(item) == nil) } else { #expect(MoreMenu.route(item) != nil, "\(item)") }
@@ -182,7 +182,7 @@ struct MoreMenuTests {
         #expect(AccountCopy.devicesLine(3, offline: true) == "3 ingelogd\u{00A0}· kan weer als je online bent")
         #expect(AccountCopy.addPasskeyLine(offline: true) == "kan weer als je online bent")
         let at = Date(timeIntervalSince1970: 1_793_538_120)
-        #expect(AccountCopy.failureCause(.transport("x"), at: at, now: at) == "verder was niet bereikbaar · 14:02")
+        #expect(AccountCopy.failureCause(.transport("x"), at: at, now: at) == "Grip was niet bereikbaar · 14:02")
     }
 
     @Test func devicesLiveOnTheWeb() {
@@ -229,7 +229,7 @@ struct MoreMenuTests {
             #expect(!kind.name.isEmpty && !(kind.explanation.isEmpty && kind.detail == nil), "\(kind.category)")
             #expect(["tijdgevoelig", "gewoon", "stil"].contains(kind.level), "\(kind.category)")
         }
-        #expect(NotificationsCopy.groups.map(\.label) == ["Post", "Wat op je wacht", "Wat verder deed"])
+        #expect(NotificationsCopy.groups.map(\.label) == ["Post", "Wat op je wacht", "Wat Grip deed"])
     }
 
     /// Figma "Meldingen / normaal": the level and its short fact on line 1,
@@ -302,10 +302,10 @@ struct MoreMenuTests {
         #expect(NotificationsCopy.action(.notDetermined) == .ask)
         #expect(NotificationsCopy.action(.allowed) == nil)
         #expect(NotificationsCopy.countLine(8, of: 9) == "8 van 9 soorten aan")
-        #expect(NotificationsCopy.saveFailed(offline: false) == "Niet opgeslagen · verder niet bereikbaar.")
+        #expect(NotificationsCopy.saveFailed(offline: false) == "Niet opgeslagen · Grip niet bereikbaar.")
     }
 
-    // MARK: - Widgets, Over verder, Ontwikkelaar
+    // MARK: - Widgets, Over Grip, Ontwikkelaar
 
     @Test func theWidgetGuideNamesEveryPlaceAWidgetGoes() {
         #expect(WidgetGuide.homeSteps.count == 3)
@@ -330,7 +330,7 @@ struct MoreMenuTests {
         #expect(WidgetGuide.sampleLock == "4 wachten · oudste 2 d")
     }
 
-    /// Adding a toegangssleutel and the web's device list need verder: offline
+    /// Adding a toegangssleutel and the web's device list need Grip: offline
     /// both are drawn unavailable and cannot be tapped.
     @Test func onlineOnlyAccountActionsAreUnavailableOffline() {
         #expect(AccountCopy.onlineOnlyAvailable(offline: false))
@@ -451,7 +451,7 @@ struct NotificationPrefsModelTests {
     }
 }
 
-/// An offline sign-out is revoked once verder answers again (Meer's offline
+/// An offline sign-out is revoked once Grip answers again (Meer's offline
 /// sheet promises it).
 @MainActor
 struct PendingSignOutTests {

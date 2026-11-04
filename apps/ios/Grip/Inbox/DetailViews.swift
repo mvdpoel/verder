@@ -65,8 +65,8 @@ struct DetailBadge: View {
     }
 }
 
-/// "VRAAG VAN VERDER · ZO 1 NOV" on one line where it fits; else each group
-/// after the first starts its own line WITH its dot ("Vraag van verder" /
+/// "VRAAG VAN GRIP · ZO 1 NOV" on one line where it fits; else each group
+/// after the first starts its own line WITH its dot ("Vraag van Grip" /
 /// "· zo 1 nov"), so no line ever ends on a "·" (the final frames' rule).
 struct EyebrowLine: View {
     let groups: [String]
@@ -191,7 +191,7 @@ extension DetailCard where Label == DetailLabel {
     }
 }
 
-/// "NIET AANGEKOMEN" / "Je antwoord kwam niet aan bij verder. …".
+/// "NIET AANGEKOMEN" / "Je antwoord kwam niet aan bij Grip. …".
 struct DetailNotice: View {
     let label: String
     let text: String

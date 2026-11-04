@@ -20,7 +20,7 @@ import Observation
 final class SuggestionDetailModel {
     enum Copy {
         static let alreadyDecided = "Deze suggestie is al afgehandeld."
-        static let refused = "verder weigerde dit. Controleer de velden."
+        static let refused = "Grip weigerde dit. Controleer de velden."
         static let gone = "Deze suggestie bestaat niet (meer)."
         static let approved = "Vastgelegd."
         static let rejected = "Afgewezen."
@@ -282,11 +282,11 @@ final class SuggestionDetailModel {
         }
     }
 
-    /// "Je goedkeuring kwam niet aan bij verder. Er staat nog niets in het
+    /// "Je goedkeuring kwam niet aan bij Grip. Er staat nog niets in het
     /// logboek; je 2 aanpassingen staan hier nog."
     var failureText: String? {
         guard approveFailed, let s = suggestion else { return nil }
-        var t = "Je goedkeuring kwam niet aan bij verder. "
+        var t = "Je goedkeuring kwam niet aan bij Grip. "
         let what: String = switch s.kind {
         case "log-entry": "Er staat nog niets in het logboek"
         case "task": "Er is nog geen taak aangemaakt"
@@ -331,7 +331,7 @@ final class SuggestionDetailModel {
     /// "SUGGESTIE · LOGBOEKREGEL".
     var eyebrow: [String] { ["Suggestie", SuggestionFormat.kind(suggestion?.kind ?? "")] }
 
-    /// Where verder found it, as one sentence: "Gevonden door verder in je
+    /// Where Grip found it, as one sentence: "Gevonden door Grip in je
     /// spraaknotitie van za 31 okt." Then what a tap does, while it is open;
     /// for a debt, what approving means.
     func provenance() -> String {
@@ -346,7 +346,7 @@ final class SuggestionDetailModel {
         } else if let d = s.document {
             where_ = "het document “\(d.title)”"
         }
-        var out = where_.map { "Gevonden door verder in \($0)." } ?? "Gevonden door verder."
+        var out = where_.map { "Gevonden door Grip in \($0)." } ?? "Gevonden door Grip."
         if s.kind == "debt" { out += " " + Copy.debtMeaning }
         // A task's fields read as a form already (the frame leaves it out).
         else if isOpen && !opensOnWebsite && s.kind != "task" { out += " " + Copy.tapToEdit }
@@ -1034,7 +1034,7 @@ struct SuggestionDetailView: View {
 
     private var rejectSheet: some View {
         DecisionSheet(title: "Niet relevant, met reden",
-                      text: "Niet verplicht — verder leert ervan. Daarna gaat de suggestie uit Voor jou.",
+                      text: "Niet verplicht — Grip leert ervan. Daarna gaat de suggestie uit Voor jou.",
                       action: "Niet relevant", enabled: model?.isBusy == false && !offline,
                       onConfirm: { Task {
                           if await model?.reject(reason: rejectReason) == true { rejecting = false; await next?.refresh() }
@@ -1077,7 +1077,7 @@ struct SuggestionDetailView: View {
             // The AX5 frame's position: the first changed field at the top.
             if launch.detail == .aangepast, launch.scroll == .middle { fixtureFocus = edits.first?.0 }
         case .vastgelegd?:
-            // The frames approve the suggestion as verder proposed it.
+            // The frames approve the suggestion as Grip proposed it.
             _ = await model.approve()
         case .reden?:
             rejectReason = "Dit gesprek staat al in het logboek."

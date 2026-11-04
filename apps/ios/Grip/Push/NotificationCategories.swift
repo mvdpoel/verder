@@ -13,13 +13,13 @@ enum NotificationCategories {
     /// A locked phone with previews hidden shows this and nothing else: no
     /// title (the category sets no `.hiddenPreviewsShowTitle`), no sender, no
     /// line from the dossier.
-    static let hiddenPlaceholder = "Nieuw bericht van verder"
+    static let hiddenPlaceholder = "Nieuw bericht van Grip"
 
     static let openAction = "OPEN"
 
     /// "Gedaan" on a deadline push ("notifications · final", task-due · lang
     /// ingedrukt): sets the task to done IN THE BACKGROUND, behind an unlocked
-    /// phone (`.authenticationRequired`), without bringing verder forward.
+    /// phone (`.authenticationRequired`), without bringing Grip forward.
     /// It is the second background action, beside a question's answer, and
     /// like it sends nothing outward: the task status is Martin's, so his
     /// press is his decision and the `task.status` event it appends is his.

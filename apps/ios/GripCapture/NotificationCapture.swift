@@ -37,9 +37,9 @@ final class NotificationCapture: XCTestCase {
 
     /// Settings → Notifications → Show Previews. The row titles are read in
     /// either language the simulator may run in.
-    /// Settings → Apps → verder → Meldingen → Toon voorvertoningen: the
+    /// Settings → Apps → Grip → Meldingen → Toon voorvertoningen: the
     /// simulator has no system-wide Notifications pane, only the per-app one,
-    /// which is the same setting for verder's notifications.
+    /// which is the same setting for Grip's notifications.
     @MainActor
     private func setPreviews(_ choices: [String], debug: String) {
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
@@ -56,7 +56,7 @@ final class NotificationCapture: XCTestCase {
             Thread.sleep(forTimeInterval: 0.8)
             return true
         }
-        guard open(["Apps"], step: 1), open(["verder"], step: 2), open(["Meldingen", "Notifications"], step: 3) else { return }
+        guard open(["Apps"], step: 1), open(["Grip"], step: 2), open(["Meldingen", "Notifications"], step: 3) else { return }
         let previews = settings.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Show Previews", "Toon voorvertoning")).firstMatch
         var tries = 0

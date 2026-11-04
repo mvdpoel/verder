@@ -183,7 +183,7 @@ struct WeeklyDTOTests {
         #expect(chart.bars.map(\.value) == [nil, nil, nil, nil, nil, nil, 4, 6])
         #expect(chart.average == nil)
         #expect(chart.caption == "geen data vóór week 43")
-        #expect(s.sentence?.full == "Je tweede week met verder. Een gemiddelde volgt vanaf 3 weken.")
+        #expect(s.sentence?.full == "Je tweede week met Grip. Een gemiddelde volgt vanaf 3 weken.")
         #expect(s.grip.map(\.title) == ["1 stuk opgeborgen"])
         #expect(s.grip[0].lines == [["Klopt het niet? In de lijst maak je het met één tik ongedaan."]])
     }
@@ -196,14 +196,14 @@ struct WeeklyDTOTests {
         #expect(s.rows.map(\.lines) == [
             [["vorige week: 1"]],
             [["mail en scans", "vorige week: 9"]],
-            [["3 door jou", "2 door verder"], ["vorige week: 4"]],
+            [["3 door jou", "2 door Grip"], ["vorige week: 4"]],
             [["vorige week: ook 2"]],
             [["momentopname zo 18:00", "vorige week: 6"]],
         ])
         #expect(s.rows.map(\.destination) == [nil, .dossier, .dossier, nil, nil])
     }
 
-    /// What verder did on its own is stated plainly, and the rename says why
+    /// What Grip did on its own is stated plainly, and the rename says why
     /// it cannot be undone here.
     @Test func whatGripDidOnItsOwnIsStatedPlainly() throws {
         let s = WeeklyScreen(try Self.withHistory())
@@ -430,7 +430,7 @@ struct WeeklyDTOTests {
         #expect(await router.handle(action: UNNotificationDismissActionIdentifier, category: "WEEKLY",
                                     userInfo: ["link": "grip://inbox"]) == .ignored)
         // Another category with the same link still opens Voor jou. (FILING's
-        // `grip://inbox` is the "Door verder gedaan" digest and opens that
+        // `grip://inbox` is the "Door Grip gedaan" digest and opens that
         // section: `LinkDestinationTests.theDigestOpensDoorGripGedaan`.)
         let links = DeepLinkInbox()
         _ = await NotificationRouter(links: links, client: { nil })

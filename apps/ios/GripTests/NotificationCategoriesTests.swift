@@ -35,7 +35,7 @@ struct NotificationCategoriesTests {
     /// A locked phone with previews hidden shows nothing of the dossier.
     @Test func everyCategoryHidesItsPreview() {
         for category in NotificationCategories.all() {
-            #expect(category.hiddenPreviewsBodyPlaceholder == "Nieuw bericht van verder", "\(category.identifier)")
+            #expect(category.hiddenPreviewsBodyPlaceholder == "Nieuw bericht van Grip", "\(category.identifier)")
             #expect(!category.options.contains(.hiddenPreviewsShowTitle), "\(category.identifier)")
             #expect(!category.options.contains(.hiddenPreviewsShowSubtitle), "\(category.identifier)")
         }

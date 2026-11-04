@@ -48,7 +48,7 @@ struct GripApp: App {
         let auth = AuthModel(client: s.client, store: s.store, defaults: s.defaults, widgetSnapshotDir: s.snapshotDir,
                              pendingSignOut: s.pendingSignOut, now: s.now)
         // A missing answer reads "offline" only when the phone has no network
-        // path; otherwise it is verder not answering ("De server reageert niet.").
+        // path; otherwise it is Grip not answering ("De server reageert niet.").
         auth.networkIsUp = { [uploads = s.uploads] in !uploads.isOffline }
         #if DEBUG
         if let state = FixtureLaunch.current?.signIn { auth.fixtureSeed(state) }
@@ -100,7 +100,7 @@ struct GripApp: App {
         _call = State(initialValue: CallSession(
             client: client, cache: CallCache(dir: s.callCacheDir), activities: s.makeCallActivities(),
             observer: s.makeCallObserver(), epoch: auth.epoch, now: { clock() },
-            // The call itself is the Phone app's: verder only hands it the number.
+            // The call itself is the Phone app's: Grip only hands it the number.
             dial: { UIApplication.shared.open($0) },
             openVoice: { voice.open(prefill: $0) },
             recent: recent,

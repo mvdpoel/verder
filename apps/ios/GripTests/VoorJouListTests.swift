@@ -192,7 +192,7 @@ struct InboxDecisionsTests {
         m.decide(d("suggestion:s", .approve))
         await m.flush()
         let f = m.failures["suggestion:s"]
-        #expect(f?.message.contains("de server van verder heeft een storing") == true)
+        #expect(f?.message.contains("de server van Grip heeft een storing") == true)
         #expect(f?.decision.withdrawLabel == "Goedkeuring intrekken")
         #expect(m.hiddenKeys.isEmpty, "the row is back where it was")
         m.withdraw("suggestion:s")
@@ -238,7 +238,7 @@ struct InboxDecisionsTests {
                      proposedTitle: nil, undone: false, undoable: undoable, notUndoableReason: undoable ? nil : "al aangepast")
     }
 
-    /// The undo of "Door verder gedaan" moves its document into Kan wachten
+    /// The undo of "Door Grip gedaan" moves its document into Kan wachten
     /// AT ONCE: the hero, Kan wachten and the section's own count all follow
     /// it, so "Terug in Kan wachten" is never contradicted by the list.
     @Test func anUndoOfGripMovesTheDocumentBackAtOnce() {

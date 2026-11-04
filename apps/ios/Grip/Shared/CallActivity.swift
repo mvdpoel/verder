@@ -52,7 +52,7 @@ enum CallActivityFaces {
 
     /// The lock screen and the banner: counts only.
     static func lockScreen(_ s: CallActivityAttributes.ContentState) -> LockScreen {
-        LockScreen(title: "Gesprek · verder", progress: progress(s),
+        LockScreen(title: "Gesprek · Grip", progress: progress(s),
                    detail: s.nextPoint == nil ? "Alles besproken" : "Open de app voor de punten",
                    fraction: fraction(s))
     }

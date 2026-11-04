@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// One proposal (Figma "proposal · final"): the header and its status, the
-/// trigger, verder's draft — Martin's own changes marked — what verder relied
+/// trigger, Grip's draft — Martin's own changes marked — what Grip relied
 /// on, and a bar pinned to the bottom that says what a send would do. Versturen
 /// is a HOLD (`SendHold`), then a FRESH Face ID every time (`ApprovalGate`).
 /// At the accessibility sizes the bar's content sits in the scroll as a
@@ -443,7 +443,7 @@ struct ProposalScreen: View {
     private func sourcesSection(_ d: ProposalDetail) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                ProposalLabel("Waar verder op leunt")
+                ProposalLabel("Waar Grip op leunt")
                 Spacer(minLength: 12)
                 if !ax { ProposalLabel(ProposalText.sourcesCount(d.reliedOn.count), color: .inkDim) }
             }

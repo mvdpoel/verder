@@ -1,4 +1,4 @@
-# verder for iPhone
+# Grip for iPhone
 
 Native SwiftUI app (iOS 27, iPhone only, dark only). Spec:
 `docs/superpowers/specs/2026-10-28-iphone-app-design.md`; plan:

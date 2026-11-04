@@ -98,8 +98,8 @@ enum CallCopy {
     static let failed = "De gesprekspunten konden niet worden opgehaald."
     static let notFound = "Deze partij staat niet (meer) in je dossier."
     static let loading = "Gesprekspunten ophalen…"
-    static let noNumber = "Geen telefoonnummer bekend in verder. Bel zoals je gewend bent; zet de punten wel op je toegangsscherm."
-    static let activitiesOff = "Live Activities staan uit voor verder. Zet ze aan in Instellingen › verder."
+    static let noNumber = "Geen telefoonnummer bekend in Grip. Bel zoals je gewend bent; zet de punten wel op je toegangsscherm."
+    static let activitiesOff = "Live Activities staan uit voor Grip. Zet ze aan in Instellingen › Grip."
     static let showDuring = "Toon tijdens het gesprek"
     static let stopShowing = "Niet meer tonen"
     static let showing = "Op je toegangsscherm en in het Dynamic Island: alleen het aantal, nooit namen of punten."
@@ -107,7 +107,7 @@ enum CallCopy {
     static let logCall = "Gesprek vastleggen"
     static let notNow = "Niet nu"
     /// What iOS does not allow, said once, plainly (see `TalkingPointsDTO`).
-    static let noListening = "verder luistert niet mee: iOS laat geen app een telefoongesprek opnemen. Leg het na afloop vast met je stem."
+    static let noListening = "Grip luistert niet mee: iOS laat geen app een telefoongesprek opnemen. Leg het na afloop vast met je stem."
 
     /// "AI-samenvatting · 30 okt": the AI line is always marked as AI, with
     /// the day it was written, so it is never read as a dossier fact.

@@ -15,14 +15,14 @@ import Foundation
 /// ben.nl/blog/telefoongesprek-opnemen-iphone,
 /// simyo.nl/blog/telefoongesprek-opnemen-iphone). And
 /// `CXCallObserver` (CallKit) tells an app only THAT a call started or ended,
-/// never with whom or what was said. So verder puts the dossier in front of
+/// never with whom or what was said. So Grip puts the dossier in front of
 /// Martin during the call and lets him tick it off; after the call he records
 /// what was said with the voice quick-log, as before.
 struct TalkingPointsDTO: Codable, Equatable, Sendable {
     struct Party: Codable, Equatable, Sendable {
         let id: String
         let name: String
-        /// What "Bel" dials. Optional: nil when verder has no number, and
+        /// What "Bel" dials. Optional: nil when Grip has no number, and
         /// absent from a server older than this field.
         var phone: String? = nil
     }

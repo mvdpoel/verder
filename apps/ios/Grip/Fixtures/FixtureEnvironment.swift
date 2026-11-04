@@ -44,7 +44,7 @@ enum FixtureEnvironment {
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
     static let defaultsSuite = "pro.vanderpoel.grip.fixtures"
 
-    /// The host Over verder shows in a fixture run: the frames'
+    /// The host Over Grip shows in a fixture run: the frames'
     /// "grip.example", not the fixture's `<name>.fixtures.grip.invalid`.
     nonisolated static let displayServer: URL? =
         FixtureLaunch.current == nil ? nil : URL(string: "https://grip.example")
@@ -472,7 +472,7 @@ enum FixtureVoiceDriver {
 }
 
 /// The camera permission a capture asks for (`-fixtures-camera`). "Ga
-/// verder" on the pre-prompt allows it, as a tap on iOS's alert would.
+/// Grip" on the pre-prompt allows it, as a tap on iOS's alert would.
 final class FixtureCamera: CameraAccess {
     private let state: Mutex<CameraAuthorization>
     init(state: CameraAuthorization) { self.state = Mutex(state) }

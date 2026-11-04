@@ -15,14 +15,14 @@ import UserNotifications
 ///   (`NotificationFeedback`), carrying the same action again where a second
 ///   try is the next step.
 /// - A tap on the Sunday summary (`WEEKLY`) opens the Weekoverzicht, a tap on
-///   the "Door verder gedaan" digest opens that section, and a push with no
+///   the "Door Grip gedaan" digest opens that section, and a push with no
 ///   link opens its category's place (`target`).
 /// - Anything else opens at most; nothing else is reachable.
 ///
 /// An answer that does not go through — no revision in the push, no session,
 /// a 409 (answered on the web meanwhile, or a newer revision), a 400, the
 /// network — changes nothing on the server and is NEVER retried; the proposal
-/// is delivered to `links` so the next look at verder shows where it stands.
+/// is delivered to `links` so the next look at Grip shows where it stands.
 @MainActor
 final class NotificationRouter {
     enum Outcome: Equatable {
@@ -172,7 +172,7 @@ final class NotificationRouter {
     /// knows better:
     /// - the Sunday summary (`WEEKLY`) opens the Weekoverzicht, whatever its
     ///   link says (the worker sends `grip://inbox`);
-    /// - the daily "Door verder gedaan" digest is the one `FILING` push that
+    /// - the daily "Door Grip gedaan" digest is the one `FILING` push that
     ///   carries `grip://inbox`, and opens that section;
     /// - a push with NO usable link (a merged duplex scan, a new loonstrook,
     ///   the watchdog's "hersteld") opens its category's place

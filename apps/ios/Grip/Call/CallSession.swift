@@ -52,7 +52,7 @@ final class CallSession {
     /// When "Bel" handed the number to the Phone app, until that call's end
     /// is taken. Lets `reconcile` end a call whose `.started` never arrived.
     @ObservationIgnored private var dialledAt: Date?
-    /// verder went to the BACKGROUND since that dial — the Phone app took the
+    /// Grip went to the BACKGROUND since that dial — the Phone app took the
     /// screen. The "Bel …?" prompt iOS shows first only makes the scene
     /// inactive, so a cancelled prompt never reads as a finished call.
     @ObservationIgnored private var leftAfterDial = false
@@ -257,7 +257,7 @@ final class CallSession {
 
     /// The app is back in the foreground (RootView's `scenePhase == .active`).
     ///
-    /// "Bel" hands the call to the Phone app, and iOS suspends verder for the
+    /// "Bel" hands the call to the Phone app, and iOS suspends Grip for the
     /// whole call — so the delegate's `.ended` may arrive late, coalesced, or
     /// not at all. Waiting for it would leave the Live Activity on the lock
     /// screen for hours, keep the sheet "active", and let some LATER call's
@@ -266,26 +266,26 @@ final class CallSession {
     /// gone or listed as ended — through `handle`, so it is the same end.
     ///
     /// A call it never saw start counts too, when THIS sheet dialled it: once
-    /// verder is suspended the `.started` can be lost exactly like the
+    /// Grip is suspended the `.started` can be lost exactly like the
     /// `.ended` (what CallKit delivers to a suspended app is unmeasured), so
     /// "dialled, went to the background, and nothing is live now" is a call
     /// that is over, started at the dial (review, 2026-11-03).
     ///
     /// Not a Live Activity started by hand ("Toon tijdens het gesprek") with no
     /// call seen: switching apps does not end that. And not a cancelled
-    /// "Bel …?" prompt: that never takes verder to the background.
+    /// "Bel …?" prompt: that never takes Grip to the background.
     ///
     /// A return that comes WITHOUT a background since the dial, and with no
     /// call live, is the cancelled prompt: it spends the dial there and then.
     /// Kept armed, the dial waited for any later background (locking the
     /// phone, another app) and the return after THAT ended a call that never
     /// took place (review, 2026-11-03). With a call live it is not a cancel —
-    /// the in-call UI may only have made verder inactive — so the dial stays.
+    /// the in-call UI may only have made Grip inactive — so the dial stays.
     ///
     /// NOT MEASURED ON THE DEVICE (review, 2026-11-03): this rule ASSUMES a
-    /// CONFIRMED dial always takes verder to `.background` before it is
+    /// CONFIRMED dial always takes Grip to `.background` before it is
     /// `.active` again with nothing in `CXCallObserver.calls`. If iOS ever
-    /// brings verder back to `.active` after a confirmed dial without a
+    /// brings Grip back to `.active` after a confirmed dial without a
     /// `.background` in between — and lists no call at that moment (the
     /// call not yet registered, or already gone) — the dial is spent here as
     /// a cancelled prompt and that real call's end is never offered. The

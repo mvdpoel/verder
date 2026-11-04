@@ -19,7 +19,7 @@ import UniformTypeIdentifiers
 /// second one is answered `duplicate: true` through `phone:<clientId>`.
 ///
 /// AUDIO DROPS (Added 2026-11-03): a call recording shared from any app — a
-/// call-recording app, Voice Memos, Files, AirDrop (verder itself can never
+/// call-recording app, Voice Memos, Files, AirDrop (Grip itself can never
 /// record a call — iOS gives no third-party app the call audio, and the
 /// iPhone's built-in recording is not available in the Netherlands) — is a drop of
 /// kind `.audio`. It is NOT an upload: `importIncoming` leaves it alone, and
@@ -130,7 +130,7 @@ struct IncomingDrop: Codable, Equatable, Sendable {
 
     /// How long a shared recording waits for the voice log before it ages
     /// out. Longer than `UploadQueue.orphanAge` (24 h) on purpose: sharing
-    /// from another app does not open verder, so a recording Martin has not yet
+    /// from another app does not open Grip, so a recording Martin has not yet
     /// opened the app for is not an orphan — a day of not opening the app
     /// must not lose it. A week is the bound on a drop that, for whatever
     /// reason, keeps coming back; the original stays in its own app either way.

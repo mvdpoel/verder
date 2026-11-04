@@ -35,7 +35,7 @@ import Observation
 /// AN IMPORTED CALL (Added 2026-11-03, `importRecording`): the same flow
 /// from a FILE — a recording made elsewhere (a call-recording app, a second
 /// device on the speaker) that Martin shared from any app (an audio
-/// `IncomingDrop`), or one picked with "Opname kiezen". verder
+/// `IncomingDrop`), or one picked with "Opname kiezen". Grip
 /// copies it into its own folder (the copy is what is read and, kept, what
 /// is sent; the picked original is never touched), transcribes it on the
 /// phone with progress, and sends the edited text as the same suggestion.
@@ -78,7 +78,7 @@ final class VoiceLogModel {
         /// The Dutch model is downloading (first use only).
         case installing
         case ready
-        /// Speech recognition is switched off for verder in Settings.
+        /// Speech recognition is switched off for Grip in Settings.
         case denied
         /// No transcription; the reason, in Dutch. Typing still works.
         case unavailable(String)
@@ -114,23 +114,23 @@ final class VoiceLogModel {
         static let nothingHeard = "Te zacht of te kort? Houd de knop vast terwijl je praat, of tik één keer om te starten."
         static let transcribeFailed = "Typ zelf wat er besproken is; de opname blijft op je iPhone tot je verstuurt."
         static let holdLonger = "Dat was te kort. Houd de knop vast terwijl je praat, of tik één keer om te starten."
-        static let micDenied = "verder hoort je alleen terwijl je opneemt. Zet Microfoon aan in Instellingen → verder."
-        static let speechDenied = "verder zet je stem op je iPhone om in tekst. Zet Spraakherkenning aan in Instellingen → verder."
+        static let micDenied = "Grip hoort je alleen terwijl je opneemt. Zet Microfoon aan in Instellingen → Grip."
+        static let speechDenied = "Grip zet je stem op je iPhone om in tekst. Zet Spraakherkenning aan in Instellingen → Grip."
         static let recordFailed = "Opnemen lukte niet. Probeer het nog eens."
         static let partiesFailed = "De partijen konden niet worden geladen. Controleer je verbinding en probeer het opnieuw; je notitie blijft staan."
         static let partiesLoading = "Partijen laden…"
         /// A voice log is always ABOUT someone (the suggestion's participant),
         /// so with no parties there is nothing to send it with; it says so.
-        static let noParties = "Een gesprek leg je vast bij een partij, dus versturen kan pas als er een is. Voeg die toe in verder en probeer het opnieuw. Je notitie blijft staan."
+        static let noParties = "Een gesprek leg je vast bij een partij, dus versturen kan pas als er een is. Voeg die toe in Grip en probeer het opnieuw. Je notitie blijft staan."
         static let retry = "Opnieuw proberen"
         static let recordAgain = "Opnieuw opnemen"
         static let typeNote = "Typ je notitie"
         static let openSettings = "Open Instellingen"
         static let occurredAt = "Gesprek was om"
         static let offline = "Geen verbinding. Je tekst blijft staan; probeer het zo opnieuw."
-        static let serverFailed = "verder kon het nu niet aannemen. Je tekst blijft staan; probeer het zo opnieuw."
+        static let serverFailed = "Grip kon het nu niet aannemen. Je tekst blijft staan; probeer het zo opnieuw."
         static let signedOut = "Je sessie is verlopen. Log opnieuw in; je tekst blijft staan."
-        static let rejected = "verder weigerde dit voorstel. Controleer de tekst en de partij."
+        static let rejected = "Grip weigerde dit voorstel. Controleer de tekst en de partij."
         static let tooLong = "De tekst is te lang om te versturen. Kort hem in tot 20.000 tekens."
         static let audioTooLarge = "De opname is te groot om mee te sturen. Verstuur alleen de tekst; de opname blijft op je iPhone."
         static let audioMissing = "De opname is niet meer op je telefoon. Verstuur alleen de tekst."
@@ -147,7 +147,7 @@ final class VoiceLogModel {
         static let lockedFootnote = "Je notitie blijft staan. Na ontgrendelen kun je hem meteen versturen."
         static let idlePrompt = "Vertel met wie je sprak en wat jullie afspraken."
         static let privacy = "Je stem wordt op je iPhone omgezet. De opname gaat niet mee, tenzij je hem bewaart."
-        static let onPhone = "Dit gebeurt op je iPhone. Er gaat niets naar verder tot je verstuurt."
+        static let onPhone = "Dit gebeurt op je iPhone. Er gaat niets naar Grip tot je verstuurt."
         static let confirmTitle = "Deze notitie is nog niet verstuurd."
         static let keepEditing = "Verder bewerken"
         static let discard = "Weggooien"
@@ -157,15 +157,15 @@ final class VoiceLogModel {
         static let pickRecording = "Opname kiezen"
         static let importFailed = "Deze opname kon niet worden geopend. Kies een andere, of typ zelf wat er besproken is."
         static let retryTranscription = "Opnieuw uitschrijven"
-        static let importNothingHeard = "verder hoorde niets in deze opname. Probeer het opnieuw, of typ zelf wat er besproken is."
+        static let importNothingHeard = "Grip hoorde niets in deze opname. Probeer het opnieuw, of typ zelf wat er besproken is."
         static let importTranscribeFailed = "Uitschrijven lukte niet. Probeer het opnieuw, of typ zelf wat er besproken is; de kopie blijft op je iPhone tot je verstuurt."
         /// Honest about where a recording can come from: the iPhone's own
         /// call recording is not available in the Netherlands and no app can
         /// record a call on the same iPhone (Martin, 2026-11-03), so it never
         /// promises one — it names the ways a recording is made elsewhere.
-        static let phoneRecordingHint = "De iPhone kan in Nederland zelf geen gesprekken opnemen. Heb je wel een opname — van een opname-app of een tweede toestel op de luidspreker? Deel hem met verder, of kies hem hier."
-        static let keepRecordingHint = "Alleen dan gaat de opname naar verder. Anders wordt ze na het versturen gewist."
-        static let keepImportHint = "Alleen dan gaat de opname naar verder. Anders wist verder zijn kopie na het versturen; het origineel blijft staan waar het stond."
+        static let phoneRecordingHint = "De iPhone kan in Nederland zelf geen gesprekken opnemen. Heb je wel een opname — van een opname-app of een tweede toestel op de luidspreker? Deel hem met Grip, of kies hem hier."
+        static let keepRecordingHint = "Alleen dan gaat de opname naar Grip. Anders wordt ze na het versturen gewist."
+        static let keepImportHint = "Alleen dan gaat de opname naar Grip. Anders wist Grip zijn kopie na het versturen; het origineel blijft staan waar het stond."
     }
 
     /// Shorter than this is a tap: it starts a hands-free recording (and a
@@ -1213,7 +1213,7 @@ extension VoiceLogModel {
         switch partiesState {
         case .loading: return RowText(title: Copy.partiesLoading, meta: "MET WIE")
         case .failed: return RowText(title: "Partijen laden lukt niet", meta: "MET WIE · OPNIEUW LADEN")
-        case .empty: return RowText(title: "Nog geen partijen", meta: "MET WIE · VOEG ER EEN TOE IN VERDER")
+        case .empty: return RowText(title: "Nog geen partijen", meta: "MET WIE · VOEG ER EEN TOE IN GRIP")
         case .loaded:
             let source = switch partySource {
             case .fromText: "MET WIE · UIT JE TEKST"

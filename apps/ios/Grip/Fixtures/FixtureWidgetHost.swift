@@ -391,7 +391,7 @@ enum HostApp: CaseIterable {
         case .agenda: "Agenda"
         case .fotos: "Foto's"
         case .camera: "Camera"
-        case .grip: "verder"
+        case .grip: "Grip"
         case .klok: "Klok"
         case .notities: "Notities"
         case .instellingen: "Instellingen"

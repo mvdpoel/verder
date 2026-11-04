@@ -168,7 +168,7 @@ final class InboxStore {
                 oldestAt: dto.items.map(\.at).min(),
                 headlineTrack: summary?.headline?.trackTitle, headlineAt: summary?.headline?.happenedAt)
             // A snapshot that cannot be written leaves the old one; the widget
-            // ages it out after 24 h ("Open verder om bij te werken").
+            // ages it out after 24 h ("Open Grip om bij te werken").
             if (try? WidgetSnapshot.write(snapshot, to: snapshotDir, writer: writer)) != nil {
                 // The widget reads only this file; tell WidgetKit it changed.
                 reloadWidgets()

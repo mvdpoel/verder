@@ -21,7 +21,7 @@ import Observation
 /// `done-by-grip`, because links already on the phone (delivered pushes,
 /// widget timelines written by the old build) carry it (`acceptedSchemes`).
 /// The app registers NO URL scheme: these links
-/// arrive only inside a push, or from verder's own widget (`widgetURL`, which
+/// arrive only inside a push, or from Grip's own widget (`widgetURL`, which
 /// reaches `RootView.onOpenURL` without a registered scheme), so no web page
 /// or other app can fire one.
 enum DeepLink: Equatable, Sendable {
@@ -37,8 +37,8 @@ enum DeepLink: Equatable, Sendable {
     /// Sunday push itself carries `grip://inbox`; `NotificationRouter`
     /// sends a tap on its `WEEKLY` category here.
     case weekly
-    /// `grip://done-by-grip`: "Door verder gedaan" on Voor jou — what
-    /// verder filed or renamed by itself (Overzicht's card, the daily digest).
+    /// `grip://done-by-grip`: "Door Grip gedaan" on Voor jou — what
+    /// Grip filed or renamed by itself (Overzicht's card, the daily digest).
     case doneByGrip
     /// `grip://dossier`: the Dossier tab at its root (a link-less filing
     /// push: a merged duplex scan, a new loonstrook).

@@ -9,7 +9,7 @@ import Foundation
 ///
 /// AMBER ONLY for what waits on Martin: the waiting card when it is non-zero,
 /// and overdue tasks ("1 te laat" and its dot); never the money card, never
-/// "Door verder gedaan", never the map, never the scan queue.
+/// "Door Grip gedaan", never the map, never the scan queue.
 ///
 /// THE CASE'S CALENDAR is Amsterdam's, whatever zone the phone is in, and the
 /// board stores instants, never formatted strings: every age ("vandaag",
@@ -231,7 +231,7 @@ enum HomeSummary {
         return parts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
-    // MARK: - The rest card: tasks, scans, Door verder gedaan
+    // MARK: - The rest card: tasks, scans, Door Grip gedaan
 
     struct Row: Equatable {
         let title: String
@@ -282,8 +282,8 @@ enum HomeSummary {
                    amberSuffix: nil, meta: ["scans"])
     }
 
-    /// "Door verder gedaan · 3" / "2 OPGEBORGEN · 1 HERNOEMD". Counts only, so
-    /// it shows while locked. NEVER AMBER: what verder already did does not
+    /// "Door Grip gedaan · 3" / "2 OPGEBORGEN · 1 HERNOEMD". Counts only, so
+    /// it shows while locked. NEVER AMBER: what Grip already did does not
     /// wait on Martin.
     static func doneRow(_ inbox: InboxDTO) -> Row {
         let all = inbox.doneByGrip
@@ -299,7 +299,7 @@ enum HomeSummary {
         return Row(title: "\(DoneByGripCopy.title) · \(all.count)", amberSuffix: nil, meta: meta)
     }
 
-    /// Where a tap on "Door verder gedaan" leads; nil when there is nothing.
+    /// Where a tap on "Door Grip gedaan" leads; nil when there is nothing.
     static func doneOpens(_ inbox: InboxDTO) -> InboxRoute? {
         inbox.doneByGrip.isEmpty ? nil : .doneByGrip
     }
@@ -348,7 +348,7 @@ enum HomeSummary {
             return ErrorNotice(
                 strip: "Geen verbinding.",
                 headline: "Je bent nu\noffline.",
-                body: "Zodra er weer verbinding is, haalt verder het overzicht op. Er gaat niets verloren; scans in de wachtrij gaan daarna vanzelf mee.",
+                body: "Zodra er weer verbinding is, haalt Grip het overzicht op. Er gaat niets verloren; scans in de wachtrij gaan daarna vanzelf mee.",
                 readout: ["offline", next].compactMap { $0 },
                 step: nil)
         case .server(let code), .rejected(let code): cause = "server \(code)"
@@ -358,7 +358,7 @@ enum HomeSummary {
         return ErrorNotice(
             strip: "Overzicht nu niet op te halen.",
             headline: "Het overzicht is nu\nniet op te halen.",
-            body: "De server van verder werkt even niet. Er gaat niets verloren; verder probeert het elke minuut opnieuw.",
+            body: "De server van Grip werkt even niet. Er gaat niets verloren; Grip probeert het elke minuut opnieuw.",
             readout: [cause, next].compactMap { $0 },
             step: "Lukt het na een paar minuten nog niet? Kijk dan of de server thuis aanstaat.")
     }

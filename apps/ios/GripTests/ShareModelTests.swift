@@ -48,7 +48,7 @@ struct ShareModelTests {
         await m.commit()
 
         #expect(m.phase == .done(.delivered))
-        #expect(m.closing?.title == "Staan in de wachtrij van verder")
+        #expect(m.closing?.title == "Staan in de wachtrij van Grip")
         #expect(files(group).filter { $0.hasSuffix(".json") }.count == 2)
         #expect(files(group).filter { $0.hasSuffix(".bin") }.count == 2)
     }
@@ -67,7 +67,7 @@ struct ShareModelTests {
 
         #expect(ContinuousClock.now - started < .seconds(10))
         #expect(m.phase == .done(.kept(.unknown)))
-        #expect(m.closing?.title == "Bewaard in verder")
+        #expect(m.closing?.title == "Bewaard in Grip")
         #expect(m.closing?.reason == "in wachtrij")
         #expect(files(group).filter { $0.hasSuffix(".json") }.count == 1)
     }
@@ -89,7 +89,7 @@ struct ShareModelTests {
         let offline = model(try scratchDir()) { _, _ in .offline }
         offline.loaded([pdf])
         await offline.commit()
-        #expect(offline.closing == .init(title: "Bewaard in verder", body: "Hij gaat mee zodra je verder opent.",
+        #expect(offline.closing == .init(title: "Bewaard in Grip", body: "Hij gaat mee zodra je Grip opent.",
                                          reason: "offline · in wachtrij", name: "Brief.pdf", facts: [], delivered: false))
 
         let large = model(try scratchDir()) { _, _ in .tooLargeForExtension }
@@ -128,7 +128,7 @@ struct ShareModelTests {
 
         #expect(m.phase == .done(.kept(.signedOut)))
         #expect(await attempts.value == 0)
-        #expect(m.closing?.body == "Open verder en log in; daarna gaat het bestand vanzelf naar je dossier.")
+        #expect(m.closing?.body == "Open Grip en log in; daarna gaat het bestand vanzelf naar je dossier.")
         #expect(files(group).filter { $0.hasSuffix(".json") }.count == 1)
         #expect(!m.closesByItself())
     }
@@ -166,8 +166,8 @@ struct ShareModelTests {
         m.loaded([pdf, .link("https://westerlaan.example")])
         #expect(m.phase == .ready)
         #expect(m.prepared.count == 1)
-        #expect(m.notice?.head == "verder neemt er 1 van de 2 mee.")
-        #expect(m.notice?.body == "De link gaat niet mee; verder bewaart alleen bestanden.")
+        #expect(m.notice?.head == "Grip neemt er 1 van de 2 mee.")
+        #expect(m.notice?.body == "De link gaat niet mee; Grip bewaart alleen bestanden.")
     }
 
     // MARK: - Too large
@@ -196,9 +196,9 @@ struct ShareModelTests {
 
         #expect(m.phase == .ready)
         #expect(m.prepared.map(\.fileName) == ["Bevestiging.pdf", "Polis.pdf"])
-        #expect(m.notice?.head == "verder neemt er 2 van de 3 mee.")
+        #expect(m.notice?.head == "Grip neemt er 2 van de 3 mee.")
         #expect(m.notice?.body == "Jaaropgaaf 2025 scan.pdf is te groot (62\u{00A0}MB, max.\u{00A0}48\u{00A0}MB). Scan de "
-                + "brief met verder, of deel later een kleinere versie.")
+                + "brief met Grip, of deel later een kleinere versie.")
         #expect(m.rows.map(\.fileName) == ["Bevestiging.pdf", "Jaaropgaaf 2025 scan.pdf", "Polis.pdf"])
         #expect(m.rows.map(\.included) == [true, false, true])
         #expect(m.rows[1].detail == ["Gaat niet mee", "62\u{00A0}MB, max.\u{00A0}48\u{00A0}MB"])
@@ -222,7 +222,7 @@ struct ShareModelTests {
 
         #expect(m.phase == .ready)
         #expect(m.photoPages == 10)
-        #expect(m.notice == .init(head: "Dat zijn er 14; verder neemt de eerste 10 mee.",
+        #expect(m.notice == .init(head: "Dat zijn er 14; Grip neemt de eerste 10 mee.",
                                   body: "Deel foto 11–14 daarna opnieuw."))
         #expect(m.photoBadge == "foto 1–10 van 14")
         #expect(m.detail(of: 0).prefix(2) == ["PDF van 10\u{00A0}foto's", "10\u{00A0}pagina's"])
@@ -245,7 +245,7 @@ struct ShareModelTests {
 
         #expect(m.phase == .ready)
         #expect(m.prepared.count == 2)
-        #expect(m.notice == .init(head: "verder neemt er 2 van de 3 mee.", body: "1 bestand kon niet worden gelezen."))
+        #expect(m.notice == .init(head: "Grip neemt er 2 van de 3 mee.", body: "1 bestand kon niet worden gelezen."))
         #expect(!m.closesByItself())
 
         await m.commit()
@@ -276,7 +276,7 @@ struct ShareModelTests {
 
         #expect(m.photoPages == 2)
         #expect(m.detail(of: 0).prefix(2) == ["PDF van 2\u{00A0}foto's", "2\u{00A0}pagina's"])
-        #expect(m.notice?.head == "verder neemt er 2 van de 3 mee.")
+        #expect(m.notice?.head == "Grip neemt er 2 van de 3 mee.")
         let pdfData = try #require(m.prepared.first?.data)
         #expect(PDFDocument(data: pdfData)?.pageCount == 2)
     }
@@ -300,7 +300,7 @@ struct ShareModelTests {
         m.loaded([realPDF("Beschikking.pdf", pages: 2)])
         #expect(m.title == "Beschikking.pdf")
         #expect(m.detail.prefix(2) == ["PDF", "2\u{00A0}pagina's"])
-        #expect(m.explanation?.text == "Komt in je dossier onder Gedeeld. Daarna zet verder een suggestie voor naam en "
+        #expect(m.explanation?.text == "Komt in je dossier onder Gedeeld. Daarna zet Grip een suggestie voor naam en "
                 + "soort klaar in Voor jou.")
         #expect(m.rows.isEmpty)
     }

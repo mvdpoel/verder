@@ -18,9 +18,9 @@ import Observation
 final class ProposalModel {
     enum Copy {
         static let newerVersion = "Er is intussen een nieuwere versie. Bekijk hem en verstuur opnieuw."
-        static let refused = "verder weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel."
+        static let refused = "Grip weigerde dit: een ontvanger of bijlage hoort niet (meer) bij dit voorstel."
         static let notPending = "Dit voorstel is al afgehandeld."
-        static let offline = "Geen verbinding met verder. Probeer het opnieuw."
+        static let offline = "Geen verbinding met Grip. Probeer het opnieuw."
         static let failed = "Dat lukte niet. Probeer het over een moment opnieuw."
         static let unavailableAttachment = "Een bijlage is niet meer beschikbaar. Haal hem weg voordat je verstuurt."
         static let sending = "Wordt verstuurd…"
@@ -49,7 +49,7 @@ final class ProposalModel {
     private(set) var message: String?
     private(set) var loadError: String?
     private(set) var taskCreated = false
-    /// verder's own draft as the server stored it: what Martin's edits are
+    /// Grip's own draft as the server stored it: what Martin's edits are
     /// measured against (`changes`).
     private(set) var originalDraft: ReplyDraft?
 
@@ -197,7 +197,7 @@ final class ProposalModel {
         }
     }
 
-    /// What Martin changed against verder's draft; nil before loading or for
+    /// What Martin changed against Grip's draft; nil before loading or for
     /// a question.
     var changes: DraftChanges? {
         guard let originalDraft, let draft else { return nil }
@@ -206,7 +206,7 @@ final class ProposalModel {
 
     var isEdited: Bool { changes.map { !$0.isEmpty } ?? false }
 
-    /// Which of verder's drafts is on screen, as the server numbers it.
+    /// Which of Grip's drafts is on screen, as the server numbers it.
     var draftVersion: Int? { detail?.draftVersion }
 
     /// "CONCEPT · VERSIE 2" / "CONCEPT · AANGEPAST DOOR JOU" / "VERSTUURD BERICHT".
@@ -214,7 +214,7 @@ final class ProposalModel {
         ProposalText.conceptLabel(status: detail?.status ?? "", edited: isEdited, version: draftVersion)
     }
 
-    /// "1 ZIN TOEGEVOEGD DOOR JOU" over "VERSIE 2 VAN VERDER BEWAARD".
+    /// "1 ZIN TOEGEVOEGD DOOR JOU" over "VERSIE 2 VAN GRIP BEWAARD".
     var editSummary: (what: String, kept: String)? { ProposalText.editSummary(changes, version: draftVersion) }
 
     /// A new draft is being made over an earlier one ("Wordt opnieuw opgesteld").

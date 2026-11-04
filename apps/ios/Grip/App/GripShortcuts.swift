@@ -1,7 +1,7 @@
 import AppIntents
 
 /// The App Shortcut the Action button (and Shortcuts, and Spotlight) offers:
-/// "Actieknop → verder: Scan een brief".
+/// "Actieknop → Grip: Scan een brief".
 struct GripShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: ScanLetterIntent(),

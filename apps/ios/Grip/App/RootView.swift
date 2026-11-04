@@ -123,7 +123,7 @@ struct RootView: View {
             if signedIn { voice.sessionStarted() } else { voice.sessionEnded() }
         }
         // Push permission is asked after a sign-in or an unlock — moments
-        // Martin chose to look at verder — and never on a cold launch, which
+        // Martin chose to look at Grip — and never on a cold launch, which
         // belongs to the camera (plan 2 Task 7 step 3). Both are idempotent:
         // the pre-prompt is offered once per install.
         .onChange(of: auth.sessionGeneration) { _, _ in
@@ -156,7 +156,7 @@ struct RootView: View {
             if to.opensCamera { cameraRequested = true }
             if to.opensCall { call.reopen() }
         }
-        // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
+        // The widget's `widgetURL` (Task 23). Grip registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.
         .onOpenURL { url in links.deliver(DeepLink.parse(url.absoluteString)) }
         // An offline sign-out is revoked at the next launch, the next time the

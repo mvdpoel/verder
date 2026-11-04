@@ -142,7 +142,7 @@ struct LinkDestinationTests {
         #expect(NotificationRouter.fallback(category: "NOT_A_CATEGORY") == DeepLink.none)
     }
 
-    /// The daily "Door verder gedaan" digest is a FILING push with
+    /// The daily "Door Grip gedaan" digest is a FILING push with
     /// `grip://inbox`: a tap opens that section, not the top of Voor jou.
     @Test func theDigestOpensDoorGripGedaan() async {
         let links = DeepLinkInbox()

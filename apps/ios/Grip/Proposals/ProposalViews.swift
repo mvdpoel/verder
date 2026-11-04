@@ -458,7 +458,7 @@ struct DraftFailedCard: View {
     }
 }
 
-/// One thing verder relied on, with a chevron: every source opens. A
+/// One thing Grip relied on, with a chevron: every source opens. A
 /// document, a task or an earlier proposal opens its own screen; anything
 /// else (the mail, a stop, a debt) opens what the proposal knows of it.
 struct SourceRow: View {
@@ -506,7 +506,7 @@ struct SourceRow: View {
 
 /// What the proposal knows of a source the phone cannot open on its own
 /// screen: the mail it answers (sender, subject, when, the opening lines) or
-/// a stop or debt (its name, and why verder leaned on it).
+/// a stop or debt (its name, and why Grip leaned on it).
 struct SourceSheet: View {
     let title: String
     let meta: String
@@ -551,7 +551,7 @@ struct SourceSheet: View {
                         }
                         if let why = why?.trimmingCharacters(in: .whitespacesAndNewlines), !why.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                ProposalLabel("Waarom verder hierop leunt")
+                                ProposalLabel("Waarom Grip hierop leunt")
                                 Text(why)
                                     .font(.display(17, relativeTo: .body))
                                     .foregroundStyle(Color.ink)

@@ -9,7 +9,7 @@ import Foundation
 @MainActor
 protocol CallActivityControlling: AnyObject {
     var isRunning: Bool { get }
-    /// False when Live Activities are off for verder (Settings) or iOS refused.
+    /// False when Live Activities are off for Grip (Settings) or iOS refused.
     func start(_ state: CallActivityAttributes.ContentState) -> Bool
     func update(_ state: CallActivityAttributes.ContentState)
     func end()

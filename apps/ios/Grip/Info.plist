@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>verder</string>
+	<string>Grip</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,13 +21,13 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>verder gebruikt de camera om brieven voor je dossier te scannen.</string>
+	<string>Grip gebruikt de camera om brieven voor je dossier te scannen.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>verder vraagt Face ID zodat alleen jij je dossier opent.</string>
+	<string>Grip vraagt Face ID zodat alleen jij je dossier opent.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>verder neemt je stem op om een gesprek vast te leggen.</string>
+	<string>Grip neemt je stem op om een gesprek vast te leggen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>verder zet je opname op je telefoon om in tekst.</string>
+	<string>Grip zet je opname op je telefoon om in tekst.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIAppFonts</key>

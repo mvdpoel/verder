@@ -57,7 +57,7 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
 
     struct Question: Decodable, Equatable, Sendable {
         let prompt: String
-        /// Why verder asks, in plain Dutch ("Op 1 nov kwam een brief van …").
+        /// Why Grip asks, in plain Dutch ("Op 1 nov kwam een brief van …").
         /// Not yet written by the drafter: absent, the trigger card stands in.
         var why: String? = nil
     }
@@ -129,7 +129,7 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     let attachable: [Attachable]
     let options: [Option]
     let error: String?
-    /// Which of verder's drafts this is (1 for the first, 2 after a re-draft).
+    /// Which of Grip's drafts this is (1 for the first, 2 after a re-draft).
     /// Not yet served by every server: absent, the screen names no version.
     /// While `drafting`, the version that is being replaced, if any.
     var draftVersion: Int? = nil

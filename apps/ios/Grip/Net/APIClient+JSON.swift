@@ -1,6 +1,6 @@
 import Foundation
 
-/// JSON over verder's mobile routes, on top of `send`: the same cookie, Origin
+/// JSON over Grip's mobile routes, on top of `send`: the same cookie, Origin
 /// and trust header, and the same `APIError` mapping (401 and any 3xx →
 /// `.unauthorized`, 409 → `.rejected(409)`, …).
 extension APIClient {

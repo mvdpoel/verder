@@ -35,7 +35,7 @@ final class DocumentViewerModel {
     }
 
     enum Copy {
-        static let unsupported = "Dit soort bestand kan de telefoon niet tonen. Open het in verder op de computer."
+        static let unsupported = "Dit soort bestand kan de telefoon niet tonen. Open het in Grip op de computer."
         static let gone = "Dit document is er niet meer."
         static let offline = "Dit document staat nog niet op je telefoon, en er is geen verbinding."
         static let failed = "Het document kon niet worden geopend."

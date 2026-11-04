@@ -3,9 +3,9 @@ import SwiftUI
 /// What a question says, as pure functions (Figma "detail · final", Vraag).
 /// Tested in `DetailTextTests`.
 enum QuestionText {
-    /// "VRAAG VAN VERDER · ZO 1 NOV": who asks, and the day of what started it.
+    /// "VRAAG VAN GRIP · ZO 1 NOV": who asks, and the day of what started it.
     static func eyebrow(_ d: ProposalDetail) -> [String] {
-        ["Vraag van verder", DetailText.dayName(d.trigger.date ?? d.triggerAt ?? d.createdAt)]
+        ["Vraag van Grip", DetailText.dayName(d.trigger.date ?? d.triggerAt ?? d.createdAt)]
     }
 
     /// The question itself is the title.
@@ -82,15 +82,15 @@ enum QuestionText {
     }
 
     static let nothingChanged = "Er is niets veranderd. Je antwoord staat bij de vraag."
-    /// Not the frame's "verder bekijkt je antwoord": nothing reads a free
-    /// answer yet (FEATURES "verder pakt een vrij antwoord op").
-    static let freeTextKept = "Er is nog niets gekoppeld; je antwoord staat bij de vraag. Stelt verder iets voor, dan zie je dat in Voor jou."
+    /// Not the frame's "Grip bekijkt je antwoord": nothing reads a free
+    /// answer yet (FEATURES "Grip pakt een vrij antwoord op").
+    static let freeTextKept = "Er is nog niets gekoppeld; je antwoord staat bij de vraag. Stelt Grip iets voor, dan zie je dat in Voor jou."
     static let offline = "Je bent offline. Antwoorden kan weer zodra je verbinding hebt."
-    static let unreached = "Je antwoord kwam niet aan bij verder. Er is niets gekoppeld; je kunt het opnieuw proberen."
-    static let ownAnswerNote = "Je antwoord gaat alleen naar verder. Er gaat niets naar anderen."
+    static let unreached = "Je antwoord kwam niet aan bij Grip. Er is niets gekoppeld; je kunt het opnieuw proberen."
+    static let ownAnswerNote = "Je antwoord gaat alleen naar Grip. Er gaat niets naar anderen."
 }
 
-/// The body of a question: why verder asks, the options, an own answer —
+/// The body of a question: why Grip asks, the options, an own answer —
 /// or, once answered, what was answered and what happened.
 struct QuestionBody: View {
     let model: ProposalModel
@@ -152,13 +152,13 @@ struct QuestionBody: View {
         }
     }
 
-    /// "WAAROM VERDER HET VRAAGT": verder's own reason where it wrote one,
+    /// "WAAROM GRIP HET VRAAGT": Grip's own reason where it wrote one,
     /// else what started the question. Opens the source.
     @ViewBuilder private var why: some View {
         if let text = detail.payload?.question?.why?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
             let card = HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    DetailLabel("Waarom verder het vraagt")
+                    DetailLabel("Waarom Grip het vraagt")
                     DetailPara(text)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One permission pre-prompt (brief R25, Figma "auth · final", Pre-prompts
-/// row): a picture of what comes, a title, what verder uses it for, at most
+/// row): a picture of what comes, a title, what Grip uses it for, at most
 /// two promises, ONE button that is not titled "Toestaan", and no close. iOS's
 /// own alert follows the tap. Asked at first use, never on a cold launch.
 struct PermissionPrePrompt<Art: View>: View {
@@ -132,7 +132,7 @@ struct CameraPrePrompt: View {
 
     enum Copy {
         static let title = "Brieven scannen"
-        static let purpose = "verder gebruikt de camera om brieven voor je dossier te scannen."
+        static let purpose = "Grip gebruikt de camera om brieven voor je dossier te scannen."
         static let promises = ["De camera gaat alleen aan als jij op Scan tikt.",
                                "Wat je scant, gaat alleen naar je eigen dossier."]
     }
@@ -152,7 +152,7 @@ struct NotificationPrePrompt: View {
 
     enum Copy {
         static let title = "Meldingen"
-        static let purpose = "verder laat je weten als je bewindvoerder iets vraagt, of als er iets klaarstaat om te versturen."
+        static let purpose = "Grip laat je weten als je bewindvoerder iets vraagt, of als er iets klaarstaat om te versturen."
         /// Both true in the code: lock-screen bodies never carry a creditor or
         /// an amount (brief §4), and Meer → Meldingen holds a switch per kind
         /// (`NotificationPrefs`, /api/mobile/v1/push/preferences).
@@ -178,7 +178,7 @@ struct SampleNotification: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 AppIconTile(size: 20)
-                Text("verder").font(AuthType.callout).foregroundStyle(Color.inkSoft)
+                Text("Grip").font(AuthType.callout).foregroundStyle(Color.inkSoft)
                 Spacer()
                 Text("nu").font(AuthType.callout).foregroundStyle(Color.inkMute)
             }
@@ -271,7 +271,7 @@ struct ScanDiscArt: View {
     }
 }
 
-/// The camera is off for verder in Settings: say where to turn it on, and
+/// The camera is off for Grip in Settings: say where to turn it on, and
 /// one button that goes there (brief §2.5: cause in one line plus a verb).
 /// The tab bar stays, so it is never a dead end.
 struct CameraDenied: View {
@@ -279,7 +279,7 @@ struct CameraDenied: View {
 
     enum Copy {
         static let title = "Scannen kan nu niet"
-        static let body = "De camera staat uit in Instellingen → verder → Camera. Zet hem aan, dan kun je meteen scannen."
+        static let body = "De camera staat uit in Instellingen → Grip → Camera. Zet hem aan, dan kun je meteen scannen."
     }
 
     var body: some View {

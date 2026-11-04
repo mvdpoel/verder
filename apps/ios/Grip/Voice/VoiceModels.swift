@@ -136,7 +136,7 @@ struct VoiceDraft: Equatable, Sendable {
 /// A call recording handed to the voice log (Added 2026-11-03, Martin: "it
 /// would be perfect if i can also record phone calls and transcribe them").
 ///
-/// verder cannot record the call: iOS gives no third-party app a phone call's
+/// Grip cannot record the call: iOS gives no third-party app a phone call's
 /// audio, and `CXCallObserver` only says THAT a call started or ended. The
 /// iPhone's built-in call recording is NOT available in the Netherlands
 /// (Martin, 2026-11-03: support.apple.com/nl-nl/guide/iphone/iph57c6590e9/ios,
@@ -151,7 +151,7 @@ struct RecordingImport: Equatable, Sendable {
     let file: URL
     let fileName: String
     let mime: String
-    /// When it reached verder; the call's time when no call sheet knows better.
+    /// When it reached Grip; the call's time when no call sheet knows better.
     let capturedAt: Date?
     /// The App Group drop it came from, deleted after sending or cancelling.
     let drop: UUID?
@@ -167,7 +167,7 @@ struct RecordingImport: Equatable, Sendable {
     static let mimeByExtension = ["m4a": "audio/mp4", "aac": "audio/aac", "wav": "audio/wav", "caf": "audio/x-caf",
                                   "mp3": "audio/mpeg", "aif": "audio/aiff", "aiff": "audio/aiff"]
 
-    /// The extension verder's copy is stored (and kept) under: `AVAudioFile`
+    /// The extension Grip's copy is stored (and kept) under: `AVAudioFile`
     /// needs a real one to read the file, never the drop's `.bin`.
     var fileExtension: String {
         let own = IncomingDrop.fileExtension(fileName: fileName, mime: mime)

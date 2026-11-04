@@ -65,7 +65,7 @@ struct WidgetEntryTests {
 
     @Test func lockScreenShowsTheCount() {
         #expect(Self.content(Self.snapshot(), .accessoryCircular).countText == "4")
-        #expect(Self.content(Self.snapshot(), .accessoryInline).inlineText == "verder · 4 voor jou")
+        #expect(Self.content(Self.snapshot(), .accessoryInline).inlineText == "Grip · 4 voor jou")
         let rect = Self.content(Self.snapshot(), .accessoryRectangular)
         #expect(rect.countText == "4")
         #expect(rect.caption == "wachten op jou")
@@ -117,7 +117,7 @@ struct WidgetEntryTests {
             #expect(!c.countIsAmber(in: .fullColor), "\(family)")
         }
         #expect(Self.content(empty, .systemSmall).words == "Niets wacht op je")
-        #expect(Self.content(empty, .accessoryInline).inlineText == "verder · niets voor jou")
+        #expect(Self.content(empty, .accessoryInline).inlineText == "Grip · niets voor jou")
         // The check and the words replace "0" (Figma "Widgets thuis / leeg").
         #expect(Self.content(empty, .systemSmall).countText == nil)
         #expect(Self.content(empty, .systemSmall).glyph == .check)
@@ -206,7 +206,7 @@ struct WidgetEntryTests {
         for family in Self.homeScreen {
             let c = Self.content(old, family)
             #expect(c.state == .stale)
-            #expect(c.words == "Open verder om bij te werken", "\(family)")
+            #expect(c.words == "Open Grip om bij te werken", "\(family)")
             #expect(c.countText == nil, "a day-old count is a guess")
             #expect(c.rows.isEmpty)
             #expect(!c.countIsAmber(in: .fullColor))
@@ -218,13 +218,13 @@ struct WidgetEntryTests {
             #expect(c.countText == nil)
             #expect(!c.countIsAmber(in: .fullColor))
         }
-        #expect(Self.content(old, .accessoryInline).inlineText == "verder · open de app")
+        #expect(Self.content(old, .accessoryInline).inlineText == "Grip · open de app")
         #expect(Self.content(old, .accessoryCircular).words == "oud")
     }
 
     @Test func noSnapshotIsStale() {
         #expect(Self.content(nil, .systemMedium).state == .stale)
-        #expect(Self.content(nil, .systemMedium).words == "Open verder om bij te werken")
+        #expect(Self.content(nil, .systemMedium).words == "Open Grip om bij te werken")
         // No snapshot, no time: the "bijgewerkt" line stays away.
         #expect(Self.content(nil, .systemSmall).readout == nil)
         #expect(Self.content(nil, .systemLarge).footer == nil)
@@ -460,7 +460,7 @@ struct WidgetEntryTests {
         let small = Self.sample(WidgetSamples.empty, .systemSmall)
         #expect(small.readout == "bijgewerkt 08:12")
         let medium = Self.sample(WidgetSamples.empty, .systemMedium)
-        #expect(medium.body == "Goed bezig. verder laat het weten zodra er iets binnenkomt.")
+        #expect(medium.body == "Goed bezig. Grip laat het weten zodra er iets binnenkomt.")
         let large = Self.sample(WidgetSamples.empty, .systemLarge)
         #expect(large.updatedText == "bijgewerkt 08:12")
         #expect(large.footer?.text == "Nergens op. Je bent helemaal bij.")
@@ -472,7 +472,7 @@ struct WidgetEntryTests {
         #expect(Self.sample(WidgetSamples.stale, .systemSmall).readout == "bijgewerkt 31 okt")
         let medium = Self.sample(WidgetSamples.stale, .systemMedium)
         #expect(medium.readout == "laatst bijgewerkt za 31 okt 14:02")
-        #expect(medium.body == "verder toont bewust geen oud aantal.")
+        #expect(medium.body == "Grip toont bewust geen oud aantal.")
         let large = Self.sample(WidgetSamples.stale, .systemLarge)
         #expect(large.footer?.label == "laatst bijgewerkt")
         #expect(large.footer?.text == "za 31 okt 14:02")
@@ -489,9 +489,9 @@ struct WidgetEntryTests {
         }
         #expect(Self.content(nil, .systemSmall, signedOut: true).readout == "tik en log in")
         #expect(Self.content(nil, .systemMedium, signedOut: true).readout == "afgemeld · niets bewaard op dit toestel")
-        #expect(Self.content(nil, .accessoryInline, signedOut: true).inlineText == "verder · log in")
+        #expect(Self.content(nil, .accessoryInline, signedOut: true).inlineText == "Grip · log in")
         #expect(Self.content(nil, .systemLarge, signedOut: true).footer?.text == "Niets bewaard op dit toestel")
-        #expect(Self.content(nil, .systemSmall, signedOut: true).eyebrow == "verder")
+        #expect(Self.content(nil, .systemSmall, signedOut: true).eyebrow == "Grip")
         // A snapshot written after signing in again wins over a stale marker.
         #expect(Self.content(Self.snapshot(), .systemSmall, signedOut: true).state == .waiting)
         #expect(Self.content(nil, .systemSmall).state == .stale)
@@ -511,7 +511,7 @@ struct WidgetEntryTests {
         #expect(empty.sub == "geen open stap")
         #expect(empty.quiet && !empty.sensitive)
         #expect(!HeadlineContent.make(snapshot: WidgetSamples.stale, now: WidgetSamples.today).sensitive)
-        #expect(HeadlineContent.make(snapshot: nil, now: WidgetSamples.today, signedOut: true).text == "Log in bij verder")
+        #expect(HeadlineContent.make(snapshot: nil, now: WidgetSamples.today, signedOut: true).text == "Log in bij Grip")
     }
 
     @Test func theLargeFooterOpensTheMap() {

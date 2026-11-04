@@ -32,7 +32,7 @@ final class ShareModel {
         case saveFailed(SaveFailure)
         case done(Outcome)
         /// A call recording, left for the app as an audio drop: it is
-        /// transcribed in verder, on the phone, and never uploaded from here.
+        /// transcribed in Grip, on the phone, and never uploaded from here.
         case handedToApp
         case refused(Refusal)
     }
@@ -135,7 +135,7 @@ final class ShareModel {
     }
 
     enum Copy {
-        static let heading = "Naar verder"
+        static let heading = "Naar Grip"
         static let cancel = "Annuleren"
         static let close = "Sluiten"
         static let send = "Versturen"
@@ -156,44 +156,44 @@ final class ShareModel {
         static let saveFailedTitle = "Opslaan lukte niet"
         static let outOfSpace = "Er is te weinig ruimte vrij op je iPhone. Maak ruimte en probeer het opnieuw; "
             + "er is nog niets verstuurd."
-        static let saveFailedOther = "verder kon het niet op je iPhone bewaren. Probeer het opnieuw; "
+        static let saveFailedOther = "Grip kon het niet op je iPhone bewaren. Probeer het opnieuw; "
             + "er is nog niets verstuurd."
 
         static let tooLargeTitle = "Te groot om mee te nemen"
-        static let tooLargeBody = "Dat is meer dan verder per bestand meeneemt. Scan de brief met verder, "
+        static let tooLargeBody = "Dat is meer dan Grip per bestand meeneemt. Scan de brief met Grip, "
             + "of deel een kleinere versie."
         static let linkTitle = "Hier zit geen bestand in"
-        static let linkBody = "Je deelde een link. verder bewaart alleen bestanden, geen links. Open de link, "
-            + "bewaar de pagina als PDF en deel die met verder."
+        static let linkBody = "Je deelde een link. Grip bewaart alleen bestanden, geen links. Open de link, "
+            + "bewaar de pagina als PDF en deel die met Grip."
         static let nothingTitle = "Niets om te bewaren"
-        static let nothing = "Hier zit niets in dat verder kan bewaren."
+        static let nothing = "Hier zit niets in dat Grip kan bewaren."
         static let unreadableTitle = "Niet te lezen"
-        static let unreadable = "verder kon hier niets uit lezen. Er is niets verstuurd."
+        static let unreadable = "Grip kon hier niets uit lezen. Er is niets verstuurd."
         static let noGroupTitle = "Opslaan lukte niet"
-        static let noGroup = "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
+        static let noGroup = "Grip kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
 
-        static let openToTranscribe = "Open verder om het gesprek uit te schrijven."
+        static let openToTranscribe = "Open Grip om het gesprek uit te schrijven."
         static let audioAloneTitle = "Eén opname tegelijk"
         static let audioAlone = "Deel een opname los, één tegelijk, zonder andere bestanden erbij."
-        static let tooLargeAudio = "Deze opname is te groot voor verder (max. 300 MB)."
-        static let audioExplanation = "verder schrijft het gesprek uit op je iPhone. De opname zelf gaat alleen mee "
+        static let tooLargeAudio = "Deze opname is te groot voor Grip (max. 300 MB)."
+        static let audioExplanation = "Grip schrijft het gesprek uit op je iPhone. De opname zelf gaat alleen mee "
             + "als je hem bewaart."
 
         static let signedOutHead = "Je bent niet ingelogd"
-        static let signedOutBody = "Tik op Bewaar en open daarna verder om in te loggen. Dan gaat het bestand "
+        static let signedOutBody = "Tik op Bewaar en open daarna Grip om in te loggen. Dan gaat het bestand "
             + "vanzelf naar je dossier."
 
-        static let keptTitle = "Bewaard in verder"
+        static let keptTitle = "Bewaard in Grip"
         static func deliveredTitle(_ n: Int) -> String {
-            n == 1 ? "Staat in de wachtrij van verder" : "Staan in de wachtrij van verder"
+            n == 1 ? "Staat in de wachtrij van Grip" : "Staan in de wachtrij van Grip"
         }
         static func deliveredBody(_ n: Int) -> String {
-            (n == 1 ? "Hij komt" : "Ze komen") + " in je dossier onder Gedeeld. De voortgang zie je in verder."
+            (n == 1 ? "Hij komt" : "Ze komen") + " in je dossier onder Gedeeld. De voortgang zie je in Grip."
         }
         static func keptBody(_ n: Int) -> String {
-            (n == 1 ? "Hij gaat" : "Ze gaan") + " mee zodra je verder opent."
+            (n == 1 ? "Hij gaat" : "Ze gaan") + " mee zodra je Grip opent."
         }
-        static let keptSignedOutBody = "Open verder en log in; daarna gaat het bestand vanzelf naar je dossier."
+        static let keptSignedOutBody = "Open Grip en log in; daarna gaat het bestand vanzelf naar je dossier."
 
         /// `2 pagina's`, `1 pagina`.
         static func pages(_ n: Int) -> String { n == 1 ? "1\u{00A0}pagina" : "\(n)\u{00A0}pagina's" }
@@ -590,27 +590,27 @@ final class ShareModel {
         var sentences: [String] = []
         if tooLargeFiles.count == 1, let file = tooLargeFiles.first {
             let size = file.bytes.map { "\(Self.size($0)), " } ?? ""
-            sentences.append("\(file.fileName) is te groot (\(size)max.\u{00A0}48\u{00A0}MB). Scan de brief met verder, "
+            sentences.append("\(file.fileName) is te groot (\(size)max.\u{00A0}48\u{00A0}MB). Scan de brief met Grip, "
                              + "of deel later een kleinere versie.")
         } else if tooLargeFiles.count > 1 {
             sentences.append("\(tooLargeFiles.count) bestanden zijn te groot (max.\u{00A0}48\u{00A0}MB). Scan de brief "
-                             + "met verder, of deel later een kleinere versie.")
+                             + "met Grip, of deel later een kleinere versie.")
         }
         if leftOut == 1 { sentences.append("1 bestand kon niet worden gelezen.") }
         if leftOut > 1 { sentences.append("\(leftOut) bestanden konden niet worden gelezen.") }
-        if links.count == 1 { sentences.append("De link gaat niet mee; verder bewaart alleen bestanden.") }
-        if links.count > 1 { sentences.append("De links gaan niet mee; verder bewaart alleen bestanden.") }
+        if links.count == 1 { sentences.append("De link gaat niet mee; Grip bewaart alleen bestanden.") }
+        if links.count > 1 { sentences.append("De links gaan niet mee; Grip bewaart alleen bestanden.") }
         if isCut {
             let allPhotos = photosHandedOver == loadedCount
             let first = loadedCount + 1
             let range = first == handedOver ? "\(first)" : "\(first)–\(handedOver)"
             let rest = "Deel \(allPhotos ? "foto" : "bestand") \(range) daarna opnieuw."
-            return Notice(head: "Dat zijn er \(handedOver); verder neemt de eerste \(loadedCount) mee.",
+            return Notice(head: "Dat zijn er \(handedOver); Grip neemt de eerste \(loadedCount) mee.",
                           body: ([rest] + sentences).joined(separator: " "))
         }
         guard !sentences.isEmpty else { return nil }
         let going = loadedCount - leftOut - tooLargeFiles.count - links.count
-        return Notice(head: "verder neemt er \(going) van de \(loadedCount) mee.", body: sentences.joined(separator: " "))
+        return Notice(head: "Grip neemt er \(going) van de \(loadedCount) mee.", body: sentences.joined(separator: " "))
     }
 
     /// What happens next, matched to the share, so a share never seems to
@@ -620,7 +620,7 @@ final class ShareModel {
         case .loading:
             return Explanation(label: Copy.explanationLabel, text: handedOver > 1
                 ? "Komt in je dossier onder Gedeeld, elk bestand als eigen document."
-                : "Komt in je dossier onder Gedeeld. Daarna zet verder een suggestie voor naam en soort klaar in Voor jou.")
+                : "Komt in je dossier onder Gedeeld. Daarna zet Grip een suggestie voor naam en soort klaar in Voor jou.")
         case .ready, .saving: break
         default: return nil
         }
@@ -640,13 +640,13 @@ final class ShareModel {
         }
         if n == 1, hasPhotoPDF {
             return Explanation(label: Copy.explanationLabel, text: isCut
-                ? "Komt in je dossier onder Gedeeld. verder stelt daarna een naam voor in Voor jou."
-                : "Komt in je dossier onder Gedeeld, eerst met deze tijdelijke naam. verder stelt daarna een betere "
+                ? "Komt in je dossier onder Gedeeld. Grip stelt daarna een naam voor in Voor jou."
+                : "Komt in je dossier onder Gedeeld, eerst met deze tijdelijke naam. Grip stelt daarna een betere "
                     + "naam voor in Voor jou.")
         }
         if n == 1 {
             return Explanation(label: Copy.explanationLabel,
-                               text: "Komt in je dossier onder Gedeeld. Daarna zet verder een suggestie voor naam en "
+                               text: "Komt in je dossier onder Gedeeld. Daarna zet Grip een suggestie voor naam en "
                                    + "soort klaar in Voor jou.")
         }
         let all = n == 2 ? "allebei" : "alle \(Self.number(n))"
@@ -739,7 +739,7 @@ final class ShareModel {
             }
         }
         if isAudio {
-            // Never uploaded from here: verder transcribes it on the phone,
+            // Never uploaded from here: Grip transcribes it on the phone,
             // and the audio leaves only if Martin keeps it.
             let file = prepared[0]
             do {

@@ -19,7 +19,7 @@ struct TokenPreview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                Text("verder")
+                Text("Grip")
                     .font(.display(34, relativeTo: .largeTitle, weight: .ultraLight))
                     .foregroundStyle(Color.inkBright)
 

@@ -124,8 +124,8 @@ struct LeefgeldGlance: Equatable, Sendable {
             case 1: "1 rekening krijgt wekelijks geld binnen"
             default: "\(n) rekeningen krijgen wekelijks geld binnen"
             }
-            let setUp = "Welke je leefgeldrekening is, stel je in bij de installatie van verder."
-            let text = (n >= 2 ? "verder kiest er niet zelf een. \(setUp)" : setUp)
+            let setUp = "Welke je leefgeldrekening is, stel je in bij de installatie van Grip."
+            let text = (n >= 2 ? "Grip kiest er niet zelf een. \(setUp)" : setUp)
                 + "\n" + (n == 2 ? "Tik om beide rekeningen te bekijken." : "Tik om de rekeningen te bekijken.")
             return LeefgeldGlance(range: currentWeek.flatMap(range), partial: false,
                                   body: .message(Message(display: false, title: "Leefgeldrekening niet herkend",
@@ -147,7 +147,7 @@ struct LeefgeldGlance: Equatable, Sendable {
         LeefgeldGlance(
             range: week.flatMap(range), partial: false,
             body: .message(Message(
-                display: false, title: "Nog geen afschriften", meta: "0 boekingen in verder",
+                display: false, title: "Nog geen afschriften", meta: "0 boekingen in Grip",
                 text: "Lees je eerste afschrift in op de computer, onder Register → Afschrift inlezen. Daarna staat hier wat er deze week over is.")))
     }
 

@@ -184,7 +184,7 @@ struct HomeSummaryTests {
         #expect(HomeSummary.scansRow(q(0, 0), offline: false).meta == ["scans"])
     }
 
-    // MARK: - Door verder gedaan
+    // MARK: - Door Grip gedaan
 
     private func action(_ n: Int, kind: String = "auto-file") -> GripAction {
         GripAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Brief \(n)",
@@ -198,7 +198,7 @@ struct HomeSummaryTests {
     @Test func doneRowCountsWhatGripDidByKind() {
         let inbox = InboxDTO(count: 0, items: [], doneByGrip: [action(1), action(2, kind: "auto-name"), action(3)])
         let row = HomeSummary.doneRow(inbox)
-        #expect(row.title == "Door verder gedaan · 3")
+        #expect(row.title == "Door Grip gedaan · 3")
         #expect(row.meta == ["2 opgeborgen", "1 hernoemd"])
         #expect(!row.accessibilityLabel.contains("Brief"), "no document title reaches the glance")
         #expect(HomeSummary.doneOpens(inbox) == .doneByGrip)
@@ -206,12 +206,12 @@ struct HomeSummaryTests {
 
     @Test func nothingDoneOpensNothing() {
         let inbox = InboxDTO(count: 0, items: [], doneByGrip: [])
-        // lowercase: verder is the app; capital Verder is the bewindvoerder.
-        #expect(HomeSummary.doneRow(inbox).meta == ["verder deed niets zelf"])
+        // Grip is the app; Verder is the bewindvoerder.
+        #expect(HomeSummary.doneRow(inbox).meta == ["Grip deed niets zelf"])
         #expect(HomeSummary.doneOpens(inbox) == nil)
     }
 
-    /// What verder already did is never amber: it does not wait on Martin.
+    /// What Grip already did is never amber: it does not wait on Martin.
     @Test func doneRowIsNeverAmber() {
         let inbox = InboxDTO(count: 3, items: (1...3).map { item($0) }, doneByGrip: [action(1)])
         #expect(HomeSummary.cardAmber(.waiting, inbox: inbox))

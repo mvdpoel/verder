@@ -72,7 +72,7 @@ struct PasskeyAuthTests {
         #expect(reqs[1].url?.path() == "/api/auth/passkey/verify-authentication")
         #expect(reqs[1].value(forHTTPHeaderField: "Cookie") == Self.challengeCookiePair)
         #expect(reqs[1].value(forHTTPHeaderField: "Origin") == server.base.absoluteString)
-        #expect(reqs[1].value(forHTTPHeaderField: "x-verder-trust-device") == "1")
+        #expect(reqs[1].value(forHTTPHeaderField: "x-grip-trust-device") == "1")
         let body = try Self.json(reqs[1])
         let response = try #require(body["response"] as? [String: Any])
         #expect(response["id"] as? String == "AQID")
@@ -141,14 +141,14 @@ struct PasskeyAuthTests {
         let fake = FakeAuthenticator()
         let passkeys = PasskeyAuth(client: server.client(store: store), store: store, authenticator: fake)
 
-        try await passkeys.register(name: "verder op iPhone")
+        try await passkeys.register(name: "Grip op iPhone")
 
         let reqs = server.requests
         #expect(reqs.count == 2)
         #expect(reqs[0].httpMethod == "GET")
         #expect(reqs[0].url?.path() == "/api/auth/passkey/generate-register-options")
         // `name` stays OUT of the options query: there it would replace the
-        // WebAuthn userName, and the iOS passkey picker would list "verder op
+        // WebAuthn userName, and the iOS passkey picker would list "Grip op
         // iPhone" where Martin's e-mail address belongs.
         #expect(reqs[0].url?.query()?.contains("name=") != true)
         #expect(reqs[0].url?.query()?.contains("authenticatorAttachment=platform") == true)
@@ -159,7 +159,7 @@ struct PasskeyAuthTests {
         #expect(reqs[1].value(forHTTPHeaderField: "Cookie")
                 == "__Secure-better-auth.session_token=stok.sig; \(Self.challengeCookiePair)")
         let body = try Self.json(reqs[1])
-        #expect(body["name"] as? String == "verder op iPhone")
+        #expect(body["name"] as? String == "Grip op iPhone")
         let response = try #require(body["response"] as? [String: Any])
         #expect((response["response"] as? [String: Any])?["attestationObject"] as? String == "CQ")
 

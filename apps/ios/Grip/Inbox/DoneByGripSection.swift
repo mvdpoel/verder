@@ -1,13 +1,13 @@
 import SwiftUI
 import Observation
 
-/// The words "Door verder gedaan" uses for one action. The web spells the same
-/// sentences in apps/web/src/lib/verder-action-copy.ts; keep the two in step.
+/// The words "Door Grip gedaan" uses for one action. The web spells the same
+/// sentences in apps/web/src/lib/grip-action-copy.ts; keep the two in step.
 enum DoneByGripCopy {
-    static let title = "Door verder gedaan"
-    static let explanation = "Wat verder zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
-    /// Lowercase: verder is the app; capital Verder is the bewindvoerder.
-    static let none = "verder deed niets zelf."
+    static let title = "Door Grip gedaan"
+    static let explanation = "Wat Grip zelf heeft opgeborgen of hernoemd. Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
+    /// Grip is the app; Verder is the bewindvoerder.
+    static let none = "Grip deed niets zelf."
     static let undone = "Ongedaan gemaakt."
     static let changedSince = "Al aangepast of vernietigd — de lijst is bijgewerkt."
     static let refused = "Dit kan hier niet ongedaan worden gemaakt."
@@ -27,7 +27,7 @@ enum DoneByGripCopy {
     }
 
     static func headline(_ a: GripAction) -> String {
-        a.kind == "auto-file" ? "Opgeborgen door verder" : "Hernoemd door verder"
+        a.kind == "auto-file" ? "Opgeborgen door Grip" : "Hernoemd door Grip"
     }
 
     /// What changed, before → after, one clause per field that moved.
@@ -58,7 +58,7 @@ enum DoneByGripCopy {
 
 /// The one-tap undo. NO FACE ID, deliberately: an undo reveals nothing and
 /// sends nothing — the server appends a correction in Martin's name restoring
-/// the document as it was before verder touched it.
+/// the document as it was before Grip touched it.
 ///
 /// After every answer, good or refused, the list is refreshed: an undo moves a
 /// document back into the inbox, and a 409 means the row the button sat on is
@@ -81,7 +81,7 @@ final class DoneByGripModel {
         self.onUnauthorized = onUnauthorized
     }
 
-    nonisolated static func undoPath(_ changeId: String) -> String { "/api/mobile/v1/verder-actions/\(changeId)/undo" }
+    nonisolated static func undoPath(_ changeId: String) -> String { "/api/mobile/v1/grip-actions/\(changeId)/undo" }
 
     /// Only a row the server called undoable is ever posted.
     func canUndo(_ a: GripAction) -> Bool { a.undoable && !a.undone && !busy.contains(a.changeId) }
@@ -115,9 +115,9 @@ final class DoneByGripModel {
     }
 }
 
-/// "Door verder gedaan" at the end of Voor jou: a header that opens it in
+/// "Door Grip gedaan" at the end of Voor jou: a header that opens it in
 /// place ("BEKIJKEN ›" / "INKLAPPEN ⌄"), and — open — the explanation and
-/// one row per action with its one-tap undo. NEVER AMBER: what verder already
+/// one row per action with its one-tap undo. NEVER AMBER: what Grip already
 /// did is there to check, not waiting on Martin. On the empty list the
 /// closed section says in a sentence what is behind it.
 ///
@@ -190,7 +190,7 @@ struct DoneByGripListSection: View {
     }
 }
 
-/// One thing verder did, as the list draws it: the sentence, its soort (or
+/// One thing Grip did, as the list draws it: the sentence, its soort (or
 /// "hernoemd") and day, and "Ongedaan maken" where the server allows it —
 /// otherwise the server's reason why not.
 struct DoneByGripListRow: View {
@@ -318,7 +318,7 @@ struct DoneByGripScreen: View {
     }
 }
 
-/// One thing verder did, with its one-tap undo when the server allows it.
+/// One thing Grip did, with its one-tap undo when the server allows it.
 struct DoneByGripRow: View {
     let action: GripAction
     let model: DoneByGripModel

@@ -28,8 +28,8 @@ struct QuickActionTests {
 
     @Test func infoPlistCarriesTheDutchPurposeStrings() {
         #expect(Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") as? String
-                == "verder neemt je stem op om een gesprek vast te leggen.")
+                == "Grip neemt je stem op om een gesprek vast te leggen.")
         #expect(Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") as? String
-                == "verder zet je opname op je telefoon om in tekst.")
+                == "Grip zet je opname op je telefoon om in tekst.")
     }
 }

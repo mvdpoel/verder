@@ -34,7 +34,7 @@ targets:
     info:
       path: Grip/Info.plist
       properties:
-        CFBundleDisplayName: verder
+        CFBundleDisplayName: Grip
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen:
@@ -48,11 +48,11 @@ targets:
           - IBMPlexMono-Regular.ttf
           - IBMPlexMono-Medium.ttf
           - IBMPlexMono-SemiBold.ttf
-        NSCameraUsageDescription: "verder gebruikt de camera om brieven voor je dossier te scannen."
-        NSFaceIDUsageDescription: "verder vraagt Face ID zodat alleen jij je dossier opent."
+        NSCameraUsageDescription: "Grip gebruikt de camera om brieven voor je dossier te scannen."
+        NSFaceIDUsageDescription: "Grip vraagt Face ID zodat alleen jij je dossier opent."
         # The voice quick-log (plan 3 Task 25): recorded and transcribed on the phone.
-        NSMicrophoneUsageDescription: "verder neemt je stem op om een gesprek vast te leggen."
-        NSSpeechRecognitionUsageDescription: "verder zet je opname op je telefoon om in tekst."
+        NSMicrophoneUsageDescription: "Grip neemt je stem op om een gesprek vast te leggen."
+        NSSpeechRecognitionUsageDescription: "Grip zet je opname op je telefoon om in tekst."
         # Long-press the icon. Handled by App/QuickAction.swift.
         UIApplicationShortcutItems:
           - UIApplicationShortcutItemType: pro.vanderpoel.grip.scan
@@ -116,7 +116,7 @@ targets:
     info:
       path: GripNotify/Info.plist
       properties:
-        CFBundleDisplayName: verder
+        CFBundleDisplayName: Grip
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
@@ -166,7 +166,7 @@ targets:
     info:
       path: GripShare/Info.plist
       properties:
-        CFBundleDisplayName: verder
+        CFBundleDisplayName: Grip
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UIAppFonts:
@@ -181,13 +181,13 @@ targets:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
           NSExtensionAttributes:
-            # PDFs arrive as files; photos as images. verder takes TEN per
+            # PDFs arrive as files; photos as images. Grip takes TEN per
             # share (ShareModel.maxItems), but is offered for up to 50, so a
-            # share of 14 photos gets "verder neemt de eerste 10 mee" and the
-            # range to share again, instead of verder missing from the sheet
+            # share of 14 photos gets "Grip neemt de eerste 10 mee" and the
+            # range to share again, instead of Grip missing from the sheet
             # with no reason given. Only the first ten are loaded. One web
             # link is accepted ONLY to be answered: "Hier zit geen bestand in"
-            # says verder keeps files and how to make one of the page; a link
+            # says Grip keeps files and how to make one of the page; a link
             # never travels as a file.
             NSExtensionActivationRule:
               NSExtensionActivationSupportsFileWithMaxCount: 50
@@ -232,7 +232,7 @@ targets:
     info:
       path: GripWidget/Info.plist
       properties:
-        CFBundleDisplayName: verder
+        CFBundleDisplayName: Grip
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # An extension's Bundle.main is its own: it registers the fonts itself.

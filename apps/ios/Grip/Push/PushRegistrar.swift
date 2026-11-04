@@ -53,7 +53,7 @@ func hexToken(_ d: Data) -> String {
     d.map { String(format: "%02x", $0) }.joined()
 }
 
-/// Asks for permission, registers with APNs, and tells verder the token.
+/// Asks for permission, registers with APNs, and tells Grip the token.
 ///
 /// WHEN IT ASKS (plan Task 7 step 3): once, after the first successful
 /// sign-in or the first unlock with a session — never on a cold launch,
@@ -70,10 +70,10 @@ func hexToken(_ d: Data) -> String {
 final class PushRegistrar {
     enum Copy {
         static let prePromptTitle = "Meldingen aanzetten?"
-        static let prePrompt = "verder laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen."
+        static let prePrompt = "Grip laat je weten als Verder iets vraagt of als er iets klaarstaat om te versturen."
         static let allow = "Meldingen aanzetten"
         static let notNow = "Niet nu"
-        static let registerFailed = "Aanmelden voor meldingen lukte niet. verder probeert het bij de volgende start opnieuw."
+        static let registerFailed = "Aanmelden voor meldingen lukte niet. Grip probeert het bij de volgende start opnieuw."
         static let apnsFailed = "Deze iPhone kon zich niet aanmelden bij Apple voor meldingen."
     }
 
@@ -81,9 +81,9 @@ final class PushRegistrar {
 
     /// Nil until first read.
     private(set) var permission: PushPermission?
-    /// The environment verder last accepted for this phone's token.
+    /// The environment Grip last accepted for this phone's token.
     private(set) var registeredEnvironment: String?
-    /// The last four hex digits of the token verder stored, and when: enough
+    /// The last four hex digits of the token Grip stored, and when: enough
     /// to tell two registrations apart in Ontwikkelaar, never the token.
     private(set) var registeredTokenTail: String?
     private(set) var registeredAt: Date?
@@ -188,7 +188,7 @@ final class PushRegistrar {
     }
 
     #if DEBUG
-    /// A fixture run's registration as verder stored it (`FixtureEnvironment`):
+    /// A fixture run's registration as Grip stored it (`FixtureEnvironment`):
     /// nothing reaches APNs or a server.
     func seedFixtureRegistration(environment: String, tokenTail: String, at: Date) {
         registeredEnvironment = environment

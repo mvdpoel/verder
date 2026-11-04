@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// The fake verder behind `-fixtures <name>`: answers every `/api/mobile/v1/*`
+/// The fake Grip behind `-fixtures <name>`: answers every `/api/mobile/v1/*`
 /// request from the bundled synthetic dataset (`FixtureData/`, written from
 /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md — the ONLY data a
 /// fixture may hold, because simulator screenshots leave this machine).

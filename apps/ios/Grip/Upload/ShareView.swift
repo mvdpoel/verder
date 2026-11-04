@@ -6,7 +6,7 @@ import UIKit
 /// says comes from `ShareModel`; this decides only where it goes. Compiled
 /// into the extension AND the app, so the captures draw the same view.
 ///
-/// The bar ("Annuleren · Naar verder · Versturen") stays put and does not
+/// The bar ("Annuleren · Naar Grip · Versturen") stays put and does not
 /// scale with Dynamic Type, as a system navigation bar does not (a long press
 /// shows the Large Content Viewer); everything under it scrolls, so at AX5
 /// nothing is pushed off the sheet.

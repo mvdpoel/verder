@@ -2,7 +2,7 @@
   "Simulator Target Bundle": "pro.vanderpoel.grip",
   "aps": {
     "alert": {
-      "title": "Door verder gedaan",
+      "title": "Door Grip gedaan",
       "body": "2 opgeborgen · 1 hernoemd. Tik om ze na te kijken; opbergen draai je daar met één tik terug."
     },
     "category": "FILING",

@@ -22,7 +22,7 @@ enum SharedInput {
     /// "62 MB, max. 48 MB"); `thumbnail` a small PNG of a PDF's first page,
     /// drawn lazily by PDFKit without reading the file whole.
     case tooLarge(fileName: String, bytes: Int? = nil, thumbnail: Data? = nil)
-    /// A web link, not a file: verder keeps files only, and the screen says
+    /// A web link, not a file: Grip keeps files only, and the screen says
     /// so with the link itself ("Hier zit geen bestand in").
     case link(String)
     /// Handed over, but nothing could be read from it. Kept as an input rather

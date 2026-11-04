@@ -338,7 +338,7 @@ struct WeeklyScreen: Equatable, Sendable {
         enum Destination: Hashable, Sendable {
             /// The Dossier (mail, scans, filed documents).
             case dossier
-            /// Voor jou's "Door verder gedaan" list.
+            /// Voor jou's "Door Grip gedaan" list.
             case doneByGrip
         }
         let id: String
@@ -356,7 +356,7 @@ struct WeeklyScreen: Equatable, Sendable {
     var title: String { Self.title }
     static let retry = "Opnieuw proberen"
     static let happenedLabel = "WAT ER GEBEURDE"
-    static let gripLabel = "DOOR VERDER GEDAAN"
+    static let gripLabel = "DOOR GRIP GEDAAN"
 
     let week: String
     let closesAt: Date
@@ -427,8 +427,8 @@ struct WeeklyScreen: Equatable, Sendable {
                 sentence = Sentence(full: "Een rustige week — en dat mag.", compact: "Een rustige week — en dat mag.")
             case nil:
                 let nth = covered == 1 ? "eerste" : "tweede"
-                sentence = Sentence(full: "Je \(nth) week met verder. Een gemiddelde volgt vanaf 3 weken.",
-                                    compact: "Je \(nth) week met verder.")
+                sentence = Sentence(full: "Je \(nth) week met Grip. Een gemiddelde volgt vanaf 3 weken.",
+                                    compact: "Je \(nth) week met Grip.")
             }
         } else {
             chart = nil
@@ -439,7 +439,7 @@ struct WeeklyScreen: Equatable, Sendable {
             old.map { $0 == value ? "vorige week: ook \($0)" : "vorige week: \($0)" }
         }
         let filed = d.filedByMartin + d.filedByGrip
-        let filedLines: [[String]] = filed == 0 ? [] : [["\(d.filedByMartin) door jou", "\(d.filedByGrip) door verder"]]
+        let filedLines: [[String]] = filed == 0 ? [] : [["\(d.filedByMartin) door jou", "\(d.filedByGrip) door Grip"]]
         rows = [
             Row(id: "sent", title: d.sent == 0 ? "Niets verstuurd" : "\(d.sent) verstuurd",
                 lines: [before(d.sent, previous?.sent)].compactMap { $0 }.map { [$0] }, destination: nil),
@@ -594,7 +594,7 @@ struct WeeklyPage: Equatable, Sendable {
                 // day from being stranded at a line end, away from its month.
                 title: "Je eerste weekoverzicht komt zondag "
                     + "\(WeeklyFormat.dayMonthLong(next)) om 18:00".replacingOccurrences(of: " ", with: "\u{00A0}"),
-                body: "Elke zondag zet verder je week op een rij: wat je verstuurde, wat je ontving, wat je opborg en wat nog op je wacht.",
+                body: "Elke zondag zet Grip je week op een rij: wat je verstuurde, wat je ontving, wat je opborg en wat nog op je wacht.",
                 retry: false, older: nil)
             return WeeklyPage(eyebrow: ["EERSTE WEEK"], status: nil, body: .notYet(empty, preview: preview),
                               live: .make(live, .notYet))

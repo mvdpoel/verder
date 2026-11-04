@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// A gated tab while the app is locked: the verder mark on `void` and one way
+/// A gated tab while the app is locked: the Grip mark on `void` and one way
 /// through. When a tapped notification is waiting behind the lock, the target
 /// screen is drawn as empty placeholder rows under its own title — never its
 /// content (Figma "Lock / Koude start via melding"). No amber on the screen
@@ -190,7 +190,7 @@ struct PrivacyCover: View {
             Color.void.ignoresSafeArea()
             VStack(spacing: 24) {
                 GripRings(size: 160)
-                Text("VERDER")
+                Text("GRIP")
                     .font(.mono(17, relativeTo: .headline, weight: .medium))
                     .tracking(2)
                     .foregroundStyle(Color.inkSoft)

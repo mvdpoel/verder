@@ -34,7 +34,7 @@ struct BackgroundUploaderTests {
         #expect(req.httpMethod == "POST")
         #expect(req.url?.path() == "/api/mobile/v1/documents")
         #expect(req.value(forHTTPHeaderField: "Cookie") == "__Secure-better-auth.session_token=tok.sig")
-        #expect(req.value(forHTTPHeaderField: "x-verder-trust-device") == "1")
+        #expect(req.value(forHTTPHeaderField: "x-grip-trust-device") == "1")
         let type = try #require(req.value(forHTTPHeaderField: "Content-Type"))
         #expect(type.hasPrefix("multipart/form-data; boundary="))
         // The server answers 411 without it (vault-upload.ts).

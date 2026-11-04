@@ -21,7 +21,7 @@ import UIKit
 //      Cookie: <challenge cookie> from step 1 — REQUIRED, or 400 CHALLENGE_NOT_FOUND.
 //      → 200 { session, user } + Set-Cookie: the session cookie (setSessionCookie).
 //      The session row goes through packages/auth's databaseHooks.session.create,
-//      so x-verder-trust-device: 1 (APIClient sends it) gives the 30-day session.
+//      so x-grip-trust-device: 1 (APIClient sends it) gives the 30-day session.
 //      better-auth rate-limits this path at 10/min (packages/auth customRules).
 //
 // Register (session REQUIRED, and FRESH — freshSessionMiddleware: the session

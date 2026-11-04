@@ -43,7 +43,7 @@ enum DraftBodyCodec {
             .filter { !$0.isEmpty }
     }
 
-    /// Which display lines (by index) Martin added against verder's draft —
+    /// Which display lines (by index) Martin added against Grip's draft —
     /// the same longest-common-subsequence rule as `DraftChanges`, so the
     /// editor and the read-only concept mark the same paragraphs.
     static func addedLines(_ display: String, original: String) -> Set<Int> {
@@ -66,7 +66,7 @@ enum DraftBodyCodec {
 /// away, so nothing floats over the text.
 struct DraftBodyEditor: UIViewRepresentable {
     @Binding var text: String
-    /// verder's own body: what "added" is measured against.
+    /// Grip's own body: what "added" is measured against.
     let original: String
     @Binding var focused: Bool
     /// The dossier files that may be attached (empty: the button is off).

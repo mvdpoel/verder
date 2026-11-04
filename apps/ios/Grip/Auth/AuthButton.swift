@@ -112,9 +112,9 @@ struct AuthPressStyle: ButtonStyle {
     }
 }
 
-/// The "VERDER" word above a screen title.
+/// The "GRIP" word above a screen title.
 struct AuthEyebrow: View {
-    var text = "VERDER"
+    var text = "GRIP"
     var body: some View {
         Text(text)
             .font(.display(12, relativeTo: .caption, weight: .medium))
@@ -124,7 +124,7 @@ struct AuthEyebrow: View {
     }
 }
 
-/// The verder mark (the rail's): a ring, its axis and the curve.
+/// The Grip mark (the rail's): a ring, its axis and the curve.
 struct GripGlyph: View {
     var lineWidth: CGFloat = 1.6
 

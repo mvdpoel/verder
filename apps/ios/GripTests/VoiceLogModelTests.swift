@@ -442,7 +442,7 @@ struct VoiceLogModelTests {
         #expect(m.partyRow(locked: false).title == "Partijen laden…")
         await m.prepare()
         #expect(m.partiesState == .empty)
-        #expect(m.partyRow(locked: false) == .init(title: "Nog geen partijen", meta: "MET WIE · VOEG ER EEN TOE IN VERDER"))
+        #expect(m.partyRow(locked: false) == .init(title: "Nog geen partijen", meta: "MET WIE · VOEG ER EEN TOE IN GRIP"))
         #expect(VoiceLogModel.Copy.noParties.hasSuffix("Je notitie blijft staan."))
         #expect(m.canRetryParties)
         m.typeInstead()

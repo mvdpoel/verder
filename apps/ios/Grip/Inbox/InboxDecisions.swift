@@ -12,7 +12,7 @@ enum DecisionBody: Encodable, Sendable, Equatable {
     /// `{}`: rejected without a reason.
     case reject
     case status(String)
-    /// `{}`: "Door verder gedaan"'s undo.
+    /// `{}`: "Door Grip gedaan"'s undo.
     case empty
     /// `{ revision, option }`: a question answered with an option that
     /// changes nothing ("Nee", "Weet ik niet").
@@ -35,7 +35,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case approve
         case reject
         case task(String)
-        /// Undo one thing verder did ("Door verder gedaan").
+        /// Undo one thing Grip did ("Door Grip gedaan").
         case undoGrip
         /// A question's option that changes nothing, by its index, at the
         /// revision the screen showed; `label` is the option's own words.
@@ -43,7 +43,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
     }
 
     let id: UUID
-    /// The row it hides while held (`VoorJouList.key`, or `verder:<changeId>`).
+    /// The row it hides while held (`VoorJouList.key`, or `grip:<changeId>`).
     let key: String
     let title: String
     let action: Action
@@ -303,9 +303,9 @@ final class InboxDecisions {
         case .transport?:
             "\(d.noun) is nog niet opgeslagen: er is geen verbinding. Probeer het opnieuw zodra je verbinding hebt."
         case .rejected?:
-            "\(d.noun) is niet opgeslagen: verder weigerde dit. Open het om het na te kijken."
+            "\(d.noun) is niet opgeslagen: Grip weigerde dit. Open het om het na te kijken."
         default:
-            "\(d.noun) is nog niet opgeslagen: de server van verder heeft een storing. Probeer het opnieuw zodra verder weer werkt."
+            "\(d.noun) is nog niet opgeslagen: de server van Grip heeft een storing. Probeer het opnieuw zodra Grip weer werkt."
         }
     }
 

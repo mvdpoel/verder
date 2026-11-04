@@ -295,7 +295,7 @@ struct SuggestionDiffTests {
         let data = try #require(server.requests(to: "/approve").first?.httpBody)
         let body = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect((body["edits"] as? [String: Any])?["dueAt"] as? String == "2026-11-04T16:00:00.000Z")
-        #expect(m.provenance() == "Gevonden door verder in de brief van Gemeente Westerlaan van vr\u{00A0}30\u{00A0}okt.")
+        #expect(m.provenance() == "Gevonden door Grip in de brief van Gemeente Westerlaan van vr\u{00A0}30\u{00A0}okt.")
     }
 
     @Test func anApprovalThatNeverArrivedKeepsTheEdits() async {
@@ -350,7 +350,7 @@ struct TaskStatusControlTests {
         #expect(await m.setStatus("done") == false)
         #expect(m.failedStatus == "done")
         #expect(m.retryLabel == "Opnieuw: zet op gedaan")
-        #expect(m.failureText == "Gedaan is niet opgeslagen: je telefoon kreeg geen antwoord van verder. De status staat nog op bezig.")
+        #expect(m.failureText == "Gedaan is niet opgeslagen: je telefoon kreeg geen antwoord van Grip. De status staat nog op bezig.")
         #expect(m.task?.status == "in-progress", "nothing changed on screen")
     }
 

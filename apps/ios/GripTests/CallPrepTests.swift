@@ -540,7 +540,7 @@ struct CallPrepTests {
 
     // MARK: - Coming back from the Phone app
 
-    /// "Bel" hands the call to the Phone app and iOS suspends verder for the
+    /// "Bel" hands the call to the Phone app and iOS suspends Grip for the
     /// whole call, so the `.ended` callback may never arrive. Coming back to
     /// the foreground compares with `CXCallObserver.calls`: a call this
     /// session saw start that is no longer live has ended (review, 2026-11-03).
@@ -557,7 +557,7 @@ struct CallPrepTests {
         observer.live = [call: false]
         observer.send(.started(call))
         let started = clock
-        // No `.ended` is delivered. Twenty minutes later verder is back.
+        // No `.ended` is delivered. Twenty minutes later Grip is back.
         clock = clock.addingTimeInterval(1200)
         observer.live = [:]
         session.reconcile()
@@ -634,7 +634,7 @@ struct CallPrepTests {
         #expect(voice.value.first?.occurredAt == started)
     }
 
-    /// "Bel", then verder is suspended before CallKit's `.started` reaches it:
+    /// "Bel", then Grip is suspended before CallKit's `.started` reaches it:
     /// on return `startedCalls` is empty AND `CXCallObserver.calls` lists
     /// nothing. The session dialled and went to the background, so the call
     /// is over — the dial time stands in for the start (review, 2026-11-03).
@@ -675,7 +675,7 @@ struct CallPrepTests {
     }
 
     /// iOS asks "Bel …?" over the app before dialling; that alert makes the
-    /// scene inactive, never background. Cancelling it brings verder back
+    /// scene inactive, never background. Cancelling it brings Grip back
     /// with no call — and that is no call to log.
     @Test func aCancelledDialPromptEndsNothing() async throws {
         let r = try rig()
@@ -703,7 +703,7 @@ struct CallPrepTests {
         #expect(r.activities.isRunning)
     }
 
-    /// Back while the call is live but verder never reached the background
+    /// Back while the call is live but Grip never reached the background
     /// (the in-call UI only made it inactive): that is no cancelled prompt,
     /// so the dial stays armed for the return after the call.
     @Test func aReturnDuringALiveDialledCallKeepsTheDial() async throws {

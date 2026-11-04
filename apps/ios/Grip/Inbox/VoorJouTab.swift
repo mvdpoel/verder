@@ -7,10 +7,10 @@ enum InboxRoute: Hashable, Sendable {
     case proposal(String)
     case suggestion(String)
     case task(String)
-    /// A document, read-only: the one an undo of "Door verder gedaan" is
+    /// A document, read-only: the one an undo of "Door Grip gedaan" is
     /// putting back into Kan wachten, before its suggestion has an id.
     case document(id: String, title: String)
-    /// "Door verder gedaan" on a screen of its own, open: where Overzicht's
+    /// "Door Grip gedaan" on a screen of its own, open: where Overzicht's
     /// card and the daily digest lead.
     case doneByGrip
 

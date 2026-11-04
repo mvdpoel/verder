@@ -67,7 +67,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// `items` and `oldestAt` arrived with the widget (Plan 3 Task 23). A
     /// snapshot an older build left in the App Group has neither, and must
     /// still read — as count-only — rather than turn the widget into "Open
-    /// verder om bij te werken" until the app next refreshes.
+    /// Grip om bij te werken" until the app next refreshes.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         count = try c.decode(Int.self, forKey: .count)
@@ -107,7 +107,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     }
 
     /// `<dir>/widget/signed-out`: an EMPTY file that says only "signed out",
-    /// so the widget can tell "Log in bij verder" from a snapshot that was
+    /// so the widget can tell "Log in bij Grip" from a snapshot that was
     /// never written. It holds no case content — nothing about the dossier
     /// outlives a sign-out (`WidgetSnapshotTests.theSignedOutMarkerIsEmpty`).
     static func signedOutURL(in dir: URL) -> URL {
@@ -137,7 +137,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// and a rejected session call this (through `AuthModel` and
     /// `InboxStore`), because the pocket dossier is wiped then and the
     /// widget's copy of the same content may not outlive it. The widget then
-    /// says "Log in bij verder", and nothing new is
+    /// says "Log in bij Grip", and nothing new is
     /// written in its place but the empty signed-out marker. Already gone is
     /// success.
     static func erase(in dir: URL) {
@@ -149,7 +149,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     }
 
     /// Nil when nothing was written yet or the file does not decode — the
-    /// widget then says "Open verder om bij te werken", never a guessed count.
+    /// widget then says "Open Grip om bij te werken", never a guessed count.
     static func read(from dir: URL) -> WidgetSnapshot? {
         guard let data = try? Data(contentsOf: fileURL(in: dir)) else { return nil }
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)

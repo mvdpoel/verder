@@ -93,10 +93,10 @@ struct PlatformOwnerAuthenticator: DeviceOwnerAuthenticator {
 @Observable
 final class AppLock {
     enum Copy {
-        static let reason = "Ontgrendel verder om je dossier te zien."
+        static let reason = "Ontgrendel Grip om je dossier te zien."
         static let button = "Ontgrendel met Face ID"
         static let failed = "Ontgrendelen lukte niet. Probeer het nog eens."
-        static let unavailable = "Stel een toegangscode in op je iPhone; daarna kun je verder ontgrendelen."
+        static let unavailable = "Stel een toegangscode in op je iPhone; daarna kun je Grip ontgrendelen."
     }
 
     /// What a screen shows. `capture` and `glance` are open while locked;

@@ -9,7 +9,7 @@ enum SpeechAvailability: Equatable, Sendable {
     case needsDownload
     /// No Dutch on-device transcription on this iOS (or this device).
     case unsupported
-    /// Speech recognition is switched off for verder in Settings.
+    /// Speech recognition is switched off for Grip in Settings.
     case denied
 }
 

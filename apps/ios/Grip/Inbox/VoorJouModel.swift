@@ -14,10 +14,10 @@ enum VoorJouCopy {
     static let offlineLabel = "offline"
     static let offlineBody = "Je ziet je laatste stand. Goedkeuren en afronden kan weer zodra je verbinding hebt."
     static let failureLabel = "storing"
-    static let failureBody = "De server van verder heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan."
+    static let failureBody = "De server van Grip heeft een storing. Je ziet je laatste stand; er is niets verloren gegaan."
     static let failedHeadline = "Voor jou laadt nu niet"
-    static let failedServer = "De server van verder heeft een storing. Er is niets verloren gegaan."
-    static let failedOffline = "Er is geen verbinding. Zodra die er weer is, haalt verder je lijst op. Er is niets verloren gegaan."
+    static let failedServer = "De server van Grip heeft een storing. Er is niets verloren gegaan."
+    static let failedOffline = "Er is geen verbinding. Zodra die er weer is, haalt Grip je lijst op. Er is niets verloren gegaan."
     static let sendOnlyInProposal = "Versturen kan alleen in het voorstel zelf, met Face\u{00A0}ID."
     static let offlineMenu = "Offline: beslissen kan weer zodra je verbinding hebt."
     static let view = "Bekijken"
@@ -34,7 +34,7 @@ enum VoorJouCopy {
 ///
 /// AMBER MEANS WAITING ON MARTIN NOW: the dot sits on the Nu rows (proposals
 /// and questions) and beside the header's count, never on its own without
-/// words. "Door verder gedaan" is what verder already did: never amber.
+/// words. "Door Grip gedaan" is what Grip already did: never amber.
 enum VoorJouList {
     static let emptyText = "Niets wacht op je."
     /// A long section shows this many rows, then "Toon alle N" (brief §3).
@@ -46,7 +46,7 @@ enum VoorJouList {
         let item: WaitingItem
         let route: InboxRoute?
         let amber: Bool
-        /// A document an undo of "Door verder gedaan" is putting back, drawn
+        /// A document an undo of "Door Grip gedaan" is putting back, drawn
         /// in Kan wachten while that undo is on the phone (`restoredItem`).
         /// It carries no suggestion id yet, so it offers no decision: no
         /// swipe, no menu step, no tick. A tap opens the document itself.
@@ -99,7 +99,7 @@ enum VoorJouList {
     /// not drawn. ONLY Kan wachten is ever cut short: a limit never hides
     /// something that waits on Martin now.
     ///
-    /// `restoring`: "Door verder gedaan" actions whose undo the phone holds
+    /// `restoring`: "Door Grip gedaan" actions whose undo the phone holds
     /// or is posting. Each document is back at the top of Kan wachten AT
     /// ONCE, as the frame draws it, so the toast's "Terug in Kan wachten"
     /// is never contradicted by the list under it; the next refresh puts the
@@ -133,10 +133,10 @@ enum VoorJouList {
     /// The header's number: the SERVER's count, less only the decisions the
     /// phone is holding in their undo window (they are gone from the list,
     /// and the count follows them down; an undo puts both back).
-    /// An undo of "Door verder gedaan" adds its document back (`restored`).
+    /// An undo of "Door Grip gedaan" adds its document back (`restored`).
     static func count(_ inbox: InboxDTO, hidden: Int, restored: Int = 0) -> Int { max(0, inbox.count - hidden + restored) }
 
-    /// The undoable "Door verder gedaan" actions among `keys` (the held and
+    /// The undoable "Door Grip gedaan" actions among `keys` (the held and
     /// posting decisions): the documents on their way back to Kan wachten.
     static func restoring(_ inbox: InboxDTO, keys: Set<String>) -> [GripAction] {
         inbox.doneByGrip.filter { $0.undoable && !$0.undone && keys.contains(ListDecision.key(grip: $0.changeId)) }
@@ -148,7 +148,7 @@ enum VoorJouList {
                     subtitle: "Document", priority: 3, at: a.at, dueAt: nil, verder: false)
     }
 
-    /// "Door verder gedaan"'s count, less what is on its way back.
+    /// "Door Grip gedaan"'s count, less what is on its way back.
     static func doneCount(_ inbox: InboxDTO, restored: Int) -> Int { max(0, inbox.doneByGrip.count - restored) }
 
     /// Selection mode pays off only on a list with several suggestions: with
@@ -459,7 +459,7 @@ enum VoorJouList {
     static func suggestionsCount(_ n: Int) -> String { n == 1 ? "1 suggestie" : "\(n) suggesties" }
 }
 
-/// "Door verder gedaan" as the list draws it (Figma "voorjou · final"):
+/// "Door Grip gedaan" as the list draws it (Figma "voorjou · final"):
 /// a sentence per action, its soort or "hernoemd" and the day underneath.
 enum DoneByGripList {
     /// The model's English soort vocabulary in the app's Dutch; a soort
@@ -512,7 +512,7 @@ enum DoneByGripList {
 
     /// The collapsed section's sentence (and the empty list's).
     static func summary(_ n: Int) -> String {
-        let what = n == 1 ? "1 ding deed verder deze week zelf." : "\(n) dingen deed verder deze week zelf."
+        let what = n == 1 ? "1 ding deed Grip deze week zelf." : "\(n) dingen deed Grip deze week zelf."
         return "\(what) Klopt iets niet? Wat hier kan, maak je met één tik ongedaan."
     }
 }
