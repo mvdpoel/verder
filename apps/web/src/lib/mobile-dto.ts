@@ -1,4 +1,4 @@
-import type { WaitingItem } from "@verder/api/src/waiting";
+import { waitingCounts, type WaitingItem } from "@verder/api/src/waiting";
 import type { VerderActionDTO } from "@verder/api/src/routers/verder-actions";
 
 /**
@@ -28,6 +28,10 @@ export type { VerderActionDTO };
 
 export interface InboxDTO {
   count: number;
+  /** Martin's own work; the number the app icon shows (`waitingBucket`). */
+  todo: number;
+  /** The suggestion backlog awaiting his verdict. `todo + review === count`. */
+  review: number;
   items: WaitingItem[];
   /**
    * "Door verder gedaan". NOT part of `count`: what verder already did is
@@ -36,9 +40,9 @@ export interface InboxDTO {
   doneByVerder: VerderActionDTO[];
 }
 
-/** `count` is the list's own length, so the badge and the list cannot disagree. */
+/** All three counts come from the list itself, so they cannot disagree with it. */
 export function toInboxDTO(items: WaitingItem[], doneByVerder: VerderActionDTO[] = []): InboxDTO {
-  return { count: items.length, items, doneByVerder };
+  return { ...waitingCounts(items), items, doneByVerder };
 }
 
 // --- suggestion --------------------------------------------------------------

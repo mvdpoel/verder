@@ -15,7 +15,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Db } from "@verder/db";
 import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { loadWaiting, waitingCounts } from "@verder/api/src/waiting";
 import { recordRun } from "../heartbeat";
 import { realTransport, type PushTransport } from "../push";
 import {
@@ -47,9 +47,9 @@ export interface NotifyDeps {
 }
 
 /**
- * The badge: how many items wait on Martin, from THE one definition
- * (`loadWaiting`, spec §12.9) — the same list Voor jou shows, so the icon can
- * never say 3 over a list of 2.
+ * The badge: how many items are Martin's to DO (`waitingCounts(...).todo`), from
+ * THE one definition (`loadWaiting`, spec §12.9). The suggestion backlog is not
+ * in it (see `waitingBucket`); Voor jou shows both numbers.
  *
  * Deliberately NOT wrapped in a transaction: `loadWaiting` runs its reads in
  * parallel, which on the pool means parallel connections, while inside one
@@ -57,7 +57,7 @@ export interface NotifyDeps {
  * removed in pg 9). Every production notify() runs on the pool.
  */
 export async function countWaiting(db: Db): Promise<number> {
-  return (await loadWaiting(db)).length;
+  return waitingCounts(await loadWaiting(db)).todo;
 }
 
 export interface NotifyResult {

@@ -5,7 +5,7 @@ import { NOTIFY_WORKER_NAME } from "@verder/api/src/worker-names";
 import type { ApnsAlert, ApnsEnvironment, ApnsRaw, ApnsResult, ApnsSender } from "./apns";
 import type { PushTransport } from "../push";
 import { CATEGORY, notify, pushToDevices, type NotifyInput } from "./notify";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { loadWaiting, waitingCounts } from "@verder/api/src/waiting";
 
 // notify() runs as verder_worker, the role it meets in production — which also
 // proves the column-level SELECT on "session" (0037) is enough for the session
@@ -362,13 +362,13 @@ describe("notify", () => {
     expect(r).toEqual({ notificationId: null, duplicate: false, delivered: 0, failed: 0, skipped: 0 });
   });
 
-  it("every alert carries the waiting count as badge", async () => {
+  it("every alert carries the todo count as badge", async () => {
     await isolated(async (db) => {
       await device(db);
       const apns = fakeApns();
       // The real default: THE one definition of what waits on Martin, read in
       // the same transaction the expectation is read in.
-      const expected = (await loadWaiting(db)).length;
+      const expected = waitingCounts(await loadWaiting(db)).todo;
       await notify({ db, apns: apns.factory, webPush: () => null }, N);
       expect(apns.calls[0].alert.badge).toBe(expected);
       // And it is what the counter says, not a number a caller passed.

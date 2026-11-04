@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "@verder/db";
 import { BADGE_SYNC_WORKER_NAME } from "@verder/api/src/worker-names";
-import { loadWaiting } from "@verder/api/src/waiting";
+import { loadWaiting, waitingCounts } from "@verder/api/src/waiting";
 import type { ApnsRaw } from "./notify/apns";
 import type { PushCounts } from "./notify/notify";
 import { syncBadge } from "./badge-sync";
@@ -54,7 +54,7 @@ async function newestRun(db: Db) {
 describe("syncBadge", () => {
   it("first run sends", async () => {
     await isolated(async (db) => {
-      const expected = (await loadWaiting(db)).length;
+      const expected = waitingCounts(await loadWaiting(db)).todo;
       const fake = fakePush();
       const r = await syncBadge(db, { push: fake.push });
       expect(r).toEqual({ count: expected, sent: true });

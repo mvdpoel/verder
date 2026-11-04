@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StopRow } from "./track-map";
 import {
-  WAITING_TASK_STATUSES, waitingOnMartin,
+  WAITING_TASK_STATUSES, waitingCounts, waitingOnMartin,
   type ProposalRow, type SuggestionRow, type TaskRow,
 } from "./waiting";
 
@@ -146,5 +146,18 @@ describe("waitingOnMartin", () => {
       createdAt: new Date("2026-10-01T08:00:00Z") })] });
     expect(item.at).toBe("2026-10-01T08:00:00.000Z");
     expect(item.dueAt).toBe("2026-11-05T09:00:00.000Z");
+  });
+});
+
+describe("waitingCounts", () => {
+  it("the suggestion backlog is review; proposals, questions, tasks and the stop are todo", () => {
+    const items = run({
+      proposals: [proposal({ id: "p" }), proposal({ id: "q", kind: "question" })],
+      suggestions: [suggestion({ id: "s1" }), suggestion({ id: "s2", kind: "log-entry" }),
+        suggestion({ id: "s3", kind: "document-meta" })],
+      tasks: [task({ id: "t" })],
+      currentStop: stop({ id: "halte" }),
+    });
+    expect(waitingCounts(items)).toEqual({ count: 7, todo: 4, review: 3 });
   });
 });

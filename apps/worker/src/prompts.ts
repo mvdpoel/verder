@@ -19,7 +19,7 @@ export function buildEntryPrompt(email: {
   ].join("\n");
 }
 
-export const TASK_PROMPT_VERSION = "task-v1";
+export const TASK_PROMPT_VERSION = "task-v2";
 export function buildTaskPrompt(subject: string, bodyText: string): string {
   return [
     "You are screening email for a Dutch debt-restructuring (WSNP/bewindvoering) case.",
@@ -31,6 +31,8 @@ export function buildTaskPrompt(subject: string, bodyText: string): string {
     `administrator VerderGroep must act, "other" otherwise).`,
     "Purely informational email — status updates, confirmations, newsletters, FYI messages —",
     "is NOT a task: reply with isTask false. Only a clear, explicit request counts.",
+    "Checking or awaiting whether someone else did their work — confirming receipt, waiting for a",
+    "reply, verifying that the administrator handled something — is NOT a task for Martin.",
     `When isTask is false, use "" for title and details and null for dueAt.`,
     "",
     `Subject: ${subject}`,

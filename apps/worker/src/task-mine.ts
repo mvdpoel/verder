@@ -4,6 +4,8 @@ import { schema, type Db } from "@verder/db";
 import { normalizeName } from "@verder/parsers";
 import { recordRun } from "./heartbeat";
 import { proposalForOwnSentMail } from "./proposals/own-sent";
+import { senderAddress } from "./gmail";
+import { ownMailboxAddresses } from "./mail/relevance";
 import { buildTaskPrompt, TASK_PROMPT_VERSION } from "./prompts";
 import type { LlmPort } from "./ollama";
 
@@ -52,6 +54,16 @@ export async function suggestTask(
       return;
     }
 
+    // Martin's own outbound mail is never a task for him: whatever he asks of
+    // Verder there is Verder's work, and checking that Verder did it is not
+    // his (Martin, 2026-11-04). Task-v1 mined 14 of its first 25 suggestions
+    // from exactly this mail.
+    const from = senderAddress(email.fromAddr);
+    if (from !== null && ownMailboxAddresses().includes(from)) {
+      await recordRun(deps.db, "task-mine", "ok", { rawEmailId, skipped: "own-outbound" });
+      return;
+    }
+
     // Pre-LLM guard: one mining attempt per email (see doc comment above).
     const prior = await deps.db.select({ id: schema.suggestions.id })
       .from(schema.suggestions)
@@ -67,6 +79,12 @@ export async function suggestTask(
       await deps.llm.chatJson(buildTaskPrompt(email.subject, email.bodyText)));
     if (!parsed.isTask) {
       await recordRun(deps.db, "task-mine", "ok", { rawEmailId, isTask: false });
+      return;
+    }
+    // Only Martin's own work becomes a suggestion: a task for Verder or anyone
+    // else would sit in his list as a check on someone else's job.
+    if (parsed.assigneeHint !== "martin") {
+      await recordRun(deps.db, "task-mine", "ok", { rawEmailId, skipped: "not-martin", assigneeHint: parsed.assigneeHint });
       return;
     }
     const title = parsed.title.trim();
