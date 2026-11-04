@@ -333,6 +333,9 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
     /// The id of the part being edited: scrolled to the top, so the field,
     /// its "was:" line and the dock all show (frame "veld aanpassen").
     var focus: String? = nil
+    /// A decision sheet is up: the page behind it is dimmed, so the sheet
+    /// stands apart (the frames' scrim).
+    var dimmed = false
     @ViewBuilder let content: Content
     @ViewBuilder let dock: Dock
     @ViewBuilder let menu: Menu
@@ -340,10 +343,11 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
     @State private var scrolled: CGFloat = 0
     @State private var titleBottom: CGFloat = .infinity
 
-    init(navTitle: String, focus: String? = nil, @ViewBuilder content: () -> Content, @ViewBuilder dock: () -> Dock,
-         @ViewBuilder menu: () -> Menu) {
+    init(navTitle: String, focus: String? = nil, dimmed: Bool = false, @ViewBuilder content: () -> Content,
+         @ViewBuilder dock: () -> Dock, @ViewBuilder menu: () -> Menu) {
         self.navTitle = navTitle
         self.focus = focus
+        self.dimmed = dimmed
         self.content = content()
         self.dock = dock()
         self.menu = menu()
@@ -392,11 +396,21 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, now in
                 scrolled = now
             }
+            // The bar's hairline once anything has gone under it (the frames).
+            .safeAreaBar(edge: .top, spacing: 0) {
+                Rectangle().fill(Color.hairline).frame(height: 1).opacity(scrolled > 1 ? 1 : 0)
+            }
             .safeAreaBar(edge: .bottom, spacing: 0) { dock }
+            if dimmed { SheetScrim() }
         }
+        .animation(.easeOut(duration: 0.2), value: dimmed)
         .preferredColorScheme(.dark)
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // Opaque, as the frames draw it: nothing scrolled under the bar is
+        // legible behind its title, the back button or the status bar.
+        .toolbarBackground(Color.void, for: .navigationBar)
+        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(navTitle)
@@ -417,6 +431,18 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
         }
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+    }
+}
+
+/// The dim over a page while a decision sheet is up, so the sheet reads as
+/// apart from it rather than as more of the page.
+struct SheetScrim: View {
+    var body: some View {
+        Color.black.opacity(0.55)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .transition(.opacity)
     }
 }
 
@@ -450,6 +476,10 @@ struct FadingBarSurface: ViewModifier {
                 if edge == .top { gradient(from: .top) }
             }
             .padding(edge == .bottom ? .top : .bottom, -fade)
+            // Past the edge too, by hand: `ignoresSafeArea` alone does not
+            // always reach the home-indicator band (measured at AX5, where
+            // the page showed through under the dock).
+            .padding(.bottom, edge == .bottom ? -48 : 0)
             .ignoresSafeArea(edges: edge == .bottom ? .bottom : .top)
             .allowsHitTesting(false)
         }
@@ -516,6 +546,9 @@ struct DecisionSheet<Extra: View>: View {
     /// The title's fade only once the body has scrolled under it: at rest
     /// the first line is drawn at full contrast (the frames).
     @State private var bodyScrolled = false
+    /// The body is taller than its room: both pinned edges are ruled and
+    /// the scroll bar flashes, so a line cut at an edge reads as scrolling.
+    @State private var overflows = false
 
     init(title: String, text: String, action: String, enabled: Bool = true,
          onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void, @ViewBuilder extra: () -> Extra) {
@@ -542,10 +575,17 @@ struct DecisionSheet<Extra: View>: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.visible)
+            .scrollIndicatorsFlash(trigger: overflows)
             .fixtureScrollAnchor()
             .scrollEdgeEffectHidden(true, for: .all)
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 1 } action: { _, now in
                 bodyScrolled = now
+            }
+            .onScrollGeometryChange(for: Bool.self) { g in
+                g.contentSize.height > g.containerSize.height - g.contentInsets.top - g.contentInsets.bottom + 4
+            } action: { _, now in
+                overflows = now
             }
             // The title and the actions are bars: the body scrolls and fades
             // under both, never cut mid-line.
@@ -561,6 +601,9 @@ struct DecisionSheet<Extra: View>: View {
                     .padding(.bottom, 12)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { titleHeight = $0 }
                     .fadingBar(.top, color: .plate, fade: bodyScrolled ? 28 : 0)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.hairline).frame(height: 1).opacity(overflows ? 1 : 0)
+                    }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 VStack(spacing: 4) {
@@ -572,6 +615,9 @@ struct DecisionSheet<Extra: View>: View {
                 .padding(.bottom, 4)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { dockHeight = $0 }
                 .fadingBar(.bottom, color: .plate)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Color.hairline).frame(height: 1).opacity(overflows ? 1 : 0)
+                }
             }
         }
         .frameLeading()

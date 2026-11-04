@@ -28,7 +28,8 @@ final class SuggestionDetailModel {
         static let debtMeaning = "Goedkeuren legt vast wat zij vorderen; je erkent het bedrag daarmee niet."
         static let collector = "Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben."
         static let tapToEdit = "Tik op een veld om het aan te passen."
-        static let correctionWeb = "Een logboekregel blijft staan. Klopt er iets niet? Op de website voeg je een correctie toe; die komt ernaast."
+        /// "Correctie toevoegen" in the dock opens the entry on the website.
+        static let correctionWeb = "Een logboekregel blijft staan. Klopt er iets niet? Voeg een correctie toe; die komt ernaast."
         static let unknownAmount = "onbekend — de brief noemt geen totaal"
     }
 
@@ -89,6 +90,10 @@ final class SuggestionDetailModel {
     /// edits stay on screen.
     private(set) var approveFailed = false
     private(set) var loadedAt: Date?
+    /// A decision met an expired session: the screen stays, its edits are
+    /// kept for the next sign-in, and only "Opnieuw inloggen" opens sign-in
+    /// (frame "sessie verlopen").
+    private(set) var sessionExpired = false
     /// Haptic triggers (brief §2.5).
     private(set) var successes = 0
     private(set) var softs = 0
@@ -97,12 +102,14 @@ final class SuggestionDetailModel {
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private let kept: KeptSuggestionEdits
 
     init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
-         now: @escaping @Sendable () -> Date = { Date() }) {
+         now: @escaping @Sendable () -> Date = { Date() }, kept: KeptSuggestionEdits = .shared) {
         self.client = client
         self.onUnauthorized = onUnauthorized
         self.now = now
+        self.kept = kept
     }
 
     private var base: String { "/api/mobile/v1/suggestions/\(suggestion?.id ?? "")" }
@@ -113,6 +120,10 @@ final class SuggestionDetailModel {
             suggestion = s
             fields = Self.fields(for: s)
             values = Dictionary(uniqueKeysWithValues: fields.map { ($0.key, $0.initial) })
+            // What an expired session kept comes back, once.
+            if let back = kept.take(id) {
+                for (key, value) in back where values[key] != nil { values[key] = value }
+            }
             loadError = nil
             loadedAt = now()
         } catch {
@@ -238,12 +249,36 @@ final class SuggestionDetailModel {
         case .rejected(400)?:
             message = Copy.refused
             return false
-        case .unauthorized?, .rejected(404)?:
+        case .unauthorized?:
+            // Kept in place: the edits wait for the next sign-in, and the
+            // screen asks for it rather than vanishing under sign-in.
+            sessionExpired = true
+            message = nil
+            if let id = suggestion?.id {
+                kept.keep(values.filter { k, _ in isChanged(k) }, for: id)
+            }
+            return false
+        case .rejected(404)?:
             message = handle(error)
             return false
         default:
             message = nil
             return true
+        }
+    }
+
+    /// "Opnieuw inloggen": sign-in, now. The kept edits come back with the
+    /// suggestion once Martin is signed in again.
+    func signInAgain() { onUnauthorized() }
+
+    /// "Je sessie op deze telefoon is verlopen. Je 2 aanpassingen blijven op
+    /// deze telefoon bewaard."
+    var expiredText: String {
+        let head = "Je sessie op deze telefoon is verlopen."
+        switch changedCount {
+        case 0: return head
+        case 1: return "\(head) Je aanpassing blijft op deze telefoon bewaard."
+        default: return "\(head) Je \(changedCount) aanpassingen blijven op deze telefoon bewaard."
         }
     }
 
@@ -594,15 +629,18 @@ struct SuggestionDetailView: View {
     @State private var rejecting = false
     @State private var rejectReason = ""
     @State private var fixtureApplied = false
+    /// A capture's field at the top (`--detail aangepast --scroll middle`).
+    @State private var fixtureFocus: String?
     @FocusState private var focused: String?
     @Environment(\.networkOffline) private var offline
     @Environment(\.voorJouNext) private var next
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         // "Suggestie" in the bar whatever the kind (the frames); the kind is
         // in the eyebrow.
-        DetailScaffold(navTitle: "Suggestie", focus: editingKey) {
+        DetailScaffold(navTitle: "Suggestie", focus: editingKey ?? fixtureFocus, dimmed: rejecting) {
             if let model, let s = model.suggestion {
                 content(model, s)
             } else if let error = model?.loadError {
@@ -651,7 +689,9 @@ struct SuggestionDetailView: View {
         if let outcome {
             outcomeSection(model, outcome)
         } else {
-            if let failure = model.failureText {
+            if model.sessionExpired {
+                DetailNotice(label: "Opnieuw inloggen", text: model.expiredText).padding(.top, 24)
+            } else if let failure = model.failureText {
                 DetailNotice(label: "Niet vastgelegd", text: failure).padding(.top, 24)
             } else if model.isOpen {
                 DetailPara(model.provenance(), color: .inkMute, size: 15)
@@ -717,16 +757,6 @@ struct SuggestionDetailView: View {
                 DetailRow(title: model.value("summary"), meta: entryMeta(model), dot: .steel, web: web)
                 DetailPara(SuggestionDetailModel.Copy.correctionWeb, color: .inkMute, size: 15)
                     .padding(.horizontal, 16).padding(.top, 20)
-                if let web {
-                    Link(destination: web) {
-                        Text("Correctie toevoegen")
-                            .font(.display(17, relativeTo: .body, weight: .medium))
-                            .foregroundStyle(Color.signalLink)
-                            .frame(minHeight: 44)
-                    }
-                    .padding(.horizontal, 16).padding(.top, 4)
-                    .accessibilityHint("Opent op de website.")
-                }
             case "debt":
                 DetailLabel("Vordering vastgelegd").padding(.horizontal, 16)
                 DetailRow(title: model.value("creditorName"), meta: model.display(model.field("claimedCents")!), dot: .steel)
@@ -773,21 +803,35 @@ struct SuggestionDetailView: View {
         let state = editing ? (f.style.isDate ? "aan het kiezen" : "aan het aanpassen")
                             : (changed ? "aangepast" : "aanpassen")
         VStack(alignment: .leading, spacing: 8) {
-            DetailCard(highlighted: editing, label: {
-                if model.isOpen {
-                    EyebrowLine(groups: [f.label, state], color: editing ? .signal : .inkLabel,
-                                accent: editing ? .signal : (changed ? .ink : .signal))
-                } else {
-                    DetailLabel(f.label)
+            if editing {
+                // Being edited, the field stands bare under its label: the
+                // label lifts out above it, the field takes the signal edge
+                // (frames "veld aanpassen", "datum kiezen").
+                EyebrowLine(groups: [f.label, state], color: .signal, accent: .signal)
+                    .padding(.horizontal, 16)
+                editor(model, f)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.void, in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.signal, lineWidth: 1.5))
+                    .accessibilityElement(children: .contain)
+            } else {
+                DetailCard(label: {
+                    if model.isOpen {
+                        EyebrowLine(groups: [f.label, state], color: .inkLabel, accent: changed ? .ink : .signal)
+                    } else {
+                        DetailLabel(f.label)
+                    }
+                }) {
+                    valueText(model, f)
                 }
-            }) {
-                if editing { editor(model, f) } else { valueText(model, f) }
+                .contentShape(Rectangle())
+                .onTapGesture { if model.isOpen { begin(f) } }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(model.isOpen ? .isButton : [])
+                .accessibilityHint(model.isOpen ? "Dubbeltik om aan te passen." : "")
             }
-            .contentShape(Rectangle())
-            .onTapGesture { if model.isOpen, !editing { begin(f) } }
-            .accessibilityElement(children: editing ? .contain : .combine)
-            .accessibilityAddTraits(model.isOpen && !editing ? .isButton : [])
-            .accessibilityHint(model.isOpen && !editing ? "Dubbeltik om aan te passen." : "")
             // The field being edited shows only what it was: "Zet terug"
             // appears once it is done (the frames' "aangepast").
             if model.isOpen {
@@ -797,7 +841,11 @@ struct SuggestionDetailView: View {
                 }
             }
         }
-        .id(f.key)
+        // Scrolled to, the field keeps a line of room above its label, so
+        // the label is never under the bar's edge.
+        .background(alignment: .top) {
+            Color.clear.frame(height: 1).offset(y: -32).id(f.key)
+        }
     }
 
     @ViewBuilder
@@ -930,7 +978,22 @@ struct SuggestionDetailView: View {
                 AuthButton(title: "Klaar") { withAnimation(.snappy) { finishEditing() } }
                 if f.style.isDate { wheel(model, f) }
             }
-        } else if model.outcome != nil || (model.decided && next != nil) {
+        } else if model.sessionExpired, model.isOpen {
+            // Only this button opens sign-in; the screen and its edits stay.
+            DetailDock { AuthButton(title: "Opnieuw inloggen") { model.signInAgain() } }
+        } else if let o = model.outcome {
+            DetailDock {
+                NextInVoorJouButton(id: id)
+                // A logbook entry stands; a correction goes beside it, on the
+                // website (the phone has no logbook screen).
+                if o.kind == "log-entry", let entry = o.entryId {
+                    AuthButton(title: "Correctie toevoegen", weight: .ghost) {
+                        openURL(client.base.appending(path: "logbook/\(entry)"))
+                    }
+                    .accessibilityHint("Opent op de website.")
+                }
+            }
+        } else if model.decided && next != nil {
             DetailDock { NextInVoorJouButton(id: id) }
         } else if model.isOpen {
             DetailDock(note: offline ? SuggestionDetailModel.Copy.offline : nil) {
@@ -948,15 +1011,12 @@ struct SuggestionDetailView: View {
     private func wheel(_ model: SuggestionDetailModel, _ f: SuggestionDetailModel.Field) -> some View {
         let v = model.value(f.key)
         let date = (f.style == .day ? SuggestionFormat.date(fromDay: v) : parseISODate(v)) ?? now()
-        // No "Geen datum": "Zet terug" brings back the proposal's own.
-        DatePicker(f.label, selection: Binding(get: { date }, set: {
+        // No "Geen datum": "Zet terug" brings back the proposal's own. The
+        // days are named on the screen's own clock, never the system's
+        // "Vandaag".
+        DetailWheelPicker(selection: date, showsTime: f.style != .day, now: now(), label: f.label) {
             model.set(f.key, f.style == .day ? SuggestionFormat.day(from: $0) : SuggestionFormat.iso($0))
-        }), displayedComponents: f.style == .day ? [.date] : [.date, .hourAndMinute])
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .environment(\.locale, Locale(identifier: "nl_NL"))
-            .environment(\.timeZone, ProposalFormat.amsterdam)
-            .frame(maxWidth: .infinity)
+        }
     }
 
     // MARK: Reject
@@ -976,7 +1036,11 @@ struct SuggestionDetailView: View {
         DecisionSheet(title: "Niet relevant, met reden",
                       text: "Niet verplicht — verder leert ervan. Daarna gaat de suggestie uit Voor jou.",
                       action: "Niet relevant", enabled: model?.isBusy == false && !offline,
-                      onConfirm: { Task { if await model?.reject(reason: rejectReason) == true { rejecting = false; await next?.refresh() } } },
+                      onConfirm: { Task {
+                          if await model?.reject(reason: rejectReason) == true { rejecting = false; await next?.refresh() }
+                          // An expired session is said on the screen, under "Opnieuw inloggen".
+                          else if model?.sessionExpired == true { rejecting = false }
+                      } },
                       onCancel: { rejecting = false }) {
             VStack(alignment: .leading, spacing: 8) {
                 EyebrowLine(groups: ["Reden", "mag leeg blijven"])
@@ -1007,9 +1071,14 @@ struct SuggestionDetailView: View {
                 if let value = edits.first(where: { $0.0 == f.key })?.1 { model.set(f.key, value) }
                 editingKey = f.key
             }
-        case .aangepast?, .fout?, .vastgelegd?:
+        case .aangepast?, .fout?, .verlopen?:
             for (key, value) in edits { model.set(key, value) }
-            if launch.detail == .fout || launch.detail == .vastgelegd { _ = await model.approve() }
+            if launch.detail == .fout || launch.detail == .verlopen { _ = await model.approve() }
+            // The AX5 frame's position: the first changed field at the top.
+            if launch.detail == .aangepast, launch.scroll == .middle { fixtureFocus = edits.first?.0 }
+        case .vastgelegd?:
+            // The frames approve the suggestion as verder proposed it.
+            _ = await model.approve()
         case .reden?:
             rejectReason = "Dit gesprek staat al in het logboek."
             rejecting = true

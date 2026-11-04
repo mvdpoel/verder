@@ -47,7 +47,8 @@ enum QuestionText {
     static func confirmText(_ o: ProposalDetail.Option) -> String {
         let target = o.target.last.map { ".?!".contains($0) } == true ? o.target : o.target + "."
         switch o.action {
-        case "link-document-to-debt": return "\(target) Je kunt hem daar later weer losmaken op de website."
+        // "Daar": the vordering, where "Brief losmaken" leads.
+        case "link-document-to-debt": return "\(target) Je kunt hem daar later weer losmaken."
         case "set-task-status": return "\(target) Ook dat wordt vastgelegd."
         default: return target
         }
@@ -65,14 +66,25 @@ enum QuestionText {
     }
 
     /// Under "Brief gekoppeld aan de vordering": the way back. The phone has
-    /// no route to unlink (`debts.unlinkDocument` is the web's), so it says
-    /// where it is done rather than offering a button that cannot work.
+    /// no route to unlink (`debts.unlinkDocument` is the web's), so "Brief
+    /// losmaken" OPENS the vordering on the website and the note says so.
+    /// Not the frame's "Ook dat wordt vastgelegd": a `debt_documents` link is
+    /// not evidence, and removing it appends nothing to the ledger.
     static func undoNote(_ o: ProposalDetail.Option) -> String? {
-        o.action == "link-document-to-debt" ? "Verkeerd gekozen? Op de website maak je de brief weer los." : nil
+        o.action == "link-document-to-debt" ? "Verkeerd gekozen? Maak de brief weer los op de website." : nil
+    }
+
+    /// Where "Brief losmaken" goes on the website: the vordering itself when
+    /// the server named it, else the vorderingen.
+    static func unlinkPath(_ o: ProposalDetail.Option) -> String? {
+        guard o.action == "link-document-to-debt" else { return nil }
+        return o.debtId.map { "registry/debts/\($0)" } ?? "registry"
     }
 
     static let nothingChanged = "Er is niets veranderd. Je antwoord staat bij de vraag."
-    static let freeTextKept = "Er is niets gekoppeld; je antwoord staat bij de vraag, en verder doet er niets mee zonder jou."
+    /// Not the frame's "verder bekijkt je antwoord": nothing reads a free
+    /// answer yet (FEATURES "verder pakt een vrij antwoord op").
+    static let freeTextKept = "Er is nog niets gekoppeld; je antwoord staat bij de vraag. Stelt verder iets voor, dan zie je dat in Voor jou."
     static let offline = "Je bent offline. Antwoorden kan weer zodra je verbinding hebt."
     static let unreached = "Je antwoord kwam niet aan bij verder. Er is niets gekoppeld; je kunt het opnieuw proberen."
     static let ownAnswerNote = "Je antwoord gaat alleen naar verder. Er gaat niets naar anderen."
@@ -88,9 +100,12 @@ struct QuestionBody: View {
     @Binding var freeText: String
     var focus: FocusState<Bool>.Binding
     let onTrigger: () -> Void
+    /// The website, for what the phone hands over to it ("Brief losmaken").
+    var base: URL? = nil
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.voorJouNext) private var next
+    @Environment(\.openURL) private var openURL
     /// The trailing link glyph grows with the option's words.
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
@@ -271,6 +286,11 @@ struct QuestionBody: View {
                               ? .document(id: detail.trigger.id, title: detail.trigger.subject ?? "Brief") : nil)
                 if let note = QuestionText.undoNote(option) {
                     DetailPara(note, color: .inkMute, size: 15).padding(.horizontal, 16).padding(.top, 14)
+                }
+                if let path = QuestionText.unlinkPath(option), let base {
+                    AuthButton(title: "Brief losmaken", weight: .outline) { openURL(base.appending(path: path)) }
+                        .accessibilityHint("Opent de vordering op de website.")
+                        .padding(.top, 16)
                 }
             } else {
                 DetailPara(a?.freeText != nil ? QuestionText.freeTextKept : QuestionText.nothingChanged,

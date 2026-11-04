@@ -300,6 +300,8 @@ final class AuthModel {
         sessionExpired = false
         sessionExpiredAt = nil
         notice = nil
+        // Signing out on purpose drops what a 401 kept for the next sign-in.
+        KeptSuggestionEdits.shared.forgetAll()
         forgetLocally()
     }
 

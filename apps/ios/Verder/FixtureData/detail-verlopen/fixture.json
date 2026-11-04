@@ -1,0 +1,7 @@
+{
+  "description": "`detail` with the session expired by the time a decision is posted: the approval of suggestion c1 answers 401, and the screen keeps the suggestion and its edits in place behind \"Opnieuw inloggen\" (Suggestie / sessie verlopen).",
+  "today": "2026-11-02T13:02:00Z",
+  "statuses": {
+    "POST suggestions/00000000-f1c5-4000-8000-0000000000c1/approve": 401
+  }
+}

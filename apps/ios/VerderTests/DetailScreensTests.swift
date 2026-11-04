@@ -109,8 +109,14 @@ struct QuestionTextTests {
     }
 
     @Test func aLinkSaysWhereItIsUndoneAndNothingElseDoes() {
-        #expect(QuestionText.undoNote(Self.option("link-document-to-debt")) == "Verkeerd gekozen? Op de website maak je de brief weer los.")
+        #expect(QuestionText.undoNote(Self.option("link-document-to-debt")) == "Verkeerd gekozen? Maak de brief weer los op de website.")
         #expect(QuestionText.undoNote(Self.option("none")) == nil)
+        // "Brief losmaken" opens the vordering itself where the server names it.
+        var linked = Self.option("link-document-to-debt")
+        #expect(QuestionText.unlinkPath(linked) == "registry")
+        linked.debtId = "d-1"
+        #expect(QuestionText.unlinkPath(linked) == "registry/debts/d-1")
+        #expect(QuestionText.unlinkPath(Self.option("none")) == nil)
     }
 
     @Test func aLinkAnswerSaysWhatHappened() throws {

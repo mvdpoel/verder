@@ -14,6 +14,8 @@
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
 #            server-error-cached, offline-cached, money-complete, money-partial,
 #            money-geen-data, money-empty, money-no-account, money-unrecognised,
+#            detail, detail-na-vraag (after the question is answered), detail-fout,
+#            detail-offline, detail-verlopen,
 #            money-no-budget, money-overspent, dossier, timeline, weekly, weekly-rustig,
 #            weekly-tweede, weekly-eerste, weekly-loading, weekly-offline-kept,
 #            weekly-offline-missing, weekly-fout, voice)
@@ -85,7 +87,11 @@
 #            vastgelegd (approved) nee (a question answered "Nee": Voor jou
 #            with its undo toast) nietrelevant (a suggestion's one-tap "Niet
 #            relevant": the same) gedaan (a task just set to gedaan, its undo
-#            row up)
+#            row up) verlopen (two fields changed and approved against
+#            fixture detail-verlopen, whose approval answers 401: the
+#            session expired, the screen and its edits kept in place).
+#            With aangepast, --scroll middle puts the first changed field
+#            at the top (the AX5 frame's Gevorderd card)
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does
@@ -199,8 +205,8 @@ while [ $# -gt 0 ]; do
       shift ;;
     --detail)
       [ $# -ge 2 ] || usage
-      case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd|nee|nietrelevant|gedaan) DETAIL="$2" ;;
-        *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant or gedaan" >&2; exit 2 ;; esac
+      case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd|nee|nietrelevant|gedaan|verlopen) DETAIL="$2" ;;
+        *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant, gedaan or verlopen" >&2; exit 2 ;; esac
       shift ;;
     --swipe)
       [ $# -ge 2 ] || usage

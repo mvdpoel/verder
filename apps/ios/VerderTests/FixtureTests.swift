@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "detail", "detail-fout", "detail-offline", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
         "timeline-vier", "unauthorized", "voice", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
@@ -69,6 +69,28 @@ struct FixtureTests {
         #expect(fout.reply(method: "POST", path: FixtureServer.apiPrefix + "suggestions/\(p)c1/approve").isError)
         #expect(fout.reply(method: "POST", path: FixtureServer.apiPrefix + "tasks/\(p)d1/status").isError)
         #expect(fout.reply(method: "GET", path: FixtureServer.apiPrefix + "tasks").isError == false)
+        let verlopen = try Self.server("detail-verlopen")
+        guard case .json(401, _) = try verlopen.reply(method: "POST", path: FixtureServer.apiPrefix + "suggestions/\(p)c1/approve")
+        else { Issue.record("detail-verlopen must answer the approval 401"); return }
+    }
+
+    /// "Volgende in Voor jou · N" counts what still waits BESIDES the item on
+    /// screen, in the world each fixture draws: with the question still open
+    /// (`detail`) and once it is answered (`detail-na-vraag`, the frames that
+    /// come after an answer).
+    @Test func theNextCountExcludesWhatWasJustDecided() throws {
+        let p = "00000000-f1c5-4000-8000-0000000000"
+        let open = try Self.decode(InboxDTO.self, "detail", "inbox").items
+        let after = try Self.decode(InboxDTO.self, "detail-na-vraag", "inbox")
+        #expect(open.count == 4)
+        #expect(after.count == 3 && after.items.count == 3)
+        #expect(!after.items.contains { $0.id == "\(p)b1" })
+        // Vraag / beantwoord: the answered question is not on the list.
+        #expect(VoorJouNextPick.pick(items: after.items, excluding: "\(p)b2")?.remaining == 3)
+        // Taak / gedaan: the task just done no longer counts.
+        #expect(VoorJouNextPick.pick(items: after.items, excluding: "\(p)d1")?.remaining == 2)
+        // A suggestion decided while the question still waits.
+        #expect(VoorJouNextPick.pick(items: open, excluding: "\(p)c1")?.remaining == 3)
     }
 
     @Test func everyFixtureTheDataDocNamesIsBundled() {

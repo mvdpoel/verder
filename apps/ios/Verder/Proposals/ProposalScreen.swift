@@ -114,6 +114,9 @@ struct ProposalScreen: View {
                             .overlay(alignment: .top) {
                                 Rectangle().fill(Color.hairline).frame(height: 1).opacity(showsInlineTitle ? 1 : 0)
                             }
+                    } else {
+                        // A question rules the bar once anything is under it.
+                        Rectangle().fill(Color.hairline).frame(height: 1).opacity(scrolled > 1 ? 1 : 0)
                     }
                 }
                 .task(id: model?.detail?.id) { await applyFixture(proxy) }
@@ -124,7 +127,10 @@ struct ProposalScreen: View {
                     withAnimation(.snappy) { proxy.scrollTo(ProposalAnchor.answerEnd, anchor: .bottom) }
                 }
             }
+            // The confirmation sheet stands apart from the page behind it.
+            if pendingOption != nil { SheetScrim() }
         }
+        .animation(.easeOut(duration: 0.2), value: pendingOption != nil)
     }
 
     private func chrome(_ page: some View) -> some View {
@@ -145,8 +151,9 @@ struct ProposalScreen: View {
         .navigationTitle(model?.title ?? "Voorstel")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.void, for: .navigationBar)
-        // A question lets the system's scroll-edge fade show under the bar.
-        .toolbarBackgroundVisibility(isQuestion ? .automatic : .visible, for: .navigationBar)
+        // Opaque for a question too: scrolled words never show through
+        // behind the back button or the status bar (the frames).
+        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ViewThatFits(in: .horizontal) {
@@ -240,7 +247,7 @@ struct ProposalScreen: View {
                          : answered ? model.shownAnsweredAt.map(DetailText.stamp) : nil)
         if model.isPending, let note = model.senderNote { ProposalLabel(note, color: .inkMute).padding(.top, 8) }
         QuestionBody(model: model, detail: d, now: now(), pendingOption: $pendingOption, freeText: $freeText,
-                     focus: $answerFocused, onTrigger: { sourceSheet = .trigger })
+                     focus: $answerFocused, onTrigger: { sourceSheet = .trigger }, base: client.base)
         if !model.isPending, !answered, let line = model.statusLine {
             DetailPara(line, size: 15).padding(.top, 24)
         }

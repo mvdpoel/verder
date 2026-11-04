@@ -38,7 +38,8 @@
       "index": 0,
       "action": "link-document-to-debt",
       "label": "Ja, koppel hem",
-      "target": "De brief van 1 nov komt bij de vordering van Stroomnet Energie"
+      "target": "De brief van 1 nov komt bij de vordering van Stroomnet Energie",
+      "debtId": "00000000-f1c5-4000-8000-300000000001"
     },
     {
       "index": 1,

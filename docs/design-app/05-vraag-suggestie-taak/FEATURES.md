@@ -186,7 +186,7 @@ Het scherm wordt een verslag: een badge "BEANTWOORD" met de tijd, "JE ANTWOORD" 
 
 Na "Ja, koppel hem" biedt het beantwoorde scherm "Brief losmaken" ("Verkeerd gekozen? Maak de brief weer los. Ook dat wordt vastgelegd."). Na "Nee" of "Weet ik niet" toont Voor jou een toast, "Beantwoord: Nee · Ongedaan maken".
 
-**Status:** Deels gebouwd — "Nee" en "Weet ik niet" (actie `none`) gaan vanaf de Voor jou-stack terug naar de lijst en worden daar VASTGEHOUDEN met de toast "Beantwoord: Nee · Ongedaan maken" (`ListDecision.Action.answer`, `InboxDecisions`): pas na het venster van 5 s (8 s bij AX) gaat `POST …/answer` de deur uit, dus ongedaan maken binnen het venster betekent dat er nooit iets is vastgelegd en er geen terugroute nodig is. Na "Ja, koppel hem" opent de rij "Brief gekoppeld aan de vordering" de brief (chevron) en zegt het scherm "Verkeerd gekozen? Op de website maak je de brief weer los." Nog te bouwen: de knop "Brief losmaken" — de mobiele API heeft geen route voor `registry.debts.unlinkDocument`, en het frame belooft "Ook dat wordt vastgelegd", terwijl losmaken geen bewijs is en niets logt. Dat vraagt een route en Martins woorden.
+**Status:** Deels gebouwd — "Nee" en "Weet ik niet" (actie `none`) gaan vanaf de Voor jou-stack terug naar de lijst en worden daar VASTGEHOUDEN met de toast "Beantwoord: Nee · Ongedaan maken" (`ListDecision.Action.answer`, `InboxDecisions`): pas na het venster van 5 s (8 s bij AX) gaat `POST …/answer` de deur uit, dus ongedaan maken binnen het venster betekent dat er nooit iets is vastgelegd en er geen terugroute nodig is. Na "Ja, koppel hem" opent de rij "Brief gekoppeld aan de vordering" de brief (chevron), zegt het scherm "Verkeerd gekozen? Maak de brief weer los op de website." en staat de knop "Brief losmaken" eronder. Die knop OPENT de vordering op de website (`/registry/debts/<debtId>` als de server de `debtId` van de optie meestuurt — vandaag niet, dan `/registry`): de mobiele API heeft geen route voor `registry.debts.unlinkDocument`. Bewust NIET de framezin "Ook dat wordt vastgelegd": losmaken is geen bewijs en logt niets. Nog nodig voor losmaken op de telefoon zelf: een route en Martins woorden.
 
 #### Rechtstreeks vanuit de melding antwoorden
 
@@ -281,7 +281,7 @@ Waar de taak vandaan kwam, als link.
 
 "Uiterlijk op" als dag, uur en minuut ("wo 4 nov 2026 · 17:00").
 
-**Status:** Gebouwd — een deadline die als tijdstip binnenkomt krijgt veldstijl `.dateTime`: een draaiwiel voor dag, uur en minuut in de dock (waar het toetsenbord zou staan), Amsterdamse tijd, verstuurd als ISO 8601; een kale dag blijft een dag. Een gekozen datum gaat terug met "Zet terug"; er is geen "Geen datum".
+**Status:** Gebouwd — een deadline die als tijdstip binnenkomt krijgt veldstijl `.dateTime`: een draaiwiel voor dag, uur en minuut (stappen van 5; de eigen minuut van het voorstel blijft kiesbaar) in de dock, met de dagen benoemd als op de kaarten ("wo 4 nov") op de klok van het scherm, nooit het systeem-"Vandaag" (`DetailWheel`, getest in `DetailWheelTests`) (waar het toetsenbord zou staan), Amsterdamse tijd, verstuurd als ISO 8601; een kale dag blijft een dag. Een gekozen datum gaat terug met "Zet terug"; er is geen "Geen datum".
 
 #### Vaste last: goedkeuren op de website
 
@@ -348,7 +348,7 @@ Een badge "VASTGELEGD" (of "TAAK AANGEMAAKT") met de tijd, en een rij die het aa
 
 "Een logboekregel blijft staan. Klopt er iets niet? Voeg een correctie toe; die komt ernaast." Het corrigeren van een goedgekeurde logboekregel voegt een vervangende regel toe en bewerkt nooit het origineel.
 
-**Status:** Deels gebouwd — "Correctie toevoegen" en de rij "In het logboek" (chevron) openen de regel op de website (`/logbook/<entryId>`), waar de correctie wordt gemaakt; de tekst zegt "Op de website". Een correctie op de telefoon vraagt een mobiele route en een editor (`entries.correct`, gelogd als `entry.corrected` met `supersedesId`).
+**Status:** Deels gebouwd — "Correctie toevoegen" staat in de dock onder "Volgende in Voor jou", en samen met de rij "In het logboek" (chevron) opent hij de regel op de website (`/logbook/<entryId>`), waar de correctie wordt gemaakt; de tekst is die van het frame ("Voeg een correctie toe; die komt ernaast."), de knop heeft de hint "Opent op de website". Een correctie op de telefoon vraagt een mobiele route en een editor (`entries.correct`, gelogd als `entry.corrected` met `supersedesId`).
 
 #### Wie het eerst besliste
 
@@ -464,7 +464,7 @@ Brief §2.4: gecachte inhoud met "offline · bijgewerkt 14:02" in een mono-uitle
 
 "Je sessie op deze telefoon is verlopen. Je 2 aanpassingen blijven op deze telefoon bewaard." met "Opnieuw inloggen". Na het inloggen zijn de aanpassingen terug.
 
-**Status:** Deels gebouwd — een 401 van een van deze routes roept `auth.sessionRejected()` aan, die de app vervangt door "Je sessie is verlopen." (`Auth/SessionExpiredView.swift`). Aanpassingen die zijn getypt maar niet goedgekeurd gaan **verloren**, omdat ze alleen in het model van het scherm leven. Nodig: een beschermde opslag voor niet-verstuurde aanpassingen per suggestie-id (gewist door `forgetLocally` bij uitloggen), ze terugzetten na het inloggen, en een test.
+**Status:** Gebouwd voor goedkeuren en "Niet relevant, met reden" op het suggestiescherm — een 401 op die beslissing laat het scherm staan met de kaart "OPNIEUW INLOGGEN", de aanpassingen met "was:" en "Zet terug", en één knop "Opnieuw inloggen" in de dock; alleen die knop opent het inloggen (`SuggestionDetailModel.sessionExpired`, `signInAgain`). De gewijzigde velden worden IN HET GEHEUGEN bewaard (`KeptSuggestionEdits`, zoals `VoiceLogSession` een onverstuurd logboek bewaart), komen één keer terug wanneer die suggestie na het inloggen weer opent, en verdwijnen bij bewust uitloggen (`AuthModel.signOut`). Getest in `SessionExpiredTests`; capture `--detail verlopen` op fixture `detail-verlopen`. Grens: een app die wordt afgesloten verliest ze, en een 401 van een andere route (de lijst die ververst) vervangt de app nog steeds meteen door inloggen.
 
 #### Vergrendeld
 
@@ -600,7 +600,7 @@ Alle 44 frames uit `detail · final` (`326:6980`), opnieuw geëxporteerd op 2026
 | ![](frames/Vraag_normaal.jpg) `Vraag_normaal.jpg` | Vraag, open: waarom verder het vraagt, drie opties, eigen antwoord | Opties met servertekst en "Iets anders…" op `ProposalScreen`; geen "Waarom"-kaart |
 | ![](frames/Vraag_eigen_antwoord.jpg) `Vraag_eigen_antwoord.jpg` | Een eigen antwoord typen, "Geef antwoord" | Gebouwd als "Iets anders…" + "Antwoorden" |
 | ![](frames/Vraag_bevestigen.jpg) `Vraag_bevestigen.jpg` | Bevestigingssheet "Brief koppelen aan de vordering?" | Een systeembevestigingsdialoog, bij **elke** optie |
-| ![](frames/Vraag_beantwoord.jpg) `Vraag_beantwoord.jpg` | "Ja" beantwoord: wat er gebeurde, "Brief losmaken", volgend item | Alleen statusregel; geen ongedaan maken, geen volgende |
+| ![](frames/Vraag_beantwoord.jpg) `Vraag_beantwoord.jpg` | "Ja" beantwoord: wat er gebeurde, "Brief losmaken", volgend item | Wat er gebeurde, "Brief losmaken" (opent de vordering op de website), volgend item |
 | ![](frames/Vraag_beantwoord_eigen_antwoord.jpg) `Vraag_beantwoord_eigen_antwoord.jpg` | Beantwoord met eigen tekst, "verder bekijkt je antwoord" | Alleen opgeslagen; er volgt niets |
 | ![](frames/Vraag_beantwoord_Nee_of_Weet_ik_niet.jpg) `Vraag_beantwoord_Nee_of_Weet_ik_niet.jpg` | Terug op Voor jou met "Beantwoord: Nee · Ongedaan maken" | Niet gebouwd; geen ongedaan maken op de server |
 | ![](frames/Vraag_fout.jpg) `Vraag_fout.jpg` | Antwoord niet aangekomen, "Opnieuw: Ja, koppel hem" | Eén foutregel; opnieuw op de optie tikken |
@@ -628,9 +628,9 @@ Alle 44 frames uit `detail · final` (`326:6980`), opnieuw geëxporteerd op 2026
 | ![](frames/Suggestie_niet_relevant_met_reden.jpg) `Suggestie_niet_relevant_met_reden.jpg` | Redensheet | Gebouwd ("Waarom? Niet verplicht — verder leert ervan.") |
 | ![](frames/Suggestie_niet_relevant_met_reden_AX5.jpg) `Suggestie_niet_relevant_met_reden_AX5.jpg` | Redensheet bij AX5 | Sheet schaalt |
 | ![](frames/Suggestie_niet_relevant_met_reden_AX5_gescrold.jpg) `Suggestie_niet_relevant_met_reden_AX5_gescrold.jpg` | Redensheet bij AX5, gescrold | Sheet op middelhoge stand |
-| ![](frames/Suggestie_vastgelegd.jpg) `Suggestie_vastgelegd.jpg` | Goedgekeurd: link naar de logboekregel, "Correctie toevoegen" | Alleen "Vastgelegd." |
+| ![](frames/Suggestie_vastgelegd.jpg) `Suggestie_vastgelegd.jpg` | Goedgekeurd: link naar de logboekregel, "Correctie toevoegen" | Rij "In het logboek"; "Correctie toevoegen" in de dock (opent de website) |
 | ![](frames/Suggestie_fout.jpg) `Suggestie_fout.jpg` | Goedkeuring niet aangekomen, aanpassingen bewaard, "Opnieuw goedkeuren" | Foutregel, aanpassingen in het geheugen bewaard, opnieuw tikken |
-| ![](frames/Suggestie_sessie_verlopen.jpg) `Suggestie_sessie_verlopen.jpg` | Sessie verlopen, aanpassingen op de telefoon bewaard | App-breed "Je sessie is verlopen."; aanpassingen verloren |
+| ![](frames/Suggestie_sessie_verlopen.jpg) `Suggestie_sessie_verlopen.jpg` | Sessie verlopen, aanpassingen op de telefoon bewaard | Op het scherm zelf: kaart "Opnieuw inloggen", aanpassingen bewaard (in het geheugen) |
 | ![](frames/Suggestie_offline.jpg) `Suggestie_offline.jpg` | Offlinebanner, aanpassen toegestaan, beslissen uitgeschakeld | Foutregel alleen na een mislukt verzoek |
 | ![](frames/Suggestie_document_normaal.jpg) `Suggestie_document_normaal.jpg` | Documentsuggestie: titel, soort, afzender, het document | Alleen titel + soort |
 | ![](frames/Suggestie_vordering_aangepast.jpg) `Suggestie_vordering_aangepast.jpg` | Vordering met een aangepast bedrag | Bedrag alleen-lezen; schuldeiser bewerkbaar |

@@ -99,6 +99,11 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
         /// The SERVER's Dutch description of what the option does, built from
         /// the validated ids — the button never shows only the model's label.
         let target: String
+        /// The debt a "link-document-to-debt" option links to, where the
+        /// server sends it (not yet: `proposals.get` serves index, action,
+        /// label and target only). Absent, "Brief losmaken" opens the
+        /// vorderingen on the website rather than this one.
+        var debtId: String? = nil
         var id: Int { index }
     }
 
