@@ -57,6 +57,16 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
 
     struct Question: Decodable, Equatable, Sendable {
         let prompt: String
+        /// Why verder asks, in plain Dutch ("Op 1 nov kwam een brief van …").
+        /// Not yet written by the drafter: absent, the trigger card stands in.
+        var why: String? = nil
+    }
+
+    /// How a question was answered (`finalPayload.answer`). Not yet served by
+    /// `proposals.get`: absent, the screen shows the answer it gave itself.
+    struct Answer: Decodable, Equatable, Sendable {
+        var option: Int? = nil
+        var freeText: String? = nil
     }
 
     /// The subset of the stored model payload the screen reads. The question's
@@ -123,6 +133,9 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     /// When the worker claimed the send (`proposals.sending_at`). Not yet
     /// served: absent, a send in flight is never called "unknown".
     var sendingAt: Date? = nil
+    /// A question's answer and when it was given. Not yet served.
+    var answer: Answer? = nil
+    var decidedAt: Date? = nil
 }
 
 /// What the phone may change before approving, exactly the `payload` of

@@ -72,6 +72,18 @@ final class ProposalModel {
     private(set) var successes = 0
     private(set) var softs = 0
     private(set) var errors = 0
+    /// The answer THIS screen gave, and when: what the answered question
+    /// shows while the server does not yet serve its own `answer`.
+    private(set) var givenAnswer: ProposalDetail.Answer?
+    private(set) var answeredAt: Date?
+    /// The option whose answer never reached the server: the "NIET
+    /// AANGEKOMEN" card and "Opnieuw: <label>". Nothing was executed.
+    private(set) var failedOption: Int?
+    @ObservationIgnored private var lastFailureUnreached = false
+    /// When the copy on screen was last loaded (the offline readout).
+    private(set) var loadedAt: Date?
+    /// The screen's clock (a fixture's "today" in a capture).
+    @ObservationIgnored var clock: @Sendable () -> Date = { Date() }
 
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let gate: ApprovalGate
@@ -100,6 +112,7 @@ final class ProposalModel {
             let d: ProposalDetail = try await client.getJSON(base)
             apply(d)
             loadError = nil
+            loadedAt = clock()
         } catch {
             loadError = handle(error)
         }
@@ -419,7 +432,15 @@ final class ProposalModel {
         isBusy = true
         defer { isBusy = false }
         let ok = await decide("\(base)/answer", AnswerOptionRequest(revision: revision, option: index))
-        if ok { successes += 1 }
+        if ok {
+            successes += 1
+            givenAnswer = ProposalDetail.Answer(option: index)
+            answeredAt = clock()
+            failedOption = nil
+        } else if lastFailureUnreached {
+            failedOption = index
+            message = nil
+        }
         return ok
     }
 
@@ -429,12 +450,18 @@ final class ProposalModel {
         isBusy = true
         defer { isBusy = false }
         let ok = await decide("\(base)/answer", AnswerTextRequest(revision: revision, freeText: text))
-        if ok { successes += 1 }
+        if ok {
+            successes += 1
+            givenAnswer = ProposalDetail.Answer(freeText: text)
+            answeredAt = clock()
+            failedOption = nil
+        }
         return ok
     }
 
     private func decide<B: Encodable & Sendable>(_ path: String, _ body: B) async -> Bool {
         message = nil
+        lastFailureUnreached = false
         do {
             let _: Ignored = try await client.postJSON(path, body)
             await reload()
@@ -450,10 +477,18 @@ final class ProposalModel {
             return false
         } catch {
             message = handle(error)
+            if case .unauthorized? = error as? APIError {} else if case .rejected(404)? = error as? APIError {} else {
+                lastFailureUnreached = true
+            }
             errors += 1
             return false
         }
     }
+
+    /// The answer the screen shows once the question is answered: the
+    /// server's own, else the one given here.
+    var shownAnswer: ProposalDetail.Answer? { detail?.answer ?? givenAnswer }
+    var shownAnsweredAt: Date? { detail?.decidedAt ?? answeredAt }
 
     /// Creates the proposed task — on Martin's tap and nowhere else. The server
     /// makes a second tap a no-op; the phone does not even send it.

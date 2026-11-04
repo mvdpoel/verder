@@ -39,11 +39,14 @@ struct ProposalScreen: View {
     /// left above the bar, the words themselves are under it.
     private var showsInlineTitle: Bool { scrolled + 8 > titleBottom }
     @State private var fixtureApplied = false
+    @FocusState private var answerFocused: Bool
+    @Environment(\.voorJouNext) private var next
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
 
     private var ax: Bool { typeSize.isAccessibilitySize }
+    private var isQuestion: Bool { model?.detail?.kind == "question" }
     private var successes: Int { model?.successes ?? 0 }
     private var softs: Int { model?.softs ?? 0 }
     private var errors: Int { model?.errors ?? 0 }
@@ -87,13 +90,18 @@ struct ProposalScreen: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frameLeading()
                     .coordinateSpace(.named(ProposalAnchor.page))
+                    .coordinateSpace(.named(DetailSpace.name))
                 }
+                .scrollEdgeEffectStyle(.soft, for: .top)
                 .scrollDismissesKeyboard(.interactively)
                 // The bar names the proposal once the page's own title has
                 // gone UNDER it — measured, not a fixed offset, so the rule
                 // holds at AX5, where the title is three lines and ~200 pt.
                 .onPreferenceChange(LargeTitleBottom.self) { bottom in
-                    MainActor.assumeIsolated { titleBottom = bottom }
+                    MainActor.assumeIsolated { if !isQuestion { titleBottom = bottom } }
+                }
+                .onPreferenceChange(DetailTitleBottom.self) { bottom in
+                    MainActor.assumeIsolated { if isQuestion { titleBottom = bottom } }
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, now in
                     scrolled = now
@@ -101,10 +109,12 @@ struct ProposalScreen: View {
                 // Opaque, as the frames draw it: nothing scrolled under the
                 // bar shows through behind its title.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    Rectangle().fill(Color.void).frame(height: 2)
-                        .overlay(alignment: .top) {
-                            Rectangle().fill(Color.hairline).frame(height: 1).opacity(showsInlineTitle ? 1 : 0)
-                        }
+                    if !isQuestion {
+                        Rectangle().fill(Color.void).frame(height: 2)
+                            .overlay(alignment: .top) {
+                                Rectangle().fill(Color.hairline).frame(height: 1).opacity(showsInlineTitle ? 1 : 0)
+                            }
+                    }
                 }
                 .task(id: model?.detail?.id) { await applyFixture(proxy) }
             }
@@ -114,15 +124,23 @@ struct ProposalScreen: View {
     private func chrome(_ page: some View) -> some View {
         page
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !ax, let model, let bar = model.sendBar(offline: offline, holding: hold.isHolding, now: now()) {
+            if !ax, !isQuestion, let model, let bar = model.sendBar(offline: offline, holding: hold.isHolding, now: now()) {
                 barPanel(model, bar)
+            }
+        }
+        // A question's dock: "Volgende in Voor jou" once it is answered. A
+        // bar, so the page fades under it rather than being cut.
+        .safeAreaBar(edge: .bottom, spacing: 0) {
+            if isQuestion, model?.detail?.status == "sent", next != nil {
+                DetailDock { NextInVoorJouButton(id: id) }
             }
         }
         .preferredColorScheme(.dark)
         .navigationTitle(model?.title ?? "Voorstel")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.void, for: .navigationBar)
-        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+        // A question lets the system's scroll-edge fade show under the bar.
+        .toolbarBackgroundVisibility(isQuestion ? .automatic : .visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ViewThatFits(in: .horizontal) {
@@ -140,6 +158,7 @@ struct ProposalScreen: View {
         .task {
             if model == nil {
                 let m = ProposalModel(client: client, gate: gate, onUnauthorized: onUnauthorized)
+                m.clock = now
                 model = m
                 await m.load(id: id)
             }
@@ -161,13 +180,16 @@ struct ProposalScreen: View {
         .sheet(item: $sourceSheet) { item in
             if let d = model?.detail { sourceSheetView(item, d) }
         }
-        .confirmationDialog(pendingOption?.target ?? "", isPresented: Binding(
-            get: { pendingOption != nil }, set: { if !$0 { pendingOption = nil } }
-        ), titleVisibility: .visible) {
-            if let option = pendingOption {
-                Button(option.label) { Task { _ = await model?.answer(option: option.index); pendingOption = nil } }
-            }
-            Button("Annuleren", role: .cancel) { pendingOption = nil }
+        // Only an option with consequences asks first (brief §3).
+        .sheet(item: $pendingOption) { option in
+            DecisionSheet(title: QuestionText.confirmTitle(option, triggerType: model?.detail?.trigger.type ?? ""),
+                          text: QuestionText.confirmText(option), action: option.label,
+                          enabled: model?.isBusy == false && !offline,
+                          onConfirm: {
+                              pendingOption = nil
+                              Task { if await model?.answer(option: option.index) == true { await next?.refresh() } }
+                          },
+                          onCancel: { pendingOption = nil })
         }
         // VoiceOver and Switch Control: the hold is one action that asks first.
         .alert(SendCopy.accessibilityConfirm, isPresented: $confirmingAccessibleSend) {
@@ -194,6 +216,46 @@ struct ProposalScreen: View {
 
     @ViewBuilder
     private func content(_ model: ProposalModel, _ d: ProposalDetail, _ proxy: ScrollViewProxy) -> some View {
+        if d.kind == "question" {
+            questionContent(model, d)
+        } else {
+            replyContent(model, d, proxy)
+        }
+    }
+
+    /// A question (Figma "detail · final", Vraag): the question is the title.
+    @ViewBuilder
+    private func questionContent(_ model: ProposalModel, _ d: ProposalDetail) -> some View {
+        let answered = d.status == "sent"
+        DetailHeader(eyebrow: QuestionText.eyebrow(d), title: QuestionText.title(d),
+                     offlineStamp: offline && model.isPending ? DetailText.offlineStamp(loadedAt: model.loadedAt ?? now(), now: now()) : nil,
+                     badges: model.isPending ? [("Wacht op jou", .waiting)] : answered ? [("Beantwoord", .okay)] : [],
+                     note: model.isPending ? DetailText.age(since: d.createdAt, now: now())
+                         : answered ? model.shownAnsweredAt.map(DetailText.stamp) : nil)
+        if model.isPending, let note = model.senderNote { ProposalLabel(note, color: .inkMute).padding(.top, 8) }
+        QuestionBody(model: model, detail: d, now: now(), pendingOption: $pendingOption, freeText: $freeText,
+                     focus: $answerFocused, onTrigger: { sourceSheet = .trigger })
+        if !model.isPending, !answered, let line = model.statusLine {
+            DetailPara(line, size: 15).padding(.top, 24)
+        }
+        if let title = model.proposedTaskTitle {
+            Group {
+                if model.taskCreated {
+                    ProposalLabel("Taak aangemaakt: \(title)", color: .steel)
+                } else {
+                    AuthButton(title: "Taak aanmaken: \(title)", weight: model.isBusy ? .secondary : .outline,
+                               enabled: !model.isBusy) {
+                        Task { await model.createTask() }
+                    }
+                }
+            }
+            .padding(.top, 32)
+        }
+        Color.clear.frame(height: 1).id(ProposalAnchor.end)
+    }
+
+    @ViewBuilder
+    private func replyContent(_ model: ProposalModel, _ d: ProposalDetail, _ proxy: ScrollViewProxy) -> some View {
         header(model, d)
         triggerLink(model, d)
             .padding(.top, 22)
@@ -553,6 +615,17 @@ struct ProposalScreen: View {
         case .goedgekeurd?: model.fixtureSetApprovedHere()
         case .bron?: sourceSheet = .trigger
         case nil: break
+        }
+        switch launch.detail {
+        case .bevestigen?: pendingOption = model.optionButtons.first(where: QuestionText.needsConfirmation)
+        case .typen?:
+            freeText = "Alleen de eerste bladzijde hoort erbij; de tweede is van Duinzorg."
+            answerFocused = true
+        case .fout?:
+            if let option = model.optionButtons.first(where: QuestionText.needsConfirmation) {
+                _ = await model.answer(option: option.index)
+            }
+        default: break
         }
         try? await Task.sleep(for: .milliseconds(300))
         switch launch.scroll {

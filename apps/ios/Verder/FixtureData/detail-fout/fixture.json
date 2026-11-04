@@ -1,0 +1,9 @@
+{
+  "description": "`detail` with every decision POST failing (503): the \"niet aangekomen\" / \"niet vastgelegd\" / \"niet opgeslagen\" cards.",
+  "today": "2026-11-02T13:02:00Z",
+  "statuses": {
+    "POST proposals/00000000-f1c5-4000-8000-0000000000b1/answer": 503,
+    "POST suggestions/00000000-f1c5-4000-8000-0000000000c1/approve": 503,
+    "POST tasks/00000000-f1c5-4000-8000-0000000000d1/status": 503
+  }
+}

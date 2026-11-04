@@ -1,0 +1,61 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000b3",
+  "kind": "question",
+  "status": "sent",
+  "priority": "other",
+  "ask": "Hoort deze brief bij Stroomnet Energie?",
+  "partyName": "Stroomnet Energie",
+  "triggerAt": "2026-11-01T09:50:00.000Z",
+  "createdAt": "2026-11-01T10:15:00.000Z",
+  "trigger": {
+    "type": "document",
+    "id": "00000000-f1c5-4000-8000-200000000106",
+    "from": "Incassobureau Kade & Partners",
+    "subject": "Brief Kade & Partners 1 nov",
+    "date": "2026-11-01T09:50:00.000Z",
+    "excerpt": null
+  },
+  "dueAt": null,
+  "missing": [],
+  "entrySummary": null,
+  "proposedTask": null,
+  "createdTaskId": null,
+  "senderUnconfirmed": false,
+  "reliedOn": [],
+  "payload": {
+    "entrySummary": null,
+    "reply": null,
+    "question": {
+      "prompt": "Hoort deze brief bij Stroomnet Energie?",
+      "why": "Op 1 nov kwam een brief van Kade & Partners binnen als scan. Kade & Partners int de vordering van Stroomnet Energie; het kenmerk lijkt op dat van de sommatie van 14 okt."
+    }
+  },
+  "revision": 2,
+  "attachments": [],
+  "attachable": [],
+  "options": [
+    {
+      "index": 0,
+      "action": "link-document-to-debt",
+      "label": "Ja, koppel hem",
+      "target": "De brief van 1 nov komt bij de vordering van Stroomnet Energie"
+    },
+    {
+      "index": 1,
+      "action": "none",
+      "label": "Nee",
+      "target": "Brief blijft los"
+    },
+    {
+      "index": 2,
+      "action": "none",
+      "label": "Weet ik niet",
+      "target": "Brief blijft los"
+    }
+  ],
+  "error": null,
+  "answer": {
+    "freeText": "Alleen de eerste bladzijde hoort erbij; de tweede is van Duinzorg."
+  },
+  "decidedAt": "2026-11-01T13:06:00.000Z"
+}

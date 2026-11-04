@@ -44,6 +44,8 @@ import Foundation
 ///                              editor (the editor sheet, edited) · typen (the editor, typing) ·
 ///                              weggooien (the editor's "Wijzigingen weggooien?") · afwijzen (the reject sheet,
 ///                              "Ik regel het zelf" chosen)
+///     -fixtures-detail <state>  a question, suggestion or task screen in a state only a gesture
+///                              reaches (`DetailState`)
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
 ///             |meer:<account|notifications|widgets|about|developer>>
@@ -136,6 +138,15 @@ struct FixtureLaunch: Equatable, Sendable {
         case hold, faceid, afgebroken, aangepast, editor, typen, weggooien, afwijzen, goedgekeurd, bron
     }
 
+    /// The detail screens' gesture-only states (`-fixtures-detail`): a
+    /// question's confirmation sheet up (bevestigen) or its own answer typed
+    /// (typen); a decision posted against a fixture whose POST fails (fout);
+    /// a suggestion's field being edited (veld, datum), two fields changed
+    /// (aangepast), the reason sheet up (reden), or approved (vastgelegd).
+    enum DetailState: String, CaseIterable, Sendable {
+        case bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd
+    }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end, middle }
@@ -214,6 +225,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var mic: MicState? = nil
     var voorJou: [VoorJouState] = []
     var proposal: ProposalState? = nil
+    var detail: DetailState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -300,6 +312,10 @@ struct FixtureLaunch: Equatable, Sendable {
                                  },
                              proposal: try value(after: "-fixtures-proposal").map { (raw: String) throws(ParseError) -> ProposalState in
                                  guard let s = ProposalState(rawValue: raw) else { throw .unknownValue("-fixtures-proposal", raw) }
+                                 return s
+                             },
+                             detail: try value(after: "-fixtures-detail").map { (raw: String) throws(ParseError) -> DetailState in
+                                 guard let s = DetailState(rawValue: raw) else { throw .unknownValue("-fixtures-detail", raw) }
                                  return s
                              })
     }

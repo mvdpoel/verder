@@ -2,19 +2,19 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-03 (iOS in `apps/ios/Verder/`, mobiele routes in `apps/web/src/app/api/mobile/v1/`, routers in `packages/api/src/routers/`, worker in `apps/worker/src/`). Elke functie hieronder heeft precies één statusregel.
+Gecontroleerd tegen de code op branch `feat/iphone-app` op 2026-11-04 (iOS in `apps/ios/Verder/`, mobiele routes in `apps/web/src/app/api/mobile/v1/`, routers in `packages/api/src/routers/`, worker in `apps/worker/src/`). Elke functie hieronder heeft precies één statusregel.
 
 | Status | Aantal |
 |---|---|
-| **Gebouwd** | 26 |
-| **Deels gebouwd** | 19 |
-| **Nog te bouwen** | 19 |
+| **Gebouwd** | 40 |
+| **Deels gebouwd** | 16 |
+| **Nog te bouwen** | 8 |
 
 De drie belangrijkste dingen die nog gebouwd moeten worden:
 
 1. **Ongedaan maken, en de serverroutes die daarvoor nodig zijn.** Het ontwerp biedt na bijna elk besluit een ongedaan maken: "Brief losmaken" en "Ongedaan maken" na het beantwoorden van een vraag, een toast met ongedaan maken na "Niet relevant", en "Ongedaan maken" nadat een taak op "gedaan" is gezet. Voor geen van deze bestaat een serverroute. Twee ervan botsen met bestaande regels: `proposals.answer` is definitief, en `done`/`dropped` zijn definitief in `TASK_EDGES`. Martin moet over elk ervan beslissen voordat er UI wordt gebouwd (zie [Waar ontwerp en code verschillen](#waar-ontwerp-en-code-verschillen)).
-2. **De bewerkingsdiff zichtbaar vóór het goedkeuren** (brief §3: "Edit diff visible before approve (golden rule)"). Dat betekent: tikken-om-te-bewerken per veld, "was: … / Zet terug", "N AANGEPAST" en "Goedkeuren · N aangepast", plus de velden die de telefoon nog niet biedt: het bedrag van de vordering en "Namens hen", "Gesprek" bij een logboekregel, en "Van wie" en het document zelf bij een documentsuggestie. Het model berekent de diff al (`SuggestionDetailModel.edits`), dus het meeste hiervan is UI-werk. "Van wie" en "Namens hen" vragen serverwerk.
-3. **Offline- en sessie-verlopen-toestanden die het werk bewaren.** Het ontwerp toont een gecachte kopie gemarkeerd met "OFFLINE · BIJGEWERKT 14:02", uitgeschakelde besluiten met de reden erbij, bewerken nog toegestaan, en aanpassingen die een verlopen sessie overleven. Nu toont een mislukte lading alleen een foutregel, wordt niets gecachet en gaan de aanpassingen verloren bij een 401.
+2. **Wat de server nog moet meesturen.** De telefoon leest al `answer`/`decidedAt` bij een beantwoorde vraag, `question.why` ("Waarom verder het vraagt"), `origin` en `document.partyName` bij een suggestie, `collectorName` bij een vordering en `links` bij een taak, en valt eerlijk terug zolang ze ontbreken. Geen enkele route stuurt ze vandaag mee (`proposals.get`, `toSuggestionDTO`, `toTaskDTO`, de schrijver). "Van wie" en "Namens hen" bewerkbaar maken vraagt daarnaast nieuwe goedkeurinvoer.
+3. **Een detailcache en aanpassingen die een verlopen sessie overleven.** Een scherm dat al open is, toont offline "OFFLINE · BIJGEWERKT 14:02" met de besluiten uit en de reden erbij. Maar een scherm dat offline wordt geopend heeft geen kopie, en aanpassingen gaan verloren bij een 401.
 
 ---
 
@@ -77,7 +77,7 @@ Elk scherm heeft de systeemterugknop ("Voor jou" of "Dossier"). Wanneer de Voor 
 
 Na een besluit opent een onderaan vastgezette knop het volgende wachtende item en zegt hoeveel er nog over zijn ("Volgende in Voor jou · 3"). Dit is een bewuste tik en nooit een automatische overgang: het plan verbiedt automatisch doorgaan na een verzending. Bij een taaksuggestie legt het frame uit waarom het aantal niet daalde: de suggestie is uit Voor jou verdwenen, maar de nieuwe taak wacht nu op Martin.
 
-**Status:** Nog te bouwen — alleen UI. Het volgende item en het aantal kunnen uit `InboxStore` komen (servervolgorde, de ene `loadWaiting`-definitie). Er is een test nodig dat de knop nooit vanzelf afgaat.
+**Status:** Gebouwd — `NextInVoorJouButton` en `VoorJouNextPick` (servervolgorde uit `InboxStore`, het item op het scherm overgeslagen; getest). Alleen op de Voor jou-stack (`\.voorJouNext`), alleen op tik: niets roept `open` aan behalve de knop.
 
 #### Beslissen zonder het scherm te openen
 
@@ -108,7 +108,7 @@ Een vraag is een voorstel met `kind = 'question'`. De voorstelschrijver (`ops/pr
 
 Naast "WACHT OP JOU", de leeftijd van de vraag.
 
-**Status:** Nog te bouwen — alleen UI. `proposals.get` geeft `createdAt` al terug.
+**Status:** Gebouwd — `DetailText.age` ("sinds 1 dag", in Amsterdamse kalenderdagen), in de kop van `ProposalScreen.questionContent`.
 
 #### Wat ze vragen, wanneer uiterlijk, wat ontbreekt, waar verder op leunde
 
@@ -120,7 +120,7 @@ Naast "WACHT OP JOU", de leeftijd van de vraag.
 
 Een kaart die in gewoon Nederlands zegt waarom verder het vraagt, bijvoorbeeld "Op 1 nov kwam een brief van Kade & Partners binnen als scan. Kade & Partners int de vordering van Stroomnet Energie; het kenmerk lijkt op dat van de sommatie van 14 okt.". Een chevron opent de bron. De spec eist dat de schrijver zegt waar hij op leunde, zodat Martin kan zien waarom (§6.5).
 
-**Status:** Deels gebouwd — de `why` van elke bronvermelding wordt al teruggegeven (`reliedOn[].why` in `proposals.get`) en gedecodeerd (`ProposalDetail.Citation.why`), maar het scherm toont van elke bronvermelding alleen het label als chip. De schrijver schrijft geen lopende toelichting voor de vraag als geheel. Nog nodig: een `why`-tekst in de payload van de vraag (`validate-draft.ts` en de prompt van de schrijver), de kaart, en een link van de kaart naar de aangehaalde mail of het aangehaalde document.
+**Status:** Deels gebouwd — de kaart is gebouwd (`QuestionBody.why`, `Proposals/QuestionViews.swift`) en opent de aanleiding (een brief opent het document, een mail het bronvel). Ze leest `payload.question.why`; zolang de schrijver die niet schrijft, staat de aanleidingskaart op haar plek. Nog nodig: een `why`-tekst in de payload van de vraag (`validate-draft.ts` en de prompt van de schrijver).
 
 #### Opties die zeggen wat ze doen
 
@@ -132,7 +132,7 @@ Eén knop per optie. Elke knop toont het label van het model en daaronder de Ned
 
 Brief §3: "Confirm dialog only when the option has consequences." In de frames opent "Ja, koppel hem" een sheet, "Brief koppelen aan de vordering?", die uitlegt wat er gebeurt en dat Martin de brief later weer kan losmaken ("Je kunt hem daar later weer losmaken"). "Nee" en "Weet ik niet" worden direct vastgelegd, met een toast om het ongedaan te maken.
 
-**Status:** Deels gebouwd — er bestaat een bevestigingsdialoog, met de serverbeschrijving van de optie als titel en het label van de optie als knop. Hij verschijnt bij **elke** optie, `none` inbegrepen. Nog nodig: een regel per actie (bevestigen bij `link-document-to-debt`, `set-task-status` en `create-task`; `none` direct vastleggen), de gevolgtekst, en het ongedaan maken waar vastleggen met één tik van afhangt (zie hieronder).
+**Status:** Deels gebouwd — `QuestionText.needsConfirmation`: een optie met gevolgen opent het bevestigingssheet (`DecisionSheet`, titel per actie, de serverbeschrijving als tekst), `none` wordt direct vastgelegd. De regel onder elke optie is "VRAAGT EERST BEVESTIGING" of de serverbeschrijving, nooit alleen de woorden van het model (`DetailScreensTests`). Ontbreekt: de toast om een `none`-antwoord ongedaan te maken (zie hieronder).
 
 #### Antwoorden in eigen woorden
 
@@ -178,7 +178,7 @@ Het beantwoorde frame belooft "verder bekijkt je antwoord. Er is nog niets gekop
 
 Het scherm wordt een verslag: een badge "BEANTWOORD" met de tijd, "JE ANTWOORD" (de gekozen optie of de geciteerde eigen tekst), en "WAT ER IS GEBEURD" met een rij die het resultaat opent, bijvoorbeeld "Brief gekoppeld aan de vordering · VORDERING · STROOMNET ENERGIE".
 
-**Status:** Deels gebouwd — na een antwoord laadt het scherm opnieuw, verdwijnen de knoppen en luidt de algemene statusregel "Verstuurd.". Het antwoord wordt op de server opgeslagen (`finalPayload.answer`). Nog nodig: `proposals.get` die het antwoord teruggeeft en wat het opleverde (de taak, de koppeling aan de vordering, de nieuwe taak), de badge en beide kaarten, en de link naar Dossier.
+**Status:** Deels gebouwd — de badge "BEANTWOORD" met de tijd, "JE ANTWOORD" en "WAT ER IS GEBEURD" (`QuestionBody.answered`). Het antwoord komt uit `answer`/`decidedAt` als de server die meestuurt, anders uit het antwoord dat dit scherm zelf gaf (`ProposalModel.shownAnswer`). Na een eigen antwoord zegt het scherm eerlijk "Er is niets gekoppeld; je antwoord staat bij de vraag" (zie "verder pakt een vrij antwoord op"). Nog nodig: `proposals.get` die `answer` en `decidedAt` teruggeeft, en een rij die de vordering in Dossier opent.
 
 #### Een antwoord ongedaan maken ("Brief losmaken", "Ongedaan maken")
 
@@ -218,13 +218,13 @@ Het soort in hoofdletters: "LOGBOEKREGEL", "DOCUMENT", "VORDERING", "TAAK" of "V
 
 De frames zetten de suggestie zelf in de titel ("Telefoongesprek met Woonstichting Lindehof over de betalingsregeling") en zeggen in een zin waar ze vandaan kwam, voor elke bron: "Gevonden door verder in je spraaknotitie van za 31 okt.", "… in de scan van vr 30 okt.", "… in de sommatie van 14 okt.", gevolgd door "Tik op een veld om het aan te passen.".
 
-**Status:** Deels gebouwd — herkomst uit mail en document bestaat als mono-regel. Een suggestie uit een spraaknotitie heeft geen aanleidende mail en geen document, dus valt terug op het soortlabel. Er is geen titelregel. Nog nodig: een brontype voor spraaknotities in `toSuggestionDTO`, de zin en de titel.
+**Status:** Deels gebouwd — de titel (`SuggestionDetailModel.title`, volgt de aanpassing) en de zin (`provenance()`) zijn gebouwd, uit `origin` als de server die meestuurt, anders uit de mail of het document. Nog nodig: `origin` (soort bron, van wie, wanneer) in `toSuggestionDTO`, zodat een spraaknotitie zichzelf noemt.
 
 #### "WACHT OP JOU · sinds 1 dag"
 
 De frames markeren een open suggestie als wachtend op Martin, met haar leeftijd. Een openstaande suggestie telt onder `loadWaiting` als wachtend, dus amber is hier toegestaan.
 
-**Status:** Nog te bouwen — alleen UI. De code toont bewust het soort in cyaan en geen badge. `createdAt` zit al in het DTO.
+**Status:** Gebouwd — amber "WACHT OP JOU" zolang ze open staat, met "N AANGEPAST" (zonder kleur) ernaast.
 
 #### De velden per soort
 
@@ -251,37 +251,37 @@ De partij, het kanaal en de datum van het gesprek, elk bewerkbaar ("Woonstichtin
 
 De afzender, bewerkbaar, en het document zelf, dat de viewer opent.
 
-**Status:** Nog te bouwen — voor "Van wie" moet de server veranderen: `suggestions.approveDocumentMeta` neemt alleen `title` en `docType` en neemt de effectieve afzender over, dus een aangepaste afzender vraagt een `partyId`-invoer, geschreven naar `document_status_changes.party_id`. "Het document" vraagt alleen UI: het document-id zit in het DTO, en `Dossier/DocumentViewer.swift` en `documents/[id]` bestaan.
+**Status:** Deels gebouwd — "Het document" opent de viewer. "Van wie" staat er alleen-lezen als de server `document.partyName` meestuurt (nog niet). Bewerkbaar vraagt een `partyId`-invoer in `suggestions.approveDocumentMeta`, geschreven naar `document_status_changes.party_id`.
 
 #### Vordering: bewerkbaar bedrag
 
 "Gevorderd · aangepast € 240,00, was: € 420,00", en een onbekend bedrag dat bewerkbaar is vanaf "onbekend — de brief noemt geen totaal". Een leeggemaakt bedrag blijft onbekend en wordt nooit € 0,00.
 
-**Status:** Nog te bouwen — alleen UI (een veld in hele centen). De goedkeurroute accepteert `claimedCents` via `debtFields`.
+**Status:** Gebouwd — veldstijl `.money`, gerekend met strings en hele centen (`SuggestionFormat.cents`); een leeg vak blijft onbekend, een onleesbaar bedrag houdt Goedkeuren uit (getest).
 
 #### Vordering: "Namens hen" (de incassopartij)
 
 De partij die namens de schuldeiser int, bewerkbaar.
 
-**Status:** Nog te bouwen — server en UI. `debtFields` kent geen partijrollen, en `approveDebt` schrijft geen `debt_parties`-rij, dus de goedkeurroute heeft een `incasso`-partij als invoer nodig en een koppelrij (geen bewijs, geen ledger).
+**Status:** Deels gebouwd — alleen-lezen, als het model een `collectorName` noemt. Bewerkbaar vraagt serverwerk: `debtFields` kent geen partijrollen en `approveDebt` schrijft geen `debt_parties`-rij.
 
 #### Vordering: wat goedkeuren betekent
 
 Het frame zegt "Goedkeuren legt vast wat zij vorderen; je erkent het bedrag daarmee niet." Dit is de regel dat het vastleggen van een vordering een waarneming is, terwijl het accepteren ervan een registerbesluit is.
 
-**Status:** Deels gebouwd — de telefoon toont een vaste opmerking, "Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben.", bij **elke** vorderingssuggestie, wat het model ook concludeerde. Nog nodig: de zin uit het frame in plaats van die opmerking, en de incasso-opmerking alleen getoond wanneer `isDebtCollector` van het model dat zegt.
+**Status:** Gebouwd — de zin uit het frame staat in de herkomstzin; de incasso-opmerking alleen bij `isDebtCollector: true` (`collectorNote`, getest).
 
 #### Taak: "Gevonden in"
 
 Waar de taak vandaan kwam, als link.
 
-**Status:** Nog te bouwen — UI. De herkomst (aanleidende mail of document) zit in het DTO.
+**Status:** Gebouwd — als rij die het document opent, wanneer de suggestie een document heeft.
 
 #### Taak: een deadline met een tijd
 
 "Uiterlijk op" als dag, uur en minuut ("wo 4 nov 2026 · 17:00").
 
-**Status:** Deels gebouwd — een Nederlandse datumkiezer op Amsterdamse kalenderdagen, met "Geen datum" om te wissen en "Datum kiezen" om bij vandaag te beginnen. Hij stuurt een kale dag (`yyyy-MM-dd`) en heeft geen tijd. `taskFields.dueAt` accepteert een tijdstip, dus wat ontbreekt is de kiezer en zijn codering.
+**Status:** Gebouwd — een deadline die als tijdstip binnenkomt krijgt veldstijl `.dateTime`: een draaiwiel voor dag, uur en minuut in de dock (waar het toetsenbord zou staan), Amsterdamse tijd, verstuurd als ISO 8601; een kale dag blijft een dag. "Geen datum" wist hem.
 
 #### Vaste last: goedkeuren op de website
 
@@ -310,7 +310,7 @@ Het oordeel is `approved` als er niets veranderde en `edited` als er wel iets ve
 
 Brief §3: "Edit diff visible before approve (golden rule)." Een tik op één veld bewerkt dat veld ("AAN HET AANPASSEN", met "Klaar" boven het toetsenbord). Een veranderd veld leest "AANGEPAST", toont "was: <oud>" doorgestreept, en biedt "Zet terug". De kop telt "N AANGEPAST", en de goedkeurknop luidt "Goedkeuren · N aangepast".
 
-**Status:** Deels gebouwd — bewerken werkt via één "Aanpassen"-schakelaar ("Klaar met aanpassen") die alle velden tegelijk in tekstvakken verandert, en het model kent de diff al (`SuggestionDetailModel.edits`). Ontbreekt: bewerken per veld, de "was:"-regel, "Zet terug", de telbadge en het knoplabel met aantal. Dat zijn UI en een view-modeltest voor "Zet terug".
+**Status:** Gebouwd — tik op een kaart om dat ene veld te bewerken ("AAN HET AANPASSEN", "Klaar" in de dock, het veld naar boven gescrold); "AANGEPAST", "was: …" doorgestreept, "Zet terug" (`revert`), "N AANGEPAST" en "Goedkeuren · N aangepast" (`approveLabel`), getest in `SuggestionDiffTests`.
 
 #### "Niet relevant", met een optionele reden
 
@@ -334,7 +334,7 @@ De onderste knop wijst direct af en keert terug naar Voor jou met een toast om h
 
 "Niet relevant, met reden…", "Bekijk spraaknotitie" en "Kopieer tekst".
 
-**Status:** Nog te bouwen — het menu is UI. "Kopieer tekst" heeft alleen het klembord nodig. "Bekijk spraaknotitie" heeft het transcript nodig en, als Martin de opname bewaarde, het document-id van de audio (`audioDocumentId` uit `entries/voice`) in `toSuggestionDTO`. Nu bevat het DTO geen van beide.
+**Status:** Deels gebouwd — "Niet relevant, met reden…" en "Kopieer tekst" staan in het systeemmenu. "Bekijk spraaknotitie" ontbreekt: het DTO bevat geen transcript en geen `audioDocumentId`.
 
 #### Wat er is vastgelegd, na het goedkeuren
 
@@ -342,7 +342,7 @@ De onderste knop wijst direct af en keert terug naar Voor jou met een toast om h
 
 Een badge "VASTGELEGD" (of "TAAK AANGEMAAKT") met de tijd, en een rij die het aangemaakte item opent: "IN HET LOGBOEK" voor een logboekregel, "NIEUWE TAAK" voor een taak (die nog op Martin wacht, dus amber).
 
-**Status:** Deels gebouwd — het bericht luidt "Vastgelegd." en de knoppen verdwijnen. De goedkeurroute antwoordt al met `entryId`, `debtId` of `taskId`, maar de telefoon decodeert het antwoord als `Ignored`. Nog nodig: het id decoderen, de badge en een link naar Dossier of `TaskScreen`.
+**Status:** Deels gebouwd — het antwoord wordt gedecodeerd (`ApproveSuggestionResponse`), de badge "VASTGELEGD" / "TAAK AANGEMAAKT" met de tijd, de rij (een nieuwe taak opent `TaskScreen`, amber), en "Volgende in Voor jou". De logboekregel opent nog niets: Dossier heeft geen route naar één regel.
 
 #### "Correctie toevoegen"
 
@@ -366,13 +366,13 @@ Er is geen route voor één taak. `TaskModel.load` haalt `GET /api/mobile/v1/tas
 
 "WACHT OP JOU" in amber wanneer de effectieve status `open` of `in-progress` is (de ene definitie, `WAITING_TASK_STATUSES`). Het ontwerp voegt "WACHT OP ANDER" toe, zonder amber, voor `waiting`.
 
-**Status:** Deels gebouwd — "WACHT OP JOU" staat in `Inbox/TaskRowView.swift`. Een `waiting`-taak krijgt geen label. Alleen UI.
+**Status:** Gebouwd — `TaskModel.badge`: amber "WACHT OP JOU" (met "bezig" bij `in-progress`), "WACHT OP ANDER" zonder kleur, "GEDAAN" in okay.
 
 #### Titel, status, deadline, toegewezene en toelichting
 
 De titel; "taak · <status>"; "uiterlijk <datum tijd>"; de naam van de toegewezene, als die er is; en de toelichting. Het ontwerp voegt onder de deadline een relatieve regel toe ("over 2 dagen").
 
-**Status:** Deels gebouwd — alles behalve de relatieve deadlineregel, die alleen UI is.
+**Status:** Gebouwd — de deadline als "di 3 nov 2026 · 17:00" met "morgen" / "over 2 dagen" eronder (`DetailText.relativeDue`).
 
 #### De status veranderen, alleen langs toegestane stappen
 
@@ -394,13 +394,13 @@ Een tik opent "Status wordt: <status>" met die status als knop en "Annuleren". B
 
 Brief §3: "Status as a segmented control, not a buried button" (3 tikken → 2). De frames tekenen "open · bezig · wacht · gedaan" met één uitlegregel eronder: "Open: dit wacht op jou. Wacht: je wacht op iemand anders; de taak staat dan niet in Voor jou.", "Je wacht op een reactie. Deze taak staat nu niet in Voor jou.", "Gedaan. Vergist? Kies een andere status.".
 
-**Status:** Deels gebouwd — de stappen bestaan als gestapelde knoppen achter een bevestiging. De segmentknop is niet gebouwd, en zoals getekend botst hij met de server: elk segment is aantikbaar, terwijl alleen `validNext` is toegestaan ("open" komt nooit terug), en "laten vallen" heeft geen segment. Nog nodig: een besturing die niet-toegestane segmenten uitschakelt en "laten vallen" een plek geeft, de uitlegregels, en Martins besluit of een gelogde stap zijn bevestigingsstap houdt.
+**Status:** Gebouwd, met twee keuzes die Martin kan omdraaien — de segmentknop "open · bezig · wacht · gedaan" (bij de toegankelijkheidsgroottes een lijst met een vinkje), elk segment alleen aantikbaar als het in `validNext` staat; de uitlegregel per status. (1) Bezig en wacht gaan met één tik; **gedaan en laten vallen vragen eerst** ("Taak op gedaan zetten?"), omdat ze op de server definitief zijn en ongedaan maken niet bestaat. (2) "Laten vallen…" staat in het "…"-menu.
 
 #### "GEKOPPELD": waar de taak aan gekoppeld is
 
 De gekoppelde items van de taak als rijen die ze openen ("Formulier bijzondere bijstand · DOSSIER · TE SORTEREN").
 
-**Status:** Nog te bouwen — server en UI. `tasks` heeft al `entry_id`, `debt_id`, `document_id` en `financial_item_id`, maar `toTaskDTO` (`apps/web/src/lib/mobile-dto.ts`) stuurt er geen van mee. Nodig: de koppelingen met labels in het DTO, rijen, navigatie naar Dossier, en een test dat weggegooide of definitief verwijderde documenten erbuiten blijven.
+**Status:** Deels gebouwd — de rijen zijn gebouwd en lezen `links` (een document opent de viewer); zonder `links` verschijnt de sectie niet. Nog nodig: `links` met labels in `toTaskDTO`, en een test dat weggegooide of definitief verwijderde documenten erbuiten blijven.
 
 #### Ongedaan maken na "gedaan"
 
@@ -422,7 +422,7 @@ Brief §3 (meldingen): "TASK_DUE gains **Gedaan** (`authenticationRequired`, Mar
 
 Brief §2.4: een skelet in de vorm van de echte inhoud, nooit een spinner.
 
-**Status:** Deels gebouwd — elk scherm toont een `ProgressView`-spinner. Skeletten bestaan alleen op Overzicht (`Home/HomeTab.swift` `skeletonCard`).
+**Status:** Gebouwd — alle drie tonen `ProposalSkeleton`, nooit een spinner.
 
 #### Weg (404)
 
@@ -448,7 +448,7 @@ De oorzaak in gewoon Nederlands.
 
 Brief §2.4: één regel gewoon Nederlands plus een knop met een werkwoord. De frames tonen een kaart "NIET AANGEKOMEN" / "NIET OPGESLAGEN" ("Je antwoord kwam niet aan bij verder. Er is niets gekoppeld; je kunt het opnieuw proberen.") en een primaire knop "Opnieuw: Ja, koppel hem" / "Opnieuw goedkeuren" / "Opnieuw: zet op gedaan", met de andere opties onder "OF KIES OPNIEUW". De aanpassingen blijven bewaard. Een mislukte actie krijgt de `.error`-haptiek.
 
-**Status:** Deels gebouwd — het bericht verschijnt boven de knoppen, al het andere (scherm, aanpassingen, gekozen optie) blijft staan, en nogmaals op dezelfde knop tikken probeert het opnieuw. Er wordt niets in een wachtrij gezet, dus een besluit dat de server niet bereikte is eenvoudig niet genomen. Ontbreekt: de kaart, de benoemde knop "Opnieuw: …" en de haptiek.
+**Status:** Gebouwd — "NIET AANGEKOMEN" / "NIET VASTGELEGD" / "NIET OPGESLAGEN" met "Opnieuw: Ja, koppel hem" / "Opnieuw goedkeuren · 2 aangepast" / "Opnieuw: zet op gedaan", de andere opties onder "OF KIES OPNIEUW", aanpassingen bewaard, `.error`-haptiek (`failedOption`, `approveFailed`, `failedStatus`; getest). Een 400 of 409 is geen "niet aangekomen" en krijgt zijn eigen regel. Er wordt niets in een wachtrij gezet.
 
 #### Offline: de laatste kopie, met besluiten uitgeschakeld en de reden erbij
 
@@ -456,7 +456,7 @@ Brief §2.4: één regel gewoon Nederlands plus een knop met een werkwoord. De f
 
 Brief §2.4: gecachte inhoud met "offline · bijgewerkt 14:02" in een mono-uitlezing, en serveracties uitgeschakeld **met de reden**: "Je bent offline. Antwoorden kan weer zodra je verbinding hebt." / "Je bent offline. Goedkeuren of Niet relevant kiezen kan weer zodra je verbinding hebt; aanpassen kan nu al." / statuswijzigingen uitgeschakeld bij een taak.
 
-**Status:** Nog te bouwen — niets van deze schermen wordt gecachet. Een mislukte lading toont alleen "Geen verbinding met verder. Probeer het opnieuw.", zonder knop om het opnieuw te proberen en zonder trekken-om-te-verversen, dus Martin gaat terug en opent het item opnieuw. Nodig: een detailcache (in de App Group, gewist bij uitloggen zoals de andere stores), een bereikbaarheidssignaal, uitgeschakelde acties met hun reden, en een fixture (`-fixtures offline-cached`).
+**Status:** Deels gebouwd — valt het netwerk weg terwijl een scherm open is, dan toont het "OFFLINE · BIJGEWERKT 14:02" (wanneer het geladen werd), schakelt het de besluiten uit met de reden erbij en laat het aanpassen toe (fixture `detail-offline`). Er is nog geen detailcache: een scherm dat offline wordt geopend toont alleen "Geen verbinding met verder. Probeer het opnieuw.".
 
 #### Sessie verlopen, met de aanpassingen bewaard
 
@@ -488,7 +488,7 @@ Brief §2.1: een actie die het netwerk nodig heeft (goedkeuren, antwoorden, opni
 
 Brief §2.5: `.success` wanneer een vraag in de app wordt beantwoord (de meldingsactie heeft er geen), wanneer een suggestie wordt goedgekeurd en wanneer een taakstatus verandert (ook vanuit een veeg); `.impact(.soft)` wanneer een afwijzing wordt bevestigd; `.error` bij een mislukte actie; `.selection` eenmaal per overschreden veegdrempel; `.impact(.light)` bij ongedaan maken. Alles wordt overgeslagen als systeemhaptiek uit staat.
 
-**Status:** Nog te bouwen — geen `sensoryFeedback` in `Proposals/` of `Inbox/` (het bestaat alleen op Overzicht, `Home/HomeTab.swift`). Alleen UI.
+**Status:** Gebouwd — `.success` bij antwoorden, goedkeuren en een statuswijziging, `.impact(.soft)` bij afwijzen, `.error` bij een mislukte actie (de modellen tellen, de schermen spelen af). Veeg- en ongedaan-maken-haptiek horen bij de lijst.
 
 ## Privacy en beveiliging
 

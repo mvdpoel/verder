@@ -7,11 +7,15 @@ import SwiftUI
 struct ProposalLabel: View {
     let text: String
     var color: Color = .inkLabel
+    /// How far this label grows; the detail screens' frames let it grow all
+    /// the way (`DetailLabel`).
+    var cap: DynamicTypeSize = ProposalLabel.largest
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(_ text: String, color: Color = .inkLabel) {
+    init(_ text: String, color: Color = .inkLabel, cap: DynamicTypeSize = ProposalLabel.largest) {
         self.text = text
         self.color = color
+        self.cap = cap
     }
 
     /// The largest size a label grows to. At AX5 a 12-pt caption would grow
@@ -27,7 +31,7 @@ struct ProposalLabel: View {
             .tracking(ax ? 0 : 1.2)
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
-            .dynamicTypeSize(...Self.largest)
+            .dynamicTypeSize(...cap)
     }
 }
 

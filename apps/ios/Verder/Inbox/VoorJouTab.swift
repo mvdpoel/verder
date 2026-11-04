@@ -115,14 +115,25 @@ struct VoorJouTab: View {
         .sensoryFeedback(.error, trigger: store.failures)
     }
 
+    /// "Volgende in Voor jou": the store's list in the server's order, minus
+    /// the item on screen. Opening it REPLACES that screen on the stack.
+    private var nextUp: VoorJouNext {
+        VoorJouNext(pick: { id in VoorJouNextPick.pick(items: store.inbox?.items ?? [], excluding: id) },
+                    refresh: { await store.refresh() },
+                    open: { route in path = [route] })
+    }
+
     @ViewBuilder private func destination(_ route: InboxRoute) -> some View {
         switch route {
         case .proposal(let id):
             ProposalScreen(id: id, client: client, gate: gate, onUnauthorized: onUnauthorized, now: now)
+                .environment(\.voorJouNext, nextUp)
         case .suggestion(let id):
-            SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized)
+            SuggestionDetailView(id: id, client: client, onUnauthorized: onUnauthorized, now: now)
+                .environment(\.voorJouNext, nextUp)
         case .task(let id):
-            TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized)
+            TaskScreen(id: id, client: client, onUnauthorized: onUnauthorized, now: now)
+                .environment(\.voorJouNext, nextUp)
         case .doneByVerder:
             DoneByVerderScreen(store: store, model: done)
         case .document(let id, let title):

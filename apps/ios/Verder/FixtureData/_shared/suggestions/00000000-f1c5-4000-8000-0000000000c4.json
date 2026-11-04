@@ -1,0 +1,19 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000c4",
+  "status": "pending",
+  "retrievedRefs": [],
+  "kind": "debt",
+  "createdAt": "2026-11-01T09:00:00.000Z",
+  "proposed": {
+    "creditorName": "Stroomnet Energie",
+    "collectorName": "Incassobureau Kade & Partners",
+    "isDebtCollector": false
+  },
+  "trigger": null,
+  "document": null,
+  "origin": {
+    "kind": "sommatie",
+    "from": null,
+    "at": "2026-10-14T09:00:00.000Z"
+  }
+}

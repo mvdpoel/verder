@@ -119,7 +119,7 @@ struct SuggestionDetailTests {
 
     @Test func fieldsPerKindMirrorTheQueueCard() async {
         for (data, keys) in [(SuggestionFixture.entry, ["summary", "details"]),
-                             (SuggestionFixture.task, ["title", "details", "dueAt"]),
+                             (SuggestionFixture.task, ["title", "dueAt", "details"]),
                              (SuggestionFixture.docMeta(), ["title", "docType"])] {
             let m = model(SuggestionServer(data))
             await m.load(id: SuggestionFixture.id)

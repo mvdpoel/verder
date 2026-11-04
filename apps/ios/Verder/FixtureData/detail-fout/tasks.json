@@ -1,0 +1,107 @@
+[
+  {
+    "id": "00000000-f1c5-4000-8000-0000000000d1",
+    "status": "open",
+    "validNext": [
+      "in-progress",
+      "waiting",
+      "done",
+      "dropped"
+    ],
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Gemeente Westerlaan heeft je handtekening nodig voordat de aanvraag verder kan.",
+    "dueAt": "2026-11-03T16:00:00.000Z",
+    "assigneeName": null,
+    "links": [
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000106",
+        "title": "Formulier bijzondere bijstand",
+        "meta": "Dossier · te sorteren"
+      },
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000104",
+        "title": "Bevestiging aanmelding Noordkust",
+        "meta": "Dossier · brief"
+      }
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-0000000000d2",
+    "status": "in-progress",
+    "validNext": [
+      "waiting",
+      "done",
+      "dropped"
+    ],
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Gemeente Westerlaan heeft je handtekening nodig voordat de aanvraag verder kan.",
+    "dueAt": "2026-11-03T16:00:00.000Z",
+    "assigneeName": null,
+    "links": [
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000106",
+        "title": "Formulier bijzondere bijstand",
+        "meta": "Dossier · te sorteren"
+      },
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000104",
+        "title": "Bevestiging aanmelding Noordkust",
+        "meta": "Dossier · brief"
+      }
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-0000000000d3",
+    "status": "waiting",
+    "validNext": [
+      "in-progress",
+      "done",
+      "dropped"
+    ],
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Gemeente Westerlaan heeft je handtekening nodig voordat de aanvraag verder kan.",
+    "dueAt": "2026-11-03T16:00:00.000Z",
+    "assigneeName": null,
+    "links": [
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000106",
+        "title": "Formulier bijzondere bijstand",
+        "meta": "Dossier · te sorteren"
+      },
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000104",
+        "title": "Bevestiging aanmelding Noordkust",
+        "meta": "Dossier · brief"
+      }
+    ]
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-0000000000d4",
+    "status": "done",
+    "validNext": [],
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Gemeente Westerlaan heeft je handtekening nodig voordat de aanvraag verder kan.",
+    "dueAt": "2026-11-03T16:00:00.000Z",
+    "assigneeName": null,
+    "links": [
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000106",
+        "title": "Formulier bijzondere bijstand",
+        "meta": "Dossier · te sorteren"
+      },
+      {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000104",
+        "title": "Bevestiging aanmelding Noordkust",
+        "meta": "Dossier · brief"
+      }
+    ]
+  }
+]

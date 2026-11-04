@@ -1,0 +1,24 @@
+{
+  "id": "00000000-f1c5-4000-8000-0000000000c5",
+  "status": "pending",
+  "retrievedRefs": [],
+  "kind": "task",
+  "createdAt": "2026-11-01T09:00:00.000Z",
+  "proposed": {
+    "title": "Formulier bijzondere bijstand ondertekenen",
+    "details": "Gemeente Westerlaan heeft je handtekening nodig.",
+    "dueAt": "2026-11-03T16:00:00.000Z"
+  },
+  "trigger": null,
+  "document": {
+    "id": "00000000-f1c5-4000-8000-200000000106",
+    "title": "Brief Gemeente Westerlaan 30 okt",
+    "docType": "brief",
+    "status": "filed"
+  },
+  "origin": {
+    "kind": "brief",
+    "from": "Gemeente Westerlaan",
+    "at": "2026-10-30T09:00:00.000Z"
+  }
+}

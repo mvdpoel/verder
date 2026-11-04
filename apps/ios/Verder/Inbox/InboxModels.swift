@@ -189,6 +189,19 @@ struct SuggestionDTO: Codable, Equatable, Sendable, Identifiable {
         let title: String
         let docType: String?
         let status: String
+        /// The document's effective sender, by name. Not yet served.
+        var partyName: String? = nil
+    }
+
+    /// Where verder found it, in words: "spraaknotitie" of za 31 okt, the
+    /// "brief" from Gemeente Westerlaan. Not yet served by `toSuggestionDTO`
+    /// (a voice note has neither a mail nor a document): absent, the
+    /// sentence is built from the mail or the document.
+    struct Origin: Codable, Equatable, Sendable {
+        /// "spraaknotitie", "scan", "brief", "sommatie", "mail".
+        let kind: String
+        let from: String?
+        let at: Date?
     }
 
     let id: String
@@ -200,6 +213,7 @@ struct SuggestionDTO: Codable, Equatable, Sendable, Identifiable {
     let trigger: Trigger?
     let document: Document?
     let retrievedRefs: [JSONValue]
+    var origin: Origin? = nil
 }
 
 // MARK: - Task
@@ -214,6 +228,19 @@ struct TaskDTO: Codable, Equatable, Sendable, Identifiable {
     let status: String
     let assigneeName: String?
     let validNext: [String]
+    /// What the task is linked to (a document, an entry, a debt), labelled by
+    /// the server. Not yet served by `toTaskDTO`: absent, the screen shows no
+    /// "GEKOPPELD" section rather than an empty one.
+    var links: [TaskLink]? = nil
+}
+
+/// One item a task is linked to: "Formulier bijzondere bijstand" /
+/// "DOSSIER · TE SORTEREN". A document opens its viewer.
+struct TaskLink: Codable, Equatable, Sendable, Identifiable {
+    let type: String
+    let id: String
+    let title: String
+    let meta: String?
 }
 
 // MARK: - Dashboard summary

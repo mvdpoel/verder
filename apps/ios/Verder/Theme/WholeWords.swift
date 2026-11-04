@@ -55,6 +55,10 @@ enum WholeWords {
     static func splits(wordWidth: CGFloat, textWidth: CGFloat) -> Bool {
         textWidth > 0 && wordWidth > textWidth + 0.5
     }
+
+    /// The line has grown by more than rounding since a step was taken at
+    /// `from`: the step may no longer be needed.
+    static func widened(from: CGFloat, to: CGFloat) -> Bool { to > from + 8 }
 }
 
 private struct WholeWordsModifier: ViewModifier {
@@ -65,11 +69,19 @@ private struct WholeWordsModifier: ViewModifier {
     @State private var cap: DynamicTypeSize?
     @State private var textWidth: CGFloat = 0
     @State private var wordWidth: CGFloat = 0
+    /// The line width the last step was taken at. A text laid out once in a
+    /// transient narrow box (a sheet mid-presentation) would otherwise stay
+    /// stepped down for good: once the line is wider again, measure afresh.
+    @State private var steppedAt: CGFloat?
 
     func body(content: Content) -> some View {
         content
             .font(font)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                if let at = steppedAt, WholeWords.widened(from: at, to: $0) {
+                    steppedAt = nil
+                    cap = nil
+                }
                 textWidth = $0
                 stepIfSplit()
             }
@@ -94,7 +106,10 @@ private struct WholeWordsModifier: ViewModifier {
     private func stepIfSplit() {
         guard WholeWords.splits(wordWidth: wordWidth, textWidth: textWidth) else { return }
         let current = min(outer, cap ?? outer)
-        if let next = WholeWords.smaller(than: current) { cap = next }
+        if let next = WholeWords.smaller(than: current) {
+            cap = next
+            steppedAt = textWidth
+        }
     }
 }
 

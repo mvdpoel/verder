@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "calm", "detail", "detail-fout", "detail-offline", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
         "timeline-vier", "unauthorized", "voice", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
@@ -48,6 +48,28 @@ struct FixtureTests {
     }
 
     // MARK: - The set
+
+    /// The detail screens' fixtures decode into the real DTOs, and `detail-fout`
+    /// fails exactly the three decisions it is for.
+    @Test func detailFixturesDecodeAndFailOnlyTheirDecisions() throws {
+        let p = "00000000-f1c5-4000-8000-0000000000"
+        for id in ["b1", "b2", "b3", "b4"] {
+            let d = try Self.decode(ProposalDetail.self, "detail", "proposals/\(p)\(id)")
+            #expect(d.kind == "question")
+        }
+        #expect(try Self.decode(ProposalDetail.self, "detail", "proposals/\(p)b2").answer?.option == 0)
+        for id in ["c1", "c2", "c3", "c4", "c5"] {
+            _ = try Self.decode(SuggestionDTO.self, "detail", "suggestions/\(p)\(id)")
+        }
+        let tasks = try Self.decode([TaskDTO].self, "detail", "tasks")
+        #expect(tasks.map(\.status) == ["open", "in-progress", "waiting", "done"])
+        #expect(tasks.first?.links?.count == 2)
+        let fout = try Self.server("detail-fout")
+        #expect(fout.reply(method: "POST", path: FixtureServer.apiPrefix + "proposals/\(p)b1/answer").isError)
+        #expect(fout.reply(method: "POST", path: FixtureServer.apiPrefix + "suggestions/\(p)c1/approve").isError)
+        #expect(fout.reply(method: "POST", path: FixtureServer.apiPrefix + "tasks/\(p)d1/status").isError)
+        #expect(fout.reply(method: "GET", path: FixtureServer.apiPrefix + "tasks").isError == false)
+    }
 
     @Test func everyFixtureTheDataDocNamesIsBundled() {
         #expect(FixtureServer.names(in: Self.root) == Self.expectedNames)
