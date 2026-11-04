@@ -443,8 +443,8 @@ struct PartyPickerSheet: View {
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.rail.ignoresSafeArea())
-        .presentationBackground(Color.rail)
+        .background(VoiceSurface.color.ignoresSafeArea())
+        .presentationBackground(VoiceSurface.color)
         .preferredColorScheme(.dark)
         .lineHeight(.multiple(factor: AuthType.lineFactor))
         .presentationDetents(model.partiesState == .loaded ? [.large] : [.fraction(0.44), .large], selection: $detent)

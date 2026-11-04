@@ -44,10 +44,6 @@ struct VoiceLogSheet: View {
                                      openSuggestion(id)
                                  })
                         .interactiveDismissDisabled(model.blocksSwipe || model.micPrePrompt)
-                        .presentationDetents(detents(model), selection: $detent)
-                        .onChange(of: tall(model), initial: true) { _, tall in
-                            detent = tall ? .large : Self.short
-                        }
                         .onChange(of: offline, initial: true) { _, offline in
                             Task { await model.networkChanged(offline: offline) }
                         }
@@ -55,6 +51,12 @@ struct VoiceLogSheet: View {
             } else {
                 Color.void.ignoresSafeArea()
             }
+        }
+        // On the whole sheet, so the lock screen and the note agree on the
+        // height (a locked note once kept the lock screen's short detent).
+        .presentationDetents(session.model.map(detents) ?? [Self.short, .large], selection: $detent)
+        .onChange(of: session.model.map(tall) ?? false, initial: true) { _, tall in
+            detent = tall ? .large : Self.short
         }
         .task(id: session.model.map(ObjectIdentifier.init)) {
             guard let model = session.model else { return }
@@ -67,7 +69,7 @@ struct VoiceLogSheet: View {
         .onDisappear { session.sheetDisappeared() }
         .presentationDragIndicator(.visible)
         // Opaque, as the frames draw it: the footer and the page are one surface.
-        .presentationBackground(Color.rail)
+        .presentationBackground(VoiceSurface.color)
     }
 
     private func tall(_ model: VoiceLogModel) -> Bool {
@@ -110,6 +112,17 @@ struct MicrophonePrePrompt: View {
             .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(Color.edge, lineWidth: 1))
         }
     }
+}
+
+/// The sheet's surface: `rail` over `void`. `rail` alone is 60% alpha, so
+/// a pinned footer drawn in it let the rows scrolled under it show through.
+enum VoiceSurface {
+    static let color: Color = {
+        let base = Tokens.rgba(Tokens.hex["void"] ?? "#04070d") ?? (0, 0, 0, 1)
+        let top = Tokens.rgba(Tokens.hex["rail"] ?? "#060b1499") ?? (0, 0, 0, 0.6)
+        func mix(_ a: Double, _ b: Double) -> Double { b * top.opacity + a * (1 - top.opacity) }
+        return Color(red: mix(base.red, top.red), green: mix(base.green, top.green), blue: mix(base.blue, top.blue))
+    }()
 }
 
 /// The type ramp of the frames: 22 / 17 / 15 / 12 (display/title-2,
@@ -156,7 +169,7 @@ struct VoiceLogView: View {
                               open: { if let id = model.sentSuggestionId { openSuggestion(id) } })
             }
         }
-        .background(Color.rail.ignoresSafeArea())
+        .background(VoiceSurface.color.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .lineHeight(.multiple(factor: AuthType.lineFactor))
         .confirmationDialog(VoiceLogModel.Copy.confirmTitle, isPresented: $model.confirmingClose,
@@ -258,7 +271,7 @@ struct VoiceFooter<Content: View>: View {
             .padding(.top, 16)
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.rail)
+            .background(VoiceSurface.color)
             .overlay(alignment: .top) {
                 if hairline { Rectangle().fill(Color.hairline).frame(height: 1) }
             }
@@ -266,7 +279,7 @@ struct VoiceFooter<Content: View>: View {
             // the footer fades out instead of being sliced.
             .background(alignment: .top) {
                 if hairline {
-                    LinearGradient(colors: [Color.rail.opacity(0), Color.rail], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [VoiceSurface.color.opacity(0), VoiceSurface.color], startPoint: .top, endPoint: .bottom)
                         .frame(height: 24)
                         .offset(y: -24)
                         .allowsHitTesting(false)
