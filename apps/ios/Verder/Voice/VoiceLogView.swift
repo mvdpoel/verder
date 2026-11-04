@@ -498,7 +498,7 @@ private struct VoiceCapturePage: View {
                         .foregroundStyle(model.pressOutside ? Color.inkBright : Color.inkBright)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                    VoiceNote(text: model.pressHint, color: .inkSoft, centered: true)
+                    VoiceNote(text: model.pressHint, color: model.phase == .recording ? .inkSoft : .inkMute, centered: true)
                     if let notice = model.notice {
                         VoiceNote(text: notice, color: .ink, centered: true).padding(.top, 8)
                     }
@@ -515,7 +515,7 @@ private struct VoiceCapturePage: View {
                 if recording {
                     AuthButton(title: "Annuleer", weight: .ghost) { model.cancelRecording() }
                 } else {
-                    VoiceNote(text: VoiceLogModel.Copy.privacy, centered: true)
+                    VoiceNote(text: VoiceLogModel.Copy.privacy, color: .inkMute, centered: true)
                     AuthButton(title: VoiceLogModel.Copy.typeNote, weight: .ghost) { model.typeInstead() }
                         .padding(.top, 4)
                 }
@@ -671,7 +671,7 @@ private struct VoiceTranscribingPage: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VoiceFooter { VoiceNote(text: VoiceLogModel.Copy.onPhone, color: .inkSoft) }
+            VoiceFooter { VoiceNote(text: VoiceLogModel.Copy.onPhone, color: .inkMute) }
         }
     }
 }
@@ -722,7 +722,7 @@ private struct VoiceStatePage: View {
                     .accessibilityElement(children: .combine)
                 }
                 if let meta = page.meta { VoiceLabel(meta).padding(.top, 16) }
-                if let note = page.note { VoiceNote(text: note).padding(.top, 16) }
+                if let note = page.note { VoiceNote(text: note, color: .inkMute).padding(.top, 16) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)

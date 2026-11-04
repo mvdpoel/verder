@@ -19,13 +19,18 @@ import Observation
 ///
 /// ONE clientId per voice log, reused on every retry: the server makes the
 /// suggestion (and a kept recording) idempotent on it, so a lost response
-/// never stores the call twice. "Opnieuw opnemen" KEEPS it too, and is only
-/// offered BEFORE any send was attempted: until then the server has never seen
-/// the id, so the new take is simply this same voice log. After an attempt the
-/// server may already hold the id (the response can be lost after it stored
-/// the suggestion) — a different take under it would be answered `duplicate`
-/// and silently dropped, and a fresh id could store the call twice — so then
-/// the text is edited instead and no re-record is offered.
+/// never stores the call twice. "Opnieuw opnemen" KEEPS it too before any send
+/// was attempted: until then the server has never seen the id, so the new take
+/// is simply this same voice log. After an attempt whose outcome is UNKNOWN
+/// (no answer once the request may have left, or a 5xx — a 524 can come back
+/// after the origin stored it) the server may already hold the id: a
+/// different take under it would be answered `duplicate` and silently
+/// dropped, and a fresh id could store the call twice — so from then on the
+/// text is edited instead and no re-record is offered. After an attempt that
+/// PROVABLY stored no suggestion (an HTTP 401/4xx answer, or no connection at
+/// all — frames "niet verstuurd …" all offer "Opnieuw opnemen") the new take
+/// gets a FRESH id, so nothing a refused attempt left behind (a kept
+/// recording is stored before the suggestion) is tied to the new take.
 ///
 /// THE RECORDING is NSFileProtectionComplete (unreadable while the phone is
 /// locked): its folder gets the class before the recorder writes a byte, so
@@ -159,6 +164,9 @@ final class VoiceLogModel {
     /// A send was tried under this clientId (whatever came back): from then on
     /// the server may hold it, so no re-record (see the type's doc).
     private(set) var sendAttempted = false
+    /// A send under this clientId ended without proof it stored nothing
+    /// (`serverMayHold(after:)`): from then on no re-record (see the type's doc).
+    private(set) var serverMayHoldId = false
     /// A short line under the record button (a press too short, a recorder
     /// that would not start).
     private(set) var notice: String?
@@ -262,7 +270,7 @@ final class VoiceLogModel {
     /// "Opnieuw opnemen": after a take (with text or without), never once a
     /// send was attempted, and only while Dutch speech is ready.
     var canRecordAgain: Bool {
-        phase == .editing && speech == .ready && !sendAttempted && (hasRecording || takeProblem != nil)
+        phase == .editing && speech == .ready && !serverMayHoldId && (hasRecording || takeProblem != nil)
     }
 
     /// The latest time "Gesprek was om" may say: now. A call is never in the
@@ -560,6 +568,12 @@ final class VoiceLogModel {
         notice = nil
         textFocused = false
         timeOpen = false
+        if sendAttempted {
+            // Every attempt provably stored nothing: a new take, a new id.
+            clientId = UUID()
+            sendAttempted = false
+            sendFailure = nil
+        }
         phase = .idle
     }
 
@@ -699,6 +713,7 @@ final class VoiceLogModel {
             phase = .sent(duplicate: answer.duplicate)
         } catch {
             phase = .editing
+            if Self.serverMayHold(after: error) { serverMayHoldId = true }
             fail(Self.failure(for: error, keptAudio: audio != nil))
         }
     }
@@ -745,6 +760,7 @@ final class VoiceLogModel {
         occurredAt = nil
         occurredAtSetByHand = false
         sendAttempted = false
+        serverMayHoldId = false
         notice = nil
         takeProblem = nil
         sendFailure = nil
@@ -772,6 +788,25 @@ final class VoiceLogModel {
             try? fm.removeItem(at: dir.appending(path: name))
         }
     }
+
+    /// Whether a failed send may still have stored the suggestion. An HTTP
+    /// 401 or other 4xx answer means the route refused before creating it
+    /// (the suggestion is its last write, its answer the very next line), and
+    /// a connection that never opened sent nothing; anything else — a 5xx,
+    /// a timeout, a connection lost mid-request — may have.
+    static func serverMayHold(after error: any Error) -> Bool {
+        switch error as? APIError {
+        case .unauthorized?, .rejected?: return false
+        case .transport(let description)?:
+            return !neverSentCodes.contains { description == APIError.transportDescription(URLError($0)) }
+        case .rateLimited?, .server?, nil: return true
+        }
+    }
+
+    private static let neverSentCodes: [URLError.Code] = [
+        .notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+        .internationalRoamingOff, .dataNotAllowed,
+    ]
 
     static func failure(for error: any Error, keptAudio: Bool = false) -> SendFailure {
         switch error as? APIError {

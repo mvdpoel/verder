@@ -264,7 +264,7 @@ struct VoiceQuickLogTests {
         #expect(m.banner == .init(symbol: "wifi.slash", title: "Niet verstuurd", text: VoiceLogModel.Copy.offline))
         #expect(m.primary(locked: false).title == "Opnieuw proberen")
         #expect(m.footnote(locked: false) == nil)        // "Weggooien…" takes its place
-        #expect(!m.canRecordAgain)                       // the server may hold the id now
+        #expect(m.canRecordAgain)                        // no connection: nothing left the phone (frame "niet verstuurd")
     }
 
     @Test func aRecordingTooLargeIsSentWithoutIt() async throws {

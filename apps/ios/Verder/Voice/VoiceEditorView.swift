@@ -52,6 +52,15 @@ struct VoiceEditorPage: View {
                 ScrollView {
                     content
                 }
+                // At the accessibility sizes the page scrolls from the
+                // sheet's very top: an opaque band for the grabber, so the
+                // rows scrolled up go UNDER it instead of across the grabber
+                // (frame "voorbeeld · AX5 · einde").
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if ax {
+                        VoiceSurface.color.frame(height: Self.grabberBand).accessibilityHidden(true)
+                    }
+                }
                 .scrollDismissesKeyboard(.interactively)
                 .scrollIndicators(.visible)
                 .fixtureVoiceScroll()
@@ -130,7 +139,7 @@ struct VoiceEditorPage: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, ax ? 20 : 0)
+        .padding(.top, ax ? 20 - Self.grabberBand : 0)
         .padding(.bottom, Self.bottomPadding(typing: typingFresh))
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
             contentHeight = $0
@@ -153,6 +162,9 @@ struct VoiceEditorPage: View {
         let want = min(max(room - others - Self.fieldPadding, fieldMin), fieldMax).rounded()
         if abs(want - typingFieldHeight) >= 2 { typingFieldHeight = want }
     }
+    /// The grabber's band at the top of the AX page (part of its 20-pt top).
+    static let grabberBand: CGFloat = 16
+
     static func bottomPadding(typing: Bool) -> CGFloat { typing ? 4 : 16 }
 
     /// The editor's vertical padding, inside the measured field.
@@ -419,7 +431,7 @@ struct VoiceEditorPage: View {
     private func footnoteText(_ note: String) -> some View {
         Text(note)
             .wholeWords(note, font: VoiceType.callout)
-            .foregroundStyle(Color.inkSoft)
+            .foregroundStyle(Color.inkMute)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -451,17 +463,15 @@ struct VoiceRow: View {
                     .foregroundStyle(titleColor)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                // MetaLine sets a one-group line unwrapped (it only breaks
-                // between groups), so "ANDERS GEWIST NA VERSTUREN" at AX5
-                // would widen the page: a single group wraps instead.
-                if meta.contains(" · ") {
-                    VoiceMetaLine(meta)
-                } else {
-                    VoiceLabel(meta, color: .inkLabel)
-                }
+                // One wrapped string with its " · " kept, at every size
+                // (frame "voorbeeld · AX5": "MET WIE · UIT JE TEKST" wraps as
+                // one caption). MetaLine stacked the groups without the dot.
+                VoiceLabel(meta, color: .inkLabel)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if chevron { RowChevron() }
+            // Not at the accessibility sizes, where the row stands without
+            // a card and the frame draws none (frame "voorbeeld · AX5").
+            if chevron && !typeSize.isAccessibilitySize { RowChevron() }
         }
         // At the accessibility sizes the rows stand without a card, edge to
         // gutter (frame "voorbeeld · AX5"): a 53-pt "Woonstichting" needs

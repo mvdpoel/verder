@@ -402,6 +402,36 @@ struct VoiceLogModelTests {
         #expect(m.clientId == id)
     }
 
+    /// A send the server ANSWERED with a refusal (401, 4xx) stored no
+    /// suggestion, nor did one that never connected: "Opnieuw opnemen" stays
+    /// (frames "niet verstuurd …"), and the new take gets a fresh clientId.
+    @Test func recordAgainAfterARefusedSendTakesAFreshId() async throws {
+        for status in [401, 400, 413] {
+            let m = try model(server(voiceStatus: status))
+            await m.prepare()
+            await record(m)
+            await m.send()
+            #expect(m.sendFailure != nil)
+            #expect(m.canRecordAgain)
+            let id = m.clientId
+            m.recordAgain()
+            #expect(m.phase == .idle)
+            #expect(m.clientId != id)
+            #expect(m.sendFailure == nil)
+        }
+    }
+
+    @Test func onlyAnUnknownOutcomeMayHoldTheId() {
+        #expect(!VoiceLogModel.serverMayHold(after: APIError.unauthorized))
+        #expect(!VoiceLogModel.serverMayHold(after: APIError.rejected(400)))
+        #expect(!VoiceLogModel.serverMayHold(after: APIError.transport(APIError.transportDescription(URLError(.notConnectedToInternet)))))
+        #expect(!VoiceLogModel.serverMayHold(after: APIError.transport(APIError.transportDescription(URLError(.cannotConnectToHost)))))
+        #expect(VoiceLogModel.serverMayHold(after: APIError.transport(APIError.transportDescription(URLError(.timedOut)))))
+        #expect(VoiceLogModel.serverMayHold(after: APIError.transport(APIError.transportDescription(URLError(.networkConnectionLost)))))
+        #expect(VoiceLogModel.serverMayHold(after: APIError.server(524)))
+        #expect(VoiceLogModel.serverMayHold(after: APIError.rateLimited))
+    }
+
     /// An empty dossier is not "loading": it says why nothing can be sent and
     /// offers a retry, which picks up a party added in the meantime.
     @Test func noPartiesSaysWhyAndRetries() async throws {
