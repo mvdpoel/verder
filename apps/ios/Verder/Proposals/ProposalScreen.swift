@@ -114,7 +114,7 @@ struct ProposalScreen: View {
     private func chrome(_ page: some View) -> some View {
         page
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !ax, let model, let bar = model.sendBar(offline: offline, holding: hold.isHolding) {
+            if !ax, let model, let bar = model.sendBar(offline: offline, holding: hold.isHolding, now: now()) {
                 barPanel(model, bar)
             }
         }
@@ -207,8 +207,8 @@ struct ProposalScreen: View {
         }
         if d.kind != "question" { conceptSection(model, d) }
         if let prompt = model.questionPrompt { questionSection(model, prompt) }
-        if ax, let bar = model.sendBar(offline: offline, holding: hold.isHolding) {
-            section(label: "Versturen") { barContent(model, bar, proxy) }
+        if ax, let bar = model.sendBar(offline: offline, holding: hold.isHolding, now: now()) {
+            section(label: "Versturen") { barContent(model, bar, proxy).id(ProposalAnchor.send) }
         }
         if !d.reliedOn.isEmpty { sourcesSection(d) }
         if let summary = model.draft?.entrySummary, !summary.isEmpty {
@@ -238,7 +238,7 @@ struct ProposalScreen: View {
             }
             .padding(.top, 32)
         }
-        if ax || model.sendBar(offline: offline, holding: false) == nil, let message = model.message {
+        if ax || model.sendBar(offline: offline, holding: false, now: now()) == nil, let message = model.message {
             Text(message)
                 .font(.display(15, relativeTo: .callout))
                 .foregroundStyle(Color.ink)
@@ -501,12 +501,12 @@ struct ProposalScreen: View {
                 Button(ProposalText.openTriggerLabel(d.trigger), systemImage: "envelope") { sourceSheet = .trigger }
             }
             if let d = model?.draft {
-                // Not "Kopieer concepttekst" (the frame's words): the system
-                // menu is narrow, iOS hyphenates that word to "concept-/tekst",
-                // and a word never breaks in the middle (measured 2026-11-04).
-                Button("Tekst kopiëren", systemImage: "doc.on.doc") {
+                Button {
                     UIPasteboard.general.string = ProposalText.copyText(d)
+                } label: {
+                    Label(ProposalText.copyMenuTitle, systemImage: "doc.on.doc")
                 }
+                .accessibilityLabel(ProposalText.copyLabel)
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -559,6 +559,9 @@ struct ProposalScreen: View {
         case .rest?: proxy.scrollTo(ProposalAnchor.trigger, anchor: .top)
         case .middle?: proxy.scrollTo(ProposalAnchor.attachments, anchor: .top)
         case .end?: proxy.scrollTo(ProposalAnchor.end, anchor: .bottom)
+        // On a proposal, "waiting" is the accessibility sizes' Versturen
+        // section at the top (frame "AX5 · uitkomst onbekend").
+        case .waiting?: proxy.scrollTo(ProposalAnchor.send, anchor: .top)
         default: break
         }
         #endif
@@ -566,7 +569,7 @@ struct ProposalScreen: View {
 }
 
 enum ProposalAnchor: Hashable {
-    case trigger, attachments, draftEnd, end, page
+    case trigger, attachments, draftEnd, end, page, send
 }
 
 /// Where the page's own large title ends, in the scroll's content space:

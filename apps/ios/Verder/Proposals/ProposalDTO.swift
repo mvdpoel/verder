@@ -120,6 +120,9 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     var draftVersion: Int? = nil
     /// When Gmail accepted the send. Absent on an older server.
     var sentAt: Date? = nil
+    /// When the worker claimed the send (`proposals.sending_at`). Not yet
+    /// served: absent, a send in flight is never called "unknown".
+    var sendingAt: Date? = nil
 }
 
 /// What the phone may change before approving, exactly the `payload` of

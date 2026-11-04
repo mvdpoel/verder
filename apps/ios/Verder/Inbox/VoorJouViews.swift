@@ -280,7 +280,7 @@ struct VoorJouRowView: View {
 
     @ViewBuilder private func meta(_ item: WaitingItem) -> some View {
         let parts = VoorJouList.meta(item, now: now).map { $0.uppercased() }
-        let age = VoorJouList.age(item.at, now: now).uppercased()
+        let age = VoorJouList.rowAge(item, now: now).uppercased()
         if ax {
             // One fact per line at the accessibility sizes (brief §2.7).
             VStack(alignment: .leading, spacing: 2) {

@@ -62,6 +62,8 @@ enum ProposalText {
         case waiting
         case sent
         case drafting
+        /// The drafter stopped without a draft: it happened, it waits on nobody.
+        case draftFailed
     }
 
     static func badge(status: String) -> Badge? {
@@ -69,6 +71,7 @@ enum ProposalText {
         case "pending": .waiting
         case "sent": .sent
         case "drafting": .drafting
+        case "draft-failed": .draftFailed
         default: nil
         }
     }
@@ -78,6 +81,7 @@ enum ProposalText {
         case .waiting: "Wacht op jou"
         case .sent: "Verstuurd"
         case .drafting: "Wordt opgesteld"
+        case .draftFailed: "Geen concept"
         }
     }
 
@@ -227,6 +231,22 @@ enum ProposalText {
         guard let summary = changes?.summary else { return nil }
         let kept = version.map { "Versie \($0) van verder bewaard" } ?? "Het concept van verder blijft bewaard"
         return ("\(summary) door jou", kept)
+    }
+
+    /// The ⋯ menu's copy item, the frame's words.
+    static let copyLabel = "Kopieer concepttekst"
+
+    /// `copyLabel` as the system menu may draw it: WORD JOINERs inside
+    /// "concepttekst", so iOS wraps the item at its space ("Kopieer" /
+    /// "concepttekst") and never hyphenates it to "concept-/tekst"
+    /// (measured 2026-11-04). VoiceOver reads `copyLabel`.
+    static var copyMenuTitle: String { unbreakable(copyLabel) }
+
+    /// Every word of `s` with a WORD JOINER (U+2060) between its letters.
+    static func unbreakable(_ s: String) -> String {
+        s.split(separator: " ", omittingEmptySubsequences: false)
+            .map { $0.map(String.init).joined(separator: "\u{2060}") }
+            .joined(separator: " ")
     }
 
     /// "Kopieer concepttekst": the subject, a blank line, the body.
@@ -522,6 +542,9 @@ struct SendBar: Equatable {
     var meta: String? = nil
     /// The mono moment under the words: "09:31" when the send landed.
     var stamp: String? = nil
+    /// `meta` and `stamp` only in the accessibility sizes' "Versturen"
+    /// section; the 402 bar leaves them out (frame "uitkomst onbekend").
+    var extrasOnlyInSection = false
     var button: Button? = nil
 }
 
@@ -546,6 +569,11 @@ enum SendCopy {
     static let failed = "Versturen mislukt."
     static let failedNothingSent = "Versturen mislukt. Er is niets verstuurd."
     static let failedDetail = "verder kon de mail niet versturen."
+    static let unknown = "Nog onbekend of het is aangekomen."
+    static let unknownDetail = "Gmail gaf geen antwoord. In je Verzonden mail wordt nu gekeken; dit scherm werkt zichzelf bij."
+    static let resendNotYet = "Opnieuw versturen kan nog niet"
+    /// "Controle sinds 09:32".
+    static func checkingSince(_ clock: String) -> String { "Controle sinds \(clock)" }
     static let rejected = "Afgewezen."
     static let rejectedDetail = "Er is niets verstuurd."
     static let superseded = "Vervangen door een nieuwer voorstel."

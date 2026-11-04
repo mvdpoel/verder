@@ -13,6 +13,20 @@ struct VoorJouListTests {
                     dueAt: due, verder: false)
     }
 
+    /// A proposal whose send failed says so, with the moment it failed
+    /// (frame "Voor jou · niet verstuurd in de lijst").
+    @Test func aFailedSendSaysNietVerstuurdAndWhen() {
+        let now = parseISODate("2026-11-02T08:41:00Z")!
+        var failed = Self.item(.proposal, "p", at: "2026-11-01T08:30:00Z", subtitle: "Bewindkantoor Noordkust")
+        #expect(VoorJouList.meta(failed, now: now) == ["voorstel", "Noordkust"])
+        #expect(VoorJouList.rowAge(failed, now: now) == "gisteren")
+        failed.failedAt = parseISODate("2026-11-02T08:32:00Z")
+        #expect(VoorJouList.meta(failed, now: now) == ["voorstel", "niet verstuurd"])
+        #expect(VoorJouList.rowAge(failed, now: now) == "09:32")
+        failed.failedAt = parseISODate("2026-10-31T08:32:00Z")
+        #expect(VoorJouList.rowAge(failed, now: now) == VoorJouList.age(failed.failedAt!, now: now))
+    }
+
     static func inbox(_ items: [WaitingItem], count: Int? = nil) -> InboxDTO {
         InboxDTO(count: count ?? items.count, items: items, doneByVerder: [])
     }

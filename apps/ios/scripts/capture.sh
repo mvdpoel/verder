@@ -74,7 +74,8 @@
 #            gesture reaches: hold faceid afgebroken aangepast editor typen goedgekeurd bron
 #            weggooien afwijzen. On a proposal route, --scroll rest puts the
 #            trigger card at the top (the frames' "scrolled" position),
-#            middle the attachments and end the end
+#            middle the attachments and end the end (also in the editor),
+#            waiting the AX "Versturen" section at the top
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does

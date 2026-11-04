@@ -12,8 +12,10 @@ struct ProposalEditor: View {
     @State private var toText: String
     @State private var ccText: String
     @State private var confirmingDiscard = false
+    /// The body is a UIKit text view (`DraftBodyEditor`), outside FocusState.
+    @State private var bodyFocused = false
     @FocusState private var focus: Field?
-    enum Field: Hashable { case to, cc, subject, body }
+    enum Field: Hashable { case to, cc, subject }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -41,6 +43,7 @@ struct ProposalEditor: View {
         NavigationStack {
             ZStack {
                 Color.void.ignoresSafeArea()
+                ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         // Addresses stay on ONE line (a field scrolls sideways,
@@ -68,35 +71,38 @@ struct ProposalEditor: View {
                                 .focused($focus, equals: .subject)
                                 .modifier(EditorField(mono: false))
                         }
-                        TextField("", text: $working.body, axis: .vertical)
-                            .font(.display(17, relativeTo: .body))
-                            .foregroundStyle(Color.ink)
-                            .lineSpacing(4)
-                            .focused($focus, equals: .body)
+                        DraftBodyEditor(text: $working.body, original: model.originalDraft?.body ?? "",
+                                        focused: $bodyFocused, attachable: addable,
+                                        attach: { working.attachmentDocumentIds.append($0) })
                             .padding(.top, 18)
-                            .accessibilityLabel("Tekst van het concept")
+                            .id(EditorAnchor.body)
                         if let original = model.originalDraft,
                            let summary = DraftChanges(original: original, current: result).summary {
-                            Label {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Image(systemName: "pencil")
+                                    .font(.mono(12, relativeTo: .caption))
+                                    .foregroundStyle(Color.inkDim)
+                                    .accessibilityHidden(true)
                                 ProposalLabel("Aangepast door jou · \(summary)", color: .inkDim)
-                            } icon: {
-                                Image(systemName: "pencil").foregroundStyle(Color.inkDim)
                             }
-                            .labelStyle(TightLabel())
+                            .dynamicTypeSize(...ProposalLabel.largest)
                             .padding(.top, 14)
                         }
-                        attachments.padding(.top, 28)
+                        attachments.padding(.top, 28).id(EditorAnchor.attachments)
                         Text("Klaar bewaart je versie en brengt je terug naar het voorstel. Versturen gebeurt daar, met vasthouden en Face ID.")
                             .font(.display(15, relativeTo: .callout))
                             .foregroundStyle(Color.inkMute)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 28)
+                        Color.clear.frame(height: 1).id(EditorAnchor.end)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 32)
                     .frameLeading()
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .task { await applyFixtureScroll(proxy) }
+                }
                 if confirmingDiscard { discardSheet }
             }
             .animation(.easeOut(duration: 0.2), value: confirmingDiscard)
@@ -104,7 +110,7 @@ struct ProposalEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuleren") {
-                        if dirty { focus = nil; confirmingDiscard = true } else { dismiss() }
+                        if dirty { focus = nil; bodyFocused = false; confirmingDiscard = true } else { dismiss() }
                     }
                     .foregroundStyle(Color.signalLink)
                     .disabled(confirmingDiscard)
@@ -151,6 +157,8 @@ struct ProposalEditor: View {
         // A swipe down with edits is held: only Annuleren (which asks) or
         // Klaar can close it then.
         .interactiveDismissDisabled(dirty)
+        .onChange(of: focus) { _, f in if f != nil { bodyFocused = false } }
+        .onChange(of: bodyFocused) { _, on in if on { focus = nil } }
         .presentationDragIndicator(.visible)
         .task { await applyFixture() }
     }
@@ -169,6 +177,7 @@ struct ProposalEditor: View {
                     .tracking(ax ? 0 : 1.2)
                     .foregroundStyle(Color.inkLabel)
                     .fixedSize()
+                    .dynamicTypeSize(...ProposalLabel.largest)
                     .frame(width: ax ? nil : 96, alignment: .leading)
                     .accessibilityHidden(true)
                 field().accessibilityLabel(label)
@@ -267,7 +276,7 @@ struct ProposalEditor: View {
     /// draws that as a narrow popover with no cancel row.
     private var discardSheet: some View {
         ZStack(alignment: .bottom) {
-            Color.black.opacity(0.5).ignoresSafeArea()
+            Color.scrim.ignoresSafeArea()
                 .onTapGesture { confirmingDiscard = false }
                 .accessibilityHidden(true)
             ViewThatFits(in: .vertical) {
@@ -337,12 +346,25 @@ struct ProposalEditor: View {
         ProposalScreenAddresses.split(text)
     }
 
+    private enum EditorAnchor: Hashable { case body, attachments, end }
+
+    private func applyFixtureScroll(_ proxy: ScrollViewProxy) async {
+        #if DEBUG
+        let scroll = FixtureLaunch.current?.scroll
+        guard scroll == .end || scroll == .middle else { return }
+        try? await Task.sleep(for: .milliseconds(500))
+        // middle: the body's end at the bottom (the highlight in view).
+        if scroll == .end { proxy.scrollTo(EditorAnchor.end, anchor: .bottom) }
+        else { proxy.scrollTo(EditorAnchor.body, anchor: .bottom) }
+        #endif
+    }
+
     private func applyFixture() async {
         #if DEBUG
         switch FixtureLaunch.current?.proposal {
         case .typen?:
             try? await Task.sleep(for: .milliseconds(400))
-            focus = .body
+            bodyFocused = true
         case .weggooien?:
             try? await Task.sleep(for: .milliseconds(400))
             confirmingDiscard = true

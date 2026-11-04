@@ -240,6 +240,17 @@ enum VoorJouList {
 
     // MARK: - Rows
 
+    static let notSent = "niet verstuurd"
+
+    /// The row's age column. A failed send gives the moment it failed —
+    /// "09:32" today, else its day as `age` says it — rather than when the
+    /// proposal was made.
+    static func rowAge(_ item: WaitingItem, now: Date) -> String {
+        guard let failed = item.failedAt, item.kind == .proposal else { return age(item.at, now: now) }
+        guard HomeSummary.calendar.isDate(failed, inSameDayAs: now) else { return age(failed, now: now) }
+        return HomeSummary.clock(failed)
+    }
+
     /// The age column: "vandaag", "gisteren", else "31 okt" — the item's
     /// `at` on Amsterdam's calendar, worked out against `now` on display.
     static func age(_ date: Date, now: Date) -> String {
@@ -284,6 +295,9 @@ enum VoorJouList {
     /// the age as the frames draw it; VoiceOver reads the whole name.
     static func meta(_ item: WaitingItem, now: Date, short: Bool = true) -> [String] {
         var parts = [rowKindLabel(item.kind)]
+        // A send that failed says so in place of the party (frame "Voor jou ·
+        // niet verstuurd in de lijst": "VOORSTEL · NIET VERSTUURD · 09:32").
+        if item.kind == .proposal, item.failedAt != nil { return parts + [notSent] }
         switch item.kind {
         case .stop:
             if let n = item.taskCount, n > 0 { parts.append(n == 1 ? "1 taak" : "\(n) taken") }
@@ -419,7 +433,7 @@ enum VoorJouList {
     static func accessibilityLabel(_ item: WaitingItem, now: Date) -> String {
         var parts = [HomeSummary.sentence(rowKindLabel(item.kind)), item.title]
         parts += meta(item, now: now, short: false).dropFirst()
-        parts += ["wacht op jou", age(item.at, now: now)]
+        parts += ["wacht op jou", rowAge(item, now: now)]
         return parts.joined(separator: ", ")
     }
 

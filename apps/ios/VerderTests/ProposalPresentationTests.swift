@@ -21,6 +21,15 @@ struct ProposalTextTests {
         #expect(ProposalText.eyebrow(kind: "reply") == "Voorstel · antwoord")
     }
 
+    /// A draft that failed has a status of its own, steel (it waits on nobody).
+    @Test func aFailedDraftHasItsOwnBadge() {
+        #expect(ProposalText.badge(status: "draft-failed") == .draftFailed)
+        #expect(ProposalText.badgeText(.draftFailed) == "Geen concept")
+        #expect(ProposalText.copyLabel == "Kopieer concepttekst")
+        #expect(ProposalText.copyMenuTitle.replacingOccurrences(of: "\u{2060}", with: "") == ProposalText.copyLabel)
+        #expect(ProposalText.copyMenuTitle.split(separator: " ").count == 2)
+    }
+
     @Test func stampIsTheClockTodayAndTheDayOtherwise() {
         let now = Self.date("2026-11-02T08:41:00Z")
         #expect(ProposalText.stamp(Self.date("2026-11-02T08:20:00Z"), now: now) == "09:20")
@@ -366,8 +375,38 @@ struct ProposalBarTests {
         let failed = await loaded(status: "failed", error: #""Gmail weigerde het bericht (400).""#)
         #expect(failed.sendBar(offline: false, holding: false)?.title == SendCopy.failedNothingSent)
         #expect(failed.sendBar(offline: false, holding: false)?.detail == "Gmail weigerde het bericht.")
-        #expect(failed.sendBar(offline: false, holding: false)?.button == nil)
+        // "Opnieuw versturen" is not built: the bar still leads somewhere.
+        #expect(failed.sendBar(offline: false, holding: false)?.button == .back)
     }
+
+    /// A claimed send Gmail never answered is said to be UNKNOWN, from the
+    /// server's `sendingAt` — never guessed from the phone's own wait.
+    @Test func anUnansweredSendIsUnknownNotSending() async {
+        func with(_ extra: String) -> Data {
+            let raw = String(decoding: ProposalFixture.reply(status: "sending"), as: UTF8.self)
+            return Data(raw.replacingOccurrences(of: #""revision":"#, with: extra + #","revision":"#).utf8)
+        }
+        let claimed = Self.date("2026-10-30T08:22:00Z")
+        let m = model(ProposalServer(detail: with(#""sendingAt":"2026-10-30T08:22:00.000Z""#)))
+        await m.load(id: ProposalFixture.id)
+        let early = m.sendBar(offline: false, holding: false, now: claimed.addingTimeInterval(60))
+        #expect(early?.spinning == true)
+        #expect(!m.outcomeUnknown(now: claimed.addingTimeInterval(ProposalModel.unknownAfter - 1)))
+        let late = claimed.addingTimeInterval(ProposalModel.unknownAfter)
+        #expect(m.outcomeUnknown(now: late))
+        let bar = m.sendBar(offline: false, holding: false, now: late)
+        #expect(bar?.icon == "clock")
+        #expect(bar?.title == "Nog onbekend of het is aangekomen.")
+        // Checking in Verzonden began when recovery did: claim + 10 minutes.
+        #expect(bar?.stamp == "Controle sinds 09:32")
+        #expect(bar?.extrasOnlyInSection == true)
+        #expect(bar?.button == .disabled("Opnieuw versturen kan nog niet"))
+        // Without the server's claim time, a send in flight is just in flight.
+        let old = await loaded(status: "sending")
+        #expect(!old.outcomeUnknown(now: late.addingTimeInterval(3600)))
+    }
+
+    static func date(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
 
     /// A newer server's draft version and send time reach the screen; an
     /// older one's absence names no version and no time.

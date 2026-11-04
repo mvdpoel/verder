@@ -14,6 +14,11 @@ struct ProposalLabel: View {
         self.color = color
     }
 
+    /// The largest size a label grows to. At AX5 a 12-pt caption would grow
+    /// to body size and the label/value hierarchy the frames keep (labels
+    /// visibly smaller than what they label) would be gone.
+    static let largest = DynamicTypeSize.accessibility2
+
     var body: some View {
         let ax = typeSize.isAccessibilitySize
         let shown = ax ? text : text.uppercased()
@@ -22,6 +27,34 @@ struct ProposalLabel: View {
             .tracking(ax ? 0 : 1.2)
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
+            .dynamicTypeSize(...Self.largest)
+    }
+}
+
+/// A mono meta line ("BIJLAGE · PDF · 184 KB") that, where it does not fit,
+/// wraps BETWEEN its groups and drops the dot there — never a line ending
+/// on "·" ("Bijlage · PDF" / "184 KB" at AX5).
+struct MetaLine: View {
+    let parts: [String]
+    var color: Color = .inkDim
+
+    init(_ line: String, color: Color = .inkDim) {
+        parts = line.components(separatedBy: " · ")
+        self.color = color
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: parts.count, through: 1, by: -1)), id: \.self) { head in
+                VStack(alignment: .leading, spacing: 0) {
+                    ProposalLabel(parts.prefix(head).joined(separator: " · "), color: color).fixedSize()
+                    ForEach(Array(parts.dropFirst(head).enumerated()), id: \.offset) { _, p in
+                        ProposalLabel(p, color: color)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -37,7 +70,7 @@ struct StatusBadge: View {
         switch badge {
         case .waiting: .attn
         case .sent: .okay
-        case .drafting: .steel
+        case .drafting, .draftFailed: .steel
         }
     }
 
@@ -55,6 +88,7 @@ struct StatusBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(color.opacity(0.85), lineWidth: 1))
+        .dynamicTypeSize(...ProposalLabel.largest)
     }
 }
 
@@ -109,9 +143,13 @@ struct TriggerCard: View {
     let model: ProposalModel
     let detail: ProposalDetail
     let now: Date
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        // Beside the one-line meta at the ordinary sizes; at the accessibility
+        // sizes the card is tall and the chevron sits centred on it.
+        let ax = typeSize.isAccessibilitySize
+        HStack(alignment: ax ? .center : .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 meta
                 if let line = model.triggerLine {
@@ -128,7 +166,7 @@ struct TriggerCard: View {
                 if let due = model.dueText { ProposalLabel(due, color: model.isPending ? .attn : .ink) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            RowChevron().padding(.top, 2)
+            RowChevron().padding(.top, ax ? 0 : 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,9 +230,13 @@ struct DraftCard: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassPanel()
+            .modifier(DraftCardSurface(record: isRecord))
         }
     }
+
+    /// The sent message is a read-only RECORD: drawn darker than a draft,
+    /// and its attachments are listed, not opened from here.
+    private var isRecord: Bool { model.status == "sent" }
 
     @ViewBuilder
     private func recipients(_ label: String, _ addresses: [String]) -> some View {
@@ -210,6 +252,7 @@ struct DraftCard: View {
                 WrappingName(joined, font: .mono(13, relativeTo: .footnote)).foregroundStyle(Color.ink)
             }
         }
+        .dynamicTypeSize(...ProposalLabel.largest)
         .accessibilityElement(children: .combine)
     }
 
@@ -248,7 +291,7 @@ struct DraftCard: View {
                 }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, a in
                     if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                    AttachmentRow(attachment: a, removable: editable && a.unavailable) {
+                    AttachmentRow(attachment: a, removable: editable && a.unavailable, opens: !isRecord) {
                         model.edit(removing: a.id)
                     }
                 }
@@ -263,6 +306,8 @@ struct DraftCard: View {
 struct AttachmentRow: View {
     let attachment: ProposalDetail.Attachment
     let removable: Bool
+    /// False in the sent record: a listed file, no chevron.
+    var opens = true
     let remove: () -> Void
 
     var body: some View {
@@ -282,13 +327,22 @@ struct AttachmentRow: View {
                 }
             }
             .padding(.vertical, 12)
+        } else if !opens {
+            VStack(alignment: .leading, spacing: 4) {
+                WrappingName(attachment.title, font: .display(17, relativeTo: .body, weight: .medium))
+                    .foregroundStyle(Color.inkBright)
+                MetaLine(meta)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 12)
+            .accessibilityElement(children: .combine)
         } else {
             NavigationLink(value: InboxRoute.document(id: attachment.id, title: attachment.title)) {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         WrappingName(attachment.title, font: .display(17, relativeTo: .body, weight: .medium))
                             .foregroundStyle(Color.inkBright)
-                        ProposalLabel(meta, color: .inkDim)
+                        MetaLine(meta)
                     }
                     Spacer(minLength: 8)
                     RowChevron()
@@ -303,6 +357,22 @@ struct AttachmentRow: View {
     private var meta: String {
         ["Bijlage", ProposalText.fileKind(attachment.title), ProposalText.bytes(attachment.sizeBytes)]
             .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// A draft is a glass panel; the sent message is a record, darker, with a
+/// plain edge and no lit top (frame "verstuurd").
+private struct DraftCardSurface: ViewModifier {
+    let record: Bool
+    func body(content: Content) -> some View {
+        if record {
+            let shape = RoundedRectangle(cornerRadius: Radius.panel, style: .continuous)
+            content
+                .background(Color.void, in: shape)
+                .overlay(shape.strokeBorder(Color.edge, lineWidth: 1))
+        } else {
+            content.glassPanel()
+        }
     }
 }
 
@@ -393,7 +463,7 @@ struct SourceRow: View {
                     .foregroundStyle(Color.inkBright)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                ProposalLabel(s.meta, color: .inkDim)
+                MetaLine(s.meta)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             RowChevron()
@@ -541,8 +611,14 @@ struct BarText: View {
                             .foregroundStyle(bar.title == nil ? Color.ink : Color.inkSoft)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if let meta = bar.meta { metaLine(meta, ax: ax).padding(.top, 2) }
-                    if let stamp = bar.stamp { ProposalLabel(stamp, color: .inkDim).padding(.top, 2) }
+                    let extras = ax || !bar.extrasOnlyInSection
+                    if extras, let stamp = bar.stamp, bar.extrasOnlyInSection {
+                        ProposalLabel(stamp, color: .inkDim).padding(.top, 2)
+                    }
+                    if extras, let meta = bar.meta { metaLine(meta, ax: ax).padding(.top, 2) }
+                    if extras, let stamp = bar.stamp, !bar.extrasOnlyInSection {
+                        ProposalLabel(stamp, color: .inkDim).padding(.top, 2)
+                    }
                 }
             }
             .accessibilityElement(children: .combine)
@@ -562,6 +638,7 @@ struct BarText: View {
                 WrappingName(to, font: .mono(12, relativeTo: .caption)).foregroundStyle(Color.inkDim)
                 ForEach(parts.dropFirst(), id: \.self) { ProposalLabel($0, color: .inkDim) }
             }
+            .dynamicTypeSize(...ProposalLabel.largest)
         } else {
             let line = meta.uppercasedKeepingAddresses()
             // One line where it fits; else it wraps after "@" or a dot, never clipped.

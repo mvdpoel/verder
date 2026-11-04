@@ -126,6 +126,10 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     /// shown in the row's meta in place of what it suggests. Absent (the
     /// server does not send it yet), the row says "Logboek" / "Document".
     var party: String? = nil
+    /// A proposal whose send FAILED, and when. The server lists only pending
+    /// proposals today (whether a failed send waits on Martin is still his
+    /// call, F-38); absent, a proposal row reads as an ordinary one.
+    var failedAt: Date? = nil
 }
 
 /// One thing verder did on its own (spec §6.6), as `verderActions.list` builds

@@ -235,7 +235,20 @@ final class ProposalModel {
 
     /// The bar under the proposal, from what the server said and what is
     /// happening on this screen. `holding`: a finger is on Versturen.
-    func sendBar(offline: Bool, holding: Bool) -> SendBar? {
+    /// How long a CLAIMED send stays "Wordt verstuurd…": the worker's own
+    /// `RECOVERY_AFTER_MS` (apps/worker/src/proposals/send.ts, 10 minutes),
+    /// after which it stops waiting on Gmail and looks in Verzonden — only
+    /// from then is "In je Verzonden mail wordt nu gekeken" true (F-42).
+    static let unknownAfter: TimeInterval = 10 * 60
+
+    /// The send was claimed and Gmail never answered: whether it arrived is
+    /// not known yet. Only from the server's `sendingAt`, never guessed.
+    func outcomeUnknown(now: Date) -> Bool {
+        guard detail?.status == "sending", let at = detail?.sendingAt else { return false }
+        return now.timeIntervalSince(at) >= Self.unknownAfter
+    }
+
+    func sendBar(offline: Bool, holding: Bool, now: Date = Date()) -> SendBar? {
         guard let d = detail else { return nil }
         let isQuestion = d.kind == "question"
         switch d.status {
@@ -271,6 +284,10 @@ final class ProposalModel {
                                detail: SendCopy.hint, meta: sendMeta, button: .hold(SendCopy.send))
             }
             return SendBar(detail: SendCopy.hint, meta: sendMeta, button: .hold(SendCopy.send))
+        case "sending" where outcomeUnknown(now: now):
+            return SendBar(icon: "clock", title: SendCopy.unknown, detail: SendCopy.unknownDetail,
+                           meta: sendMeta, stamp: d.sendingAt.map { SendCopy.checkingSince(ProposalText.clock($0.addingTimeInterval(Self.unknownAfter))) },
+                           extrasOnlyInSection: true, button: .disabled(SendCopy.resendNotYet))
         case "approved", "sending":
             return SendBar(spinning: true, title: approvedHere ? SendCopy.approvedHere : SendCopy.approved,
                            meta: SendCopy.approvedMeta, button: .disabled(SendCopy.sending))
@@ -281,7 +298,10 @@ final class ProposalModel {
                            stamp: d.sentAt.map(ProposalText.clock), button: .back)
         case "failed":
             let f = ProposalText.failure(d.error)
-            return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: f.title, detail: f.detail)
+            // "Opnieuw versturen" is not built (F-38/F-39), so the bar's one
+            // way on is back to the list — never a bar with no action.
+            return SendBar(icon: "exclamationmark.triangle", tone: .problem, title: f.title, detail: f.detail,
+                           button: .back)
         case "rejected":
             return SendBar(title: SendCopy.rejected, detail: SendCopy.rejectedDetail, button: .back)
         case "superseded":
@@ -450,8 +470,11 @@ final class ProposalModel {
     }
 
     /// After approve: reload until the worker has settled the send (`sent` or
-    /// `failed`), at most `limit` times. Stops when the view goes away.
-    func followSend(every interval: Duration = .seconds(5), limit: Int = 120) async {
+    /// `failed`), at most `limit` times — 40 minutes at the default, past the
+    /// worker's 30-minute recovery window, so an unknown outcome is followed
+    /// until it is known ("dit scherm werkt zichzelf bij"). Stops when the
+    /// view goes away.
+    func followSend(every interval: Duration = .seconds(5), limit: Int = 480) async {
         var left = limit
         while isSending, left > 0, !Task.isCancelled {
             left -= 1
