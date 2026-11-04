@@ -75,7 +75,7 @@ enum DetailText {
     }
 
     /// "Volgende in Voor jou · 3".
-    static func nextLabel(remaining: Int) -> String { "Volgende in Voor jou · \(remaining)" }
+    static func nextLabel(remaining: Int) -> String { "Volgende in Voor jou ·\(nbsp)\(remaining)" }
 
     /// The first word in capitals: "gedaan" → "Gedaan".
     static func capitalised(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }

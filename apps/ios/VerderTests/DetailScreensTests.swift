@@ -172,7 +172,7 @@ struct SuggestionDiffTests {
         m.set("details", "Nog iets")
         #expect(m.isChanged("summary"))
         #expect(m.changedCount == 2)
-        #expect(m.approveLabel == "Goedkeuren · 2 aangepast")
+        #expect(m.approveLabel == "Goedkeuren ·\u{00A0}2 aangepast")
         #expect(m.title == "Iets anders", "the title follows the edit")
         m.revert("summary")
         #expect(!m.isChanged("summary"))
@@ -235,7 +235,7 @@ struct SuggestionDiffTests {
         #expect(await m.approve() == false)
         #expect(m.approveFailed)
         #expect(m.value("summary") == "Iets anders")
-        #expect(m.approveLabel == "Opnieuw goedkeuren · 1 aangepast")
+        #expect(m.approveLabel == "Opnieuw goedkeuren ·\u{00A0}1 aangepast")
         #expect(m.failureText?.contains("je aanpassing staat hier nog") == true)
         #expect(!m.decided)
     }

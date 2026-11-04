@@ -169,7 +169,9 @@ final class SuggestionDetailModel {
     /// "Goedkeuren", "Goedkeuren · 2 aangepast", "Opnieuw goedkeuren · 2 aangepast".
     var approveLabel: String {
         let head = approveFailed ? "Opnieuw goedkeuren" : "Goedkeuren"
-        return changedCount == 0 ? head : "\(head) · \(changedCount) aangepast"
+        // A no-break space after the dot: where the label wraps, "·" starts
+        // the next line ("Goedkeuren" / "· 2 aangepast"), never ends one.
+        return changedCount == 0 ? head : "\(head) ·\u{00A0}\(changedCount) aangepast"
     }
 
     func approve() async -> Bool {
