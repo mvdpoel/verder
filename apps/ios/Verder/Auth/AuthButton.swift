@@ -20,7 +20,7 @@ struct AuthButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(AuthType.button)
+                .wholeWords(title, font: AuthType.button)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(foreground)
@@ -35,11 +35,12 @@ struct AuthButton: View {
                 }
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Not `.plain`: that style dims a disabled label too, and a disabled
+        // primary must keep its full on-signal label on the muted plate
+        // (frame "Te veel pogingen": the fill fades, the words do not).
+        .buttonStyle(AuthPressStyle())
         .disabled(!enabled)
         .allowsHitTesting(!busy)
-        // A disabled primary keeps a legible label on a muted plate (frame
-        // "Te veel pogingen"); the others fade as a whole.
         .opacity(enabled || weight == .primary ? 1 : 0.5)
         .accessibilityAddTraits(busy ? .updatesFrequently : [])
     }
@@ -93,20 +94,20 @@ struct AuthTitle: View {
 
     var body: some View {
         Text(text)
-            .font(.display(28, relativeTo: .title, weight: typeSize.isAccessibilitySize ? .semibold : .regular))
+            .wholeWords(text, font: .display(28, relativeTo: .title,
+                                             weight: typeSize.isAccessibilitySize ? .semibold : .regular))
             .foregroundStyle(Color.inkBright)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
     }
 }
 
-extension View {
-    /// The largest text these screens set. Martin's rule is that no word breaks
-    /// in the middle, and at AX4/AX5 "toegangssleutel", "vergrendelscherm" and
-    /// "bewindvoerder" are each wider than the line, so SwiftUI would split
-    /// them; AX3 is the largest size at which every word of these screens
-    /// fits whole (the final frames shrank the same strings to fit).
-    func authTypeCap() -> some View { dynamicTypeSize(...DynamicTypeSize.accessibility3) }
+/// A button that answers a press by fading slightly and never dims its label
+/// when disabled (the caller decides what disabled looks like).
+struct AuthPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
+    }
 }
 
 /// The "VERDER" word above a screen title.
@@ -204,19 +205,19 @@ struct AuthNoticeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(AuthType.label)
+                .wholeWords(label, font: AuthType.label)
                 .tracking(AuthType.labelTracking)
                 .foregroundStyle(Color.inkLabel)
                 .padding(.bottom, 8)
             Text(title)
-                .font(AuthType.headline)
+                .wholeWords(title, font: AuthType.headline)
                 .foregroundStyle(Color.inkBright)
             Text(text)
-                .font(AuthType.callout)
+                .wholeWords(text, font: AuthType.callout)
                 .foregroundStyle(Color.inkSoft)
             if let detail {
                 Text(detail)
-                    .font(.mono(11, relativeTo: .caption2))
+                    .wholeWords(detail, font: .mono(11, relativeTo: .caption2))
                     .foregroundStyle(Color.inkMute)
                     .padding(.top, 4)
             }
@@ -241,7 +242,7 @@ struct AuthCaption: View {
 
     var body: some View {
         Text(text)
-            .font(AuthType.callout)
+            .wholeWords(text, font: AuthType.callout)
             .foregroundStyle(emphasised ? Color.ink : Color.inkMute)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)

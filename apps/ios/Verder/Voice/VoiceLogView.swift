@@ -62,7 +62,7 @@ struct MicrophonePrePrompt: View {
                     .frame(width: 96, height: 96)
                     .overlay(Circle().strokeBorder(Color.signal.opacity(0.5), lineWidth: 1.5))
                 Text(Copy.sample)
-                    .font(AuthType.callout)
+                    .wholeWords(Copy.sample, font: AuthType.callout)
                     .foregroundStyle(Color.inkSoft)
                     .multilineTextAlignment(.center)
             }
@@ -70,7 +70,6 @@ struct MicrophonePrePrompt: View {
             .frame(maxWidth: .infinity)
             .background(Color.rail, in: RoundedRectangle(cornerRadius: Radius.panel))
             .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(Color.edge, lineWidth: 1))
-            .padding(.top, 140)
         }
     }
 }
@@ -85,7 +84,8 @@ struct MicDeniedView: View {
     enum Copy {
         static let title = "Een gesprek vastleggen"
         static let cause = "verder mag de microfoon niet gebruiken."
-        static let body = "Uitgezet in Instellingen → verder → Microfoon. Zet het aan, dan kun je meteen inspreken."
+        /// "hem": de microfoon (frame "Pre-prompt / Microfoon geweigerd").
+        static let body = "Uitgezet in Instellingen → verder → Microfoon. Zet hem aan, dan kun je meteen inspreken."
         static let close = "Sluit"
     }
 
@@ -94,11 +94,11 @@ struct MicDeniedView: View {
             VStack(alignment: .leading, spacing: 0) {
                 AuthTitle(Copy.title)
                 Text(Copy.cause)
-                    .font(AuthType.headline)
+                    .wholeWords(Copy.cause, font: AuthType.headline)
                     .foregroundStyle(Color.inkBright)
                     .padding(.top, 16)
                 Text(Copy.body)
-                    .font(AuthType.callout)
+                    .wholeWords(Copy.body, font: AuthType.callout)
                     .foregroundStyle(Color.inkSoft)
                     .padding(.top, 12)
                 VStack(spacing: 12) {
@@ -118,7 +118,6 @@ struct MicDeniedView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .lineHeight(.multiple(factor: AuthType.lineFactor))
-        .authTypeCap()
         .background(Color.rail.ignoresSafeArea())
         .preferredColorScheme(.dark)
     }

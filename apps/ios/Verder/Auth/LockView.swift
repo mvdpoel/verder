@@ -77,6 +77,9 @@ struct LockedPlaceholder: View {
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // The target is a pushed screen (a proposal under "Voor jou"), which
+        // draws no tab bar (frame "Lock / Koude start via melding").
+        .toolbar(.hidden, for: .tabBar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(target.title), vergrendeld")
     }
@@ -113,6 +116,7 @@ struct UnlockSheetView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         }
         .scrollBounceBehavior(.basedOnSize)
+        .fixtureScrollAnchor()
         .presentationDetents([.height(height)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.rail)
@@ -124,11 +128,11 @@ struct UnlockSheetView: View {
             AuthTitle(sheet == .cancelled ? Copy.title : Copy.noPasscodeTitle)
             if sheet == .cancelled {
                 Text(Copy.cancelled)
-                    .font(AuthType.callout)
+                    .wholeWords(Copy.cancelled, font: AuthType.callout)
                     .foregroundStyle(Color.ink)
                     .padding(.top, 12)
                 Text(Copy.rule)
-                    .font(AuthType.callout)
+                    .wholeWords(Copy.rule, font: AuthType.callout)
                     .foregroundStyle(Color.inkSoft)
                     .padding(.top, 16)
                 if let target {
@@ -136,7 +140,7 @@ struct UnlockSheetView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Circle().fill(Color.attn).frame(width: 10, height: 10).glow(Glow.attn)
                         Text(target.waitingLine)
-                            .font(AuthType.callout)
+                            .wholeWords(target.waitingLine, font: AuthType.callout)
                             .foregroundStyle(Color.ink)
                     }
                     .frame(maxWidth: .infinity)
@@ -145,7 +149,7 @@ struct UnlockSheetView: View {
                 }
             } else {
                 Text(Copy.noPasscode)
-                    .font(AuthType.callout)
+                    .wholeWords(Copy.noPasscode, font: AuthType.callout)
                     .foregroundStyle(Color.ink)
                     .padding(.top, 12)
             }
@@ -172,7 +176,6 @@ struct UnlockSheetView: View {
         .padding(.top, 32)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .authTypeCap()
     }
 }
 
@@ -195,6 +198,20 @@ struct PrivacyCover: View {
             .offset(y: -64)
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The dim over the whole app, status bar included, while Face ID is being
+/// asked (frame "Lock / Face ID vraagt"): a pending prompt must not look like
+/// the glance at rest. The system draws its own Face ID mark on top; this
+/// only dims what is behind it. Takes the taps too, so nothing behind it can
+/// be pressed while the answer is out.
+struct UnlockScrim: View {
+    var body: some View {
+        Color.black.opacity(0.62)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
     }
 }
 

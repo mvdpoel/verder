@@ -294,6 +294,10 @@ struct RootView: View {
         }
         // Above the tab bar: the handoff dims it too (frame "Scan · overdracht").
         .overlay { ScanHandoffOverlay(handoff: scanHandoff) }
+        .overlay {
+            if lock.isUnlocking && tab != .scan { UnlockScrim().transition(.opacity) }
+        }
+        .animation(.easeInOut(duration: 0.2), value: lock.isUnlocking)
         .preferredColorScheme(.dark)
         // Lock-gated: it names parties. From the quick action on a cold
         // launch the lock asks Face ID by itself (`promptOnOpen`).

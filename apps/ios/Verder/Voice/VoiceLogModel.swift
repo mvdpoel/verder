@@ -65,7 +65,7 @@ final class VoiceLogModel {
         static let nothingHeard = "Er is niets verstaan. Neem opnieuw op, of typ zelf wat er besproken is."
         static let transcribeFailed = "Omzetten naar tekst lukte niet. Typ zelf wat er besproken is; de opname blijft bewaard tot je verstuurt."
         static let holdLonger = "Houd de knop ingedrukt zolang je praat."
-        static let micDenied = "verder mag de microfoon niet gebruiken. Zet het aan in Instellingen."
+        static let micDenied = "verder mag de microfoon niet gebruiken. Zet hem aan in Instellingen."
         static let recordFailed = "Opnemen lukte niet. Probeer het nog eens."
         static let partiesFailed = "De partijen konden niet worden geladen."
         static let partiesLoading = "Partijen laden…"

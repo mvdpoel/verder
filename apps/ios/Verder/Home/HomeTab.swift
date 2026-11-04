@@ -310,9 +310,14 @@ struct HomeTab: View {
                         Text(button)
                             .font(HomeType.bodyStrong)
                             .foregroundStyle(Color.signal)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .padding(.horizontal, 12)
+                    // Real room inside the border at every size: at AX5 the
+                    // label otherwise runs into it edge to edge.
+                    .padding(.horizontal, ax ? 20 : 12)
+                    .padding(.vertical, ax ? 8 : 0)
                     .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip))
                     .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1))
                     .contentShape(Rectangle())

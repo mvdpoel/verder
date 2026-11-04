@@ -12,10 +12,21 @@ struct PermissionPrePrompt<Art: View>: View {
     @ViewBuilder let art: () -> Art
 
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var viewport: CGFloat = 0
+    @State private var height: CGFloat = 0
 
     static var goOn: String { "Ga verder" }
     static var thenIOS: String { "Daarna vraagt iOS om toestemming." }
+
+    private var ax: Bool { typeSize.isAccessibilitySize }
+
+    enum Layout {
+        /// From the title's top to the bottom of the scrolling area: the
+        /// frames set every pre-prompt's title at the same height (472 on a
+        /// 6.3-inch phone, 318 on an SE), whatever picture stands above it.
+        static var titleFromBottom: CGFloat { 266 }
+        /// The picture's bottom to the title (frames: 35–46).
+        static var artGap: CGFloat { 40 }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,16 +34,17 @@ struct PermissionPrePrompt<Art: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // At the accessibility sizes the words need the room the
                     // picture takes (frame "Pre-prompt / Meldingen · AX5").
-                    if !typeSize.isAccessibilitySize {
-                        Spacer(minLength: 24)
+                    if !ax {
                         art()
                             .frame(maxWidth: .infinity)
+                            .frame(minHeight: max(0, height - Layout.titleFromBottom - Layout.artGap),
+                                   alignment: .bottom)
                             .accessibilityHidden(true)
-                            .padding(.bottom, 48)
+                            .padding(.bottom, Layout.artGap)
                     }
                     AuthTitle(title)
                     Text(purpose)
-                        .font(.display(17, relativeTo: .body))
+                        .wholeWords(purpose, font: .display(17, relativeTo: .body))
                         .foregroundStyle(Color.ink)
                         .padding(.top, 8)
                     VStack(alignment: .leading, spacing: 12) {
@@ -43,28 +55,33 @@ struct PermissionPrePrompt<Art: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .lineHeight(.multiple(factor: AuthType.lineFactor))
                 .padding(.horizontal, 16)
-                .padding(.top, typeSize.isAccessibilitySize ? 24 : 0)
-                .frame(maxWidth: .infinity, minHeight: viewport, alignment: .bottomLeading)
+                .padding(.top, ax ? 24 : 0)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.bottom, 24)
+                // At the accessibility sizes the button scrolls with the
+                // words: pinned, it would slice the last promise in half at
+                // its edge (frame "Meldingen · AX5" shows every line).
+                if ax { actions }
             }
             .scrollBounceBehavior(.basedOnSize)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height * 0.92 } action: { viewport = $0 }
-            VStack(spacing: 16) {
-                AuthButton(title: Self.goOn, action: proceed)
-                AuthCaption(Self.thenIOS)
-            }
-            .lineHeight(.multiple(factor: AuthType.lineFactor))
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 16)
-            .overlay(alignment: .top) {
-                if typeSize.isAccessibilitySize { Rectangle().fill(Color.hairline).frame(height: 1) }
-            }
+            .fixtureScrollAnchor()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            if !ax { actions }
         }
         .background(Color.void.ignoresSafeArea())
-        .authTypeCap()
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled()
+    }
+
+    private var actions: some View {
+        VStack(spacing: 16) {
+            AuthButton(title: Self.goOn, action: proceed)
+            AuthCaption(Self.thenIOS)
+        }
+        .lineHeight(.multiple(factor: AuthType.lineFactor))
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
     }
 
     private func promise(_ text: String) -> some View {
@@ -74,7 +91,7 @@ struct PermissionPrePrompt<Art: View>: View {
                 .foregroundStyle(Color.okay)
                 .accessibilityHidden(true)
             Text(text)
-                .font(AuthType.callout)
+                .wholeWords(text, font: AuthType.callout)
                 .foregroundStyle(Color.inkSoft)
         }
         .accessibilityElement(children: .combine)
@@ -120,7 +137,6 @@ struct NotificationPrePrompt: View {
     var body: some View {
         PermissionPrePrompt(title: Copy.title, purpose: Copy.purpose, promises: Copy.promises, proceed: proceed) {
             SampleNotification(title: Copy.sampleTitle, text: Copy.sampleBody)
-                .padding(.top, 180)
         }
     }
 }

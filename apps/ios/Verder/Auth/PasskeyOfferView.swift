@@ -28,6 +28,9 @@ struct PasskeyOfferView: View {
         static let noSecondFaceID = "Face\u{00A0}ID wordt nu niet nog een keer gevraagd."
     }
 
+    /// The Ghost row (48) and the footer line (28) this step does not draw.
+    static let worksLift: CGFloat = 76
+
     private var works: Bool { auth.passkeyOffer == .alreadyOnDevice }
 
     var body: some View {
@@ -38,7 +41,7 @@ struct PasskeyOfferView: View {
                     AuthEyebrow().padding(.bottom, 16)
                     AuthTitle(works ? Copy.worksTitle : Copy.title)
                     Text(works ? Copy.worksBody : Copy.body)
-                        .font(AuthType.callout)
+                        .wholeWords(works ? Copy.worksBody : Copy.body, font: AuthType.callout)
                         .foregroundStyle(Color.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 4)
@@ -55,10 +58,10 @@ struct PasskeyOfferView: View {
                 .lineHeight(.multiple(factor: AuthType.lineFactor))
             }
             .scrollBounceBehavior(.basedOnSize)
+            .fixtureScrollAnchor()
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
             .safeAreaInset(edge: .bottom, spacing: 0) { actions }
         }
-        .authTypeCap()
         .preferredColorScheme(.dark)
         .sensoryFeedback(.success, trigger: auth.passkeyAddedCount)
         // Added: the offer has done its job.
@@ -87,7 +90,11 @@ struct PasskeyOfferView: View {
         .lineHeight(.multiple(factor: AuthType.lineFactor))
         .padding(.horizontal, 16)
         .padding(.top, 12)
-        .padding(.bottom, 16)
+        // "Ga naar Overzicht" has neither a Ghost nor the footer line under
+        // it: it keeps the place the first button has on the sign-in screens
+        // (frame "… staat al op je telefoon": the button at 664, not dropped
+        // to the bottom edge).
+        .padding(.bottom, works ? 16 + Self.worksLift : 16)
         .background(Color.void)
     }
 }
