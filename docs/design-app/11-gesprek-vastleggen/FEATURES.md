@@ -10,7 +10,9 @@ Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief d
 | Deels gebouwd | 11 |
 | Nog te bouwen | 19 |
 
-De drie belangrijkste dingen die nog gebouwd moeten worden:
+> **2026-11-04: het blad volgt nu de definitieve frames.** Titel "Spraaknotitie", tikken of vasthouden, annuleren, de timer, het blad omlaag met de opname in de tabbalk, de ontlede partij en het kanaal, de partijkiezer, de blad-vullende toestanden, de vastgezette voet met reden, de mislukte verzendingen in het blad, de bevestiging voor weggooien, de suggestiekaart en de vergrendelde notitie zijn gebouwd. Wat nog open is, staat hieronder met zijn status; onder andere het live streamen op het toestel, `recognizedTranscript` naar de server, de rol van een partij op de server en de App Intent. De beschrijving onder [Functies](#functies) is van vóór deze ronde. Captures: `scripts/capture.sh <voice-fixture> overzicht <out> --voice <toestand>`.
+
+De drie belangrijkste dingen die nog gebouwd moesten worden (2026-11-03):
 
 1. **Vragen voordat een niet-verstuurde notitie wordt weggegooid** ([Bevestiging voor weggooien](#bevestiging-voor-weggooien-bij-sluiten)). Nu gooit "Sluiten" de tekst en de opname direct weg, zonder vraag. Dat is de enige plek waar Martin een gesprek dat hij net heeft ingesproken kan kwijtraken.
 2. **De ontworpen opname zelf**: [tikken om te starten en te stoppen](#tikken-om-te-starten-en-tikken-om-te-stoppen), een [live transcript](#live-transcript-tijdens-het-praten), de [timer](#opnametimer-en-weergave-op-het-toestel) en [annuleren door van de knop af te schuiven](#een-opname-annuleren-van-de-knop-af-schuiven-of-annuleer). Het begint met de meting die nog openstaat: zet iOS 27.2 Nederlands überhaupt op de telefoon om in tekst (plan 3 Task 25 stap 1)?
@@ -230,31 +232,31 @@ Functies die de definitieve frames, de spec of de design brief definiëren en di
 
 Het rustframe zegt "Houd vast om te praten · of tik één keer om te starten en weer om te stoppen", en "Niets gehoord" herhaalt het ("of tik één keer om te starten"). Eén tik start een opname die handsfree doorloopt tot de volgende tik; dat is van belang als Martin de telefoon nog vasthoudt om een gesprek af te ronden of een brief hardop voorleest. Nu wordt een druk korter dan 0,6 s verwijderd met "Houd de knop ingedrukt zolang je praat.", en krijgen alleen VoiceOver en Switch Control een aan/uit-knop.
 
-**Status:** Nog te bouwen — `VoiceLogModel`: een aan/uit-modus naast het vasthouden, beslist op de duur van de druk (een korte druk start en laat hem doorlopen); `HoldToRecord`: gebaar voor tikken vs. vasthouden; tests dat een tik een lopende opname start, een tweede tik hem stopt en omzet, en dat vasthouden nog werkt zoals nu. Geen serverwijziging.
+**Status:** Gebouwd (2026-11-04) — een druk korter dan 0,6 s start een handsfree opname, de volgende tik stopt en zet om; vasthouden werkt zoals voorheen. `apps/ios/Verder/Voice/VoiceLogModel.swift` (`press`, `release`, `toggleRecording`), `VoiceLogView.swift` (`RecordButton`); `VoiceQuickLogTests`
 
 #### Live transcript tijdens het praten
 
 Terwijl Martin praat, verschijnen zijn woorden boven de knop zodra ze herkend worden (frame "opname"). Bij loslaten wordt diezelfde tekst de tekst van de editor, zodat hij tijdens het gesprek ziet dat het begrepen wordt. Brief §3: "Live on-device transcript, then a parsed preview". Nu verschijnt de tekst pas nadat de vinger loslaat, uit het opgenomen bestand.
 
-**Status:** Nog te bouwen — `Transcribing`: een streamingmodus die `SpeechAnalyzer` live microfoonbuffers voert (een `AVAudioEngine`-tap die ook de `.m4a` schrijft, zodat "Bewaar opname" blijft werken) en voorlopige en definitieve resultaten publiceert; `VoiceLogModel`: een `liveTranscript`; UI boven de knop; tests met een nep-streamingtranscriber. Vereist eerst de meting van Nederlands op het toestel (plan 3 Task 25 stap 1). Nog steeds geen serverterugval.
+**Status:** Deels gebouwd (2026-11-04) — het model en het blad hebben de plek (`Transcribing.live`, `VoiceLogModel.live`; vaste woorden in ink, de staart in signal), en de fixture vult hem. Het streamen op het toestel zelf ontbreekt: `OnDeviceTranscriber` geeft een lege stroom tot Nederlands op de telefoon gemeten is (plan 3 Task 25 stap 1) en een `AVAudioEngine`-tap de m4a schrijft
 
 #### Opnametimer en weergave op het toestel
 
 Tijdens het opnemen toont een weergave de verstreken tijd en waar de spraak verwerkt wordt: "0:14 · NEDERLANDS · OP JE IPHONE". Dat vertelt Martin dat de opname loopt, hoe lang die is, en dat de stem op de telefoon blijft.
 
-**Status:** Nog te bouwen — verstreken tijd in `VoiceLogModel` (vanaf de start van de recorder), de weergave in de view, een test op het starten en stoppen van de timer. Geen serverwijziging.
+**Status:** Gebouwd (2026-11-04) — "0:14 · NEDERLANDS · OP JE IPHONE" (`elapsedText`, `RecordingLine`)
 
 #### Een opname annuleren: van de knop af schuiven, of "Annuleer"
 
 Tijdens een opname annuleert het van de knop af schuiven van de vinger die ("Schuif van de knop af om te annuleren."), en een knop "Annuleer" doet hetzelfde. Een geannuleerde opname wordt verwijderd, nooit omgezet en nooit verstuurd. Nu *beëindigt* meer dan 80 pt wegbewegen de opname en wordt die nog steeds omgezet, en annuleren bestaat helemaal niet.
 
-**Status:** Nog te bouwen — een sleepvolgend gebaar in `HoldToRecord` in plaats van `onLongPressGesture(maximumDistance: 80)`; `VoiceLogModel.cancelRecording()` (recorder `cancel`, bestand verwijderen, terug naar rust met dezelfde `clientId`); een knop "Annuleer"; tests dat annuleren geen bestand en geen transcript achterlaat.
+**Status:** Gebouwd (2026-11-04) — `cancelRecording()`: bestand weg, geen transcript, zelfde `clientId`; afschuiven toont "Laat los om te annuleren"; tests in `VoiceQuickLogTests`
 
 #### Opname loopt door met het blad omlaag
 
 Martin kan het blad tijdens een (met een tik gestarte) opname omlaag trekken en de app blijven gebruiken. De opname loopt door, en het onderste accessoire van de tabbalk toont "Opname loopt 0:14 Stop" (frame "opname · blad omlaag"; brief §3: "Recording state in the tab accessory"). Tikken op het accessoire opent het blad weer, en "Stop" beëindigt de opname en zet die om.
 
-**Status:** Nog te bouwen — vereist eerst [tikken om te starten](#tikken-om-te-starten-en-tikken-om-te-stoppen) (vasthouden kan het blad niet overleven); `RootView`: een `tabViewBottomAccessory` aangestuurd door `VoiceLogSession` (de Scan-wachtrij tekent zijn strip nu zelf, zie `apps/ios/Verder/Scan/QueueViews.swift`); `VoiceLogSession`: het blad omlaag trekken houdt de opname vast in plaats van die in `sheetDisappeared` te stoppen; tests voor beide.
+**Status:** Gebouwd (2026-11-04) — een handsfree opname overleeft het omlaag trekken (`VoiceLogSession.sheetDisappeared`, `blocksSwipe`); `tabViewBottomAccessory` in `RootView` toont "Opname loopt 0:14 Stop" (`VoiceRecordingAccessory`); uitloggen stopt hem altijd
 
 ### De tekst en het gesprek
 
@@ -262,37 +264,37 @@ Martin kan het blad tijdens een (met een tik gestarte) opname omlaag trekken en 
 
 Na het omzetten leest verder de tekst op een partijnaam die het kent en op woorden die het kanaal noemen ("Gebeld", "langs geweest"), en selecteert beide voor. De gevonden woorden worden in de tekst onderstreept, en de partijrij zegt waar de waarde vandaan komt: "MET WIE · UIT JE TEKST" als die uit de tekst gelezen is, "MET WIE · LAATST GESPROKEN" als het de meest recente partij is (frame "typen"). Terwijl de tekst nog wordt omgezet, tonen de gespreksrijen een laadtoestand (frame "omzetten naar tekst"). Elke waarde blijft een voorstel dat Martin kan wijzigen: er wordt nooit een partij verzonnen, alleen namen die al in zijn dossier staan worden herkend. Brief §3: "a parsed preview (party, channel `call`, date)".
 
-**Status:** Nog te bouwen — een pure matcher op het toestel (partijnamen en organisaties uit `/parties`; een kleine Nederlandse lijst met kanaaltrefwoorden) in `apps/ios/Verder/Voice/`; `VoiceLogModel`: de match, de bron ervan ("uit je tekst" / "laatst gesproken") en de woordbereiken om te markeren; UI; unittests met een fixture van bijna-gelijke namen, zodat een verkeerde match nooit wint van "laatst gesproken". Geen serverwijziging; er wordt niets verstuurd tot Martin op versturen tikt.
+**Status:** Gebouwd (2026-11-04) — `VoiceText.read`: alleen volledige namen (of organisatie) als heel woord, nooit over een keuze met de hand; gemarkeerd met een stippellijn in signal; "UIT JE TEKST" / "LAATST GESPROKEN". De laadtoestand van de gespreksrijen tijdens het omzetten is gebouwd (skelet)
 
 #### "Aangepast": wat gehoord is naast wat verstuurd is bewaren
 
 Als Martin het transcript bewerkt, luidt het label "WAT JE ZEI · AANGEPAST" (frame "tekst bewerken"). Volgens de gouden regel (modeluitvoer, oordeel en bewerkingsverschil worden altijd vastgelegd) worden het transcript van de machine en Martins bewerking allebei bewaard, zodat de server kan onderscheiden wat het spraakmodel hoorde en wat hij veranderde. Nu verstuurt de telefoon alleen de definitieve tekst, en gaat het transcript zoals herkend verloren.
 
-**Status:** Nog te bouwen — `VoiceLogModel`: de herkende tekst naast de bewerkte bewaren en een vlag "aangepast" beschikbaar maken; `VoiceDraft` + route `entries/voice` + `suggestions.createVoice`: een optioneel veld `recognizedTranscript`, opgeslagen in `proposed` (geen ledgerwijziging, de suggestie is geen bewijs); tests aan beide kanten.
+**Status:** Deels gebouwd (2026-11-04) — de telefoon bewaart de herkende tekst en toont "WAT JE ZEI · AANGEPAST" (`isEdited`); het veld `recognizedTranscript` naar de server (route + `createVoice`) ontbreekt nog
 
 #### Partijkiezer: zoeken, recent, A–Z
 
 Tikken op de partijrij opent "Met wie sprak je?": een zoekveld ("Zoek een partij"), een sectie "RECENT" met de partijen met wie Martin het laatst contact had, een sectie "ALLE PARTIJEN · A–Z", een vinkje bij de huidige keuze en "Annuleer" (frame "met wie"). Nu toont een gewoon iOS-menu elke naam op volgorde van meest recent contact, zonder zoeken.
 
-**Status:** Nog te bouwen — alleen UI: een blad over `model.parties` met lokaal zoeken en de twee secties (de route geeft al `lastContactAt` terug, dus "recent" kan bestaan uit de partijen met een contactdatum); tests voor het zoeken en de splitsing.
+**Status:** Gebouwd (2026-11-04) — `PartyPickerSheet` met lokaal zoeken, RECENT (tot drie met een contactdatum) en A–Z (`VoiceText.sections`)
 
 #### Laatste contact per partij
 
 Elke partijrij in de kiezer toont wanneer Martin hen het laatst sprak ("laatst 31 okt").
 
-**Status:** Deels gebouwd — de server geeft het al terug (`lastContactAt` in `apps/web/src/app/api/mobile/v1/parties/route.ts`, gedecodeerd in `PartyDTO`); de app toont niets. Vereist het kiezerblad en een notatie per Amsterdamse dag.
+**Status:** Gebouwd (2026-11-04) — "LAATST 31 OKT" in RECENT (`VoiceText.lastContact`)
 
 #### De rol van de partij per rij
 
 Elke partijrij zegt wat de partij voor Martin is: "VERHUURDER", "BEWINDVOERDER", "INCASSO", "WERKGEVER", "GEMEENTE", "SCHULDEISER", "ZORGVERZEKERAAR".
 
-**Status:** Nog te bouwen — het model heeft zo'n veld niet: `parties.kind` is alleen `person` / `organization`, en rollen bestaan alleen per schuld (`debt_parties.role`: `eiser`, `incasso`, `deurwaarder`, `gemachtigde`). Vereist een besluit over de bron (afleiden uit `debt_parties`, of een nieuwe nullable kolom en een migratie), een veld op de route `/parties`, het label in de kiezer, en tests. Het mag nooit worden geraden.
+**Status:** Deels gebouwd (2026-11-04) — de telefoon toont `PartyDTO.role` als de server hem meegeeft (de fixture doet dat); de server geeft hem NIET: daarvoor blijft het besluit over de bron, een veld op `/parties` en een test nodig
 
 #### Laadtoestanden van partijen in de kiezer
 
 Het kiezerblad heeft eigen toestanden "Nog geen partijen" en "Partijen laden lukt niet", elk met "Opnieuw proberen", en beide zeggen "je notitie blijft staan" (frames "met wie · geen partijen", "met wie · laden lukt niet").
 
-**Status:** Deels gebouwd — beide toestanden en hun nieuwe poging bestaan inline in de editor (`partiesLine`, `retryParties` in `VoiceLogModel.swift`); het kiezerblad waar ze bij horen niet, en de tekst mist "je notitie blijft staan".
+**Status:** Gebouwd (2026-11-04) — "Nog geen partijen" en "Partijen laden lukt niet" in het kiezerblad met "Opnieuw proberen" en "je notitie blijft staan"; de partijrij zegt "OPNIEUW LADEN"
 
 ### Versturen
 
@@ -300,43 +302,43 @@ Het kiezerblad heeft eigen toestanden "Nog geen partijen" en "Partijen laden luk
 
 Onder de verstuurknop zegt een regel wat er gaat gebeuren ("Komt als suggestie in Voor jou. Na jouw akkoord staat het in je logboek."). Als versturen nog niet kan, zegt de regel in plaats daarvan waarom ("Schrijf eerst wat er besproken is.", frame "typen"); brief §2.4: acties worden uitgeschakeld met de reden erbij, nooit stilzwijgend.
 
-**Status:** Deels gebouwd — de uitleg bestaat als faseregel van de editor ("Controleer de tekst. Er gaat niets naar het logboek tot jij het goedkeurt in Voor jou."); een uitgeschakelde knop geeft geen reden (geen tekst, geen partij, of meer dan 20 000 tekens, waarvan de tekst `tooLong` in het model bestaat maar nooit wordt getoond). Vereist een `sendBlockedReason` in het model, de regel in de view en een test per reden.
+**Status:** Gebouwd (2026-11-04) — `footnote(locked:)`: geen tekst, te lang, partijen laden/mislukt, geen partij, vergrendeld; tests per reden
 
 #### Verstuurknop altijd bereikbaar
 
 De verstuurknop blijft onderaan het blad vastgezet terwijl de inhoud scrolt, ook bij de grootste toegankelijkheidstekstgrootte in een venster van één scherm hoog en op een iPhone SE (frames "voorbeeld", "AX5 · 874-venster", "iPhone SE").
 
-**Status:** Nog te bouwen — alleen UI: de verstuuractie uit de `ScrollView` halen en in een onderste inset plaatsen (`safeAreaInset(edge: .bottom)`); controleren tegen de drie frames.
+**Status:** Gebouwd (2026-11-04) — vastgezette voet (`safeAreaInset`) met haarlijn en 24-pt vervaging; gecontroleerd op iPhone 17, iPhone SE en AX5
 
 #### Bevestiging voor weggooien bij sluiten
 
 Het blad sluiten (✕) of tikken op "Weggooien…" terwijl een notitie niet verstuurd is, vraagt eerst: "Deze notitie is nog niet verstuurd." met "Verstuur als voorstel", "Weggooien" (destructief) en "Verder bewerken" (frame "weggooien?"). Nu telt "Sluiten" als expliciet sluiten en gooit het de tekst en de opname direct weg, en doet "Weggooien" hetzelfde. Een veeg is al geblokkeerd zolang de notitie werk bevat, dus de sluitknop is de enige manier om een ingesproken gesprek per ongeluk kwijt te raken.
 
-**Status:** Nog te bouwen — UI: een `confirmationDialog` op Sluiten en Weggooien bij `holdsUnsentWork`, met versturen / weggooien / verder bewerken; `.warning`-haptiek bij de destructieve keuze (brief §2.5 "destructive confirm"); tests dat een niet-verstuurde notitie "Verder bewerken" overleeft en dat sluiten zonder inhoud nog steeds direct sluit.
+**Status:** Gebouwd (2026-11-04) — `requestClose()` + `confirmationDialog` (versturen / weggooien / verder bewerken), `.warning`-haptiek; iOS 26 tekent het als popover en verbergt "Verder bewerken" achter een tik ernaast
 
 #### Mislukte verzending met oorzaak en één nieuwe poging
 
 Een mislukte verzending toont bovenaan het blad een melding met titel ("Niet verstuurd" met de oorzaak: "Geen verbinding. Je tekst blijft staan; probeer het zo opnieuw.") en maakt van de hoofdknop "Opnieuw proberen", met "Weggooien…" eronder (frame "niet verstuurd").
 
-**Status:** Deels gebouwd — de oorzaakzinnen en de nieuwe poging met dezelfde `clientId` bestaan (`VoiceLogModel.copy(for:)`, `send`); de melding staat onder de knoppen zonder titel, en de nieuwe poging is dezelfde knop "Verstuur als voorstel". Vereist de plaatsing van de melding en een label voor de nieuwe poging in de view.
+**Status:** Gebouwd (2026-11-04) — `sendFailure` + `banner` bovenaan, hoofdknop "Opnieuw proberen", "Weggooien…" eronder, `.error`-haptiek
 
 #### Opname te groot: versturen zonder
 
 Als de bewaarde opname te groot is om te versturen, zegt de melding dat ("Niet verstuurd · opname te groot … Verstuur alleen de tekst; de opname blijft op je iPhone.") en doet één knop precies dat: "Verstuur zonder opname" (frame "niet verstuurd · verder weigert").
 
-**Status:** Deels gebouwd — de groottecontrole vóór het versturen bestaat (`VoiceDraft.audioMaxBytes`); Martin moet "Bewaar opname" zelf uitzetten en opnieuw versturen. Vereist een actie `sendWithoutRecording()` (zet de schakelaar uit en verstuurt), de knop, en een test. Een 413 van de server zou hier ook naartoe moeten leiden in plaats van naar het algemene "verder weigerde dit voorstel…".
+**Status:** Gebouwd (2026-11-04) — `sendWithoutRecording()` en "Verstuur zonder opname"; een 413 op een bewaarde opname komt hier ook uit
 
 #### Sessie verlopen binnen het blad
 
 Als de sessie tijdens het versturen verloopt, blijft het blad staan: een melding "Je bent uitgelogd · Je sessie is verlopen. Log opnieuw in; je tekst blijft staan." en een hoofdknop "Log opnieuw in" (frame "niet verstuurd · opnieuw inloggen").
 
-**Status:** Deels gebouwd — de notitie overleeft de 401 en komt terug na het inloggen (`VoiceLogSession.sessionEnded` / `sessionStarted`); maar het app-brede scherm "Je sessie is verlopen." vervangt het blad, dus de melding en knop in het blad verschijnen nooit.
+**Status:** Gebouwd (2026-11-04) — een 401 bij versturen houdt het blad met "Je bent uitgelogd"; pas "Log opnieuw in" (`signInAgain`) geeft het over aan het inlogscherm
 
 #### Vergrendeld met de notitie behouden
 
 Als de app vergrendelt terwijl een notitie open is, blijft de tekst van de notitie zichtbaar, luidt de partijrij "Ontgrendel om partijen te laden · NA FACE ID", en wordt de hoofdknop "Ontgrendel met Face ID" ("Je notitie blijft staan. Na ontgrendelen kun je hem meteen versturen.", frame "voorbeeld · vergrendeld").
 
-**Status:** Nog te bouwen — nu vervangt het vergrendelscherm het hele blad. Vereist een vergrendelingsbewust blad in plaats van `.lockGated`, dat de partijen en de verstuuractie verbergt tot Face ID; het vereist ook een besluit, omdat een transcript meestal de partij noemt ("Gebeld met …"), dus de tekst tonen terwijl de app vergrendeld is, toont precies wat de vergrendeling elders verbergt.
+**Status:** Gebouwd (2026-11-04) — `VoiceLogSheet` beoordeelt de vergrendeling zelf: een lege notitie is het vergrendelscherm, een notitie met inhoud blijft zichtbaar met partijen en versturen achter Face ID. Het frame is het besluit; de tekst kan een partij noemen
 
 ### Na het versturen
 
@@ -344,19 +346,19 @@ Als de app vergrendelt terwijl een notitie open is, blijft de tekst van de notit
 
 Na een verzending luidt het blad "Staat in Voor jou · Het staat als suggestie in Voor jou. Keur het goed, dan komt het in je logboek." en toont het de nieuwe suggestie als rij ("Gebeld met Woonstichting Lindehof · SUGGESTIE · NU · WACHT OP JOU"). "Bekijk in Voor jou" opent die suggestie; "Klaar" sluit (frame "staat in Voor jou").
 
-**Status:** Deels gebouwd — de server antwoordt met de `suggestionId` en de app heeft al `verder://suggestion/<id>`, dat op de suggestie in Voor jou uitkomt (`apps/ios/Verder/Push/DeepLink.swift`); het model decodeert het id en laat het vallen, en het blad toont een regel met "Nog een gesprek" en "Klaar". Vereist dat het id in `.sent` bewaard wordt, de kaart (titel uit dezelfde afkapping op de eerste zin als `voiceSummary`), de knop, en een test dat die naar de suggestie routeert.
+**Status:** Gebouwd (2026-11-04) — `sentSuggestionId`, titel via `VoiceText.summary` (de server-`voiceSummary`), "Bekijk in Voor jou" levert `verder://suggestion/<id>` af; "Nog een gesprek" is vervallen (staat niet in de frames)
 
 #### Wat er met de opname gebeurde
 
 Na een verzending zegt één regel wat er van de opname geworden is: "OPNAME GEWIST · ALLEEN DE TEKST IS VERSTUURD", of dat die in het dossier bewaard is.
 
-**Status:** Nog te bouwen — alleen UI: het model kent `keepRecording` en `audioDocumentId`; een regel in de verzonden toestand en een test per geval.
+**Status:** Gebouwd (2026-11-04) — `sentRecordingLine`
 
 #### Het aantal dat wacht op jou werkt meteen bij
 
 Achter het blad gaat "WACHT OP JOU" in Overzicht met één omhoog zodra de suggestie is opgeslagen (4 → 5 in de frames), en Voor jou toont hem.
 
-**Status:** Nog te bouwen — het blad laat niets herladen: Overzicht en Voor jou pakken de suggestie bij hun eigen volgende verversing op, en de badge op het icoon bij de volgende tik van `badge.sync` (tot 5 minuten). Vereist een verversing van `InboxStore` en de samenvatting van het beginscherm na een geslaagde verzending, en een test.
+**Status:** Gebouwd (2026-11-04) — na een verzending ververst `RootView` de `InboxStore`; de badge op het icoon volgt nog bij de volgende tik van `badge.sync`
 
 ### Spraak- en toestemmingstoestanden
 
@@ -364,19 +366,19 @@ Achter het blad gaat "WACHT OP JOU" in Overzicht met één omhoog zodra de sugge
 
 De download van Nederlandse spraak bij eerste gebruik toont de voortgang ("Nederlandse spraak laden · Dit gebeurt één keer. Daarna werkt inspreken ook zonder internet.", een balk, "EENMALIG · 38 VAN 61 MB", "Inspreken kan zodra het geladen is.") met "Typ je notitie" als weg verder (frame "spraak laden").
 
-**Status:** Nog te bouwen — de download zelf bestaat (`OnDeviceTranscriber.install`), met alleen de regel "Nederlands spraakmodel wordt geïnstalleerd…". Vereist dat de `progress` van het installatieverzoek via `Transcribing` wordt gepubliceerd, de balk en de cijfers, en een test met nepvoortgang.
+**Status:** Deels gebouwd (2026-11-04) — balk en "38 VAN 61 MB" zodra er bytes bekend zijn (`InstallProgress`); op het toestel meldt `OnDeviceTranscriber` alleen de fractie, omdat de eenheid van die `Progress` niet gemeten is
 
 #### Download gaat vanzelf verder als er weer verbinding is
 
 Een download die stopt door gebrek aan internet zegt waar hij stopte ("Geen internet. Het laden gaat vanzelf verder zodra je weer online bent. · GESTOPT BIJ 38 VAN 61 MB") en gaat vanzelf verder als de verbinding terugkomt, met "Opnieuw proberen" nog steeds beschikbaar (frame "spraak laden lukt niet").
 
-**Status:** Nog te bouwen — nu is de fout één zin ("Het Nederlandse spraakmodel is nog niet op je telefoon…") en start alleen "Opnieuw proberen" (`retrySpeech`) het opnieuw. Vereist een netwerkpadbewaking die `install()` opnieuw probeert zolang het blad open is, het cijfer waar het stopte, en tests.
+**Status:** Gebouwd (2026-11-04) — `networkChanged(offline:)` uit het padbewaking van de app probeert opnieuw; "GESTOPT BIJ …" blijft staan
 
 #### Spraakherkenning staat uit
 
 Als spraakherkenning voor verder geweigerd is, zegt het blad dat ("Spraakherkenning staat uit · verder zet je stem op je iPhone om in tekst. Zet Spraakherkenning aan in Instellingen → verder.") met "Open Instellingen" en "Typ je notitie" (frame "spraakherkenning uit").
 
-**Status:** Nog te bouwen — `NSSpeechRecognitionUsageDescription` is gedeclareerd, maar de app vraagt of leest nooit de autorisatie voor spraakherkenning. Meet eerst op de telefoon of `SpeechTranscriber` die autorisatie op iOS 27.2 überhaupt nodig heeft; zo ja, voeg dan het verzoek toe, een spraaktoestand `denied`, het scherm en een test. Zo nee, dan is het frame overbodig en moet het vervallen.
+**Status:** Deels gebouwd (2026-11-04) — een geweigerde `SFSpeechRecognizer`-autorisatie wordt gerespecteerd (scherm + "Open Instellingen"); de app vraagt er nog steeds nooit om, en of `SpeechTranscriber` hem nodig heeft is niet gemeten
 
 #### Uitleg vóór de microfoonvraag
 
@@ -388,13 +390,13 @@ Voordat iOS om de microfoon vraagt, legt verder op één scherm uit waarom het d
 
 "Microfoon staat uit", "Niets gehoord" en "Omzetten lukte niet" hebben elk een eigen blad: een symbool, een titel, één zin, een primaire actie en "Typ je notitie" (frames "microfoon uit", "niets gehoord", "omzetten lukt niet"). "Niets gehoord" begint met "Opnieuw opnemen" ("Te zacht of te kort? …"), "Omzetten lukte niet" begint met "Typ je notitie" en bewaart de opname tot het versturen.
 
-**Status:** Deels gebouwd — elke toestand en zijn acties bestaan, als een zin in de opnamelayout (microfoon, met "Open Instellingen") of in de editor (niets gehoord, omzetten mislukt); zie [Toestanden](#toestanden). Vereist de eigen layouts in de view; geen modelwijziging.
+**Status:** Gebouwd (2026-11-04) — `VoiceLogModel.screen` / `StatePage`
 
 #### Waar de stem heen gaat, vooraf gezegd
 
 Het rustblad zegt "Je stem wordt op je iPhone omgezet. De opname gaat niet mee, tenzij je hem bewaart.", en de omzettoestand zegt "Dit gebeurt op je iPhone. Er gaat niets naar verder tot je verstuurt."
 
-**Status:** Deels gebouwd — de omzetregel zegt "Omzetten naar tekst, op je telefoon…" en de schakelaar legt de opname uit ("Alleen dan gaat de opname naar verder…"); het rustblad zegt er niets over. Alleen UI-tekst.
+**Status:** Gebouwd (2026-11-04)
 
 ### Terugkoppeling
 
@@ -402,7 +404,7 @@ Het rustblad zegt "Je stem wordt op je iPhone omgezet. De opname gaat niet mee, 
 
 Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname geldt de kaart van de brief: `.error` als een verzending mislukt (met de nieuwe poging inline), en `.warning` bij een destructieve bevestiging ([Bevestiging voor weggooien](#bevestiging-voor-weggooien-bij-sluiten)).
 
-**Status:** Deels gebouwd — de helft "geen tijdens het opnemen" klopt (het blad heeft helemaal geen `.sensoryFeedback`); de `.error` bij een mislukte verzending ontbreekt, anders dan bij Overzicht, Scan en het scherm voor een verlopen sessie, die hem al gebruiken. Vereist een `.sensoryFeedback(.error, …)` op de melding van een mislukte verzending.
+**Status:** Gebouwd (2026-11-04) — `.error` bij een mislukte verzending, `.warning` bij weggooien; niets tijdens het opnemen
 
 ## Regels die het volgt
 
