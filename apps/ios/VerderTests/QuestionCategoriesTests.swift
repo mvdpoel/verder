@@ -30,6 +30,21 @@ struct QuestionCategoriesTests {
         #expect(!category.options.contains(.hiddenPreviewsShowTitle))
     }
 
+    /// The frame's symbols, read off the label; anything else gets none.
+    @Test func optionSymbolsFollowTheirWords() {
+        #expect(QuestionCategories.iconName(for: "Ja, koppel hem") == "link")
+        #expect(QuestionCategories.iconName(for: "Nee") == "xmark")
+        #expect(QuestionCategories.iconName(for: "Weet ik niet") == "questionmark.circle")
+        #expect(QuestionCategories.iconName(for: "Ja") == "checkmark")
+        #expect(QuestionCategories.iconName(for: "Jaarafrekening") == nil)
+        #expect(QuestionCategories.iconName(for: "Neem contact op") == nil)
+        #expect(QuestionCategories.iconName(for: "Zet de taak op gedaan") == nil)
+        let c = QuestionCategories.make(proposalId: "6f9619ff-8b86-d011-b42d-00c04fc964ff",
+                                        options: ["Ja, koppel hem", "Nee", "Weet ik niet"])
+        #expect(c.actions.map(\.title) == ["Ja, koppel hem", "Nee", "Weet ik niet"])
+        #expect(c.actions.allSatisfy { $0.icon != nil })
+    }
+
     @Test func questionCategoryCapsOptionsLikeTheServer() {
         let long = String(repeating: "x", count: 60)
         let category = QuestionCategories.make(proposalId: Self.id, options: [long, "b", "c", "d", "e"])

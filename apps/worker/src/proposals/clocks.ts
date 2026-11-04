@@ -433,7 +433,10 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
     const prefix = dueAlert(dueAt, now)!;
     const res = await deps.notify({
       kind: "task-due", level: "time-sensitive", title: `${prefix}: ${r.title}`,
-      body: `Deadline ${dayMonth(dueAt)}.`, link: "verder://inbox", dedupKey,
+      // The task's own link: the phone's "Gedaan" action marks THIS task done
+      // (TASK_DUE's DONE, NotificationRouter), and a tap opens it on Voor jou.
+      body: `Deadline ${dayMonth(dueAt)}. Al gedaan? Kies Gedaan bij deze melding.`,
+      link: `verder://task/${r.id}`, dedupKey,
     });
     if (!res.duplicate) alerted++;
   }

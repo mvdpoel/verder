@@ -20,6 +20,8 @@ final class PressCapture: XCTestCase {
     @MainActor
     func testPressAndCapture() throws {
         let env = ProcessInfo.processInfo.environment
+        // The scheme's other capture (`--notify`) runs in the same target.
+        try XCTSkipIf(env["CAPTURE_SCENE"] != nil, "a --notify capture")
         let tap = env["CAPTURE_TAP"].flatMap { $0.isEmpty ? nil : $0 }
         let text = env["CAPTURE_PRESS"] ?? ""
         let swipe = env["CAPTURE_SWIPE"].flatMap { $0.isEmpty ? nil : $0 }

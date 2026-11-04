@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline", "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline", "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "meldingen", "meldingen-afgehandeld", "meldingen-afgerond", "meldingen-offline", "meldingen-verlopen", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
         "timeline-vier", "unauthorized", "voice", "voice-geen-partijen", "voice-offline", "voice-partijen-fout",
@@ -73,6 +73,27 @@ struct FixtureTests {
         let verlopen = try Self.server("detail-verlopen")
         guard case .json(401, _) = try verlopen.reply(method: "POST", path: FixtureServer.apiPrefix + "suggestions/\(p)c1/approve")
         else { Issue.record("detail-verlopen must answer the approval 401"); return }
+    }
+
+    /// The notifications fixtures: `meldingen` answers both actions a
+    /// notification can run, and each failing variant fails exactly the one
+    /// its notice is for.
+    @Test func notificationFixturesFailOnlyTheirAction() throws {
+        let done = "tasks/\(Self.task)/status", answer = "proposals/\(Self.question)/answer"
+        func reply(_ name: String, _ path: String) throws -> FixtureServer.Reply {
+            try Self.server(name).reply(method: "POST", path: FixtureServer.apiPrefix + path)
+        }
+        let ok = try Self.decode(TaskStatusResponse.self, "meldingen", done, method: "POST")
+        #expect(ok.taskId == Self.task)
+        #expect(try reply("meldingen", answer).isError == false)
+        guard case .transportFailure = try reply("meldingen-offline", done),
+              case .transportFailure = try reply("meldingen-offline", answer)
+        else { Issue.record("meldingen-offline must fail both actions without an answer"); return }
+        guard case .json(401, _) = try reply("meldingen-verlopen", done) else { Issue.record("verlopen: 401"); return }
+        guard case .json(409, _) = try reply("meldingen-afgehandeld", answer) else { Issue.record("afgehandeld: 409"); return }
+        guard case .json(400, _) = try reply("meldingen-afgerond", done) else { Issue.record("afgerond: 400"); return }
+        let tasks = try Self.decode([TaskDTO].self, "meldingen-afgerond", "tasks")
+        #expect(tasks.first { $0.id == Self.task }?.status == "done")
     }
 
     /// "Volgende in Voor jou · N" counts what still waits BESIDES the item on

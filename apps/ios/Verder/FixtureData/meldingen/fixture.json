@@ -1,0 +1,3 @@
+{
+  "description": "The notifications frames' app: the synthetic case, every action FROM a notification answered (\"Gedaan\" on the bijstand task, an answer to the Kade & Partners question). capture.sh --notify sends the pushes."
+}

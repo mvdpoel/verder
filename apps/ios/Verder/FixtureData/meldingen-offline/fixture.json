@@ -1,0 +1,4 @@
+{
+  "description": "`meldingen` with no network for the two notification actions: \"Gedaan kwam niet door\" and \"Keuze kwam niet door\".",
+  "offlinePaths": ["tasks/00000000-f1c5-4000-8000-000000000004/status", "proposals/00000000-f1c5-4000-8000-000000000002/answer"]
+}

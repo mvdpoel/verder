@@ -1,0 +1,14 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Herinneringsmail klaar",
+      "body": "Tik om hem na te lezen en te versturen. De schuldeiser heeft sinds 16 okt niet gereageerd."
+    },
+    "category": "FOLLOW_UP",
+    "interruption-level": "active",
+    "badge": 4,
+    "sound": "default"
+  },
+  "link": "verder://proposal/00000000-f1c5-4000-8000-000000000001"
+}

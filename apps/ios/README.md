@@ -25,6 +25,12 @@ scripts/capture.sh voorjou-few overzicht out/overzicht-locked.png --locked
 scripts/capture.sh voorjou-many voorjou out/voorjou-498.png
 scripts/capture.sh voorjou-few proposal:00000000-f1c5-4000-8000-000000000002 out/question.png
 scripts/capture.sh dossier dossier out/dossier.png
+# A notification as iOS draws it (lock screen, banner, long press); see --notify in capture.sh.
+# Use a simulator of its own, in Dutch and dark mode, so pushes and Settings changes stay off
+# the shared "iPhone 17": `xcrun simctl create "iPhone 17 Meldingen" "iPhone 17"`, then
+# `simctl spawn <udid> defaults write -g AppleLanguages -array nl-NL` and `simctl ui <udid> appearance dark`.
+DEVICE="iPhone 17 Meldingen" scripts/capture.sh meldingen voorjou out/vraag.png --notify vraag
+DEVICE="iPhone 17 Meldingen" scripts/capture.sh meldingen-offline voorjou out/gedaan.png --notify gedaan-notice
 scripts/capture.sh dossier document:00000000-f1c5-4000-8000-200000000311 out/viewer.png
 ```
 

@@ -1,0 +1,22 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Klopt deze koppeling?",
+      "body": "Hoort de brief van 14 okt bij de vordering voor energie?"
+    },
+    "category": "q.00000000-f1c5-4000-8000-000000000002",
+    "interruption-level": "active",
+    "badge": 4,
+    "sound": "default",
+    "mutable-content": 1
+  },
+  "link": "verder://proposal/00000000-f1c5-4000-8000-000000000002",
+  "options": [
+    "Ja, koppel hem",
+    "Nee",
+    "Weet ik niet"
+  ],
+  "revision": 3,
+  "subject": "brief van 14 okt"
+}

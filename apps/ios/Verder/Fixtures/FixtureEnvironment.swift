@@ -2,6 +2,7 @@
 import Foundation
 import Synchronization
 import SwiftUI
+import UserNotifications
 
 /// The app's services for a `-fixtures` launch: the REAL stores (`AuthModel`,
 /// `InboxStore`, `PushRegistrar`, `UploadCenter`, `AppLock`) on a client whose
@@ -19,6 +20,24 @@ import SwiftUI
 ///   Group and Application Support never hold synthetic data.
 @MainActor
 enum FixtureEnvironment {
+    /// `-fixtures-notify-allow`: the question the notifications frames long-press
+    /// (`scripts/pushes/question.apns`, the Kade & Partners proposal), registered
+    /// as its `q.<id>` category through the SAME merge the service extension
+    /// runs. The simulator never runs a notification service extension for
+    /// `simctl push`, so the payload names the category the extension would
+    /// have rewritten it to.
+    static let captureQuestionId = "00000000-f1c5-4000-8000-000000000002"
+    static let captureQuestionOptions = ["Ja, koppel hem", "Nee", "Weet ik niet"]
+
+    static func registerCaptureQuestion() async {
+        let center = UNUserNotificationCenter.current()
+        let category = QuestionCategories.make(proposalId: captureQuestionId, options: captureQuestionOptions)
+        let merged = QuestionCategories.merged(existing: NotificationCategories.union(existing: await center.notificationCategories()),
+                                               adding: category, order: [])
+        center.setNotificationCategories(merged.categories)
+        _ = await center.notificationCategories()
+    }
+
     nonisolated static let cookie = SessionCookie(name: SessionCookie.names[0], value: "fixture-session", expires: nil)
     static let defaultsSuite = "pro.vanderpoel.verder.fixtures"
 

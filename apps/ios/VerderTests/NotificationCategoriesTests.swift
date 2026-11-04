@@ -43,6 +43,7 @@ struct NotificationCategoriesTests {
 
     /// "Bekijken" opens the draft behind Face ID and never sends. A question's
     /// answer buttons live in its own `q.<id>` category, never in this set.
+    /// A deadline carries "Gedaan" and nothing else; every other category none.
     @Test func onlyDraftCategoriesHaveOneOpenAction() {
         let withAction: Set = ["PROPOSAL", "REMINDER", "FOLLOW_UP"]
         for category in NotificationCategories.all() {
@@ -54,23 +55,31 @@ struct NotificationCategoriesTests {
                 #expect(action?.options.contains(.foreground) == true)
                 #expect(action?.options.contains(.authenticationRequired) == true)
                 #expect(action?.options.contains(.destructive) == false)
+            } else if category.identifier == "TASK_DUE" {
+                #expect(category.actions.map(\.identifier) == [NotificationCategories.doneAction])
+                #expect(category.actions.first?.title == "Gedaan")
             } else {
                 #expect(category.actions.isEmpty, "\(category.identifier)")
             }
         }
     }
 
-    /// No STATIC category may run anything in the background: every action
-    /// they carry brings the app forward (behind Face ID) and only opens. The
-    /// one background action is a question's answer, which lives in the
-    /// per-question `q.*` categories (`QuestionCategories`) and never sends.
-    @Test func onlyQuestionActionsWorkInBackground() {
+    /// Exactly ONE static action may run in the background: "Gedaan" on a
+    /// deadline, which sets Martin's own task status and sends nothing out.
+    /// It still needs an unlocked phone. Every other static action brings the
+    /// app forward (behind Face ID) and only opens; a question's answer lives
+    /// in the per-question `q.*` categories (`QuestionCategories`).
+    @Test func onlyQuestionAndDoneActionsWorkInBackground() {
+        var background: [String] = []
         for category in NotificationCategories.all() {
             #expect(!QuestionCategories.isQuestion(category.identifier))
             for action in category.actions {
-                #expect(action.options.contains(.foreground), "\(category.identifier).\(action.identifier)")
+                #expect(action.options.contains(.authenticationRequired), "\(category.identifier).\(action.identifier)")
+                #expect(!action.options.contains(.destructive), "\(category.identifier).\(action.identifier)")
+                if !action.options.contains(.foreground) { background.append("\(category.identifier).\(action.identifier)") }
             }
         }
+        #expect(background == ["TASK_DUE.DONE"])
     }
 
     /// The app re-registers on every launch: the static set is restored in

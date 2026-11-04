@@ -1,0 +1,14 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Voorstel wacht nog op je",
+      "body": "Tik om het te keuren. Het antwoord aan Ilse staat sinds 07:30 klaar."
+    },
+    "category": "REMINDER",
+    "interruption-level": "active",
+    "badge": 4,
+    "sound": "default"
+  },
+  "link": "verder://proposal/00000000-f1c5-4000-8000-000000000001"
+}

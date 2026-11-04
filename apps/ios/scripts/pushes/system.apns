@@ -1,0 +1,13 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Mislukt: hersteltest mail",
+      "body": "Je hoeft nu niets te doen; je dossier is in orde. Tik om de oorzaak te zien."
+    },
+    "category": "SYSTEM",
+    "interruption-level": "active",
+    "badge": 4,
+    "sound": "default"
+  }
+}

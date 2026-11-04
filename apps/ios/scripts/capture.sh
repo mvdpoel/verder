@@ -8,7 +8,7 @@
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
 #                      [--proposal <state>] [--detail <state>] [--dossier <state[,state…]>]
-#                      [--voice <state>]
+#                      [--voice <state>] [--notify <state>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
@@ -118,6 +118,20 @@
 #   --tap    tap the BUTTON whose accessibility label is exactly <label> and
 #            shoot what it opens (the Tijdlijn's filter menu: --tap Filter);
 #            runs through the VerderCapture UI test, as --press does
+#   --notify a notification as iOS draws it ("notifications · final"): the
+#            payloads in scripts/pushes/ are sent with `xcrun simctl push` while
+#            the VerderCapture UI test holds the phone in place (lock screen,
+#            in the app, or home screen) and presses. The app runs on <fixture>
+#            (meldingen, or meldingen-offline / -verlopen / -afgerond /
+#            -afgehandeld for the notices an action leads to) and asks iOS for
+#            the real permission once. States:
+#            verborgen (previews set to Never for the shot) verder-mail
+#            creditor-mail proposal reminder follow-up follow-up-schuldeiser
+#            filing system weekly stapel (reminder + follow-up) se (verder-mail
+#            + filing) banner (verder-mail over the app) badge (home screen)
+#            task-due task-due-scroll (long-pressed, AX5: scrolled to Gedaan)
+#            vraag vraag-scroll gedaan-notice (Gedaan chosen; the fixture
+#            decides the notice) keuze-notice (an option chosen; likewise)
 #   --press  long-press the text that reads exactly <text> and shoot what that
 #            opens (with --scan queue: the row menu, "Wachtrij / rij-acties").
 #            A simulator cannot be long-pressed from the shell, so the app is
@@ -147,7 +161,8 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""; VOICE=""
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""; VOICE=""; NOTIFY=""
+NOTIFY_STATES="verborgen verder-mail creditor-mail proposal reminder follow-up follow-up-schuldeiser filing system weekly stapel se banner badge task-due task-due-scroll vraag vraag-scroll gedaan-notice keuze-notice"
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -197,6 +212,10 @@ while [ $# -gt 0 ]; do
       case " $SIGNIN_STATES " in *" $2 "*) SIGNIN="$2" ;; *) echo "capture.sh: --signin takes one of: $SIGNIN_STATES" >&2; exit 2 ;; esac
       shift ;;
     --cover) COVER=1 ;;
+    --notify)
+      [ $# -ge 2 ] || usage
+      case " $NOTIFY_STATES " in *" $2 "*) NOTIFY="$2" ;; *) echo "capture.sh: --notify takes one of: $NOTIFY_STATES" >&2; exit 2 ;; esac
+      shift ;;
     --push-preprompt) PUSHPRE=1 ;;
     --mic)
       [ $# -ge 2 ] || usage
@@ -353,6 +372,68 @@ fi
 restore_size() { [ -z "$TEXT_SIZE" ] || xcrun simctl ui "$UDID" content_size "${PREV_SIZE:-large}" 2>/dev/null || true; }
 trap restore_size EXIT
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
+if [ -n "$NOTIFY" ]; then
+  # What to push, where the phone is, what to wait for, and what to press.
+  SCENE=lock; PREVIEWS=""; GESTURE=none; RESULT=""; PUSHES=(); WAKE=
+  case "$NOTIFY" in
+    verborgen) PUSHES=(verder-mail); PREVIEWS=never ;;
+    stapel) PUSHES=(reminder follow-up) ;;
+    se) PUSHES=(verder-mail filing); WAKE=1 ;;
+    banner) PUSHES=(verder-mail); SCENE=app ;;
+    # The simulator refuses a badge-only push ("no content that needs to
+    # alert"); the app sets the badge itself from Voor jou's count.
+    badge) PUSHES=(); SCENE=home ;;
+    # A long press opens a BANNER (over the app): on the lock screen
+    # XCUITest's press reads as the start of a swipe and only slides the row.
+    task-due) PUSHES=(task-due); GESTURE=press; SCENE=app ;;
+    task-due-scroll) PUSHES=(task-due); GESTURE=press-scroll; SCENE=app ;;
+    vraag) PUSHES=(question); GESTURE=press; SCENE=app ;;
+    vraag-scroll) PUSHES=(question); GESTURE=press-scroll; SCENE=app ;;
+    gedaan-notice) PUSHES=(task-due); GESTURE="act:Gedaan"; SCENE=home ;;
+    keuze-notice) PUSHES=(question); GESTURE="act:Ja, koppel hem"; SCENE=home ;;
+    *) PUSHES=("$NOTIFY") ;;
+  esac
+  case "$NOTIFY:$FIXTURE" in
+    gedaan-notice:meldingen-offline) RESULT="Gedaan kwam niet door" ;;
+    gedaan-notice:meldingen-verlopen) RESULT="Opnieuw inloggen nodig" ;;
+    gedaan-notice:meldingen-afgerond) RESULT="Taak al afgerond" ;;
+    keuze-notice:meldingen-offline) RESULT="Keuze kwam niet door" ;;
+    keuze-notice:meldingen-afgehandeld) RESULT="Vraag al afgehandeld" ;;
+    gedaan-notice:*|keuze-notice:*) echo "capture.sh: --notify $NOTIFY needs a fixture whose action fails (meldingen-offline, -verlopen, -afgerond, -afgehandeld)" >&2; exit 2 ;;
+  esac
+  # The text the LAST push shows (its title; the placeholder when previews hide it).
+  LAST=""; [ "${#PUSHES[@]}" -eq 0 ] || LAST="${PUSHES[${#PUSHES[@]}-1]}"
+  WAIT=""
+  [ -z "$LAST" ] || WAIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["aps"]["alert"]["title"])' "scripts/pushes/$LAST.apns")"
+  [ "$PREVIEWS" != never ] || WAIT="Nieuw bericht van verder"
+  ALL_ARGS=(-fixtures "$FIXTURE" "${ARGS[@]}" -fixtures-notify-allow)
+  mkdir -p "$(dirname "$OUT")"
+  rm -f "$OUT.partial.png" "$OUT.partial.png.ready"
+  TEST_RUNNER_CAPTURE_ARGS="$(printf '%s\n' "${ALL_ARGS[@]}")" TEST_RUNNER_CAPTURE_SCENE="$SCENE" \
+    TEST_RUNNER_CAPTURE_PREVIEWS="$PREVIEWS" TEST_RUNNER_CAPTURE_WAIT="$WAIT" \
+    TEST_RUNNER_CAPTURE_GESTURE="$GESTURE" TEST_RUNNER_CAPTURE_RESULT="$RESULT" TEST_RUNNER_CAPTURE_WAKE="$WAKE" \
+    TEST_RUNNER_CAPTURE_OUT="$OUT.partial.png" \
+    env -u NODE_ENV xcodebuild test -scheme VerderCapture -destination "id=$UDID" \
+    -only-testing:VerderCapture/NotificationCapture -derivedDataPath build/DD -quiet >"$OUT.log" 2>&1 &
+  TEST_PID=$!
+  for _ in $(seq 1 600); do
+    [ -e "$OUT.partial.png.ready" ] && break
+    kill -0 "$TEST_PID" 2>/dev/null || break
+    sleep 1
+  done
+  if [ -e "$OUT.partial.png.ready" ]; then
+    for p in ${PUSHES[@]+"${PUSHES[@]}"}; do
+      xcrun simctl push "$UDID" "$BUNDLE" "scripts/pushes/$p.apns" >/dev/null
+      sleep 1.5
+    done
+  fi
+  wait "$TEST_PID" || { echo "capture.sh: the --notify capture failed — not writing $OUT (log: $OUT.log)." >&2; rm -f "$OUT.partial.png" "$OUT.partial.png.ready"; exit 1; }
+  rm -f "$OUT.partial.png.ready" "$OUT.log"
+  [ -s "$OUT.partial.png" ] || { echo "capture.sh: the --notify capture wrote no PNG." >&2; exit 1; }
+  mv -f "$OUT.partial.png" "$OUT"
+  echo "$OUT"
+  exit 0
+fi
 if [ -n "$PRESS" ] || [ -n "$TAP" ] || [ -n "$SWIPE" ]; then
   # The UI test launches the app with these arguments, presses, and writes
   # the PNG itself; it fails (and writes nothing) if the text is not on screen.

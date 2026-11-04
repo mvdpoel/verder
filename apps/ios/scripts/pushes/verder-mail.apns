@@ -1,0 +1,15 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Noordkust vraagt je loonstrook",
+      "body": "Tik om de mail van Ilse te lezen. Ze vraagt je loonstrook van oktober."
+    },
+    "category": "VERDER_MAIL",
+    "interruption-level": "time-sensitive",
+    "badge": 4,
+    "sound": "default",
+    "thread-id": "mail:00000000-f1c5-4000-8000-500000000001"
+  },
+  "link": "verder://inbox"
+}

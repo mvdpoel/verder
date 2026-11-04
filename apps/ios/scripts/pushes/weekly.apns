@@ -1,0 +1,13 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Je week in verder",
+      "body": "4 wachten · 3 verstuurd · 2 afgerond · 5 opgeborgen. Tik voor je week."
+    },
+    "category": "WEEKLY",
+    "interruption-level": "passive",
+    "badge": 4
+  },
+  "link": "verder://inbox"
+}

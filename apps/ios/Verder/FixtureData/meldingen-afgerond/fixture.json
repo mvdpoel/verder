@@ -1,0 +1,4 @@
+{
+  "description": "`meldingen` whose bijstand task was set to done on the web first: \"Gedaan\" is refused (400) and the task list says done, so \"Taak al afgerond\".",
+  "statuses": { "POST tasks/00000000-f1c5-4000-8000-000000000004/status": 400 }
+}

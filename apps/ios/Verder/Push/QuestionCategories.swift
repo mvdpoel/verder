@@ -103,13 +103,28 @@ enum QuestionCategories {
     static func make(proposalId: String, options: [String]) -> UNNotificationCategory {
         let actions = options.prefix(maxOptions).enumerated().map { index, label in
             UNNotificationAction(identifier: "\(actionPrefix)\(index)", title: String(label.prefix(maxLabel)),
-                                 options: [.authenticationRequired])
+                                 options: [.authenticationRequired],
+                                 icon: iconName(for: label).map(UNNotificationActionIcon.init(systemImageName:)))
         }
         return UNNotificationCategory(identifier: identifier(proposalId: proposalId),
                                       actions: Array(actions),
                                       intentIdentifiers: [],
                                       hiddenPreviewsBodyPlaceholder: NotificationCategories.hiddenPlaceholder,
                                       options: [])
+    }
+
+    /// The SF Symbol beside an option in the long-press menu ("vraag · lang
+    /// ingedrukt": a link for "Ja, koppel hem", a cross for "Nee", a question
+    /// mark for "Weet ik niet"). The push carries labels only, so the symbol is
+    /// read off the label's own words, and only for the four shapes the frames
+    /// draw; any other label gets no symbol rather than a guessed one.
+    static func iconName(for label: String) -> String? {
+        let l = label.trimmingCharacters(in: .whitespaces).lowercased()
+        if l == "nee" || l.hasPrefix("nee,") || l.hasPrefix("nee ") { return "xmark" }
+        if l.hasPrefix("weet ik niet") { return "questionmark.circle" }
+        if l.hasPrefix("ja") && l.contains("koppel") { return "link" }
+        if l == "ja" || l.hasPrefix("ja,") || l.hasPrefix("ja ") { return "checkmark" }
+        return nil
     }
 
     struct Merge {

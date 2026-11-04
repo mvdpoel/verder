@@ -1,0 +1,15 @@
+{
+  "Simulator Target Bundle": "pro.vanderpoel.verder",
+  "aps": {
+    "alert": {
+      "title": "Brief van een schuldeiser",
+      "body": "Tik om te kiezen bij welke vordering hij hoort. Hij staat al in je dossier."
+    },
+    "category": "CREDITOR_MAIL",
+    "interruption-level": "active",
+    "badge": 4,
+    "sound": "default",
+    "thread-id": "letter:00000000-f1c5-4000-8000-200000000106"
+  },
+  "link": "verder://inbox"
+}

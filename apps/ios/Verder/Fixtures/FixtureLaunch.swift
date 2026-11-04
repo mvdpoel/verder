@@ -24,6 +24,8 @@ import Foundation
 ///     -fixtures-signin <state> signed out, on a sign-in state (`SignInState`), or signed in on the
 ///                              toegangssleutel offer (offer, already-on)
 ///     -fixtures-push-preprompt the notification permission never asked: the pre-prompt shows
+///     -fixtures-notify-allow   ask iOS itself for the notification permission at launch (the real
+///                              sheet; capture.sh --notify accepts it), so `simctl push` can deliver
 ///     -fixtures-cover          draw the app-switcher privacy cover, as the scene going inactive does
 ///     -fixtures-mic <notDetermined|denied>  the microphone permission (default: allowed)
 ///     -fixtures-push <denied|notDetermined>  the notification permission (default: allowed)
@@ -293,6 +295,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var signIn: SignInState? = nil
     var cover = false
     var pushPrePrompt = false
+    var notifyAllow = false
     var mic: MicState? = nil
     var voorJou: [VoorJouState] = []
     var proposal: ProposalState? = nil
@@ -372,6 +375,7 @@ struct FixtureLaunch: Equatable, Sendable {
                              },
                              cover: arguments.contains("-fixtures-cover"),
                              pushPrePrompt: arguments.contains("-fixtures-push-preprompt"),
+                             notifyAllow: arguments.contains("-fixtures-notify-allow"),
                              mic: try value(after: "-fixtures-mic").map { (raw: String) throws(ParseError) -> MicState in
                                  guard let s = MicState(rawValue: raw) else { throw .unknownValue("-fixtures-mic", raw) }
                                  return s

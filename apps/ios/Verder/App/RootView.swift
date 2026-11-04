@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 /// The tab bar behind sign-in: Overzicht opens first (Martin, 2026-11-01: "the
 /// app should open on a dashboard, showing current state"); then Voor jou,
@@ -356,6 +357,16 @@ struct RootView: View {
         if launch.mic != nil || launch.voice != nil { voice.open() }
         // `-fixtures-push-preprompt`: the moment after a sign-in, when it asks.
         if launch.pushPrePrompt { Task { await push.requestPermissionIfNeeded() } }
+        // `-fixtures-notify-allow`: the REAL system sheet, so a simulated push
+        // (`capture.sh --notify`) is delivered and drawn by iOS itself.
+        // Each shot starts from an empty notification centre and no badge.
+        if launch.notifyAllow {
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            Task {
+                _ = await SystemNotificationPermission().request()
+                await FixtureEnvironment.registerCaptureQuestion()
+            }
+        }
         switch launch.route {
         case .link(let link)?: links.deliver(link)
         case .screen(let screen)?: fixtureScreen = screen

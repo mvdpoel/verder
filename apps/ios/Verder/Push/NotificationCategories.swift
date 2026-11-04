@@ -17,6 +17,15 @@ enum NotificationCategories {
 
     static let openAction = "OPEN"
 
+    /// "Gedaan" on a deadline push ("notifications · final", task-due · lang
+    /// ingedrukt): sets the task to done IN THE BACKGROUND, behind an unlocked
+    /// phone (`.authenticationRequired`), without bringing verder forward.
+    /// It is the second background action, beside a question's answer, and
+    /// like it sends nothing outward: the task status is Martin's, so his
+    /// press is his decision and the `task.status` event it appends is his.
+    static let doneAction = "DONE"
+    static let taskDueCategory = "TASK_DUE"
+
     /// Categories whose notification leads to a draft. "Bekijken" OPENS it,
     /// behind the lock, and never sends: nothing leaves without Martin
     /// approving the final text inside the app. A question's answer buttons are
@@ -26,9 +35,12 @@ enum NotificationCategories {
     static func all() -> [UNNotificationCategory] {
         let open = UNNotificationAction(identifier: openAction, title: "Bekijken",
                                         options: [.foreground, .authenticationRequired])
+        let done = UNNotificationAction(identifier: doneAction, title: "Gedaan",
+                                        options: [.authenticationRequired],
+                                        icon: UNNotificationActionIcon(systemImageName: "checkmark"))
         return ids.map { id in
             UNNotificationCategory(identifier: id,
-                                   actions: withOpenAction.contains(id) ? [open] : [],
+                                   actions: id == taskDueCategory ? [done] : withOpenAction.contains(id) ? [open] : [],
                                    intentIdentifiers: [],
                                    hiddenPreviewsBodyPlaceholder: hiddenPlaceholder,
                                    options: [])
