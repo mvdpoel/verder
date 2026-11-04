@@ -7,6 +7,8 @@ enum DossierRoute: Hashable, Sendable {
     /// The full-screen viewer. `title` is nil when a push opened it before
     /// the row was known; the viewer then looks it up.
     case document(id: String, title: String?)
+    /// The viewer with "Toon aan de balie" already up: a row's long-press menu.
+    case counter(id: String)
     case task(String)
     /// The Tijdlijn: the case as a metro map (`TimelineScreen`).
     case timeline
@@ -21,7 +23,7 @@ enum DossierCopy {
     static let tasksLabel = "OPEN TAKEN"
     static let documentsLabel = "DOCUMENTEN"
     static let serverLabel = "OP DE SERVER"
-    static let searchPrompt = "Zoek in je dossier"
+    static let searchPrompt = "Zoek in titel en tekst"
     static let searchServer = "Zoek op de server"
     static let serverNeedsNetwork = "Zoeken op de server kan niet offline."
     static let noLocalHits = "Niets gevonden op je telefoon."
@@ -63,7 +65,7 @@ enum DossierCopy {
         case "contract": return "contract"
         case "invoice": return "factuur"
         case "bank-statement": return "bankafschrift"
-        case "id-document": return "identiteitsbewijs"
+        case "id-document": return "id-bewijs"
         case "other": return "overig"
         default: return t
         }
@@ -84,12 +86,6 @@ enum DossierCopy {
         "\(MoneyFormat.day(date)) \(amsterdam.component(.year, from: date))"
     }
 
-    /// "26 okt 2026 · loonstrook · opgeborgen".
-    static func rowLine(_ doc: DossierDoc) -> String {
-        [day(doc.receivedAt), docTypeLabel(doc.docType), statusLabel(doc.status)]
-            .compactMap { $0 }.joined(separator: " · ")
-    }
-
     /// "offline · bijgewerkt 14:02" — the age of what is shown, in Amsterdam
     /// time; with the day when it was not today. Nil when there is nothing to
     /// say (online and never synced: the skeleton says it).
@@ -103,31 +99,34 @@ enum DossierCopy {
         return "\(prefix)bijgewerkt \(when)"
     }
 
-    /// "12 documenten · bijgewerkt 14:02": the eyebrow above the title. The
-    /// count only once the phone's copy is read; nil when there is nothing.
-    static func eyebrow(docCount: Int?, freshness: String?) -> String? {
-        let parts = [docCount.map { "\($0) \($0 == 1 ? "document" : "documenten")" }, freshness].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    /// The eyebrow above the title: "bijgewerkt 14:02", "offline ·
+    /// bijgewerkt 14:02", "bijwerken… · 2 van 3 nieuw" while a later sync
+    /// takes documents in, and "nog niet bijgewerkt" before the first sync
+    /// finished (the first-sync card says the rest). Nil while the phone's
+    /// copy is not read yet.
+    static func eyebrow(loaded: Bool, syncedAt: Date?, freshness: String?, updating: DossierStore.Progress?) -> String? {
+        guard loaded else { return freshness }
+        if syncedAt == nil { return "nog niet bijgewerkt" }
+        if let updating, updating.due > 0 { return DossierProgressCopy.updating(done: updating.done, due: updating.due) }
+        return freshness
     }
 
-    /// How many open tasks the tab lists before "Alles bekijken".
+    /// How many open tasks the tab lists before "Toon alle".
     static let tasksShown = 2
-    static func seeAllTasks(_ n: Int) -> String { "Alles bekijken (\(n))" }
-    static let seeAllTasksLine = "open voor jou · taken"
+    static func seeAllTasks(_ n: Int) -> String { "Toon alle \(n)" }
 
-    /// A task's caption, as two parts: the amber lead "voor jou" and the due
-    /// date said relative to now — "morgen 17:00", "vandaag 17:00", "te laat
-    /// sinds 30 okt", else "uiterlijk 6 nov" — in Amsterdam time.
-    static func taskLine(dueAt: Date?, now: Date) -> (lead: String, rest: String?) {
-        guard let due = dueAt else { return ("voor jou", nil) }
-        let cal = amsterdam
-        let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
-        let rest: String
-        if due < now { rest = "te laat sinds \(MoneyFormat.day(due))" }
-        else if days == 0 { rest = "vandaag \(HomeSummary.clock(due))" }
-        else if days == 1 { rest = "morgen \(HomeSummary.clock(due))" }
-        else { rest = "uiterlijk \(MoneyFormat.day(due))" }
-        return ("voor jou", rest)
+    /// The open tasks as the tab lists them: the most pressing first — the
+    /// earliest due (overdue ones lead), then those without a date, in the
+    /// server's order.
+    static func byDue(_ tasks: [TaskDTO]) -> [TaskDTO] {
+        tasks.enumerated().sorted { a, b in
+            switch (a.element.dueAt, b.element.dueAt) {
+            case let (x?, y?): x != y ? x < y : a.offset < b.offset
+            case (_?, nil): true
+            case (nil, _?): false
+            case (nil, nil): a.offset < b.offset
+            }
+        }.map(\.element)
     }
 
     /// Waiting on Martin by the one definition (`WAITING_TASK_STATUSES` in
@@ -158,6 +157,8 @@ final class DossierModel {
         case loading(String)
         case done(query: String, hits: [SearchHit])
         case failed(String)
+        /// No answer within `serverTimeout`: "Je zoekterm staat nog klaar."
+        case timedOut
     }
 
     private(set) var docs: [IndexedDoc] = []
@@ -167,7 +168,25 @@ final class DossierModel {
     /// Documents the server lists that the phone does not hold (see
     /// `DossierStore.State.notHeld`).
     private(set) var notHeldCount = 0
+    /// The documents behind `notHeldCount`: the viewer offers "Haal nu op".
+    private(set) var notHeldDocs: [DossierDoc] = []
     private(set) var isSyncing = false
+    /// The running sync's progress; kept after a FIRST sync that stopped
+    /// half-way, so its card can say how far it got ("onderbroken").
+    private(set) var progress: DossierStore.Progress?
+    /// When the running sync started, and what the phone held then: the
+    /// first-sync card's estimate is this run's rate, not the dossier's.
+    @ObservationIgnored private var runStartedAt: Date?
+    @ObservationIgnored private var bytesAtStart = 0
+    /// Bumped by every reload: the viewer looks again (a link opened before
+    /// the first sync finds out afterwards that its document is not held).
+    private(set) var revision = 0
+    /// The soort the list is narrowed to (`DossierKinds.key`); nil for all.
+    /// It narrows the search too ("Het filter geldt ook als je zoekt.").
+    var kind: String?
+    /// The search bar is up (the field tapped, or a query typed): the tab's
+    /// header gives way to it, and "Annuleer" leaves it.
+    var searchActive = false
     /// The last sync had no network: actions that need the server say so.
     private(set) var offline = false
     /// The last sync's failure, in Dutch; nil after a good one.
@@ -191,11 +210,16 @@ final class DossierModel {
     @ObservationIgnored private let epoch: SessionEpoch
     /// The case's clock (`AppServices.now`): "bijgewerkt" and every due date.
     @ObservationIgnored let now: @Sendable () -> Date
+    /// The server search's limit ("binnen 10 seconden geen antwoord"). The
+    /// app's network layer sets no timeout of its own (URLSession's 60 s).
+    @ObservationIgnored let serverTimeout: Duration
 
     init(store: DossierStore, client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
          isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
-         epoch: SessionEpoch = SessionEpoch(), now: @escaping @Sendable () -> Date = { Date() }) {
+         epoch: SessionEpoch = SessionEpoch(), now: @escaping @Sendable () -> Date = { Date() },
+         serverTimeout: Duration = .seconds(10)) {
         self.now = now
+        self.serverTimeout = serverTimeout
         self.store = store
         self.epoch = epoch
         self.client = client
@@ -209,12 +233,72 @@ final class DossierModel {
         }
     }
 
-    var results: [IndexedDoc] { DossierSearch.search(query, in: docs) }
+    var results: [IndexedDoc] { DossierSearch.search(query, in: DossierKinds.filter(docs, kind: kind)) }
     var isSearching: Bool { !DossierSearch.words(query).isEmpty }
     var freshness: String? { DossierCopy.freshness(syncedAt: syncedAt, offline: offline, now: now()) }
     var notHeldLine: String? { DossierCopy.notHeldLine(notHeldCount) }
 
+    /// The soort chips, counted on the phone's copy.
+    var kinds: [DossierKind] { DossierKinds.counts(docs) }
+    /// The list as the chips narrow it.
+    var shownDocs: [IndexedDoc] { DossierKinds.filter(docs, kind: kind) }
+    /// Held documents with no recognised text: found by their title only.
+    var titleOnlyCount: Int { docs.filter { !$0.doc.hasText }.count }
+
+    /// The eyebrow above the title (`DossierCopy.eyebrow`).
+    var eyebrow: String? {
+        DossierCopy.eyebrow(loaded: loaded, syncedAt: syncedAt, freshness: freshness,
+                            updating: isSyncing && syncedAt != nil ? progress : nil)
+    }
+
+    /// The first sync's card, while it runs and after it stopped half-way;
+    /// nil once a sync has finished (or before one started).
+    var firstSyncCard: DossierProgressCopy.Card? {
+        guard loaded, syncedAt == nil, let progress, isSyncing || progress.done < progress.due || progress.more else {
+            return nil
+        }
+        let held = docs.reduce(0) { $0 + $1.doc.sizeBytes }
+        let bytesLeft = progress.totalBytes.map { max(0, $0 - held) } ?? 0
+        let eta = runStartedAt.flatMap {
+            DossierProgressCopy.eta(bytesThisRun: held - bytesAtStart, elapsed: now().timeIntervalSince($0), bytesLeft: bytesLeft)
+        }
+        return DossierProgressCopy.card(held: docs.count, heldBytes: held, total: progress.total,
+                                        totalBytes: progress.totalBytes, interrupted: !isSyncing,
+                                        offline: offline, eta: eta)
+    }
+
+    /// The server's hits that are new to the phone, grouped by kind.
+    var serverGroups: [ServerHitGroup] {
+        guard case .done(_, let hits) = server else { return [] }
+        return ServerHits.groups(ServerHits.fresh(hits, held: Set(docs.map(\.id))))
+    }
+
+    /// "Annuleer": the query, the server's answer and the bar go.
+    func cancelSearch() {
+        query = ""
+        searchActive = false
+        server = .idle
+    }
+
     func doc(_ id: String) -> DossierDoc? { docs.first { $0.id == id }?.doc }
+    /// The record the server listed for a document the phone could not take in.
+    func notHeldDoc(_ id: String) -> DossierDoc? { notHeldDocs.first { $0.id == id } }
+
+    /// "Haal nu op": takes one document in and keeps it (`DossierStore.take`).
+    /// True when it is on the phone afterwards.
+    func takeIn(_ doc: DossierDoc) async -> Bool {
+        let started = epoch.current
+        do {
+            let held = try await store.take(doc, client: client)
+            guard epoch.isCurrent(started) else { return false }
+            await reload()
+            return held
+        } catch {
+            guard epoch.isCurrent(started), !Self.isInterruption(error) else { return false }
+            _ = handle(error)
+            return false
+        }
+    }
 
     /// What the Tijdlijn needs before it can describe a document behind a
     /// stop (its soort, and whether it opens offline): the phone's copy read,
@@ -256,8 +340,12 @@ final class DossierModel {
         server = .loading(sent)
         let next: ServerSearch
         do {
-            let results: SearchResults = try await client.getJSON(DossierCopy.searchPath(String(q.prefix(500))))
+            let results = try await Self.withTimeout(serverTimeout) { [client] () async throws -> SearchResults in
+                try await client.getJSON(DossierCopy.searchPath(String(q.prefix(500))))
+            }
             next = .done(query: sent, hits: results.hits)
+        } catch is TimedOut {
+            next = .timedOut
         } catch {
             guard !Self.isInterruption(error) else {
                 if server == .loading(sent) { server = .idle }
@@ -268,6 +356,24 @@ final class DossierModel {
         }
         guard epoch.isCurrent(started), server == .loading(sent), query == sent else { return }
         server = next
+    }
+
+    struct TimedOut: Error {}
+
+    /// The operation's answer, or `TimedOut` once `limit` passes first; the
+    /// loser is cancelled.
+    nonisolated static func withTimeout<T: Sendable>(_ limit: Duration,
+                                                     _ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: limit)
+                throw TimedOut()
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw TimedOut() }
+            return first
+        }
     }
 
     /// Forgets the phone's copy and everything the tab shows about it. The
@@ -284,6 +390,10 @@ final class DossierModel {
         docs = []
         syncedAt = nil
         notHeldCount = 0
+        notHeldDocs = []
+        progress = nil
+        kind = nil
+        searchActive = false
         tasks = nil
         query = ""
         server = .idle
@@ -295,11 +405,15 @@ final class DossierModel {
     /// in: a sync that outlives its session leaves the wiped tab wiped.
     private func sync() async {
         let started = epoch.current
+        runStartedAt = now()
+        bytesAtStart = docs.reduce(0) { $0 + $1.doc.sizeBytes }
+        let sink: DossierStore.ProgressSink = { [weak self] p in await self?.didProgress(p, started: started) }
         do {
-            try await store.sync(client: client)
+            try await store.sync(client: client, progress: sink)
             guard epoch.isCurrent(started) else { return }
             offline = false
             message = nil
+            progress = nil
         } catch DossierStore.SyncError.unavailable {
             // Not a failure: the copy is still locked away; tried again on unlock.
         } catch where Self.isInterruption(error) || !isProtectedDataAvailable() {
@@ -321,6 +435,15 @@ final class DossierModel {
         await reload()
     }
 
+    /// Each settled document shows at once: a first sync's list fills while
+    /// it runs, rather than all at the end.
+    private func didProgress(_ p: DossierStore.Progress, started: Int) async {
+        guard epoch.isCurrent(started) else { return }
+        let grew = p.done != progress?.done
+        progress = p
+        if grew { await reload() }
+    }
+
     private func fetchTasks() async {
         let started = epoch.current
         do {
@@ -337,12 +460,14 @@ final class DossierModel {
         guard await store.load() else { return }
         let docs = await store.indexed()
         let syncedAt = await store.lastSyncedAt
-        let notHeldCount = await store.notHeld().count
+        let notHeld = await store.notHeld()
         guard epoch.isCurrent(started) else { return }
         self.docs = docs
         self.syncedAt = syncedAt
-        self.notHeldCount = notHeldCount
+        self.notHeldCount = notHeld.count
+        self.notHeldDocs = notHeld
         loaded = true
+        revision += 1
     }
 
     /// The caller stopped waiting — never a fact about the network or disk.

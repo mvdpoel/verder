@@ -13,7 +13,7 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
+        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline", "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
         "timeline-vier", "unauthorized", "voice", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
@@ -408,9 +408,10 @@ struct FixtureTests {
         #expect(Set(sync.keys) == ["cursor", "more", "upserts", "tombstones"])
         let docs = Self.array(sync["upserts"])
         #expect(docs.count == 12)
-        #expect(docs.allSatisfy {
-            Self.keys($0) == ["id", "title", "docType", "status", "receivedAt", "mime", "sizeBytes", "sha256", "hasText"]
-        })
+        // `source` is the one field the "dossier · final" frames need beyond
+        // dossier-sync.ts ("foto-scan"); the phone reads it as optional.
+        let route: Set = ["id", "title", "docType", "status", "receivedAt", "mime", "sizeBytes", "sha256", "hasText"]
+        #expect(docs.allSatisfy { Self.keys($0) == route || Self.keys($0) == route.union(["source"]) })
         #expect(docs.allSatisfy { ["inbox", "filed"].contains($0["status"]?.string ?? "") })
         let texts = try Self.decode(JSONValue.self, "dossier", "documents/texts")
         #expect(Self.array(texts).allSatisfy { Self.keys($0) == ["id", "text", "truncated"] })
@@ -418,11 +419,18 @@ struct FixtureTests {
         let search = try Self.object("dossier", "search")
         #expect(Set(search.keys) == ["hits", "nextCursor"])
         let hits = Self.array(search["hits"])
-        #expect(hits.count == 2)
+        #expect(hits.count == 6)
+        // `from`, `assigneeName` and `channel` are the frames' detail lines
+        // ("ILSE, NOORDKUST", "WACHT OP GEMEENTE WESTERLAAN", "TELEFOON"),
+        // beyond toSearchDTO; the phone reads them as optional.
+        let base: Set = ["entityType", "entityId", "title", "snippet", "occurredAt", "status", "link"]
         for hit in hits {
-            #expect(Self.keys(hit) == ["entityType", "entityId", "title", "snippet", "occurredAt", "status", "link"])
-            // `link` is a route the app's own strict parser accepts.
-            #expect(DeepLink.parse(hit["link"]?.string ?? "") != .none)
+            let keys = Self.keys(hit)
+            #expect(base.isSubset(of: keys))
+            #expect(keys.subtracting(base).isSubset(of: ["from", "assigneeName", "channel"]))
+            // `link` is nil (no screen for a mail or a log entry yet) or a
+            // route the app's own strict parser accepts.
+            if let link = hit["link"]?.string { #expect(DeepLink.parse(link) != .none) }
         }
 
         let weekly = try Self.object("weekly", "weekly")

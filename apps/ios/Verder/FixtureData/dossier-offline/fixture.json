@@ -1,0 +1,5 @@
+{
+  "description": "`dossier` synced at 14:02, then no network: the kept copy with its age (\"offline · bijgewerkt 14:02\"), the headline and tasks as loaded. Capture with -fixtures-dossier refresh.",
+  "keptAt": "2026-11-01T13:02:00Z",
+  "thenFail": "offline"
+}

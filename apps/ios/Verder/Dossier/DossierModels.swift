@@ -20,6 +20,10 @@ struct DossierDoc: Codable, Equatable, Identifiable, Sendable {
     let sizeBytes: Int
     let sha256: String
     let hasText: Bool
+    /// The ingest path (`documents.source`: "phone-scan", "nas-scan",
+    /// "email-attachment", …). Not served by dossier-sync.ts yet; the phone
+    /// reads it as optional, and only a phone scan is ever named ("foto-scan").
+    var source: String? = nil
 }
 
 /// A document the phone must forget: discarded or purged on the web.
@@ -34,6 +38,11 @@ struct DossierDelta: Codable, Equatable, Sendable {
     let more: Bool
     let upserts: [DossierDoc]
     let tombstones: [DossierTombstone]
+    /// The whole dossier the phone is catching up to — documents and bytes —
+    /// so a first sync can say "5 van 12". Not served by dossier-sync.ts yet;
+    /// without it the card counts only what has arrived.
+    var total: Int? = nil
+    var totalBytes: Int? = nil
 }
 
 /// One row of `GET /api/mobile/v1/documents/texts?ids=`.
@@ -48,15 +57,18 @@ struct DossierText: Codable, Equatable, Sendable {
 struct IndexedDoc: Identifiable, Equatable, Sendable {
     let doc: DossierDoc
     let text: String?
+    /// Pages of a held PDF, read on the phone (PDFKit); nil when unknown.
+    var pages: Int? = nil
     /// Title and text, folded (case, diacritics, width).
     let haystack: String
     let foldedTitle: String
 
     var id: String { doc.id }
 
-    init(doc: DossierDoc, text: String?) {
+    init(doc: DossierDoc, text: String?, pages: Int? = nil) {
         self.doc = doc
         self.text = text
+        self.pages = pages
         let title = DossierSearch.fold(doc.title)
         foldedTitle = title
         haystack = text.map { title + "\n" + DossierSearch.fold($0) } ?? title
@@ -79,6 +91,13 @@ struct SearchHit: Codable, Equatable, Identifiable, Sendable {
     /// `verder://document/<id>` or `verder://task/<id>`; nil for a kind the
     /// phone has no screen for.
     let link: String?
+    /// A mail's sender as the frames name it ("Ilse, Noordkust"), a task's
+    /// assignee when it waits on someone else, a log entry's channel
+    /// ("phone"). Not in `toSearchDTO` yet; each detail line falls back to
+    /// the kind and the day without them.
+    var from: String? = nil
+    var assigneeName: String? = nil
+    var channel: String? = nil
 
     var id: String { "\(entityType):\(entityId)" }
 }

@@ -1,0 +1,40 @@
+{
+  "cursor": 418,
+  "more": false,
+  "upserts": [
+    {
+      "id": "00000000-f1c5-4000-8000-200000000104",
+      "title": "Loonstrook 2026-10",
+      "docType": "payslip",
+      "status": "filed",
+      "receivedAt": "2026-10-28T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 1138,
+      "sha256": "0f192254092a07953fc7d7d58484cc23a1dc08bfba381d0f8652d12f059289dc",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000307",
+      "title": "Brief Gemeente Westerlaan 30 okt",
+      "docType": "letter",
+      "status": "filed",
+      "receivedAt": "2026-10-30T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 2702,
+      "sha256": "1c73db50de2274ca99b9ea7c4dc1b3723cd69f9207c895f58053e26b33398d49",
+      "hasText": true
+    },
+    {
+      "id": "00000000-f1c5-4000-8000-200000000311",
+      "title": "Formulier bijzondere bijstand",
+      "docType": "other",
+      "status": "inbox",
+      "receivedAt": "2026-10-29T09:00:00.000Z",
+      "mime": "application/pdf",
+      "sizeBytes": 1162,
+      "sha256": "bf4c8b73937953146d994ccf0a46f53a45cf6de6c4e1139af5b3c418e490ed4d",
+      "hasText": true
+    }
+  ],
+  "tombstones": []
+}

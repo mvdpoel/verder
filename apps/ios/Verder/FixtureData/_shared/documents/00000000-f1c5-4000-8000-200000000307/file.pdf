@@ -3,35 +3,72 @@
 << /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+<< /Type /Pages /Kids [7 0 R 9 0 R] /Count 2 >>
 endobj
 3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+<< /Producer (verder fixtures) >>
 endobj
 4 0 obj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
 endobj
 5 0 obj
-<< /Length 275 >>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 1171 >>
 stream
-BT /F1 18 Tf 56 770 Td (Brief Gemeente Westerlaan 30 okt) Tj ET
-BT /F1 11 Tf 56 736 Td 15 TL
-(Gemeente Westerlaan. We hebben je brief ontvangen en nemen binnen acht weken een) Tj T*
-(besluit.) Tj T*
-ET
+BT /F2 19 Tf 56 780 Td (Gemeente Westerlaan) Tj ET
+BT /F1 10 Tf 56 749 Td (Afdeling Werk en Inkomen - Postbus 100 - 9999 ZZ Westerlaan) Tj ET
+BT /F3 11 Tf 56 717 Td (Westerlaan, 30 oktober 2026) Tj ET
+BT /F3 11 Tf 56 702 Td (Ons kenmerk  WL-TEST-0412) Tj ET
+BT /F2 13 Tf 56 669 Td (Betreft: uw aanvraag bijzondere bijstand) Tj ET
+BT /F1 13 Tf 56 639 Td (Geachte heer, mevrouw,) Tj ET
+BT /F1 13 Tf 56 609 Td (Wij hebben uw aanvraag voor bijzondere bijstand ontvangen op 27 oktober) Tj ET
+BT /F1 13 Tf 56 592 Td (2026. Om uw aanvraag te kunnen beoordelen, hebben wij nog enkele stukken) Tj ET
+BT /F1 13 Tf 56 575 Td (van u nodig.) Tj ET
+BT /F1 13 Tf 56 545 Td (Wilt u het ondertekende aanvraagformulier en uw loonstroken van) Tj ET
+BT /F1 13 Tf 56 528 Td (september en oktober voor 13 november 2026 aan ons sturen? Dat kan via) Tj ET
+BT /F1 13 Tf 56 511 Td (uw bewindvoerder of per post.) Tj ET
+BT /F1 13 Tf 56 481 Td (Heeft u vragen? Bel ons op werkdagen tussen 9.00 en 12.00 uur.) Tj ET
+BT /F1 13 Tf 56 451 Td (Met vriendelijke groet,) Tj ET
+BT /F1 13 Tf 56 434 Td (Team Bijzondere Bijstand) Tj ET
+BT /F1 9 Tf 56 60 Td (Synthetisch voorbeeld - geen echt document.) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 386 >>
+stream
+BT /F2 15 Tf 56 780 Td (Bijlage - welke stukken wij nodig hebben) Tj ET
+BT /F1 13 Tf 56 747 Td (1. Het ondertekende aanvraagformulier bijzondere bijstand.) Tj ET
+BT /F1 13 Tf 56 726 Td (2. Uw loonstroken van september en oktober 2026.) Tj ET
+BT /F1 13 Tf 56 695 Td (Stuur de stukken voor 13 november 2026.) Tj ET
 BT /F1 9 Tf 56 60 Td (Synthetisch voorbeeld - geen echt document.) Tj ET
 endstream
 endobj
 xref
-0 6
+0 11
 0000000000 65535 f 
 0000000009 00000 n 
 0000000058 00000 n 
-0000000115 00000 n 
-0000000241 00000 n 
-0000000338 00000 n 
+0000000121 00000 n 
+0000000170 00000 n 
+0000000267 00000 n 
+0000000369 00000 n 
+0000000464 00000 n 
+0000000610 00000 n 
+0000001832 00000 n 
+0000001979 00000 n 
 trailer
-<< /Size 6 /Root 1 0 R >>
+<< /Size 11 /Root 1 0 R >>
 startxref
-663
+2416
 %%EOF

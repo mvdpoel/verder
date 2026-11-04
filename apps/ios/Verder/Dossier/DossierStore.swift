@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import PDFKit
 
 /// The pocket dossier: every document that is neither discarded nor purged,
 /// with its bytes and its extracted text, kept on the phone so it can be shown
@@ -75,7 +76,24 @@ actor DossierStore {
     struct Record: Codable, Equatable, Sendable {
         var doc: DossierDoc
         var contentType: String?
+        /// A PDF's page count, read once when its bytes are stored ("2 blz").
+        var pages: Int? = nil
     }
+
+    /// How far the running sync is, for the tab to show while it runs: the
+    /// first sync's "5 van 12 documenten", a later one's "2 van 3 nieuw".
+    struct Progress: Equatable, Sendable {
+        /// Documents this sync has to download, over the pages seen so far.
+        var due = 0
+        /// Of those, taken in (stored, gone or not held: each is settled).
+        var done = 0
+        /// Another page follows: `due` is not the end of it.
+        var more = false
+        /// The whole dossier, when the delta says (`DossierDelta.total`).
+        var total: Int?
+        var totalBytes: Int?
+    }
+    typealias ProgressSink = @Sendable (Progress) async -> Void
 
     struct State: Codable, Equatable, Sendable {
         var cursor: Int
@@ -210,7 +228,18 @@ actor DossierStore {
     }
 
     func indexed() -> [IndexedDoc] {
-        documents().map { IndexedDoc(doc: $0, text: texts[$0.id]) }
+        documents().map { IndexedDoc(doc: $0, text: texts[$0.id], pages: pages($0.id)) }
+    }
+
+    /// A held PDF's pages. A record stored before pages were counted is
+    /// counted on first ask and remembered (saved with the next sync).
+    private func pages(_ id: String) -> Int? {
+        guard let record = state.records[id] else { return nil }
+        if let n = record.pages { return n }
+        guard ViewerKind(contentType: record.contentType) == .pdf, let url = fileURL(id),
+              let n = PDFDocument(url: url)?.pageCount, n > 0 else { return nil }
+        state.records[id]?.pages = n
+        return n
     }
 
     func text(_ id: String) -> String? { load(); return texts[id] }
@@ -237,21 +266,28 @@ actor DossierStore {
     /// Pages through the delta until `more` is false, then asks for the text
     /// of every document that has none yet. A second call while one runs
     /// returns at once: the running one already covers it.
-    func sync(client: APIClient) async throws {
+    func sync(client: APIClient, progress: ProgressSink? = nil) async throws {
         guard !syncing else { return }
         // Never sync, and above all never save, over a copy not yet read.
         guard load() else { throw SyncError.unavailable }
         let gen = wipes
         syncing = true
         triedThisSync = []
+        sink = progress
+        running = Progress()
         // A wipe already reset both for whatever runs next.
-        defer { if gen == wipes { syncing = false } }
+        defer { if gen == wipes { syncing = false; sink = nil } }
         try prepareDirectories()
 
         while true {
             let delta: DossierDelta = try await client.getJSON(
                 "\(Self.syncPath)?cursor=\(state.cursor)&limit=\(Self.pageSize)")
             try ensureLive(gen)
+            running.due += delta.upserts.filter { !isCurrent($0) }.count
+            running.more = delta.more
+            running.total = delta.total ?? running.total
+            running.totalBytes = delta.totalBytes ?? running.totalBytes
+            await report()
             do {
                 try await apply(delta, client: client, gen: gen)
             } catch {
@@ -282,6 +318,37 @@ actor DossierStore {
         syncing = false
     }
 
+    /// The sink the running sync reports to, and what it last said.
+    private var sink: ProgressSink?
+    private var running = Progress()
+
+    private func report() async {
+        guard let sink else { return }
+        await sink(running)
+    }
+
+    /// Held with this exact content: nothing to download.
+    private func isCurrent(_ doc: DossierDoc) -> Bool {
+        guard let held = state.records[doc.id] else { return false }
+        return held.doc.sha256 == doc.sha256 && fileURL(doc.id) != nil
+    }
+
+    /// "Haal nu op": takes ONE document in outside the delta — a server hit,
+    /// a link, a document the sync could not take — checked against its sha
+    /// and written like every other download, so it opens offline next
+    /// time. True when it is on the phone afterwards. The cursor is untouched:
+    /// the next delta still names it, and finds it held.
+    func take(_ doc: DossierDoc, client: APIClient) async throws -> Bool {
+        guard load() else { throw SyncError.unavailable }
+        guard UUID(uuidString: doc.id) != nil else { return false }
+        if isCurrent(doc) { return true }
+        let gen = wipes
+        try prepareDirectories()
+        try await take(doc, client: client, gen: gen)
+        try save(gen)
+        return fileURL(doc.id) != nil
+    }
+
     private func ensureLive(_ gen: Int) throws {
         if gen != wipes { throw SyncError.wiped }
     }
@@ -295,12 +362,14 @@ actor DossierStore {
         for doc in delta.upserts {
             // The id becomes a file name: anything but a UUID never reaches the disk.
             guard UUID(uuidString: doc.id) != nil else { continue }
-            if let held = state.records[doc.id], held.doc.sha256 == doc.sha256, fileURL(doc.id) != nil {
+            if isCurrent(doc) {
                 state.records[doc.id]?.doc = doc
                 state.notHeld[doc.id] = nil
                 continue
             }
             try await take(doc, client: client, gen: gen)
+            running.done += 1
+            await report()
         }
     }
 
@@ -310,9 +379,9 @@ actor DossierStore {
         let outcome = try await download(doc, client: client, gen: gen)
         try ensureLive(gen)
         switch outcome {
-        case .stored(let contentType):
+        case .stored(let contentType, let pages):
             if state.records[doc.id]?.doc.sha256 != doc.sha256 { dropText(doc.id) }
-            state.records[doc.id] = Record(doc: doc, contentType: contentType)
+            state.records[doc.id] = Record(doc: doc, contentType: contentType, pages: pages)
             state.notHeld[doc.id] = nil
         case .gone:
             forget(doc.id)
@@ -345,7 +414,7 @@ actor DossierStore {
         try save(gen)
     }
 
-    private enum Download { case stored(contentType: String?), gone, notHeld }
+    private enum Download { case stored(contentType: String?, pages: Int?), gone, notHeld }
 
     private func download(_ doc: DossierDoc, client: APIClient, gen: Int) async throws -> Download {
         let req = client.request("/api/mobile/v1/documents/\(doc.id)/file", method: "GET", body: nil, contentType: nil)
@@ -367,7 +436,9 @@ actor DossierStore {
         // tampered vault; storing them would make them permanent.
         guard Self.sha256Hex(data) == doc.sha256 else { return .notHeld }
         try write(data, to: Self.fileURL(doc.id, in: dir), gen: gen)
-        return .stored(contentType: http.value(forHTTPHeaderField: "Content-Type"))
+        let type = http.value(forHTTPHeaderField: "Content-Type")
+        let pages = ViewerKind(contentType: type) == .pdf ? PDFDocument(data: data)?.pageCount : nil
+        return .stored(contentType: type, pages: pages)
     }
 
     private func fetchMissingTexts(client: APIClient, gen: Int) async throws {

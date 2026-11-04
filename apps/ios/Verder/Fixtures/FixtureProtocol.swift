@@ -58,12 +58,24 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didLoad: body)
             client?.urlProtocolDidFinishLoading(self)
         case .file(let type, let body):
+            if let delay = server.manifest.fileDelay, delay > 0 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [self] in
+                    Self.deliver(self, client: self.client, url: url, type: type, body: body)
+                }
+                return
+            }
+            Self.deliver(self, client: client, url: url, type: type, body: body)
+        }
+    }
+
+    private static func deliver(_ proto: URLProtocol, client: (any URLProtocolClient)?, url: URL, type: String, body: Data) {
+        do {
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
                                            headerFields: ["Content-Type": type, "Cache-Control": "no-store",
                                                           "X-Content-Type-Options": "nosniff"])!
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: body)
-            client?.urlProtocolDidFinishLoading(self)
+            client?.urlProtocol(proto, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(proto, didLoad: body)
+            client?.urlProtocolDidFinishLoading(proto)
         }
     }
 

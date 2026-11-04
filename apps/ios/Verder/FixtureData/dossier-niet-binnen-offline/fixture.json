@@ -1,0 +1,5 @@
+{
+  "description": "`dossier-niet-binnen`, then no network: \"Haal nu op\" off with its reason. Capture with -fixtures-dossier refresh.",
+  "statuses": {"documents/00000000-f1c5-4000-8000-200000000104/file": 503},
+  "thenFail": "offline"
+}

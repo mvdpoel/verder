@@ -1,0 +1,7 @@
+{
+  "description": "`dossier`, but the server search never answers: \"Zoekt op de server\u2026\" while it runs, \"binnen 10 seconden geen antwoord\" once the limit passes.",
+  "neverPaths": [
+    "search"
+  ],
+  "keptAt": "2026-11-01T13:02:00Z"
+}

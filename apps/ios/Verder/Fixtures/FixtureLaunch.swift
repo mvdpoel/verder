@@ -46,6 +46,10 @@ import Foundation
 ///                              "Ik regel het zelf" chosen)
 ///     -fixtures-detail <state>  a question, suggestion or task screen in a state only a gesture
 ///                              reaches (`DetailState`)
+///     -fixtures-dossier <state[,state…]>  Dossier and its viewer in a state only a gesture reaches
+///                              (`DossierState`): refresh · filter:<soort> · zoek:<query> · server ·
+///                              scroll:<documenten|chips|server> · open:<document id> · balie ·
+///                              balie-zoom · pagina
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
 ///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
 ///             |meer:<account|notifications|widgets|about|developer>>
@@ -152,6 +156,45 @@ struct FixtureLaunch: Equatable, Sendable {
         case bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant, gedaan, verlopen
     }
 
+    /// Dossier's gesture-only states (`-fixtures-dossier`).
+    enum DossierState: Equatable, Sendable {
+        /// A second sync once the first is done, as a return to the foreground starts.
+        case refresh
+        /// A soort chip tapped (its Dutch label: "brief").
+        case filter(String)
+        /// The search bar up with this query typed (the keyboard down).
+        case zoek(String)
+        /// "Zoek op de server" tapped.
+        case server
+        /// Scrolled: the documents pinned (documenten), the chips mid-screen
+        /// (chips), or the server's hits at the top (server).
+        case scroll(String)
+        /// The viewer's "Toon aan de balie" up; zoomed in on the letter.
+        case balie, balieZoom
+        /// The viewer scrolled to its page (AX5).
+        case pagina
+        /// The viewer pushed for this document once the first sync is done
+        /// (a route at launch would ask for its file before the sync does).
+        case open(String)
+
+        static func parse(_ raw: String) -> DossierState? {
+            switch raw {
+            case "refresh": return .refresh
+            case "server": return .server
+            case "balie": return .balie
+            case "balie-zoom": return .balieZoom
+            case "pagina": return .pagina
+            default:
+                for (prefix, make) in [("filter:", DossierState.filter), ("zoek:", DossierState.zoek),
+                                       ("scroll:", DossierState.scroll), ("open:", DossierState.open)] where raw.hasPrefix(prefix) {
+                    let value = String(raw.dropFirst(prefix.count))
+                    return value.isEmpty ? nil : make(value)
+                }
+                return nil
+            }
+        }
+    }
+
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).
     /// `middle` is a Meer screen's own middle anchor (`MorePageAnchor`).
     enum Scroll: String, CaseIterable, Sendable { case waiting, leefgeld, rest, end, middle }
@@ -231,6 +274,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var voorJou: [VoorJouState] = []
     var proposal: ProposalState? = nil
     var detail: DetailState? = nil
+    var dossier: [DossierState] = []
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -322,7 +366,14 @@ struct FixtureLaunch: Equatable, Sendable {
                              detail: try value(after: "-fixtures-detail").map { (raw: String) throws(ParseError) -> DetailState in
                                  guard let s = DetailState(rawValue: raw) else { throw .unknownValue("-fixtures-detail", raw) }
                                  return s
-                             })
+                             },
+                             dossier: try (value(after: "-fixtures-dossier") ?? "").split(separator: ",")
+                                 .map { (raw: Substring) throws(ParseError) -> DossierState in
+                                     guard let s = DossierState.parse(String(raw)) else {
+                                         throw .unknownValue("-fixtures-dossier", String(raw))
+                                     }
+                                     return s
+                                 })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

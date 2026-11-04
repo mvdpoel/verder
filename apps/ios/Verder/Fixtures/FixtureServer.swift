@@ -98,10 +98,16 @@ struct FixtureServer: Sendable {
         /// before launch: the kept list a cold start shows offline or through
         /// a server failure, with its age.
         let inboxCachedAt: Date?
+        /// Paths that are never answered while the rest answer: a first sync
+        /// held at its sixth file, a server search still underway.
+        let neverPaths: [String]?
+        /// Seconds every document file (`documents/<id>/file`) takes to
+        /// arrive, so a first sync's progress and estimate can be captured.
+        let fileDelay: Double?
 
         private enum Key: String, CodingKey {
             case description, behavior, statuses, generate, transcript, thenFail, keptAt, offlineAfter, today
-            case offlinePaths, timelineCachedAt, inboxCachedAt
+            case offlinePaths, timelineCachedAt, inboxCachedAt, neverPaths, fileDelay
         }
 
         init(from decoder: Decoder) throws {
@@ -126,6 +132,8 @@ struct FixtureServer: Sendable {
                 return d
             }
             offlinePaths = try c.decodeIfPresent([String].self, forKey: .offlinePaths)
+            neverPaths = try c.decodeIfPresent([String].self, forKey: .neverPaths)
+            fileDelay = try c.decodeIfPresent(Double.self, forKey: .fileDelay)
             timelineCachedAt = try c.decodeIfPresent(String.self, forKey: .timelineCachedAt).map { (raw: String) throws -> Date in
                 guard let d = ISO8601DateFormatter().date(from: raw) else {
                     throw DecodingError.dataCorruptedError(forKey: .timelineCachedAt, in: c,
@@ -194,6 +202,7 @@ struct FixtureServer: Sendable {
             return Self.error(404, "not found")
         }
         if manifest.offlinePaths?.contains(path) == true { return .transportFailure }
+        if manifest.neverPaths?.contains(path) == true { return .never }
         // `"POST push/preferences": 503` fails one method only (a save that
         // fails over a read that works).
         if let status = manifest.statuses?["\(method.uppercased()) \(path)"] ?? manifest.statuses?[path] {

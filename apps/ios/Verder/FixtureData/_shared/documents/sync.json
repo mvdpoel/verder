@@ -7,10 +7,10 @@
       "title": "Beschikking Rechtbank Westerlaan",
       "docType": "letter",
       "status": "filed",
-      "receivedAt": "2026-06-03T09:00:00.000Z",
+      "receivedAt": "2026-08-14T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 905,
-      "sha256": "8505963b23628c4067fa29d9d1d4e0de0b65f45dee50dc3c82a497acd5976057",
+      "sizeBytes": 2136,
+      "sha256": "dd651f47a9390245b492ffe38e4b8403b4e38a0b348e11a726fa490d3da6be4c",
       "hasText": true
     },
     {
@@ -18,10 +18,10 @@
       "title": "Loonstrook 2026-09",
       "docType": "payslip",
       "status": "filed",
-      "receivedAt": "2026-09-25T09:00:00.000Z",
+      "receivedAt": "2026-09-26T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 814,
-      "sha256": "e1fb1582d94afb96997ee3b29bad8dfe761958aaa780be00364759145f219fa8",
+      "sizeBytes": 1140,
+      "sha256": "3731487cb22fbaac27d84dd6b83beafe7e12900468f85b8a9a96e7f28cdddd8e",
       "hasText": true
     },
     {
@@ -29,10 +29,10 @@
       "title": "Loonstrook 2026-10",
       "docType": "payslip",
       "status": "filed",
-      "receivedAt": "2026-10-26T09:00:00.000Z",
+      "receivedAt": "2026-10-28T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 812,
-      "sha256": "377ef02b57f4f494f3e50f4ac18bf06c2b8361ed3b9cef0720c349622a0ff8bb",
+      "sizeBytes": 1138,
+      "sha256": "0f192254092a07953fc7d7d58484cc23a1dc08bfba381d0f8652d12f059289dc",
       "hasText": true
     },
     {
@@ -40,10 +40,10 @@
       "title": "Polis Duinzorg 2026",
       "docType": "contract",
       "status": "filed",
-      "receivedAt": "2026-01-05T09:00:00.000Z",
+      "receivedAt": "2026-09-04T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 835,
-      "sha256": "ce950e8858f7d4343865584611050de3bf1ea10926662dcd143e51b6613c5140",
+      "sizeBytes": 1161,
+      "sha256": "195cec1b02de13a39d547167e4e128982afc3522b819e64fa688b0890a100b88",
       "hasText": true
     },
     {
@@ -53,8 +53,8 @@
       "status": "filed",
       "receivedAt": "2025-03-01T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 838,
-      "sha256": "461495512e98d5028e1c2c2a45fe442f7972a15e1929cffa2546c39020deb9c4",
+      "sizeBytes": 1164,
+      "sha256": "e3b8b1d653c664421fc3553c32b71d3fd166cc005ccd9b0d4eeb4fb3a5391eb5",
       "hasText": true
     },
     {
@@ -64,8 +64,8 @@
       "status": "filed",
       "receivedAt": "2026-10-14T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 882,
-      "sha256": "b1bb58de9f9a26ba8dbb484e591a7a341c3b2d6b22baf1fe92663a1a9f69bbce",
+      "sizeBytes": 1208,
+      "sha256": "827a861d5ce8dc8694682e29214f3a064da3ea01414895403b737560a79d0646",
       "hasText": true
     },
     {
@@ -75,19 +75,19 @@
       "status": "filed",
       "receivedAt": "2026-10-02T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 814,
-      "sha256": "d5a44f5f8dbdea5784478dfe230e0f2defdaaf0058645d4e72b951bf6f5100af",
+      "sizeBytes": 1140,
+      "sha256": "2e51765b9af9ab66861e9d9cd92b89eb95faf8b3ba4c765609964926672f7806",
       "hasText": true
     },
     {
       "id": "00000000-f1c5-4000-8000-200000000307",
       "title": "Brief Gemeente Westerlaan 30 okt",
       "docType": "letter",
-      "status": "inbox",
+      "status": "filed",
       "receivedAt": "2026-10-30T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 846,
-      "sha256": "369c231650933400954ca5b8c1d3abde779776d559ca9ccd7f42909eab45bb38",
+      "sizeBytes": 2702,
+      "sha256": "1c73db50de2274ca99b9ea7c4dc1b3723cd69f9207c895f58053e26b33398d49",
       "hasText": true
     },
     {
@@ -95,43 +95,44 @@
       "title": "ID-kaart",
       "docType": "id-document",
       "status": "filed",
-      "receivedAt": "2026-05-11T09:00:00.000Z",
+      "receivedAt": "2026-09-12T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 684,
-      "sha256": "71d55f48049b5ea0ef697481ab1a989fed5ce0f61007a9c489a4976e0d428439",
-      "hasText": false
+      "sizeBytes": 1053,
+      "sha256": "f863a4b09c7a009e74f5a4d6eb946978f43e4035fcc37ab83e8f84e0e3da7858",
+      "hasText": false,
+          "source": "phone-scan"
     },
     {
       "id": "00000000-f1c5-4000-8000-200000000309",
       "title": "Jaaropgaaf 2025",
-      "docType": null,
+      "docType": "other",
       "status": "filed",
       "receivedAt": "2026-02-20T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 803,
-      "sha256": "564562276bd9da8af9e43f5139e31f4d134d97c089ab7abbd6b43ed355e4b18e",
+      "sizeBytes": 1129,
+      "sha256": "65979e9d712b7a599ed4f3e51b0b85c51d044af6cca837ed7086738cb205bd7d",
       "hasText": true
     },
     {
       "id": "00000000-f1c5-4000-8000-200000000310",
       "title": "Bevestiging aanmelding Noordkust",
-      "docType": null,
+      "docType": "letter",
       "status": "filed",
-      "receivedAt": "2026-05-11T09:00:00.000Z",
+      "receivedAt": "2026-09-18T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 870,
-      "sha256": "d57071d55711693e3c3c448caa73e57a8fee8f6c5fe86e87544c1e55f95ba24c",
+      "sizeBytes": 1196,
+      "sha256": "0c9b0768e0237a4890fbe0a8bb30baccfe69e21dd93d5cbcb16b08cab34d059e",
       "hasText": true
     },
     {
       "id": "00000000-f1c5-4000-8000-200000000311",
       "title": "Formulier bijzondere bijstand",
-      "docType": null,
+      "docType": "other",
       "status": "inbox",
       "receivedAt": "2026-10-29T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 836,
-      "sha256": "d9d83b6ca9bea39843b02e61294c5a5b17c1dd1bc41a0272549a592881c06b48",
+      "sizeBytes": 1162,
+      "sha256": "bf4c8b73937953146d994ccf0a46f53a45cf6de6c4e1139af5b3c418e490ed4d",
       "hasText": true
     }
   ],

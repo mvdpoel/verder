@@ -7,7 +7,7 @@
 #                      [--timeline <state[,state…]>] [--tap <label>]
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
-#                      [--proposal <state>] [--detail <state>]
+#                      [--proposal <state>] [--detail <state>] [--dossier <state[,state…]>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
@@ -92,6 +92,14 @@
 #            session expired, the screen and its edits kept in place).
 #            With aangepast, --scroll middle puts the first changed field
 #            at the top (the AX5 frame's Gevorderd card)
+#   --dossier  Dossier (tab dossier, or a document: route) in a state only a
+#            gesture reaches, comma-separated: refresh (a second sync after the
+#            first — the kept copy offline, or a later delta) · filter:<soort>
+#            (a chip tapped, e.g. filter:brief) · zoek:<query> (the search bar
+#            up with it typed) · server ("Zoek op de server" tapped) ·
+#            scroll:<documenten|chips|server> · open:<document id> (the viewer
+#            pushed after the first sync) · balie · balie-zoom (the viewer's
+#            "Toon aan de balie", zoomed in) · pagina (the AX5 viewer at its page)
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does
@@ -127,7 +135,7 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -208,6 +216,14 @@ while [ $# -gt 0 ]; do
       case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd|nee|nietrelevant|gedaan|verlopen) DETAIL="$2" ;;
         *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant, gedaan or verlopen" >&2; exit 2 ;; esac
       shift ;;
+    --dossier)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      for d in ${2//,/ }; do
+        case "$d" in refresh|server|balie|balie-zoom|pagina|filter:?*|zoek:?*|scroll:documenten|scroll:chips|scroll:server|open:?*) ;;
+          *) echo "capture.sh: --dossier takes refresh, filter:<soort>, zoek:<query>, server, scroll:<documenten|chips|server>, open:<id>, balie, balie-zoom or pagina" >&2; exit 2 ;; esac
+      done
+      DOSSIER="$2"
+      shift ;;
     --swipe)
       [ $# -ge 2 ] || usage
       case "$2" in ?*:left|?*:right) SWIPE="$2" ;; *) echo "capture.sh: --swipe takes <text>:left or <text>:right" >&2; exit 2 ;; esac
@@ -279,6 +295,7 @@ fi
 [ -z "$VOORJOU" ] || ARGS+=(-fixtures-voorjou "$VOORJOU")
 [ -z "$PROPOSAL" ] || ARGS+=(-fixtures-proposal "$PROPOSAL")
 [ -z "$DETAIL" ] || ARGS+=(-fixtures-detail "$DETAIL")
+[ -z "$DOSSIER" ] || ARGS+=(-fixtures-dossier "$DOSSIER")
 [ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
 [ -z "$COVER" ] || ARGS+=(-fixtures-cover)
 [ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)

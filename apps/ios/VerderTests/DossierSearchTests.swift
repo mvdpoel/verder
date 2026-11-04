@@ -94,16 +94,6 @@ struct DossierSearchTests {
         #expect(ViewerKind(contentType: nil) == .unsupported)
     }
 
-    @Test func rowLineSaysWhenWhatAndWhere() {
-        let d = Self.doc("1", "Loonstrook", receivedAt: "2026-10-26T09:00:00Z", status: "filed", docType: "payslip")
-        #expect(DossierCopy.rowLine(d.doc) == "26 okt 2026 · loonstrook · opgeborgen")
-        let e = Self.doc("2", "Scan", receivedAt: "2026-10-31T23:30:00Z", docType: "beschikking")
-        // Amsterdam's calendar: 23:30 UTC on 31 okt is already 1 nov there.
-        #expect(DossierCopy.rowLine(e.doc) == "1 nov 2026 · beschikking · in de inbox")
-        let f = Self.doc("3", "Scan", receivedAt: "2026-10-30T09:00:00Z")
-        #expect(DossierCopy.rowLine(f.doc) == "30 okt 2026 · in de inbox")
-    }
-
     @Test func freshnessLineNamesTheAgeAndOffline() {
         let now = parseISODate("2026-11-01T14:30:00Z")!
         let today = parseISODate("2026-11-01T13:02:00Z")!
@@ -131,23 +121,40 @@ struct DossierSearchTests {
         #expect(DossierCopy.openTasks(all).map(\.id) == ["b", "d"])
     }
 
-    /// A task's due date, said relative to now in Amsterdam time.
+    /// A task's readout, all of it waiting on Martin, in Amsterdam time
+    /// (frame: "WACHT OP JOU · TE LAAT · 30 OKT", "… · UITERLIJK DI 3 NOV").
     @Test func aTaskLineSaysTheDueDateRelativeToNow() throws {
         let iso = ISO8601DateFormatter()
         let now = try #require(iso.date(from: "2026-11-02T13:02:00Z")) // 14:02 in Amsterdam
-        func rest(_ s: String) -> String? { DossierCopy.taskLine(dueAt: iso.date(from: s), now: now).rest }
-        #expect(rest("2026-11-03T16:00:00Z") == "morgen 17:00")
-        #expect(rest("2026-11-02T16:00:00Z") == "vandaag 17:00")
-        #expect(rest("2026-10-30T16:00:00Z") == "te laat sinds 30 okt")
-        #expect(rest("2026-11-06T16:00:00Z") == "uiterlijk 6 nov")
-        #expect(DossierCopy.taskLine(dueAt: nil, now: now).rest == nil)
-        #expect(DossierCopy.taskLine(dueAt: nil, now: now).lead == "voor jou")
+        func line(_ s: String?) -> [String] { DossierLine.task(dueAt: s.flatMap(iso.date(from:)), now: now) }
+        #expect(line("2026-11-03T16:00:00Z") == ["wacht op jou", "morgen 17:00"])
+        #expect(line("2026-11-02T16:00:00Z") == ["wacht op jou", "vandaag 17:00"])
+        #expect(line("2026-10-30T16:00:00Z") == ["wacht op jou", "te laat", "30 okt"])
+        #expect(line("2026-11-06T16:00:00Z") == ["wacht op jou", "uiterlijk vr 6 nov"])
+        #expect(line(nil) == ["wacht op jou"])
     }
 
-    @Test func theEyebrowCountsTheDocumentsAndSaysTheirAge() {
-        #expect(DossierCopy.eyebrow(docCount: 12, freshness: "bijgewerkt 14:02") == "12 documenten · bijgewerkt 14:02")
-        #expect(DossierCopy.eyebrow(docCount: 1, freshness: nil) == "1 document")
-        #expect(DossierCopy.eyebrow(docCount: nil, freshness: nil) == nil)
-        #expect(DossierCopy.seeAllTasks(6) == "Alles bekijken (6)")
+    @Test func theEyebrowSaysTheAgeOrWhatIsArriving() {
+        #expect(DossierCopy.eyebrow(loaded: true, syncedAt: Date(), freshness: "bijgewerkt 14:02", updating: nil)
+                == "bijgewerkt 14:02")
+        #expect(DossierCopy.eyebrow(loaded: true, syncedAt: nil, freshness: nil, updating: nil) == "nog niet bijgewerkt")
+        #expect(DossierCopy.eyebrow(loaded: false, syncedAt: nil, freshness: nil, updating: nil) == nil)
+        let two = DossierStore.Progress(due: 3, done: 2)
+        #expect(DossierCopy.eyebrow(loaded: true, syncedAt: Date(), freshness: "bijgewerkt 14:02", updating: two)
+                == "bijwerken… · 2 van 3 nieuw")
+        // A sync with nothing new keeps the age.
+        #expect(DossierCopy.eyebrow(loaded: true, syncedAt: Date(), freshness: "bijgewerkt 14:02",
+                                    updating: DossierStore.Progress()) == "bijgewerkt 14:02")
+        #expect(DossierCopy.seeAllTasks(6) == "Toon alle 6")
+    }
+
+    /// The most pressing first: overdue, then due soonest, then undated.
+    @Test func tasksAreListedByDue() {
+        func t(_ id: String, _ due: String?) -> TaskDTO {
+            TaskDTO(id: id, title: id, details: nil, dueAt: due.flatMap(parseISODate), status: "open",
+                    assigneeName: nil, validNext: [])
+        }
+        let sorted = DossierCopy.byDue([t("a", nil), t("b", "2026-11-03T16:00:00Z"), t("c", "2026-10-30T16:00:00Z"), t("d", nil)])
+        #expect(sorted.map(\.id) == ["c", "b", "a", "d"])
     }
 }

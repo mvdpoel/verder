@@ -1,0 +1,5 @@
+{
+  "description": "The phone holds nine documents; the next delta (cursor 412) brings three new ones and the third never arrives: \"bijwerken… · 2 van 3 nieuw\". Capture with -fixtures-dossier refresh.",
+  "keptAt": "2026-11-01T13:02:00Z",
+  "neverPaths": ["documents/00000000-f1c5-4000-8000-200000000311/file"]
+}

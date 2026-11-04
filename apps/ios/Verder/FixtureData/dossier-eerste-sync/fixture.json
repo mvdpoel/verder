@@ -1,0 +1,8 @@
+{
+  "description": "A first sync of 12 documents (9,8 MB) under way: five in, the sixth file never answers; each file takes 4 s, so the card has a rate to estimate from.",
+  "fileDelay": 4,
+  "neverPaths": [
+    "documents/00000000-f1c5-4000-8000-200000000105/file"
+  ],
+  "keptAt": "2026-11-01T13:02:00Z"
+}

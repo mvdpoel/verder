@@ -32,20 +32,38 @@ struct Doc {
     let receivedAt: String
     /// nil = no extracted text (`hasText: false`), like a scanned ID card.
     let text: String?
+    /// The ingest path, when it matters to the reader ("foto-scan"). Not
+    /// served by dossier-sync.ts yet: the phone reads it as optional.
+    var source: String? = nil
+    /// How the PDF is drawn: one page with the title and the text, unless
+    /// the frames show this document's own pages.
+    var layout: Layout = .plain(pages: 1)
 }
 
+enum Layout {
+    case plain(pages: Int)
+    /// The "Document / viewer" frame's letter, two pages.
+    case letter
+    /// A photographed ID card: a card shape, no text layer.
+    case card
+}
+
+// Dates, soorten and statuses follow the "dossier · final" frames (2026-11-03).
+// Nothing here is the real case: no date is the aanmelding, the stukken to the
+// rechtbank or the beschikking (FixtureTests.fixturesHoldNoRealCaseDate).
 let docs: [Doc] = [
     Doc(id: "00000000-f1c5-4000-8000-200000000300", title: "Beschikking Rechtbank Westerlaan", docType: "letter",
-        status: "filed", receivedAt: "2026-06-03T09:00:00.000Z",
-        text: "Rechtbank Westerlaan. Beschikking van 3 juni 2026. De rechtbank stelt de goederen onder bewind en benoemt Bewindkantoor Noordkust tot bewindvoerder."),
+        status: "filed", receivedAt: "2026-08-14T09:00:00.000Z",
+        text: "Rechtbank Westerlaan. Beschikking van 3 juni 2026. De rechtbank stelt de goederen onder bewind en benoemt Bewindkantoor Noordkust tot bewindvoerder.",
+        layout: .plain(pages: 3)),
     Doc(id: "00000000-f1c5-4000-8000-200000000105", title: "Loonstrook 2026-09", docType: "payslip",
-        status: "filed", receivedAt: "2026-09-25T09:00:00.000Z",
+        status: "filed", receivedAt: "2026-09-26T09:00:00.000Z",
         text: "Atelier Sterrenwacht. Loonstrook september 2026. Netto uit te betalen 2.400,00."),
     Doc(id: "00000000-f1c5-4000-8000-200000000104", title: "Loonstrook 2026-10", docType: "payslip",
-        status: "filed", receivedAt: "2026-10-26T09:00:00.000Z",
+        status: "filed", receivedAt: "2026-10-28T09:00:00.000Z",
         text: "Atelier Sterrenwacht. Loonstrook oktober 2026. Netto uit te betalen 2.400,00."),
     Doc(id: "00000000-f1c5-4000-8000-200000000303", title: "Polis Duinzorg 2026", docType: "contract",
-        status: "filed", receivedAt: "2026-01-05T09:00:00.000Z",
+        status: "filed", receivedAt: "2026-09-04T09:00:00.000Z",
         text: "Zorgverzekeraar Duinzorg. Polisblad 2026. Basisverzekering met het verplichte eigen risico."),
     Doc(id: "00000000-f1c5-4000-8000-200000000304", title: "Huurcontract Lindehof", docType: "contract",
         status: "filed", receivedAt: "2025-03-01T09:00:00.000Z",
@@ -57,17 +75,19 @@ let docs: [Doc] = [
         status: "filed", receivedAt: "2026-10-02T09:00:00.000Z",
         text: "Rekeningafschrift september 2026. Rekening NL00TEST0123456789, beheerrekening."),
     Doc(id: "00000000-f1c5-4000-8000-200000000307", title: "Brief Gemeente Westerlaan 30 okt", docType: "letter",
-        status: "inbox", receivedAt: "2026-10-30T09:00:00.000Z",
-        text: "Gemeente Westerlaan. We hebben je brief ontvangen en nemen binnen acht weken een besluit."),
+        status: "filed", receivedAt: "2026-10-30T09:00:00.000Z",
+        text: "Gemeente Westerlaan. We hebben je brief ontvangen en nemen binnen acht weken een besluit.",
+        layout: .letter),
     Doc(id: "00000000-f1c5-4000-8000-200000000308", title: "ID-kaart", docType: "id-document",
-        status: "filed", receivedAt: "2026-05-11T09:00:00.000Z", text: nil),
-    Doc(id: "00000000-f1c5-4000-8000-200000000309", title: "Jaaropgaaf 2025", docType: nil,
+        status: "filed", receivedAt: "2026-09-12T09:00:00.000Z", text: nil, source: "phone-scan",
+        layout: .card),
+    Doc(id: "00000000-f1c5-4000-8000-200000000309", title: "Jaaropgaaf 2025", docType: "other",
         status: "filed", receivedAt: "2026-02-20T09:00:00.000Z",
         text: "Atelier Sterrenwacht. Jaaropgaaf 2025. Fiscaal loon over het hele jaar."),
-    Doc(id: "00000000-f1c5-4000-8000-200000000310", title: "Bevestiging aanmelding Noordkust", docType: nil,
-        status: "filed", receivedAt: "2026-05-11T09:00:00.000Z",
+    Doc(id: "00000000-f1c5-4000-8000-200000000310", title: "Bevestiging aanmelding Noordkust", docType: "letter",
+        status: "filed", receivedAt: "2026-09-18T09:00:00.000Z",
         text: "Bewindkantoor Noordkust bevestigt je aanmelding. Team Startdossier helpt ook met de aanvraag bijzondere bijstand."),
-    Doc(id: "00000000-f1c5-4000-8000-200000000311", title: "Formulier bijzondere bijstand", docType: nil,
+    Doc(id: "00000000-f1c5-4000-8000-200000000311", title: "Formulier bijzondere bijstand", docType: "other",
         status: "inbox", receivedAt: "2026-10-29T09:00:00.000Z",
         text: "Aanvraagformulier bijzondere bijstand Gemeente Westerlaan. Handtekening aanvrager."),
 ]
@@ -92,22 +112,78 @@ func wrap(_ text: String, width: Int) -> [String] {
     return lines
 }
 
-func pdf(for doc: Doc) -> Data {
-    var stream = "BT /F1 18 Tf 56 770 Td \(pdfString(doc.title)) Tj ET\n"
-    let body = wrap(doc.text ?? "", width: 80)
-    if !body.isEmpty {
-        stream += "BT /F1 11 Tf 56 736 Td 15 TL\n"
-        stream += body.map { "\(pdfString($0)) Tj T*" }.joined(separator: "\n") + "\nET\n"
+/// Text lines from `y` down: (font, size, text, extra gap before).
+func lines(_ rows: [(String, Int, String, Int)], from top: Int) -> String {
+    var y = top
+    var out = ""
+    for (font, size, text, gap) in rows {
+        y -= gap
+        out += "BT /\(font) \(size) Tf 56 \(y) Td \(pdfString(text)) Tj ET\n"
+        y -= size + 4
     }
-    stream += "BT /F1 9 Tf 56 60 Td \(pdfString("Synthetisch voorbeeld - geen echt document.")) Tj ET\n"
+    return out
+}
 
-    let objects = [
+let footer = "BT /F1 9 Tf 56 60 Td \(pdfString("Synthetisch voorbeeld - geen echt document.")) Tj ET\n"
+
+func streams(for doc: Doc) -> [String] {
+    switch doc.layout {
+    case .plain(let count):
+        var first = "BT /F1 18 Tf 56 770 Td \(pdfString(doc.title)) Tj ET\n"
+        let body = wrap(doc.text ?? "", width: 80)
+        if !body.isEmpty {
+            first += "BT /F1 11 Tf 56 736 Td 15 TL\n"
+            first += body.map { "\(pdfString($0)) Tj T*" }.joined(separator: "\n") + "\nET\n"
+        }
+        return (1...count).map { n in
+            let page = "BT /F1 9 Tf 480 800 Td \(pdfString("Pagina \(n) van \(count)")) Tj ET\n"
+            return (n == 1 ? first : "BT /F1 14 Tf 56 770 Td \(pdfString(doc.title)) Tj ET\n") + (count > 1 ? page : "") + footer
+        }
+    case .letter:
+        let para = { (s: String) in wrap(s, width: 72).enumerated().map { ("F1", 13, $1, $0 == 0 ? 13 : 0) } }
+        let one: [(String, Int, String, Int)] = [("F2", 19, "Gemeente Westerlaan", 0),
+             ("F1", 10, "Afdeling Werk en Inkomen - Postbus 100 - 9999 ZZ Westerlaan", 8),
+             ("F3", 11, "Westerlaan, 30 oktober 2026", 18),
+             ("F3", 11, "Ons kenmerk  WL-TEST-0412", 0),
+             ("F2", 13, "Betreft: uw aanvraag bijzondere bijstand", 18),
+             ("F1", 13, "Geachte heer, mevrouw,", 13)]
+            + para("Wij hebben uw aanvraag voor bijzondere bijstand ontvangen op 27 oktober 2026. Om uw aanvraag te kunnen beoordelen, hebben wij nog enkele stukken van u nodig.")
+            + para("Wilt u het ondertekende aanvraagformulier en uw loonstroken van september en oktober voor 13 november 2026 aan ons sturen? Dat kan via uw bewindvoerder of per post.")
+            + para("Heeft u vragen? Bel ons op werkdagen tussen 9.00 en 12.00 uur.")
+            + [("F1", 13, "Met vriendelijke groet,", 13), ("F1", 13, "Team Bijzondere Bijstand", 0)]
+        let two: [(String, Int, String, Int)] = [("F2", 15, "Bijlage - welke stukken wij nodig hebben", 0),
+             ("F1", 13, "1. Het ondertekende aanvraagformulier bijzondere bijstand.", 14),
+             ("F1", 13, "2. Uw loonstroken van september en oktober 2026.", 4),
+             ("F1", 13, "Stuur de stukken voor 13 november 2026.", 14)]
+        return [lines(one, from: 780) + footer, lines(two, from: 780) + footer]
+    case .card:
+        // A light page with a card: the card, a photo square and three bars.
+        let card = """
+        0.74 0.80 0.86 rg 110 470 375 230 re f
+        0.70 0.78 0.88 rg 135 520 100 130 re f
+        0.68 0.74 0.80 rg 260 630 180 14 re f 260 600 140 12 re f 260 575 160 12 re f
+
+        """
+        return [card]
+    }
+}
+
+func pdf(for doc: Doc) -> Data {
+    let pages = streams(for: doc)
+    let fonts = "<< /F1 4 0 R /F2 5 0 R /F3 6 0 R >>"
+    var objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
-        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        "<< /Type /Pages /Kids [\((0..<pages.count).map { "\(7 + 2 * $0) 0 R" }.joined(separator: " "))] /Count \(pages.count) >>",
+        "",
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        "<< /Length \(stream.utf8.count) >>\nstream\n\(stream)endstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
     ]
+    objects[2] = "<< /Producer (verder fixtures) >>"
+    for (i, stream) in pages.enumerated() {
+        objects.append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font \(fonts) >> /Contents \(8 + 2 * i) 0 R >>")
+        objects.append("<< /Length \(stream.utf8.count) >>\nstream\n\(stream)endstream")
+    }
     var out = "%PDF-1.4\n"
     var offsets: [Int] = []
     for (i, body) in objects.enumerated() {
@@ -134,39 +210,77 @@ guard CommandLine.arguments.count == 2 else {
 let shared = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let documents = shared.appending(path: "documents", directoryHint: .isDirectory)
 
-var upserts: [String] = []
+struct Built { let doc: Doc; let bytes: Data; let sha: String }
+var built: [Built] = []
 for doc in docs {
     let bytes = pdf(for: doc)
     let dir = documents.appending(path: doc.id, directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     try bytes.write(to: dir.appending(path: "file.pdf"))
-    let sha = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
-    upserts.append("""
-        {
-          "id": \(json(doc.id)),
-          "title": \(json(doc.title)),
-          "docType": \(doc.docType.map(json) ?? "null"),
-          "status": \(json(doc.status)),
-          "receivedAt": \(json(doc.receivedAt)),
-          "mime": "application/pdf",
-          "sizeBytes": \(bytes.count),
-          "sha256": \(json(sha)),
-          "hasText": \(doc.text != nil)
-        }
-    """)
-}
-let sync = """
-{
-  "cursor": 412,
-  "more": false,
-  "upserts": [
-\(upserts.joined(separator: ",\n"))
-  ],
-  "tombstones": []
+    built.append(Built(doc: doc, bytes: bytes, sha: SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()))
 }
 
-"""
-try Data(sync.utf8).write(to: documents.appending(path: "sync.json"))
+/// One delta, as `dossierSync.delta` serves it. `sizes` overrides a
+/// document's `sizeBytes` (a capture's "4,1 van 9,8 MB"; the bytes served
+/// stay the tiny PDF, whose sha the phone checks); `total`/`totalBytes` are
+/// the whole dossier, which the first-sync card needs and dossier-sync.ts
+/// does not serve yet (the phone reads them as optional).
+func delta(_ items: [Built], cursor: Int, sizes: [String: Int] = [:], total: (Int, Int)? = nil) -> String {
+    let upserts = items.map { b in
+        """
+            {
+              "id": \(json(b.doc.id)),
+              "title": \(json(b.doc.title)),
+              "docType": \(b.doc.docType.map(json) ?? "null"),
+              "status": \(json(b.doc.status)),
+              "receivedAt": \(json(b.doc.receivedAt)),
+              "mime": "application/pdf",
+              "sizeBytes": \(sizes[b.doc.id] ?? b.bytes.count),
+              "sha256": \(json(b.sha)),
+              "hasText": \(b.doc.text != nil)\(b.doc.source.map { ",\n          \"source\": \(json($0))" } ?? "")
+            }
+        """
+    }
+    let totals = total.map { "  \"total\": \($0.0),\n  \"totalBytes\": \($0.1),\n" } ?? ""
+    return """
+    {
+      "cursor": \(cursor),
+      "more": false,
+    \(totals)  "upserts": [
+    \(upserts.joined(separator: ",\n"))
+      ],
+      "tombstones": []
+    }
+
+    """
+}
+try Data(delta(built, cursor: 412).utf8).write(to: documents.appending(path: "sync.json"))
+
+// The capture variants (docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md,
+// "Dossier states"), each in its own fixture folder next to `_shared`.
+func variant(_ name: String, _ file: String, _ body: String) throws {
+    let dir = shared.deletingLastPathComponent().appending(path: name).appending(path: "documents", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try Data(body.utf8).write(to: dir.appending(path: file))
+}
+func id(_ title: String) -> String { built.first { $0.doc.title == title }!.doc.id }
+let newestFirst = built.sorted { $0.doc.receivedAt > $1.doc.receivedAt }
+// First sync: 12 documents, 9,8 MB, newest first; the sixth file never answers
+// (`neverPaths`) or has no network (`offlinePaths`), after 4,1 MB.
+let mb = [1_200_000, 900_000, 400_000, 800_000, 800_000, 600_000, 900_000, 1_100_000, 500_000, 700_000, 1_200_000, 700_000]
+let sizes = Dictionary(uniqueKeysWithValues: zip(newestFirst.map(\.doc.id), mb))
+for name in ["dossier-eerste-sync", "dossier-onderbroken"] {
+    try variant(name, "sync.json", delta(newestFirst, cursor: 412, sizes: sizes, total: (12, mb.reduce(0, +))))
+}
+// Bijwerken: the phone took nine; the next delta brings three new ones.
+let later = ["Loonstrook 2026-10", "Brief Gemeente Westerlaan 30 okt", "Formulier bijzondere bijstand"]
+try variant("dossier-bijwerken", "sync.json", delta(built.filter { !later.contains($0.doc.title) }, cursor: 412))
+try variant("dossier-bijwerken", "sync~cursor=412&limit=50.json",
+            delta(later.map { t in built.first { $0.doc.title == t }! }, cursor: 418))
+// Nog niet op deze iPhone: Loonstrook 2026-10 is 0,4 MB and its file answers 503.
+for name in ["dossier-niet-binnen", "dossier-niet-binnen-offline"] {
+    try variant(name, "sync.json", delta(built, cursor: 412, sizes: [id("Loonstrook 2026-10"): 420_000]))
+}
 
 let texts = docs.compactMap { doc in
     doc.text.map { """

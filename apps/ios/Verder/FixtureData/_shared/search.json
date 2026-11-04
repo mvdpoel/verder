@@ -10,11 +10,50 @@
       "link": "verder://document/00000000-f1c5-4000-8000-200000000311"
     },
     {
+      "entityType": "email",
+      "entityId": "00000000-f1c5-4000-8000-400000000021",
+      "title": "Bijzondere bijstand: welke stukken nog?",
+      "snippet": "Welke stukken heb je al voor de «bijzondere» «bijstand»?",
+      "occurredAt": "2026-10-28T10:12:00.000Z",
+      "status": null,
+      "link": null,
+      "from": "Ilse, Noordkust"
+    },
+    {
+      "entityType": "task",
+      "entityId": "00000000-f1c5-4000-8000-000000000004",
+      "title": "Formulier bijzondere bijstand ondertekenen",
+      "snippet": "Ondertekenen en terugsturen naar Gemeente Westerlaan.",
+      "occurredAt": "2026-11-03T16:00:00.000Z",
+      "status": "open",
+      "link": "verder://task/00000000-f1c5-4000-8000-000000000004"
+    },
+    {
+      "entityType": "task",
+      "entityId": "00000000-f1c5-4000-8000-300000000016",
+      "title": "Besluit bijzondere bijstand",
+      "snippet": "Gemeente Westerlaan neemt binnen acht weken een besluit.",
+      "occurredAt": "2026-10-30T09:00:00.000Z",
+      "status": "waiting",
+      "link": "verder://task/00000000-f1c5-4000-8000-300000000016",
+      "assigneeName": "Gemeente Westerlaan"
+    },
+    {
+      "entityType": "entry",
+      "entityId": "00000000-f1c5-4000-8000-500000000031",
+      "title": "Telefoongesprek met Gemeente Westerlaan",
+      "snippet": "Gebeld over de aanvraag «bijzondere» «bijstand».",
+      "occurredAt": "2026-10-27T13:30:00.000Z",
+      "status": null,
+      "link": null,
+      "channel": "phone"
+    },
+    {
       "entityType": "document",
       "entityId": "00000000-f1c5-4000-8000-200000000310",
       "title": "Bevestiging aanmelding Noordkust",
       "snippet": "Team Startdossier helpt ook met de aanvraag «bijzondere» «bijstand».",
-      "occurredAt": "2026-05-11T09:00:00.000Z",
+      "occurredAt": "2026-09-18T09:00:00.000Z",
       "status": "filed",
       "link": "verder://document/00000000-f1c5-4000-8000-200000000310"
     }

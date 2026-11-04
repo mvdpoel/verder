@@ -1,0 +1,7 @@
+{
+  "description": "A first sync of 12 documents whose sixth file finds no network: five kept, \"onderbroken \u00b7 wacht op verbinding\", \"Haal de rest op\".",
+  "offlinePaths": [
+    "documents/00000000-f1c5-4000-8000-200000000105/file"
+  ],
+  "keptAt": "2026-11-01T13:02:00Z"
+}
