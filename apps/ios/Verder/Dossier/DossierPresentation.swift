@@ -161,10 +161,26 @@ enum DossierLine {
         ["wacht op jou"] + [happenedAt.map { day($0, now: now) }].compactMap { $0 }
     }
 
-    /// Mono readout parts on one line: uppercase, joined so a wrap falls
-    /// after a " ·", never before (`HomeSummary.metaLine`).
+    /// Mono readout parts on one line: uppercase, each part kept whole, and
+    /// joined so that where the line wraps the "·" STARTS the next line
+    /// ("WACHT OP JOU · TE LAAT" / "· 30 OKT") and never ends one — the rule
+    /// the detail labels follow (4029dfe).
     static func joined(_ parts: [String]) -> String {
-        HomeSummary.metaLine(parts.map { $0.uppercased() })
+        parts.map { $0.uppercased().replacingOccurrences(of: " ", with: "\u{00A0}") }
+            .joined(separator: " ·\u{00A0}")
+    }
+
+    /// The viewer's title: the document's own title without the day at its
+    /// end when it ends on that day ("Brief Gemeente Westerlaan 30 okt" →
+    /// "Brief Gemeente Westerlaan", the final frames), so the 28 pt title
+    /// fits one line; a title that only says a day elsewhere, or says
+    /// nothing else, is kept whole. VoiceOver still reads the full title.
+    static func viewerTitle(_ title: String, receivedAt: Date) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        let day = " " + MoneyFormat.day(receivedAt)
+        guard trimmed.lowercased().hasSuffix(day.lowercased()) else { return trimmed }
+        let rest = String(trimmed.dropLast(day.count)).trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty ? trimmed : rest
     }
 }
 
@@ -229,6 +245,43 @@ enum DossierProgressCopy {
     /// "documenten · 5 van 12 binnen".
     static func documentsLabel(held: Int, total: Int?) -> String {
         total.map { "documenten · \(held) van \($0) binnen" } ?? "documenten · \(held) binnen"
+    }
+
+    /// One place in a first sync's list: a document on the phone, or one
+    /// the server listed whose file is still on its way (drawn as a skeleton).
+    enum Row: Equatable, Identifiable {
+        case held(IndexedDoc)
+        case arriving(String)
+
+        var id: String {
+            switch self {
+            case .held(let d): d.id
+            case .arriving(let id): "arriving:\(id)"
+            }
+        }
+    }
+
+    /// The first sync's list in the order it will have when complete: newest
+    /// first, every document in its own place. Files arrive in the server's
+    /// order, not by date, so a place whose file has not come in yet stays a
+    /// skeleton between the ones that have ("5 van 12 binnen" may draw two
+    /// rows, three skeletons, then a row further down). A held document is
+    /// never also drawn as arriving.
+    static func rows(held: [IndexedDoc], waiting: [DossierStore.Arriving]) -> [Row] {
+        let heldIDs = Set(held.map(\.id))
+        let places: [(id: String, at: Date, row: Row)] =
+            held.map { ($0.id, $0.doc.receivedAt, .held($0)) }
+            + waiting.filter { !heldIDs.contains($0.id) }.map { ($0.id, $0.receivedAt, .arriving($0.id)) }
+        return places.sorted { a, b in a.at != b.at ? a.at > b.at : a.id < b.id }.map(\.row)
+    }
+
+    /// How many documents the Documenten label and the "Alles" chip count:
+    /// while a sync runs that knows the whole dossier, the whole of it
+    /// ("documenten · 12" while the 12th is still on its way); else what
+    /// the phone holds.
+    static func documentCount(held: Int, syncing: Bool, total: Int?) -> Int {
+        guard syncing, let total else { return held }
+        return max(held, total)
     }
 }
 

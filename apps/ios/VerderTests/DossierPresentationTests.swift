@@ -249,6 +249,72 @@ struct DossierPresentationTests {
     }
 
     /// Each settled document is reported, so a first sync's list fills as it runs.
+    /// A readout wraps BEFORE a dot, never after it: no line ends on "·"
+    /// (the rule the detail labels follow, 4029dfe).
+    @Test func aReadoutWrapsBeforeTheDot() {
+        let line = DossierLine.joined(["wacht op jou", "te laat", "30 okt"])
+        #expect(line == "WACHT\u{00A0}OP\u{00A0}JOU ·\u{00A0}TE\u{00A0}LAAT ·\u{00A0}30\u{00A0}OKT")
+        // The only breakable spaces are the ones in front of a dot.
+        let breakable = line.enumerated().filter { $0.element == " " }.map(\.offset)
+        let chars = Array(line)
+        #expect(breakable.allSatisfy { chars[$0 + 1] == "·" })
+        #expect(DossierLine.joined(["brief"]) == "BRIEF")
+    }
+
+    /// The viewer's title drops the day it ends on (the final frames), and
+    /// only that.
+    @Test func theViewerTitleDropsTheDayItEndsOn() {
+        let at = parseISODate("2026-10-30T09:00:00Z")!
+        #expect(DossierLine.viewerTitle("Brief Gemeente Westerlaan 30 okt", receivedAt: at) == "Brief Gemeente Westerlaan")
+        #expect(DossierLine.viewerTitle("Loonstrook 2026-10", receivedAt: at) == "Loonstrook 2026-10")
+        // A day that is not the received day, or a title that IS the day, stays.
+        #expect(DossierLine.viewerTitle("Sommatie 14 okt", receivedAt: at) == "Sommatie 14 okt")
+        #expect(DossierLine.viewerTitle("30 okt", receivedAt: at) == "30 okt")
+    }
+
+    /// A first sync keeps a place for every listed document, in date order:
+    /// files arrive in the server's order, so a skeleton can stand between
+    /// two rows that have come in.
+    @Test func theFirstSyncListKeepsAPlaceForEveryDocument() {
+        let held = [Self.doc("a", "Brief", receivedAt: "2026-10-30T09:00:00Z"),
+                    Self.doc("e", "Beschikking", receivedAt: "2026-08-14T09:00:00Z")]
+        let waiting = [DossierStore.Arriving(id: "c", receivedAt: parseISODate("2026-10-28T09:00:00Z")!),
+                       DossierStore.Arriving(id: "a", receivedAt: parseISODate("2026-10-30T09:00:00Z")!),
+                       DossierStore.Arriving(id: "z", receivedAt: parseISODate("2025-03-01T09:00:00Z")!)]
+        let rows = DossierProgressCopy.rows(held: held, waiting: waiting)
+        #expect(rows.map(\.id) == ["a", "arriving:c", "e", "arriving:z"], "a held document is never also arriving")
+        #expect(DossierProgressCopy.rows(held: [], waiting: []).isEmpty)
+    }
+
+    /// The Documenten label counts the whole dossier while a sync that knows
+    /// it runs ("documenten · 12" with the 12th on its way), else what is held.
+    @Test func theDocumentCountIsTheWholeWhileASyncKnowsIt() {
+        #expect(DossierProgressCopy.documentCount(held: 11, syncing: true, total: 12) == 12)
+        #expect(DossierProgressCopy.documentCount(held: 11, syncing: false, total: 12) == 11)
+        #expect(DossierProgressCopy.documentCount(held: 11, syncing: true, total: nil) == 11)
+        #expect(DossierProgressCopy.documentCount(held: 13, syncing: true, total: 12) == 13)
+    }
+
+    /// Sections sit 32 apart, 24 at a compact height (the iPhone SE).
+    @Test func theSectionGapFollowsTheScreenHeight() {
+        #expect(DossierSpacing.sectionGap(screenHeight: 874) == 32)
+        #expect(DossierSpacing.sectionGap(screenHeight: 667) == 24)
+        #expect(DossierSpacing.sectionGap(screenHeight: 600) == 24)
+        #expect(DossierCopy.tasksShown(compact: false) == 2)
+        #expect(DossierCopy.tasksShown(compact: true) == 1)
+        #expect(DossierSpacing.underStatusBar(safeTop: 62) == 0)
+        #expect(DossierSpacing.underStatusBar(safeTop: 20) == 8)
+    }
+
+    /// Zoomed in at the counter, the page starts at the text's leading
+    /// margin, within the page.
+    @Test func aZoomedPageStartsAtTheTextsMargin() {
+        #expect(PageZoom.leadingX(textMinX: 56, pageWidth: 595, visibleWidth: 260, margin: 10) == 46)
+        #expect(PageZoom.leadingX(textMinX: 4, pageWidth: 595, visibleWidth: 260, margin: 10) == 0)
+        #expect(PageZoom.leadingX(textMinX: 500, pageWidth: 595, visibleWidth: 260, margin: 10) == 335)
+        #expect(PageZoom.leadingX(textMinX: nil, pageWidth: 595, visibleWidth: 700, margin: 10) == 0)
+    }
+
     @Test func theStoreReportsEveryDocumentItTakesIn() async throws {
         let server = StubServer()
         server.on { req in
@@ -268,6 +334,8 @@ struct DossierPresentationTests {
         let reports = seen.withLock { $0 }
         #expect(reports.map(\.due) == [2, 2, 2])
         #expect(reports.map(\.done) == [0, 1, 2])
+        // Each listed document waits until its file is settled.
+        #expect(reports.map { $0.waiting.map(\.id) } == [[DossierStoreTests.a, DossierStoreTests.b], [DossierStoreTests.b], []])
     }
 
     /// "Haal nu op" keeps the document (it opens offline next time) and

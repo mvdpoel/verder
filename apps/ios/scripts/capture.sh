@@ -97,7 +97,8 @@
 #            first — the kept copy offline, or a later delta) · filter:<soort>
 #            (a chip tapped, e.g. filter:brief) · zoek:<query> (the search bar
 #            up with it typed) · server ("Zoek op de server" tapped) ·
-#            scroll:<documenten|chips|server> · open:<document id> (the viewer
+#            scroll:<documenten|chips|server|rij:<n>> (rij:<n>: the n-th row,
+#            1 = the newest, first under the pinned bar) · open:<document id> (the viewer
 #            pushed after the first sync) · balie · balie-zoom (the viewer's
 #            "Toon aan de balie", zoomed in) · pagina (the AX5 viewer at its page)
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
@@ -219,8 +220,8 @@ while [ $# -gt 0 ]; do
     --dossier)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
       for d in ${2//,/ }; do
-        case "$d" in refresh|server|balie|balie-zoom|pagina|filter:?*|zoek:?*|scroll:documenten|scroll:chips|scroll:server|open:?*) ;;
-          *) echo "capture.sh: --dossier takes refresh, filter:<soort>, zoek:<query>, server, scroll:<documenten|chips|server>, open:<id>, balie, balie-zoom or pagina" >&2; exit 2 ;; esac
+        case "$d" in refresh|server|balie|balie-zoom|pagina|filter:?*|zoek:?*|scroll:documenten|scroll:chips|scroll:server|scroll:rij:[1-9]*|open:?*) ;;
+          *) echo "capture.sh: --dossier takes refresh, filter:<soort>, zoek:<query>, server, scroll:<documenten|chips|server|rij:<n>>, open:<id>, balie, balie-zoom or pagina" >&2; exit 2 ;; esac
       done
       DOSSIER="$2"
       shift ;;

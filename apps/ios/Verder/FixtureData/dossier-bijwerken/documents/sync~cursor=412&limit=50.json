@@ -1,6 +1,8 @@
 {
   "cursor": 418,
   "more": false,
+  "total": 12,
+  "totalBytes": 16399,
   "upserts": [
     {
       "id": "00000000-f1c5-4000-8000-200000000104",
@@ -31,8 +33,8 @@
       "status": "inbox",
       "receivedAt": "2026-10-29T09:00:00.000Z",
       "mime": "application/pdf",
-      "sizeBytes": 1162,
-      "sha256": "bf4c8b73937953146d994ccf0a46f53a45cf6de6c4e1139af5b3c418e490ed4d",
+      "sizeBytes": 1215,
+      "sha256": "a286f530d95f745fb1ea2e3aaa8f20d0dda70fe815a9906f44fc45b36767ef11",
       "hasText": true
     }
   ],

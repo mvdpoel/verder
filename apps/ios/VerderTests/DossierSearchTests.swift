@@ -59,9 +59,28 @@ struct DossierSearchTests {
         #expect(s.contains("Beschíkking"))
         #expect(s.hasPrefix("…") && s.hasSuffix("…"))
         #expect(s.count < 120)
-        // A title hit needs no snippet; nor does an empty query.
-        #expect(DossierSearch.snippet(Self.doc("y", "Beschikking", text: long), query: "beschikking") == nil)
+        // A title hit shows its text too (the frames' "Formulier bijzondere
+        // bijstand"); an empty query or a text without the word shows none.
+        #expect(DossierSearch.snippet(Self.doc("y", "Beschikking", text: long), query: "beschikking") != nil)
         #expect(DossierSearch.snippet(d, query: "") == nil)
+        #expect(DossierSearch.snippet(Self.doc("z", "Beschikking", text: "Niets hier."), query: "beschikking") == nil)
+    }
+
+    /// Whole words only, "…" only where the text goes on (frame "Zoeken /
+    /// bijstand · op deze iPhone").
+    @Test func snippetCutsAtWordsAndSaysWhereTheTextGoesOn() throws {
+        let form = Self.doc("f", "Formulier bijzondere bijstand",
+                            text: "Aanvraag bijzondere bijstand voor de periode vanaf 1 oktober 2026. Vul alle velden in en onderteken het formulier.")
+        #expect(DossierSearch.snippet(form, query: "bijstand")
+                == "Aanvraag bijzondere bijstand voor de periode vanaf 1 oktober 2026. Vul alle…")
+        let letter = Self.doc("n", "Bevestiging aanmelding Noordkust",
+                              text: "Bewindkantoor Noordkust bevestigt je aanmelding. Team Startdossier helpt bij de aanvraag voor bijzondere bijstand bij de gemeente.")
+        #expect(DossierSearch.snippet(letter, query: "bijstand")
+                == "…aanvraag voor bijzondere bijstand bij de gemeente.")
+        // A cut that would fall inside a word moves to that word's edge.
+        let s = try #require(DossierSearch.snippet(Self.doc("w", "Scan", text: "eenlangwoord bijstand tweedelangwoord"),
+                                                   query: "bijstand", before: 5, after: 5))
+        #expect(s == "…bijstand…")
     }
 
     /// The server marks keyword matches with «…» (ts_headline's StartSel/StopSel).

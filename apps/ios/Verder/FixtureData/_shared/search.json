@@ -4,7 +4,7 @@
       "entityType": "document",
       "entityId": "00000000-f1c5-4000-8000-200000000311",
       "title": "Formulier bijzondere bijstand",
-      "snippet": "Aanvraagformulier «bijzondere» «bijstand» Gemeente Westerlaan.",
+      "snippet": "Aanvraag «bijzondere» «bijstand» voor de periode vanaf 1 oktober 2026.",
       "occurredAt": "2026-10-29T09:00:00.000Z",
       "status": "inbox",
       "link": "verder://document/00000000-f1c5-4000-8000-200000000311"
@@ -52,7 +52,7 @@
       "entityType": "document",
       "entityId": "00000000-f1c5-4000-8000-200000000310",
       "title": "Bevestiging aanmelding Noordkust",
-      "snippet": "Team Startdossier helpt ook met de aanvraag «bijzondere» «bijstand».",
+      "snippet": "Team Startdossier helpt bij de aanvraag voor «bijzondere» «bijstand» bij de gemeente.",
       "occurredAt": "2026-09-18T09:00:00.000Z",
       "status": "filed",
       "link": "verder://document/00000000-f1c5-4000-8000-200000000310"

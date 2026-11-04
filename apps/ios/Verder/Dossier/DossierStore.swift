@@ -92,6 +92,16 @@ actor DossierStore {
         /// The whole dossier, when the delta says (`DossierDelta.total`).
         var total: Int?
         var totalBytes: Int?
+        /// The documents a page listed that this sync has not settled yet,
+        /// with the day each was received: a first sync's list keeps a
+        /// place for each, in date order, while its file is on the way.
+        var waiting: [Arriving] = []
+    }
+
+    /// A listed document whose file has not come in yet.
+    struct Arriving: Equatable, Sendable {
+        let id: String
+        let receivedAt: Date
     }
     typealias ProgressSink = @Sendable (Progress) async -> Void
 
@@ -283,7 +293,9 @@ actor DossierStore {
             let delta: DossierDelta = try await client.getJSON(
                 "\(Self.syncPath)?cursor=\(state.cursor)&limit=\(Self.pageSize)")
             try ensureLive(gen)
-            running.due += delta.upserts.filter { !isCurrent($0) }.count
+            let due = delta.upserts.filter { !isCurrent($0) && UUID(uuidString: $0.id) != nil }
+            running.due += due.count
+            running.waiting += due.map { Arriving(id: $0.id, receivedAt: $0.receivedAt) }
             running.more = delta.more
             running.total = delta.total ?? running.total
             running.totalBytes = delta.totalBytes ?? running.totalBytes
@@ -369,6 +381,7 @@ actor DossierStore {
             }
             try await take(doc, client: client, gen: gen)
             running.done += 1
+            running.waiting.removeAll { $0.id == doc.id }
             await report()
         }
     }

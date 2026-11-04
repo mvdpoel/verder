@@ -86,10 +86,10 @@ let docs: [Doc] = [
         text: "Atelier Sterrenwacht. Jaaropgaaf 2025. Fiscaal loon over het hele jaar."),
     Doc(id: "00000000-f1c5-4000-8000-200000000310", title: "Bevestiging aanmelding Noordkust", docType: "letter",
         status: "filed", receivedAt: "2026-09-18T09:00:00.000Z",
-        text: "Bewindkantoor Noordkust bevestigt je aanmelding. Team Startdossier helpt ook met de aanvraag bijzondere bijstand."),
+        text: "Bewindkantoor Noordkust bevestigt je aanmelding. Team Startdossier helpt bij de aanvraag voor bijzondere bijstand bij de gemeente."),
     Doc(id: "00000000-f1c5-4000-8000-200000000311", title: "Formulier bijzondere bijstand", docType: "other",
         status: "inbox", receivedAt: "2026-10-29T09:00:00.000Z",
-        text: "Aanvraagformulier bijzondere bijstand Gemeente Westerlaan. Handtekening aanvrager."),
+        text: "Aanvraag bijzondere bijstand voor de periode vanaf 1 oktober 2026. Vul alle velden in en onderteken het formulier. Gemeente Westerlaan."),
 ]
 
 /// A PDF string literal: `\`, `(` and `)` escaped. ASCII only, enforced.
@@ -265,18 +265,29 @@ func variant(_ name: String, _ file: String, _ body: String) throws {
 }
 func id(_ title: String) -> String { built.first { $0.doc.title == title }!.doc.id }
 let newestFirst = built.sorted { $0.doc.receivedAt > $1.doc.receivedAt }
-// First sync: 12 documents, 9,8 MB, newest first; the sixth file never answers
-// (`neverPaths`) or has no network (`offlinePaths`), after 4,1 MB.
+// First sync: 12 documents, 9,8 MB. The server lists them in ITS order, not
+// by date, so files arrive out of date order: the two newest, then three
+// older ones (4,1 MB in all); the sixth — Loonstrook 2026-10 — never answers
+// (`neverPaths`) or has no network (`offlinePaths`). The list keeps a
+// skeleton in each place still on its way (frame "Dossier / eerste sync":
+// two rows, then skeletons).
 let mb = [1_200_000, 900_000, 400_000, 800_000, 800_000, 600_000, 900_000, 1_100_000, 500_000, 700_000, 1_200_000, 700_000]
 let sizes = Dictionary(uniqueKeysWithValues: zip(newestFirst.map(\.doc.id), mb))
+let arrivalFirst = ["Brief Gemeente Westerlaan 30 okt", "Formulier bijzondere bijstand", "Beschikking Rechtbank Westerlaan",
+                    "Huurcontract Lindehof", "Loonstrook 2026-09", "Loonstrook 2026-10"]
+let arrival = arrivalFirst.map { t in built.first { $0.doc.title == t }! }
+    + newestFirst.filter { !arrivalFirst.contains($0.doc.title) }
 for name in ["dossier-eerste-sync", "dossier-onderbroken"] {
-    try variant(name, "sync.json", delta(newestFirst, cursor: 412, sizes: sizes, total: (12, mb.reduce(0, +))))
+    try variant(name, "sync.json", delta(arrival, cursor: 412, sizes: sizes, total: (12, mb.reduce(0, +))))
 }
 // Bijwerken: the phone took nine; the next delta brings three new ones.
 let later = ["Loonstrook 2026-10", "Brief Gemeente Westerlaan 30 okt", "Formulier bijzondere bijstand"]
 try variant("dossier-bijwerken", "sync.json", delta(built.filter { !later.contains($0.doc.title) }, cursor: 412))
+// The later delta says the whole dossier (12), so the Documenten label
+// counts 12 while the third is still on its way.
+let built12 = built.reduce(0) { $0 + $1.bytes.count }
 try variant("dossier-bijwerken", "sync~cursor=412&limit=50.json",
-            delta(later.map { t in built.first { $0.doc.title == t }! }, cursor: 418))
+            delta(later.map { t in built.first { $0.doc.title == t }! }, cursor: 418, total: (12, built12)))
 // Nog niet op deze iPhone: Loonstrook 2026-10 is 0,4 MB and its file answers 503.
 for name in ["dossier-niet-binnen", "dossier-niet-binnen-offline"] {
     try variant(name, "sync.json", delta(built, cursor: 412, sizes: [id("Loonstrook 2026-10"): 420_000]))

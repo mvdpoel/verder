@@ -2,9 +2,10 @@ import SwiftUI
 
 /// The Dossier tab: the case in Martin's pocket ("dossier · final",
 /// 2026-11-03). The age of the copy and the title, the search field, where
-/// the case waits, the Tijdlijn, the open tasks, then every document newest
-/// first under the soort chips. Scrolled down, the title collapses into the
-/// bar and the search field, the chips and the documents' label stay pinned
+/// the case waits (with the way into the Tijdlijn beside its label), the
+/// open tasks, then every document newest first under the soort chips.
+/// Scrolled down, the title collapses into the bar and — at the regular
+/// sizes — the search field, the chips and the documents' label stay pinned
 /// above the rows. Searching, the bar is the search field and "Annuleer".
 ///
 /// It renders from the phone's own copy at once (offline included, with the
@@ -34,6 +35,15 @@ struct DossierTab: View {
     @State private var titleBottom: CGFloat = 100
     @State private var labelTop: CGFloat = 10_000
     @State private var pinnedTop: CGFloat = 0
+    /// The bar's bottom and the list's places, on screen: what tucks a row
+    /// exactly under the pinned bar (a soort chosen, a capture's offset).
+    @State private var barBottom: CGFloat = 0
+    @State private var placeTops: [String: CGFloat] = [:]
+    @State private var scrollOffset: CGFloat = 0
+    @State private var position = ScrollPosition(edge: .top)
+    /// The screen's height: at a compact height (the iPhone SE's 667 pt)
+    /// the sections sit 24 apart instead of 32 (the final frames' rule).
+    @State private var screenHeight: CGFloat = 874
     /// The search bar asks for the keyboard when it opens from a tap.
     @State private var focusOnOpen = false
     /// A refresh pulled by hand shows the system's own spinner; the header's
@@ -42,6 +52,14 @@ struct DossierTab: View {
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     private var now: Date { model.now() }
+    private var sectionGap: CGFloat { DossierSpacing.sectionGap(screenHeight: screenHeight) }
+    /// One open task instead of two on a short screen or at the
+    /// accessibility sizes (the SE and AX5 frames).
+    private var compactHeight: Bool { ax || DossierSpacing.isCompact(screenHeight: screenHeight) }
+    /// The status bar's own height: a phone without a notch (the SE) puts
+    /// the content straight under it, where the frames keep 8 pt free.
+    @State private var safeTop: CGFloat = 62
+    private var underStatusBar: CGFloat { DossierSpacing.underStatusBar(safeTop: safeTop) }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -75,6 +93,13 @@ struct DossierTab: View {
         }
         .tint(Color.signalLink)
         .preferredColorScheme(.dark)
+        .onAppear {
+            // The screen's own height: what "compact" means is a fact about
+            // the phone, not about how much room this tab was given.
+            if let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen {
+                screenHeight = screen.bounds.height
+            }
+        }
         .task {
             await model.loadCached()
             #if DEBUG
@@ -124,22 +149,29 @@ struct DossierTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
+                        .padding(.top, underStatusBar - 2)
                         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).maxY } action: { titleBottom = $0 }
-                    searchButton.padding(.top, ax ? 16 : 20)
+                    searchButton.padding(.top, 14)
                     if let card = model.firstSyncCard {
                         syncCard(card).padding(.top, 24)
                     } else {
-                        headlineSection.padding(.top, 24)
-                        timelineRow.padding(.top, 16)
-                        tasksSection.padding(.top, 20)
+                        headlineSection.padding(.top, ax ? 24 : (compactHeight ? 16 : 22))
+                        tasksSection.padding(.top, sectionGap)
                     }
                     documentsHeader(pinned: false)
                         // Pinned, the bar draws it; never both at once.
                         .opacity(isPinned ? 0 : 1)
-                        .padding(.top, 32)
+                        .padding(.top, sectionGap)
                         .id(DossierAnchor.documents)
                         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).minY } action: { labelTop = $0 }
-                    documentsBody.padding(.top, 12)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                            placeTops[DossierPlace.header] = $0
+                        }
+                    Color.clear.frame(height: 0)
+                        .id(DossierAnchor.list)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { placeTops[DossierPlace.list] = $0 }
+                        .padding(.top, 8)
+                    documentsBody
                     // A short filtered list can still scroll up under the bar.
                     if model.kind != nil { Color.clear.frame(height: 480) }
                 }
@@ -150,23 +182,48 @@ struct DossierTab: View {
                 .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
             }
             .scrollDismissesKeyboard(.immediately)
+            .scrollPosition($position)
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
+                scrollOffset = y
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
             .refreshable {
                 pulled = true
                 await refresh()
                 pulled = false
             }
             .overlay(alignment: .top) { compactBar }
+            // A soort chosen in the pinned bar starts its list at the top,
+            // right under the bar — never with its first row hidden behind it.
+            .onChange(of: model.kind) { _, _ in
+                guard isPinned else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    tuck(DossierPlace.list)
+                }
+            }
             #if DEBUG
             .task(id: model.loaded) { await fixtureScroll(proxy) }
             #endif
         }
     }
 
+    /// Scrolls so the place `key` (the list's top, or a row) starts exactly
+    /// at the pinned bar's bottom edge.
+    private func tuck(_ key: String) {
+        guard let top = placeTops[key], barBottom > 0 else { return }
+        // The place starts at the bar's lip (`PanelLip`), the card's edge.
+        let edge = barBottom - PanelLip.height + (key == DossierPlace.list ? 0 : 1)
+        position.scrollTo(y: max(0, scrollOffset + top - edge))
+    }
+
     /// The bar that takes over once the page scrolls: the title alone after
     /// the big title has gone, then — once the documents reach it — the
     /// search field, the chips and the documents' label too, pinned.
     private var isPinned: Bool {
-        model.loaded && model.firstSyncCard == nil && !model.docs.isEmpty && labelTop <= pinnedTop
+        // At the accessibility sizes nothing pins: the field, its hint and
+        // every chip would fill most of the screen (the AX5 frames).
+        !ax && model.loaded && model.firstSyncCard == nil && !model.docs.isEmpty && labelTop <= pinnedTop
     }
 
     @ViewBuilder private var compactBar: some View {
@@ -176,31 +233,39 @@ struct DossierTab: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(DossierCopy.title)
                         .font(.display(17, relativeTo: .headline, weight: .medium))
+                        // An inline bar title: it stays small at every size
+                        // (the AX5 frame), the big title above says it large.
+                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
                         .foregroundStyle(Color.inkBright)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 44)
                         .accessibilityAddTraits(.isHeader)
                     if pinned {
-                        searchButton.padding(.top, 8)
+                        searchButton
                         chips.padding(.top, 8)
                     }
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, underStatusBar - 8)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pinnedTop = $0 + (pinned ? 0 : 140) }
                 if pinned {
                     Hairline().padding(.top, 4)
-                    documentsLabel.padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 8)
+                    documentsLabel.padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 7)
+                    // The list card's own top edge: the rows tuck under it
+                    // rather than reading as sliced off at the bar.
+                    PanelLip().padding(.horizontal, 16)
                 }
             }
             .background(Color.void.ignoresSafeArea(edges: .top))
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { barBottom = $0 }
             .transition(.opacity)
         }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             if !pulled, model.isSyncing, model.syncedAt != nil, (model.progress?.due ?? 0) > 0 {
-                ProgressView().tint(Color.inkLabel).frame(maxWidth: .infinity).padding(.bottom, 20)
+                ProgressView().tint(Color.inkLabel).frame(maxWidth: .infinity).padding(.top, 15).padding(.bottom, 18)
             }
             if let line = model.eyebrow {
                 Text(ax ? line : line.uppercased())
@@ -279,8 +344,19 @@ struct DossierTab: View {
     // MARK: Waar het nu op wacht
 
     @ViewBuilder private var headlineSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel(DossierCopy.headlineLabel)
+        VStack(alignment: .leading, spacing: 8) {
+            labelRow(sectionLabel(DossierCopy.headlineLabel)) {
+                // The way into the Tijdlijn (Martin, 2026-11-03: "I'm also
+                // missing the timeline from the web app"), as a link beside
+                // the label it explains rather than a card of its own, so the
+                // documents keep their place on the first screen (the frames).
+                // At the accessibility sizes it would take a line of its own,
+                // and the headline card below opens the Tijdlijn already.
+                if !ax || inbox.summary?.headline == nil {
+                    link(TimelineCopy.rowTitle) { path.append(.timeline) }
+                        .accessibilityHint(TimelineCopy.rowLine)
+                }
+            }
             if let h = inbox.summary?.headline {
                 // The way into the Tijdlijn at what waits: the NU sheet comes up.
                 Button { path.append(.timelineNow) } label: { headlineCard(h) }
@@ -318,63 +394,28 @@ struct DossierTab: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.void, in: RoundedRectangle(cornerRadius: Radius.panel))
+        // The glow is the card's, around its edge; the words stay crisp.
+        .background { RoundedRectangle(cornerRadius: Radius.panel).fill(Color.void).glow(Glow.attn) }
         .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(Color.attn, lineWidth: 1))
-        .glow(Glow.attn)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-    }
-
-    /// The way into the Tijdlijn, right under the headline it explains
-    /// (Martin, 2026-11-03: "I'm also missing the timeline from the web app").
-    private var timelineRow: some View {
-        Button { path.append(.timeline) } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(TimelineCopy.rowTitle)
-                        .font(.display(17, relativeTo: .body, weight: .medium))
-                        .foregroundStyle(Color.inkBright)
-                    // The map's own count once it is on the phone.
-                    let line = timeline.map.map { TimelineCopy.stats($0).joined(separator: " · ") } ?? TimelineCopy.rowLine
-                    Text(ax ? HomeSummary.sentence(line) : line.uppercased())
-                        .font(.mono(12, relativeTo: .caption)).monoCap()
-                        .foregroundStyle(Color.inkLabel)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                chevron
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .glassPanel()
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: Open taken
 
     @ViewBuilder private var tasksSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                sectionLabel(DossierCopy.tasksLabel, count: model.tasks?.count)
-                Spacer(minLength: 8)
-                if let n = model.tasks?.count, n > DossierCopy.tasksShown {
-                    Button(DossierCopy.seeAllTasks(n), action: openVoorJou)
-                        .font(.display(15, relativeTo: .subheadline))
-                        .foregroundStyle(Color.signalLink)
-                        .frame(minHeight: 44)
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 8) {
+            labelRow(sectionLabel(DossierCopy.tasksLabel, count: model.tasks?.count)) {
+                if let n = model.tasks?.count, n > DossierCopy.tasksShown(compact: compactHeight) {
+                    link(DossierCopy.seeAllTasks(n), action: openVoorJou)
                 }
             }
-            .frame(minHeight: 24)
             VStack(alignment: .leading, spacing: 0) {
                 if let tasks = model.tasks {
                     if tasks.isEmpty {
                         muted(DossierCopy.noTasks).padding(16)
                     } else {
-                        let shown = DossierCopy.byDue(tasks).prefix(DossierCopy.tasksShown)
+                        let shown = DossierCopy.byDue(tasks).prefix(DossierCopy.tasksShown(compact: compactHeight))
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, task in
                             if i > 0 { Hairline().padding(.horizontal, 16) }
                             Button { path.append(.task(task.id)) } label: { taskRow(task) }
@@ -393,9 +434,9 @@ struct DossierTab: View {
     }
 
     private func taskRow(_ t: TaskDTO) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            amberDot
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .center, spacing: 0) {
+            amberDot.padding(.trailing, 12)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(t.title)
                     .font(.display(17, relativeTo: .body))
                     .foregroundStyle(Color.inkBright)
@@ -403,10 +444,11 @@ struct DossierTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                 readout(DossierLine.task(dueAt: t.dueAt, now: now), amber: true)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: DossierSpacing.toChevron)
             chevron
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -424,7 +466,7 @@ struct DossierTab: View {
     /// "DOCUMENTEN · 12 · NIEUWSTE EERST" and the chips; pinned in the bar
     /// once it reaches the top.
     @ViewBuilder private func documentsHeader(pinned: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             documentsLabel
             if model.firstSyncCard == nil, !model.docs.isEmpty { chips }
         }
@@ -434,50 +476,66 @@ struct DossierTab: View {
         let filtered = model.kind != nil
         let label: String = {
             if model.firstSyncCard != nil { return DossierProgressCopy.documentsLabel(held: model.docs.count, total: model.progress?.total) }
-            if filtered { return "documenten · \(model.shownDocs.count) van \(model.docs.count)" }
-            return model.loaded ? "documenten · \(model.docs.count)" : "documenten"
+            if filtered { return "documenten · \(model.shownDocs.count) van \(model.documentCount)" }
+            return model.loaded ? "documenten · \(model.documentCount)" : "documenten"
         }()
         let trailing: some View = Group {
             if filtered {
-                Button(DossierSearchCopy.clearFilter) { model.kind = nil }
-                    .font(.display(15, relativeTo: .subheadline))
-                    .foregroundStyle(Color.signalLink)
-                    .frame(minHeight: 44)
-                    .buttonStyle(.plain)
+                link(DossierSearchCopy.clearFilter) { model.kind = nil }
             } else if model.firstSyncCard == nil, !model.docs.isEmpty {
                 Text(ax ? DossierSearchCopy.newestFirst : DossierSearchCopy.newestFirst.uppercased())
                     .font(.mono(12, relativeTo: .caption)).monoCap().tracking(ax ? 0 : 1)
                     .foregroundStyle(Color.inkLabel)
             }
         }
+        labelRow(sectionLabel(label)) { trailing }
+    }
+
+    /// A section label with something at its trailing end ("Toon alle 6",
+    /// "Wis filter"): the trailing part keeps its 44 pt hit area without
+    /// making the row taller than its label. At the accessibility sizes it
+    /// goes under the label, which needs the whole width.
+    @ViewBuilder private func labelRow(_ label: some View, @ViewBuilder trailing: () -> some View) -> some View {
         if ax {
             VStack(alignment: .leading, spacing: 4) {
-                sectionLabel(label)
-                trailing
+                label
+                trailing()
             }
         } else {
-            HStack(alignment: .firstTextBaseline) {
-                sectionLabel(label)
-                Spacer(minLength: 8)
-                trailing
-            }
-            .frame(minHeight: 20)
+            label
+                .padding(.trailing, 120)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .trailing) { trailing() }
         }
     }
 
+    private func link(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.display(15, relativeTo: .subheadline))
+            .foregroundStyle(Color.signalLink)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+    }
+
     private var chips: some View {
-        KindChips(kinds: model.kinds, total: model.docs.count, selected: model.kind, ax: ax) { model.kind = $0 }
+        KindChips(kinds: model.kinds, total: model.documentCount, selected: model.kind, ax: ax) { model.kind = $0 }
     }
 
     @ViewBuilder private var documentsBody: some View {
         if let card = model.firstSyncCard {
-            let left = max(0, (model.progress?.total ?? (model.docs.count + 3)) - model.docs.count)
+            // Every listed document in its own place, newest first; a place
+            // whose file is still on its way is a skeleton.
+            let rows = model.firstSyncRows
             VStack(alignment: .leading, spacing: 0) {
-                documentRows(model.docs)
-                ForEach(0..<min(3, left), id: \.self) { i in
-                    if i > 0 || !model.docs.isEmpty { Hairline().padding(.horizontal, 16) }
-                    SkeletonRow()
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    if i > 0 { Hairline().padding(.horizontal, 16) }
+                    switch row {
+                    case .held(let d): documentRow(d)
+                    case .arriving: SkeletonRow()
+                    }
                 }
+                if rows.isEmpty { SkeletonRow() }
             }
             .glassPanel()
             .accessibilityHint(card.headline)
@@ -497,6 +555,15 @@ struct DossierTab: View {
     private func documentRows(_ docs: [IndexedDoc], filtered: Bool = false, query: String = "") -> some View {
         ForEach(Array(docs.enumerated()), id: \.element.id) { i, d in
             if i > 0 { Hairline().padding(.horizontal, 16) }
+            documentRow(d, filtered: filtered, query: query)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                    placeTops[DossierPlace.row(i)] = $0
+                }
+        }
+    }
+
+    private func documentRow(_ d: IndexedDoc, filtered: Bool = false, query: String = "") -> some View {
+        Group {
             let row = DossierDocRow(symbol: DossierKinds.symbol(d.doc.docType),
                                     title: DossierSearchCopy.marked(d.doc.title, query: query),
                                     parts: DossierLine.row(d, filtered: filtered, inSearch: !query.isEmpty, now: now),
@@ -532,10 +599,8 @@ struct DossierTab: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let f = card.fraction {
                 GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.hairline)
-                        Capsule().fill(card.interrupted ? Color.inkLabel : Color.signal).frame(width: g.size.width * f)
-                    }
+                    // The part that is in, and nothing for the rest (the frames).
+                    Capsule().fill(card.interrupted ? Color.inkLabel : Color.signal).frame(width: g.size.width * f)
                 }
                 .frame(height: 3)
                 .frame(maxWidth: .infinity)
@@ -574,7 +639,7 @@ struct DossierTab: View {
                         serverResults
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 24)
+                    .padding(.top, 16)
                     .padding(.bottom, 32)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .lineHeight(.multiple(factor: HomeType.sairaLineFactor))
@@ -642,7 +707,7 @@ struct DossierTab: View {
             if !model.docs.isEmpty { chips }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.top, 0)
         .padding(.bottom, 12)
         .overlay(alignment: .bottom) { Hairline() }
         .task {
@@ -816,22 +881,27 @@ struct DossierTab: View {
         case .task(let id)?: .task(id.uuidString.lowercased())
         default: nil
         }
-        let row = HStack(alignment: .center, spacing: 14) {
-            if waits { amberDot } else {
-                Image(systemName: ServerHits.symbol(hit)).font(.system(size: 15)).foregroundStyle(Color.inkLabel)
-                    .frame(width: 18).accessibilityHidden(true)
+        let row = HStack(alignment: .center, spacing: 0) {
+            Group {
+                if waits { amberDot } else {
+                    Image(systemName: ServerHits.symbol(hit)).font(.system(size: 15)).foregroundStyle(Color.inkLabel)
+                        .frame(width: 18).accessibilityHidden(true)
+                }
             }
-            VStack(alignment: .leading, spacing: 6) {
+            .padding(.trailing, 14)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(DossierDocRow.attributed(DossierSearchCopy.marked(hit.title, query: model.query), size: 17))
                     .foregroundStyle(Color.inkBright)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 readout(ServerHits.detail(hit, now: now), amber: waits)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: opens != nil ? DossierSpacing.toChevron : 0)
             if opens != nil { chevron }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(minHeight: ax ? 44 : DossierSpacing.rowMinHeight)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -912,8 +982,27 @@ struct DossierTab: View {
         for case .scroll(let target) in states {
             try? await Task.sleep(for: .milliseconds(400))
             switch target {
-            case "documenten": proxy.scrollTo(DossierAnchor.documents, anchor: UnitPoint(x: 0, y: 0.02))
-            case "chips": proxy.scrollTo(DossierAnchor.documents, anchor: UnitPoint(x: 0, y: 0.48))
+            case "documenten":
+                // The list's top tucked under the pinned bar.
+                proxy.scrollTo(DossierAnchor.documents, anchor: .top)
+                try? await Task.sleep(for: .milliseconds(500))
+                tuck(DossierPlace.list)
+            case _ where target.hasPrefix("rij:"):
+                // `scroll:rij:<n>`: the n-th row (1 = the newest) first under the bar.
+                guard let n = Int(target.dropFirst(4)), n >= 1 else { return }
+                proxy.scrollTo(DossierAnchor.documents, anchor: .top)
+                try? await Task.sleep(for: .milliseconds(500))
+                tuck(DossierPlace.row(n - 1))
+                try? await Task.sleep(for: .milliseconds(400))
+                tuck(DossierPlace.row(n - 1))
+            case "chips":
+                // The documents' label and chips a little below the middle,
+                // the open task's end above them (frame "AX5 · verder gescrold").
+                proxy.scrollTo(DossierAnchor.documents, anchor: .center)
+                try? await Task.sleep(for: .milliseconds(500))
+                if let top = placeTops[DossierPlace.header] {
+                    position.scrollTo(y: max(0, scrollOffset + top - screenHeight * 0.53))
+                }
             case "server":
                 guard case .done = model.server else { return }
                 proxy.scrollTo(DossierAnchor.server, anchor: UnitPoint(x: 0, y: 0.2))
@@ -924,7 +1013,46 @@ struct DossierTab: View {
     #endif
 }
 
-enum DossierAnchor: Hashable { case documents, server }
+enum DossierAnchor: Hashable { case documents, list, server }
+
+/// The places `DossierTab.tuck` can bring to the pinned bar's edge.
+enum DossierPlace {
+    static let list = "list"
+    static let header = "header"
+    static func row(_ i: Int) -> String { "row:\(i)" }
+}
+
+/// The Dossier's measured spacing ("dossier · final").
+enum DossierSpacing {
+    /// A one-line document row: title and readout at 12/12, held at 68.
+    static let rowMinHeight: CGFloat = 68
+    /// Between a row's text and its chevron.
+    static let toChevron: CGFloat = 18
+    /// Between sections: 32 at a regular height, 24 at a compact one (the
+    /// iPhone SE's 667 pt and less).
+    static func sectionGap(screenHeight: CGFloat) -> CGFloat { isCompact(screenHeight: screenHeight) ? 24 : 32 }
+    static func isCompact(screenHeight: CGFloat) -> Bool { screenHeight <= 667 }
+    /// Room between the status bar and the content: a notched phone's safe
+    /// area already leaves it; one without (the SE's 20 pt bar) gets 8.
+    static func underStatusBar(safeTop: CGFloat) -> CGFloat { safeTop < 40 ? 8 : 0 }
+}
+
+/// The top edge of the list card, drawn under the pinned bar so the rows
+/// scrolling up go in under a card's edge instead of being cut by the bar.
+struct PanelLip: View {
+    static let height: CGFloat = 4
+
+    var body: some View {
+        let shape = UnevenRoundedRectangle(topLeadingRadius: Radius.panel, topTrailingRadius: Radius.panel)
+        shape.fill(Color.glassA)
+            .overlay(shape.stroke(Color.edge, lineWidth: 1).padding(.bottom, -2).clipped())
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.edgeLit).frame(height: 1).padding(.horizontal, Radius.panel)
+            }
+            .frame(height: Self.height)
+            .accessibilityHidden(true)
+    }
+}
 
 extension View {
     /// Mono readouts stop growing at AX3: the frames set them 28 at AX5
@@ -949,14 +1077,18 @@ struct DossierDocRow: View {
 
     var body: some View {
         let ax = typeSize.isAccessibilitySize
-        HStack(alignment: .center, spacing: 14) {
+        // A search hit's glyph and chevron stand at its title's first line
+        // (the text under it can run three lines); a plain row centres them.
+        let lead = snippet?.isEmpty == false
+        HStack(alignment: lead ? .firstTextBaseline : .center, spacing: 0) {
             Image(systemName: symbol)
                 .font(.system(size: 15))
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .foregroundStyle(Color.inkLabel)
                 .frame(width: 18)
+                .padding(.trailing, 14)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(Self.attributed(title, size: 17))
                     .foregroundStyle(Color.inkBright)
                     .lineLimit(ax ? nil : 2)
@@ -983,7 +1115,7 @@ struct DossierDocRow: View {
                         .padding(.top, 8)
                 }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: DossierSpacing.toChevron)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.inkFaint)
@@ -991,7 +1123,9 @@ struct DossierDocRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(minHeight: 44)
+        // One-line rows keep 68 by intent (the frames' row model); two-line
+        // rows hug their text at 12/12.
+        .frame(minHeight: ax ? 44 : DossierSpacing.rowMinHeight)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -1118,7 +1252,7 @@ struct SkeletonRow: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .frame(minHeight: 62)
+        .frame(minHeight: DossierSpacing.rowMinHeight)
         .accessibilityLabel("Laden")
     }
 }

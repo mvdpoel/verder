@@ -169,10 +169,10 @@ Het veld heeft een wisknop ("Wis zoekopdracht" voor VoiceOver). Een zoekopdracht
 - de regel "wacht op jou · <datum>" met het amber (UI);
 - de kop offline bij een koude start. De samenvatting van `InboxStore` staat alleen in het geheugen, dus de samenvatting moet in de cache, of gelezen worden uit de widget-snapshot, die de kop al bevat.
 
-#### 16. De Tijdlijn-rij
-"Tijdlijn" met de regel "De zaak, het nieuwste bovenaan" (`TimelineCopy`). Hij opent de zaakkaart (`TimelineScreen`), de "vertical read-only version of the case map" uit de spec (§7.5). Hij is op 2026-11-03 toegevoegd op verzoek van Martin ("I'm also missing the timeline from the web app in the app") en staat niet in de Figma-frames.
+#### 16. De ingang naar de Tijdlijn
+Een link "Tijdlijn" rechts naast het label "WAAR HET NU OP WACHT" (zoals "Toon alle 6" naast "OPEN TAKEN"). Hij opent de zaakkaart (`TimelineScreen`), de "vertical read-only version of the case map" uit de spec (§7.5). Hij is op 2026-11-03 toegevoegd op verzoek van Martin ("I'm also missing the timeline from the web app in the app") en staat niet in de Figma-frames. Eerst was het een eigen kaart onder de kop; die duwde de documenten van het eerste scherm (op de iPhone SE ook de tweede taak), dus sinds 2026-11-04 is het een link die geen ruimte kost. Bij de toegankelijkheidsgrootten staat hij er alleen als er geen kopkaart is: de kopkaart opent de Tijdlijn zelf al. Martin moet nog bevestigen dat dit de ingang is.
 
-**Status:** Gebouwd (`Dossier/DossierTab.swift` `timelineRow`, `Timeline/`, `apps/web/src/app/api/mobile/v1/case-map/route.ts`).
+**Status:** Gebouwd (`Dossier/DossierTab.swift` `headlineSection`, `Timeline/`, `apps/web/src/app/api/mobile/v1/case-map/route.ts`).
 
 #### 17. "OPEN TAKEN" met een aantal
 - Bron: `GET /api/mobile/v1/tasks`, op de telefoon gefilterd op `open` en `in-progress` (`DossierCopy.openTasks`). Dit is de ene definitie van wachten op Martin (`WAITING_TASK_STATUSES` in `packages/api/src/waiting.ts`).

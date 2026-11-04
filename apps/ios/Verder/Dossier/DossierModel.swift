@@ -111,8 +111,10 @@ enum DossierCopy {
         return freshness
     }
 
-    /// How many open tasks the tab lists before "Toon alle".
-    static let tasksShown = 2
+    /// How many open tasks the tab lists before "Toon alle": two, one at a
+    /// compact height (the iPhone SE frame), so the documents still start
+    /// on the first screen.
+    static func tasksShown(compact: Bool) -> Int { compact ? 1 : 2 }
     static func seeAllTasks(_ n: Int) -> String { "Toon alle \(n)" }
 
     /// The open tasks as the tab lists them: the most pressing first — the
@@ -240,6 +242,16 @@ final class DossierModel {
 
     /// The soort chips, counted on the phone's copy.
     var kinds: [DossierKind] { DossierKinds.counts(docs) }
+    /// What the Documenten label and the "Alles" chip count
+    /// (`DossierProgressCopy.documentCount`).
+    var documentCount: Int {
+        DossierProgressCopy.documentCount(held: docs.count, syncing: isSyncing, total: progress?.total)
+    }
+    /// A first sync's list: every held document and a place for each one on
+    /// its way, newest first (`DossierProgressCopy.rows`).
+    var firstSyncRows: [DossierProgressCopy.Row] {
+        DossierProgressCopy.rows(held: docs, waiting: progress?.waiting ?? [])
+    }
     /// The list as the chips narrow it.
     var shownDocs: [IndexedDoc] { DossierKinds.filter(docs, kind: kind) }
     /// Held documents with no recognised text: found by their title only.

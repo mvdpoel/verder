@@ -57,7 +57,7 @@ final class DocumentViewerModel {
 
     @ObservationIgnored let id: String
     @ObservationIgnored private let store: DossierStore
-    @ObservationIgnored private let client: APIClient
+    @ObservationIgnored let client: APIClient
     @ObservationIgnored private let dossier: DossierModel?
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
 
@@ -149,6 +149,9 @@ struct DocumentViewer: View {
     @State private var model: DocumentViewerModel
     @State private var pager = PDFPager()
     @State private var counter = false
+    /// The AX column has scrolled under the bar: its hairline shows.
+    @State private var scrolled = false
+    @Environment(\.dismiss) private var dismiss
     private let dossier: DossierModel?
     /// Opened from the list's "Toon aan de balie": the counter comes up as
     /// soon as the document is on screen.
@@ -166,14 +169,30 @@ struct DocumentViewer: View {
     }
 
     private var now: Date { dossier?.now() ?? Date() }
-    private var shownTitle: String { model.record?.title ?? title }
+    /// The document's full title: the share's file name, VoiceOver's label.
+    private var fullTitle: String { model.record?.title ?? title }
+    /// The title on the page, without the day it ends on (`DossierLine.viewerTitle`).
+    private var shownTitle: String {
+        guard let record = model.record else { return title }
+        return DossierLine.viewerTitle(record.title, receivedAt: record.receivedAt)
+    }
 
     var body: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             if ax {
-                ScrollView { column.padding(.horizontal, 16).padding(.bottom, 16) }
-                    .fixtureViewerScroll()
+                ScrollViewReader { proxy in
+                    ScrollView { column.padding(.horizontal, 16).padding(.bottom, 16) }
+                        .fixtureViewerScroll(proxy, ready: model.settled)
+                }
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 1 } action: { _, now in
+                        scrolled = now
+                    }
+                    // The bar's hairline once the page has gone under it.
+                    .safeAreaBar(edge: .top, spacing: 0) {
+                        Rectangle().fill(Color.hairline).frame(height: 1).opacity(scrolled ? 1 : 0)
+                    }
             } else {
                 column.padding(.horizontal, 16)
             }
@@ -183,13 +202,26 @@ struct DocumentViewer: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        // Opaque, as the frames draw it: a scrolled page never shows behind
+        // the back button or the status bar (the detail screens' rule, e980094).
+        .toolbarBackground(Color.void, for: .navigationBar)
+        // The regular column does not scroll, so its bar stays clear and the
+        // readout can sit right under Back; the AX column scrolls under it.
+        .toolbarBackgroundVisibility(ax ? .visible : .hidden, for: .navigationBar)
+        // "‹ Dossier", as the frames say where Back goes; the edge swipe
+        // still goes back (`InteractivePopKeeper`).
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { backButton }
+                .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) { shareButton }
+                .sharedBackgroundVisibility(.hidden)
         }
+        .background(InteractivePopKeeper())
         .preferredColorScheme(.dark)
         .task(id: dossier?.revision ?? 0) { if !model.settled { await model.load() } }
         .fullScreenCover(isPresented: $counter) {
-            CounterView(content: model.content, title: shownTitle)
+            CounterView(content: model.content, title: fullTitle)
         }
         .task(id: model.settled) { if opensCounter, model.settled { counter = true } }
         .onDisappear { SharedDocument.cleanUp() }
@@ -209,22 +241,25 @@ struct DocumentViewer: View {
                 Text(line).font(.mono(12, relativeTo: .caption)).monoCap().tracking(1)
                     .foregroundStyle(Color.inkLabel)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
             }
             Text(shownTitle)
                 .font(.display(28, relativeTo: .title2))
                 // 49 pt at AX5 (the frames' AX5 ramp), so the page keeps its room.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                // Display leading at the large sizes, as the AX5 frame sets it.
+                .lineHeight(.multiple(factor: ax ? 1.15 : HomeType.sairaLineFactor))
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(fullTitle)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.top, ax ? 8 : 2)
                 .padding(.bottom, 16)
                 .id(ViewerAnchor.title)
             page
                 .frame(maxWidth: .infinity)
                 .frame(height: ax ? 342 : nil)
                 .frame(maxHeight: ax ? nil : .infinity)
+                .clipped()
                 .id(ViewerAnchor.page)
             below
             if ax, let parts = metaParts {
@@ -238,6 +273,9 @@ struct DocumentViewer: View {
                 .padding(.top, 8)
             }
         }
+        // The system bar is taller than the frames' 44 pt: the column starts
+        // right under its buttons (the frames' "back gap 6").
+        .padding(.top, ax ? 0 : ViewerSpacing.underBar)
     }
 
     private var metaParts: [String]? {
@@ -251,10 +289,12 @@ struct DocumentViewer: View {
         case .loading:
             Color.plate.opacity(0.6)
         case .pdf(let data):
-            PDFKitView(data: data, pager: pager, label: shownTitle)
+            // At the accessibility sizes the page keeps the column's full
+            // width and shows its top (the AX5 frames), not a thumbnail.
+            PDFKitView(data: data, pager: pager, label: fullTitle, fillsWidth: ax)
         case .image(let data):
             if let image = UIImage(data: data) {
-                ZoomableImageView(image: image, label: shownTitle)
+                ZoomableImageView(image: image, label: fullTitle)
             } else {
                 notice(DocumentViewerModel.Copy.failed)
             }
@@ -271,7 +311,7 @@ struct DocumentViewer: View {
     /// with no text, what that means.
     @ViewBuilder private var below: some View {
         if case .pdf = model.content, pager.count > 1 {
-            pagerRow.padding(.vertical, ax ? 8 : 12)
+            pagerRow.padding(.top, ax ? 8 : 16).padding(.bottom, ax ? 8 : 8)
         } else if dossier?.doc(model.id)?.hasText == false {
             DossierNotice(label: DocumentViewerModel.Copy.noTextLabel, text: DocumentViewerModel.Copy.noText)
                 .padding(.vertical, 16)
@@ -354,21 +394,53 @@ struct DocumentViewer: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.top, ax ? 16 : 8)
         .padding(.bottom, 8)
         .background(Color.void.opacity(ax ? 1 : 0))
+        // At the accessibility sizes the page scrolls: a rule says where the
+        // bar starts (the AX5 frames).
+        .overlay(alignment: .top) { if ax { Hairline() } }
+    }
+
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                Text(DossierCopy.title).font(.display(17, relativeTo: .body))
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(Color.signalLink)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Terug naar \(DossierCopy.title)")
     }
 
     @ViewBuilder private var shareButton: some View {
-        if let file = SharedDocument(content: model.content, title: shownTitle) {
-            ShareLink(item: file, preview: SharePreview(shownTitle)) {
-                Image(systemName: "square.and.arrow.up")
-            }
-            .accessibilityLabel("Deel…")
+        if let file = SharedDocument(content: model.content, title: fullTitle) {
+            ShareLink(item: file, preview: SharePreview(fullTitle)) { shareGlyph }
+                .accessibilityLabel("Deel…")
+        } else if case .notHere(let doc) = model.content, let dossier, !model.isOffline {
+            // Not on the phone yet: "Deel…" takes it in first (kept,
+            // sha-checked, as "Haal nu op" keeps it), then hands it over.
+            ShareLink(item: SharedDocument(takingIn: doc, store: dossier.store, client: model.client),
+                      preview: SharePreview(fullTitle)) { shareGlyph }
+                .accessibilityLabel("Deel…")
         } else {
             Image(systemName: "square.and.arrow.up").foregroundStyle(Color.inkFaint)
                 .accessibilityHidden(true)
         }
+    }
+
+    private var shareGlyph: some View {
+        Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .medium))
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .foregroundStyle(Color.signalLink)
+            .frame(minWidth: 44, minHeight: 44)
     }
 
     private func notice(_ text: String) -> some View {
@@ -383,13 +455,24 @@ struct DocumentViewer: View {
 
 enum ViewerAnchor: Hashable { case title, page }
 
+enum ViewerSpacing {
+    /// How far the column moves up under iOS's taller navigation bar, so the
+    /// readout sits 6 pt under the Back button as in the frames.
+    static let underBar: CGFloat = -18
+}
+
 extension View {
-    /// `-fixtures-dossier pagina`: the AX5 viewer scrolled so the page is at
-    /// the top ("Document / AX5 · gescrold"). Nothing in a Release build.
-    @ViewBuilder func fixtureViewerScroll() -> some View {
+    /// `-fixtures-dossier pagina`: the AX5 viewer scrolled so the page starts
+    /// right under the bar ("Document / AX5 · gescrold"). Nothing in a
+    /// Release build.
+    @ViewBuilder func fixtureViewerScroll(_ proxy: ScrollViewProxy, ready: Bool) -> some View {
         #if DEBUG
         if FixtureLaunch.current?.dossier.contains(.pagina) == true {
-            defaultScrollAnchor(.bottom)
+            task(id: ready) {
+                guard ready else { return }
+                try? await Task.sleep(for: .milliseconds(500))
+                proxy.scrollTo(ViewerAnchor.page, anchor: .top)
+            }
         } else { self }
         #else
         self
@@ -437,6 +520,18 @@ struct SharedDocument: Transferable {
         case .pdf(let d): fileName = Self.name(title, ext: "pdf"); bytes = { d }
         case .image(let d): fileName = Self.name(title, ext: "jpg"); bytes = { d }
         default: return nil
+        }
+    }
+
+    /// "Deel…" on a document the phone does not hold yet: taken in (and
+    /// kept, sha-checked, as every download) when a share is chosen.
+    init(takingIn doc: DossierDoc, store: DossierStore, client: APIClient) {
+        fileName = Self.name(doc.title, ext: "pdf")
+        let id = doc.id
+        bytes = {
+            _ = try await store.take(doc, client: client)
+            guard let url = await store.fileURL(id) else { throw CocoaError(.fileNoSuchFile) }
+            return try Data(contentsOf: url)
         }
     }
 
@@ -514,10 +609,43 @@ final class PDFPager {
         view.scaleFactor = view.scaleFactorForSizeToFit * factor
         if let point {
             let size = CGSize(width: view.bounds.width / view.scaleFactor, height: view.bounds.height / view.scaleFactor)
-            view.go(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
-                               width: size.width, height: size.height), on: page)
+            let box = page.bounds(for: view.displayBox)
+            // Lines start readable: the view's left edge at the text's own
+            // leading margin, never half-way into a line.
+            let text = page.selection(for: box)?.bounds(for: page)
+            let x = PageZoom.leadingX(textMinX: text?.minX, pageWidth: box.width, visibleWidth: size.width,
+                                      margin: 16 / view.scaleFactor)
+            // The zoomed page's own scroll view is moved directly: in page
+            // view controller mode PDFKit's `go(to:)` keeps the zoom centred.
+            let top = min(box.maxY, point.y + size.height / 2)
+            let offset = CGPoint(x: (x - box.minX) * view.scaleFactor, y: (box.maxY - top) * view.scaleFactor)
+            DispatchQueue.main.async { [weak view] in
+                guard let view else { return }
+                if let scroll = Self.pageScrollView(in: view) {
+                    let maxX = max(0, scroll.contentSize.width - scroll.bounds.width)
+                    let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
+                    scroll.contentOffset = CGPoint(x: min(maxX, offset.x) - scroll.adjustedContentInset.left,
+                                                   y: min(maxY, offset.y) - scroll.adjustedContentInset.top)
+                } else {
+                    view.go(to: PDFDestination(page: page, at: CGPoint(x: x, y: top)))
+                }
+            }
         }
         update()
+    }
+
+    /// The scroll view that holds the zoomed page: the largest one on screen.
+    private static func pageScrollView(in root: UIView) -> UIScrollView? {
+        var best: UIScrollView?
+        var stack: [UIView] = [root]
+        while let v = stack.popLast() {
+            if let s = v as? UIScrollView, s.window != nil, !s.isPagingEnabled,
+               s.contentSize.height > (best?.contentSize.height ?? 0) {
+                best = s
+            }
+            stack.append(contentsOf: v.subviews)
+        }
+        return best
     }
 
     var isZoomed: Bool { PageIndicator.isZoomed(scale: scale, fit: fit) }
@@ -531,10 +659,14 @@ struct PDFKitView: UIViewRepresentable {
     var label: String = ""
     /// A double tap goes back to the whole page, or zooms in on the tap.
     var doubleTapZooms = false
+    /// The page at the view's full width, its top showing (the AX5 column),
+    /// rather than the whole page fitted in.
+    var fillsWidth = false
 
     func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
+        let view = fillsWidth ? WidthFillingPDFView() : PDFView()
+        view.autoScales = !fillsWidth
+        view.pageBreakMargins = .zero
         view.displayMode = .singlePage
         view.displayDirection = .horizontal
         view.usePageViewController(true)
@@ -598,23 +730,40 @@ struct CounterView: View {
     @State private var brightness = BrightnessGuard.live()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @State private var width: CGFloat = 402
 
     static let hint = "helderheid op max · sluit met × of veeg terug"
     static let zoomHint = "dubbeltik: hele pagina"
+    /// The top band: the × and the zoom readout, on black.
+    static let bandHeight: CGFloat = 64
+    /// At rest the page sits this much lower, centred on the screen; zoomed
+    /// in, it starts right under the band.
+    static let restingDrop: CGFloat = 70
 
-    var body: some View {
-        ZStack {
-            Color.void.ignoresSafeArea()
-            switch content {
-            case .pdf(let data):
-                PDFKitView(data: data, pager: pager, label: title, doubleTapZooms: true).ignoresSafeArea()
-            case .image(let data):
-                if let image = UIImage(data: data) { ZoomableImageView(image: image, label: title).ignoresSafeArea() }
-            default:
-                EmptyView()
-            }
+    /// A portrait page at the full width (A4's √2).
+    private var pageHeight: CGFloat { (width * 1.414).rounded() }
+
+    @ViewBuilder private var page: some View {
+        switch content {
+        case .pdf(let data):
+            PDFKitView(data: data, pager: pager, label: title, doubleTapZooms: true)
+        case .image(let data):
+            if let image = UIImage(data: data) { ZoomableImageView(image: image, label: title) }
+        default:
+            Color.clear
         }
-        .overlay(alignment: .topTrailing) {
+    }
+
+    private var topBand: some View {
+        HStack(alignment: .center) {
+            if pager.isZoomed {
+                Label(PageIndicator.zoom(scale: pager.scale, fit: pager.fit), systemImage: "plus.magnifyingglass")
+                    .font(.mono(12, relativeTo: .caption)).monoCap()
+                    .foregroundStyle(Color.inkBright)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Capsule().fill(Color.field))
+            }
+            Spacer(minLength: 0)
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
                     .foregroundStyle(Color.inkBright)
@@ -623,44 +772,59 @@ struct CounterView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Sluit")
-            .padding(.trailing, 16)
         }
-        .overlay(alignment: .topLeading) {
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .frame(height: Self.bandHeight)
+        .frame(maxWidth: .infinity)
+        .background(Color.void)
+    }
+
+    private var bottomBand: some View {
+        VStack(spacing: 14) {
             if pager.isZoomed {
-                Label(PageIndicator.zoom(scale: pager.scale, fit: pager.fit), systemImage: "plus.magnifyingglass")
-                    .font(.mono(12, relativeTo: .caption)).monoCap()
-                    .foregroundStyle(Color.inkBright)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Capsule().fill(Color.field))
-                    .padding(.leading, 16).padding(.top, 6)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            VStack(spacing: 14) {
-                if pager.isZoomed {
-                    Text(Self.zoomHint.uppercased())
-                } else {
-                    if pager.count > 1 {
-                        Text(PageIndicator.label(page: pager.page, of: pager.count, style: .counter))
-                            .font(.mono(13, relativeTo: .caption, weight: .medium)).monoCap()
-                            .foregroundStyle(Color.inkBright)
-                            .monospacedDigit()
-                            .padding(.horizontal, 14).padding(.vertical, 5)
-                            .background(Capsule().fill(Color.field))
-                            .accessibilityLabel(PageIndicator.label(page: pager.page, of: pager.count, style: .full))
-                    }
-                    Text(Self.hint.uppercased())
+                Text(Self.zoomHint.uppercased())
+            } else {
+                if pager.count > 1 {
+                    Text(PageIndicator.label(page: pager.page, of: pager.count, style: .counter))
+                        .font(.mono(13, relativeTo: .caption, weight: .medium)).monoCap()
+                        .foregroundStyle(Color.inkBright)
+                        .monospacedDigit()
+                        .padding(.horizontal, 14).padding(.vertical, 5)
+                        .background(Capsule().fill(Color.field))
+                        .accessibilityLabel(PageIndicator.label(page: pager.page, of: pager.count, style: .full))
                 }
+                Text(Self.hint.uppercased())
             }
-            .font(.mono(12, relativeTo: .caption)).monoCap()
-            .tracking(1)
-            .foregroundStyle(Color.inkLabel)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 40)
-            .allowsHitTesting(false)
         }
+        .font(.mono(12, relativeTo: .caption)).monoCap()
+        .tracking(1)
+        .foregroundStyle(Color.inkLabel)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color.void)
+        .allowsHitTesting(false)
+    }
+
+    var body: some View {
+        // Opaque bands above and below the page: the zoom readout and the ×
+        // sit on black, never over the letter, and the page is clipped
+        // between them (the frames).
+        VStack(spacing: 0) {
+            topBand
+            page
+                .frame(height: pageHeight)
+                .clipped()
+                .padding(.top, pager.isZoomed ? 0 : Self.restingDrop)
+            bottomBand
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.void)
+        .ignoresSafeArea(edges: .top)
         // "veeg terug": a swipe in from the leading edge closes, as Back would.
         .overlay(alignment: .leading) {
             Color.clear.frame(width: 20).contentShape(Rectangle())
@@ -668,6 +832,7 @@ struct CounterView: View {
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .preferredColorScheme(.dark)
         .onAppear { brightness.raise() }
         .onDisappear { brightness.restore() }
@@ -679,7 +844,7 @@ struct CounterView: View {
             guard FixtureLaunch.current?.dossier.contains(.balieZoom) == true else { return }
             try? await Task.sleep(for: .milliseconds(600))
             // The letter's body paragraphs (PDF points, from the bottom).
-            pager.zoom(2.3, at: CGPoint(x: 190, y: 440))
+            pager.zoom(2.3, at: CGPoint(x: 190, y: 445))
         }
         #endif
     }
@@ -798,4 +963,62 @@ struct ZoomableImageView: UIViewRepresentable {
 
     /// Like `PDFKitView`: a new image is a new `.image` case, and so a new view.
     func updateUIView(_ view: ZoomingImageScrollView, context: Context) {}
+}
+
+/// Where a zoomed page starts across: at the text's own leading margin (a
+/// little before it), so every line on screen reads from its start; within
+/// the page. Pure, so the rule is tested as numbers.
+enum PageZoom {
+    static func leadingX(textMinX: CGFloat?, pageWidth: CGFloat, visibleWidth: CGFloat, margin: CGFloat) -> CGFloat {
+        let wanted = (textMinX ?? 0) - margin
+        return min(max(0, wanted), max(0, pageWidth - visibleWidth))
+    }
+}
+
+/// A PDF page at the view's full width with its top on screen: the AX5
+/// column's page, which a fitted page would shrink to a thumbnail.
+final class WidthFillingPDFView: PDFView {
+    private var fittedWidth: CGFloat = 0
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 0, bounds.width != fittedWidth, let page = currentPage ?? document?.page(at: 0) else { return }
+        fittedWidth = bounds.width
+        let box = page.bounds(for: displayBox)
+        guard box.width > 0 else { return }
+        scaleFactor = bounds.width / box.width
+        go(to: PDFDestination(page: page, at: CGPoint(x: box.minX, y: box.maxY)))
+    }
+}
+
+/// Keeps the edge swipe going back on a screen that draws its own Back
+/// button ("‹ Dossier"): hiding the system's button also stops its swipe.
+/// The swipe begins only while there is a screen to go back to.
+struct InteractivePopKeeper: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Keeper { Keeper() }
+    func updateUIViewController(_ controller: Keeper, context: Context) {}
+
+    final class Keeper: UIViewController, UIGestureRecognizerDelegate {
+        private weak var previous: (any UIGestureRecognizerDelegate)?
+        private weak var held: UINavigationController?
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard let nav = navigationController, let pop = nav.interactivePopGestureRecognizer else { return }
+            if held == nil { previous = pop.delegate }
+            held = nav
+            pop.delegate = self
+            pop.isEnabled = true
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            if let pop = held?.interactivePopGestureRecognizer, pop.delegate === self { pop.delegate = previous }
+            held = nil
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            (held?.viewControllers.count ?? 0) > 1
+        }
+    }
 }
