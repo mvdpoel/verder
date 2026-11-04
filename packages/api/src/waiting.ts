@@ -1,9 +1,10 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@grip/db";
 import { buildTrackMap, type StopRow } from "./track-map";
 import { effectiveTaskStatuses } from "./task-decide";
 import { effectiveTitleSql, notDiscardedSql, notPurgedSql } from "./effective-status";
 import { loadTrackMapRows } from "./routers/tracks";
+import { requestThreads, requestTodoMeta, type RequestThreadRow } from "./request-threads";
 
 /**
  * WHAT WAITS ON MARTIN — the one definition (spec §12.9).
@@ -24,8 +25,11 @@ import { loadTrackMapRows } from "./routers/tracks";
  */
 export const WAITING_TASK_STATUSES = ["open", "in-progress"] as const;
 
-/** `request` (Vraag Grip): an ANSWERED request Martin has not opened yet. A
- *  queued or working one waits on Grip, not on him, and is not listed here. */
+/** `request` (Vraag Grip): a question THREAD that waits on Martin — an unread
+ *  answer, a step only he can do, the proposal it drafted (folded into this
+ *  row, never listed apart), or a failure to retry or drop
+ *  (`request-threads.ts`). A queued or working one waits on Grip and is not
+ *  listed here. */
 export type WaitingKind = "proposal" | "question" | "request" | "suggestion" | "task" | "stop";
 
 export interface WaitingItem {
@@ -58,14 +62,12 @@ export interface ProposalRow {
   /** `proposals.party_id`; optional so a caller that never reads it need not select it. */
   partyId?: string | null;
   senderGuess: unknown;
+  /** The request that drafted it (Vraag Grip); optional for older callers. */
+  triggerRequestId?: string | null;
 }
 
-/** An answered request Martin has not opened (Vraag Grip). */
-export interface RequestRow {
-  id: string;
-  text: string;
-  answeredAt: Date;
-}
+/** Every request row, for the thread rule (`request-threads.ts`). */
+export type RequestRow = RequestThreadRow;
 
 /** A pending or needs-manual suggestion on a live (or no) document. */
 export interface SuggestionRow {
@@ -136,8 +138,6 @@ function suggestionTitle(s: SuggestionRow): string {
   return fromProposal ?? s.documentTitle ?? s.emailSubject ?? SUGGESTION_LABEL[s.kind] ?? "Suggestie";
 }
 
-const REQUEST_TITLE_MAX = 120;
-
 export function waitingOnMartin(input: {
   proposals: ProposalRow[];
   /** Optional so older hand-built inputs still check; absent means none. */
@@ -150,25 +150,34 @@ export function waitingOnMartin(input: {
   const byAt = <T extends { id: string; createdAt: Date }>(rows: T[]) =>
     [...rows].sort((a, b) => newestFirst({ at: a.createdAt, id: a.id }, { at: b.createdAt, id: b.id }));
 
+  // Vraag Grip first: his own questions, newest first (the frames put the
+  // answered question above every proposal). A thread's pending proposal is
+  // FOLDED into its row; "Laat maar" releases it as a proposal of its own.
+  const threads = requestThreads(input.requests ?? []);
+  const folded = new Set<string>();
+  const foldedRequests = new Set<string>();
+  for (const t of threads) {
+    if (t.head.dismissedAt) continue;
+    for (const m of t.members) foldedRequests.add(m.id);
+    if (t.carried) folded.add(t.carried.id);
+  }
+  const released = new Set(threads.flatMap((t) => (t.released ? [t.released.id] : [])));
+  const requests = threads.filter((t) => t.phase === "todo").map((t): WaitingItem => ({
+    kind: "request", id: t.head.id, title: t.title, subtitle: requestTodoMeta(t), priority: 2,
+    at: t.at.toISOString(), dueAt: null, verder: t.carried?.priority === "verder", partyId: null,
+  }));
+
   // 1 and 2: Verder-priority proposals, then the others and the questions.
-  const proposals = byAt(input.proposals);
+  const proposals = byAt(input.proposals.filter((p) =>
+    !folded.has(p.id) && !(p.triggerRequestId && foldedRequests.has(p.triggerRequestId))));
   const verderFirst = [
     ...proposals.filter((p) => p.priority === "verder"),
     ...proposals.filter((p) => p.priority !== "verder"),
-  ].map(proposalItem);
-
-  // 2: answered requests he has not opened — his own question, answered.
-  const requests = [...(input.requests ?? [])]
-    .sort((a, b) => newestFirst({ at: a.answeredAt, id: a.id }, { at: b.answeredAt, id: b.id }))
-    .map((r): WaitingItem => {
-      const t = r.text.trim().replace(/\s+/g, " ");
-      return {
-        kind: "request", id: r.id,
-        title: t.length > REQUEST_TITLE_MAX ? `${t.slice(0, REQUEST_TITLE_MAX - 1)}…` : t,
-        subtitle: "Grip heeft het uitgezocht", priority: 2,
-        at: r.answeredAt.toISOString(), dueAt: null, verder: false, partyId: null,
-      };
-    });
+  ].map((p) => {
+    const item = proposalItem(p);
+    // Released from a question he put away: it says where it came from.
+    return released.has(p.id) ? { ...item, subtitle: "Uit je vraag" } : item;
+  });
 
   // 3: suggestions.
   const suggestions = byAt(input.suggestions).map((s): WaitingItem => ({
@@ -204,11 +213,12 @@ export function waitingOnMartin(input: {
           dueAt: null, verder: false, partyId: null }]
       : [];
 
-  return [...verderFirst, ...requests, ...suggestions, ...tasks, ...stopItems];
+  return [...requests, ...verderFirst, ...suggestions, ...tasks, ...stopItems];
 }
 
 /**
- * `todo` is work only Martin can do: proposals, questions, tasks and the
+ * `todo` is work only Martin can do: his own questions (Vraag Grip),
+ * proposals, questions, tasks and the
  * current stop. `review` is the suggestion backlog, verder's reading of what
  * arrived, waiting for his verdict. The badge counts `todo` only (Martin,
  * 2026-11-04): a number that a backlog of 494 unread suggestions keeps at 500
@@ -229,10 +239,13 @@ export function waitingCounts(items: WaitingItem[]): WaitingCounts {
 /**
  * The one loader. Every membership rule that needs the database lives here:
  *
- * - Requests (Vraag Grip): answered and not yet opened. Queued and working
- *   requests wait on Grip; a failed one is shown on the phone's request list
- *   ("Lukte niet · Opnieuw") but does not count, because nothing he can decide
- *   is in it.
+ * - Requests (Vraag Grip): one item per THREAD that waits on him
+ *   (`request-threads.ts`): an unread answer, an unticked step, a pending
+ *   proposal it drafted (folded in, never counted twice), or a FAILURE — his
+ *   next step is "Opnieuw proberen" or "Laat maar", so it counts until he takes
+ *   one. Queued and working threads wait on Grip. Every request row is read:
+ *   they are Martin's own questions, a handful a day, and the thread rule
+ *   needs every member.
  * - Proposals: `status = 'pending'` only. drafting, draft-failed, approved and
  *   sending wait on Grip, not on Martin; the verdict column is never read.
  * - Suggestions: pending or needs-manual, and NOT on a discarded or purged
@@ -250,13 +263,11 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
       id: schema.proposals.id, kind: schema.proposals.kind, priority: schema.proposals.priority,
       createdAt: schema.proposals.createdAt, payload: schema.proposals.payload,
       partyName: schema.parties.name, partyId: schema.proposals.partyId,
-      senderGuess: schema.proposals.senderGuess,
+      senderGuess: schema.proposals.senderGuess, triggerRequestId: schema.proposals.triggerRequestId,
     }).from(schema.proposals)
       .leftJoin(schema.parties, eq(schema.parties.id, schema.proposals.partyId))
       .where(eq(schema.proposals.status, "pending")),
-    db.select({ id: schema.requests.id, text: schema.requests.text, answeredAt: schema.requests.answeredAt })
-      .from(schema.requests)
-      .where(and(eq(schema.requests.status, "answered"), isNull(schema.requests.openedAt))),
+    loadRequestThreadRows(db),
     // `documents` unaliased, because the shared expressions assume it.
     db.execute(sql`
       SELECT s.id, s.kind, s.created_at, s.proposed,
@@ -284,8 +295,7 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
     document_title: string | null; email_subject: string | null };
   return waitingOnMartin({
     proposals,
-    // answered_at is NOT NULL whenever status = 'answered' (requests_answered_ck).
-    requests: requests.map((r) => ({ id: r.id, text: r.text, answeredAt: r.answeredAt ?? new Date(0) })),
+    requests,
     suggestions: (suggestions.rows as RawSuggestion[]).map((r) => ({
       id: r.id, kind: r.kind, createdAt: new Date(r.created_at), proposed: r.proposed,
       documentTitle: r.document_title, emailSubject: r.email_subject,
@@ -294,4 +304,23 @@ export async function loadWaiting(db: Db, now = new Date()): Promise<WaitingItem
     currentStop,
     now,
   });
+}
+
+/** Every request with the proposal it drafted, for `requestThreads`. */
+export async function loadRequestThreadRows(db: Db): Promise<RequestThreadRow[]> {
+  const rows = await db.select({
+    id: schema.requests.id, parentRequestId: schema.requests.parentRequestId, text: schema.requests.text,
+    title: schema.requests.title, status: schema.requests.status, createdAt: schema.requests.createdAt,
+    answeredAt: schema.requests.answeredAt, openedAt: schema.requests.openedAt,
+    dismissedAt: schema.requests.dismissedAt, updatedAt: schema.requests.updatedAt,
+    martinSteps: schema.requests.martinSteps, stepsDone: schema.requests.stepsDone,
+    proposalId: schema.proposals.id, proposalStatus: schema.proposals.status,
+    proposalPriority: schema.proposals.priority,
+  }).from(schema.requests)
+    .leftJoin(schema.proposals, eq(schema.proposals.id, schema.requests.proposalId));
+  return rows.map(({ proposalId, proposalStatus, proposalPriority, ...r }) => ({
+    ...r, status: r.status as string,
+    martinSteps: r.martinSteps ?? [], stepsDone: r.stepsDone ?? {},
+    proposal: proposalId ? { id: proposalId, status: proposalStatus!, priority: proposalPriority! } : null,
+  }));
 }

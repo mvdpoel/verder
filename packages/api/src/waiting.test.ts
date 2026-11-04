@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StopRow } from "./track-map";
+import type { RequestThreadRow } from "./request-threads";
 import {
   WAITING_TASK_STATUSES, waitingCounts, waitingOnMartin,
   type ProposalRow, type SuggestionRow, type TaskRow,
@@ -159,5 +160,103 @@ describe("waitingCounts", () => {
       currentStop: stop({ id: "halte" }),
     });
     expect(waitingCounts(items)).toEqual({ count: 7, todo: 4, review: 3 });
+  });
+});
+
+describe("Vraag Grip in waitingOnMartin (the final frames' folding rule)", () => {
+  const req = (over: Partial<RequestThreadRow> & { id: string }): RequestThreadRow => ({
+    parentRequestId: null, text: `Vraag ${over.id}`, title: null, status: "answered",
+    createdAt: ago(3), answeredAt: ago(2), openedAt: null, dismissedAt: null, updatedAt: ago(2),
+    martinSteps: [], stepsDone: {}, proposal: null, ...over,
+  });
+  const fromRequest = (id: string, requestId: string, over: Partial<ProposalRow> = {}) =>
+    proposal({ id, priority: "verder", createdAt: ago(2), triggerRequestId: requestId, ...over });
+
+  it("an answered request with a pending proposal is ONE item, the proposal not listed apart", () => {
+    const items = run({
+      requests: [req({ id: "r", title: "Boedelbeschrijving Noordkust",
+        proposal: { id: "pr", status: "pending", priority: "verder" }, martinSteps: ["Check het huurcontract"] })],
+      proposals: [fromRequest("pr", "r"), proposal({ id: "p-ilse", priority: "verder", createdAt: ago(30) })],
+    });
+    expect(items.map((i) => i.id)).toEqual(["r", "p-ilse"]);
+    expect(items[0]).toMatchObject({ kind: "request", title: "Boedelbeschrijving Noordkust",
+      subtitle: "Nieuw antwoord · 1 voorstel", verder: true });
+    expect(waitingCounts(items)).toEqual({ count: 2, todo: 2, review: 0 });
+  });
+
+  it("read, it still waits while a step is open or its proposal is pending", () => {
+    const opened = { openedAt: ago(1) };
+    const both = run({ requests: [req({ id: "r", ...opened, martinSteps: ["a"],
+      proposal: { id: "pr", status: "pending", priority: "other" } })], proposals: [fromRequest("pr", "r")] });
+    expect(both.map((i) => [i.id, i.subtitle])).toEqual([["r", "1 voorstel · 1 stap voor jou"]]);
+    const stepOnly = run({ requests: [req({ id: "r", ...opened, martinSteps: ["a", "b"], stepsDone: { 0: ago(1).toISOString() } })] });
+    expect(stepOnly.map((i) => i.subtitle)).toEqual(["1 stap voor jou"]);
+    const allDone = run({ requests: [req({ id: "r", ...opened, martinSteps: ["a"], stepsDone: { 0: ago(1).toISOString() } })] });
+    expect(allDone).toEqual([]);
+    const sent = run({ requests: [req({ id: "r", ...opened, proposal: { id: "pr", status: "sent", priority: "other" } })] });
+    expect(sent).toEqual([]);
+  });
+
+  it("a FAILED request waits on Martin (retry or drop), and counts as todo", () => {
+    const items = run({ requests: [req({ id: "r", status: "failed", answeredAt: null, updatedAt: ago(0.5) })] });
+    expect(items).toMatchObject([{ kind: "request", id: "r", subtitle: "Lukte niet · Opnieuw" }]);
+    expect(waitingCounts(items).todo).toBe(1);
+  });
+
+  it("queued and working requests wait on Grip and are not listed", () => {
+    expect(run({ requests: [req({ id: "q", status: "queued", answeredAt: null }),
+      req({ id: "w", status: "working", answeredAt: null })] })).toEqual([]);
+  });
+
+  it("Laat maar releases the proposal as its own row: the count stays the same", () => {
+    const before = run({
+      requests: [req({ id: "r", openedAt: ago(1), proposal: { id: "pr", status: "pending", priority: "verder" } })],
+      proposals: [fromRequest("pr", "r", { partyName: "Bewindkantoor Noordkust" })],
+    });
+    const after = run({
+      requests: [req({ id: "r", openedAt: ago(1), dismissedAt: ago(0.2),
+        proposal: { id: "pr", status: "pending", priority: "verder" } })],
+      proposals: [fromRequest("pr", "r", { partyName: "Bewindkantoor Noordkust" })],
+    });
+    expect(before.map((i) => i.kind)).toEqual(["request"]);
+    expect(after).toMatchObject([{ kind: "proposal", id: "pr", subtitle: "Uit je vraag" }]);
+    expect(waitingCounts(after).todo).toBe(waitingCounts(before).todo);
+  });
+
+  it("a put-away failure, or one without a proposal, leaves Voor jou entirely", () => {
+    expect(run({ requests: [req({ id: "r", status: "failed", dismissedAt: ago(0.1) })] })).toEqual([]);
+  });
+
+  it("while a follow-up works, the thread waits on Grip and version 1 is NOT offered", () => {
+    const items = run({
+      requests: [
+        req({ id: "r", openedAt: ago(1), proposal: { id: "pr", status: "pending", priority: "verder" } }),
+        req({ id: "f", parentRequestId: "r", status: "working", createdAt: ago(0.5), answeredAt: null }),
+      ],
+      proposals: [fromRequest("pr", "r")],
+    });
+    expect(items).toEqual([]);
+  });
+
+  it("a thread is one row, by its newest answer; a stopped follow-up hands it back", () => {
+    const answered = run({ requests: [
+      req({ id: "r", title: "Boedelbeschrijving Noordkust", openedAt: ago(1) }),
+      req({ id: "f", parentRequestId: "r", createdAt: ago(0.5), answeredAt: ago(0.4),
+        proposal: { id: "p2", status: "pending", priority: "verder" } }),
+    ], proposals: [fromRequest("p2", "f")] });
+    expect(answered.map((i) => [i.id, i.title])).toEqual([["f", "Boedelbeschrijving Noordkust"]]);
+    const stopped = run({ requests: [
+      req({ id: "r", martinSteps: ["a"], openedAt: ago(1) }),
+      req({ id: "f", parentRequestId: "r", status: "cancelled", createdAt: ago(0.5), answeredAt: null }),
+    ] });
+    expect(stopped.map((i) => i.id)).toEqual(["r"]);
+  });
+
+  it("a retried failure is replaced by its retry, never shown twice", () => {
+    const items = run({ requests: [
+      req({ id: "old", text: "Zoek de polis", status: "failed", dismissedAt: ago(0.3), createdAt: ago(5) }),
+      req({ id: "new", text: "Zoek de polis", status: "queued", createdAt: ago(0.3), answeredAt: null }),
+    ] });
+    expect(items).toEqual([]);
   });
 });

@@ -246,17 +246,22 @@ async function triggerView(db: Db, p: ProposalRow, partyName: string | null): Pr
     return { type: "task", id: p.triggerTaskId, from: null, subject: t?.title ?? null,
       date: t?.createdAt ?? null, excerpt: clip(t?.details) };
   }
+  if (p.triggerRequestId) {
+    // Vraag Grip: the proposal's reason is Martin's own question ("AANLEIDING ·
+    // JOUW VRAAG"), even when it replies to a Gmail message (triggerExternal
+    // then only carries the threading). `from` is null: the author is Martin
+    // himself, and the phone says "Jij vroeg Grip". `parentRequestId` says a
+    // follow-up wrote it ("JOUW VERVOLGVRAAG").
+    const [r] = await db.select({ text: schema.requests.text, createdAt: schema.requests.createdAt,
+      parent: schema.requests.parentRequestId })
+      .from(schema.requests).where(eq(schema.requests.id, p.triggerRequestId));
+    return { type: r?.parent ? "follow-up-request" : "request", id: p.triggerRequestId, from: null,
+      subject: clip(r?.text) ?? null, date: r?.createdAt ?? null, excerpt: null };
+  }
   if (p.triggerExternal) {
     const e = p.triggerExternal as ExternalTrigger;
     return { type: "external", id: e.gmailId, from: e.from, subject: e.subject, date: parseDate(e.date),
       excerpt: clip(e.body) };
-  }
-  if (p.triggerRequestId) {
-    // Vraag Grip: a compose proposal's only trigger is Martin's own question.
-    const [r] = await db.select({ text: schema.requests.text, createdAt: schema.requests.createdAt })
-      .from(schema.requests).where(eq(schema.requests.id, p.triggerRequestId));
-    return { type: "request", id: p.triggerRequestId, from: "Martin", subject: clip(r?.text) ?? null,
-      date: r?.createdAt ?? null, excerpt: null };
   }
   const [parent] = p.parentProposalId
     ? await db.select().from(schema.proposals).where(eq(schema.proposals.id, p.parentProposalId))
@@ -264,6 +269,28 @@ async function triggerView(db: Db, p: ProposalRow, partyName: string | null): Pr
   const sent = (parent?.finalPayload ?? null) as Partial<StoredReply> | null;
   return { type: "proposal", id: p.parentProposalId ?? "", from: "grip", subject: sent?.subject ?? null,
     date: parent?.sentAt ?? null, excerpt: clip(sent?.body) };
+}
+
+/**
+ * The follow-up ("Vraag door") that is rewriting a request's proposal: a queued
+ * or working request later in the same thread. Null when nothing is.
+ */
+export async function updatingBy(db: Db, triggerRequestId: string | null):
+  Promise<{ requestId: string; text: string; since: Date } | null> {
+  if (!triggerRequestId) return null;
+  const rows = await db.select({ id: schema.requests.id, parent: schema.requests.parentRequestId,
+    status: schema.requests.status, text: schema.requests.text, createdAt: schema.requests.createdAt })
+    .from(schema.requests);
+  // The thread below the trigger: every descendant, walked down from it.
+  const below = new Set<string>([triggerRequestId]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const r of rows) if (r.parent && below.has(r.parent) && !below.has(r.id)) { below.add(r.id); grew = true; }
+  }
+  const live = rows.filter((r) => r.id !== triggerRequestId && below.has(r.id)
+    && (r.status === "queued" || r.status === "working"))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  return live ? { requestId: live.id, text: live.text, since: live.createdAt } : null;
 }
 
 /** Every item of the stored context, by id, so a citation can be labelled. */
@@ -406,6 +433,7 @@ export const proposalsRouter = router({
       attachable,
       options,
       error: p.error,
+      updating: await updatingBy(ctx.db, p.triggerRequestId),
     };
   }),
 
@@ -419,6 +447,9 @@ export const proposalsRouter = router({
       const p = await lockPending(tx, input.id, input.revision);
       const kind = p.kind as ProposalKind;
       if (kind === "question") bad("a question is answered, not approved");
+      // A follow-up is rewriting this proposal ("voorstel wordt bijgewerkt"):
+      // version 1 is never sent while version 2 is being drafted.
+      if (await updatingBy(tx as unknown as Db, p.triggerRequestId)) conflict("a follow-up question is rewriting this proposal");
       if (!canTransition(p.status as ProposalStatus, "approved", kind)) conflict("approve is not a legal move");
       const payload = payloadOf(p);
       if (!payload.reply) bad("proposal has no reply to approve");

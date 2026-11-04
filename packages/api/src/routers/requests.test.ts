@@ -60,7 +60,7 @@ describe("requests router", () => {
         .values({ kind: "organization", name: `Requests Testfixture ${crypto.randomUUID()}` }).returning();
       const ok = await c.requests.create({ clientId: crypto.randomUUID(), text: "Wat wil deze partij?",
         about: { partyId: party.id } });
-      expect((await c.requests.get({ id: ok.id })).about).toEqual({ type: "party", id: party.id, label: party.name });
+      expect((await c.requests.get({ id: ok.id })).about).toMatchObject({ type: "party", id: party.id, label: party.name });
     });
   });
 
@@ -85,7 +85,8 @@ describe("requests router", () => {
       const r = await c.requests.create({ clientId: crypto.randomUUID(), text: "Zoek de polis" });
       expect(await c.requests.cancel({ id: r.id })).toEqual({ id: r.id, status: "cancelled" });
       expect(await c.requests.cancel({ id: r.id })).toEqual({ id: r.id, status: "cancelled" });
-      expect((await c.requests.list()).some((x) => x.id === r.id)).toBe(false);
+      // Stopped by him: under Eerdere vragen, "gestopt door jou".
+      expect((await c.requests.list()).find((x) => x.id === r.id)).toMatchObject({ phase: "done", doneReason: "gestopt" });
       const s = await c.requests.create({ clientId: crypto.randomUUID(), text: "Nog een" });
       await db.update(schema.requests).set({ status: "answered", answer: "a", answeredAt: new Date(),
         claimedAt: new Date() }).where(eq(schema.requests.id, s.id));
@@ -150,7 +151,102 @@ describe("requests router", () => {
       });
       // The proposal screen shows the request as the trigger.
       const prop = await c.proposals.get({ id: p.id });
-      expect(prop.trigger).toMatchObject({ type: "request", id: r.id, from: "Martin" });
+      expect(prop.trigger).toMatchObject({ type: "request", id: r.id, from: null });
+    });
+  });
+
+  it("the folding rule through the database: one row for a question and its proposal; Laat maar releases it", async () => {
+    await isolated(async (db, uid) => {
+      const c = caller(db, uid);
+      const r = await c.requests.create({ clientId: crypto.randomUUID(), text: "Wat moet ik antwoorden?" });
+      const [p] = await db.insert(schema.proposals).values({
+        kind: "compose", status: "pending", priority: "other", triggerRequestId: r.id,
+        context: { trigger: { type: "request", id: r.id, label: "x" }, thread: [], party: null, parentParty: null,
+          entries: [], debts: [], tasks: [], stops: [], kb: [], sentDocuments: [], attachable: [], addresses: [] },
+        payload: { ask: "Antwoord", reply: { to: ["a@b.example"], cc: [], subject: "S", body: "b", attachmentDocumentIds: [] } },
+      }).returning();
+      await db.update(schema.requests).set({ status: "answered", answer: "a", answeredAt: new Date(), claimedAt: new Date(),
+        proposalId: p.id, martinSteps: ["Bel de bank"], openedAt: new Date() }).where(eq(schema.requests.id, r.id));
+      const mine = async () => (await loadWaiting(db)).filter((i) => i.id === r.id || i.id === p.id);
+      expect((await mine()).map((i) => `${i.kind}:${i.id}`)).toEqual([`request:${r.id}`]);
+      expect((await mine())[0].subtitle).toBe("1 voorstel · 1 stap voor jou");
+
+      // Ticking the step leaves the proposal: still one row.
+      expect((await c.requests.step({ id: r.id, index: 0, done: true })).doneAt).toBeTruthy();
+      expect(await code(c.requests.step({ id: r.id, index: 3, done: true }))).toBe("BAD_REQUEST");
+      expect((await mine()).map((i) => i.subtitle)).toEqual(["1 voorstel"]);
+
+      // Laat maar: the question is put away, the proposal stands on its own.
+      await c.requests.dismiss({ id: r.id });
+      expect((await mine()).map((i) => `${i.kind}:${i.id}:${i.subtitle}`)).toEqual([`proposal:${p.id}:Uit je vraag`]);
+      expect((await c.requests.list()).find((x) => x.id === r.id)).toMatchObject({ phase: "done", doneReason: "weggelegd",
+        proposal: { id: p.id, status: "pending" } });
+      // Ongedaan maken: back as it was.
+      await c.requests.undismiss({ id: r.id });
+      expect((await mine()).map((i) => i.kind)).toEqual(["request"]);
+      // Unticking puts the step back.
+      expect((await c.requests.step({ id: r.id, index: 0, done: false })).doneAt).toBeNull();
+    });
+  });
+
+  it("a failed request counts until he retries it or lets it go; the retry is a new, idempotent request", async () => {
+    await isolated(async (db, uid) => {
+      const c = caller(db, uid);
+      const r = await c.requests.create({ clientId: crypto.randomUUID(), text: "Zoek de polis van Duinzorg", about: null });
+      await db.update(schema.requests).set({ status: "failed", error: "runner: timeout", claimedAt: new Date() })
+        .where(eq(schema.requests.id, r.id));
+      const waiting = async () => (await loadWaiting(db)).filter((i) => i.kind === "request").map((i) => i.id);
+      expect(await waiting()).toContain(r.id);
+      const got = await c.requests.get({ id: r.id });
+      expect(got).toMatchObject({ failure: "Duurde te lang", phase: "todo", todoReason: "failed" });
+      expect(got.failureDetail).toMatch(/langer dan 10 minuten/);
+      // Opening it is not dealing with it.
+      await c.requests.markOpened({ id: r.id });
+      expect(await waiting()).toContain(r.id);
+
+      const clientId = crypto.randomUUID();
+      const again = await c.requests.retry({ id: r.id, clientId });
+      expect(again).toMatchObject({ status: "queued", duplicate: false });
+      expect(await c.requests.retry({ id: r.id, clientId })).toEqual({ id: again.id, status: "queued", duplicate: true });
+      expect(await waiting()).not.toContain(r.id);
+      const listed = (await c.requests.list()).map((x) => x.id);
+      expect(listed).toContain(again.id);
+      expect(listed).not.toContain(r.id);
+      expect(await code(c.requests.retry({ id: again.id, clientId: crypto.randomUUID() }))).toBe("CONFLICT");
+    });
+  });
+
+  it("Laat maar on a queued request stops it", async () => {
+    await isolated(async (db, uid) => {
+      const c = caller(db, uid);
+      const r = await c.requests.create({ clientId: crypto.randomUUID(), text: "Laat maar" });
+      expect(await c.requests.dismiss({ id: r.id })).toMatchObject({ status: "cancelled" });
+      expect(await code(c.requests.dismiss({ id: crypto.randomUUID() }))).toBe("NOT_FOUND");
+    });
+  });
+
+  it("get: sources resolve now; steps carry their tick; a working follow-up names the proposal it rewrites", async () => {
+    await isolated(async (db, uid) => {
+      const c = caller(db, uid);
+      const r = await c.requests.create({ clientId: crypto.randomUUID(), text: "Gift opzeggen" });
+      const gmailId = "18c0ffee";
+      const log = [{ tool: "gmail_read", args: {}, resultSha256: "x", ids: [{ type: "gmail" as const, id: gmailId }], ms: 1,
+        at: new Date().toISOString(), mail: { gmailId, threadId: "t", messageId: null, references: [],
+          from: "Ilse <ilse@noordkust.example>", to: "jou", subject: "Re: Aanvullende stukken",
+          date: "2026-10-20T08:12:00.000Z", body: "Beste," } }];
+      await db.update(schema.requests).set({ status: "answered", answer: "a", headline: "De incasso loopt nog",
+        title: "Gift Lindeboom", answeredAt: new Date(), claimedAt: new Date(), toolLog: log,
+        sources: [{ type: "gmail", id: gmailId, why: "Ilse vroeg het" }], martinSteps: ["Trek de machtiging in"] })
+        .where(eq(schema.requests.id, r.id));
+      await c.requests.step({ id: r.id, index: 0, done: true });
+      const got = await c.requests.get({ id: r.id });
+      expect(got).toMatchObject({ title: "Gift Lindeboom", headline: "De incasso loopt nog" });
+      expect(got.sources[0]).toMatchObject({ type: "gmail", label: "Re: Aanvullende stukken", inDossier: false,
+        meta: ["Gmail", "Niet in je dossier"], gmail: { body: "Beste," } });
+      expect(got.steps[0].doneAt).toBeTruthy();
+      expect((await c.requests.list()).find((x) => x.id === r.id)).toMatchObject({ phase: "todo", todoReason: "unread" });
+      await c.requests.markOpened({ id: r.id });
+      expect((await c.requests.list()).find((x) => x.id === r.id)).toMatchObject({ phase: "done", doneReason: "afgerond" });
     });
   });
 
@@ -174,16 +270,18 @@ describe("request progress and the waiting list (pure)", () => {
     expect(requestFailureText("a source id never appeared")).toBe("Lukte niet");
   });
 
-  it("an answered request sits after the Verder proposals and before suggestions", () => {
+  it("an answered request leads Nu (above the Verder proposals) and comes before suggestions", () => {
     const now = new Date("2026-11-04T12:00:00Z");
     const items = waitingOnMartin({
       proposals: [{ id: "p1", kind: "reply", priority: "verder", createdAt: now, payload: { ask: "Antwoord Ilse" },
         partyName: "Noordkust", senderGuess: null }],
-      requests: [{ id: "r1", text: "Zeg  het\nabonnement op", answeredAt: now }],
+      requests: [{ id: "r1", parentRequestId: null, text: "Zeg  het\nabonnement op", title: null, status: "answered",
+        createdAt: now, answeredAt: now, openedAt: null, dismissedAt: null, updatedAt: now,
+        martinSteps: [], stepsDone: {}, proposal: null }],
       suggestions: [{ id: "s1", kind: "task", createdAt: now, proposed: { title: "Bellen" }, documentTitle: null, emailSubject: null }],
       tasks: [], currentStop: null, now,
     });
-    expect(items.map((i) => `${i.kind}:${i.id}`)).toEqual(["proposal:p1", "request:r1", "suggestion:s1"]);
-    expect(items[1]).toMatchObject({ title: "Zeg het abonnement op", priority: 2, verder: false });
+    expect(items.map((i) => `${i.kind}:${i.id}`)).toEqual(["request:r1", "proposal:p1", "suggestion:s1"]);
+    expect(items[0]).toMatchObject({ title: "Zeg het abonnement op", subtitle: "Nieuw antwoord", priority: 2, verder: false });
   });
 });

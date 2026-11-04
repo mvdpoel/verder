@@ -54,3 +54,77 @@ export function requestFailureText(error: string | null): string {
   if (/^(runner: )?(timeout|claude-exit-124|stuck)/.test(error)) return "Duurde te lang";
   return "Lukte niet";
 }
+
+/** One line of "Wat Grip nu doet" / "Wat Grip deed" (the answer screen's
+ *  stappenlog, frames "antwoord · bezig" and "antwoord · lukte niet"). */
+export interface RequestActivityStep {
+  /** Dutch, activity only — never a title, a party or an amount. */
+  label: string;
+  /** done: a finished kind of work; current: the one Grip is on now;
+   *  failed: every call of that kind was refused. */
+  state: "done" | "current" | "failed";
+}
+
+export interface ActivityLogLike extends ToolLogLike { ids?: readonly { type: string; id: string }[] }
+
+type Kind = "documents" | "mail" | "gmail" | "bank" | "parties" | "case" | "search";
+const KIND_OF: Record<string, Kind> = {
+  get_document: "documents", list_documents: "search", search: "search",
+  get_mail: "mail", list_mail: "mail", gmail_search: "gmail", gmail_read: "gmail",
+  list_transactions: "bank", get_party: "parties", list_parties: "parties", list_debts: "parties",
+  case_map: "case", list_tasks: "case", list_entries: "case",
+};
+
+/**
+ * The tool log as a short list of kinds of work, in the order Grip began them.
+ * While Grip works (`finished` false) the newest kind is `current` and reads
+ * in the present ("Zoekt live in Gmail…"); once it stopped, every line reads in
+ * the past ("Las 4 documenten"), and a kind whose every call was refused reads
+ * as what went wrong ("Gmail gaf geen antwoord").
+ */
+export function requestActivity(log: readonly ActivityLogLike[], finished: boolean): RequestActivityStep[] {
+  const order: Kind[] = [];
+  const ok = new Map<Kind, number>();
+  const failed = new Map<Kind, number>();
+  const found = new Map<Kind, Set<string>>();
+  for (const c of log) {
+    const k = KIND_OF[c.tool];
+    if (!k) continue;
+    if (!order.includes(k)) order.push(k);
+    if (c.error) { failed.set(k, (failed.get(k) ?? 0) + 1); continue; }
+    ok.set(k, (ok.get(k) ?? 0) + 1);
+    const ids = found.get(k) ?? new Set<string>();
+    for (const r of c.ids ?? []) if (r.type !== "address") ids.add(`${r.type}:${r.id}`);
+    found.set(k, ids);
+  }
+  return order.map((k, i): RequestActivityStep => {
+    const n = ok.get(k) ?? 0;
+    const hits = found.get(k)?.size ?? 0;
+    const now = !finished && i === order.length - 1;
+    if (n === 0 && (failed.get(k) ?? 0) > 0) {
+      return { label: k === "gmail" ? "Gmail gaf geen antwoord" : "Dit lukte niet", state: "failed" };
+    }
+    const docs = log.filter((c) => !c.error && c.tool === "get_document").length;
+    const label = ((): string => {
+      switch (k) {
+        case "documents": return now ? `Leest ${plural(docs, "document", "documenten")}` : `${finished ? "Las" : "Leest"} ${plural(docs, "document", "documenten")}`;
+        case "mail": return `${finished ? "Zocht" : "Zoekt"} in je dossier (mail)${hits > 0 ? ` · ${hits} gevonden` : ""}`;
+        case "gmail": return now ? "Zoekt live in Gmail…" : `${finished ? "Zocht" : "Zoekt"} live in Gmail`;
+        case "bank": return `${finished ? "Bekeek" : "Bekijkt"} je bankafschriften${now ? "…" : ""}`;
+        case "parties": return `${finished ? "Bekeek" : "Bekijkt"} partijen en vorderingen${now ? "…" : ""}`;
+        case "case": return `${finished ? "Bekeek" : "Bekijkt"} de zaak${now ? "…" : ""}`;
+        case "search": return `${finished ? "Zocht" : "Zoekt"} in je dossier${now ? "…" : ""}`;
+      }
+    })();
+    return { label, state: now ? "current" : "done" };
+  });
+}
+
+/** "Wat er gebeurde" on the failed answer screen: what went wrong, in Martin's
+ *  words, and what did NOT happen. Never the stored English reason. */
+export function requestFailureDetail(error: string | null): string {
+  if (requestFailureText(error) === "Duurde te lang") {
+    return "Grip zocht langer dan 10 minuten en is gestopt. Er is niets verstuurd en niets veranderd.";
+  }
+  return "Grip kwam niet tot een antwoord dat klopt met je dossier. Er is niets verstuurd en niets veranderd.";
+}
