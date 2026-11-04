@@ -601,7 +601,7 @@ describe("runClocks: due within 24 h", () => {
         dedupKey: `due:${t.id}:${c.at(5 * HOUR).toISOString()}` });
       expect(first[0].title).toMatch(new RegExp(`^(Vandaag|Morgen): ${t.title}$`));
       expect(first[0].link).toBe(`verder://task/${t.id}`);
-      expect(first[0].body).toMatch(/^Deadline \d\d-\d\d\. Al gedaan\? Kies Gedaan bij deze melding\.$/);
+      expect(first[0].body).toMatch(/^Deadline \d\d-\d\d\. Al gedaan\? Kies Gedaan\.$/);
 
       const moved = c.at(20 * HOUR);
       await db.update(schema.tasks).set({ dueAt: moved }).where(eq(schema.tasks.id, t.id));

@@ -388,3 +388,42 @@ from.
   them (it decodes both as optional). The income caption names the payer the
   bank wrote ("Atelier Sterrenwacht"); the frame's "Salaris ·" is a kind the
   server does not know and is not invented.
+- **A Verder-mail tap lands on Voor jou; there is no "Mail van …" screen**
+  (2026-11-04, "notifications · final"). The frames `verder-mail · na tik ·
+  voorstel in voorbereiding / geen antwoord nodig / geen voorstel gemaakt`
+  draw a mail detail with a status card. They are RETIRED for now, not built:
+  the phone has no route that serves a mail (`/api/mobile/v1/*` has inbox,
+  proposals, suggestions, tasks, documents — no raw email), and "geen
+  antwoord nodig" / "geen voorstel gemaakt" are verdicts the worker does not
+  record per mail (`proposals` holds what WAS drafted, not a decision not to
+  draft). A fixture-only screen would draw states production cannot reach.
+  Building it is a server half first: a mail read route and a per-mail
+  proposal verdict. Until then the push links `verder://inbox`, where the
+  proposal appears once drafted.
+- **An answer given from a notification leaves no confirmation-and-undo row
+  on Voor jou** (frame `na antwoord · Voor jou`, RETIRED). In the app an
+  answer is HELD on the phone for its undo window before it posts; a
+  notification action posts at once (`NotificationRouter`, no view exists
+  to hold it), and the server has no undo for a proposal answer. A "Brief
+  gekoppeld · Ongedaan maken" row would offer an undo nothing can carry
+  out. The answered question simply leaves the list and the count. If Martin
+  wants the row, it needs a server-side answer undo first.
+- **Notification grouping is iOS's** ("gegroepeerde stapel", "vergrendeld ·
+  iPhone SE"). The frames draw two separate cards; iOS collapses
+  notifications from one app with no distinct `thread-id` into one group,
+  and on the lock screen stacks the rest behind the newest. The build's part
+  is the ORDER: what waits longest on Martin is sent last so it lands on top
+  (capture.sh sends the follow-up before the reminder, the filing digest
+  before the Verder mail). The worker sets no `thread-id` on reminders or
+  follow-ups; separate cards would need one per kind there.
+- **Notification texts are cut to what AX5 shows whole.** The filing digest's
+  title is the worker's own "Door verder gedaan" — the frame's "2 opgeborgen
+  · 1 hernoemd" as a TITLE clipped to "…hernoe…" beside "5 min. geleden" —
+  and the counts lead the body. The reminder fixture reads "Voorstel wacht op
+  je": at AX5 the lock screen gives a title two lines and "Voorstel wacht nog
+  op je" truncated to "Voorstel wacht nog…". The worker's own reminder title
+  ("Wacht nog: <vraag>") carries free text and can still truncate there. The deadline push's body is "Deadline <dag>.
+  Al gedaan? Kies Gedaan." (worker) / "Uiterlijk di 3 nov. Al gedaan? Kies
+  Gedaan." (fixture): iOS clips a long-pressed preview at AX5 to a fixed
+  height, and neither a swipe nor a held drag in the capture scrolled it, so the frame's longer body was cut
+  mid-word above the Gedaan button.

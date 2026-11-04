@@ -15,7 +15,10 @@ import UserNotifications
 ///   tap on "Toon details" then unlocks;
 /// - notifications read as allowed and nothing registers with APNs, so no
 ///   pre-prompt covers a screenshot and no fixture token reaches anything;
-/// - the widget snapshot and the icon badge are left alone, and the upload
+/// - the widget snapshot and the icon badge are left alone (the badge is set
+///   only under `-fixtures-notify-allow`, the --notify captures' real
+///   permission, so the home-screen shot draws the fixture's own waiting
+///   count — 498 on voorjou-many — and not a push's `aps.badge`), and the upload
 ///   queue and the pocket dossier live in temporary folders, so the real App
 ///   Group and Application Support never hold synthetic data.
 @MainActor
@@ -155,9 +158,11 @@ enum FixtureEnvironment {
             try? InboxCache(dir: inboxDir).save(.init(savedAt: at, inbox: inbox))
         }
 
+        let setBadge: @Sendable (Int) async -> Void
+        if launch.notifyAllow { setBadge = InboxStore.systemBadge } else { setBadge = { @Sendable _ in } }
         var services = AppServices(client: client, store: store, lock: lock, uploads: uploads, defaults: defaults,
                            permission: FixturePermission(state: launch.pushPrePrompt ? .notDetermined : launch.push ?? .allowed), registerRemote: {},
-                           snapshotDir: nil, setBadge: { _ in }, dossierDir: dossierDir,
+                           snapshotDir: nil, setBadge: setBadge, dossierDir: dossierDir,
                            timelineDir: timelineDir,
                            // No microphone and no speech model: a "recording"
                            // is synthetic bytes, and its transcript is the

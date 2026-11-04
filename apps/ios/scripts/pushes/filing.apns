@@ -2,8 +2,8 @@
   "Simulator Target Bundle": "pro.vanderpoel.verder",
   "aps": {
     "alert": {
-      "title": "2 opgeborgen · 1 hernoemd",
-      "body": "Tik om ze na te kijken. Opbergen draai je daar met één tik terug."
+      "title": "Door verder gedaan",
+      "body": "2 opgeborgen · 1 hernoemd. Tik om ze na te kijken; opbergen draai je daar met één tik terug."
     },
     "category": "FILING",
     "interruption-level": "passive",

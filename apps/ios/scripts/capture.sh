@@ -127,8 +127,9 @@
 #            the real permission once. States:
 #            verborgen (previews set to Never for the shot) verder-mail
 #            creditor-mail proposal reminder follow-up follow-up-schuldeiser
-#            filing system weekly stapel (reminder + follow-up) se (verder-mail
-#            + filing) banner (verder-mail over the app) badge (home screen)
+#            filing system weekly stapel (follow-up, then reminder on top) se
+#            (filing, then verder-mail on top) banner (verder-mail over the app)
+#            badge (home screen; the fixture's waiting count — voorjou-many for 498)
 #            task-due task-due-scroll (long-pressed, AX5: scrolled to Gedaan)
 #            vraag vraag-scroll gedaan-notice (Gedaan chosen; the fixture
 #            decides the notice) keuze-notice (an option chosen; likewise)
@@ -377,11 +378,15 @@ if [ -n "$NOTIFY" ]; then
   SCENE=lock; PREVIEWS=""; GESTURE=none; RESULT=""; PUSHES=(); WAKE=
   case "$NOTIFY" in
     verborgen) PUSHES=(verder-mail); PREVIEWS=never ;;
-    stapel) PUSHES=(reminder follow-up) ;;
-    se) PUSHES=(verder-mail filing); WAKE=1 ;;
+    # The LAST push lands on top. The frames put what waits longest on Martin
+    # first: the proposal reminder over the follow-up, the time-sensitive
+    # Verder mail over the passive filing digest.
+    stapel) PUSHES=(follow-up reminder) ;;
+    se) PUSHES=(filing verder-mail); WAKE=1 ;;
     banner) PUSHES=(verder-mail); SCENE=app ;;
     # The simulator refuses a badge-only push ("no content that needs to
-    # alert"); the app sets the badge itself from Voor jou's count.
+    # alert"); the app sets the badge itself from Voor jou's count (under
+    # -fixtures-notify-allow only; voorjou-many draws 498).
     badge) PUSHES=(); SCENE=home ;;
     # A long press opens a BANNER (over the app): on the lock screen
     # XCUITest's press reads as the start of a swipe and only slides the row.

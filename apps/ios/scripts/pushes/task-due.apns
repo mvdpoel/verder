@@ -3,7 +3,7 @@
   "aps": {
     "alert": {
       "title": "Morgen: bijstand tekenen",
-      "body": "Uiterlijk di 3 nov: teken het formulier bijzondere bijstand. Al gedaan? Kies Gedaan bij deze melding."
+      "body": "Uiterlijk di 3 nov. Al gedaan? Kies Gedaan."
     },
     "category": "TASK_DUE",
     "interruption-level": "time-sensitive",

@@ -435,7 +435,11 @@ async function dueTasks(deps: ClockDeps, now: Date): Promise<number> {
       kind: "task-due", level: "time-sensitive", title: `${prefix}: ${r.title}`,
       // The task's own link: the phone's "Gedaan" action marks THIS task done
       // (TASK_DUE's DONE, NotificationRouter), and a tap opens it on Voor jou.
-      body: `Deadline ${dayMonth(dueAt)}. Al gedaan? Kies Gedaan bij deze melding.`,
+      // Short on purpose: at the largest text size iOS clips the long-pressed
+      // preview to a fixed height and does not scroll it, so "…bij deze
+      // melding." was cut mid-word above the Gedaan button (measured on the
+      // simulator 2026-11-04).
+      body: `Deadline ${dayMonth(dueAt)}. Al gedaan? Kies Gedaan.`,
       link: `verder://task/${r.id}`, dedupKey,
     });
     if (!res.duplicate) alerted++;
