@@ -653,6 +653,8 @@ export const proposals = pgTable("proposals", {
   error: text("error"),
   remindedAt: timestamp("reminded_at", { withTimezone: true }),
   resultEntryId: uuid("result_entry_id").references(() => logEntries.id),
+  // Vraag Grip (0044): the request whose answer carried this proposal.
+  triggerRequestId: uuid("trigger_request_id").references((): AnyPgColumn => requests.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -669,11 +671,83 @@ export const proposals = pgTable("proposals", {
     .where(sql`${t.kind} = 'follow-up' AND ${t.parentProposalId} IS NOT NULL`),
   index("proposals_status_idx").on(t.status),
   index("proposals_thread_key_idx").on(t.threadKey),
-  check("proposals_kind_check", sql`${t.kind} IN ('reply', 'question', 'follow-up')`),
+  uniqueIndex("proposals_request_trigger_uq").on(t.triggerRequestId)
+    .where(sql`${t.triggerRequestId} IS NOT NULL`),
+  check("proposals_kind_check", sql`${t.kind} IN ('reply', 'question', 'follow-up', 'compose')`),
   check("proposals_status_check", sql`${t.status} IN ('drafting', 'draft-failed', 'pending', 'approved', 'sending', 'sent', 'failed', 'rejected', 'superseded')`),
   check("proposals_verdict_check", sql`${t.verdict} IN ('approved', 'edited', 'rejected')`),
   check("proposals_priority_check", sql`${t.priority} IN ('verder', 'creditor', 'other')`),
-  check("proposals_has_trigger_ck", sql`num_nonnulls(${t.triggerRawEmailId}, ${t.triggerDocumentId}, ${t.triggerTaskId}, ${t.triggerExternal}, ${t.parentProposalId}) >= 1`),
+  check("proposals_has_trigger_ck", sql`num_nonnulls(${t.triggerRawEmailId}, ${t.triggerDocumentId}, ${t.triggerTaskId}, ${t.triggerExternal}, ${t.parentProposalId}, ${t.triggerRequestId}) >= 1`),
+]);
+
+// Vraag Grip (0044): a request in Martin's own words, researched on the host
+// by `claude -p` through the read-only `grip-tools` server. NOT evidence: no
+// ledger event. App and worker SELECT/INSERT/UPDATE, nobody DELETE. Golden
+// rule on the row: prompt, version, model, every tool call (with a hash of its
+// result) in `tool_log`, the raw model output and the stored answer.
+export const REQUEST_STATUSES = ["queued", "working", "answered", "failed", "cancelled"] as const;
+export type RequestStatus = typeof REQUEST_STATUSES[number];
+
+/** What a request is about: at most one key. */
+export interface RequestAbout {
+  rawEmailId?: string; documentId?: string; partyId?: string; stopId?: string; taskId?: string;
+}
+
+/** One cited source of an answer. `label` is what the tool showed. */
+export const REQUEST_SOURCE_TYPES = [
+  "document", "mail", "gmail", "transaction", "party", "debt", "stop", "task", "entry",
+] as const;
+export type RequestSourceType = typeof REQUEST_SOURCE_TYPES[number];
+export interface RequestSource { type: RequestSourceType; id: string; why: string; label?: string }
+
+/** One id a tool result showed. `address` is an e-mail address, parsed strictly. */
+export interface RequestToolRef { type: RequestSourceType | "track" | "address"; id: string; label?: string }
+export interface RequestToolCall {
+  tool: string;
+  args: unknown;
+  resultSha256: string;
+  ids: RequestToolRef[];
+  ms: number;
+  at: string;
+  /** A refused call (cap reached, bad arguments, Gmail unavailable): why. */
+  error?: string;
+  /** gmail_read only: the headers and text the store needs to reply to it. */
+  mail?: {
+    gmailId: string; threadId: string; messageId: string | null; references: string[];
+    from: string; to: string; subject: string; date: string; body: string;
+  };
+}
+
+export const requests = pgTable("requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").notNull().unique(),
+  parentRequestId: uuid("parent_request_id").references((): AnyPgColumn => requests.id),
+  text: text("text").notNull(),
+  about: jsonb("about").$type<RequestAbout | null>(),
+  status: text("status").$type<RequestStatus>().notNull().default("queued"),
+  answer: text("answer"),
+  sources: jsonb("sources").$type<RequestSource[]>().notNull().default([]),
+  martinSteps: jsonb("martin_steps").$type<string[]>().notNull().default([]),
+  proposalId: uuid("proposal_id").references((): AnyPgColumn => proposals.id),
+  prompt: text("prompt"),
+  promptVersion: text("prompt_version"),
+  model: text("model"),
+  modelOutput: text("model_output"),
+  toolLog: jsonb("tool_log").$type<RequestToolCall[]>().notNull().default([]),
+  error: text("error"),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  answeredAt: timestamp("answered_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("requests_status_idx").on(t.status, t.createdAt),
+  index("requests_parent_idx").on(t.parentRequestId),
+  check("requests_text_check", sql`char_length(${t.text}) BETWEEN 1 AND 4000`),
+  check("requests_status_check", sql`${t.status} IN ('queued', 'working', 'answered', 'failed', 'cancelled')`),
+  check("requests_answered_ck", sql`${t.status} <> 'answered' OR (${t.answer} IS NOT NULL AND ${t.answeredAt} IS NOT NULL)`),
+  check("requests_working_ck", sql`${t.status} <> 'working' OR ${t.claimedAt} IS NOT NULL`),
+  check("requests_no_self_parent_ck", sql`${t.parentRequestId} IS DISTINCT FROM ${t.id}`),
 ]);
 
 // Talking points during a call (Added 2026-11-03, migration 0042): the ONE AI
