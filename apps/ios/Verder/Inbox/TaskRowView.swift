@@ -62,6 +62,11 @@ final class TaskModel {
     private(set) var failedStatus: String?
     /// When the copy on screen was loaded (the offline readout).
     private(set) var loadedAt: Date?
+    /// A final step (gedaan, laten vallen) Martin confirmed, HELD on the
+    /// phone for its undo window before it is posted — the list's own rule
+    /// (`InboxDecisions`): "Ongedaan maken" inside the window means nothing
+    /// was ever recorded, so the server's "final" stays true.
+    private(set) var held: String?
     /// Haptic triggers (brief §2.5).
     private(set) var successes = 0
     private(set) var errors = 0
@@ -69,12 +74,61 @@ final class TaskModel {
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let onUnauthorized: @MainActor () -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private let sleep: @Sendable (TimeInterval) async throws -> Void
+    @ObservationIgnored private var holdTimer: Task<Void, Never>?
+    @ObservationIgnored private let onCommitted: @MainActor () async -> Void
 
     init(client: APIClient, onUnauthorized: @escaping @MainActor () -> Void = {},
-         now: @escaping @Sendable () -> Date = { Date() }) {
+         now: @escaping @Sendable () -> Date = { Date() },
+         sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+         onCommitted: @escaping @MainActor () async -> Void = {}) {
         self.client = client
         self.onUnauthorized = onUnauthorized
         self.now = now
+        self.sleep = sleep
+        self.onCommitted = onCommitted
+    }
+
+    /// The status the screen draws: the held step while it is held.
+    var shownStatus: String? { held ?? task?.status }
+
+    /// Holds a confirmed final step for `window` seconds, then posts it.
+    func hold(_ status: String, window: TimeInterval) {
+        guard let t = task, !isBusy, t.validNext.contains(status), Self.isFinal(status) else { return }
+        holdTimer?.cancel()
+        held = status
+        failedStatus = nil
+        message = nil
+        let sleep = sleep
+        holdTimer = Task { [weak self] in
+            do { try await sleep(window) } catch { return }
+            await self?.commitHeld()
+        }
+    }
+
+    /// "Ongedaan maken": nothing was posted, so nothing is recorded.
+    func undoHeld() {
+        holdTimer?.cancel()
+        holdTimer = nil
+        held = nil
+    }
+
+    /// Posts the held step now (the window ran out, or the screen is leaving).
+    func commitHeld() async {
+        guard let status = held else { return }
+        holdTimer?.cancel()
+        holdTimer = nil
+        held = nil
+        if await setStatus(status) { await onCommitted() }
+    }
+
+    /// "Taak gedaan" in the undo row.
+    var heldText: String? {
+        switch held {
+        case "done": "Taak gedaan"
+        case "dropped": "Taak laten vallen"
+        default: nil
+        }
     }
 
     /// There is no single-task route: the list carries each task's effective
@@ -95,18 +149,23 @@ final class TaskModel {
     }
 
     /// Waits on Martin by the one definition (`WAITING_TASK_STATUSES`).
-    var waitsOnMartin: Bool { task?.status == "open" || task?.status == "in-progress" }
+    var waitsOnMartin: Bool { shownStatus == "open" || shownStatus == "in-progress" }
 
     /// A segment may be chosen when the server offers it; the current one is
     /// drawn selected.
-    func segmentEnabled(_ status: String) -> Bool { task?.validNext.contains(status) == true }
+    /// While a step is held, the status it left is a choice too: picking it
+    /// (or any other) takes the held step back first.
+    func segmentEnabled(_ status: String) -> Bool {
+        if held != nil, status == task?.status { return true }
+        return task?.validNext.contains(status) == true
+    }
 
     /// Gedaan and laten vallen are final in `TASK_EDGES`: they ask first.
     static func isFinal(_ status: String) -> Bool { status == "done" || status == "dropped" }
 
     /// The badge: amber only while it waits on Martin.
     var badge: (text: String, tone: DetailBadge.Tone)? {
-        switch task?.status {
+        switch shownStatus {
         case "open", "in-progress": ("Wacht op jou", .waiting)
         case "waiting": ("Wacht op ander", .neutral)
         case "done": ("Gedaan", .okay)
@@ -116,11 +175,14 @@ final class TaskModel {
     }
 
     /// "bezig" beside the badge of a task Martin is working on.
-    var badgeNote: String? { task?.status == "in-progress" ? "bezig" : nil }
+    var badgeNote: String? { shownStatus == "in-progress" ? "bezig" : nil }
 
     /// The one line under the control: what the current status means.
     func explanation(offline: Bool) -> String {
         if offline, task.map({ !$0.validNext.isEmpty }) == true { return Copy.offline }
+        // Inside the undo window another status really can still be chosen.
+        if held == "done" { return "Gedaan. Vergist? Kies een andere status." }
+        if held == "dropped" { return "Laten vallen. Vergist? Kies een andere status." }
         switch task?.status {
         case "open": return "Open: dit wacht op jou. Wacht: je wacht op iemand anders; de taak staat dan niet in Voor jou."
         case "in-progress": return "Bezig: je bent ermee bezig; het blijft in Voor jou staan."
@@ -146,7 +208,7 @@ final class TaskModel {
         status == "done" ? "Taak op gedaan zetten?" : "Taak laten vallen?"
     }
 
-    static let confirmText = "Dit kan daarna niet meer terug: de taak verlaat Voor jou, en verder legt de stap vast."
+    static let confirmText = "Je kunt het nog even ongedaan maken; daarna kan het niet meer terug: de taak verlaat Voor jou, en verder legt de stap vast."
 
     func setStatus(_ status: String) async -> Bool {
         guard let t = task, !isBusy, t.validNext.contains(status) else { return false }
@@ -219,6 +281,7 @@ struct TaskScreen: View {
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.voorJouNext) private var next
+    @Environment(\.scenePhase) private var scenePhase
 
     private var ax: Bool { typeSize.isAccessibilitySize }
 
@@ -232,7 +295,12 @@ struct TaskScreen: View {
                 ProposalSkeleton()
             }
         } dock: {
-            if let model, model.task.map({ TaskModel.isFinal($0.status) }) == true, next != nil {
+            if let model, let text = model.heldText {
+                DetailDock {
+                    DetailUndoRow(text: text) { model.undoHeld() }
+                    if next != nil { NextInVoorJouButton(id: id) }
+                }
+            } else if let model, model.task.map({ TaskModel.isFinal($0.status) }) == true, next != nil {
                 DetailDock { NextInVoorJouButton(id: id) }
             }
         } menu: {
@@ -247,7 +315,9 @@ struct TaskScreen: View {
         }
         .task {
             if model == nil {
-                let m = TaskModel(client: client, onUnauthorized: onUnauthorized, now: now)
+                let refresh = next?.refresh
+                let m = TaskModel(client: client, onUnauthorized: onUnauthorized, now: now,
+                                  onCommitted: { await refresh?() })
                 model = m
                 await m.load(id: id)
                 await applyFixture(m)
@@ -255,6 +325,11 @@ struct TaskScreen: View {
         }
         .sensoryFeedback(.success, trigger: model?.successes ?? 0)
         .sensoryFeedback(.error, trigger: model?.errors ?? 0)
+        // Leaving posts what is held: a step is never lost to a gone screen.
+        .onDisappear { if let model { Task { await model.commitHeld() } } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active, let model { Task { await model.commitHeld() } }
+        }
         .confirmationDialog(confirming.map(TaskModel.confirmTitle) ?? "", isPresented: Binding(
             get: { confirming != nil }, set: { if !$0 { confirming = nil } }
         ), titleVisibility: .visible) {
@@ -271,8 +346,17 @@ struct TaskScreen: View {
 
     private func choose(_ status: String, confirmed: Bool = false) async {
         guard let model else { return }
+        // Another choice inside the undo window takes the held step back.
+        if model.held != nil {
+            model.undoHeld()
+            if status == model.task?.status { return }
+        }
         if TaskModel.isFinal(status) && !confirmed { confirming = status; return }
         confirming = nil
+        if TaskModel.isFinal(status) {
+            model.hold(status, window: ax ? InboxDecisions.accessibilityWindow : InboxDecisions.window)
+            return
+        }
         if await model.setStatus(status) { await next?.refresh() }
     }
 
@@ -307,7 +391,7 @@ struct TaskScreen: View {
                         .font(.mono(18, relativeTo: .title3))
                         .foregroundStyle(Color.inkBright)
                         .fixedSize(horizontal: false, vertical: true)
-                    if !TaskModel.isFinal(task.status) {
+                    if !TaskModel.isFinal(model.shownStatus ?? task.status) {
                         DetailPara(DetailText.relativeDue(due, now: now()), color: .inkMute, size: 15)
                     }
                 }
@@ -337,7 +421,7 @@ struct TaskScreen: View {
     private func statusSegments(_ model: TaskModel, _ task: TaskDTO) -> some View {
         HStack(spacing: 4) {
             ForEach(TaskModel.segments, id: \.self) { status in
-                let current = task.status == status
+                let current = model.shownStatus == status
                 let enabled = model.segmentEnabled(status) && !offline && !model.isBusy
                 Button { Task { await choose(status) } } label: {
                     Text(TaskModel.segmentLabel(status))
@@ -357,7 +441,11 @@ struct TaskScreen: View {
                 }
                 .buttonStyle(AuthPressStyle())
                 .disabled(!enabled || current)
-                .opacity(current || model.segmentEnabled(status) ? 1 : 0.4)
+                // Every unselected segment in the same ink (the frames): a
+                // step the server does not offer simply does nothing, and
+                // says so to VoiceOver; only offline dims the control.
+                .opacity(offline && !current ? 0.55 : 1)
+                .accessibilityHint(model.segmentEnabled(status) || current ? "" : "Deze stap kan niet (meer).")
                 .accessibilityLabel(TaskModel.label(status))
                 .accessibilityAddTraits(current ? .isSelected : [])
             }
@@ -372,7 +460,7 @@ struct TaskScreen: View {
     private func statusList(_ model: TaskModel, _ task: TaskDTO) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(TaskModel.segments, id: \.self) { status in
-                let current = task.status == status
+                let current = model.shownStatus == status
                 Button { Task { await choose(status) } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 16) {
                         Image(systemName: "checkmark")
@@ -392,7 +480,8 @@ struct TaskScreen: View {
                 }
                 .buttonStyle(AuthPressStyle())
                 .disabled(!model.segmentEnabled(status) || offline || model.isBusy || current)
-                .opacity(current || model.segmentEnabled(status) ? 1 : 0.4)
+                .opacity(offline && !current ? 0.55 : 1)
+                .accessibilityHint(model.segmentEnabled(status) || current ? "" : "Deze stap kan niet (meer).")
                 .accessibilityLabel(TaskModel.label(status))
                 .accessibilityAddTraits(current ? .isSelected : [])
             }
@@ -407,6 +496,8 @@ struct TaskScreen: View {
         guard let launch = FixtureLaunch.current, !fixtureApplied else { return }
         fixtureApplied = true
         if launch.detail == .fout { _ = await model.setStatus("done") }
+        // Just set to gedaan: the undo row up, its window frozen open.
+        if launch.detail == .gedaan { model.hold("done", window: 3600) }
         #endif
     }
 }

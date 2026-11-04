@@ -120,7 +120,38 @@ struct VoorJouTab: View {
     private var nextUp: VoorJouNext {
         VoorJouNext(pick: { id in VoorJouNextPick.pick(items: store.inbox?.items ?? [], excluding: id) },
                     refresh: { await store.refresh() },
-                    open: { route in path = [route] })
+                    open: { route in path = [route] },
+                    hand: { id, action, title in
+                        let d = Self.handBack(id: id, action: action, title: title, items: store.inbox?.items ?? [])
+                        #if DEBUG
+                        // A capture shoots the toast: its countdown frozen.
+                        if FixtureLaunch.current?.detail != nil {
+                            decisions.fixtureHold([d], remaining: decisions.accessibilitySize ? 8 : 4)
+                            path = []
+                            return
+                        }
+                        #endif
+                        decisions.decide(d)
+                        path = []
+                    },
+                    push: { route in path.append(route) })
+    }
+
+    /// The decision a detail screen hands back to the list: keyed by the
+    /// list's own row (so the row hides while it is held), named as the
+    /// row names it. A row the list has not loaded falls back to the kind
+    /// the action implies.
+    static func handBack(id: String, action: ListDecision.Action, title: String,
+                         items: [WaitingItem]) -> ListDecision {
+        let item = items.first { $0.id.lowercased() == id.lowercased() }
+        let fallbackKind: String = switch action {
+        case .answer: "question"
+        case .task: "task"
+        default: "suggestion"
+        }
+        return ListDecision(id: UUID(), key: item.map(VoorJouList.key) ?? "\(fallbackKind):\(id)",
+                            title: item?.title ?? title, action: action, target: id,
+                            short: item.flatMap(VoorJouList.toastSubject))
     }
 
     @ViewBuilder private func destination(_ route: InboxRoute) -> some View {

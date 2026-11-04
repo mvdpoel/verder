@@ -118,7 +118,7 @@ struct SuggestionDetailTests {
     }
 
     @Test func fieldsPerKindMirrorTheQueueCard() async {
-        for (data, keys) in [(SuggestionFixture.entry, ["summary", "details"]),
+        for (data, keys) in [(SuggestionFixture.entry, ["summary", "details", "occurredAt", "channel"]),
                              (SuggestionFixture.task, ["title", "dueAt", "details"]),
                              (SuggestionFixture.docMeta(), ["title", "docType"])] {
             let m = model(SuggestionServer(data))

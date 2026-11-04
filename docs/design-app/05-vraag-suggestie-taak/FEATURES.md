@@ -186,7 +186,7 @@ Het scherm wordt een verslag: een badge "BEANTWOORD" met de tijd, "JE ANTWOORD" 
 
 Na "Ja, koppel hem" biedt het beantwoorde scherm "Brief losmaken" ("Verkeerd gekozen? Maak de brief weer los. Ook dat wordt vastgelegd."). Na "Nee" of "Weet ik niet" toont Voor jou een toast, "Beantwoord: Nee · Ongedaan maken".
 
-**Status:** Nog te bouwen — en in strijd met de server. `proposals.answer` zet het voorstel op `sent` zonder weg terug, en de mobiele API heeft geen route voor `registry.debts.unlinkDocument` (die bestaat op de webrouter). Een antwoord dat een taak op `done` of `dropped` zette kan nooit worden teruggedraaid, omdat die definitief zijn. Nodig: Martins besluit over wat ongedaan maken per actie betekent; een mobiele route om los te koppelen; een route die een `none`-antwoord terugzet naar `pending`; de toast; tests.
+**Status:** Deels gebouwd — "Nee" en "Weet ik niet" (actie `none`) gaan vanaf de Voor jou-stack terug naar de lijst en worden daar VASTGEHOUDEN met de toast "Beantwoord: Nee · Ongedaan maken" (`ListDecision.Action.answer`, `InboxDecisions`): pas na het venster van 5 s (8 s bij AX) gaat `POST …/answer` de deur uit, dus ongedaan maken binnen het venster betekent dat er nooit iets is vastgelegd en er geen terugroute nodig is. Na "Ja, koppel hem" opent de rij "Brief gekoppeld aan de vordering" de brief (chevron) en zegt het scherm "Verkeerd gekozen? Op de website maak je de brief weer los." Nog te bouwen: de knop "Brief losmaken" — de mobiele API heeft geen route voor `registry.debts.unlinkDocument`, en het frame belooft "Ook dat wordt vastgelegd", terwijl losmaken geen bewijs is en niets logt. Dat vraagt een route en Martins woorden.
 
 #### Rechtstreeks vanuit de melding antwoorden
 
@@ -245,7 +245,7 @@ Totdat op "Aanpassen" wordt getikt, worden de velden als platte tekst getoond ("
 
 De partij, het kanaal en de datum van het gesprek, elk bewerkbaar ("Woonstichting Lindehof · telefoon · za 31 okt").
 
-**Status:** Nog te bouwen — UI en een partijkiezer. De goedkeurroute accepteert `occurredAt`, `channel`, `direction` en `participantPartyIds` al via `entryFromProposed`, en `GET /api/mobile/v1/parties` bestaat.
+**Status:** Deels gebouwd — de kaart "GESPREK · AANPASSEN" toont partij · kanaal over de dag; tikken zet het draaiwiel (dag + tijd) in de dock en een kanaalkiezer ("Hoe: telefoon") in de kaart, en alleen een gewijzigd `occurredAt` / `channel` gaat mee in `edits`. De partij komt uit `proposed.partyName` als de server die meestuurt (vandaag niet) en is nog niet bewerkbaar: dat vraagt een partijkiezer op `participantPartyIds`.
 
 #### Document: "Van wie" en "Het document"
 
@@ -281,7 +281,7 @@ Waar de taak vandaan kwam, als link.
 
 "Uiterlijk op" als dag, uur en minuut ("wo 4 nov 2026 · 17:00").
 
-**Status:** Gebouwd — een deadline die als tijdstip binnenkomt krijgt veldstijl `.dateTime`: een draaiwiel voor dag, uur en minuut in de dock (waar het toetsenbord zou staan), Amsterdamse tijd, verstuurd als ISO 8601; een kale dag blijft een dag. "Geen datum" wist hem.
+**Status:** Gebouwd — een deadline die als tijdstip binnenkomt krijgt veldstijl `.dateTime`: een draaiwiel voor dag, uur en minuut in de dock (waar het toetsenbord zou staan), Amsterdamse tijd, verstuurd als ISO 8601; een kale dag blijft een dag. Een gekozen datum gaat terug met "Zet terug"; er is geen "Geen datum".
 
 #### Vaste last: goedkeuren op de website
 
@@ -326,7 +326,7 @@ Een sheet met de titel "Niet relevant", met de regel "Waarom? Niet verplicht —
 
 De onderste knop wijst direct af en keert terug naar Voor jou met een toast om het ongedaan te maken. Het redensheet verhuist naar het "…"-menu.
 
-**Status:** Nog te bouwen — server en UI. `suggestions.reject` is definitief, en geen route heropent een suggestie. Nodig: een heropenroute (`rejected → pending` binnen een kort venster, waarbij het ongedaan maken wordt vastgelegd), de toast op Voor jou, en tests.
+**Status:** Gebouwd — zonder heropenroute. Op de Voor jou-stack gaat "Niet relevant" terug naar de lijst en wordt de afwijzing daar vastgehouden met "Niet relevant · Ongedaan maken"; pas na het venster gaat `POST …/reject` de deur uit, dus de server blijft definitief en er hoeft niets heropend te worden. Buiten Voor jou (geen lijst om hem vast te houden) opent dezelfde knop het redensheet.
 
 #### Het "…"-menu
 
@@ -334,7 +334,7 @@ De onderste knop wijst direct af en keert terug naar Voor jou met een toast om h
 
 "Niet relevant, met reden…", "Bekijk spraaknotitie" en "Kopieer tekst".
 
-**Status:** Deels gebouwd — "Niet relevant, met reden…" en "Kopieer tekst" staan in het systeemmenu. "Bekijk spraaknotitie" ontbreekt: het DTO bevat geen transcript en geen `audioDocumentId`.
+**Status:** Deels gebouwd — alle drie staan in het systeemmenu. "Bekijk spraaknotitie" (oog) verschijnt alleen als `origin.documentId` de bewaarde opname noemt en opent die als document; geen route stuurt dat veld vandaag mee, en zonder bewaarde opname is er niets om te tonen.
 
 #### Wat er is vastgelegd, na het goedkeuren
 
@@ -348,7 +348,7 @@ Een badge "VASTGELEGD" (of "TAAK AANGEMAAKT") met de tijd, en een rij die het aa
 
 "Een logboekregel blijft staan. Klopt er iets niet? Voeg een correctie toe; die komt ernaast." Het corrigeren van een goedgekeurde logboekregel voegt een vervangende regel toe en bewerkt nooit het origineel.
 
-**Status:** Nog te bouwen — een mobiele route en een editor. De serverprocedure bestaat (`entries.correct`, gelogd als `entry.corrected` met `supersedesId`).
+**Status:** Deels gebouwd — "Correctie toevoegen" en de rij "In het logboek" (chevron) openen de regel op de website (`/logbook/<entryId>`), waar de correctie wordt gemaakt; de tekst zegt "Op de website". Een correctie op de telefoon vraagt een mobiele route en een editor (`entries.correct`, gelogd als `entry.corrected` met `supersedesId`).
 
 #### Wie het eerst besliste
 
@@ -408,7 +408,7 @@ De gekoppelde items van de taak als rijen die ze openen ("Formulier bijzondere b
 
 "Taak gedaan · Ongedaan maken", en "Gedaan. Vergist? Kies een andere status.".
 
-**Status:** Nog te bouwen — in strijd met de server. `done` heeft geen uitgaande overgangen in `TASK_EDGES`. De enige uitweg is een `overrideReason`, die de mobiele route bewust weigert. Dit vraagt eerst Martins besluit: óf een korte gelogde "ongedaan maken"-overgang, óf geen ongedaan maken en aangepaste tekst.
+**Status:** Gebouwd — zonder de server te raken. Na de bevestiging houdt `TaskModel` de stap vast (`hold`, 5 s / 8 s bij AX) en toont de dock "Taak gedaan · Ongedaan maken"; binnen dat venster staat er "Gedaan. Vergist? Kies een andere status." en kan elke andere status echt worden gekozen (de verlaten status ook). Pas daarna, of zodra het scherm verdwijnt of de app naar de achtergrond gaat, gaat `POST …/status` de deur uit. Daarna is gedaan definitief zoals `TASK_EDGES` wil, en zegt het scherm weer "Deze taak staat niet meer in Voor jou."
 
 #### Een taak gedaan markeren vanuit de melding
 
@@ -637,7 +637,7 @@ Alle 44 frames uit `detail · final` (`326:6980`), opnieuw geëxporteerd op 2026
 | ![](frames/Suggestie_vordering_onbekend_bedrag.jpg) `Suggestie_vordering_onbekend_bedrag.jpg` | Vordering zonder genoemd totaal, schuldeiser en incassopartij | "Gevorderd: onbekend"; geen "Namens hen" |
 | ![](frames/Suggestie_vordering_aangepast_AX5.jpg) `Suggestie_vordering_aangepast_AX5.jpg` | Aangepaste vordering bij AX5 | Dynamic Type schaalt |
 | ![](frames/Suggestie_taak_normaal.jpg) `Suggestie_taak_normaal.jpg` | Taaksuggestie: titel, deadline, toelichting | Gebouwd; deadline is een dag |
-| ![](frames/Suggestie_taak_datum_kiezen.jpg) `Suggestie_taak_datum_kiezen.jpg` | Draaiwiel voor dag + tijd van de deadline | Kiezer voor alleen een dag, met "Geen datum" |
+| ![](frames/Suggestie_taak_datum_kiezen.jpg) `Suggestie_taak_datum_kiezen.jpg` | Draaiwiel voor dag + tijd van de deadline | Draaiwiel voor dag + tijd; geen "Geen datum" (Zet terug brengt het voorstel terug) |
 | ![](frames/Suggestie_taak_vastgelegd.jpg) `Suggestie_taak_vastgelegd.jpg` | Taak aangemaakt, de nieuwe taak wacht nu | "Vastgelegd."; de nieuwe taak verschijnt na verversen in de lijst |
 | ![](frames/Suggestie_iPhone_SE.jpg) `Suggestie_iPhone_SE.jpg` | Suggestie op een iPhone SE | Dezelfde kolom |
 | ![](frames/Suggestie_AX5.jpg) `Suggestie_AX5.jpg` | Suggestie bij AX5 met de knop met aantal aanpassingen | Dynamic Type schaalt; "Klopt zo" |

@@ -14,6 +14,9 @@ enum DecisionBody: Encodable, Sendable, Equatable {
     case status(String)
     /// `{}`: "Door verder gedaan"'s undo.
     case empty
+    /// `{ revision, option }`: a question answered with an option that
+    /// changes nothing ("Nee", "Weet ik niet").
+    case answer(revision: Int, option: Int)
 
     func encode(to encoder: Encoder) throws {
         switch self {
@@ -21,6 +24,7 @@ enum DecisionBody: Encodable, Sendable, Equatable {
         case .reject: try RejectRequest(reason: nil).encode(to: encoder)
         case .status(let s): try TaskStatusRequest(status: s).encode(to: encoder)
         case .empty: try EmptyBody().encode(to: encoder)
+        case .answer(let revision, let option): try AnswerOptionRequest(revision: revision, option: option).encode(to: encoder)
         }
     }
 }
@@ -33,6 +37,9 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case task(String)
         /// Undo one thing verder did ("Door verder gedaan").
         case undoVerder
+        /// A question's option that changes nothing, by its index, at the
+        /// revision the screen showed; `label` is the option's own words.
+        case answer(option: Int, revision: Int, label: String)
     }
 
     let id: UUID
@@ -52,6 +59,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .reject: "/api/mobile/v1/suggestions/\(target)/reject"
         case .task: "/api/mobile/v1/tasks/\(target)/status"
         case .undoVerder: DoneByVerderModel.undoPath(target)
+        case .answer: "/api/mobile/v1/proposals/\(target)/answer"
         }
     }
 
@@ -61,6 +69,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .reject: .reject
         case .task(let s): .status(s)
         case .undoVerder: .empty
+        case .answer(let option, let revision, _): .answer(revision: revision, option: option)
         }
     }
 
@@ -78,6 +87,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .task("open"): "Weer open"
         case .task(let s): "Status: \(s)"
         case .undoVerder: "Terug in Kan wachten"
+        case .answer(_, _, let label): "Beantwoord: \(label)"
         }
     }
 
@@ -90,6 +100,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .task("dropped"): "laten vallen"
         case .task: "gewijzigd"
         case .undoVerder: "teruggezet"
+        case .answer: "beantwoord"
         }
     }
 
@@ -100,6 +111,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .reject: "Je afwijzing"
         case .task: "Je statuswijziging"
         case .undoVerder: "Je ongedaan maken"
+        case .answer: "Je antwoord"
         }
     }
 
@@ -109,6 +121,7 @@ struct ListDecision: Identifiable, Equatable, Sendable {
         case .reject: "Afwijzing intrekken"
         case .task: "Wijziging intrekken"
         case .undoVerder: "Intrekken"
+        case .answer: "Antwoord intrekken"
         }
     }
 

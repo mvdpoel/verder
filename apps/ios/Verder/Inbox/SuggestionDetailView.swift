@@ -28,6 +28,7 @@ final class SuggestionDetailModel {
         static let debtMeaning = "Goedkeuren legt vast wat zij vorderen; je erkent het bedrag daarmee niet."
         static let collector = "Dit lijkt op een incassopartij — geen oordeel, wel goed om op de lijst te hebben."
         static let tapToEdit = "Tik op een veld om het aan te passen."
+        static let correctionWeb = "Een logboekregel blijft staan. Klopt er iets niet? Op de website voeg je een correctie toe; die komt ernaast."
         static let unknownAmount = "onbekend — de brief noemt geen totaal"
     }
 
@@ -41,6 +42,16 @@ final class SuggestionDetailModel {
             case dateTime
             /// Whole cents, typed as "240,00"; empty is UNKNOWN, never € 0,00.
             case money
+            /// When a conversation took place (an instant, ISO 8601), on the
+            /// "Gesprek" card with who and how: "Woonstichting Lindehof ·
+            /// telefoon" over "za 31 okt".
+            case occurred
+            /// One of a fixed set (`SuggestionFormat.channels`), chosen in
+            /// the card it is part of.
+            case choice
+
+            /// Set on the wheel in the dock.
+            var isDate: Bool { self == .day || self == .dateTime || self == .occurred }
         }
         let key: String
         let label: String
@@ -51,6 +62,9 @@ final class SuggestionDetailModel {
         /// the procedure wants a string.
         let cleared: JSONValue
         let initial: String
+        /// Drawn inside another field's card (the channel in "Gesprek"),
+        /// never as a card of its own.
+        var partOf: String? = nil
         var id: String { key }
     }
 
@@ -299,7 +313,8 @@ final class SuggestionDetailModel {
         }
         var out = where_.map { "Gevonden door verder in \($0)." } ?? "Gevonden door verder."
         if s.kind == "debt" { out += " " + Copy.debtMeaning }
-        else if isOpen && !opensOnWebsite { out += " " + Copy.tapToEdit }
+        // A task's fields read as a form already (the frame leaves it out).
+        else if isOpen && !opensOnWebsite && s.kind != "task" { out += " " + Copy.tapToEdit }
         return out
     }
 
@@ -337,15 +352,46 @@ final class SuggestionDetailModel {
             return SuggestionFormat.euro(cents: cents)
         case .day: return v.isEmpty ? "—" : (ProposalFormat.dayMonth(v) ?? v)
         case .dateTime: return parseISODate(v).map(DetailText.longDateTime) ?? "—"
+        case .occurred: return parseISODate(v).map(DetailText.dayName) ?? "—"
+        case .choice: return SuggestionFormat.channel(v)
         default: return v.isEmpty ? "—" : v
         }
+    }
+
+    /// The "Gesprek" card's first line: who, then how ("Woonstichting
+    /// Lindehof · telefoon"). Who is read from the proposal when it names
+    /// one; it is not editable here.
+    var conversationLine: String {
+        let channel = fields.first { $0.style == .choice }.map(display)
+        return [suggestion?.proposed["partyName"]?.string, channel].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The fields drawn as their own card.
+    var cardFields: [Field] { fields.filter { $0.partOf == nil } }
+
+    /// The fields drawn inside `key`'s card.
+    func parts(of key: String) -> [Field] { fields.filter { $0.partOf == key } }
+
+    /// The source voice note, where the server names its kept recording.
+    var voiceNoteDocument: String? {
+        guard let o = suggestion?.origin, o.kind == "spraaknotitie" else { return nil }
+        return o.documentId
+    }
+
+    /// "De suggestie staat niet meer in Voor jou, de nieuwe taak wel: die
+    /// wacht op jou. Daarom blijft Voor jou op 3." — the count is the live
+    /// one, when the screen knows it.
+    static func taskMadeText(waiting: Int?) -> String {
+        let head = "De suggestie staat niet meer in Voor jou, de nieuwe taak wel: die wacht op jou."
+        return waiting.map { "\(head) Daarom blijft Voor jou op \($0)." } ?? head
     }
 
     /// The "was:" line of a changed field: the proposal's own value.
     func was(_ f: Field) -> String {
         switch f.style {
         case .money: return SuggestionFormat.cents(from: f.initial).map(SuggestionFormat.euro) ?? "onbekend"
-        case .dateTime: return parseISODate(f.initial).map(DetailText.longDateTime) ?? "geen datum"
+        case .dateTime, .occurred: return parseISODate(f.initial).map(DetailText.longDateTime) ?? "geen datum"
+        case .choice: return SuggestionFormat.channel(f.initial)
         case .day: return f.initial.isEmpty ? "geen datum" : (ProposalFormat.dayMonth(f.initial) ?? f.initial)
         default: return f.initial.isEmpty ? "leeg" : f.initial
         }
@@ -364,10 +410,21 @@ final class SuggestionDetailModel {
         func text(_ key: String) -> String { p[key]?.string ?? "" }
         switch s.kind {
         case "log-entry":
-            return [
+            var out = [
                 Field(key: "summary", label: "Samenvatting", style: .line, required: true, cleared: .string(""), initial: text("summary")),
                 Field(key: "details", label: "Toelichting", style: .text, required: false, cleared: .string(""), initial: text("details")),
             ]
+            // "Gesprek": when (the wheel) and how (the channel). Both are
+            // in `entryEdits`; who is not editable here.
+            if let at = p["occurredAt"]?.string.flatMap(parseISODate) {
+                out.append(Field(key: "occurredAt", label: "Gesprek", style: .occurred, required: true,
+                                 cleared: .null, initial: SuggestionFormat.iso(at)))
+                if let c = p["channel"]?.string, SuggestionFormat.channels.contains(c) {
+                    out.append(Field(key: "channel", label: "Kanaal", style: .choice, required: true,
+                                     cleared: .null, initial: c, partOf: "occurredAt"))
+                }
+            }
+            return out
         case "document-meta":
             return [
                 Field(key: "title", label: "Titel", style: .line, required: true, cleared: .string(""),
@@ -436,6 +493,23 @@ struct ApproveSuggestionResponse: Decodable, Sendable {
 }
 
 enum SuggestionFormat {
+    /// `entryForApproval.channel`, in the order the picker offers them.
+    static let channels = ["call", "meeting", "email", "whatsapp", "voicemail", "letter", "other"]
+
+    /// A channel in Dutch ("call" → "telefoon").
+    static func channel(_ c: String) -> String {
+        switch c {
+        case "call": "telefoon"
+        case "meeting", "visit": "gesprek"
+        case "email": "e-mail"
+        case "whatsapp": "WhatsApp"
+        case "voicemail": "voicemail"
+        case "letter": "brief"
+        case "other": "anders"
+        default: c
+        }
+    }
+
     static func kind(_ kind: String) -> String {
         switch kind {
         case "log-entry": "Logboekregel"
@@ -526,8 +600,9 @@ struct SuggestionDetailView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        DetailScaffold(navTitle: model?.suggestion.map { SuggestionFormat.kind($0.kind) } ?? "Suggestie",
-                       focus: editingKey) {
+        // "Suggestie" in the bar whatever the kind (the frames); the kind is
+        // in the eyebrow.
+        DetailScaffold(navTitle: "Suggestie", focus: editingKey) {
             if let model, let s = model.suggestion {
                 content(model, s)
             } else if let error = model?.loadError {
@@ -542,6 +617,9 @@ struct SuggestionDetailView: View {
                 Button("Niet relevant, met reden…", systemImage: "nosign") { rejecting = true }
                     .disabled(offline)
             }
+            if let doc = model?.voiceNoteDocument, let push = next?.push {
+                Button("Bekijk spraaknotitie", systemImage: "eye") { push(.document(id: doc, title: "Spraaknotitie")) }
+            }
             if let model, model.suggestion != nil {
                 Button("Kopieer tekst", systemImage: "doc.on.doc") { UIPasteboard.general.string = model.copyText }
             }
@@ -554,7 +632,7 @@ struct SuggestionDetailView: View {
                 await applyFixture(m)
             }
         }
-        .onChange(of: focused) { _, now in if now == nil, editingKey != nil, model?.field(editingKey!)?.style != .dateTime { editingKey = nil } }
+        .onChange(of: focused) { _, now in if now == nil, editingKey != nil, model?.field(editingKey!)?.style.isDate != true { editingKey = nil } }
         .sensoryFeedback(.success, trigger: model?.successes ?? 0)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: model?.softs ?? 0)
         .sensoryFeedback(.error, trigger: model?.errors ?? 0)
@@ -596,7 +674,7 @@ struct SuggestionDetailView: View {
                 .padding(.top, 20)
             }
             VStack(alignment: .leading, spacing: 16) {
-                ForEach(model.fields) { f in fieldCard(model, f) }
+                ForEach(model.cardFields) { f in fieldCard(model, f) }
                 ForEach(Array(model.readOnly.enumerated()), id: \.offset) { _, r in
                     DetailCard(r.label) { DetailPara(r.value) }
                 }
@@ -628,15 +706,27 @@ struct SuggestionDetailView: View {
                 let due = parseISODate(model.value("dueAt")).map { "Taak · uiterlijk \(ProposalText.dayMonthName($0))" } ?? "Taak"
                 DetailRow(title: model.value("title"), meta: due, dot: .attn,
                           route: o.taskId.map { InboxRoute.task($0) })
-                DetailPara("De suggestie staat niet meer in Voor jou, de nieuwe taak wel: die wacht op jou.",
+                DetailPara(SuggestionDetailModel.taskMadeText(waiting: next?.pick(id)?.remaining),
                            color: .inkMute, size: 15)
                     .padding(.horizontal, 16).padding(.top, 20)
             case "log-entry":
+                // The phone has no logbook screen: the entry, and a
+                // correction beside it, open on the website.
+                let web = o.entryId.map { client.base.appending(path: "logbook/\($0)") }
                 DetailLabel("In het logboek").padding(.horizontal, 16)
-                DetailRow(title: model.value("summary"), meta: entryMeta(model), dot: .steel)
-                DetailPara("Een logboekregel blijft staan. Klopt er iets niet? Op de website voeg je een correctie toe; die komt ernaast.",
-                           color: .inkMute, size: 15)
+                DetailRow(title: model.value("summary"), meta: entryMeta(model), dot: .steel, web: web)
+                DetailPara(SuggestionDetailModel.Copy.correctionWeb, color: .inkMute, size: 15)
                     .padding(.horizontal, 16).padding(.top, 20)
+                if let web {
+                    Link(destination: web) {
+                        Text("Correctie toevoegen")
+                            .font(.display(17, relativeTo: .body, weight: .medium))
+                            .foregroundStyle(Color.signalLink)
+                            .frame(minHeight: 44)
+                    }
+                    .padding(.horizontal, 16).padding(.top, 4)
+                    .accessibilityHint("Opent op de website.")
+                }
             case "debt":
                 DetailLabel("Vordering vastgelegd").padding(.horizontal, 16)
                 DetailRow(title: model.value("creditorName"), meta: model.display(model.field("claimedCents")!), dot: .steel)
@@ -652,20 +742,14 @@ struct SuggestionDetailView: View {
     /// "LOGBOEK · TELEFOON · ZA 31 OKT".
     private func entryMeta(_ model: SuggestionDetailModel) -> String {
         var parts = ["Logboek"]
-        if let c = model.suggestion?.proposed["channel"]?.string { parts.append(Self.channel(c)) }
-        if let at = model.suggestion?.proposed["occurredAt"]?.string.flatMap(parseISODate) { parts.append(DetailText.dayName(at)) }
+        let channel = model.field("channel").map { model.value($0.key) } ?? model.suggestion?.proposed["channel"]?.string
+        if let c = channel { parts.append(SuggestionFormat.channel(c)) }
+        let at = model.field("occurredAt").map { model.value($0.key) } ?? model.suggestion?.proposed["occurredAt"]?.string
+        if let at = at.flatMap(parseISODate) { parts.append(DetailText.dayName(at)) }
         return parts.joined(separator: " · ")
     }
 
-    static func channel(_ c: String) -> String {
-        switch c {
-        case "call": "telefoon"
-        case "email": "e-mail"
-        case "letter": "brief"
-        case "visit": "bezoek"
-        default: c
-        }
-    }
+    static func channel(_ c: String) -> String { SuggestionFormat.channel(c) }
 
     /// The document itself, or where a task was found.
     @ViewBuilder
@@ -684,8 +768,9 @@ struct SuggestionDetailView: View {
     @ViewBuilder
     private func fieldCard(_ model: SuggestionDetailModel, _ f: SuggestionDetailModel.Field) -> some View {
         let editing = editingKey == f.key && model.isOpen
-        let changed = model.isChanged(f.key)
-        let state = editing ? (f.style == .dateTime || f.style == .day ? "aan het kiezen" : "aan het aanpassen")
+        let parts = model.parts(of: f.key)
+        let changed = model.isChanged(f.key) || parts.contains { model.isChanged($0.key) }
+        let state = editing ? (f.style.isDate ? "aan het kiezen" : "aan het aanpassen")
                             : (changed ? "aangepast" : "aanpassen")
         VStack(alignment: .leading, spacing: 8) {
             DetailCard(highlighted: editing, label: {
@@ -703,7 +788,14 @@ struct SuggestionDetailView: View {
             .accessibilityElement(children: editing ? .contain : .combine)
             .accessibilityAddTraits(model.isOpen && !editing ? .isButton : [])
             .accessibilityHint(model.isOpen && !editing ? "Dubbeltik om aan te passen." : "")
-            if changed && model.isOpen { wasLine(model, f) }
+            // The field being edited shows only what it was: "Zet terug"
+            // appears once it is done (the frames' "aangepast").
+            if model.isOpen {
+                if model.isChanged(f.key) { wasLine(model, f, revertible: !editing) }
+                ForEach(parts) { g in
+                    if model.isChanged(g.key) { wasLine(model, g, revertible: !editing) }
+                }
+            }
         }
         .id(f.key)
     }
@@ -723,6 +815,15 @@ struct SuggestionDetailView: View {
                 .wholeWords(shown, font: .mono(18, relativeTo: .title3))
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
+        case .occurred:
+            VStack(alignment: .leading, spacing: 4) {
+                let line = model.conversationLine
+                if !line.isEmpty { DetailPara(line) }
+                Text(shown)
+                    .wholeWords(shown, font: .mono(18, relativeTo: .title3))
+                    .foregroundStyle(Color.inkBright)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         default:
             DetailPara(shown, color: model.value(f.key).isEmpty ? .inkMute : .ink)
         }
@@ -735,6 +836,11 @@ struct SuggestionDetailView: View {
         case .dateTime, .day:
             // The wheel sits in the dock, where the keyboard would be.
             valueText(model, f)
+        case .occurred:
+            VStack(alignment: .leading, spacing: 10) {
+                valueText(model, f)
+                ForEach(model.parts(of: f.key)) { g in channelPicker(model, g) }
+            }
         case .money:
             HStack(spacing: 8) {
                 Text("€").font(.mono(28, relativeTo: .title)).foregroundStyle(Color.inkMute)
@@ -754,9 +860,30 @@ struct SuggestionDetailView: View {
         }
     }
 
+    /// "Hoe: telefoon ▾" while the Gesprek card is being edited.
+    private func channelPicker(_ model: SuggestionDetailModel, _ g: SuggestionDetailModel.Field) -> some View {
+        Menu {
+            Picker(g.label, selection: Binding(get: { model.value(g.key) }, set: { model.set(g.key, $0) })) {
+                ForEach(SuggestionFormat.channels, id: \.self) { Text(SuggestionFormat.channel($0)).tag($0) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("Hoe: \(SuggestionFormat.channel(model.value(g.key)))")
+                    .font(.display(17, relativeTo: .body, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.up.chevron.down").font(.footnote).accessibilityHidden(true)
+            }
+            .foregroundStyle(Color.signalLink)
+            .frame(minHeight: 44)
+        }
+        .accessibilityLabel("Kanaal: \(SuggestionFormat.channel(model.value(g.key)))")
+    }
+
     /// "was: ~~oud~~" with "Zet terug" beside it, or under it at the
-    /// accessibility sizes.
-    private func wasLine(_ model: SuggestionDetailModel, _ f: SuggestionDetailModel.Field) -> some View {
+    /// accessibility sizes. Without "Zet terug" while that field is being
+    /// edited.
+    private func wasLine(_ model: SuggestionDetailModel, _ f: SuggestionDetailModel.Field,
+                         revertible: Bool = true) -> some View {
         let old = model.was(f)
         let was = (Text("was: ").foregroundStyle(Color.inkMute)
                    + Text(old).strikethrough().foregroundStyle(Color.inkDim))
@@ -771,7 +898,7 @@ struct SuggestionDetailView: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
         return layout {
             was.frame(maxWidth: .infinity, alignment: .leading)
-            back.fixedSize()
+            if revertible { back.fixedSize() }
         }
         .padding(.horizontal, 16)
         .accessibilityElement(children: .contain)
@@ -779,7 +906,7 @@ struct SuggestionDetailView: View {
 
     private func begin(_ f: SuggestionDetailModel.Field) {
         editingKey = f.key
-        if f.style == .dateTime || f.style == .day {
+        if f.style.isDate {
             focused = nil
             if model?.value(f.key).isEmpty == true {
                 model?.set(f.key, f.style == .day ? SuggestionFormat.day(from: now()) : SuggestionFormat.iso(now()))
@@ -801,7 +928,7 @@ struct SuggestionDetailView: View {
         if let key = editingKey, let f = model.field(key), model.isOpen {
             DetailDock {
                 AuthButton(title: "Klaar") { withAnimation(.snappy) { finishEditing() } }
-                if f.style == .dateTime || f.style == .day { wheel(model, f) }
+                if f.style.isDate { wheel(model, f) }
             }
         } else if model.outcome != nil || (model.decided && next != nil) {
             DetailDock { NextInVoorJouButton(id: id) }
@@ -812,7 +939,7 @@ struct SuggestionDetailView: View {
                         Task { if await model.approve() { await next?.refresh() } }
                     }
                 }
-                AuthButton(title: "Niet relevant", weight: .ghost, enabled: !model.isBusy && !offline) { rejecting = true }
+                AuthButton(title: "Niet relevant", weight: .ghost, enabled: !model.isBusy && !offline) { notRelevant(model) }
             }
         }
     }
@@ -821,22 +948,29 @@ struct SuggestionDetailView: View {
     private func wheel(_ model: SuggestionDetailModel, _ f: SuggestionDetailModel.Field) -> some View {
         let v = model.value(f.key)
         let date = (f.style == .day ? SuggestionFormat.date(fromDay: v) : parseISODate(v)) ?? now()
-        VStack(spacing: 4) {
-            DatePicker(f.label, selection: Binding(get: { date }, set: {
-                model.set(f.key, f.style == .day ? SuggestionFormat.day(from: $0) : SuggestionFormat.iso($0))
-            }), displayedComponents: f.style == .day ? [.date] : [.date, .hourAndMinute])
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .environment(\.locale, Locale(identifier: "nl_NL"))
-                .environment(\.timeZone, ProposalFormat.amsterdam)
-                .frame(maxWidth: .infinity)
-            if !v.isEmpty {
-                AuthButton(title: "Geen datum", weight: .ghost) { model.set(f.key, "") }
-            }
-        }
+        // No "Geen datum": "Zet terug" brings back the proposal's own.
+        DatePicker(f.label, selection: Binding(get: { date }, set: {
+            model.set(f.key, f.style == .day ? SuggestionFormat.day(from: $0) : SuggestionFormat.iso($0))
+        }), displayedComponents: f.style == .day ? [.date] : [.date, .hourAndMinute])
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .environment(\.locale, Locale(identifier: "nl_NL"))
+            .environment(\.timeZone, ProposalFormat.amsterdam)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: Reject
+
+    /// "Niet relevant" in the dock: one tap. On the Voor jou stack it goes
+    /// back to the list and is HELD there with "Niet relevant · Ongedaan
+    /// maken"; elsewhere (no list to hold it) it asks first, with the sheet.
+    private func notRelevant(_ model: SuggestionDetailModel) {
+        if let hand = next?.hand, model.isOpen {
+            hand(id, .reject, model.title)
+        } else {
+            rejecting = true
+        }
+    }
 
     private var rejectSheet: some View {
         DecisionSheet(title: "Niet relevant, met reden",
@@ -879,6 +1013,8 @@ struct SuggestionDetailView: View {
         case .reden?:
             rejectReason = "Dit gesprek staat al in het logboek."
             rejecting = true
+        case .nietrelevant?:
+            notRelevant(model)
         default: break
         }
         #endif

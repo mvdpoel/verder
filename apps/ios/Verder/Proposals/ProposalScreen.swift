@@ -85,7 +85,7 @@ struct ProposalScreen: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, isQuestion ? 0 : 8)
                     .padding(.bottom, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frameLeading()
@@ -117,6 +117,12 @@ struct ProposalScreen: View {
                     }
                 }
                 .task(id: model?.detail?.id) { await applyFixture(proxy) }
+                .task(id: answerFocused) {
+                    guard answerFocused, isQuestion else { return }
+                    // After the keyboard has taken its room.
+                    try? await Task.sleep(for: .milliseconds(700))
+                    withAnimation(.snappy) { proxy.scrollTo(ProposalAnchor.answerEnd, anchor: .bottom) }
+                }
             }
         }
     }
@@ -625,6 +631,11 @@ struct ProposalScreen: View {
             if let option = model.optionButtons.first(where: QuestionText.needsConfirmation) {
                 _ = await model.answer(option: option.index)
             }
+        case .nee?:
+            if let d = model.detail, let option = model.optionButtons.first(where: { !QuestionText.needsConfirmation($0) }),
+               let action = QuestionText.handBack(option, revision: model.revision) {
+                next?.hand?(d.id, action, QuestionText.title(d))
+            }
         default: break
         }
         try? await Task.sleep(for: .milliseconds(300))
@@ -643,6 +654,8 @@ struct ProposalScreen: View {
 
 enum ProposalAnchor: Hashable {
     case trigger, attachments, draftEnd, end, page, send
+    /// The end of a question's own answer: the button and its note.
+    case answerEnd
 }
 
 /// Where the page's own large title ends, in the scroll's content space:

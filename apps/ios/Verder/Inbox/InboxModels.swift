@@ -202,6 +202,9 @@ struct SuggestionDTO: Codable, Equatable, Sendable, Identifiable {
         let kind: String
         let from: String?
         let at: Date?
+        /// The kept recording of a voice note, when Martin kept it ("bewaar
+        /// opname" makes it a document): "Bekijk spraaknotitie" opens it.
+        var documentId: String? = nil
     }
 
     let id: String

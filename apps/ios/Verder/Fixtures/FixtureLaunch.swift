@@ -142,9 +142,12 @@ struct FixtureLaunch: Equatable, Sendable {
     /// question's confirmation sheet up (bevestigen) or its own answer typed
     /// (typen); a decision posted against a fixture whose POST fails (fout);
     /// a suggestion's field being edited (veld, datum), two fields changed
-    /// (aangepast), the reason sheet up (reden), or approved (vastgelegd).
+    /// (aangepast), the reason sheet up (reden), or approved (vastgelegd);
+    /// a question answered "Nee" (nee) or a suggestion called not relevant
+    /// (nietrelevant), each handed back to Voor jou with its undo toast; a
+    /// task just set to gedaan, inside its undo window (gedaan).
     enum DetailState: String, CaseIterable, Sendable {
-        case bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd
+        case bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant, gedaan
     }
 
     /// Overzicht's cards a capture can scroll to (`HomeTab`'s scroll ids).

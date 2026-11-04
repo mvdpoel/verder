@@ -17,6 +17,15 @@ enum QuestionText {
     /// nothing and is recorded at once.
     static func needsConfirmation(_ o: ProposalDetail.Option) -> Bool { o.action != "none" }
 
+    /// An option that changes nothing goes back to Voor jou and is HELD there
+    /// with "Beantwoord: Nee · Ongedaan maken" before it posts (the frame
+    /// "beantwoord · Nee of Weet ik niet"); nil for one that asks first, or
+    /// without the revision the answer must name.
+    static func handBack(_ o: ProposalDetail.Option, revision: Int?) -> ListDecision.Action? {
+        guard !needsConfirmation(o), let revision else { return nil }
+        return .answer(option: o.index, revision: revision, label: o.label)
+    }
+
     /// The short line under an option: "VRAAGT EERST BEVESTIGING" where it
     /// asks first (its sheet then says what happens, in the server's words);
     /// otherwise the SERVER's own description — never only the model's label.
@@ -55,6 +64,13 @@ enum QuestionText {
         }
     }
 
+    /// Under "Brief gekoppeld aan de vordering": the way back. The phone has
+    /// no route to unlink (`debts.unlinkDocument` is the web's), so it says
+    /// where it is done rather than offering a button that cannot work.
+    static func undoNote(_ o: ProposalDetail.Option) -> String? {
+        o.action == "link-document-to-debt" ? "Verkeerd gekozen? Op de website maak je de brief weer los." : nil
+    }
+
     static let nothingChanged = "Er is niets veranderd. Je antwoord staat bij de vraag."
     static let freeTextKept = "Er is niets gekoppeld; je antwoord staat bij de vraag, en verder doet er niets mee zonder jou."
     static let offline = "Je bent offline. Antwoorden kan weer zodra je verbinding hebt."
@@ -74,6 +90,9 @@ struct QuestionBody: View {
     let onTrigger: () -> Void
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.voorJouNext) private var next
+    /// The trailing link glyph grows with the option's words.
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
     var body: some View {
         if detail.status == "sent" {
@@ -112,8 +131,8 @@ struct QuestionBody: View {
                     options(model.optionButtons)
                     if offline { DetailPara(QuestionText.offline, color: .inkMute, size: 15).padding(.horizontal, 16).padding(.top, 8) }
                 }
-                .padding(.top, 32)
-                if !offline { ownAnswer.padding(.top, 32) }
+                .padding(.top, 24)
+                if !offline { ownAnswer.padding(.top, 24) }
             }
         }
     }
@@ -159,8 +178,13 @@ struct QuestionBody: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, option in
                 if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
                 Button {
-                    if QuestionText.needsConfirmation(option) { pendingOption = option }
-                    else { Task { await answer(option.index) } }
+                    if QuestionText.needsConfirmation(option) {
+                        pendingOption = option
+                    } else if let hand = next?.hand, let action = QuestionText.handBack(option, revision: model.revision) {
+                        hand(detail.id, action, QuestionText.title(detail))
+                    } else {
+                        Task { await answer(option.index) }
+                    }
                 } label: {
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -180,12 +204,12 @@ struct QuestionBody: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         if option.action == "link-document-to-debt" {
                             Image(systemName: "link")
-                                .font(.system(size: 17, weight: .regular))
+                                .font(.system(size: glyph, weight: .regular))
                                 .foregroundStyle(Color.signal)
                                 .accessibilityHidden(true)
                         }
                     }
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 11)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
@@ -213,6 +237,9 @@ struct QuestionBody: View {
                 }
             }
             if typed { DetailPara(QuestionText.ownAnswerNote, color: .inkMute, size: 15).padding(.horizontal, 16) }
+            // While typing, the screen keeps this end above the keyboard:
+            // the button and the reassurance under it both show.
+            Color.clear.frame(height: 1).id(ProposalAnchor.answerEnd)
         }
     }
 
@@ -238,7 +265,13 @@ struct QuestionBody: View {
         VStack(alignment: .leading, spacing: 0) {
             DetailLabel("Wat er is gebeurd").padding(.horizontal, 16)
             if let option, let o = QuestionText.outcome(option, partyName: detail.partyName) {
-                DetailRow(title: o.title, meta: o.meta, dot: .steel)
+                // The brief it is about opens from the row.
+                DetailRow(title: o.title, meta: o.meta, dot: .steel,
+                          route: detail.trigger.type == "document"
+                              ? .document(id: detail.trigger.id, title: detail.trigger.subject ?? "Brief") : nil)
+                if let note = QuestionText.undoNote(option) {
+                    DetailPara(note, color: .inkMute, size: 15).padding(.horizontal, 16).padding(.top, 14)
+                }
             } else {
                 DetailPara(a?.freeText != nil ? QuestionText.freeTextKept : QuestionText.nothingChanged,
                            color: .inkMute, size: 15)

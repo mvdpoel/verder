@@ -82,7 +82,10 @@
 #            (the decision posted against fixture detail-fout) veld (one field
 #            being edited) datum (the deadline's wheel up) aangepast (two
 #            fields changed) reden (the "Niet relevant, met reden" sheet)
-#            vastgelegd (approved)
+#            vastgelegd (approved) nee (a question answered "Nee": Voor jou
+#            with its undo toast) nietrelevant (a suggestion's one-tap "Niet
+#            relevant": the same) gedaan (a task just set to gedaan, its undo
+#            row up)
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does
@@ -196,8 +199,8 @@ while [ $# -gt 0 ]; do
       shift ;;
     --detail)
       [ $# -ge 2 ] || usage
-      case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd) DETAIL="$2" ;;
-        *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden or vastgelegd" >&2; exit 2 ;; esac
+      case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd|nee|nietrelevant|gedaan) DETAIL="$2" ;;
+        *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant or gedaan" >&2; exit 2 ;; esac
       shift ;;
     --swipe)
       [ $# -ge 2 ] || usage

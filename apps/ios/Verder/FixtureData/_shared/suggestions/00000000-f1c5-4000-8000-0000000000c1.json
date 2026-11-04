@@ -9,13 +9,15 @@
     "details": "Afgesproken: vijftig euro per maand, eerste betaling op 1 december.",
     "channel": "call",
     "direction": "inbound",
-    "occurredAt": "2026-10-31T13:40:00.000Z"
+    "occurredAt": "2026-10-31T13:40:00.000Z",
+    "partyName": "Woonstichting Lindehof"
   },
   "trigger": null,
   "document": null,
   "origin": {
     "kind": "spraaknotitie",
     "from": null,
-    "at": "2026-10-31T13:40:00.000Z"
+    "at": "2026-10-31T13:40:00.000Z",
+    "documentId": "00000000-f1c5-4000-8000-200000000104"
   }
 }

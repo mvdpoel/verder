@@ -106,12 +106,19 @@ struct DetailHeader: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        // At the accessibility sizes a long Dutch word is HYPHENATED at a
+        // dictionary point ("Betalings-" / "regeling", the AX5 frame) rather
+        // than the whole title being set a size smaller to fit it: the title
+        // keeps its rank above the eyebrow. `wholeWords` still steps down a
+        // word that has no break point and does not fit.
+        let shown = typeSize.isAccessibilitySize ? HomeSummary.hyphenated(title) : title
         VStack(alignment: .leading, spacing: 6) {
             if !eyebrow.isEmpty { EyebrowLine(groups: eyebrow) }
-            Text(title)
-                .wholeWords(title, font: .display(28, relativeTo: .title))
+            Text(DetailText.dutch(shown))
+                .wholeWords(shown, font: .display(28, relativeTo: .title))
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
                 .background {
                     GeometryReader { g in
@@ -227,6 +234,9 @@ struct DetailRow: View {
     let meta: String?
     var dot: Color = .signal
     var route: InboxRoute? = nil
+    /// Opens on the website instead (a logbook entry: the phone has no
+    /// screen for one).
+    var web: URL? = nil
 
     var body: some View {
         let row = HStack(alignment: .center, spacing: 12) {
@@ -243,7 +253,7 @@ struct DetailRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if route != nil { RowChevron() }
+            if route != nil || web != nil { RowChevron() }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
@@ -252,6 +262,8 @@ struct DetailRow: View {
 
         if let route {
             NavigationLink(value: route) { row }.buttonStyle(.plain)
+        } else if let web {
+            Link(destination: web) { row }.buttonStyle(.plain).accessibilityHint("Opent op de website.")
         } else {
             row.accessibilityElement(children: .combine)
         }
@@ -282,6 +294,14 @@ struct VoorJouNext {
     let pick: @MainActor (String) -> (route: InboxRoute, remaining: Int)?
     let refresh: @MainActor () async -> Void
     let open: @MainActor (InboxRoute) -> Void
+    /// A decision with nothing to review afterwards ("Nee" to a question,
+    /// "Niet relevant"): back to the list, HELD there with its undo toast
+    /// (`InboxDecisions`) and only posted once the window is over — so
+    /// "Ongedaan maken" means nothing was ever recorded. Item id, action,
+    /// the item's title.
+    var hand: (@MainActor (String, ListDecision.Action, String) -> Void)? = nil
+    /// Opens something ON TOP of this screen (the source voice note).
+    var push: (@MainActor (InboxRoute) -> Void)? = nil
 }
 
 extension EnvironmentValues {
@@ -329,7 +349,9 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
         self.menu = menu()
     }
 
-    private var showsInlineTitle: Bool { scrolled + 8 > titleBottom }
+    /// Once the large title's last line has mostly gone under the bar, the
+    /// inline one takes over: never two titles legible at once.
+    private var showsInlineTitle: Bool { scrolled + 24 > titleBottom }
 
     /// A capture's `--scroll middle`: the screen's middle anchor at the top.
     private func fixtureScroll(_ proxy: ScrollViewProxy) async {
@@ -347,7 +369,6 @@ struct DetailScaffold<Content: View, Dock: View, Menu: View>: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) { content }
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
                         .padding(.bottom, 28)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .frameLeading()
@@ -434,15 +455,15 @@ struct FadingBarSurface: ViewModifier {
         }
     }
 
-    private func gradient(from: UnitPoint) -> some View {
+    @ViewBuilder private func gradient(from: UnitPoint) -> some View {
         LinearGradient(colors: [color, color.opacity(0)], startPoint: from, endPoint: from == .bottom ? .top : .bottom)
             .frame(height: fade)
     }
 }
 
 extension View {
-    func fadingBar(_ edge: VerticalEdge, color: Color = .void) -> some View {
-        modifier(FadingBarSurface(edge: edge, color: color))
+    func fadingBar(_ edge: VerticalEdge, color: Color = .void, fade: CGFloat = 28) -> some View {
+        modifier(FadingBarSurface(edge: edge, color: color, fade: fade))
     }
 }
 
@@ -492,6 +513,9 @@ struct DecisionSheet<Extra: View>: View {
     @State private var contentHeight: CGFloat = 220
     @State private var dockHeight: CGFloat = 140
     @State private var titleHeight: CGFloat = 60
+    /// The title's fade only once the body has scrolled under it: at rest
+    /// the first line is drawn at full contrast (the frames).
+    @State private var bodyScrolled = false
 
     init(title: String, text: String, action: String, enabled: Bool = true,
          onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void, @ViewBuilder extra: () -> Extra) {
@@ -520,6 +544,9 @@ struct DecisionSheet<Extra: View>: View {
             .scrollBounceBehavior(.basedOnSize)
             .fixtureScrollAnchor()
             .scrollEdgeEffectHidden(true, for: .all)
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 1 } action: { _, now in
+                bodyScrolled = now
+            }
             // The title and the actions are bars: the body scrolls and fades
             // under both, never cut mid-line.
             .safeAreaBar(edge: .top, spacing: 0) {
@@ -533,7 +560,7 @@ struct DecisionSheet<Extra: View>: View {
                     .padding(.top, 28)
                     .padding(.bottom, 12)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { titleHeight = $0 }
-                    .fadingBar(.top, color: .plate)
+                    .fadingBar(.top, color: .plate, fade: bodyScrolled ? 28 : 0)
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 VStack(spacing: 4) {
@@ -573,9 +600,40 @@ struct DetailInputStyle: ViewModifier {
             .font(.display(17, relativeTo: .body))
             .foregroundStyle(Color.inkBright)
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.chip))
             .overlay(RoundedRectangle(cornerRadius: Radius.chip)
                 .strokeBorder(focused ? Color.signal : Color.edgeStrong, lineWidth: focused ? 1.5 : 1))
+    }
+}
+
+/// "Taak gedaan · Ongedaan maken": a decision held on this screen for its
+/// undo window, not yet posted.
+struct DetailUndoRow: View {
+    let text: String
+    let undo: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+        layout {
+            Text(text)
+                .wholeWords(text, font: .display(17, relativeTo: .body))
+                .foregroundStyle(Color.inkBright)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Ongedaan maken", action: undo)
+                .font(.display(17, relativeTo: .body, weight: .medium))
+                .foregroundStyle(Color.signalLink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 44)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.plate.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.chip))
+        .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(Color.edgeStrong, lineWidth: 1))
     }
 }

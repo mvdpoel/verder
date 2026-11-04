@@ -77,6 +77,15 @@ enum DetailText {
     /// "Volgende in Voor jou · 3".
     static func nextLabel(remaining: Int) -> String { "Volgende in Voor jou ·\(nbsp)\(remaining)" }
 
+    /// The text tagged as Dutch, so where the text system hyphenates on its
+    /// own it follows Dutch rules ("Woonstich-ting"), not the phone's
+    /// English ones ("Woonsticht-ing").
+    static func dutch(_ s: String) -> AttributedString {
+        var a = AttributedString(s)
+        a.languageIdentifier = "nl"
+        return a
+    }
+
     /// The first word in capitals: "gedaan" → "Gedaan".
     static func capitalised(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
 }

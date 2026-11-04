@@ -60,6 +60,20 @@ struct DetailTextTests {
         #expect(VoorJouNextPick.pick(items: [Self.item("task", "t1")], excluding: "t1") == nil)
     }
 
+    @Test func aSoftHyphenIsABreakPointMeasuredWithItsHyphen() {
+        #expect(WholeWords.splitAfterHyphens("Betalings\u{00AD}regeling") == ["Betalings-", "regeling"])
+        #expect(WholeWords.candidates(in: HomeSummary.hyphenated("Woonstichting")).allSatisfy { $0.count < 13 })
+    }
+
+    @Test func aDecisionHandedBackHidesTheListsOwnRow() {
+        let d = VoorJouTab.handBack(id: "abc", action: .answer(option: 1, revision: 2, label: "Nee"), title: "Vraag", items: [])
+        #expect(d.key == "question:abc")
+        #expect(d.path == "/api/mobile/v1/proposals/abc/answer")
+        #expect(d.body == .answer(revision: 2, option: 1))
+        #expect(d.verb == "Beantwoord: Nee")
+        #expect(VoorJouTab.handBack(id: "s1", action: .reject, title: "S", items: []).key == "suggestion:s1")
+    }
+
     @Test func aWordIsRemeasuredOnceTheLineWidens() {
         #expect(WholeWords.widened(from: 120, to: 370))
         #expect(!WholeWords.widened(from: 370, to: 372))
@@ -85,6 +99,18 @@ struct QuestionTextTests {
         let o = Self.option("link-document-to-debt", target: "Document 'Brief' koppelen aan vordering Stroomnet")
         #expect(QuestionText.confirmText(o).hasPrefix("Document 'Brief' koppelen aan vordering Stroomnet."))
         #expect(QuestionText.confirmTitle(o, triggerType: "document") == "Brief koppelen aan de vordering?")
+    }
+
+    @Test func onlyAnOptionThatChangesNothingGoesBackToTheList() {
+        let nee = ProposalDetail.Option(index: 1, action: "none", label: "Nee", target: "Brief blijft los")
+        #expect(QuestionText.handBack(nee, revision: 3) == .answer(option: 1, revision: 3, label: "Nee"))
+        #expect(QuestionText.handBack(nee, revision: nil) == nil, "an answer must name its revision")
+        #expect(QuestionText.handBack(Self.option("link-document-to-debt"), revision: 3) == nil, "it asks first")
+    }
+
+    @Test func aLinkSaysWhereItIsUndoneAndNothingElseDoes() {
+        #expect(QuestionText.undoNote(Self.option("link-document-to-debt")) == "Verkeerd gekozen? Op de website maak je de brief weer los.")
+        #expect(QuestionText.undoNote(Self.option("none")) == nil)
     }
 
     @Test func aLinkAnswerSaysWhatHappened() throws {
@@ -162,6 +188,44 @@ struct SuggestionDiffTests {
      "trigger":null,"document":null,"retrievedRefs":[],
      "origin":{"kind":"brief","from":"Gemeente Westerlaan","at":"2026-10-30T09:00:00.000Z"}}
     """.utf8)
+
+    func edits(_ req: URLRequest?) throws -> [String: Any] {
+        let data = try #require(req?.httpBody)
+        let body = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try #require(body["edits"] as? [String: Any])
+    }
+
+    @Test func theConversationsWhenAndHowAreSentOnlyWhenChanged() async throws {
+        let (server, m) = model(SuggestionFixture.entry)
+        await m.load(id: SuggestionFixture.id)
+        #expect(m.cardFields.map(\.key) == ["summary", "details", "occurredAt"], "the channel is drawn inside Gesprek")
+        #expect(m.parts(of: "occurredAt").map(\.key) == ["channel"])
+        #expect(m.edits.isEmpty, "an untouched instant compares equal")
+        #expect(m.conversationLine == "e-mail")
+        m.set("channel", "call")
+        m.set("occurredAt", "2026-10-29T15:00:00.000Z")
+        #expect(m.changedCount == 2)
+        #expect(m.conversationLine == "telefoon")
+        #expect(await m.approve())
+        let e = try edits(server.requests(to: "/approve").first)
+        #expect(e.keys.sorted() == ["channel", "occurredAt"])
+        #expect(e["channel"] as? String == "call")
+    }
+
+    @Test func aTaskSuggestionsIntroLeavesOutTheTapHint() async {
+        let (_, m) = model(Self.timedTask)
+        await m.load(id: SuggestionFixture.id)
+        #expect(!m.provenance().contains(SuggestionDetailModel.Copy.tapToEdit))
+        let (_, e) = model(SuggestionFixture.entry)
+        await e.load(id: SuggestionFixture.id)
+        #expect(e.provenance().hasSuffix(SuggestionDetailModel.Copy.tapToEdit))
+    }
+
+    @Test func aMadeTaskSaysWhyTheCountStayed() {
+        #expect(SuggestionDetailModel.taskMadeText(waiting: 3)
+                == "De suggestie staat niet meer in Voor jou, de nieuwe taak wel: die wacht op jou. Daarom blijft Voor jou op 3.")
+        #expect(SuggestionDetailModel.taskMadeText(waiting: nil).hasSuffix("die wacht op jou."))
+    }
 
     @Test func aChangedFieldCountsAndPutsBack() async {
         let (_, m) = model(SuggestionFixture.entry)
@@ -282,6 +346,38 @@ struct TaskStatusControlTests {
         #expect(m.retryLabel == "Opnieuw: zet op gedaan")
         #expect(m.failureText == "Gedaan is niet opgeslagen: je telefoon kreeg geen antwoord van verder. De status staat nog op bezig.")
         #expect(m.task?.status == "in-progress", "nothing changed on screen")
+    }
+
+    @Test func aFinalStepIsHeldAndAnUndoPostsNothing() async {
+        let server = StubServer()
+        let ok = Data(#"{"taskId":"\#(TaskScreenTests.id)","status":"done","validNext":[]}"#.utf8)
+        server.on { req in
+            switch (req.httpMethod, req.url?.path() ?? "") {
+            case ("GET", "/api/mobile/v1/tasks"): .status(200, body: TaskScreenTests.list)
+            case ("POST", "/api/mobile/v1/tasks/\(TaskScreenTests.id)/status"): .status(200, body: ok)
+            default: .status(404)
+            }
+        }
+        let posts = { server.requests.filter { $0.httpMethod == "POST" }.count }
+        let m = TaskModel(client: server.client(store: InMemorySessionStore(ProposalModelTests.cookie)),
+                          sleep: { _ in try await Task.sleep(for: .seconds(3600)) })
+        await m.load(id: TaskScreenTests.id)
+        m.hold("done", window: 5)
+        #expect(m.shownStatus == "done")
+        #expect(m.heldText == "Taak gedaan")
+        #expect(m.explanation(offline: false) == "Gedaan. Vergist? Kies een andere status.")
+        #expect(m.segmentEnabled("in-progress"), "the status it left can be chosen again")
+        #expect(m.badge?.tone == .okay)
+        m.undoHeld()
+        #expect(m.shownStatus == "in-progress")
+        #expect(posts() == 0, "nothing was ever recorded")
+        m.hold("waiting", window: 5)
+        #expect(m.held == nil, "only a final step is held")
+        m.hold("done", window: 5)
+        await m.commitHeld()
+        #expect(posts() == 1)
+        #expect(m.task?.status == "done")
+        #expect(m.held == nil)
     }
 
     @Test func waitingIsNotAmber() async {

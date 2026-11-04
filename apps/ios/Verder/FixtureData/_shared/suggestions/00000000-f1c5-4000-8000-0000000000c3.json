@@ -7,7 +7,8 @@
   "proposed": {
     "creditorName": "Stroomnet Energie",
     "claimedCents": 42000,
-    "isDebtCollector": false
+    "isDebtCollector": false,
+    "collectorName": "Incassobureau Kade & Partners"
   },
   "trigger": null,
   "document": null,

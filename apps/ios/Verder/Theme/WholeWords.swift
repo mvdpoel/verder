@@ -29,6 +29,13 @@ enum WholeWords {
         var parts: [String] = []
         var current = ""
         for ch in word {
+            // A soft hyphen (`HomeSummary.hyphenated`) is a break point too,
+            // drawn as "-" when the line breaks there: measure it that way.
+            if ch == "\u{00AD}" {
+                if !current.isEmpty { parts.append(current + "-") }
+                current = ""
+                continue
+            }
             current.append(ch)
             if ch == "-" && current.count > 1 {
                 parts.append(current)
