@@ -36,7 +36,7 @@ struct VoiceLogSessionTests {
         await m.stopRecording()
         m.transcript = "Gebeld met Lindehof: akkoord."
         await m.send()
-        #expect(m.notice == VoiceLogModel.Copy.signedOut)
+        #expect(m.sendFailure == .signedOut)
         return m
     }
 
@@ -84,7 +84,7 @@ struct VoiceLogSessionTests {
         await m.startRecording()
         await m.stopRecording()
         await m.send()
-        #expect(m.notice == VoiceLogModel.Copy.serverFailed)
+        #expect(m.sendFailure == .server)
 
         v.sheetDisappeared()
         // The lock screen has no `interactiveDismissDisabled`: a swipe there

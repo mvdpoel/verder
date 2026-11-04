@@ -16,7 +16,8 @@ struct FixtureTests {
         "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline", "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "money-complete", "money-empty", "money-geen-data", "money-no-account",
         "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
         "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
-        "timeline-vier", "unauthorized", "voice", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
+        "timeline-vier", "unauthorized", "voice", "voice-geen-partijen", "voice-offline", "voice-partijen-fout",
+        "voice-te-groot", "voice-verlopen", "voice-verstuurd", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
         "voorjou-leeg", "voorjou-long", "voorjou-many", "voorjou-offline", "voorjou-selecteren", "voorjou-storing", "voorjou-veel", "voorjou-vijf", "voorstel", "voorstel-offline", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
         "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
@@ -189,11 +190,15 @@ struct FixtureTests {
         }
         _ = try Self.decode(Ignored.self, name, "push/register", method: "POST")
         _ = try Self.decode(UploadResponse.self, name, "documents", method: "POST")
-        _ = try Self.decode([PartyDTO].self, name, "parties")
+        // voice-partijen-fout answers the parties with its 503 by design.
+        if name != "voice-partijen-fout" { _ = try Self.decode([PartyDTO].self, name, "parties") }
         // meer-account-fails answers /me with its 503 by design.
         if name != "meer-account-fails" { _ = try Self.decode(AccountDTO.self, name, "me") }
         _ = try Self.decode(CaseMapDTO.self, name, "case-map")
-        _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
+        // The voice send's failures, each by design (offline, 413, 401).
+        if !["voice-offline", "voice-te-groot", "voice-verlopen"].contains(name) {
+            _ = try Self.decode(VoiceEntryAnswer.self, name, "entries/voice", method: "POST")
+        }
         // Every fixture holds a summary but `empty` and `weekly-eerste`
         // (404: no Sunday yet) and `weekly-fout` (503 by design).
         if let weekly = try Self.body(name, "weekly") {
@@ -445,10 +450,14 @@ struct FixtureTests {
         #expect(top.map(\.id) == [Self.reply, Self.question, Self.suggestion])
 
         let parties = try Self.decode(JSONValue.self, "voice", "parties")
+        // The picker frame's seven: three recent, four never spoken to.
         #expect(Self.array(parties).map { $0["name"]?.string } ==
-                ["Woonstichting Lindehof", "Bewindkantoor Noordkust", "Incassobureau Kade & Partners"])
+                ["Woonstichting Lindehof", "Bewindkantoor Noordkust", "Incassobureau Kade & Partners",
+                 "Atelier Sterrenwacht", "Gemeente Westerlaan", "Stroomnet Energie", "Zorgverzekeraar Duinzorg"])
+        // `role` is the one field beyond the parties route: NOT SERVED YET,
+        // and optional on the phone (`PartyDTO.role`).
         #expect(Self.array(parties).allSatisfy {
-            Self.keys($0) == ["id", "kind", "name", "organization", "lastContactAt"]
+            Self.keys($0) == ["id", "kind", "name", "organization", "lastContactAt", "role"]
         })
         let voice = try Self.decode(JSONValue.self, "voice", "entries/voice", method: "POST")
         #expect(Self.keys(voice) == ["suggestionId", "audioDocumentId", "duplicate"])

@@ -8,6 +8,7 @@
 #                      [--signin <state>] [--cover] [--mic <notDetermined|denied>]
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
 #                      [--proposal <state>] [--detail <state>] [--dossier <state[,state…]>]
+#                      [--voice <state>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
 #            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
@@ -18,7 +19,8 @@
 #            detail-offline, detail-verlopen,
 #            money-no-budget, money-overspent, dossier, timeline, weekly, weekly-rustig,
 #            weekly-tweede, weekly-eerste, weekly-loading, weekly-offline-kept,
-#            weekly-offline-missing, weekly-fout, voice)
+#            weekly-offline-missing, weekly-fout, voice, voice-offline, voice-verlopen,
+#            voice-te-groot, voice-geen-partijen, voice-partijen-fout, voice-verstuurd)
 #   tab      overzicht | voorjou | scan | dossier | meer
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
 #            | meer:account | meer:notifications | meer:widgets | meer:about | meer:developer
@@ -101,6 +103,15 @@
 #            1 = the newest, first under the pinned bar) · open:<document id> (the viewer
 #            pushed after the first sync) · balie · balie-zoom (the viewer's
 #            "Toon aan de balie", zoomed in) · pagina (the AX5 viewer at its page)
+#   --voice  the voice log ("Spraaknotitie") open over the tab, in a state of
+#            the "Voice quick-log · final" frames: idle opname (held) omlaag
+#            (hands-free, sheet pulled down) omzetten nietsgehoord
+#            omzettenmislukt spraakuit laden ladenmislukt voorbeeld tijd tekst
+#            metwie typen weggooien verstuurd nietverstuurd tegroot. The
+#            fixture decides the server's part (voice-offline for
+#            nietverstuurd, voice-verlopen, voice-te-groot, voice-verstuurd,
+#            voice-geen-partijen / voice-partijen-fout with metwie or
+#            voorbeeld); --locked with voorbeeld is "vergrendeld"
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does
@@ -136,7 +147,7 @@ FIXTURE="$1"; TARGET="$2"; OUT="$3"; shift 3
 SIGNIN=""; COVER=""; MIC=""; PUSHPRE=""
 SIGNIN_STATES="default keyboard busy cancelled no-passkey wrong-password rate-limited server not-on-account expired offline offer already-on"
 LOCKED=""; SCANS=""; SCROLLED=""; TEXT_SIZE=""; QUEUE=""; CAMERA=""; SCAN_STATE=""; PRESS=""; GELD=""; FACEID=""; PUSH=""; MORE=""
-TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""
+TIMELINE=""; TAP=""; VOORJOU=""; SWIPE=""; PROPOSAL=""; DETAIL=""; DOSSIER=""; VOICE=""
 TEXT_SIZES="extra-small small medium large extra-large extra-extra-large extra-extra-extra-large accessibility-medium accessibility-large accessibility-extra-large accessibility-extra-extra-large accessibility-extra-extra-extra-large"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -216,6 +227,11 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || usage
       case "$2" in bevestigen|typen|fout|veld|datum|aangepast|reden|vastgelegd|nee|nietrelevant|gedaan|verlopen) DETAIL="$2" ;;
         *) echo "capture.sh: --detail takes bevestigen, typen, fout, veld, datum, aangepast, reden, vastgelegd, nee, nietrelevant, gedaan or verlopen" >&2; exit 2 ;; esac
+      shift ;;
+    --voice)
+      [ $# -ge 2 ] || usage
+      case "$2" in idle|opname|omlaag|omzetten|nietsgehoord|omzettenmislukt|spraakuit|laden|ladenmislukt|voorbeeld|tijd|tekst|metwie|typen|weggooien|verstuurd|nietverstuurd|tegroot) VOICE="$2" ;;
+        *) echo "capture.sh: --voice takes idle, opname, omlaag, omzetten, nietsgehoord, omzettenmislukt, spraakuit, laden, ladenmislukt, voorbeeld, tijd, tekst, metwie, typen, weggooien, verstuurd, nietverstuurd or tegroot" >&2; exit 2 ;; esac
       shift ;;
     --dossier)
       [ $# -ge 2 ] && [ -n "$2" ] || usage
@@ -297,6 +313,7 @@ fi
 [ -z "$PROPOSAL" ] || ARGS+=(-fixtures-proposal "$PROPOSAL")
 [ -z "$DETAIL" ] || ARGS+=(-fixtures-detail "$DETAIL")
 [ -z "$DOSSIER" ] || ARGS+=(-fixtures-dossier "$DOSSIER")
+[ -z "$VOICE" ] || ARGS+=(-fixtures-voice "$VOICE")
 [ -z "$SIGNIN" ] || ARGS+=(-fixtures-signin "$SIGNIN")
 [ -z "$COVER" ] || ARGS+=(-fixtures-cover)
 [ -z "$PUSHPRE" ] || ARGS+=(-fixtures-push-preprompt)

@@ -1,0 +1,16 @@
+{
+  "id": "00000000-f1c5-4000-8000-700000000007",
+  "kind": "log-entry",
+  "status": "pending",
+  "createdAt": "2026-11-01T13:20:44.000Z",
+  "proposed": {
+    "summary": "Gebeld met Woonstichting Lindehof.",
+    "details": "Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van vijftig euro per maand, de eerste betaling is op één december.",
+    "channel": "call",
+    "direction": "inbound",
+    "occurredAt": "2026-11-01T13:20:30.000Z"
+  },
+  "trigger": null,
+  "document": null,
+  "retrievedRefs": []
+}

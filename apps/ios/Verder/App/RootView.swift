@@ -313,8 +313,23 @@ struct RootView: View {
         // launch the lock asks Face ID by itself (`promptOnOpen`).
         // The model lives in `voice`, above this gate: a relock or a 401
         // removes the sheet's content, never the text Martin was told stays.
+        // The sheet judges the lock itself: an empty log is the lock screen,
+        // a held note stays in view with its parties and sending behind
+        // Face ID (frame "voorbeeld · vergrendeld").
         .sheet(isPresented: Binding(get: { voice.isPresented }, set: { voice.presentationChanged($0) })) {
-            VoiceLogSheet(session: voice).lockGated(by: lock)
+            VoiceLogSheet(session: voice, lock: lock, offline: uploads.isOffline,
+                          openSuggestion: { id in
+                              if let uuid = UUID(uuidString: id) { links.deliver(.suggestion(uuid)) }
+                          })
+        }
+        // A hands-free recording with the sheet pulled down.
+        .tabViewBottomAccessory(isEnabled: voice.recordsInBackground) {
+            VoiceRecordingAccessory(session: voice)
+        }
+        // A sent note waits on Martin: Overzicht and Voor jou count it now,
+        // not at their next poll.
+        .onChange(of: voice.model?.phase) { _, phase in
+            if case .sent(duplicate: false)? = phase { Task { await inbox.refresh() } }
         }
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
@@ -338,7 +353,7 @@ struct RootView: View {
         if let start = launch.tab { tab = start.tabID }
         // `-fixtures-mic`: the voice log opens as the quick action opens it,
         // on its pre-prompt or its "microfoon uit" sheet.
-        if launch.mic != nil { voice.open() }
+        if launch.mic != nil || launch.voice != nil { voice.open() }
         // `-fixtures-push-preprompt`: the moment after a sign-in, when it asks.
         if launch.pushPrePrompt { Task { await push.requestPermissionIfNeeded() } }
         switch launch.route {

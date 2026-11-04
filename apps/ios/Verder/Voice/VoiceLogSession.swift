@@ -62,8 +62,32 @@ final class VoiceLogSession {
     /// The sheet's content went (lock screen, sign-in, background). A
     /// recording cannot finish without its finger, so it is stopped and
     /// transcribed here — kept, never dropped.
+    ///
+    /// EXCEPT a hands-free recording (started with a tap): it needs no finger,
+    /// so pulling the sheet down leaves it running, shown in the tab bar's
+    /// accessory ("Opname loopt 0:14 Stop", frame "opname · blad omlaag").
     @discardableResult
     func sheetDisappeared() -> Task<Void, Never>? {
+        guard let model, model.phase == .recording, !model.handsFree else { return nil }
+        return Task { await model.stopRecording() }
+    }
+
+    /// A recording runs with the sheet down: the tab bar's accessory.
+    var recordsInBackground: Bool {
+        !isPresented && model?.phase == .recording
+    }
+
+    /// The accessory's "Stop": stop, transcribe, and bring the sheet back
+    /// to show what was heard.
+    @discardableResult
+    func stopInBackground() -> Task<Void, Never>? {
+        guard let model, model.phase == .recording else { return nil }
+        isPresented = true
+        return Task { await model.stopRecording() }
+    }
+
+    /// Stops whatever is recording, hands-free or not.
+    private func stopRecording() -> Task<Void, Never>? {
         guard let model, model.phase == .recording else { return nil }
         return Task { await model.stopRecording() }
     }
@@ -76,7 +100,8 @@ final class VoiceLogSession {
     func sessionEnded() -> Task<Void, Never>? {
         guard let model else { isPresented = false; return nil }
         if model.holdsUnsentWork || model.phase == .recording {
-            let stopping = sheetDisappeared()
+            // Signed out, nothing may keep listening: hands-free stops too.
+            let stopping = stopRecording()
             isPresented = false
             return stopping
         } else {

@@ -9,6 +9,8 @@ enum SpeechAvailability: Equatable, Sendable {
     case needsDownload
     /// No Dutch on-device transcription on this iOS (or this device).
     case unsupported
+    /// Speech recognition is switched off for verder in Settings.
+    case denied
 }
 
 /// Every way an on-device transcription can end without text. The model
@@ -31,8 +33,21 @@ protocol Transcribing: Sendable {
     func availability() async -> SpeechAvailability
     /// Installs the locale's model. Called before the first recording, so the
     /// download never happens while Martin is waiting on a transcript.
-    func install() async throws(TranscriptionError)
+    /// `progress` is called as the download moves (any thread).
+    func install(progress: @escaping @Sendable (InstallProgress) -> Void) async throws(TranscriptionError)
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String
+    /// The words so far while `audio` is being recorded (frame "opname").
+    /// Ends when the recording stops. The default has none.
+    func live(_ audio: URL) -> AsyncStream<LiveText>
+}
+
+extension Transcribing {
+    /// NOT BUILT on the phone yet: live text needs `SpeechAnalyzer` fed from
+    /// an `AVAudioEngine` tap that also writes the m4a (so "Bewaar opname"
+    /// keeps working), and Dutch on-device speech is not measured on the
+    /// phone (plan 3 Task 25 step 1). Until then the words appear when the
+    /// recording is transcribed.
+    func live(_ audio: URL) -> AsyncStream<LiveText> { AsyncStream { $0.finish() } }
 }
 
 /// `SpeechAnalyzer` + `SpeechTranscriber` in Dutch (iOS 26+), with the model
@@ -46,6 +61,14 @@ struct OnDeviceTranscriber: Transcribing {
     static let locale = Locale(identifier: "nl_NL")
 
     func availability() async -> SpeechAvailability {
+        // Only ever .denied when Martin switched it off in Settings: the app
+        // never asks, so an untouched phone reads notDetermined. Whether
+        // SpeechTranscriber needs this authorisation at all on iOS 27.2 is
+        // NOT MEASURED; a denial is honoured rather than worked around.
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .denied, .restricted: return .denied
+        default: break
+        }
         guard SpeechTranscriber.isAvailable,
               let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Self.locale)
         else { return .unsupported }
@@ -57,10 +80,20 @@ struct OnDeviceTranscriber: Transcribing {
         }
     }
 
-    func install() async throws(TranscriptionError) {
+    func install(progress: @escaping @Sendable (InstallProgress) -> Void) async throws(TranscriptionError) {
         let locale = try await Self.dutch()
         do {
             if let request = try await AssetInventory.assetInstallationRequest(supporting: [Self.module(locale)]) {
+                // The fraction only: what the units of this Progress are
+                // (bytes or not) is not measured, so no "MB" is claimed.
+                nonisolated(unsafe) let p = request.progress
+                let poll = Task {
+                    while !Task.isCancelled {
+                        progress(InstallProgress(fraction: p.fractionCompleted))
+                        try? await Task.sleep(for: .milliseconds(500))
+                    }
+                }
+                defer { poll.cancel() }
                 try await request.downloadAndInstall()
             }
         } catch {
@@ -72,7 +105,7 @@ struct OnDeviceTranscriber: Transcribing {
     }
 
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String {
-        if await availability() == .needsDownload { try await install() }
+        if await availability() == .needsDownload { try await install(progress: { _ in }) }
         let locale = try await Self.dutch()
         let transcriber = Self.module(locale)
         let text: String

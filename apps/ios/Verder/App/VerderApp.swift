@@ -84,9 +84,11 @@ struct VerderApp: App {
                                                   onUnauthorized: { auth.sessionRejected() },
                                                   epoch: auth.epoch, now: s.now))
         let client = s.client
+        let clock = s.now
         _voice = State(initialValue: VoiceLogSession(factory: VoiceLogFactory {
             VoiceLogModel(client: client, recorder: s.makeRecorder(), transcriber: s.transcriber,
-                          dir: VoiceLogModel.liveDirectory, onUnauthorized: { auth.sessionRejected() })
+                          dir: VoiceLogModel.liveDirectory, now: { clock() },
+                          onUnauthorized: { auth.sessionRejected() })
         }))
         // Before any delegate callback, so a background launch for a question
         // answer or a silent refresh finds them (see `AppDelegate.Services`).

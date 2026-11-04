@@ -46,6 +46,8 @@ import Foundation
 ///                              "Ik regel het zelf" chosen)
 ///     -fixtures-detail <state>  a question, suggestion or task screen in a state only a gesture
 ///                              reaches (`DetailState`)
+///     -fixtures-voice <state>  the voice log open over the tab, in a state of the "Voice quick-log ·
+///                              final" frames (`VoiceState`)
 ///     -fixtures-dossier <state[,state…]>  Dossier and its viewer in a state only a gesture reaches
 ///                              (`DossierState`): refresh · filter:<soort> · zoek:<query> · server ·
 ///                              scroll:<documenten|chips|server> · open:<document id> · balie ·
@@ -136,6 +138,27 @@ struct FixtureLaunch: Equatable, Sendable {
     }
 
     enum MicState: String, CaseIterable, Sendable { case notDetermined, denied }
+
+    /// The voice log's states (`-fixtures-voice`, Figma "Voice quick-log ·
+    /// final"): the sheet opens over the tab as the quick action opens it and
+    /// is driven there by `FixtureVoiceDriver`.
+    enum VoiceState: String, CaseIterable, Sendable {
+        case idle, opname, omlaag, omzetten, nietsgehoord, omzettenmislukt, spraakuit, laden, ladenmislukt
+        case voorbeeld, tijd, tekst, metwie, typen, weggooien, verstuurd, nietverstuurd, tegroot
+
+        /// The fixture transcriber's part in this state.
+        var transcriber: FixtureTranscriber.Mode {
+            switch self {
+            case .omzetten: .hangs
+            case .nietsgehoord: .nothingHeard
+            case .omzettenmislukt: .fails
+            case .spraakuit: .denied
+            case .laden: .downloading
+            case .ladenmislukt: .downloadStops
+            default: .ready
+            }
+        }
+    }
 
     /// The proposal screen's gesture-only states (`-fixtures-proposal`).
     enum ProposalState: String, CaseIterable, Sendable {
@@ -275,6 +298,7 @@ struct FixtureLaunch: Equatable, Sendable {
     var proposal: ProposalState? = nil
     var detail: DetailState? = nil
     var dossier: [DossierState] = []
+    var voice: VoiceState? = nil
 
     /// Nil without `-fixtures`. Throws on a value it cannot read, so a typo in
     /// a capture script fails loudly instead of screenshotting the wrong tab.
@@ -373,7 +397,11 @@ struct FixtureLaunch: Equatable, Sendable {
                                          throw .unknownValue("-fixtures-dossier", String(raw))
                                      }
                                      return s
-                                 })
+                                 },
+                             voice: try value(after: "-fixtures-voice").map { (raw: String) throws(ParseError) -> VoiceState in
+                                 guard let s = VoiceState(rawValue: raw) else { throw .unknownValue("-fixtures-voice", raw) }
+                                 return s
+                             })
     }
 
     /// `proposal:<uuid>` and friends go through `DeepLink.parse`, the strict

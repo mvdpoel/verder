@@ -144,7 +144,8 @@ enum FixtureEnvironment {
                            // is synthetic bytes, and its transcript is the
                            // voice fixture's (synthetic-data doc).
                            makeRecorder: { FixtureRecorder(mic: launch.mic) },
-                           transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback),
+                           transcriber: FixtureTranscriber(text: server.manifest.transcript ?? FixtureTranscriber.fallback,
+                                                           mode: launch.voice?.transcriber ?? .ready),
                            now: clock(keptAt: server.manifest.keptAt, today: server.manifest.today))
         services.weeklyDir = weeklyDir
         services.inboxDir = inboxDir
@@ -327,13 +328,119 @@ final class FixtureRecorder: VoiceRecording {
     func cancel() {}
 }
 
-/// Speech "recognised" from the voice fixture's manifest transcript.
+/// Speech "recognised" from the voice fixture's manifest transcript. Its
+/// `Mode` holds a take or a download where a frame draws it.
 struct FixtureTranscriber: Transcribing {
+    enum Mode: Sendable { case ready, hangs, nothingHeard, fails, denied, downloading, downloadStops }
+
     static let fallback = "Gebeld met Woonstichting Lindehof."
+    /// The frames' download: 38 of 61 MB.
+    static let downloaded = InstallProgress(fraction: 38.0 / 61.0, completedBytes: 38_000_000, totalBytes: 61_000_000)
     let text: String
-    func availability() async -> SpeechAvailability { .ready }
-    func install() async throws(TranscriptionError) {}
-    func transcribe(_ audio: URL) async throws(TranscriptionError) -> String { text }
+    var mode: Mode = .ready
+
+    func availability() async -> SpeechAvailability {
+        switch mode {
+        case .denied: .denied
+        case .downloading, .downloadStops: .needsDownload
+        default: .ready
+        }
+    }
+
+    func install(progress: @escaping @Sendable (InstallProgress) -> Void) async throws(TranscriptionError) {
+        progress(Self.downloaded)
+        switch mode {
+        case .downloading: await Self.forever()
+        case .downloadStops: throw .assetsUnavailable
+        default: break
+        }
+    }
+
+    func transcribe(_ audio: URL) async throws(TranscriptionError) -> String {
+        switch mode {
+        case .hangs: await Self.forever(); return text
+        case .nothingHeard: throw .nothingHeard
+        case .fails: throw .failed("fixture")
+        default: return text
+        }
+    }
+
+    /// The frame "opname": the text so far, its last words still settling.
+    /// While transcribing (frame "omzetten naar tekst") all of it, settled.
+    func live(_ audio: URL) -> AsyncStream<LiveText> {
+        let words = text.split(separator: " ").map(String.init)
+        let text = text
+        let mode = mode
+        return AsyncStream { c in
+            if mode == .hangs {
+                c.yield(LiveText(settled: text, volatile: ""))
+            } else {
+                let said = words.dropLast(min(4, max(0, words.count - 4)))
+                let settled = said.dropLast(3).joined(separator: " ")
+                c.yield(LiveText(settled: settled, volatile: said.suffix(3).joined(separator: " ")))
+            }
+        }
+    }
+
+    private static func forever() async {
+        while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
+    }
+}
+
+/// Puts the real voice log in the state a "Voice quick-log · final" frame
+/// draws (`-fixtures-voice`), through the same calls a finger would make.
+@MainActor
+enum FixtureVoiceDriver {
+    static func drive(_ model: VoiceLogModel, session: VoiceLogSession) async {
+        guard let state = FixtureLaunch.current?.voice else { return }
+        func take() async {
+            await model.press()
+            await model.release(heldFor: 2)
+        }
+        switch state {
+        case .idle, .spraakuit, .laden:
+            break
+        case .ladenmislukt:
+            // The path monitor's word for the frame: no network.
+            await model.networkChanged(offline: true)
+        case .opname, .omlaag:
+            await model.press()
+            await model.release(heldFor: 0.2) // a tap: hands-free
+            model.fixtureBackdateRecording(by: 13) // "0:14" once the capture settles
+            if state == .opname {
+                model.fixtureHold()
+            } else {
+                try? await Task.sleep(for: .milliseconds(600))
+                session.presentationChanged(false)
+            }
+        case .omzetten:
+            await model.press()
+            model.fixtureBackdateRecording(by: 14)
+            try? await Task.sleep(for: .milliseconds(200))
+            await model.release(heldFor: 14)
+        case .nietsgehoord, .omzettenmislukt:
+            await take()
+        case .voorbeeld, .tijd, .tekst, .metwie, .weggooien, .verstuurd, .nietverstuurd, .tegroot:
+            await take()
+            try? await Task.sleep(for: .milliseconds(700))
+            switch state {
+            case .tijd: model.timeOpen = true
+            case .tekst:
+                model.fixtureSetTranscript("Gebeld met Woonstichting Lindehof. Ze gaan akkoord met de regeling van € 50 per maand, de eerste betaling is op 1 december.")
+                model.textFocused = true
+            case .metwie: await model.openPicker()
+            case .weggooien: _ = model.requestClose()
+            case .verstuurd: await model.send()
+            case .nietverstuurd: await model.send()
+            case .tegroot:
+                model.keepRecording = true
+                await model.send()
+            default: break
+            }
+        case .typen:
+            model.typeInstead()
+        }
+    }
 }
 
 /// The camera permission a capture asks for (`-fixtures-camera`). "Ga

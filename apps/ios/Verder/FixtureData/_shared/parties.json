@@ -4,20 +4,55 @@
     "kind": "organization",
     "name": "Woonstichting Lindehof",
     "organization": null,
-    "lastContactAt": "2026-10-31T13:40:00.000Z"
+    "lastContactAt": "2026-10-31T13:40:00.000Z",
+    "role": "verhuurder"
   },
   {
     "id": "00000000-f1c5-4000-8000-600000000002",
     "kind": "organization",
     "name": "Bewindkantoor Noordkust",
     "organization": null,
-    "lastContactAt": "2026-10-28T09:00:00.000Z"
+    "lastContactAt": "2026-10-28T09:00:00.000Z",
+    "role": "bewindvoerder"
   },
   {
     "id": "00000000-f1c5-4000-8000-600000000003",
     "kind": "organization",
     "name": "Incassobureau Kade & Partners",
     "organization": null,
-    "lastContactAt": "2026-10-14T09:00:00.000Z"
+    "lastContactAt": "2026-10-14T09:00:00.000Z",
+    "role": "incasso"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000004",
+    "kind": "organization",
+    "name": "Atelier Sterrenwacht",
+    "organization": null,
+    "lastContactAt": null,
+    "role": "werkgever"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000005",
+    "kind": "organization",
+    "name": "Gemeente Westerlaan",
+    "organization": null,
+    "lastContactAt": null,
+    "role": "gemeente"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000006",
+    "kind": "organization",
+    "name": "Stroomnet Energie",
+    "organization": null,
+    "lastContactAt": null,
+    "role": "schuldeiser"
+  },
+  {
+    "id": "00000000-f1c5-4000-8000-600000000007",
+    "kind": "organization",
+    "name": "Zorgverzekeraar Duinzorg",
+    "organization": null,
+    "lastContactAt": null,
+    "role": "zorgverzekeraar"
   }
 ]

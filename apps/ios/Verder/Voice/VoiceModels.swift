@@ -9,6 +9,20 @@ struct PartyDTO: Codable, Identifiable, Equatable, Sendable {
     let organization: String?
     /// Newest log entry this party took part in; nil when never.
     let lastContactAt: Date?
+    /// What the party is to Martin ("verhuurder", "incasso"), shown in the
+    /// picker when the server serves it. NOT SERVED YET: `parties.kind` is
+    /// only person/organization and roles live per debt, so the route has no
+    /// such field; the phone never guesses one (FEATURES "De rol van de partij").
+    var role: String? = nil
+
+    init(id: String, kind: String, name: String, organization: String?, lastContactAt: Date?, role: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.organization = organization
+        self.lastContactAt = lastContactAt
+        self.role = role
+    }
 }
 
 /// `POST /api/mobile/v1/entries/voice`'s answer.
@@ -30,12 +44,38 @@ enum VoiceChannel: String, CaseIterable, Identifiable, Sendable {
     var label: String {
         switch self {
         case .call: "Telefoon"
-        case .meeting: "Gesprek"
+        // The frames' word: a meeting a voice note is about is a visit.
+        case .meeting: "Bezoek"
         case .voicemail: "Voicemail"
         case .whatsapp: "WhatsApp"
         case .other: "Anders"
         }
     }
+}
+
+extension VoiceChannel {
+    /// The two the segmented row shows; the rest sit behind "Anders…".
+    static let primary: [VoiceChannel] = [.call, .meeting]
+    static let more: [VoiceChannel] = [.voicemail, .whatsapp, .other]
+}
+
+/// What the recogniser has so far while Martin talks: `settled` will not
+/// change, `volatile` still may (drawn in signal, the frame "opname").
+struct LiveText: Equatable, Sendable {
+    var settled: String
+    var volatile: String
+
+    static let empty = LiveText(settled: "", volatile: "")
+    var isEmpty: Bool { settled.isEmpty && volatile.isEmpty }
+    var whole: String { [settled, volatile].filter { !$0.isEmpty }.joined(separator: " ") }
+}
+
+/// How far the one-time Dutch model download is. Bytes only when the system
+/// reports them as bytes; otherwise the fraction alone.
+struct InstallProgress: Equatable, Sendable {
+    var fraction: Double
+    var completedBytes: Int64? = nil
+    var totalBytes: Int64? = nil
 }
 
 /// What one "Verstuur als voorstel" sends: the route's multipart fields, and

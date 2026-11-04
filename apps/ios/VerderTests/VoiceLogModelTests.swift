@@ -165,7 +165,9 @@ struct VoiceLogModelTests {
         await m.send()
         #expect(m.phase == .editing)
         #expect(m.transcript == "Bewerkt.")
-        #expect(m.notice == VoiceLogModel.Copy.serverFailed)
+        #expect(m.sendFailure == .server)
+        #expect(m.banner?.title == "Niet verstuurd")
+        #expect(m.primary(locked: false).title == "Opnieuw proberen")
         #expect(m.hasRecording)
 
         let first = try posted(s)
@@ -182,9 +184,15 @@ struct VoiceLogModelTests {
         await m.prepare()
         await record(m)
         await m.send()
-        #expect(rejected == 1)
-        #expect(m.notice == VoiceLogModel.Copy.signedOut)
+        // The sheet stays: "Je bent uitgelogd", and only "Log opnieuw in"
+        // hands over to the sign-in screen (frame "niet verstuurd · opnieuw inloggen").
+        #expect(rejected == 0)
+        #expect(m.sendFailure == .signedOut)
+        #expect(m.banner?.title == "Je bent uitgelogd")
+        #expect(m.primary(locked: false) == .init(title: "Log opnieuw in", does: .signIn, enabled: true))
         #expect(m.phase == .editing)
+        m.signInAgain()
+        #expect(rejected == 1)
     }
 
     /// iOS without Dutch speech: a clear Dutch state, the recorder hidden,
@@ -228,7 +236,12 @@ struct VoiceLogModelTests {
         await record(m)
         #expect(m.phase == .editing)
         #expect(m.transcript.isEmpty)
-        #expect(m.notice == VoiceLogModel.Copy.nothingHeard)
+        #expect(m.takeProblem == .nothingHeard)
+        guard case .state(let page) = m.screen else { Issue.record("no state page"); return }
+        #expect(page.kind == .nothingHeard)
+        #expect(page.title == "Niets gehoord")
+        #expect(page.primary == .recordAgain)
+        #expect(page.secondary == .typeNote)
         #expect(m.hasRecording)
         #expect(!m.canSend)
     }
@@ -249,8 +262,11 @@ struct VoiceLogModelTests {
         await m.prepare()
         await m.startRecording()
         #expect(m.phase == .idle)
-        #expect(m.notice == VoiceLogModel.Copy.micDenied)
         #expect(m.micDenied)
+        guard case .state(let page) = m.screen else { Issue.record("no state page"); return }
+        #expect(page.title == "Microfoon staat uit")
+        #expect(page.primary == .openSettings)
+        #expect(page.secondary == .typeNote)
     }
 
     @Test func nothingIsSentWithoutPartyOrText() async throws {
@@ -263,9 +279,12 @@ struct VoiceLogModelTests {
         await m.send()
         #expect(s.requests.allSatisfy { $0.httpMethod != "POST" })
         m.transcript = "Iets."
-        m.partyId = nil
-        #expect(!m.canSend)
-        m.partyId = Self.noordkust
+        #expect(m.canSend)
+        m.choose(party: Self.noordkust)
+        #expect(m.partyId == Self.noordkust)
+        #expect(m.partySource == .chosen)
+        m.choose(party: "00000000-0000-4000-8000-000000000000")   // not in the dossier: ignored
+        #expect(m.partyId == Self.noordkust)
         #expect(m.canSend)
     }
 
@@ -281,7 +300,9 @@ struct VoiceLogModelTests {
     @Test func channelsAreTheServersWithDutchLabels() {
         #expect(VoiceChannel.allCases.map(\.rawValue) == ["call", "meeting", "voicemail", "whatsapp", "other"])
         #expect(VoiceChannel.call.label == "Telefoon")
-        #expect(VoiceChannel.meeting.label == "Gesprek")
+        #expect(VoiceChannel.meeting.label == "Bezoek")
+        #expect(VoiceChannel.primary == [.call, .meeting])
+        #expect(VoiceChannel.more == [.voicemail, .whatsapp, .other])
     }
 
     @Test func theAnswerAndPartiesDecode() throws {
@@ -328,13 +349,13 @@ struct VoiceLogModelTests {
         let m = try model(s, transcriber: t, dir: dir)
         await m.prepare()
         await record(m)
-        #expect(m.notice == VoiceLogModel.Copy.nothingHeard)
+        #expect(m.takeProblem == .nothingHeard)
         #expect(m.canRecordAgain)
         let id = m.clientId
 
         m.recordAgain()
         #expect(m.phase == .idle)
-        #expect(m.notice == nil)
+        #expect(m.takeProblem == nil)
         #expect(m.clientId == id)
         #expect(!m.hasRecording)
         #expect(m.canRecord)
@@ -368,7 +389,10 @@ struct VoiceLogModelTests {
         let m = try model(server(voiceStatus: 503))
         await m.prepare()
         await record(m)
-        #expect(!m.canRecordAgain)                        // there is text
+        #expect(m.canRecordAgain)                         // over the heard text, before any send (the frames)
+        #expect(!m.needsRecordAgainConfirmation)          // nothing of Martin's to lose
+        m.transcript += " Zelf aangevuld."
+        #expect(m.needsRecordAgainConfirmation)           // his edit would go: asked first
         await m.send()
         m.transcript = ""
         #expect(!m.canRecordAgain)                        // a send was attempted
@@ -385,20 +409,21 @@ struct VoiceLogModelTests {
         let s = server(parties: rows)
         let m = try model(s)
         #expect(m.partiesState == .loading)
-        #expect(m.partiesLine == "Partijen laden…")
+        #expect(m.partyRow(locked: false).title == "Partijen laden…")
         await m.prepare()
         #expect(m.partiesState == .empty)
-        #expect(m.partiesLine == VoiceLogModel.Copy.noParties)
-        #expect(m.partiesLine?.hasPrefix("Nog geen partijen in je dossier") == true)
+        #expect(m.partyRow(locked: false) == .init(title: "Nog geen partijen", meta: "MET WIE · VOEG ER EEN TOE IN VERDER"))
+        #expect(VoiceLogModel.Copy.noParties.hasSuffix("Je notitie blijft staan."))
         #expect(m.canRetryParties)
         m.typeInstead()
         m.transcript = "Gebeld."
         #expect(!m.canSend)
+        #expect(m.footnote(locked: false) == VoiceLogModel.Copy.needParty)
 
         rows.data.withLock { $0 = Self.parties }
         await m.retryParties()
         #expect(m.partiesState == .loaded)
-        #expect(m.partiesLine == nil)
+        #expect(m.partyRow(locked: false).title == "Woonstichting Lindehof")
         #expect(!m.canRetryParties)
         #expect(m.partyId == Self.lindehof)
         #expect(m.canSend)
@@ -410,7 +435,10 @@ struct VoiceLogModelTests {
         let m = try model(s)
         await m.prepare()
         #expect(m.partiesState == .failed)
-        #expect(m.partiesLine == VoiceLogModel.Copy.partiesFailed)
+        #expect(m.partyRow(locked: false) == .init(title: "Partijen laden lukt niet", meta: "MET WIE · OPNIEUW LADEN"))
+        m.typeInstead()
+        m.transcript = "Gebeld."
+        #expect(m.footnote(locked: false) == VoiceLogModel.Copy.waitForParties)
         #expect(m.canRetryParties)
     }
 
@@ -502,8 +530,9 @@ final class FakeTranscriber: Transcribing {
 
     func availability() async -> SpeechAvailability { availabilityValue }
 
-    func install() async throws(TranscriptionError) {
+    func install(progress: @escaping @Sendable (InstallProgress) -> Void) async throws(TranscriptionError) {
         installs.withLock { $0 += 1 }
+        progress(InstallProgress(fraction: 0.5, completedBytes: 30_000_000, totalBytes: 60_000_000))
         if installFails.withLock({ $0 }) { throw .assetsUnavailable }
     }
 
