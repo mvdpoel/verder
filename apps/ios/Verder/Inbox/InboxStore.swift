@@ -162,9 +162,11 @@ final class InboxStore {
                 count: dto.count, topTitle: top?.title, topKind: top?.kind.rawValue,
                 headline: summary?.headline?.stopTitle, updatedAt: now(),
                 items: dto.items.prefix(WidgetSnapshot.maxItems).map {
-                    WidgetSnapshot.Item(kind: $0.kind.rawValue, id: $0.id, title: $0.title)
+                    WidgetSnapshot.Item(kind: $0.kind.rawValue, id: $0.id, title: $0.title,
+                                        at: $0.at, dueAt: $0.dueAt)
                 },
-                oldestAt: dto.items.map(\.at).min())
+                oldestAt: dto.items.map(\.at).min(),
+                headlineTrack: summary?.headline?.trackTitle, headlineAt: summary?.headline?.happenedAt)
             // A snapshot that cannot be written leaves the old one; the widget
             // ages it out after 24 h ("Open verder om bij te werken").
             if (try? WidgetSnapshot.write(snapshot, to: snapshotDir, writer: writer)) != nil {

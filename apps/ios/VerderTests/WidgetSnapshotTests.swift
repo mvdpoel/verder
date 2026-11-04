@@ -30,6 +30,39 @@ struct WidgetSnapshotTests {
         #expect(WidgetSnapshot.read(from: dir) == empty)
     }
 
+    /// Sign-out leaves ONE empty file, so the widget can say "Log in bij
+    /// verder" — and nothing of the case.
+    @Test func theSignedOutMarkerIsEmpty() throws {
+        let dir = Self.tempDir()
+        try WidgetSnapshot.write(Self.sample, to: dir)
+        #expect(!WidgetSnapshot.isSignedOut(in: dir))
+        WidgetSnapshot.erase(in: dir)
+        #expect(WidgetSnapshot.read(from: dir) == nil)
+        #expect(WidgetSnapshot.isSignedOut(in: dir))
+        let marker = try Data(contentsOf: WidgetSnapshot.signedOutURL(in: dir))
+        #expect(marker.isEmpty)
+        let left = try FileManager.default.contentsOfDirectory(atPath: dir.appending(path: "widget").path())
+        #expect(left == ["signed-out"])
+        // Signing in again: the next good refresh replaces the marker.
+        try WidgetSnapshot.write(Self.sample, to: dir)
+        #expect(!WidgetSnapshot.isSignedOut(in: dir))
+    }
+
+    @Test func itemDatesAndTheSporeRoundTripAndAnOlderItemStillReads() throws {
+        let dir = Self.tempDir()
+        let snap = WidgetSnapshot(count: 1, topTitle: nil, topKind: nil, headline: "Halte",
+                                  updatedAt: Date(timeIntervalSince1970: 1_793_352_001),
+                                  items: [.init(kind: "task", id: "x", title: "T",
+                                                at: Date(timeIntervalSince1970: 1_793_352_000), dueAt: "2026-11-03")],
+                                  headlineTrack: "Spoor", headlineAt: Date(timeIntervalSince1970: 1_793_000_000))
+        try WidgetSnapshot.write(snap, to: dir)
+        #expect(WidgetSnapshot.read(from: dir) == snap)
+        let old = Data(#"{"count":1,"updatedAt":815100000,"items":[{"kind":"task","id":"x","title":"T"}]}"#.utf8)
+        let decoded = try JSONDecoder().decode(WidgetSnapshot.self, from: old)
+        #expect(decoded.items.first?.at == nil)
+        #expect(decoded.headlineTrack == nil)
+    }
+
     @Test func readIsNilWhenNothingWasWritten() {
         #expect(WidgetSnapshot.read(from: Self.tempDir()) == nil)
     }

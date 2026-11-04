@@ -21,6 +21,10 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     let topKind: String?
     /// The map's current stop ("waar het nu op wacht"), or nil when none is open.
     let headline: String?
+    /// The spoor that stop sits on ("Opstart en stukken") and its date: the
+    /// StandBy face's "Opstart en stukken · 28 okt". Nil from older builds.
+    let headlineTrack: String?
+    let headlineAt: Date?
     let updatedAt: Date
     /// The server's top items (at most `maxItems`), in server order: the
     /// medium and large widgets' rows, each deep-linking to its own item.
@@ -36,17 +40,25 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         let kind: String
         let id: String
         let title: String
+        /// When it arrived (`WaitingItem.at`): the row's "VOORSTEL · 2 NOV".
+        /// Optional, so a snapshot an older build wrote still decodes.
+        var at: Date? = nil
+        /// A deadline as the server spells it (a plain day "2026-11-03" or an
+        /// ISO instant): a task's row says "TAAK · VÓÓR 3 NOV" instead.
+        var dueAt: String? = nil
     }
 
     /// The large widget's five rows.
     static let maxItems = 5
 
     init(count: Int, topTitle: String?, topKind: String?, headline: String?, updatedAt: Date,
-         items: [Item] = [], oldestAt: Date? = nil) {
+         items: [Item] = [], oldestAt: Date? = nil, headlineTrack: String? = nil, headlineAt: Date? = nil) {
         self.count = count
         self.topTitle = topTitle
         self.topKind = topKind
         self.headline = headline
+        self.headlineTrack = headlineTrack
+        self.headlineAt = headlineAt
         self.updatedAt = updatedAt
         self.items = items
         self.oldestAt = oldestAt
@@ -62,6 +74,8 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         topTitle = try c.decodeIfPresent(String.self, forKey: .topTitle)
         topKind = try c.decodeIfPresent(String.self, forKey: .topKind)
         headline = try c.decodeIfPresent(String.self, forKey: .headline)
+        headlineTrack = try c.decodeIfPresent(String.self, forKey: .headlineTrack)
+        headlineAt = try c.decodeIfPresent(Date.self, forKey: .headlineAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
         oldestAt = try c.decodeIfPresent(Date.self, forKey: .oldestAt)
@@ -88,6 +102,20 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         // date strategy keeps sub-second precision, so a round trip is exact.
         let data = try JSONEncoder().encode(snapshot)
         try writer(data, file, writeOptions)
+        // A fresh list replaces "afgemeld": Martin is signed in again.
+        try? FileManager.default.removeItem(at: signedOutURL(in: dir))
+    }
+
+    /// `<dir>/widget/signed-out`: an EMPTY file that says only "signed out",
+    /// so the widget can tell "Log in bij verder" from a snapshot that was
+    /// never written. It holds no case content — nothing about the dossier
+    /// outlives a sign-out (`WidgetSnapshotTests.theSignedOutMarkerIsEmpty`).
+    static func signedOutURL(in dir: URL) -> URL {
+        dir.appending(path: "widget", directoryHint: .isDirectory).appending(path: "signed-out")
+    }
+
+    static func isSignedOut(in dir: URL) -> Bool {
+        FileManager.default.fileExists(atPath: signedOutURL(in: dir).path)
     }
 
     /// The DEVICE check of the protection class (Plan 3 Task 9 Step 3). iOS 27
@@ -108,11 +136,16 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// Removes the snapshot: its titles, their ids and the map headline. Sign-out
     /// and a rejected session call this (through `AuthModel` and
     /// `InboxStore`), because the pocket dossier is wiped then and the
-    /// widget's copy of the same content may not outlive it. A missing file
-    /// already reads as "Open verder om bij te werken", so nothing new is
-    /// written in its place. Already gone is success.
+    /// widget's copy of the same content may not outlive it. The widget then
+    /// says "Log in bij verder", and nothing new is
+    /// written in its place but the empty signed-out marker. Already gone is
+    /// success.
     static func erase(in dir: URL) {
         try? FileManager.default.removeItem(at: fileURL(in: dir))
+        let marker = signedOutURL(in: dir)
+        try? FileManager.default.createDirectory(at: marker.deletingLastPathComponent(),
+                                                 withIntermediateDirectories: true)
+        try? Data().write(to: marker, options: writeOptions)
     }
 
     /// Nil when nothing was written yet or the file does not decode — the

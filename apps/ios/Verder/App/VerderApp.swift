@@ -95,11 +95,25 @@ struct VerderApp: App {
         AppDelegate.services = .init(client: s.client, inbox: inbox)
     }
 
+    private var root: some View {
+        RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
+                 money: money, dossier: dossier, timeline: timeline, weekly: weekly, voice: voice, now: now, camera: camera)
+            .onAppear { appDelegate.attach(push) }
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootView(auth: auth, lock: lock, uploads: uploads, push: push, links: appDelegate.links, inbox: inbox,
-                     money: money, dossier: dossier, timeline: timeline, weekly: weekly, voice: voice, now: now, camera: camera)
-                .onAppear { appDelegate.attach(push) }
+            #if DEBUG
+            // `-widget-host <scene>`: the widget faces on a drawn home screen,
+            // lock screen or StandBy, for the captures (FixtureWidgetHost).
+            if let scene = WidgetHostScene.current {
+                WidgetHostView(scene: scene)
+            } else {
+                root
+            }
+            #else
+            root
+            #endif
         }
         .backgroundTask(.urlSession(BackgroundUploader.identifier)) { [uploader = uploads.uploader] in
             await uploader.finishBackgroundEvents()

@@ -25,6 +25,15 @@
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
 #            | meer:account | meer:notifications | meer:widgets | meer:about | meer:developer
 #            (a Meer screen pushed onto the Meer stack, as its row's tap does)
+#            | widget:<scene> — the widget faces on a DRAWN home screen, lock screen,
+#            Today View or StandBy (FixtureWidgetHost; the simulator cannot be told
+#            to place a widget from the shell): thuis-{volle-kleur,getint,helder,leeg,
+#            leeg-getint,een-item,verouderd,afgemeld} groot-{volle-kleur,getint,helder,
+#            leeg,verouderd,afgemeld} vandaag-vergrendeld toegang-{wacht,een-item,leeg,
+#            verouderd,afgemeld} standby-{ontgrendeld,vergrendeld,nacht,leeg,verouderd,
+#            afgemeld}. StandBy is landscape: drawn turned a quarter, the PNG is turned
+#            back. With DEVICE="iPhone SE (3rd generation)" for the SE frame and
+#            --text-size ax5 for the AX5 frames.
 #   --locked keep the app lock closed (Overzicht's counts-only glance)
 #   --scans  the phone's upload queue holds today's scans (2 sent, 1 waiting)
 #   --scrolled  open Overzicht scrolled to its end (the lower half of a
@@ -293,6 +302,10 @@ case "$TARGET" in
   overzicht|voorjou|scan|dossier|meer) ARGS=(-tab "$TARGET") ;;
   geld|weekly|timeline|voice) ARGS=(-route "$TARGET") ;;
   meer:account|meer:notifications|meer:widgets|meer:about|meer:developer) ARGS=(-route "$TARGET") ;;
+  widget:*)
+    WIDGET_SCENES="thuis-volle-kleur thuis-getint thuis-helder thuis-leeg thuis-leeg-getint thuis-een-item thuis-verouderd thuis-afgemeld groot-volle-kleur groot-getint groot-helder groot-leeg groot-verouderd groot-afgemeld vandaag-vergrendeld toegang-wacht toegang-een-item toegang-leeg toegang-verouderd toegang-afgemeld standby-ontgrendeld standby-vergrendeld standby-nacht standby-leeg standby-verouderd standby-afgemeld"
+    case " $WIDGET_SCENES " in *" ${TARGET#widget:} "*) ;; *) echo "capture.sh: unknown widget scene '${TARGET#widget:}'; known: $WIDGET_SCENES" >&2; exit 2 ;; esac
+    ARGS=(-widget-host "${TARGET#widget:}") ;;
   proposal:*|suggestion:*|task:*|document:*)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
       echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2
@@ -476,5 +489,7 @@ TMP="$OUT.partial.png"
 trap 'rm -f "$TMP"; restore_size' EXIT
 xcrun simctl io "$UDID" screenshot --type=png "$TMP" >/dev/null 2>&1
 alive || died "during the screenshot"
+# StandBy is drawn turned a quarter counter-clockwise; turn the PNG back.
+case "$TARGET" in widget:standby-*) sips -r 90 "$TMP" >/dev/null ;; esac
 mv -f "$TMP" "$OUT"
 echo "$OUT"

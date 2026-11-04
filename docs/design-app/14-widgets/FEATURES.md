@@ -2,17 +2,17 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op 2026-11-03 (`apps/ios`, `apps/web/src/app/api/mobile/v1`, `packages/api`, `apps/worker`). De volledige lijst, met één status per functie, staat hieronder onder **Functies en bouwstatus**.
+Gecontroleerd tegen de code op 2026-11-04 (`apps/ios`, `apps/web/src/app/api/mobile/v1`, `packages/api`, `apps/worker`). De volledige lijst, met één status per functie, staat hieronder onder **Functies en bouwstatus**.
 
-- **Gebouwd:** 33
-- **Deels gebouwd:** 5
-- **Nog te bouwen:** 10
+- **Gebouwd:** 46
+- **Deels gebouwd:** 1
+- **Nog te bouwen:** 1
 
-De drie belangrijkste dingen die nog gebouwd moeten worden:
+Wat nog openstaat:
 
-1. **Een afgemelde toestand die de widget kan onderscheiden van "verouderd"** (F28). Afmelden wist nu de snapshot, dus de widget zegt "Open verder om bij te werken" waar hij "Log in bij verder" zou moeten zeggen. Hiervoor zijn nodig: een afgemeld-markering in de App Group, een vierde `WidgetContent.State` en weergaven voor alle zes families.
-2. **De StandBy-weergave** (F41, F42): links het aantal en rechts "waar het nu op wacht" met het spoor en de datum, afgeschermd tot "ontgrendel om te zien" zolang de telefoon vergrendeld is. De snapshot moet `trackTitle` en `happenedAt` meedragen. De server stuurt beide al mee in `DashboardSummaryDTO.headline`.
-3. **Datums op rijen en "en nog N"** (F11, F12). De rijen hebben de datum of de deadline van het item nodig ("VOORSTEL · 2 NOV", "TAAK · VÓÓR 3 NOV"), en middel en groot hebben de restregel nodig. `WaitingItem` op de server heeft `at` en `dueAt` al, maar `WidgetSnapshot.Item` slaat ze niet op.
+1. **De Scan-bediening voor het Bedieningspaneel en de Actieknop** (F47): deels gebouwd.
+2. **De Live Activity voor drie of meer uploads** (F48): nog te bouwen.
+3. **Server-ingekorte titels** (`widgetTitle`, `widgetHeadline` uit het ontwerp, ≤ 300 / 314 pt gemeten): de server stuurt ze niet; de widget tekent de volledige titel in maximaal twee regels en VoiceOver leest hem helemaal.
 
 Dit document beschrijft wat de widget van verder doet: wat hij toont, waar hij zijn gegevens vandaan haalt, wat hij verbergt en waar een tik naartoe leidt. Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `widgets · final` (node 347:16197) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
 
@@ -31,7 +31,7 @@ De widget beantwoordt één vraag zonder dat de app open hoeft: **"Hoeveel wacht
 
 - **Beginscherm en Vandaag-weergave** (klein, middel, groot): het aantal dat wacht, de bovenste items en op het grote formaat de headline van de dossierkaart ("waar het nu op wacht").
 - **Toegangsscherm** (rond, rechthoek, regel): **alleen aantallen, nooit een titel.**
-- **StandBy:** iOS tekent daar de systeemfamilies. De code heeft geen eigen StandBy-weergave (zie de sectie StandBy hieronder).
+- **StandBy:** links de kleine "Voor jou" in zijn eigen StandBy-compositie, rechts de tweede widget "Waar het nu op wacht" (zie de sectie StandBy hieronder).
 
 Het aantal is het eigen getal van de server. Het komt uit de ene definitie van "wacht op Martin" in `packages/api/src/waiting.ts`. Die definitie (`loadWaiting`) omvat openstaande voorstellen (vragen zijn ook voorstellen; voorstellen die worden opgesteld, zijn goedgekeurd of worden verzonden wachten op verder, niet op Martin), openstaande en needs-manual suggesties (niet bij een weggegooid of definitief verwijderd document), open taken en taken in uitvoering, en de huidige open halte van de kaart, tenzij de taak daarvan al in de lijst staat. De Voor jou-lijst, de badge op het app-icoon, de widget en "wacht op jou · N" op het webdashboard lezen allemaal die ene definitie: `count` is de lengte van de lijst zelf (`inbox.list` / `inbox.count`, en `countWaiting` in de worker), nooit een tweede SQL-telling. Het aantal in de widget en de Voor jou-lijst komen uit dezelfde fetch, dus de widget kan nooit 4 zeggen terwijl de lijst er 3 toont (`InboxStore.swift`, `/api/mobile/v1/inbox`).
 
@@ -78,16 +78,16 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `WidgetContent.make`, `WidgetSmall`/`WidgetMedium`/`WidgetLarge` in `apps/ios/Verder/Widget/WidgetViews.swift`. Het ontwerp voegt de onderdelen uit F11–F13 toe.
 
 **F11. "en nog N".** Middel en groot zeggen hoeveel items er wachten buiten de getoonde rijen ("en nog 2", "en nog 493"), zodat het aantal en de zichtbare rijen met elkaar kloppen.
-**Status:** Nog te bouwen — nodig zijn een restveld in `WidgetContent` (`count − rows.count`, nooit negatief, afwezig als er niets verborgen is), een regel in de middelgrote en grote weergave, en een test. Beide invoerwaarden staan al in de snapshot.
+**Status:** Gebouwd — `WidgetContent.more(showing:)` / `largeReadout(showing:)`; middel toont "en nog N" onder de woorden, groot in de kopregel ("en nog 493 · oudste 6 wk"), en telt precies wat de `ViewThatFits` verbergt. Test `enNogCountsExactlyWhatIsHidden`.
 
 **F12. Een datum op elke rij.** Na de soort volgt de datum van het item ("VOORSTEL · 2 NOV"). Bij een taak met een deadline toont de rij in plaats daarvan de deadline ("TAAK · VÓÓR 3 NOV").
-**Status:** Nog te bouwen — `WaitingItem` draagt al `at` en `dueAt` (`packages/api/src/waiting.ts`) en de inbox-route stuurt ze al mee. Nog nodig: `WidgetSnapshot.Item` moet beide opslaan (als optionele velden, zodat oudere snapshots nog decoderen), `InboxStore.refresh()` moet ze schrijven, `WidgetContent.Line` heeft een datumlabel op Amsterdamse dag nodig, en er zijn tests nodig voor het label en voor het decoderen van oude snapshots.
+**Status:** Gebouwd — `WidgetSnapshot.Item.at`/`dueAt` (optioneel, oude snapshots decoderen nog), geschreven door `InboxStore.refresh()`; `WidgetContent.line(for:)` en `DutchDate`. Tests `rowsCarryTheirKindAndDate`, `aDeadlineReadsAsAPlainDayOrAnInstant`, `itemDatesAndTheSporeRoundTripAndAnOlderItemStillReads`.
 
 **F13. De leeftijd van het oudste item.** Geteld in hele Amsterdamse kalenderdagen over alle wachtende items: "oudste van vandaag", "oudste 1 dag", "oudste N dagen".
-**Status:** Deels gebouwd — het is gebouwd voor groot en de rechthoek (`WidgetContent.oldest`). Ontbreekt: het ontwerp toont het ook op klein ("oudste 2 dagen"), en op groot schakelt het bij lang wachten over op weken ("oudste 6 wk"). Geen van beide bestaat, en er is geen regel voor wanneer weken het overnemen.
+**Status:** Gebouwd — `WidgetContent.oldest(since:now:single:)`: klein, rechthoek, groot en StandBy; vanaf 14 dagen in hele weken ("oudste 6 wk", VoiceOver "6 weken"); bij één item "sinds 2 dagen". Test `theAgeTurnsToWeeksAndOneItemSaysSinds`.
 
 **F14. Toegangsscherm, rond: het aantal en "voor jou".**
-**Status:** Gebouwd — `WidgetCircular`.
+**Status:** Gebouwd — `WidgetCircular`. Het ontwerp tekent het bakje en het aantal; "4 wachten op jou" is het VoiceOver-label, de rechthoek ernaast zegt de woorden.
 
 **F15. Toegangsscherm, rechthoek: het aantal, het onderschrift en "oudste N dagen".**
 **Status:** Gebouwd — `WidgetRectangular`.
@@ -107,7 +107,7 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `WidgetContent.inboxURL`.
 
 **F20. De voettekst "waar het nu op wacht" van de grote widget opent de dossierkaart.** Het ontwerp annoteert die als "footer link → Dossier".
-**Status:** Deels gebouwd — `DeepLink` parseert `verder://dossier` en `verder://timeline` (de Tijdlijn op Dossier) al. De voettekst is echter geen `Link`, dus een tik erop opent Voor jou. Nog nodig: de voettekst in een `Link` naar `verder://timeline` (of `dossier`, wat er ook besloten wordt) zetten, `headline.url` daarnaar laten wijzen en een test toevoegen.
+**Status:** Gebouwd — `LargeFooter` is een `Link` naar `WidgetContent.mapURL` (`verder://timeline`); test `theLargeFooterOpensTheMap`.
 
 **F21. De app-vergrendeling geldt ook na een tik.** Het item waar een link naar wijst, verschijnt pas na Face ID.
 **Status:** Gebouwd — `RootView.swift`.
@@ -118,22 +118,22 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 **Status:** Gebouwd — `WidgetContent.countIsAmber`, `CountBlock`, `Masthead`; tests `amberOnlyInFullColor` en `everyFamilyPaintsItsWords`.
 
 **F23. Leeg: er wacht niets.** Het ontwerp toont een vinkje met "Niets wacht op je" en, op middel en groot, de aanmoedigende regel "Goed bezig. verder laat het weten zodra er iets binnenkomt.". Het toont geen "0".
-**Status:** Deels gebouwd — de code tekent "0" met "Niets wacht op je.", nooit in amber. Ontbreekt: de "0" vervangen door het vinkje en de aanmoedigende regel toevoegen, waarbij de woorden van de lege toestand in elke familie blijven.
+**Status:** Gebouwd — vinkje (`okay`), "Niets wacht op je" en op middel en groot de aanmoedigende regel; geen "0". Tests `zeroCountIsNotAmber`, `emptySaysWhenItLastLooked`.
 
 **F24. Groot, leeg: de voettekst beantwoordt nog steeds "waar het nu op wacht".** Als er niets wacht, luidt die "Nergens op. Je bent helemaal bij.".
-**Status:** Nog te bouwen — `WidgetContent.make` keert in de lege toestand terug voordat er een headline wordt opgebouwd, dus de grote lege weergave heeft geen voettekst. Hiervoor is een headlineregel voor de lege toestand nodig. Het ontwerp zegt niet wat de voettekst toont als er niets wacht maar de kaart wel een open halte heeft; dat moet eerst besloten worden.
+**Status:** Gebouwd — de voettekst zegt "Nergens op. Je bent helemaal bij." (niet gevoelig). De open halte telt mee in "wacht op Martin", dus bij 0 is er geen; mocht de snapshot toch een headline dragen, dan toont de voettekst die.
 
 **F25. Verouderd: helemaal geen aantal.** Zonder snapshot, bij een bestand dat niet decodeert, of bij een snapshot van 24 uur of ouder toont de widget een verversingssymbool en "Open verder om bij te werken".
-**Status:** Deels gebouwd — de toestand zelf is gebouwd (`WidgetContent.make`, `staleAfter`). Ontbreekt: de toegangsschermwoorden uit het ontwerp, "oud" (rond) en "verder · open de app" (regel). De code zegt "open" en "verder · open om bij te werken". Kies één formulering.
+**Status:** Gebouwd — "oud" (rond) en "verder · open de app" (regel), zoals het ontwerp; test `staleSnapshotSaysOpenApp`.
 
 **F26. Tijd "bijgewerkt".** Lege en verouderde weergaven zeggen wanneer de snapshot is geschreven: "bijgewerkt 08:12" voor vandaag, "bijgewerkt 31 okt" of "laatst bijgewerkt za 31 okt 14:02" voor oudere. De grote lege weergave toont het in de kop.
-**Status:** Nog te bouwen — `updatedAt` staat al in de snapshot. Nog nodig: een formatter in Amsterdamse tijd in `WidgetContent` en een regel in de kleine, middelgrote en grote weergave. Een ontbrekend of niet-decodeerbaar bestand heeft geen tijd, dus daar moet de regel wegblijven, en een test moet dat afdekken.
+**Status:** Gebouwd — `DutchDate.updated`/`full` in Amsterdamse tijd; klein, middel, groot (kop of voettekst), rechthoek en StandBy. Zonder bestand blijft de regel weg. Tests `emptySaysWhenItLastLooked`, `staleSaysWhenItWasLastTrue`, `noSnapshotIsStale`.
 
 **F27. De uitlegregel bij verouderd, "verder toont bewust geen oud aantal."** Op middel zegt die waarom er geen aantal staat.
-**Status:** Nog te bouwen — alleen UI en tekst, plus de woorden-per-familie-test.
+**Status:** Gebouwd — `WidgetContent.body` op middel en groot.
 
 **F28. Afgemeld.** Na afmelden of een verlopen sessie zegt de widget "Log in bij verder". Klein toont "tik en log in". Middel toont "Open verder om je lijst te zien." en "afgemeld · niets bewaard op dit toestel". Het toegangsscherm toont "log in" en "verder · log in". StandBy toont hetzelfde in een eigen weergave. Een tik opent het inlogscherm.
-**Status:** Nog te bouwen — de widget ziet alleen "geen bestand", dus hij kan afgemeld niet onderscheiden van nooit ververst. Nodig: `AuthModel.forgetLocally()` en het 401-pad in `InboxStore` moeten een afgemeld-markering zonder dossierinhoud in de App Group schrijven in plaats van alleen de snapshot te wissen; een `signedOut`-toestand in `WidgetContent`; weergaven voor alle zes families; en tests dat de markering geen dossierinhoud bevat en dat een latere geslaagde verversing haar vervangt.
+**Status:** Gebouwd — `WidgetSnapshot.erase` laat een LEEG bestand `widget/signed-out` achter (alle afmeldpaden gaan erlangs), `write` haalt het weg; `WidgetContent.State.signedOut` voor alle zes families en StandBy. Tests `theSignedOutMarkerIsEmpty`, `signedOutSaysLogInAndHoldsNothing`. Een tik opent de app, die zelf het inlogscherm toont.
 
 **F29. Gewist bij afmelden en bij elke geweigerde sessie.** De snapshot wordt gewist, de widget herladen en de badge op 0 gezet.
 **Status:** Gebouwd — `AuthModel.forgetLocally()`, `InboxStore.forgetCaseContent()`; tests `signOutErasesTheWidgetSnapshot`, `sessionRejectedErasesTheWidgetSnapshot`, `unauthorizedErasesTheWidgetSnapshotAndReloads`.
@@ -167,21 +167,21 @@ Deze lijst omvat elke functie, toestand en elk gedrag dat de definitieve frames,
 ### Tekstgrootte en kleine telefoons
 
 **F38. Elke weergave past in zijn vak bij grote Dynamic Type op de kleinste widgetformaten, en de grote weergave behoudt haar headline.**
-**Status:** Gebouwd — tests `everyHomeScreenFaceFitsItsFamily` en `largeKeepsTheHeadlineWithFiveRows`.
+**Status:** Gebouwd — `everyHomeScreenFaceFitsItsFamily` (standaard, iPhone SE 148 / 321 pt en AX5, in elke toestand) en `largeKeepsTheFooterAndFitsARowCount`; de grote rijen zijn een `ViewThatFits` van 5 naar 1, zodat een tweede titelregel een rij kost en nooit de voettekst.
 
 **F39. Een lay-out voor toegankelijkheidsgroottes.** Bij AX5 wordt het onderschrift ingekort tot "voor jou". Middel schakelt over op aantal + "en nog N" boven één titel over de volle breedte van maximaal twee regels.
-**Status:** Nog te bouwen — nodig: `@Environment(\.dynamicTypeSize)` uitgelezen in de weergaven (of een groottecategorie meegegeven aan `WidgetContent`), het korte onderschrift als de woorden in elke familie, de alternatieve middelgrote lay-out, en een uitbreiding van de pastest bij `.accessibility5`. Hangt voor "en nog N" af van F11.
+**Status:** Gebouwd — `WidgetContent.Layout` (`standard`/`compact`/`accessibility`, uit `context.displaySize` en `dynamicTypeSize`); AX-composities met vaste groottes 64 / 22 / 17. Test `accessibilitySizesTakeTheShortWords`.
 
 ### StandBy
 
 **F40. StandBy toont de systeemfamilies,** en iOS past de rode nachtmodustint toe.
-**Status:** Gebouwd — er is geen StandBy-specifieke code; iOS gebruikt `systemSmall`.
+**Status:** Gebouwd — iOS tekent `systemSmall` en past de nachttint zelf toe; `WidgetStandBy` en `HeadlineFace` volgen bij `showsWidgetContainerBackground == false`.
 
 **F41. Een eigen StandBy-weergave.** Links: "VOOR JOU", het aantal, zijn woorden en "oudste N dagen". Rechts: "WAAR HET NU OP WACHT", de titel van de halte, en het spoor met zijn datum ("Opstart bewind · 28 okt"). Er zijn varianten voor leeg, verouderd en afgemeld.
-**Status:** Nog te bouwen — nodig: `trackTitle` en `happenedAt` in `WidgetSnapshot` (staan al in `DashboardSummaryDTO.headline`) en geschreven door `InboxStore.refresh()`; een StandBy-lay-out die gekozen wordt als de widget zonder containerachtergrond wordt getekend (`showsWidgetContainerBackground == false`); de varianten voor leeg/verouderd/afgemeld (F23–F28); en tests op de inhoudsbeslissing en op het passen.
+**Status:** Gebouwd — `headlineTrack`/`headlineAt` in `WidgetSnapshot`; links `WidgetStandBy`, rechts een TWEEDE widget "Waar het nu op wacht" (`HeadlineWidget`, `HeadlineContent`), want StandBy toont twee losse stapels van elk één kleine widget. Varianten voor leeg, verouderd en afgemeld; de klok rechts in die frames is de systeemklok die Martin zelf kiest. Test `theHeadlineWidgetNamesTheStopItsSporeAndDate`.
 
 **F42. StandBy terwijl vergrendeld.** De rechterkolom is afgeschermd en zegt "ontgrendel om te zien". Het aantal blijft zichtbaar.
-**Status:** Nog te bouwen — hangt af van F41. De headline- en spoorregels zijn `.privacySensitive()`, en de tekst "ontgrendel om te zien" is een niet-gevoelige regel die alleen onder `.redacted(reason: .privacy)` wordt getoond. Voeg een rendertest toe zoals `redactedMediumShowsNoTitleText`.
+**Status:** Gebouwd — `HeadlineFace`; test `redactedHeadlineShowsNoStop`.
 
 ### Uitleg en beweging
 
