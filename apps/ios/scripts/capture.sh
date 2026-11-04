@@ -9,6 +9,7 @@
 #                      [--voorjou <state[,state…]>] [--swipe <text>:<left|right>]
 #
 #   fixture  a folder in Verder/FixtureData (voorjou-few, voorjou-many, voorjou-long,
+#            voorjou-laden (the skeleton on the voorjou-* clock), voorjou-selecteren,
 #            empty, offline, unauthorized, calm, one-item, loading, server-error,
 #            server-error-cached, offline-cached, money-complete, money-partial,
 #            money-geen-data, money-empty, money-no-account, money-unrecognised,
@@ -65,7 +66,9 @@
 #            scroll:<stop id> | stop:<stop id>, comma-separated
 #   --voorjou  Voor jou in a state only a gesture reaches (tab voorjou):
 #            toast | twee | nietopgeslagen | selecteren | bevestigen | gedaan |
-#            ongedaan | scroll:<row key|done|more>, comma-separated
+#            ongedaan | scroll:<row key|done|more>[@<y>], comma-separated
+#            (@<y>: the row's point y — 0 top, 1 bottom — on the same point
+#            of the visible list; without it the row's top is at the top)
 #   --swipe  drag the row whose text reads exactly <text> part-way to the
 #            right (its leading action) or left (its trailing one) and shoot
 #            it held open; runs through the VerderCapture UI test, as --press does

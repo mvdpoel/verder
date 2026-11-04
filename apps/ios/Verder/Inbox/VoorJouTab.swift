@@ -141,13 +141,15 @@ struct VoorJouTab: View {
 
     private func list(_ inbox: InboxDTO) -> some View {
         let clock = now()
-        let sections = VoorJouList.sections(inbox, hiding: decisions.hiddenKeys, expanded: showAll)
-        let count = VoorJouList.count(inbox, hidden: decisions.hiddenCount)
+        let restoring = VoorJouList.restoring(inbox, keys: decisions.hiddenKeys)
+        let sections = VoorJouList.sections(inbox, hiding: decisions.hiddenKeys, expanded: showAll, restoring: restoring)
+        let count = VoorJouList.count(inbox, hidden: decisions.hiddenCount, restored: restoring.count)
         let notice = VoorJouList.notice(store.lastError, hasList: true)
         let readOnly = notice == .offline
         let freshness = VoorJouList.freshness(now: clock, fetchedAt: store.fetchedAt, error: store.lastError)
         let selectable = sections.flatMap(\.rows).filter(\.selectable)
-        let canSelect = selectable.count >= 2 && !readOnly
+        let canSelect = VoorJouList.canSelect(selectable: selectable.count, readOnly: readOnly,
+                                              holding: !decisions.held.isEmpty)
         let doneActions = inbox.doneByVerder.filter { !decisions.hiddenKeys.contains(ListDecision.key(verder: $0.changeId)) }
 
         return ScrollViewReader { proxy in
@@ -170,6 +172,15 @@ struct VoorJouTab: View {
                 }
                 ForEach(sections) { section in
                     Section {
+                        // At the accessibility sizes the section's name is an
+                        // ordinary row, not a pinned header: two lines of AX5
+                        // pinned over the rows leave them a sliver and read as
+                        // the next row's title cut off beneath it.
+                        if ax {
+                            VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
+                                .listRowBackground(Color.void)
+                                .listRowSeparator(.hidden)
+                        }
                         if selecting && section.kind == .nu {
                             Text(VoorJouCopy.nuNote)
                                 .font(.display(15, relativeTo: .subheadline))
@@ -201,11 +212,14 @@ struct VoorJouTab: View {
                         }
                         Color.clear.frame(height: 28).voorJouRow()
                     } header: {
-                        VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
+                        if !ax {
+                            VoorJouSectionHeader(section: section, trailing: sectionTrailing(section, readOnly: readOnly))
+                        }
                     }
                 }
                 if !inbox.doneByVerder.isEmpty {
-                    DoneByVerderListSection(actions: doneActions, total: inbox.doneByVerder.count,
+                    DoneByVerderListSection(actions: doneActions,
+                                            total: VoorJouList.doneCount(inbox, restored: restoring.count),
                                             open: $doneOpen, summary: sections.isEmpty, ax: ax,
                                             undo: { action in
                                                 verderUndos += 1
@@ -223,7 +237,7 @@ struct VoorJouTab: View {
             .listSectionSpacing(0)
             .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.25), value: decisions.hiddenKeys)
             .refreshable { await store.refresh() }
-            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 132 } action: { _, past in
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > VoorJouMetrics.compactAfter } action: { _, past in
                 scrolled = past
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -243,7 +257,7 @@ struct VoorJouTab: View {
                                             canApprove: !chosen.isEmpty && chosen.allSatisfy(\.approvable),
                                             reject: { decideAll(chosen, .reject) },
                                             approve: { confirming = true })
-                } else if let content = DecisionToast.content(decisions.held) {
+                } else if let content = DecisionToast.content(decisions.held, short: ax) {
                     DecisionToastView(content: content, decisions: decisions, ax: ax,
                                       undo: { decisions.undoLast() }, review: { reviewing = true })
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -302,16 +316,17 @@ struct VoorJouTab: View {
         }
         .buttonStyle(.plain)
         .voorJouRow()
+        // A restored row has no server id yet: nothing to decide on it.
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            if !selecting && !readOnly { leadingAction(row) }
+            if !selecting && !readOnly && !row.restored { leadingAction(row) }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if !selecting && !readOnly { trailingAction(row) }
+            if !selecting && !readOnly && !row.restored { trailingAction(row) }
         }
-        .contextMenu { if !selecting { menu(row, readOnly: readOnly) } }
+        .contextMenu { if !selecting && !row.restored { menu(row, readOnly: readOnly) } }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(VoorJouList.accessibilityLabel(row.item, now: now))
-        .accessibilityActions { if !selecting && !readOnly { accessibilityActions(row) } }
+        .accessibilityActions { if !selecting && !readOnly && !row.restored { accessibilityActions(row) } }
         .id(row.id)
     }
 
@@ -437,10 +452,18 @@ struct VoorJouTab: View {
                                                         action: .undoVerder, target: a.changeId)],
                                           remaining: 4)
                 }
-            case .scroll(let target):
+            case .scroll(let raw):
+                // "<key>@<y>": the row's point y (0 top, 1 bottom) on the
+                // same point of the visible list; plain "<key>" is its top.
+                var target = raw
+                var anchor = UnitPoint.top
+                if let at = raw.lastIndex(of: "@"), let y = Double(raw[raw.index(after: at)...]) {
+                    target = String(raw[..<at])
+                    anchor = UnitPoint(x: 0, y: y)
+                }
                 Task {
                     try? await Task.sleep(for: .milliseconds(400))
-                    proxy.scrollTo(target, anchor: .top)
+                    proxy.scrollTo(target, anchor: anchor)
                 }
             }
         }

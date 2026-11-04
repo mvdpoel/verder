@@ -213,6 +213,72 @@ struct InboxDecisionsTests {
         #expect(String(decoding: try enc.encode(DecisionBody.status("done")), as: UTF8.self) == #"{"status":"done"}"#)
         #expect(String(decoding: try enc.encode(DecisionBody.empty), as: UTF8.self) == "{}")
     }
+
+    // MARK: - Fixes from the final frames (2026-11-04)
+
+    static func verder(_ n: Int, undoable: Bool = true) -> VerderAction {
+        VerderAction(changeId: "c\(n)", documentId: "d\(n)", documentTitle: "Afschrift \(n)",
+                     at: parseISODate("2026-10-30T09:00:00Z")!, kind: "auto-file",
+                     before: .init(status: "inbox", title: nil, docType: nil),
+                     after: .init(status: "filed", title: nil, docType: "bank-statement"),
+                     proposedTitle: nil, undone: false, undoable: undoable, notUndoableReason: undoable ? nil : "al aangepast")
+    }
+
+    /// The undo of "Door verder gedaan" moves its document into Kan wachten
+    /// AT ONCE: the hero, Kan wachten and the section's own count all follow
+    /// it, so "Terug in Kan wachten" is never contradicted by the list.
+    @Test func anUndoOfVerderMovesTheDocumentBackAtOnce() {
+        let items = [VoorJouListTests.item(.proposal, "p"), VoorJouListTests.item(.suggestion, "s"), VoorJouListTests.item(.task, "t")]
+        let inbox = InboxDTO(count: 3, items: items, doneByVerder: [Self.verder(1), Self.verder(2), Self.verder(3, undoable: false)])
+        let keys: Set<String> = [ListDecision.key(verder: "c1"), ListDecision.key(verder: "c3")]
+        let restoring = VoorJouList.restoring(inbox, keys: keys)
+        #expect(restoring.map(\.changeId) == ["c1"], "only what the server called undoable comes back")
+        let sections = VoorJouList.sections(inbox, hiding: keys, restoring: restoring)
+        let kan = sections[1]
+        #expect(kan.rows.first?.item.title == "Afschrift 1", "at the top of Kan wachten")
+        #expect(kan.total == 3)
+        #expect(VoorJouList.count(inbox, hidden: 0, restored: restoring.count) == 4)
+        #expect(VoorJouList.doneCount(inbox, restored: restoring.count) == 2)
+        let back = kan.rows[0]
+        #expect(back.restored && back.route == nil && !back.selectable && !back.approvable,
+                "no server id yet: nothing to open, tick or approve")
+        #expect(VoorJouList.restoring(inbox, keys: []).isEmpty)
+    }
+
+    /// Selecteer only on a list with several suggestions, online, and never
+    /// while a decision sits in its undo window.
+    @Test func selecteerNeedsSeveralSuggestionsAndNoHeldDecision() {
+        #expect(!VoorJouList.canSelect(selectable: 2, readOnly: false, holding: false), "the five-item lists")
+        #expect(VoorJouList.canSelect(selectable: 3, readOnly: false, holding: false))
+        #expect(!VoorJouList.canSelect(selectable: 18, readOnly: true, holding: false))
+        #expect(!VoorJouList.canSelect(selectable: 18, readOnly: false, holding: true))
+    }
+
+    /// The bulk confirmation and the AX5 toast name items short.
+    @Test func shortTitlesDropTheirOverTail() {
+        #expect(VoorJouList.shortTitle("Brief Gemeente Westerlaan over de woonkostentoeslag") == "Brief Gemeente Westerlaan")
+        #expect(VoorJouList.shortTitle("Afschrift oktober Stroomnet Energie") == "Afschrift oktober Stroomnet Energie")
+        #expect(VoorJouList.shortTitle("Brief over de huur") == "Brief over de huur", "never down to one word")
+        let msg = VoorJouList.confirmMessage(["Telefoongesprek met Woonstichting Lindehof over de betalingsregeling",
+                                              "Afschrift oktober Stroomnet Energie",
+                                              "Brief Gemeente Westerlaan over de woonkostentoeslag"], window: 5)
+        #expect(msg == "Telefoongesprek met Woonstichting Lindehof, Afschrift oktober Stroomnet Energie en Brief Gemeente Westerlaan. Daarna heb je 5 seconden om het ongedaan te maken.")
+        let d = ListDecision(id: UUID(), key: "suggestion:s", title: "Telefoongesprek met Woonstichting Lindehof over de betalingsregeling",
+                             action: .approve, target: "s")
+        #expect(DecisionToast.content([d], short: true)?.body == "Telefoongesprek met Woonstichting Lindehof")
+        #expect(DecisionToast.content([d])?.body == d.title)
+    }
+
+    /// Stacked, the kind keeps the age's line and the rest wraps under it:
+    /// no line ever ends in a separator.
+    @Test func stackedMetaNeverEndsALineInASeparator() {
+        let m = VoorJouList.metaLines(["VRAAG", "INCASSOBUREAU KADE & PARTNERS"])
+        #expect(m.kind == "VRAAG")
+        #expect(m.rest == HomeSummary.metaLine(["INCASSOBUREAU KADE & PARTNERS"]))
+        #expect(m.oneLine == HomeSummary.metaLine(["VRAAG", "INCASSOBUREAU KADE & PARTNERS"]))
+        #expect(!m.kind.hasSuffix("·") && !(m.rest ?? "").hasSuffix("·"))
+        #expect(VoorJouList.metaLines(["HALTE"]).rest == nil)
+    }
 }
 
 /// The kept list: shown at once on the next launch, gone with the session.

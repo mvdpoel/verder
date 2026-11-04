@@ -13,6 +13,13 @@ enum VoorJouMetrics {
     static let labelTracking: CGFloat = 1.2
     static let metaTracking: CGFloat = 0.6
     static let lineFactor: CGFloat = 23.0 / 17.0
+    /// "Voor jou": Saira Regular 28 (brief §2's type table).
+    static let screenTitle = Font.display(28, relativeTo: .title)
+    /// The count: the frame's numeral is 27 pt tall, Saira Light at 39.
+    static let hero = Font.display(39, relativeTo: .largeTitle, weight: .light)
+    /// The compact header takes over once the big one (eyebrow, title,
+    /// count: about 120 pt above NU) has scrolled under the status bar.
+    static let compactAfter: CGFloat = 108
 }
 
 extension View {
@@ -44,10 +51,10 @@ struct VoorJouHeader: View {
                 .font(VoorJouMetrics.label)
                 .tracking(VoorJouMetrics.labelTracking)
                 .foregroundStyle(Color.inkLabel)
-                .padding(.bottom, 4)
+                .padding(.bottom, -3)
             HStack(alignment: .firstTextBaseline) {
                 Text(VoorJouCopy.title)
-                    .font(.display(28, relativeTo: .title, weight: .light))
+                    .font(VoorJouMetrics.screenTitle)
                     .foregroundStyle(Color.inkBright)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
@@ -61,7 +68,7 @@ struct VoorJouHeader: View {
             if !empty {
                 HStack(alignment: .center, spacing: 14) {
                     Text("\(count)")
-                        .font(.display(48, relativeTo: .largeTitle, weight: .light))
+                        .font(VoorJouMetrics.hero)
                         .foregroundStyle(Color.inkBright)
                         .contentTransition(.numericText())
                         .monospacedDigit()
@@ -79,7 +86,7 @@ struct VoorJouHeader: View {
                         }
                     }
                 }
-                .padding(.top, -4)
+                .padding(.top, -5)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel([VoorJouList.countLine(count), freshness].compactMap { $0 }.joined(separator: ", "))
             }
@@ -215,9 +222,10 @@ struct VoorJouRowView: View {
                 }
             }
             .padding(.vertical, 14)
-            // Selecting: what cannot be selected in Kan wachten steps back; Nu
-            // keeps its weight, since its note says why it is not selectable.
-            .opacity(selecting && !row.selectable && row.section == .kanWachten ? 0.55 : 1)
+            // Selecting: every row that cannot be ticked steps back — Nu's
+            // proposals and questions too, or they read as selectable under
+            // the very note that says they are not.
+            .opacity(selecting && !row.selectable ? 0.55 : 1)
             if !failed { RowHairlineShape(leading: ax ? 0 : VoorJouMetrics.gutter) }
         }
         .background(Color.void)
@@ -280,11 +288,26 @@ struct VoorJouRowView: View {
             .font(VoorJouMetrics.label)
             .foregroundStyle(Color.inkLabel)
         } else {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(HomeSummary.metaLine(parts))
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Text(age).fixedSize()
+            // Whole on one line beside the age when it fits; otherwise the
+            // kind keeps the age's line and the party wraps under it, so a
+            // "·" never dangles at a line's end (iPhone SE, long names).
+            let lines = VoorJouList.metaLines(parts)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(lines.oneLine).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(age).fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(lines.kind).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(age).fixedSize()
+                    }
+                    if let rest = lines.rest {
+                        Text(rest).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .font(VoorJouMetrics.label)
             .tracking(VoorJouMetrics.metaTracking)
@@ -301,15 +324,21 @@ struct VoorJouNotSavedNotice: View {
     let retry: () -> Void
     let withdraw: () -> Void
 
+    /// The label's text column: the warning icon and its spacing. The body
+    /// and both actions hang from it, under the label rather than the icon.
+    static let iconColumn: CGFloat = 24
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Image(systemName: "exclamationmark.triangle").font(.system(size: 12))
+                    .frame(width: Self.iconColumn, alignment: .leading)
                 Text(VoorJouCopy.notSaved.uppercased())
                     .tracking(VoorJouMetrics.labelTracking)
             }
             .font(VoorJouMetrics.label)
             .foregroundStyle(Color.inkSoft)
+            VStack(alignment: .leading, spacing: 6) {
             Text(failure.message)
                 .font(VoorJouMetrics.body)
                 .foregroundStyle(Color.inkSoft)
@@ -324,6 +353,8 @@ struct VoorJouNotSavedNotice: View {
                 .foregroundStyle(Color.inkSoft)
                 .buttonStyle(.borderless)
                 .padding(.bottom, 10)
+            }
+            .padding(.leading, Self.iconColumn)
         }
         .padding(.leading, ax ? 0 : VoorJouMetrics.gutter)
         .padding(.bottom, 6)
@@ -416,7 +447,7 @@ struct VoorJouEmptyState: View {
                 .padding(.bottom, 20)
                 .accessibilityHidden(true)
             Text(VoorJouCopy.emptyHeadline)
-                .wholeWords(VoorJouCopy.emptyHeadline, font: .display(40, relativeTo: .largeTitle, weight: .light))
+                .wholeWords(VoorJouCopy.emptyHeadline, font: .display(40, relativeTo: .largeTitle))
                 .foregroundStyle(Color.inkBright)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -445,7 +476,7 @@ private struct VoorJouPageTop: View {
                 .tracking(VoorJouMetrics.labelTracking)
                 .foregroundStyle(Color.inkLabel)
             Text(VoorJouCopy.title)
-                .font(.display(28, relativeTo: .title, weight: .light))
+                .font(VoorJouMetrics.screenTitle)
                 .foregroundStyle(Color.inkBright)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -521,7 +552,7 @@ struct VoorJouFailurePage: View {
                     .padding(.top, 84)
                     .accessibilityHidden(true)
                 Text(VoorJouCopy.failedHeadline)
-                    .wholeWords(VoorJouCopy.failedHeadline, font: .display(28, relativeTo: .title, weight: .light))
+                    .wholeWords(VoorJouCopy.failedHeadline, font: .display(28, relativeTo: .title))
                     .foregroundStyle(Color.inkBright)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 18)
@@ -655,10 +686,12 @@ struct DecisionToastView: View {
                 Text(content.title)
                     .wholeWords(content.title, font: .display(17, relativeTo: .headline, weight: .semibold))
                     .foregroundStyle(Color.inkBright)
+                // Never cut at AX: the subject (short form, `DecisionToast
+                // .content(_:short:)`) wraps whole instead.
                 Text(content.body)
                     .wholeWords(content.body, font: VoorJouMetrics.body)
                     .foregroundStyle(Color.inkSoft)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 buttons
                 Text(DecisionToast.countdown(remaining))
                     .font(VoorJouMetrics.label)

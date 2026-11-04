@@ -337,10 +337,14 @@ enum DecisionToast {
         let undoGlyph: Bool
     }
 
-    static func content(_ held: [ListDecision]) -> Content? {
+    /// `short`: the accessibility sizes, where the subject is wrapped whole
+    /// rather than cut, so it goes without its "over …" tail
+    /// (`VoorJouList.shortTitle`) to keep the card from filling the screen.
+    static func content(_ held: [ListDecision], short: Bool = false) -> Content? {
         guard let last = held.last else { return nil }
+        let lastTitle = short ? VoorJouList.shortTitle(last.title) : last.title
         if held.count == 1 {
-            return Content(title: last.verb, body: last.title, reviewAll: nil, undoGlyph: last.action == .undoVerder)
+            return Content(title: last.verb, body: lastTitle, reviewAll: nil, undoGlyph: last.action == .undoVerder)
         }
         var counts: [(String, Int)] = []
         for d in held.dropLast() {
@@ -349,7 +353,7 @@ enum DecisionToast {
         }
         let also = VoorJouList.listing(counts.map { "\($0.1) \($0.0)" })
         return Content(title: "\(held.count) beslissingen",
-                       body: "Laatste: \(last.verb) — \(last.title). Ook \(also).",
+                       body: "Laatste: \(last.verb) — \(lastTitle). Ook \(also).",
                        reviewAll: held.count == 2 ? "Bekijk beide" : "Bekijk alle \(held.count)",
                        undoGlyph: false)
     }

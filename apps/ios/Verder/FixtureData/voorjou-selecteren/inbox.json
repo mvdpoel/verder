@@ -1,0 +1,315 @@
+{
+  "count": 22,
+  "items": [
+    {
+      "kind": "proposal",
+      "id": "00000000-f1c5-4000-8000-000000000001",
+      "title": "Antwoord aan Bewindkantoor Noordkust: loonstrook oktober",
+      "subtitle": "Bewindkantoor Noordkust",
+      "priority": 1,
+      "at": "2026-11-02T07:30:00.000Z",
+      "dueAt": null,
+      "verder": true
+    },
+    {
+      "kind": "question",
+      "id": "00000000-f1c5-4000-8000-000000000002",
+      "title": "Hoort deze brief bij de vordering van Kade & Partners?",
+      "subtitle": "Incassobureau Kade & Partners",
+      "priority": 2,
+      "at": "2026-11-01T10:15:00.000Z",
+      "dueAt": null,
+      "verder": false
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000003",
+      "title": "Telefoongesprek met Woonstichting Lindehof over de betalingsregeling",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-31T14:05:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000010",
+      "title": "Afschrift oktober Stroomnet Energie",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-30T09:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "task",
+      "id": "00000000-f1c5-4000-8000-000000000004",
+      "title": "Formulier bijzondere bijstand ondertekenen",
+      "subtitle": null,
+      "priority": 1,
+      "at": "2026-10-28T09:00:00.000Z",
+      "dueAt": "2026-11-03T16:00:00.000Z",
+      "verder": false,
+      "validNext": [
+        "in-progress",
+        "waiting",
+        "done",
+        "dropped"
+      ]
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000008",
+      "title": "Brief Gemeente Westerlaan over de woonkostentoeslag",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-30T13:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "stop",
+      "id": "00000000-f1c5-4000-8000-000000000005",
+      "title": "Stukken aanleveren bij Team Startdossier",
+      "subtitle": null,
+      "priority": 3,
+      "at": "2026-10-28T00:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "taskCount": 1
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000000",
+      "title": "Brief van Bewindkantoor Noordkust over de betalingsregeling",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-29T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000001",
+      "title": "Brief van Woonstichting Lindehof over het leefgeld",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-29T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000002",
+      "title": "Brief van Incassobureau Kade & Partners over de huur",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-28T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000003",
+      "title": "Brief van Stroomnet Energie over de jaaropgaaf",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-28T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000004",
+      "title": "Brief van Gemeente Westerlaan over de polis",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-27T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000005",
+      "title": "Brief van Zorgverzekeraar Duinzorg over de stukken",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-27T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000006",
+      "title": "Brief van Atelier Sterrenwacht over een herinnering",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-26T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000007",
+      "title": "Brief van Bewindkantoor Noordkust over de betalingsregeling",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-26T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000008",
+      "title": "Brief van Woonstichting Lindehof over het leefgeld",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-25T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000009",
+      "title": "Brief van Incassobureau Kade & Partners over de huur",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-25T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000010",
+      "title": "Brief van Stroomnet Energie over de jaaropgaaf",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-24T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000011",
+      "title": "Brief van Gemeente Westerlaan over de polis",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-24T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-9100-000000000012",
+      "title": "Brief van Zorgverzekeraar Duinzorg over de stukken",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-23T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000007",
+      "title": "Sommatie Kade & Partners namens Stroomnet Energie vastleggen",
+      "subtitle": "Logboekregel",
+      "priority": 3,
+      "at": "2026-10-29T11:40:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    },
+    {
+      "kind": "suggestion",
+      "id": "00000000-f1c5-4000-8000-000000000009",
+      "title": "Polis Duinzorg 2026",
+      "subtitle": "Document",
+      "priority": 3,
+      "at": "2026-10-28T10:00:00.000Z",
+      "dueAt": null,
+      "verder": false,
+      "approvable": true
+    }
+  ],
+  "doneByVerder": [
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000001",
+      "documentId": "00000000-f1c5-4000-8000-200000000101",
+      "documentTitle": "Afschrift september",
+      "at": "2026-11-01T07:40:00.000Z",
+      "kind": "auto-file",
+      "before": {
+        "status": "inbox",
+        "title": "Afschrift september",
+        "docType": null
+      },
+      "after": {
+        "status": "filed",
+        "title": "Afschrift september",
+        "docType": "bank-statement"
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": true,
+      "notUndoableReason": null
+    },
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000002",
+      "documentId": "00000000-f1c5-4000-8000-200000000102",
+      "documentTitle": "Brief Gemeente Westerlaan 30 okt",
+      "at": "2026-10-31T16:20:00.000Z",
+      "kind": "auto-name",
+      "before": {
+        "status": "inbox",
+        "title": "Scan 2026-10-30",
+        "docType": null
+      },
+      "after": {
+        "status": "inbox",
+        "title": "Brief Gemeente Westerlaan 30 okt",
+        "docType": null
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": false,
+      "notUndoableReason": "naam staat ook op de NAS"
+    },
+    {
+      "changeId": "00000000-f1c5-4000-8000-100000000003",
+      "documentId": "00000000-f1c5-4000-8000-200000000103",
+      "documentTitle": "Herinnering Duinzorg",
+      "at": "2026-10-31T11:02:00.000Z",
+      "kind": "auto-file",
+      "before": {
+        "status": "inbox",
+        "title": "Herinnering Duinzorg",
+        "docType": null
+      },
+      "after": {
+        "status": "filed",
+        "title": "Herinnering Duinzorg",
+        "docType": "letter"
+      },
+      "proposedTitle": null,
+      "undone": false,
+      "undoable": true,
+      "notUndoableReason": null
+    }
+  ]
+}

@@ -247,9 +247,16 @@ struct DoneByVerderListRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Wrapped at AX5, the label stays flush left ("Ongedaan" / "maken"),
+    /// never centred under itself.
     private var undoButton: some View {
-        Button(VoorJouCopy.undo, action: undo)
-            .font(.display(ax ? 17 : 16, relativeTo: .body))
+        Button(action: undo) {
+            Text(VoorJouCopy.undo)
+                .wholeWords(VoorJouCopy.undo, font: .display(ax ? 17 : 16, relativeTo: .body))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: ax ? .infinity : nil, alignment: .leading)
+        }
             .foregroundStyle(Color.signal)
             .buttonStyle(.borderless)
     }

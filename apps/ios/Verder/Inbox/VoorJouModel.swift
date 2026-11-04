@@ -46,15 +46,20 @@ enum VoorJouList {
         let item: WaitingItem
         let route: InboxRoute?
         let amber: Bool
+        /// A document an undo of "Door verder gedaan" is putting back, drawn
+        /// in Kan wachten while that undo is on the phone (`restoredItem`).
+        /// It carries no server id, so it offers nothing: no route, no swipe,
+        /// no menu step, no tick.
+        var restored = false
         var id: String { VoorJouList.key(item) }
         var section: SectionKind { VoorJouList.section(item.kind) }
         /// A suggestion the server says can be approved unchanged.
-        var approvable: Bool { item.kind == .suggestion && item.approvable == true }
+        var approvable: Bool { item.kind == .suggestion && item.approvable == true && !restored }
         /// The statuses a task may move to from here (the server's `validNext`).
         var taskNext: [String] { item.kind == .task ? (item.validNext ?? []) : [] }
         var canDone: Bool { taskNext.contains("done") }
         /// Suggestions only: proposals, questions and tasks are decided one at a time.
-        var selectable: Bool { item.kind == .suggestion }
+        var selectable: Bool { item.kind == .suggestion && !restored }
     }
 
     struct Section: Identifiable, Equatable {
@@ -93,8 +98,16 @@ enum VoorJouList {
     /// Nu, then Kan wachten, each in the server's order; an empty section is
     /// not drawn. ONLY Kan wachten is ever cut short: a limit never hides
     /// something that waits on Martin now.
-    static func sections(_ inbox: InboxDTO, hiding hidden: Set<String> = [], expanded: Bool = false) -> [Section] {
-        let all = rows(inbox, hiding: hidden)
+    ///
+    /// `restoring`: "Door verder gedaan" actions whose undo the phone holds
+    /// or is posting. Each document is back at the top of Kan wachten AT
+    /// ONCE, as the frame draws it, so the toast's "Terug in Kan wachten"
+    /// is never contradicted by the list under it; the next refresh puts the
+    /// server's own row in its place.
+    static func sections(_ inbox: InboxDTO, hiding hidden: Set<String> = [], expanded: Bool = false,
+                         restoring: [VerderAction] = []) -> [Section] {
+        let back = restoring.map { Row(item: restoredItem($0), route: nil, amber: false, restored: true) }
+        let all = back + rows(inbox, hiding: hidden)
         return [SectionKind.nu, .kanWachten].compactMap { kind in
             let mine = all.filter { $0.section == kind }
             guard !mine.isEmpty else { return nil }
@@ -106,7 +119,34 @@ enum VoorJouList {
     /// The header's number: the SERVER's count, less only the decisions the
     /// phone is holding in their undo window (they are gone from the list,
     /// and the count follows them down; an undo puts both back).
-    static func count(_ inbox: InboxDTO, hidden: Int) -> Int { max(0, inbox.count - hidden) }
+    /// An undo of "Door verder gedaan" adds its document back (`restored`).
+    static func count(_ inbox: InboxDTO, hidden: Int, restored: Int = 0) -> Int { max(0, inbox.count - hidden + restored) }
+
+    /// The undoable "Door verder gedaan" actions among `keys` (the held and
+    /// posting decisions): the documents on their way back to Kan wachten.
+    static func restoring(_ inbox: InboxDTO, keys: Set<String>) -> [VerderAction] {
+        inbox.doneByVerder.filter { $0.undoable && !$0.undone && keys.contains(ListDecision.key(verder: $0.changeId)) }
+    }
+
+    /// The document an undo puts back, as the suggestion it returns as.
+    static func restoredItem(_ a: VerderAction) -> WaitingItem {
+        WaitingItem(kind: .suggestion, id: "restored:\(a.changeId)", title: a.documentTitle ?? a.after.title ?? "Document",
+                    subtitle: "Document", priority: 3, at: a.at, dueAt: nil, verder: false)
+    }
+
+    /// "Door verder gedaan"'s count, less what is on its way back.
+    static func doneCount(_ inbox: InboxDTO, restored: Int) -> Int { max(0, inbox.doneByVerder.count - restored) }
+
+    /// Selection mode pays off only on a list with several suggestions: with
+    /// two, two swipes are quicker than Selecteer · tick · tick · Keur goed
+    /// (the frames show it on the long list and the SE, never on five items).
+    static let selectMinimum = 3
+
+    /// "Selecteer": enough suggestions, a connection, and no decision in its
+    /// undo window — the toast owns the bottom of the screen until it ends.
+    static func canSelect(selectable: Int, readOnly: Bool, holding: Bool) -> Bool {
+        selectable >= selectMinimum && !readOnly && !holding
+    }
 
     static func doneRows(_ inbox: InboxDTO) -> [DoneRow] {
         inbox.doneByVerder.map { DoneRow(action: $0, amber: false) }
@@ -236,6 +276,31 @@ enum VoorJouList {
         return parts
     }
 
+    /// The meta line, whole ("VRAAG · INCASSOBUREAU KADE & PARTNERS"), and
+    /// — when that does not fit beside the age — stacked: the kind on the
+    /// age's line and the rest under it. A separator never ends a line.
+    struct MetaLines: Equatable {
+        let oneLine: String
+        let kind: String
+        let rest: String?
+    }
+
+    static func metaLines(_ parts: [String]) -> MetaLines {
+        MetaLines(oneLine: HomeSummary.metaLine(parts), kind: parts.first ?? "",
+                  rest: parts.count > 1 ? HomeSummary.metaLine(Array(parts.dropFirst())) : nil)
+    }
+
+    /// A title without its "over …" tail: "Brief Gemeente Westerlaan over de
+    /// woonkostentoeslag" → "Brief Gemeente Westerlaan". Where a sentence
+    /// names several items (the bulk confirmation) or must fit a small card
+    /// at AX5 (the toast), the full title would push the point off screen.
+    /// Kept whole when the cut would leave fewer than two words.
+    static func shortTitle(_ title: String) -> String {
+        guard let r = title.range(of: " over ") else { return title }
+        let head = String(title[..<r.lowerBound])
+        return head.split(separator: " ").count >= 2 ? head : title
+    }
+
     /// The symbol in the row's gutter, by kind (and, for a suggestion, by the
     /// server's subtitle, which names what it suggests).
     static func symbol(_ item: WaitingItem) -> String {
@@ -282,7 +347,7 @@ enum VoorJouList {
 
     /// Names EVERY item it will approve, and says how long the undo lasts.
     static func confirmMessage(_ titles: [String], window: TimeInterval) -> String {
-        "\(listing(titles)). Daarna heb je \(Int(window)) seconden om het ongedaan te maken."
+        "\(listing(titles.map(shortTitle))). Daarna heb je \(Int(window)) seconden om het ongedaan te maken."
     }
 
     static func selectedLine(_ n: Int) -> String { "\(n) geselecteerd" }

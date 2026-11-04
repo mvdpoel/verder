@@ -159,7 +159,7 @@ Een lange sectie toont zijn eerste 20 rijen en zegt dat ("20 GETOOND"), met "Too
 
 Een knop "Selecteer" in de kop opent de selectiemodus (functie 21).
 
-**Status:** Gebouwd — getoond zodra er minstens twee suggesties zijn en de lijst niet offline is.
+**Status:** Gebouwd — getoond zodra er minstens drie suggesties zijn (`VoorJouList.selectMinimum`; bij twee zijn twee veegbewegingen sneller, en de frames tonen "Selecteer" alleen op de lange lijst en de SE), de lijst niet offline is en er geen beslissing in haar undo-venster staat (de toast heeft dan de onderkant van het scherm).
 
 ### Beslissen vanuit de lijst
 
@@ -286,7 +286,7 @@ Wanneer een rij niet ongedaan kan worden gemaakt, zegt hij waarom; de server bes
 
 Na "Ongedaan maken" toont het frame een toast "Terug in Kan wachten · Afschrift september" met "Ongedaan maken" en een aftelling, en verschijnt de suggestie van het document weer in Kan wachten. Haptiek `.impact(.light)` (brief §2.5).
 
-**Status:** Deels gebouwd — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Dat de suggestie al tijdens de toast terug in Kan wachten staat (zoals het frame toont) kan niet: er wordt pas iets teruggezet als de POST na het venster is verstuurd. Haptiek `.impact(.light)`.
+**Status:** Gebouwd (2026-11-04) — de undo vanuit de lijst wordt vastgehouden met een toast "Terug in Kan wachten" en een eigen "Ongedaan maken". Zolang die undo op de telefoon staat (vastgehouden of onderweg) staat het document bovenaan Kan wachten, en volgen het hoofdgetal, het getal van Kan wachten en dat van "Door verder gedaan" mee (`VoorJouList.restoring` / `restoredItem` / `doneCount`), zoals het frame toont. Die rij heeft nog geen id van de server en biedt dus niets aan (geen route, geen veeg, geen vinkje); de volgende verversing zet de rij van de server ervoor in de plaats. Haptiek `.impact(.light)`.
 
 ### Een item openen
 
@@ -381,7 +381,7 @@ Een kaart "STORING · De server van verder heeft een storing. Je ziet je laatste
 
 Een 401 op `/inbox` of een detailaanroep laat de store de lijst en de samenvatting vergeten, de widget-snapshot wissen en de badge op nul zetten. `AuthModel.sessionRejected()` vervangt daarna de tabbladen door `SessionExpiredView`: "Je sessie is verlopen." met "Inloggen met toegangssleutel", "Inloggen met wachtwoord" en "Toch een brief scannen". Er flitst eerst geen lijst. Scans in de wachtrij blijven bewaard.
 
-**Status:** Gebouwd — `Inbox/InboxStore.swift`, `Auth/SessionExpiredView.swift`.
+**Status:** Gebouwd — `Inbox/InboxStore.swift`; het scherm is het "Uitgelogd"-inlogscherm (`SignInView`, zie 01-inloggen 3.4). Het frame "Voor jou / sessie verlopen" (een slot-icoon met "Je sessie is verlopen" en één knop "Opnieuw inloggen" binnen het tabblad) is **bewust vervangen** door dat inlogscherm uit de auth-final frames (2026-11-04): een verlopen sessie geldt voor de hele app, niet voor één tabblad, dus er is één plek waar dat staat, met de inlogknoppen er direct op in plaats van een tussenstap. Martin kan dat terugdraaien.
 
 #### 44. Vergrendeld
 
