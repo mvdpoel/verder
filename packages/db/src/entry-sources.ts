@@ -5,7 +5,7 @@
  * source is one edit here plus one migration, and a label map that forgets the
  * new value fails to typecheck. Same shape as `doc-sources.ts`.
  *
- * `proposal` (0038) is a mail verder sent for Martin after he approved the
+ * `proposal` (0038) is a mail Grip sent for Martin after he approved the
  * final text on his phone: the outbound entry written once Gmail has the
  * message, with `source_ref` = `proposal:<id>`.
  *

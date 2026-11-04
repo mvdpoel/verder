@@ -74,7 +74,7 @@ describe("autofile digest", () => {
     });
   });
 
-  it("a day with verder actions sends one passive filing push, counts only", async () => {
+  it("a day with Grip actions sends one passive filing push, counts only", async () => {
     await isolated(async (db) => {
       const now = eveningLongAgo();
       await gripChanges(db, now, { filed: 2, named: 1 });
@@ -84,7 +84,7 @@ describe("autofile digest", () => {
       const out = await runAutofileDigest({ db, notify: fake.notify, now: () => now });
       expect(out).toMatchObject({ count: 3, filed: 2, named: 1, sent: true });
       expect(fake.sent).toEqual([{
-        kind: "filing", level: "passive", title: "Door verder gedaan",
+        kind: "filing", level: "passive", title: "Door Grip gedaan",
         body: "2 documenten opgeborgen · 1 hernoemd", link: "grip://inbox",
         dedupKey: expect.stringMatching(/^autofile:199\d-07-\d\d$/),
       }]);

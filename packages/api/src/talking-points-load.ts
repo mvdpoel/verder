@@ -98,7 +98,7 @@ export async function loadTalkingPoints(db: Db, partyId: string, now = new Date(
     return replies.reduce<Date | null>((min, m) => (!min || m.sentAt < min ? m.sentAt : min), null);
   };
 
-  // ---- proposals verder sent them, on Martin's approval ----------------------
+  // ---- proposals Grip sent them, on Martin's approval ----------------------
   const since = new Date(now.getTime() - UNANSWERED_MAX_DAYS * 24 * 3600 * 1000);
   const sentProposals = await db.select({
     id: schema.proposals.id, sentAt: schema.proposals.sentAt, gmailThreadId: schema.proposals.gmailThreadId,

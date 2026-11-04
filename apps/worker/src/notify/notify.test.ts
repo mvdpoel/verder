@@ -112,7 +112,7 @@ function fakeWebPush(fail?: (endpoint: string) => number | undefined) {
   return { calls, factory: () => transport };
 }
 
-const N: NotifyInput = { kind: "system", level: "active", title: "verder hersteld", body: "Automatisch hersteld: web." };
+const N: NotifyInput = { kind: "system", level: "active", title: "Grip hersteld", body: "Automatisch hersteld: web." };
 
 async function attempts(db: Db, notificationId: string) {
   return db.select().from(schema.notificationAttempts)

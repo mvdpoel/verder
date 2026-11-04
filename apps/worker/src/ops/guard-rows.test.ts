@@ -36,7 +36,7 @@ describe("watchdog-run", () => {
       status: "error",
       detail: { restarted: ["postgres", "worker"], reason: "Hersteld: postgres, worker." },
       notify: { kind: "system", level: "active",
-        title: "verder hersteld", body: "Automatisch hersteld: postgres, worker." } });
+        title: "Grip hersteld", body: "Automatisch hersteld: postgres, worker." } });
   });
 
   it("an unfixable problem is an error row but never a push", () => {
@@ -62,7 +62,7 @@ describe("watchdog-run", () => {
     expect(row.status).toBe("error");
     expect(row.detail).toEqual({ restarted: ["web"], reason: "Hersteld: web." });
     expect(sent).toEqual([{ kind: "system", level: "active",
-      title: "verder hersteld", body: "Automatisch hersteld: web." }]);
+      title: "Grip hersteld", body: "Automatisch hersteld: web." }]);
     await pool.end();
   });
 

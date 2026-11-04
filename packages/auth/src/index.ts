@@ -29,7 +29,7 @@ export function createAuth(opts: {
     plugins: [
       passkey({
         rpID: opts.rpID ?? "localhost",
-        rpName: opts.rpName ?? "Verder",
+        rpName: opts.rpName ?? "Grip",
         origin: opts.baseURL,
       }),
     ],

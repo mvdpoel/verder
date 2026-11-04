@@ -880,7 +880,7 @@ function printReport(f: DrillFacts, verdict: { ok: boolean; reasons: string[] })
  * after the call is closing after the last one.
  *
  * `system` / `active`: a backup that cannot be restored is worth an interruption
- * but is never minutes-urgent. The title is Dutch, like every alert verder
+ * but is never minutes-urgent. The title is Dutch, like every alert Grip
  * raises; the body stays the drill's own `reasons`, which are the machine's
  * engineering statements about a backup, quoted rather than translated.
  */

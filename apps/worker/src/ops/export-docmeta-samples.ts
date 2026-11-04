@@ -67,7 +67,7 @@ export async function loadDocMetaSamples(db: Db): Promise<DocMetaSample[]> {
     JOIN ${schema.documentTexts} t ON t.document_id = documents.id
     WHERE s.kind = 'document-meta'
       -- Rejected is left out on purpose: "Niet relevant" is a judgement about
-      -- relevance, not about the metadata. auto-applied is verder's own verdict.
+      -- relevance, not about the metadata. auto-applied is Grip's own verdict.
       AND s.status IN ('approved', 'edited')
       AND s.final_payload ? 'title'
       -- A needs-manual fallback copies the raw title with no soort: approving

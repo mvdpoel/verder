@@ -1,4 +1,4 @@
--- verder for iPhone (Added 2026-11-03, Martin): talking points during a call —
+-- Grip for iPhone (Added 2026-11-03, Martin): talking points during a call —
 -- the HISTORY of the AI line. `party_briefs` (0042) holds one row per party and
 -- every redraft overwrites its context, prompt, prompt version, model and model
 -- output; `markBriefPending` re-marks that row on every new mail from the

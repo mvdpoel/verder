@@ -230,7 +230,7 @@ export async function duplexPass(deps: DuplexDeps): Promise<{ merged: number }> 
     const droppedBlank = j.evidence.filter((e) => e === "blank").length;
     await recordRun(db, "duplex", "ok", {
       fronts: A.name, backs: B.name, merged: outName, pages: j.order.length, droppedBlank, evidence: j.evidence });
-    // Passive: verder's own filing action, worth knowing, never an interruption.
+    // Passive: Grip's own filing action, worth knowing, never an interruption.
     // notify never throws, but an injected one might, and the merge happened:
     // a missing notification must not undo the record.
     try {

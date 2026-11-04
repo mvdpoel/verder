@@ -25,7 +25,7 @@ const eml = (id: string | null, marker: string) => Buffer.from([
   "To: Martin van der Poel <martin@vanderpoel.pro>",
   "Subject: Aanleveren stukken",
   ...(id === null ? [] : [`Message-ID: <${id}>`]),
-  `X-Verder-Test: ${marker}`,
+  `X-Grip-Test: ${marker}`,
   "",
   "Beste meneer Van der Poel,",
   "",

@@ -56,7 +56,7 @@ export function buildReport(args: string[]): WatchdogReport {
     // unfixable problem is an error row on the dashboard and never a notification.
     notify: restarted.length
       ? { kind: "system", level: "active",
-        title: "verder hersteld", body: `Automatisch hersteld: ${restarted.join(", ")}.` }
+        title: "Grip hersteld", body: `Automatisch hersteld: ${restarted.join(", ")}.` }
       : undefined,
   };
 }

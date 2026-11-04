@@ -1,4 +1,4 @@
--- Documents captured with the verder iPhone app get their own sources: a
+-- Documents captured with the Grip iPhone app get their own sources: a
 -- letter photographed with the camera (phone-scan) and a file handed to the
 -- app through the share sheet (phone-share). Additive only: ADD VALUE never
 -- rewrites or invalidates an existing row, so the append-only evidence

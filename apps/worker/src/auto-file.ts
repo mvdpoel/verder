@@ -1,5 +1,5 @@
 /**
- * verder files a document on its own (spec §6.6, §12.4) — the ONE thing the
+ * Grip files a document on its own (spec §6.6, §12.4) — the ONE thing the
  * suggestion-only law lets it do unasked, and only when the measured gate says
  * it can (Plan 3 Task 13 decides whether DOCMETA_AUTO_APPLY is switched on).
  *
@@ -14,7 +14,7 @@
  *   descriptive" title passed none of them, and applying it would overwrite a
  *   guarded name with an unguarded one that can collide or drop an identifier
  *   (the Rabobank year incident recorded in auto-name.ts). The proposed title
- *   stays on the suggestion, visible in "Door verder gedaan" as information.
+ *   stays on the suggestion, visible in "Door Grip gedaan" as information.
  * - NEVER THE SENDER. The docmeta prompt proposes none, and an OCR sender is an
  *   unconfirmed guess (spec §12.5); the effective party is carried forward so
  *   this row cannot revert one.
@@ -29,8 +29,8 @@
  * suggestion that is not a confident, pending docmeta-v2 answer with a soort.
  *
  * The change is a `document_status_changes` row with `actor = 'verder'` and the
- * suggestion's id, ledgered in the verder payload shape — the ledger itself
- * says verder did this, and `/verify` matches the row through that shape only.
+ * suggestion's id, ledgered in the app-actor payload shape — the ledger itself
+ * says Grip did this, and `/verify` matches the row through that shape only.
  */
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { APP_ACTOR, schema, type Db } from "@grip/db";
@@ -85,9 +85,9 @@ export async function autoApplyDocMeta(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${documentId}::text, 0))`);
     const current = await effectiveDocument(tx, documentId);
     if (current.purge !== null) return refuse("purged");
-    // If Martin has touched it, verder does not: any row of his since ingest —
+    // If Martin has touched it, Grip does not: any row of his since ingest —
     // a rename, a retype, a discard and its undo — is a judgement this must not
-    // overrule. auto-name's own rows carry actor 'verder' and do not count.
+    // overrule. auto-name's own rows carry the app actor ('verder', APP_ACTOR) and do not count.
     const [touched] = await tx.select({ id: schema.documentStatusChanges.id })
       .from(schema.documentStatusChanges)
       .where(and(eq(schema.documentStatusChanges.documentId, documentId),

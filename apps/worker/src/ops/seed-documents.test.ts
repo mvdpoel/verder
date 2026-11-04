@@ -7,7 +7,7 @@ import { settleDocumentTexts } from "../test-support/document-texts";
 import { documentIdsByTitle } from "./seed-documents";
 
 // The admin role: this helper is called from the backfill scripts, which run as
-// `verder`, and `documents`/`document_status_changes` are append-only for the
+// `grip`, and `documents`/`document_status_changes` are append-only for the
 // app and worker roles anyway.
 const URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 // Tags every fixture this run ingests, so the settle helper and the guard at the

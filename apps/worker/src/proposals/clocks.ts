@@ -41,7 +41,7 @@ import { createProposal, type CreateDeps } from "./create";
  *          MX is Gmail, so a reply would never be seen there.
  *        - A sent proposal starts a clock only in a thread the poller holds rows
  *          for. A mail-agent reply to a watchlist sender (Task 20) is sent into a
- *          thread verder never ingests, so its answer would never stop the
+ *          thread Grip never ingests, so its answer would never stop the
  *          clock and the chase would be a guess.
  *        - A re-ingested row that IS a proposal's sent mail is represented by
  *          the PROPOSAL (matched on Message-ID or Gmail id, as

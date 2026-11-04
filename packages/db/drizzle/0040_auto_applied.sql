@@ -1,9 +1,9 @@
--- verder for iPhone, slice 7 (spec §6.6, §12.4): verder may FILE a document on
+-- Grip for iPhone, slice 7 (spec §6.6, §12.4): Grip may FILE a document on
 -- its own, and must say so. Two additions:
 --   1. `auto-applied`, a suggestion verdict that is neither Martin's approval
---      nor his edit — the honest record of a suggestion verder applied itself.
+--      nor his edit — the honest record of a suggestion Grip applied itself.
 --   2. `actor` and `suggestion_id` on document_status_changes, so a change
---      verder made is told apart from one Martin made, and points at the
+--      Grip made is told apart from one Martin made, and points at the
 --      suggestion it came from (NULL for an auto-name row, which has none).
 --
 -- Additive. Nothing is dropped, no grant changes: document_status_changes keeps
@@ -15,7 +15,7 @@
 -- keys. `actor IS NULL` is what tells resolveDocumentUpdatedHashes (in
 -- packages/api/src/verification.ts) to recompute such a row in the old narrow
 -- or wide shape; a backfill writing 'verder' into an old auto-name row would
--- switch it to the verder shape and turn its event into a payload_hash_mismatch.
+-- switch it to the app-actor shape and turn its event into a payload_hash_mismatch.
 -- Old rows must hash exactly as before (spec §12.4) — the proof is
 -- nightly-verify passing on the full pre-existing chain after deploy.
 --
@@ -38,7 +38,7 @@ ALTER TABLE "document_status_changes" ADD CONSTRAINT "dsc_actor_ck" CHECK ("acto
 -- suggestion_id is NOT part of the hash of an `actor IS NULL` row (Martin's
 -- rows hash in the narrow or wide shape, neither of which reads it). Without
 -- this CHECK an admin UPDATE setting suggestion_id on a Martin row would pass
--- /verify and could make an ordinary rename look like verder's work in
--- "Door verder gedaan". The columns are new and empty, so the constraints are
+-- /verify and could make an ordinary rename look like Grip's work in
+-- "Door Grip gedaan". The columns are new and empty, so the constraints are
 -- added plain; NOT VALID + VALIDATE only pays on a populated column.
 ALTER TABLE "document_status_changes" ADD CONSTRAINT "dsc_suggestion_needs_actor_ck" CHECK ("actor" IS NOT NULL OR "suggestion_id" IS NULL);

@@ -13,7 +13,7 @@ ALTER TABLE "documents" ADD COLUMN "party_id" uuid REFERENCES "parties"("id");
 ALTER TABLE "document_status_changes" ADD COLUMN "party_id" uuid REFERENCES "parties"("id");
 --> statement-breakpoint
 
--- The backfill lives HERE, as the `verder` admin role, because no app role may
+-- The backfill lives HERE, as the `grip` admin role, because no app role may
 -- UPDATE this table. Only mail attachments can resolve: an upload or a scan
 -- carries no sender anywhere, and stays NULL until Martin sets one by hand.
 -- Case-insensitive on BOTH sides — addresses arrive in whatever case the

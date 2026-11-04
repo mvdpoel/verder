@@ -1,7 +1,7 @@
 import { docTypeKey } from "@grip/api/src/doc-type";
 
 // The docmeta eval's scorer. Pure: no DB, no model, so the arithmetic that
-// decides whether verder may file on its own (plan 3, Task 13) is unit-tested
+// decides whether Grip may file on its own (plan 3, Task 13) is unit-tested
 // rather than trusted.
 
 export interface DocMetaScore {

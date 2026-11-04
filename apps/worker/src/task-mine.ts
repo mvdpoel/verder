@@ -44,7 +44,7 @@ export async function suggestTask(
       .where(eq(schema.rawEmails.id, rawEmailId));
     if (!email) return;
 
-    // Verder's own sent mail for a proposal: nothing in it is a task for Martin
+    // Grip's own sent mail for a proposal: nothing in it is a task for Martin
     // that he did not already approve (see suggestEntry for the same skip).
     const sentBy = await proposalForOwnSentMail(deps.db, email);
     if (sentBy) {

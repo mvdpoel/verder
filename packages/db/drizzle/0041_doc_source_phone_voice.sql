@@ -1,4 +1,4 @@
--- verder for iPhone, slice 8 (Plan 3 Task 24): the voice quick-log. Martin
+-- Grip for iPhone, slice 8 (Plan 3 Task 24): the voice quick-log. Martin
 -- dictates a call on the phone; it is transcribed ON THE PHONE and arrives as a
 -- PENDING log-entry suggestion, never as an entry — he approves it in Voor jou.
 -- Two additions, both additive:

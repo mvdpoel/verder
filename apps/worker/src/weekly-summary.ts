@@ -29,7 +29,7 @@
  *
  * Rows are judged in JS on instants (the SQL bound is widened, the `money.month`
  * discipline: widen the SQL, decide in JS). Two sources carry a date that is
- * NOT when verder learned of the row — `raw_emails.sent_at` (the 15-minute Gmail poll
+ * NOT when Grip learned of the row — `raw_emails.sent_at` (the 15-minute Gmail poll
  * fetches a 17:55 mail at 18:10) and `log_entries.occurred_at` (an entry typed
  * in after the fact) — and judged on that date alone, a row recorded after the
  * run but dated before it falls in a window already pushed. `arrivedAt` judges
@@ -81,7 +81,7 @@ export function summaryWeek(now: Date): SummaryWindow {
  */
 export const LATE_RECORD_MS = 7 * 24 * 3600_000;
 
-/** When verder learned of a row: the later of its date and its recording, unless that is a backfill. */
+/** When Grip learned of a row: the later of its date and its recording, unless that is a backfill. */
 export function arrivedAt(dated: Date, recorded: Date): Date {
   const late = recorded.getTime() - dated.getTime();
   return late > 0 && late <= LATE_RECORD_MS ? recorded : dated;
@@ -282,7 +282,7 @@ export async function runWeeklySummary(
 
   await recordRun(deps.db, WEEKLY_SUMMARY_WORKER_NAME, "ok", { summary });
   const r = await deps.notify({
-    kind: "weekly", level: "passive", title: "Je week in verder", body,
+    kind: "weekly", level: "passive", title: "Je week in Grip", body,
     link: "grip://inbox", dedupKey: `weekly:${week.key}`,
   });
   return { summary, body, sent: !r.duplicate };

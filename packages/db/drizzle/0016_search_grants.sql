@@ -26,7 +26,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "document_texts", "search_chunks" TO gri
 --> statement-breakpoint
 -- The worker CLAIMS from the outbox and deletes what it has processed — but it
 -- may not enqueue. Nothing may: rows arrive only through the SECURITY DEFINER
--- function search_enqueue(), owned by `verder`, which the AFTER INSERT OR UPDATE
+-- function search_enqueue(), owned by `grip`, which the AFTER INSERT OR UPDATE
 -- triggers call. That is why there is no INSERT here for either role, and why
 -- search_outbox_id_seq needs no USAGE grant either — the only inserter is the
 -- owner, who already has it.

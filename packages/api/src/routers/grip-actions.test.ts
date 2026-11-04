@@ -10,7 +10,7 @@ import { documentStatusChangePayloadByGrip, documentStatusChangePayloadWithParty
 import { effectiveDocument } from "./documents";
 import { stateAfter } from "./grip-actions";
 
-// Plan 3 Task 15: "Door verder gedaan" and its one-tap undo. Every fixture is
+// Plan 3 Task 15: "Door Grip gedaan" and its one-tap undo. Every fixture is
 // a fresh document with a random title on the shared dev DB, and every count
 // is scoped to that document, because other suites append concurrently.
 const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
@@ -34,7 +34,7 @@ describe("gripActions", () => {
   const randomSha = () => (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", "");
 
   async function makeDocument(docType: string | null = null) {
-    const title = `VerderActions Testfixture ${crypto.randomUUID()}.pdf`;
+    const title = `GripActions Testfixture ${crypto.randomUUID()}.pdf`;
     const [doc] = await db.insert(schema.documents).values({
       sha256: randomSha(), sizeBytes: 4096, mime: "application/pdf", title,
       docType: docType ?? undefined, source: "email-attachment", receivedAt: new Date(),
@@ -44,7 +44,7 @@ describe("gripActions", () => {
     return doc;
   }
 
-  /** An auto-file as auto-file.ts writes it: row, verder-shape event, decided suggestion. */
+  /** An auto-file as auto-file.ts writes it: row, app-actor-shape event, decided suggestion. */
   async function autoFile(documentId: string, docType: string, proposedTitle = "Loonstrook juli") {
     return db.transaction(async (tx) => {
       const current = await effectiveDocument(tx, documentId);
@@ -148,7 +148,7 @@ describe("gripActions", () => {
   it("undo refuses when a newer change exists", async () => {
     const doc = await makeDocument();
     const { change } = await autoFile(doc.id, "Loonstrook");
-    // Martin renames it after verder filed it.
+    // Martin renames it after Grip filed it.
     await caller().documents.update({ id: doc.id, status: "filed", title: `Hernoemd ${crypto.randomUUID()}` });
     const events = await ledgerCount(doc.id);
     const rows = await changeCount(doc.id);

@@ -378,7 +378,7 @@ describe("loadWeekly and the job (database)", () => {
       const out = await runWeeklySummary({ db, notify: fake.notify, now: () => now, waiting: noWaiting });
       const key = summaryWeek(now).key;
       expect(fake.sent).toEqual([{
-        kind: "weekly", level: "passive", title: "Je week in verder", body: weeklyBody(out.summary),
+        kind: "weekly", level: "passive", title: "Je week in Grip", body: weeklyBody(out.summary),
         link: "grip://inbox", dedupKey: `weekly:${key}`,
       }]);
       const rows = await db.select().from(schema.workerRuns)
@@ -403,7 +403,7 @@ describe("loadWeekly and the job (database)", () => {
       const rows = await db.select().from(schema.notifications)
         .where(eq(schema.notifications.dedupKey, `weekly:${summaryWeek(now).key}`));
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ kind: "weekly", level: "passive", title: "Je week in verder" });
+      expect(rows[0]).toMatchObject({ kind: "weekly", level: "passive", title: "Je week in Grip" });
     });
   });
 

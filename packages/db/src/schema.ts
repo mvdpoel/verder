@@ -14,7 +14,7 @@ export const partyKindEnum = pgEnum("party_kind", ["person", "organization"]);
 export const clarityEnum = pgEnum("clarity", ["clear", "ambiguous", "already-provided"]);
 export const actionStatusEnum = pgEnum("action_status", ["open", "done", "cancelled"]);
 export const suggestionKindEnum = pgEnum("suggestion_kind", ["log-entry", "document-meta", "registry-item", "debt", "task"]);
-// `auto-applied` (0040): verder applied the suggestion itself under the
+// `auto-applied` (0040): Grip applied the suggestion itself under the
 // measured gate (spec §6.6) — neither Martin's approval nor his edit.
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["pending", "approved", "edited", "rejected", "needs-manual", "auto-applied"]);
 
@@ -608,7 +608,7 @@ export const notificationAttempts = pgTable("notification_attempts", {
     sql`${t.outcome} IN ('delivered', 'rejected', 'error', 'skipped')`),
 ]);
 
-// Operational (0038): proposals — something verder wants Martin to approve
+// Operational (0038): proposals — something Grip wants Martin to approve
 // (spec §6.5). NOT evidence and appends no ledger event: the evidence of a send
 // is the outbound log entry (source 'proposal', source_ref 'proposal:<id>')
 // written through insertEntry once Gmail has the message. Full CRUD for both

@@ -1,10 +1,10 @@
 /**
- * "Door verder gedaan", once a day (spec §6.6, Plan 3 Task 15): at 19:00
- * Amsterdam, if verder changed any document on its own in the last 24 hours,
+ * "Door Grip gedaan", once a day (spec §6.6, Plan 3 Task 15): at 19:00
+ * Amsterdam, if Grip changed any document on its own in the last 24 hours,
  * one PASSIVE `filing` push says how many — and nothing else.
  *
  * COUNTS ONLY. A document title on the lock screen is the dossier read aloud to
- * whoever picks up the phone; the list behind the link (Voor jou → "Door verder
+ * whoever picks up the phone; the list behind the link (Voor jou → "Door Grip
  * gedaan") shows the titles once the phone is unlocked.
  *
  * ONE PUSH PER DAY, EVER: the dedupKey `autofile:<Amsterdam day>` makes a
@@ -46,7 +46,7 @@ export async function runAutofileDigest(deps: AutofileDigestDeps): Promise<Autof
   const now = (deps.now ?? (() => new Date()))();
   const since = new Date(now.getTime() - DAY_MS);
   const c = schema.documentStatusChanges;
-  // The same source and the same kind rule as "Door verder gedaan" itself
+  // The same source and the same kind rule as "Door Grip gedaan" itself
   // (routers/grip-actions.ts), so the push never counts what the list omits.
   const rows = await deps.db.select({ suggestionId: c.suggestionId }).from(c)
     .where(and(eq(c.actor, APP_ACTOR), gt(c.createdAt, since), lte(c.createdAt, now)));
@@ -56,7 +56,7 @@ export async function runAutofileDigest(deps: AutofileDigestDeps): Promise<Autof
   let sent = false;
   if (rows.length > 0) {
     const r = await deps.notify({
-      kind: "filing", level: "passive", title: "Door verder gedaan",
+      kind: "filing", level: "passive", title: "Door Grip gedaan",
       body: digestBody(filed, named), link: "grip://inbox",
       dedupKey: `autofile:${dayKey(now)}`,
     });

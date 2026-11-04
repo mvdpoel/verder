@@ -19,7 +19,7 @@ const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:54
 describe("documents router", () => {
   let db: Db; let userId: string; let vaultDir: string;
   beforeAll(async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), "verder-docs-vault-"));
+    vaultDir = mkdtempSync(join(tmpdir(), "grip-docs-vault-"));
     process.env.VAULT_DIR = vaultDir;
     db = createDb(APP_URL).db;
     const [u] = await db.insert(schema.users)

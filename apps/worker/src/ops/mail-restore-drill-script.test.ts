@@ -429,7 +429,7 @@ describe("mail-restore-drill.sh", () => {
     expect(sh).not.toMatch(/^#\s+0 5 1 \* \*/m);
     expect(health).toContain("30 5 1 * *");
     // The SCHEDULE is the shared fact, not the path. An earlier version pinned
-    // `30 5 1 * * /path/to/verder/ops/mail-restore-drill.sh` and broke the
+    // `30 5 1 * * /path/to/grip/ops/mail-restore-drill.sh` and broke the
     // moment deploy.md was corrected to the real installed path — which is the
     // test asserting a placeholder rather than the thing that has to agree.
     // worker-health.ts's 35-day bound is reasoned from the CADENCE; where the

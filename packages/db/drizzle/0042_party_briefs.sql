@@ -1,4 +1,4 @@
--- verder for iPhone (Added 2026-11-03, Martin): talking points during a call.
+-- Grip for iPhone (Added 2026-11-03, Martin): talking points during a call.
 -- The phone shows what to TELL and what to ASK a party, derived on read from
 -- the dossier, plus ONE AI line — "what they last asked / where it stands" —
 -- drafted on the homelab HOST by `claude -p` (ops/proposal-drafter.sh), never

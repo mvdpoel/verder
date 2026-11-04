@@ -7,7 +7,7 @@ type RawRow = typeof schema.rawEmails.$inferSelect;
 /**
  * The proposal whose sent mail this raw email IS — `sending` included, because
  * the re-ingest can overtake a slow or crashed `finishSent` (Task 16). Matched
- * on the RFC 5322 Message-ID verder generated (stored with or without its
+ * on the RFC 5322 Message-ID Grip generated (stored with or without its
  * brackets; normalised on both sides) or on the Gmail id the send returned.
  */
 export async function proposalForOwnSentMail(

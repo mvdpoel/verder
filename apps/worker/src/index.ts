@@ -371,10 +371,10 @@ await boss.work("badge.sync", async () => {
   });
 });
 
-// "Door verder gedaan", once a day (autofile-digest.ts, spec §6.6): at 19:00
+// "Door Grip gedaan", once a day (autofile-digest.ts, spec §6.6): at 19:00
 // AMSTERDAM — pg-boss's `tz`, because the worker clock is UTC and a UTC 19:00
 // would drift an hour with daylight saving — one passive push with the count
-// of what verder did on its own in the last 24 h. Quiet days send nothing and
+// of what Grip did on its own in the last 24 h. Quiet days send nothing and
 // still record, so worker-health's nightly bound can tell quiet from dead.
 await boss.createQueue("autofile.digest");
 await boss.schedule("autofile.digest", "0 19 * * *", undefined, { tz: "Europe/Amsterdam" });

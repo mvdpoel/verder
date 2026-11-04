@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 /**
- * THE RFC 5322 MESSAGE VERDER SENDS FOR MARTIN (Plan 2 Task 16).
+ * THE RFC 5322 MESSAGE GRIP SENDS FOR MARTIN (Plan 2 Task 16).
  *
  * Hand-built, with no MIME dependency, because the shape is small and fixed:
  * one text/plain body, optionally followed by attachments in a multipart/mixed.
@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
  *  leaves headroom for base64 growth being counted against it differently. */
 export const SEND_MAX_BYTES = 20 * 1024 * 1024;
 
-/** The domain verder's generated Message-IDs live under. */
+/** The domain Grip's generated Message-IDs live under. */
 export const MESSAGE_ID_DOMAIN = "grip.vanderpoel.pro";
 
 /** A fresh RFC 5322 Message-ID, angle brackets included. Generated and STORED

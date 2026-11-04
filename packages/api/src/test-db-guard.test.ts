@@ -13,7 +13,7 @@ describe("assertSafeToTruncate", () => {
       .toThrow(/refusing to truncate/i);
     expect(() => assertSafeToTruncate("postgres://grip:pw@10.0.0.5:5432/grip"))
       .toThrow(/refusing to truncate/i);
-    expect(() => assertSafeToTruncate("postgres://u:p@prod.example.com/verder"))
+    expect(() => assertSafeToTruncate("postgres://u:p@prod.example.com/grip"))
       .toThrow(/refusing to truncate/i);
   });
 

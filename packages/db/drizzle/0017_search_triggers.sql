@@ -7,7 +7,7 @@
 -- invisible bug (a record that silently never becomes findable). A trigger
 -- catches every path, manual psql included.
 --
--- SECURITY DEFINER: the function runs as its owner (the `verder` admin role
+-- SECURITY DEFINER: the function runs as its owner (the `grip` admin role
 -- that runs migrations), so grip_app and grip_worker need no INSERT grant
 -- on search_outbox and no grant on its sequence — they can never write junk
 -- into the outbox directly, only by touching a real record. search_path is

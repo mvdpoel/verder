@@ -118,7 +118,7 @@ const bare = (mid: string) => mid.trim().replace(/^<(.*)>$/, "$1");
 const unfold = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /**
- * Find the message verder sent, read-only.
+ * Find the message Grip sent, read-only.
  *
  * First `rfc822msgid:<id>`. Whether Gmail KEEPS a client-generated Message-ID
  * on `users.messages.send` is unmeasured (Plan 2 Task 21 Step 7), so when that

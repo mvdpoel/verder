@@ -75,7 +75,7 @@ describe("registry.import", () => {
   let db: Db;
   let userId: string;
   beforeAll(async () => {
-    process.env.VAULT_DIR = mkdtempSync(join(tmpdir(), "verder-import-vault-"));
+    process.env.VAULT_DIR = mkdtempSync(join(tmpdir(), "grip-import-vault-"));
     db = createDb(APP_URL).db;
     const [u] = await db.insert(schema.users)
       .values({ email: `import${RUN}@test.local`, name: "Martin" }).returning();

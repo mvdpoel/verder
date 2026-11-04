@@ -1,5 +1,5 @@
--- verder for iPhone, slice 5 (spec §6.5, §12.3): proposals — something verder
--- wants Martin to approve — and a log-entry source for the mail verder sends.
+-- Grip for iPhone, slice 5 (spec §6.5, §12.3): proposals — something Grip
+-- wants Martin to approve — and a log-entry source for the mail Grip sends.
 --
 -- Additive. Nothing is dropped, and no grant on an evidence table is weakened.
 --

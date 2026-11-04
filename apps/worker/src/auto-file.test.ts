@@ -65,7 +65,7 @@ describe("autoApplyDocMeta", () => {
     });
   }
 
-  /** auto-name's row: the verder actor, no suggestion. */
+  /** auto-name's row: the app actor (APP_ACTOR), no suggestion. */
   async function gripRenames(documentId: string, title: string) {
     await db.transaction(async (tx) => {
       await tx.insert(schema.documentStatusChanges).values({
@@ -204,7 +204,7 @@ describe("autoApplyDocMeta", () => {
 
   it("a document no longer in the inbox blocks it", async () => {
     const d = await doc();
-    // A verder row that moved it out of the inbox — the only way past the
+    // An app-actor row that moved it out of the inbox — the only way past the
     // touched-by-martin guard to a non-inbox status.
     await db.transaction(async (tx) => {
       await tx.insert(schema.documentStatusChanges).values({
@@ -244,7 +244,7 @@ describe("autoApplyDocMeta", () => {
       .toEqual({ applied: false, reason: "not-document-meta" });
   });
 
-  it("verder row verifies under nightly recompute", async () => {
+  it("app-actor row verifies under nightly recompute", async () => {
     const d = await doc();
     const s = await suggestion(d.id);
     expect((await autoApplyDocMeta(db, s.id, ON)).applied).toBe(true);

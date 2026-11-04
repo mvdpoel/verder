@@ -10,7 +10,7 @@ import { dayKey } from "./amsterdam";
  * app has its own call recording (More → "Gesprek opnemen", saved to Notes,
  * region- and language-dependent — Dutch availability unconfirmed); and
  * CXCallObserver tells an app THAT a call started or ended, never with whom or
- * what was said. So verder cannot listen along. What it can do is put the
+ * what was said. So Grip cannot listen along. What it can do is put the
  * dossier in front of Martin: pick the party, read what to TELL them and what
  * to ASK them.
  *

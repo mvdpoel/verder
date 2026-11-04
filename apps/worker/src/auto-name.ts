@@ -99,9 +99,9 @@ export async function autoNameDocument(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${documentId}::text, 0))`);
     const fresh = await effectiveDocument(tx, documentId);
     if (fresh.effectiveTitle === to) return;
-    // verder's own change (migration 0040): actor 'verder', no suggestion,
-    // ledgered in the verder payload shape, so the ledger itself says this
-    // name was not Martin's and "Door verder gedaan" can list it — and so a
+    // Grip's own change (migration 0040): actor APP_ACTOR ('verder'), no suggestion,
+    // ledgered in the app-actor payload shape, so the ledger itself says this
+    // name was not Martin's and "Door Grip gedaan" can list it — and so a
     // rename never counts as Martin having touched the document, which would
     // block auto-file on every document auto-name ever named.
     const [row] = await tx.insert(schema.documentStatusChanges).values({

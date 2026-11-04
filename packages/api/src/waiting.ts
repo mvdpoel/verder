@@ -107,7 +107,7 @@ function proposalItem(p: ProposalRow): WaitingItem {
     id: p.id,
     title: (isQuestion ? str(field(question, "prompt")) : null)
       ?? str(field(p.payload, "ask"))
-      ?? (isQuestion ? "Vraag van verder" : "Voorstel van verder"),
+      ?? (isQuestion ? "Vraag van Grip" : "Voorstel van Grip"),
     subtitle: p.partyName ?? (guess === "verder" ? "Verder" : null),
     priority: verder ? 1 : 2,
     at: p.createdAt.toISOString(),
@@ -185,7 +185,7 @@ export function waitingOnMartin(input: {
  * The one loader. Every membership rule that needs the database lives here:
  *
  * - Proposals: `status = 'pending'` only. drafting, draft-failed, approved and
- *   sending wait on verder, not on Martin; the verdict column is never read.
+ *   sending wait on Grip, not on Martin; the verdict column is never read.
  * - Suggestions: pending or needs-manual, and NOT on a discarded or purged
  *   document. Purge is the `document_purges` ROW (`notPurgedSql`), the same
  *   definition `/files`, `suggestions.list` and `dashboard.stats` use; only

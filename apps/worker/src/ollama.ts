@@ -51,7 +51,7 @@ export async function suggestEntry(
   const [email] = await deps.db.select().from(schema.rawEmails)
     .where(eq(schema.rawEmails.id, rawEmailId));
   if (!email) return;
-  // A mail verder itself sent for a proposal, coming back through the poll.
+  // A mail Grip itself sent for a proposal, coming back through the poll.
   // Its outbound entry is written by finishSent (proposals/send.ts) from the
   // text Martin approved, so a log-entry suggestion here would be a second
   // entry for one mail. `sending` counts too: the re-ingest can overtake a slow

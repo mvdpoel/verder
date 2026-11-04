@@ -310,9 +310,9 @@ function triggerOf(p: ProposalRow): ProposalTrigger {
 }
 
 /**
- * A follow-up whose last outbound message is a proposal verder sent (Task 17).
+ * A follow-up whose last outbound message is a proposal Grip sent (Task 17).
  * The thread is the parent's, with the sent message at its end, and the reply
- * answers THAT message — its Message-ID is the one verder generated and Gmail
+ * answers THAT message — its Message-ID is the one Grip generated and Gmail
  * kept (measured in Task 21 before any real send).
  */
 async function fromParent(deps: ContextDeps, parentId: string, depth: number): Promise<Base> {
@@ -325,7 +325,7 @@ async function fromParent(deps: ContextDeps, parentId: string, depth: number): P
   const subject = typeof pl.subject === "string" ? pl.subject : (base.reply?.subject ?? "");
   const item: ContextItem = {
     type: "proposal", id: p.id,
-    label: `${p.sentAt ? dayKey(p.sentAt) : "niet verstuurd"} · verstuurd via verder — ${subject}`,
+    label: `${p.sentAt ? dayKey(p.sentAt) : "niet verstuurd"} · verstuurd via Grip — ${subject}`,
     text: typeof pl.body === "string" ? clip(pl.body, THREAD_TEXT_CHARS) : undefined,
   };
   const sentId = p.status === "sent" && p.messageId ? normaliseMessageId(p.messageId) : null;

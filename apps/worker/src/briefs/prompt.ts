@@ -19,7 +19,8 @@ const euro = (c: number | null) => (c === null ? "onbekend bedrag" : `€ ${(c /
 
 export function buildBriefPrompt(ctx: BriefContext): string {
   const lines: string[] = [
-    "Je helpt Martin, die onder bewind staat, zich voor te bereiden op een telefoongesprek.",
+    "Je bent Grip, de app die voor Martin werkt. Martin staat onder bewind bij Verder, zijn",
+    "bewindvoerder; Grip is niet Verder. Je helpt Martin zich voor te bereiden op een telefoongesprek.",
     `Het gesprek is met: ${oneLine(ctx.party.name)}.`,
     "",
     "Schrijf PRECIES ÉÉN korte Nederlandse zin (hoogstens 200 tekens): wat deze partij het laatst",

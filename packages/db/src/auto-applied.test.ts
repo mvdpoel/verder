@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createDb, schema, type Db } from "./index";
 
-// Migration 0040 (M-A): the `auto-applied` verdict and the verder actor on
+// Migration 0040 (M-A): the `auto-applied` verdict and the app actor (APP_ACTOR) on
 // document_status_changes. The two CHECKs are what keep the new columns from
-// becoming a way to relabel Martin's own rows as verder's work, so each is
+// becoming a way to relabel Martin's own rows as Grip's work, so each is
 // exercised through the APP role, the one that actually writes this table.
 const ADMIN_URL = "postgres://grip:grip@localhost:5432/grip";
 const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
@@ -12,7 +12,7 @@ const RUN_REF = `auto-applied-test-${crypto.randomUUID()}`;
 // Derived per run: documents.sha256 is UNIQUE and the dev DB is never truncated.
 const FIXTURE_SHA = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
 
-describe("migration 0040: auto-applied and the verder actor", () => {
+describe("migration 0040: auto-applied and the app actor", () => {
   let admin: Db; let app: Db; let close: () => Promise<void>;
   let documentId: string; let suggestionId: string;
 
@@ -41,7 +41,7 @@ describe("migration 0040: auto-applied and the verder actor", () => {
     expect(r.rows.map((row) => String(row.v))).toContain("auto-applied");
   });
 
-  it("actor other than verder is rejected by the check", async () => {
+  it("actor other than APP_ACTOR is rejected by the check", async () => {
     await expect(app.execute(sql`INSERT INTO document_status_changes
         (document_id, status, title, actor)
         VALUES (${documentId}, 'filed', 'x', 'martin')`))
@@ -55,7 +55,7 @@ describe("migration 0040: auto-applied and the verder actor", () => {
       .rejects.toThrow(/dsc_suggestion_needs_actor_ck/);
   });
 
-  it("a verder row with or without a suggestion is accepted", async () => {
+  it("an app-actor row with or without a suggestion is accepted", async () => {
     const rows = await app.insert(schema.documentStatusChanges).values([
       { documentId, status: "inbox", title: "Actor fixture.pdf", actor: "verder", suggestionId: null },
       { documentId, status: "inbox", title: "Actor fixture.pdf", actor: "verder", suggestionId },

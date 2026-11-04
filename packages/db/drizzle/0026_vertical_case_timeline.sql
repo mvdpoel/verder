@@ -2,7 +2,7 @@
 -- and the current situation only.
 --
 -- This is the ONLY migration in this project that deletes a row from `stops` or
--- `tracks`. It runs as the `verder` admin role. The app and worker grants are
+-- `tracks`. It runs as the `grip` admin role. The app and worker grants are
 -- unchanged: they keep SELECT, INSERT, UPDATE and no DELETE, and restructuring
 -- through those roles stays rename-and-move forever.
 --

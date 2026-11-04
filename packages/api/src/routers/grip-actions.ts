@@ -8,12 +8,12 @@ import { documentStatusChangePayloadWithParty } from "../verification";
 import { effectiveDocument } from "./documents";
 
 /**
- * "Door verder gedaan" (spec §6.6, Plan 3 Task 15): every change verder made
+ * "Door Grip gedaan" (spec §6.6, Plan 3 Task 15): every change Grip made
  * to a document on its own, and the one-tap undo of it.
  *
  * THE SOURCE IS THE LEDGERED CHANGE TABLE, never the suggestion: a
  * `document_status_changes` row with `actor = 'verder'` (migration 0040) is
- * what verder did, hashed in its own payload shape. The suggestion is only the
+ * what Grip did, hashed in its own payload shape. The suggestion is only the
  * learning signal beside it.
  *
  * TWO KINDS, told apart by one column: an auto-file applies a document-meta
@@ -22,7 +22,7 @@ import { effectiveDocument } from "./documents";
  * and the 19:00 digest counts through it too.
  *
  * UNDO IS AN APPEND, never a delete or an update: a Martin row (actor NULL)
- * restoring the state before verder's change, with its `document.updated`
+ * restoring the state before Grip's change, with its `document.updated`
  * event in the wide shape — exactly what documents.update would append had he
  * typed the old values back himself.
  */
@@ -178,7 +178,7 @@ export const gripActionsRouter = router({
 
   /**
    * One tap, one transaction. A double tap is harmless: the first undo's own
-   * row is newer than verder's change, so the second is refused "al aangepast"
+   * row is newer than Grip's change, so the second is refused "al aangepast"
    * and appends nothing.
    */
   undo: protectedProcedure.input(z.object({ changeId: z.string().uuid() }))
@@ -186,7 +186,7 @@ export const gripActionsRouter = router({
       const c = schema.documentStatusChanges;
       const [change] = await tx.select().from(c).where(eq(c.id, input.changeId));
       if (!change || change.actor !== APP_ACTOR)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Not a change verder made" });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Not a change Grip made" });
       const documentId = change.documentId;
       // The per-document lock every writer of change rows takes, so the
       // newer-row check below is not a TOCTOU against a rename landing now.

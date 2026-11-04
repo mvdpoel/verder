@@ -117,11 +117,11 @@ export function documentStatusChangePayloadWithParty(c: {
 }
 
 /**
- * The THIRD shape (migration 0040): a change verder made on its own — an
+ * The THIRD shape (migration 0040): a change Grip made on its own — an
  * auto-file applying a document-meta suggestion, or an auto-name rename. The
  * wide shape plus `actor: APP_ACTOR` (the stored "verder") and `suggestionId`, both always present as
  * keys (`suggestionId` is null for an auto-name row, which applies no
- * suggestion). This is how "verder did this" is recorded in the ledger itself
+ * suggestion). This is how "Grip did this" is recorded in the ledger itself
  * (spec §12.4): an ADDITIVE shape for NEW rows only. Rows with `actor IS NULL`
  * keep hashing in the narrow or wide shape exactly as before — see the
  * dispatch in `resolveDocumentUpdatedHashes`.
@@ -139,13 +139,13 @@ export function documentStatusChangePayloadByGrip(c: {
  * chosen by its `actor` — never "try every shape". Each shape is offered ONLY
  * to the rows that could have been written in it:
  *
- * - `actor = 'verder'`: ONLY the verder shape. The narrow and wide shapes never
+ * - `actor = 'verder'`: ONLY the app-actor shape. The narrow and wide shapes never
  *   read `actor`, so offering them here would let an UPDATE that CLEARED actor
- *   on a verder row still match; it reads instead as a mismatch, because the
- *   verder-shape hash cannot be reproduced without the key.
+ *   on an app-actor row still match; it reads instead as a mismatch, because the
+ *   app-actor-shape hash cannot be reproduced without the key.
  * - `actor IS NULL`: exactly the pre-0040 candidates — the wide shape always,
  *   the narrow one only while `party_id IS NULL` (see the docblock below).
- *   Never the verder shape, or an UPDATE that SET actor on Martin's row would
+ *   Never the app-actor shape, or an UPDATE that SET actor on Martin's row would
  *   still match its old hash. `suggestion_id` is not read by either shape,
  *   which is why `dsc_suggestion_needs_actor_ck` forbids it on these rows.
  *
@@ -203,8 +203,8 @@ function documentStatusChangeCandidates(c: typeof schema.documentStatusChanges.$
  * exactly one event.
  *
  * Since migration 0040 the candidates are chosen by the row's `actor` first —
- * see `documentStatusChangeCandidates` above: a verder row offers only the
- * verder shape, and a row with `actor IS NULL` offers exactly the narrow/wide
+ * see `documentStatusChangeCandidates` above: an app-actor row offers only the
+ * app-actor shape, and a row with `actor IS NULL` offers exactly the narrow/wide
  * pair described here. The consumption rule is unchanged.
  */
 export async function resolveDocumentUpdatedHashes(

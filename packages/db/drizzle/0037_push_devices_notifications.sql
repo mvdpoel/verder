@@ -1,4 +1,4 @@
--- verder for iPhone, slice 4 (spec §6.3): APNs devices, and a delivery record
+-- Grip for iPhone, slice 4 (spec §6.3): APNs devices, and a delivery record
 -- for every notification.
 --
 -- Additive. Nothing is dropped, and no grant on an evidence table is weakened.

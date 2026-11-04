@@ -1,7 +1,7 @@
 import { normaliseMessageId } from "./message-id";
 
 /**
- * THREADING HEADERS FOR A REPLY VERDER DRAFTS (plan 2, Task 12).
+ * THREADING HEADERS FOR A REPLY GRIP DRAFTS (plan 2, Task 12).
  *
  * A reply that lands outside the thread it answers is a reply the other side
  * reads without its context — and Gmail's own threading, which the 7-day clock

@@ -11,7 +11,7 @@ import {
   makeLedgerRecompute, resolveDocumentUpdatedHashes,
 } from "./verification";
 
-// The verder actor (migration 0040) is a THIRD payload shape for
+// The app actor (APP_ACTOR, stored as 'verder', migration 0040) is a THIRD payload shape for
 // document.updated. These tests drive every tamper through makeLedgerRecompute
 // — the real dispatch /verify and nightly-verify use — never the resolver
 // alone, because an untested dispatch line is the sub-project 2 lesson.
@@ -19,12 +19,12 @@ const APP_URL = "postgres://grip_app:grip_app@localhost:5432/grip";
 // Only the admin role can UPDATE an evidence table; tamper tests need it.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://grip:grip@localhost:5432/grip";
 
-describe("document.updated with the verder actor", () => {
+describe("document.updated with the app actor", () => {
   let db: Db; let admin: Db; let close: () => Promise<void>;
   let vaultDir: string;
 
   beforeAll(async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), "verder-actor-vault-"));
+    vaultDir = mkdtempSync(join(tmpdir(), "grip-actor-vault-"));
     const a = createDb(APP_URL); const b = createDb(ADMIN_URL);
     db = a.db; admin = b.db;
     close = async () => { await a.pool.end(); await b.pool.end(); };
@@ -55,7 +55,7 @@ describe("document.updated with the verder actor", () => {
     return s.id;
   }
 
-  /** Writes a verder row and its event the way Task 14's writers will. */
+  /** Writes an app-actor row and its event the way Task 14's writers will. */
   async function writeGripChange(documentId: string, suggestionId: string | null) {
     return db.transaction(async (tx) => {
       const [row] = await tx.insert(schema.documentStatusChanges).values({
@@ -98,21 +98,21 @@ describe("document.updated with the verder actor", () => {
     return { got: await fn(event), stored: ev.payloadHash };
   }
 
-  it("the verder shape is the wide shape plus actor and suggestionId, always present", () => {
+  it("the app-actor shape is the wide shape plus actor and suggestionId, always present", () => {
     const base = { documentId: "d", status: "filed", title: "t", docType: null, partyId: null };
     expect(documentStatusChangePayloadByGrip({ ...base, suggestionId: null })).toEqual({
       id: "d", status: "filed", title: "t", docType: null, partyId: null,
       actor: "verder", suggestionId: null });
   });
 
-  it("verder row verifies", async () => {
+  it("app-actor row verifies", async () => {
     const doc = await seedDocument();
     await writeGripChange(doc, await seedSuggestion(doc));
     const { got, stored } = await recompute(doc);
     expect(got).toBe(stored);
   });
 
-  it("verder row without a suggestion (auto-name) verifies", async () => {
+  it("app-actor row without a suggestion (auto-name) verifies", async () => {
     const doc = await seedDocument();
     await writeGripChange(doc, null);
     const { got, stored } = await recompute(doc);
@@ -142,9 +142,9 @@ describe("document.updated with the verder actor", () => {
     expect(got).toBe(stored);
   });
 
-  it("clearing actor on a verder row is detected", async () => {
+  it("clearing actor on an app-actor row is detected", async () => {
     const doc = await seedDocument();
-    // An auto-name row (no suggestion): the only verder row the second CHECK
+    // An auto-name row (no suggestion): the only app-actor row the second CHECK
     // allows to lose its actor, so it is the one an attacker could relabel.
     const id = await writeGripChange(doc, null);
     try {
@@ -158,7 +158,7 @@ describe("document.updated with the verder actor", () => {
     expect(got).toBe(stored);
   });
 
-  it("changing suggestion_id on a verder row is detected", async () => {
+  it("changing suggestion_id on an app-actor row is detected", async () => {
     const doc = await seedDocument();
     const original = await seedSuggestion(doc);
     const other = await seedSuggestion(doc);

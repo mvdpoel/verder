@@ -120,8 +120,8 @@ describe("autoNameDocument, already named", () => {
   });
 });
 
-describe("autoNameDocument, the verder actor", () => {
-  it("auto-name now writes actor verder", async () => {
+describe("autoNameDocument, the app actor", () => {
+  it("auto-name now writes the app actor", async () => {
     const { db, pool } = createDb(URL);
     const doc = await makeDoc(db, `scan${Date.now()}.pdf`);
     const to = `Beschikking.Rechtbank.T${Date.now()}`;
@@ -134,8 +134,8 @@ describe("autoNameDocument, the verder actor", () => {
     const [row] = await db.select().from(schema.documentStatusChanges)
       .where(eq(schema.documentStatusChanges.documentId, doc.id));
     expect(row).toMatchObject({ actor: "verder", suggestionId: null, title: `${to}.pdf` });
-    // The event carries the verder payload shape, so /verify matches the row
-    // through the actor = 'verder' candidate and nothing else.
+    // The event carries the app-actor payload shape, so /verify matches the row
+    // through the actor = APP_ACTOR ('verder') candidate and nothing else.
     const [ev] = await db.select().from(schema.ledgerEvents)
       .where(and(eq(schema.ledgerEvents.entityId, doc.id),
         eq(schema.ledgerEvents.eventType, "document.updated")));

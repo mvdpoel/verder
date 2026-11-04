@@ -45,7 +45,7 @@ describe("raw_emails.source", () => {
       .rejects.toThrow(/raw_emails_source_check/);
 
     // The dev database is shared and never truncated, so the fixture goes away
-    // again. Deleting runs as the `verder` admin role, which owns the table;
+    // again. Deleting runs as the `grip` admin role, which owns the table;
     // no grant anywhere changes, and raw_emails stays append-only for the app
     // and worker roles that actually ingest.
     await db.execute(sql`
