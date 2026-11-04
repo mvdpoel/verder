@@ -66,7 +66,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   try {
     if (args.mode === "heartbeat") await recordRunnerHeartbeat(db, args.busy);
     else if (args.mode === "failed") {
-      const r = await storeRunnerFailure(db, args);
+      const r = await storeRunnerFailure(db, args, new Date(), notifier(db));
       console.log(`requests-store: ${args.id} ${r.outcome}`);
     } else {
       const r = await storeAnswer({ db, notify: notifier(db), vaultDir: process.env.VAULT_DIR ?? "./vault-files" },

@@ -17,7 +17,7 @@ import { dayKey } from "@grip/api/src/amsterdam";
  * tools themselves (output.ts) and named here as untrusted.
  */
 
-export const REQUEST_PROMPT_VERSION = "request-v1";
+export const REQUEST_PROMPT_VERSION = "request-v2";
 export const SIGNATURE_NAME = "Martin van der Poel";
 /** A follow-up thread is given this deep, oldest first. */
 const THREAD_DEPTH = 5;
@@ -33,6 +33,8 @@ export interface PromptInput {
 const oneLine = (s: string) => s.replace(/\s+/g, " ").replace(/<<<|>>>/g, "").trim();
 
 const OUTPUT_SHAPE = `{
+  "title": string,           // Dutch, 2-5 words: what the question is about ("Boedelbeschrijving Noordkust")
+  "headline": string,        // Dutch, one short line: the outcome ("Er ontbreken twee dingen")
   "answer": string,          // Dutch, to Martin: supportive, short paragraphs
   "sources": [ { "type": "document"|"mail"|"gmail"|"transaction"|"party"|"debt"|"stop"|"task"|"entry",
                  "id": string, "why": string } ],   // why: one Dutch line
@@ -74,6 +76,8 @@ export function buildRequestPrompt(p: PromptInput): string {
     "The answer:",
     "- Write it in Dutch, to Martin, as a supportive friend who knows the paperwork: warm, encouraging, clear. Short paragraphs. Say plainly what you found, what is missing, and what you could not check (e.g. Gmail unavailable).",
     "- \"sources\" lists every item your answer relies on, with type and id EXACTLY as a tool showed them. Cite nothing you did not see in a tool result.",
+    "- \"title\" names the matter in 2-5 Dutch words, no verb, nothing at the end (it heads the question in his list). \"headline\" is the outcome in one short Dutch line, a statement and not a question (\"De incasso loopt nog\", \"Loonstrook toegevoegd\"). Neither names an amount.",
+    "- \"title\" names the matter in 2-5 Dutch words, no verb, no punctuation at the end (it heads the question in his list). \"headline\" is the outcome in one short Dutch line, a statement and not a question (\"De incasso loopt nog\", \"Loonstrook toegevoegd\"). Neither names an amount.",
     "",
     "When you are done, output ONLY this JSON object and nothing else — no prose before or after, no code fence:",
     OUTPUT_SHAPE,

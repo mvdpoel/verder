@@ -27,6 +27,7 @@ import { appRouter } from "@grip/api/src/root";
 import { createContext } from "@grip/api/src/trpc";
 import type { EmbedPort } from "@grip/api/src/search/embed";
 import { claimNext, promptFor } from "../requests/claim";
+import { REQUEST_PROMPT_VERSION } from "../requests/prompt";
 import { ToolServer } from "../requests/server";
 import { storeAnswer, type StoreResult } from "../requests/store";
 import type { NotifyFn, NotifyInput } from "../notify/notify";
@@ -116,7 +117,7 @@ export async function dryRun(o: DryRunOptions): Promise<DryRunResult> {
   const claimed = await claimNext(db, new Date(), { onlyId: request.id });
   if (claimed.id !== request.id) throw new Error("dry run: could not claim its own request");
   const prompt = await promptFor(db, request.id);
-  log(`claimed; prompt ${prompt?.length ?? 0} chars, version request-v1`);
+  log(`claimed; prompt ${prompt?.length ?? 0} chars, version ${REQUEST_PROMPT_VERSION}`);
 
   const spawned = o.spawnTools !== false && o.workerUrl ? spawnedRpc(request.id, o.workerUrl) : null;
   const rpc = spawned?.rpc ?? inProcessRpc(new ToolServer({

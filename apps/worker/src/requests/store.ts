@@ -53,6 +53,8 @@ const ATTACHMENTS_MAX = 10;
 const SUBJECT_MAX = 300;
 const BODY_MAX = 20_000;
 const ASK_MAX = 120;
+const TITLE_MAX = 80;
+const HEADLINE_MAX = 120;
 const ENTRY_SUMMARY_MAX = 100;
 /** A `working` request older than this was abandoned by a dead runner. */
 export const STUCK_AFTER_MS = 15 * 60_000;
@@ -67,7 +69,13 @@ export interface ProposalDraft {
   to: string[]; cc: string[]; subject: string; body: string; attachments: string[];
   inReplyTo: { rawEmailId: string } | { gmailId: string } | null;
 }
-export interface ValidAnswer { answer: string; sources: Source[]; martinSteps: string[]; proposal: ProposalDraft | null }
+export interface ValidAnswer {
+  answer: string; sources: Source[]; martinSteps: string[]; proposal: ProposalDraft | null;
+  /** The matter in a few words and the outcome in one line (request-v2). Optional:
+   *  an answer without them is still an answer, and the phone falls back to
+   *  Martin's own words and "Beantwoord". Never a reason to refuse. */
+  title: string | null; headline: string | null;
+}
 export type Validation = { ok: true; value: ValidAnswer } | { ok: false; reason: string };
 
 class Refusal extends Error {}
@@ -123,6 +131,15 @@ export function validateAnswer(raw: string, logs: readonly ToolCall[], own: read
     const v = parse(raw);
     const seen = seenIn(logs);
     const answer = str(v.answer, "answer", ANSWER_MAX);
+    // Short, optional words: clipped, never refused (an over-long title is a
+    // style slip, not an injected instruction).
+    const line = (x: unknown, max: number): string | null => {
+      if (typeof x !== "string") return null;
+      const t = x.replace(/\s+/g, " ").trim().replace(/[.:;,]+$/, "");
+      return t === "" ? null : t.length > max ? `${t.slice(0, max - 1)}…` : t;
+    };
+    const title = line(v.title, TITLE_MAX);
+    const headline = line(v.headline, HEADLINE_MAX);
 
     const sources: Source[] = list(v.sources, "sources", SOURCES_MAX).map((s, i) => {
       if (!isObj(s)) return refuse(`sources[${i}] is not an object`);
@@ -185,11 +202,24 @@ export function validateAnswer(raw: string, logs: readonly ToolCall[], own: read
       if (kind === "compose" && inReplyTo) refuse("a compose replies to nothing; inReplyTo must be null");
       proposal = { kind: kind as ProposalDraft["kind"], to, cc, subject, body, attachments, inReplyTo };
     }
-    return { ok: true, value: { answer, sources, martinSteps, proposal } };
+    return { ok: true, value: { answer, sources, martinSteps, proposal, title, headline } };
   } catch (err) {
     if (err instanceof Refusal) return { ok: false, reason: err.message };
     throw err;
   }
+}
+
+/** The request's ancestors, nearest first (bounded, cycle-safe). */
+async function ancestorIds(db: Db, row: RequestRow): Promise<string[]> {
+  const out: string[] = [];
+  let parentId = row.parentRequestId;
+  while (parentId && !out.includes(parentId) && out.length < 12) {
+    out.push(parentId);
+    const [p] = await db.select({ parent: schema.requests.parentRequestId }).from(schema.requests)
+      .where(eq(schema.requests.id, parentId));
+    parentId = p?.parent ?? null;
+  }
+  return out;
 }
 
 /** The tool logs this request may cite: its own and its ancestors'. */
@@ -340,8 +370,17 @@ export async function storeAnswer(deps: StoreDeps, input: { id: string; model: s
       catch (err) { if (err instanceof Refusal) return fail(err.message); throw err; }
       const [p] = await tx.insert(schema.proposals).values(values).returning({ id: schema.proposals.id });
       proposalId = p.id;
+      // "Vraag door" that drafted a new version: the thread's earlier PENDING
+      // proposals are superseded, so version 1 can never be approved beside
+      // version 2. A sent (or approved) one is Martin's decision and stays.
+      const ancestors = await ancestorIds(tx, row);
+      if (ancestors.length) {
+        await tx.update(schema.proposals).set({ status: "superseded", updatedAt: now })
+          .where(and(inArray(schema.proposals.triggerRequestId, ancestors), eq(schema.proposals.status, "pending")));
+      }
     }
     await tx.update(schema.requests).set({
+      title: v.value.title, headline: v.value.headline,
       status: "answered", answer: v.value.answer, sources: v.value.sources, martinSteps: v.value.martinSteps,
       proposalId, model: input.model, modelOutput: answerRaw, error: null, answeredAt: now, updatedAt: now,
     }).where(eq(schema.requests.id, row.id));
@@ -355,11 +394,8 @@ export async function storeAnswer(deps: StoreDeps, input: { id: string; model: s
 
   // After the commit: the answer is stored whatever happens to the push. No
   // case content on the lock screen — the question itself can name a creditor.
-  // The link is Voor jou, where the answered request is listed at the top:
-  // the phone's DeepLink does not parse a request link yet (LinkDestinationTests
-  // pins that every link the worker sends lands somewhere), and `grip://inbox`
-  // lands on every installed build. The phone half switches it to its own
-  // `grip://request/<id>` once DeepLink knows it.
+  // The link opens the answer itself (`grip://request/<id>`, the phone's
+  // DeepLink; LinkDestinationTests pins that it lands on the answer screen).
   //
   // KIND `proposal` (category PROPOSAL, "Bekijken" behind Face ID) rather than
   // a kind of its own, for the same reason: NotificationCategoriesTests on the
@@ -368,18 +404,32 @@ export async function storeAnswer(deps: StoreDeps, input: { id: string; model: s
   // hidden-preview text. An answer is something Grip prepared for Martin to
   // read, which is what PROPOSAL already means on the lock screen. A `REQUEST`
   // category arrives with the phone half, in both places at once.
-  if (result.outcome === "answered") {
-    try {
-      await deps.notify({ kind: "proposal", level: "active", title: "Grip heeft je vraag uitgezocht",
-        body: "Tik om het antwoord te lezen.", link: "grip://inbox", dedupKey: `request:${input.id}`,
-        threadId: `request:${input.id}`, collapseId: `request:${input.id}` });
-    } catch (err) { console.error(`requests-store: notify failed: ${String(err)}`); }
+  if (result.outcome === "answered" || result.outcome === "failed") {
+    await tellMartin(deps.notify, input.id, result.outcome);
   }
   return result;
 }
 
+/**
+ * One passive push per outcome, with no case content. A FAILED request is
+ * told too (frame "melding · Grip kon je vraag niet uitzoeken"): the compose
+ * sheet promises "je krijgt een melding als het klaar is, ook als het niet
+ * lukt", and a question that died silently is one he waits on forever.
+ */
+async function tellMartin(notify: NotifyFn, id: string, outcome: "answered" | "failed"): Promise<void> {
+  const answered = outcome === "answered";
+  try {
+    await notify({ kind: "proposal", level: "active",
+      title: answered ? "Grip heeft je vraag uitgezocht" : "Grip kon je vraag niet uitzoeken",
+      body: answered ? "Tik om het antwoord te lezen." : "Tik om te zien wat er misging.",
+      link: `grip://request/${id}`, dedupKey: `request:${id}:${outcome}`,
+      threadId: `request:${id}`, collapseId: `request:${id}` });
+  } catch (err) { console.error(`requests-store: notify failed: ${String(err)}`); }
+}
+
 /** The runner got no answer at all (claude exited non-zero, timed out, said nothing). */
-export async function storeRunnerFailure(db: Db, input: { id: string; model?: string; reason: string }, now = new Date()): Promise<StoreResult> {
+export async function storeRunnerFailure(db: Db, input: { id: string; model?: string; reason: string }, now = new Date(),
+  notify?: NotifyFn): Promise<StoreResult> {
   const reason = `runner: ${input.reason}`;
   const rows = await db.update(schema.requests).set({ status: "failed", error: reason, model: input.model ?? null, updatedAt: now })
     .where(and(eq(schema.requests.id, input.id), eq(schema.requests.status, "working")))
@@ -388,6 +438,7 @@ export async function storeRunnerFailure(db: Db, input: { id: string; model?: st
   await recordRun(db, REQUEST_RUNNER_WORKER_NAME, "error", {
     requestId: input.id, outcome: result.outcome, reason, ...(await carry(db, now)),
   });
+  if (notify && result.outcome === "failed") await tellMartin(notify, input.id, "failed");
   return result;
 }
 
