@@ -31,6 +31,9 @@ final class ShareModel {
         /// Writing the drops failed; everything written was taken back.
         case saveFailed(SaveFailure)
         case done(Outcome)
+        /// A call recording, left for the app as an audio drop: it is
+        /// transcribed in verder, on the phone, and never uploaded from here.
+        case handedToApp
         case refused(Refusal)
     }
 
@@ -63,6 +66,10 @@ final class ShareModel {
         case tooLarge
         case link(String)
         case noGroup
+        /// A call recording shared together with anything else.
+        case audioAlone
+        /// A call recording over `maxAudioBytes`.
+        case tooLargeAudio
     }
 
     struct Notice: Equatable {
@@ -165,6 +172,13 @@ final class ShareModel {
         static let noGroupTitle = "Opslaan lukte niet"
         static let noGroup = "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
 
+        static let openToTranscribe = "Open verder om het gesprek uit te schrijven."
+        static let audioAloneTitle = "Eén opname tegelijk"
+        static let audioAlone = "Deel een opname los, één tegelijk, zonder andere bestanden erbij."
+        static let tooLargeAudio = "Deze opname is te groot voor verder (max. 300 MB)."
+        static let audioExplanation = "verder schrijft het gesprek uit op je iPhone. De opname zelf gaat alleen mee "
+            + "als je hem bewaart."
+
         static let signedOutHead = "Je bent niet ingelogd"
         static let signedOutBody = "Tik op Bewaar en open daarna verder om in te loggen. Dan gaat het bestand "
             + "vanzelf naar je dossier."
@@ -198,6 +212,18 @@ final class ShareModel {
     /// (`ShareStaging`), copied rather than buffered into its drop, and only a
     /// drop under `ShareSender.foregroundLimit` is sent from the extension.
     nonisolated static let maxFileBytes = 48 * 1024 * 1024
+
+    /// A call recording is transcribed ON the phone and only uploaded when
+    /// Martin keeps it (where the voice route's 50 MB applies and the voice
+    /// log says so), so it may be far larger than a document: an hour of
+    /// 16-bit mono WAV at 44.1 kHz is ~320 MB… of which this takes most.
+    /// Staged by copying, never read into the extension's memory.
+    nonisolated static let maxAudioBytes = 300 * 1024 * 1024
+
+    /// The size limit for one shared file of this name and type.
+    nonisolated static func limit(fileName: String, mime: String) -> Int {
+        IncomingDrop.isAudio(fileName: fileName, mime: mime) ? maxAudioBytes : maxFileBytes
+    }
 
     /// How long a source app may take to hand its items over.
     nonisolated static let loadTimeout: Duration = .seconds(10)
@@ -397,7 +423,7 @@ final class ShareModel {
         var files: [PreparedShare] = []
         var tooLarge = result.tooLargeFiles
         for file in result.files {
-            if file.byteCount > Self.maxFileBytes {
+            if file.byteCount > Self.limit(fileName: file.fileName, mime: file.mime) {
                 tooLarge.append(.init(fileName: file.fileName, bytes: file.byteCount, thumbnail: nil,
                                       position: files.count))
             } else {
@@ -418,6 +444,17 @@ final class ShareModel {
 
     /// The phase the share's content calls for before Versturen.
     private var restingPhase: Phase {
+        // A call recording goes to the voice log, alone: never in a share
+        // with anything else, and never over its own (larger) limit.
+        let audioIn = prepared.contains { IncomingDrop.isAudio(fileName: $0.fileName, mime: $0.mime) }
+        let audioOut = tooLargeFiles.contains {
+            IncomingDrop.isAudio(fileName: $0.fileName, mime: "application/octet-stream")
+        }
+        if audioIn || audioOut {
+            if prepared.count + tooLargeFiles.count + leftOut + links.count > 1 || isCut { return .refused(.audioAlone) }
+            if audioOut { return .refused(.tooLargeAudio) }
+            return .ready
+        }
         if !prepared.isEmpty { return .ready }
         if !tooLargeFiles.isEmpty { return .refused(.tooLarge) }
         if let link = links.first, leftOut == 0 { return .refused(.link(Self.displayLink(link))) }
@@ -589,6 +626,7 @@ final class ShareModel {
         }
         let n = prepared.count
         guard n > 0 else { return nil }
+        if isAudio { return Explanation(label: Copy.explanationLabel, text: Copy.audioExplanation) }
         if signedOut {
             return Explanation(label: Copy.signedOutLabel, text: n == 1
                 ? "Komt het in je dossier onder Gedeeld."
@@ -630,6 +668,11 @@ final class ShareModel {
 
     var canSend: Bool { phase == .ready }
 
+    /// The share is ONE call recording: it goes to the voice log, not the queue.
+    var isAudio: Bool {
+        prepared.count == 1 && IncomingDrop.isAudio(fileName: prepared[0].fileName, mime: prepared[0].mime)
+    }
+
     /// Annuleren is offered only while it is TRUE: before Versturen, after a
     /// load or save that failed (nothing written), or after a refusal. From
     /// `.saving` on, the drops are written and the app WILL send them (each
@@ -638,7 +681,7 @@ final class ShareModel {
     var canCancel: Bool {
         switch phase {
         case .loading, .loadFailed, .ready, .saveFailed, .refused: true
-        case .saving, .done: false
+        case .saving, .done, .handedToApp: false
         }
     }
 
@@ -647,7 +690,7 @@ final class ShareModel {
         case .loading, .loadFailed, .ready, .saveFailed: .cancel(enabled: true)
         case .saving: .cancel(enabled: false)
         case .refused: .close
-        case .done: nil
+        case .done, .handedToApp: nil
         }
     }
 
@@ -657,7 +700,7 @@ final class ShareModel {
         case .loading: .send(label: label, enabled: false)
         case .ready: .send(label: label, enabled: true)
         case .saving: .progress
-        case .done: .done
+        case .done, .handedToApp: .done
         case .loadFailed, .saveFailed, .refused: nil
         }
     }
@@ -666,6 +709,8 @@ final class ShareModel {
     /// to read (no notice, not "log in"), and never for VoiceOver, Switch
     /// Control or accessibility text sizes, where Klaar is the way out.
     func closesByItself(voiceOver: Bool = false, switchControl: Bool = false, largeText: Bool = false) -> Bool {
+        // A handed-over recording says what to do next: Martin reads it.
+        if phase == .handedToApp { return false }
         guard case .done(let outcome) = phase else { return notice == nil && !signedOut }
         guard notice == nil, outcome != .kept(.signedOut) else { return false }
         return !voiceOver && !switchControl && !largeText
@@ -692,6 +737,26 @@ final class ShareModel {
                 phase = restingPhase
                 return
             }
+        }
+        if isAudio {
+            // Never uploaded from here: verder transcribes it on the phone,
+            // and the audio leaves only if Martin keeps it.
+            let file = prepared[0]
+            do {
+                switch file.content {
+                case .data(let data):
+                    try IncomingDrop.write(file: data, fileName: file.fileName, mime: file.mime, kind: .audio,
+                                           capturedAt: now(), to: groupDir)
+                case .file(let url):
+                    try IncomingDrop.write(fileAt: url, fileName: file.fileName, mime: file.mime, kind: .audio,
+                                           capturedAt: now(), to: groupDir)
+                }
+            } catch {
+                phase = .saveFailed(Self.saveFailure(error))
+                return
+            }
+            phase = .handedToApp
+            return
         }
         progress = Progress(current: 1, total: prepared.count, finished: 0)
         var ids: [UUID] = []
@@ -796,6 +861,10 @@ final class ShareModel {
     }
 
     var closing: Closing? {
+        if phase == .handedToApp {
+            return Closing(title: Copy.keptTitle, body: Copy.openToTranscribe, reason: nil,
+                           name: title, facts: detail, delivered: false)
+        }
         guard case .done(let outcome) = phase else { return nil }
         let n = prepared.count
         switch outcome {
@@ -843,6 +912,10 @@ final class ShareModel {
             Failure(symbol: "exclamationmark.circle", title: Copy.unreadableTitle, body: Copy.unreadable, retry: false)
         case .refused(.noGroup):
             Failure(symbol: "exclamationmark.circle", title: Copy.noGroupTitle, body: Copy.noGroup, retry: false)
+        case .refused(.audioAlone):
+            Failure(symbol: "exclamationmark.circle", title: Copy.audioAloneTitle, body: Copy.audioAlone, retry: false)
+        case .refused(.tooLargeAudio):
+            Failure(symbol: nil, title: Copy.tooLargeTitle, body: Copy.tooLargeAudio, retry: false)
         default: nil
         }
     }

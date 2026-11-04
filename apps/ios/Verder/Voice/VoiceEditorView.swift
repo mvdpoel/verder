@@ -130,8 +130,24 @@ struct VoiceEditorPage: View {
                 }
                 .padding(.top, 4)
             }
+            if model.canRetryTranscription && !model.textFocused {
+                HStack {
+                    if !ax { Spacer(minLength: 0) }
+                    Button { Task { await model.retryTranscription() } } label: {
+                        Text(VoiceLogModel.Copy.retryTranscription)
+                            .wholeWords(VoiceLogModel.Copy.retryTranscription, font: VoiceType.headlineMedium)
+                            .foregroundStyle(Color.signalLink)
+                            .multilineTextAlignment(ax ? .leading : .trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
+            }
             if !textOnly {
-                VoiceLabel("Gesprek").padding(.top, model.canRecordAgain && !model.textFocused ? 16 : 24)
+                VoiceLabel("Gesprek").padding(.top, (model.canRecordAgain || model.canRetryTranscription)
+                    && !model.textFocused ? 16 : 24)
                 conversationCard.padding(.top, 8)
             }
             if ax, let note = model.footnote(locked: locked) {

@@ -36,6 +36,10 @@ protocol Transcribing: Sendable {
     /// `progress` is called as the download moves (any thread).
     func install(progress: @escaping @Sendable (InstallProgress) -> Void) async throws(TranscriptionError)
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String
+    /// The same, for a recording that may be long (an imported call):
+    /// `progress` is told how far through the file the model is, 0…1, from
+    /// any thread.
+    func transcribe(_ audio: URL, progress: @escaping @Sendable (Double) -> Void) async throws(TranscriptionError) -> String
     /// The words so far while `audio` is being recorded (frame "opname").
     /// Ends when the recording stops. The default has none.
     func live(_ audio: URL) -> AsyncStream<LiveText>
@@ -48,6 +52,11 @@ extension Transcribing {
     /// phone (plan 3 Task 25 step 1). Until then the words appear when the
     /// recording is transcribed.
     func live(_ audio: URL) -> AsyncStream<LiveText> { AsyncStream { $0.finish() } }
+
+    /// A transcriber that cannot tell how far it is simply never says.
+    func transcribe(_ audio: URL, progress: @escaping @Sendable (Double) -> Void) async throws(TranscriptionError) -> String {
+        try await transcribe(audio)
+    }
 }
 
 /// `SpeechAnalyzer` + `SpeechTranscriber` in Dutch (iOS 26+), with the model
@@ -105,16 +114,27 @@ struct OnDeviceTranscriber: Transcribing {
     }
 
     func transcribe(_ audio: URL) async throws(TranscriptionError) -> String {
+        try await transcribe(audio, progress: { _ in })
+    }
+
+    /// Works on a FILE of any format `AVAudioFile` reads (`.m4a`, `.aac`,
+    /// `.wav`, `.caf`): `analyzeSequence(from:)`
+    /// converts to the analyzer's format itself. Progress is the end of each
+    /// result's audio range over the file's length, so a long call shows
+    /// "… 40%" rather than a spinner with no end.
+    func transcribe(_ audio: URL, progress: @escaping @Sendable (Double) -> Void) async throws(TranscriptionError) -> String {
         if await availability() == .needsDownload { try await install(progress: { _ in }) }
         let locale = try await Self.dutch()
         let transcriber = Self.module(locale)
         let text: String
         do {
             let file = try AVAudioFile(forReading: audio)
+            let seconds = Double(file.length) / max(file.processingFormat.sampleRate, 1)
             // The WWDC25 file recipe: collect results while the analyzer reads
             // the file, then finalize through its last sample.
             async let collected = transcriber.results.reduce(into: "") { text, result in
                 text += String(result.text.characters)
+                progress(Self.fraction(through: result.range.end.seconds, of: seconds))
             }
             let analyzer = SpeechAnalyzer(modules: [transcriber])
             if let last = try await analyzer.analyzeSequence(from: file) {
@@ -129,6 +149,13 @@ struct OnDeviceTranscriber: Transcribing {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw .nothingHeard }
         return trimmed
+    }
+
+    /// How far through a recording of `duration` seconds a result ending at
+    /// `end` is, clamped to 0…1 (an unknown or zero length says 0).
+    static func fraction(through end: Double, of duration: Double) -> Double {
+        guard duration > 0, end.isFinite else { return 0 }
+        return min(max(end / duration, 0), 1)
     }
 
     private static func dutch() async throws(TranscriptionError) -> Locale {

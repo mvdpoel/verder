@@ -13,13 +13,19 @@ struct FixtureTests {
     /// docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md and the task
     /// that asked for them.
     nonisolated static let expectedNames = [
-        "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier", "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline", "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading", "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "meldingen", "meldingen-afgehandeld", "meldingen-afgerond", "meldingen-offline", "meldingen-verlopen", "money-complete", "money-empty", "money-geen-data", "money-no-account",
-        "money-no-budget", "money-overspent", "money-partial", "money-unrecognised", "offline", "offline-cached",
-        "one-item", "server-error", "server-error-cached", "timeline", "timeline-fout", "timeline-offline",
-        "timeline-vier", "unauthorized", "voice", "voice-geen-partijen", "voice-offline", "voice-partijen-fout",
-        "voice-te-groot", "voice-verlopen", "voice-verstuurd", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
-        "voorjou-leeg", "voorjou-long", "voorjou-many", "voorjou-offline", "voorjou-selecteren", "voorjou-storing", "voorjou-veel", "voorjou-vijf", "voorstel", "voorstel-offline", "weekly", "weekly-eerste", "weekly-fout", "weekly-loading",
-        "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
+        "call", "calm", "detail", "detail-fout", "detail-na-vraag", "detail-offline", "detail-verlopen", "dossier",
+        "dossier-bijwerken", "dossier-eerste-sync", "dossier-niet-binnen", "dossier-niet-binnen-offline",
+        "dossier-offline", "dossier-onderbroken", "dossier-server-bezig", "dossier-server-leeg", "empty", "loading",
+        "meer-account-fails", "meer-no-passkey", "meer-offline", "meer-save-fails", "meldingen",
+        "meldingen-afgehandeld", "meldingen-afgerond", "meldingen-offline", "meldingen-verlopen", "money-complete",
+        "money-empty", "money-geen-data", "money-no-account", "money-no-budget", "money-overspent", "money-partial",
+        "money-unrecognised", "offline", "offline-cached", "one-item", "opname", "server-error",
+        "server-error-cached", "timeline", "timeline-fout", "timeline-offline", "timeline-vier", "unauthorized",
+        "voice", "voice-geen-partijen", "voice-offline", "voice-partijen-fout", "voice-te-groot", "voice-verlopen",
+        "voice-verstuurd", "voorjou-een", "voorjou-few", "voorjou-fout", "voorjou-laden", "voorjou-lang",
+        "voorjou-leeg", "voorjou-long", "voorjou-many", "voorjou-offline", "voorjou-selecteren", "voorjou-storing",
+        "voorjou-veel", "voorjou-vijf", "voorstel", "voorstel-offline", "weekly", "weekly-eerste", "weekly-fout",
+        "weekly-loading", "weekly-offline-kept", "weekly-offline-missing", "weekly-rustig", "weekly-tweede",
     ]
     static let reply = "00000000-f1c5-4000-8000-000000000001"
     static let question = "00000000-f1c5-4000-8000-000000000002"

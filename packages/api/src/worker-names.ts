@@ -179,3 +179,10 @@ export const AUTOFILE_DIGEST_WORKER_NAME = "autofile-digest";
  * reader side would answer 404 forever, which reads as "no Sunday yet".
  */
 export const WEEKLY_SUMMARY_WORKER_NAME = "weekly-summary";
+
+/**
+ * Written by apps/worker/src/briefs/store.ts once per brief the host drafter
+ * stored or failed (ops/proposal-drafter.sh), read by the dashboard taxonomy
+ * as an on-demand worker: a brief is drafted only when a party writes.
+ */
+export const PARTY_BRIEF_WORKER_NAME = "party-brief";

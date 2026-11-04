@@ -61,6 +61,8 @@ struct VoorJouTab: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// "Gesprek voorbereiden" on a row about a party (Call/).
+    @Environment(CallSession.self) private var call: CallSession?
 
     init(store: InboxStore, dossier: DossierStore, client: APIClient, gate: ApprovalGate, path: Binding<[InboxRoute]>,
          onUnauthorized: @escaping @MainActor () -> Void, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -376,7 +378,10 @@ struct VoorJouTab: View {
         .contextMenu { if !selecting && !row.restored { menu(row, readOnly: readOnly) } }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(VoorJouList.accessibilityLabel(row.item, now: now))
-        .accessibilityActions { if !selecting && !readOnly && !row.restored { accessibilityActions(row) } }
+        .accessibilityActions {
+            if !selecting && !readOnly && !row.restored { accessibilityActions(row) }
+            if !selecting, let open = prepareCall(row) { Button(CallCopy.title, action: open) }
+        }
         .id(row.id)
     }
 
@@ -403,6 +408,9 @@ struct VoorJouTab: View {
     @ViewBuilder private func menu(_ row: VoorJouList.Row, readOnly: Bool) -> some View {
         if let route = row.route {
             Button(VoorJouCopy.view, systemImage: "eye") { path.append(route) }
+        }
+        if let open = prepareCall(row) {
+            Button(CallCopy.title, systemImage: "phone", action: open)
         }
         switch row.item.kind {
         case .proposal, .question:
@@ -438,6 +446,14 @@ struct VoorJouTab: View {
         ForEach(VoorJouMenu.taskSteps(row.taskNext), id: \.status) { step in
             Button(step.label) { decide(row, .task(step.status)) }
         }
+    }
+
+    /// A row about a party (a proposal or question the server names one
+    /// for) offers "Gesprek voorbereiden"; a row with no party offers nothing.
+    private func prepareCall(_ row: VoorJouList.Row) -> (() -> Void)? {
+        guard let partyId = row.item.partyId, let call else { return nil }
+        let name = row.item.party ?? row.item.subtitle
+        return { Task { await call.open(partyId: partyId, name: name) } }
     }
 
     private func decide(_ row: VoorJouList.Row, _ action: ListDecision.Action) {

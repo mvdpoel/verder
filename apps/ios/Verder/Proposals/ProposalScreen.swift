@@ -44,6 +44,7 @@ struct ProposalScreen: View {
     @Environment(\.networkOffline) private var offline
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
+    @Environment(CallSession.self) private var call: CallSession?
 
     private var ax: Bool { typeSize.isAccessibilitySize }
     private var isQuestion: Bool { model?.detail?.kind == "question" }
@@ -246,6 +247,7 @@ struct ProposalScreen: View {
                      note: model.isPending ? DetailText.age(since: d.createdAt, now: now())
                          : answered ? model.shownAnsweredAt.map(DetailText.stamp) : nil)
         if model.isPending, let note = model.senderNote { ProposalLabel(note, color: .inkMute).padding(.top, 8) }
+        callButton(d)
         QuestionBody(model: model, detail: d, now: now(), pendingOption: $pendingOption, freeText: $freeText,
                      focus: $answerFocused, onTrigger: { sourceSheet = .trigger }, base: client.base)
         if !model.isPending, !answered, let line = model.statusLine {
@@ -273,6 +275,7 @@ struct ProposalScreen: View {
         triggerLink(model, d)
             .padding(.top, 22)
             .id(ProposalAnchor.trigger)
+        callButton(d)
         if model.showsMissing {
             section(label: "Wat nog ontbreekt") {
                 VStack(alignment: .leading, spacing: 6) {
@@ -321,6 +324,18 @@ struct ProposalScreen: View {
                 .padding(.top, 16)
         }
         Color.clear.frame(height: 1).id(ProposalAnchor.end)
+    }
+
+    /// The sender, as a call: what to tell them and what to ask
+    /// ("Gesprek voorbereiden"; only for a proposal that has a party).
+    @ViewBuilder
+    private func callButton(_ d: ProposalDetail) -> some View {
+        if let partyId = d.partyId, let call {
+            AuthButton(title: CallCopy.title, weight: .outline) {
+                Task { await call.open(partyId: partyId, name: d.partyName) }
+            }
+            .padding(.top, 22)
+        }
     }
 
     /// The trigger card opens what started it: a scanned letter's document,

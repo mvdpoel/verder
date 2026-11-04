@@ -130,6 +130,10 @@ struct WaitingItem: Codable, Identifiable, Equatable, Sendable {
     /// proposals today (whether a failed send waits on Martin is still his
     /// call, F-38); absent, a proposal row reads as an ordinary one.
     var failedAt: Date? = nil
+    /// The party a proposal or question is about, so its row can open
+    /// "Gesprek voorbereiden"; nil for every other kind (and from an older
+    /// server, which does not send it).
+    var partyId: String? = nil
 }
 
 /// One thing verder did on its own (spec §6.6), as `verderActions.list` builds

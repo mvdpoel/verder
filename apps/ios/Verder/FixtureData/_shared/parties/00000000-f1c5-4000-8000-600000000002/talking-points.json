@@ -1,0 +1,74 @@
+{
+  "party": {
+    "id": "00000000-f1c5-4000-8000-600000000002",
+    "name": "Bewindkantoor Noordkust",
+    "phone": "06 0000 0002"
+  },
+  "tell": [
+    {
+      "id": "tell:document:00000000-f1c5-4000-8000-200000000104",
+      "text": "Opgestuurd op 30 okt: Loonstrook 2026-10",
+      "source": {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000104",
+        "link": "verder://document/00000000-f1c5-4000-8000-200000000104"
+      }
+    },
+    {
+      "id": "tell:document:00000000-f1c5-4000-8000-200000000105",
+      "text": "Opgestuurd op 30 okt: Loonstrook 2026-09",
+      "source": {
+        "type": "document",
+        "id": "00000000-f1c5-4000-8000-200000000105",
+        "link": "verder://document/00000000-f1c5-4000-8000-200000000105"
+      }
+    },
+    {
+      "id": "tell:mail:00000000-f1c5-4000-8000-900000000003",
+      "text": "Gemaild op 30 okt: Loonstroken september en oktober",
+      "source": {
+        "type": "mail",
+        "id": "00000000-f1c5-4000-8000-900000000003",
+        "link": "verder://dossier"
+      }
+    }
+  ],
+  "ask": [
+    {
+      "id": "ask:mail:00000000-f1c5-4000-8000-900000000002",
+      "text": "Nog geen antwoord op je mail van 20 okt: Vraag over leefgeld november",
+      "source": {
+        "type": "mail",
+        "id": "00000000-f1c5-4000-8000-900000000002",
+        "link": "verder://dossier"
+      }
+    },
+    {
+      "id": "ask:stop:00000000-f1c5-4000-8000-500000000006",
+      "text": "Bespreek: Stukken aanleveren bij Team Startdossier",
+      "source": {
+        "type": "stop",
+        "id": "00000000-f1c5-4000-8000-500000000006",
+        "link": "verder://timeline"
+      }
+    }
+  ],
+  "summary": {
+    "text": "Team Startdossier vroeg op 28 okt om je loonstroken; die heb je op 30 okt gestuurd, een antwoord is er nog niet.",
+    "model": "claude-cli 2.1.0 (Claude Code)",
+    "promptVersion": "brief-v1",
+    "generatedAt": "2026-10-30T10:05:00.000Z",
+    "sourceRefs": [
+      {
+        "type": "mail",
+        "id": "00000000-f1c5-4000-8000-900000000001"
+      },
+      {
+        "type": "mail",
+        "id": "00000000-f1c5-4000-8000-900000000003"
+      }
+    ],
+    "ai": true,
+    "label": "Samenvatting door AI"
+  }
+}

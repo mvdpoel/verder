@@ -5,7 +5,8 @@ import Observation
 /// (`verder://proposal/<uuid>`, `verder://suggestion/<uuid>`,
 /// `verder://task/<uuid>`, `verder://document/<uuid>`, `verder://inbox`,
 /// `verder://weekly`, `verder://voice`, `verder://done-by-verder`,
-/// `verder://dossier`, `verder://timeline`, `verder://overzicht`, `verder://money`).
+/// `verder://dossier`, `verder://timeline`, `verder://overzicht`, `verder://money`,
+/// `verder://call`).
 ///
 /// EVERY CASE BUT `.none` HAS A `destination` — a tab, a stack or the voice
 /// sheet — and `LinkDestinationTests` checks that every link the worker and
@@ -47,6 +48,10 @@ enum DeepLink: Equatable, Sendable {
     /// action, the Control Center control and the Action button (R20). Scan
     /// is not lock-gated, so it opens without Face ID.
     case scan
+    /// `verder://call`: the call sheet in progress — the tap on the call's
+    /// Live Activity (`CallActivityFaces.url`). A sheet, never a tab; with no
+    /// call in progress it opens nothing more than the app.
+    case call
     case none
 
     init(userInfo: [AnyHashable: Any]) {
@@ -82,6 +87,8 @@ enum DeepLink: Equatable, Sendable {
             return parts.path.isEmpty ? .money : .none
         case "scan":
             return parts.path.isEmpty ? .scan : .none
+        case "call":
+            return parts.path.isEmpty ? .call : .none
         case "proposal", "suggestion", "task", "document":
             guard segments.count == 2, segments[0].isEmpty, let id = UUID(uuidString: segments[1]) else { return .none }
             switch host {
@@ -118,6 +125,7 @@ enum DeepLink: Equatable, Sendable {
         case .money: LinkDestination(tab: .meer, stack: .meer([.money]))
         case .voice: LinkDestination(tab: nil, stack: nil, opensVoice: true)
         case .scan: LinkDestination(tab: .scan, stack: nil, opensCamera: true)
+        case .call: LinkDestination(tab: nil, stack: nil, opensCall: true)
         case .none: nil
         }
     }
@@ -138,6 +146,8 @@ struct LinkDestination: Equatable, Sendable {
     var opensVoice = false
     /// Scan's camera opens straight away (no tap on the disc).
     var opensCamera = false
+    /// The call sheet in progress comes back (`CallSession.reopen`).
+    var opensCall = false
 }
 
 private extension UUID {

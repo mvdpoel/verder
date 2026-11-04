@@ -141,6 +141,9 @@ struct ProposalDetail: Decodable, Equatable, Sendable {
     /// A question's answer and when it was given. Not yet served.
     var answer: Answer? = nil
     var decidedAt: Date? = nil
+    /// The proposal's party, for "Gesprek voorbereiden"; nil when it has none
+    /// (and from an older server).
+    var partyId: String? = nil
 }
 
 /// What the phone may change before approving, exactly the `payload` of

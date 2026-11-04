@@ -101,5 +101,6 @@ struct VerderWidgetBundle: WidgetBundle {
         VerderWidget()
         HeadlineWidget()
         ScanControl()
+        CallLiveActivity()
     }
 }

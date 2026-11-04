@@ -2,13 +2,14 @@
 
 ## Stand van de bouw
 
-Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief de niet-gecommitte working tree). Dit document beschrijft de **volledige** functieset van dit scherm: wat de code doet en wat de definitieve frames, de spec (§7.4) en de design brief (§2.5, §3) daaraan toevoegen. Elke functie heeft één statusregel.
+Gecontroleerd tegen de code op 2026-11-03 (branch `feat/iphone-app`, inclusief de niet-gecommitte working tree; het gespreksblad en de Live Activity op branch `feat/iphone-calls`). Dit document beschrijft de **volledige** functieset van dit scherm: wat de code doet en wat de definitieve frames, de spec (§7.4) en de design brief (§2.5, §3) daaraan toevoegen. Elke functie heeft één statusregel.
 
 | Status | Aantal |
 |---|---|
-| Gebouwd | 27 |
-| Deels gebouwd | 11 |
+| Gebouwd | 43 |
+| Deels gebouwd | 12 |
 | Nog te bouwen | 19 |
+| Niet mogelijk op iOS | 1 |
 
 > **2026-11-04: het blad volgt nu de definitieve frames.** Titel "Spraaknotitie", tikken of vasthouden, annuleren, de timer, het blad omlaag met de opname in de tabbalk, de ontlede partij en het kanaal, de partijkiezer, de blad-vullende toestanden, de vastgezette voet met reden, de mislukte verzendingen in het blad, de bevestiging voor weggooien, de suggestiekaart en de vergrendelde notitie zijn gebouwd. Wat nog open is, staat hieronder met zijn status; onder andere het live streamen op het toestel, `recognizedTranscript` naar de server, de rol van een partij op de server en de App Intent. De beschrijving onder [Functies](#functies) is van vóór deze ronde. Captures: `scripts/capture.sh <voice-fixture> overzicht <out> --voice <toestand>`.
 >
@@ -164,6 +165,29 @@ Bij succes wordt de lokale opname verwijderd (een bewaarde staat nu in de kluis)
 Een mislukte verzending houdt de tekst en de opname vast en keert terug naar de editor. Martin probeert het opnieuw door weer op "Verstuur als voorstel" te tikken, wat **dezelfde `clientId`** gebruikt, zodat een verloren antwoord het gesprek nooit twee keer kan opslaan. Er is geen automatische nieuwe poging en geen wachtrij: anders dan scans wacht een spraaknotitie alleen in het geheugen, in het open blad.
 
 **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogModel.swift` (`send`, `copy(for:)`)
+
+### Een opgenomen gesprek uitschrijven (toegevoegd 2026-11-03)
+
+Martin: "it would be perfect if i can also record phone calls and transcribe them". verder kan zelf geen telefoongesprek opnemen: iOS geeft geen enkele app van derden het geluid van een gesprek, en `CXCallObserver` zegt alleen *dat* een gesprek begon of eindigde, nooit met wie of wat er gezegd werd. En de ingebouwde gespreksopname van de iPhone is **in Nederland niet beschikbaar**, en geen app kan een gesprek op dezelfde iPhone opnemen (Martin, 2026-11-03; bronnen: [support.apple.com](https://support.apple.com/nl-nl/guide/iphone/iph57c6590e9/ios), [ben.nl](https://ben.nl/blog/telefoongesprek-opnemen-iphone), [simyo.nl](https://simyo.nl/blog/telefoongesprek-opnemen-iphone)). De hoofdweg blijft dus: de gesprekspunten tijdens het gesprek, en **dicteer na het gesprek** met de gewone spraaknotitie. Deze import is de weg voor een opname die *elders* is gemaakt — met een opname-app, of met een tweede toestel naast de luidspreker. Zo'n opname komt bínnen in verder en wordt daar op de telefoon uitgeschreven.
+
+- **Delen vanuit elke app.** Uit een opname-app, Dictafoon, Bestanden of via AirDrop: de deelextensie herkent audio (`.m4a`, `.aac`, `.wav`, `.caf`, of elk `audio/*`-type) en uploadt die **niet** als document. Ze laat een `IncomingDrop` van soort `audio` achter in de App Group en zegt "Open verder om het gesprek uit te schrijven."; het blad sluit niet vanzelf, zodat Martin dat kan lezen. Een opname gaat alleen, zonder andere bestanden erbij ("Deel een opname los, één tegelijk, zonder andere bestanden erbij."), en mag groter zijn dan een document (tot 300 MB, gekopieerd en nooit in het geheugen gelezen), omdat ze op de telefoon wordt uitgeschreven. De uploadwachtrij slaat audiodrops over (`importIncoming`).
+  **Status:** Gebouwd — `apps/ios/Verder/Upload/IncomingDrop.swift`, `IncomingImport.swift`, `ShareModel.swift`, `apps/ios/VerderShare/ShareViewController.swift`
+- **De app opent "Opname uitschrijven".** Bij het openen en bij elke terugkeer naar de voorgrond (ingelogd, en niet over het gespreksblad heen) opent de oudste wachtende opname de spraaknotitie in de modus "Opname uitschrijven". Staat het gespreksblad nog open (na een gesprek, ook na "Niet nu"), dan wacht de opname en opent ze zodra dat blad sluit — behalve als "Gesprek vastleggen" het gesprek net aan de spraaknotitie gaf; die gaat voor. Een notitie waaraan Martin werkt wordt nooit vervangen; de opname wacht dan tot de volgende keer. Dezelfde opname wordt niet twee keer geopend.
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogSession.swift` (`openPendingRecording`, `openImport`), `apps/ios/Verder/Call/SharedRecordingGate.swift` (`open`, `callSheetDismissed`), `apps/ios/Verder/App/RootView.swift`; tests `aRecordingWaitingBehindTheCallSheetOpensWhenItGoes`, `theCallsOwnHandOffWinsOverAWaitingRecording`
+- **Een opname die niet te openen is, komt niet steeds terug.** Lukt het kopiëren niet (een volle schijf, een kapotte drop), dan zegt het blad "Deze opname kon niet worden geopend. …" en hoort de drop toch bij deze notitie: dezelfde terugkeer opent hem niet opnieuw, en "Sluiten" of wegvegen wist hem uit de App Group (het origineel blijft in zijn eigen app). Een drop waarvan de bytes ontbreken telt niet als wachtend en wordt opgeruimd, en een drop die langer dan een week wacht (`IncomingDrop.audioMaxAge`) verloopt. Een week, en niet de 24 uur van een half geschreven upload: delen vanuit een andere app opent verder niet, dus een dag de app niet openen mag een opname niet kosten.
+  **Status:** Gebouwd — `VoiceLogModel.importRecording` (de drop wordt vóór het kopiëren geclaimd), `IncomingDrop.pendingAudio`; tests `aDropWhoseCopyFailsIsClosedForGood`, `swipingAwayAFailedDropDeletesIt`, `aDropWithoutItsBytesIsNotPendingAndIsRemoved`, `anOldAudioDropAgesOut` in `CallRecordingImportTests`.
+- **Uitschrijven van een bestand, met voortgang.** `SpeechAnalyzer` + `SpeechTranscriber` in `nl_NL`, op het toestel, op verders eigen kopie van het bestand (Complete-beveiliging, met een echte extensie zodat `AVAudioFile` het leest). Een lang gesprek toont een voortgangsbalk en "Opname uitschrijven, op je telefoon… 40%". Dezelfde foutzinnen als bij inspreken (niets verstaan, omzetten lukte niet, Nederlands niet beschikbaar, model ontbreekt met "Opnieuw proberen"); bij een mislukte poging staat "Opnieuw uitschrijven" klaar, en typen werkt altijd. Daarna de gewone editor: tekst bewerkbaar, partij, kanaal, tijdstip, "Verstuur als voorstel" naar dezelfde `POST /api/mobile/v1/entries/voice` — een suggestie, nooit een logboekregel. Een geïmporteerd gesprek biedt geen "Opnieuw opnemen".
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/Transcriber.swift` (`transcribe(_:progress:)`), `VoiceLogModel.swift` (`importRecording`, `retryTranscription`). Niet gemeten op de telefoon: of iOS 27.2 `nl_NL` uitschrijft, en hoe lang een gesprek van een uur duurt.
+- **"Opname kiezen".** Een knop in het opnamescherm opent de documentkiezer voor audio (Bestanden, Dictafoon-export). Het gekozen bestand wordt gekopieerd; het origineel wordt nooit aangeraakt. Daaronder staat eerlijk waar een opname vandaan kan komen: "De iPhone kan in Nederland zelf geen gesprekken opnemen. Heb je wel een opname — van een opname-app of een tweede toestel op de luidspreker? Deel hem met verder, of kies hem hier." (`VoiceLogModel.Copy.phoneRecordingHint`)
+  **Status:** Gebouwd — `apps/ios/Verder/Voice/VoiceLogView.swift` (`fileImporter`), `VoiceLogModel.importPicked`
+- **Bewaar opname, of wissen.** Alleen met "Bewaar opname" aan gaat het geluid mee (als `phone-voice`-document, met het eigen type en de eigen extensie: "Gesprek 2026-11-01.caf", `audio/x-caf`). Anders wist verder zijn kopie én de drop in de App Group na het versturen of na "Sluiten"/"Weggooien"; het origineel blijft staan waar het stond. Een mislukte verzending, een vergrendeling of een nieuwe inlog houdt de drop vast, zodat zelfs een afgesloten app de opname opnieuw aanbiedt — onder hetzelfde `clientId` (dat van de drop zelf), zodat een herhaalde verzending na een herstart als `duplicate` terugkomt en nooit een tweede voorstel maakt.
+  **Status:** Gebouwd — `VoiceLogModel.send`, `discard`, `VoiceDraft.audioMime`/`audioExtension`
+- **De aangevinkte punten van het gespreksblad.** Was er in het laatste uur een gespreksblad actief, dan staat die partij voorgeselecteerd, staan de aangevinkte punten ("Besproken: …") boven de uitgeschreven tekst en is het tijdstip het begin van dat gesprek. iOS zegt niet van welk gesprek een opname is, dus dit is de beste gok en Martin past alles aan voor hij verstuurt. Alleen in het geheugen; uitloggen vergeet het. Zonder recent gespreksblad krijgt de opname het moment van delen als tijdstip.
+  **Status:** Gebouwd — `apps/ios/Verder/Call/RecentCallSheet.swift`, `CallSession` (`noteActive`)
+- **Fixture:** `-fixtures opname -route opname` toont het uitgeschreven synthetische gesprek met Bewindkantoor Noordkust (gegevensdocument, "A call recording").
+  **Status:** Gebouwd — `apps/ios/Verder/FixtureData/opname/`, `apps/ios/Verder/Fixtures/FixtureEnvironment.swift`
+- **verder neemt het gesprek zelf op.** Niet mogelijk: iOS laat geen app van derden een telefoongesprek horen of opnemen.
+  **Status:** Niet mogelijk op iOS
 
 ## Toestanden
 
@@ -400,6 +424,82 @@ Het rustblad zegt "Je stem wordt op je iPhone omgezet. De opname gaat niet mee, 
 
 **Status:** Gebouwd (2026-11-04)
 
+### Tijdens het gesprek: wat vertellen, wat vragen (toegevoegd 2026-11-03)
+
+Martin vroeg op 2026-11-03: "as for voice, it would be perfect if i can also record phone calls and transcribe them" en "maybe show tips / reminders to tell or ask about live while in the call, on screen in the app". Zijn keuze: gesprekspunten uit de **dossiergegevens** plus **één samenvattingsregel van AI**, nu bouwen.
+
+#### Een telefoongesprek opnemen en uitschrijven
+
+Wat iOS toelaat, online nagegaan vóór de bouw: een app van derden kan een telefoongesprek **niet opnemen en niet meeluisteren**. De ingebouwde gespreksopname van de iPhone is in Nederland niet beschikbaar (Martin, 2026-11-03; bronnen: [support.apple.com](https://support.apple.com/nl-nl/guide/iphone/iph57c6590e9/ios), [ben.nl](https://ben.nl/blog/telefoongesprek-opnemen-iphone), [simyo.nl](https://simyo.nl/blog/telefoongesprek-opnemen-iphone)). `CXCallObserver` vertelt een app alleen *dat* een gesprek begint of eindigt, nooit met wie of wat er gezegd wordt. verder luistert dus niet mee; het zet het dossier voor Martin klaar (hieronder), en na het gesprek dicteert hij wat er besproken is met de gewone spraaknotitie. Heeft hij een opname die elders is gemaakt (een opname-app, een tweede toestel op de luidspreker), dan kan hij die delen of kiezen; zie "Een opgenomen gesprek uitschrijven".
+
+**Status:** Niet mogelijk op iOS — geen API, en de ingebouwde gespreksopname bestaat in Nederland niet.
+
+#### Gesprekspunten per partij: "Vertel" en "Vraag"
+
+Martin kiest met wie hij belt en ziet twee korte lijsten, elk hoogstens zes punten, elk met een link naar het stuk waar het vandaan komt. **Vraag**: taken die wachten op die partij ("Vraag naar: …", vroegste deadline eerst), mail die hij hun stuurde en waarop na twee dagen nog geen antwoord kwam ("Nog geen antwoord op je mail van 20 okt: …", langste stilte eerst, niet ouder dan 30 dagen), vorderingen waarbij ze betrokken zijn en waarvan het bedrag onbekend is ("Vraag het gevorderde bedrag: …"), en open haltes op een spoor dat over hen gaat ("Bespreek: …"). **Vertel**: wat hij deed sinds hun laatste mail (anders de laatste 30 dagen), nieuwste eerst: afgeronde taken ("Gedaan: …"), mail die te vers is om na te vragen ("Gemaild op 30 okt: …"), stukken die hij hun stuurde ("Opgestuurd op 30 okt: …") en stukken van hen die zijn opgeborgen. Een contactpersoon telt mee voor haar organisatie. Alles is af te leiden uit het dossier, zonder model; weggegooide en vernietigde documenten verschijnen nooit (effectieve status, twee keer gecontroleerd).
+
+**Status:** Gebouwd — server: `GET /api/mobile/v1/parties/[id]/talking-points` (JSON 401 eerst, `no-store`, 400/404), pure `buildTalkingPoints` en de loader `loadTalkingPoints` (`parties.talkingPoints`); app: het blad "Gesprek voorbereiden" met de lijsten "Vertellen" en "Vragen" (zie hieronder), elk punt met een vinkje en een knop die de bron opent. Fixtures `FixtureData/_shared/parties/<id>/talking-points.json` voor Bewindkantoor Noordkust en Kade & Partners. Niet uitgerold (migraties 0042 en 0043 nog niet op de homelab).
+
+#### De samenvattingsregel van AI
+
+Boven de punten staat één zin, "wat ze het laatst vroegen en hoe dat ervoor staat", gemarkeerd als **"Samenvatting door AI"**. Hij wordt niet in het webverzoek en niet door Ollama gemaakt, maar door de bestaande drafter op de homelab (`ops/proposal-drafter.sh`, `claude -p --tools ""`, het token alleen in de omgeving van dat ene proces). Een nieuwe mail van een bekende partij zet haar samenvatting op `pending` (in dezelfde transactie als de mail); de drafter maakt hem binnen een paar minuten opnieuw. Het antwoord wordt **geweigerd** als het een id noemt dat niet in de verzamelde context stond, en de ruwe modeluitvoer, de prompt en de context blijven altijd bewaard (gouden regel) — niet alleen van de laatste poging: `party_briefs` wordt bij elke nieuwe versie overschreven, dus elke poging (goedgekeurd, geweigerd, mislukt of te laat) wordt ook toegevoegd aan `party_brief_drafts`, waarin niets wordt gewijzigd of verwijderd. De app krijgt de zin **alleen** als hij `ready` is; tijdens `pending`, `drafting` of na `failed` is er geen zin, ook niet de vorige. Geen bewijs: geen ledgergebeurtenis.
+
+**Status:** Gebouwd — server en drafter (migratie 0042 `party_briefs`, migratie 0043 `party_brief_drafts` voor de geschiedenis, `briefs-pending`, `briefs-store`, `validateBrief`, de tweede lus in `proposal-drafter.sh`); in de app bovenaan het blad als kaart **"AI-samenvatting · 30 okt"** (altijd als AI gemarkeerd, met de dag waarop hij is geschreven); een tik klapt "Gebaseerd op" open met de bronnen, elk een knop naar zijn scherm (een mail of vordering opent Dossier). Geen kaart als er geen `ready`-samenvatting is. Niet gemeten: een echte samenvatting op echte mail, en de vertraging na een echte mail.
+
+#### Een samenvatting klaarzetten bij nieuwe mail
+
+`ingestRawEmail` markeert de afzender (en de organisatie van een contactpersoon) als `pending` zodra een mail van een bekende partij binnenkomt, behalve bij het opzoeken van bonnetjes. Tien mails geven één nieuwe samenvatting, niet tien.
+
+**Status:** Gebouwd — `apps/worker/src/briefs/mark.ts`, `apps/worker/src/gmail.ts`; tests in `apps/worker/src/briefs/store.test.ts`.
+
+#### Gesprek voorbereiden: het blad openen
+
+Het blad hoort bij één partij en opent op drie plekken: de kaart **"BELLEN"** in Dossier (partijen op volgorde van laatste contact, zes zichtbaar, "Alle partijen (n)" voor de rest), lang drukken op een item in Voor jou dat een partij heeft (een voorstel of vraag; ook als VoiceOver-actie "Gesprek voorbereiden"), en de knop "Gesprek voorbereiden" onder de afzender van een voorstel. Bovenaan: "GESPREK VOORBEREIDEN", de naam van de partij, "bijgewerkt 09:41", dan de AI-kaart, "2 van 5 besproken" met een balk, "VERTELLEN" en "VRAGEN". Een lege lijst zegt "Niets om te vertellen." / "Niets om te vragen.". Een tik op een punt vinkt het af (staalkleur, doorgestreept, selectie-haptiek); het pijltje opent de bron en zet het blad opzij. Nergens amber: iets om aan een ander te vragen wacht niet op Martin. Het blad is vergrendeld achter Face ID (het noemt de partij). Onderaan, één keer: "verder luistert niet mee: iOS laat geen app een telefoongesprek opnemen. Leg het na afloop vast met je stem."
+
+**Status:** Gebouwd — `apps/ios/Verder/Call/CallPrepSheet.swift`, `CallSession.swift`, `CallChecklist.swift`; de server geeft `partyId` mee op voorstel-items in Voor jou en op `proposals.get`. Tests in `CallPrepTests`. Fixture `call`, `-route call:<partyId>`.
+
+#### Zonder verbinding: de laatst opgehaalde punten
+
+Het blad toont eerst de kopie op de telefoon, dan het antwoord van de server; zonder verbinding blijven de laatste punten staan met hun leeftijd ("offline · bijgewerkt 09:41"). Nooit opgehaald en geen verbinding: "Geen verbinding, en deze punten staan nog niet op je telefoon." met "Opnieuw proberen". Vinkjes blijven staan bij een verversing (de punt-id's zijn stabiel). De kopie staat in `Application Support/calls`, `completeFileProtection`, niet in de back-up, en wordt gewist bij uitloggen.
+
+**Status:** Gebouwd — `CallCache` in `apps/ios/Verder/Call/CallSystem.swift`, `CallPrepModel.swift`; tests in `CallPrepTests`.
+
+#### Uitloggen terwijl de punten nog onderweg zijn
+
+Logt Martin uit (of verloopt zijn sessie ergens in de app) terwijl de gesprekspunten nog van de server komen, dan wordt dat late antwoord weggegooid: het blad toont het niet en het wordt niet opgeslagen. Anders zou het antwoord de naam, het telefoonnummer en de punten van de partij weer op de telefoon zetten, net nadat het wissen ze had weggehaald.
+
+**Status:** Gebouwd — `CallPrepModel.load` controleert de `SessionEpoch` na het ophalen; tests `aReplyLandingAfterTheSessionEndedIsNotWrittenBack` en `theModelIgnoresAReplyFromAnEndedSession` in `CallPrepTests`.
+
+#### Bel
+
+"Bel 06 0000 0002" geeft het nummer aan de Telefoon-app (`tel:`-link) en zet tegelijk de Live Activity aan; het gesprek zelf is van de Telefoon-app. Een nummer met iets anders dan cijfers, één `+` vooraan en scheidingstekens krijgt géén knop, nooit een gok. Zonder nummer: "Geen telefoonnummer bekend in verder. Bel zoals je gewend bent; zet de punten wel op je toegangsscherm."
+
+**Status:** Gebouwd — `CallCopy.dialURL`; de server stuurt `party.phone` mee in de gesprekspunten. Niet gemeten: op Martins telefoon (alleen de simulator).
+
+#### Live Activity tijdens het gesprek
+
+Start bij "Bel" of met "Toon tijdens het gesprek". Op het toegangsscherm en in het compacte en minimale Dynamic Island staan **alleen aantallen** ("Gesprek · verder", "2 van 5 besproken", "2/5"), nooit de naam van de partij of de tekst van een punt: iedereen kan een toegangsscherm lezen. De naam zit niet eens in de gegevens van de Live Activity. Alleen het uitgeklapte Dynamic Island (ontgrendeld gebruik) toont "VOLGENDE" met de tekst van het eerstvolgende open punt, gemarkeerd als privacygevoelig. Afvinken in de app werkt de Live Activity direct bij. Een tik opent het blad weer (`verder://call`). "Niet meer tonen" haalt hem weg; staan Live Activities uit in Instellingen, dan zegt het blad dat.
+
+**Status:** Gebouwd — `apps/ios/Verder/Shared/CallActivity.swift` (`CallActivityAttributes`, `CallActivityFaces`), `apps/ios/Verder/Widget/CallActivityViews.swift`, `apps/ios/VerderWidget/CallLiveActivity.swift`, `NSSupportsLiveActivities`; de privacyregel is getest (en met een mutatie gecontroleerd) in `CallPrepTests`. Niet gemeten: de Live Activity op een echt toegangsscherm en in het Dynamic Island.
+
+#### Gesprek afgelopen: vastleggen
+
+Als iOS (`CXCallObserver`) meldt dat een gesprek is afgelopen terwijl het blad open is of zijn Live Activity loopt, stopt de Live Activity en komt het blad terug met "Het gesprek is afgelopen.", "Gesprek vastleggen" en "Niet nu". "Gesprek vastleggen" opent de spraaknotitie met de afgevinkte punten als "Besproken: …" bovenaan (Martins eigen woorden komen eronder), de partij al gekozen en het tijdstip waarop het gesprek begon. Het blijft een **suggestie** die Martin in Voor jou goedkeurt. Een gesprek dat eindigt terwijl er geen blad actief is, doet niets; CallKit zegt niet met wie het gesprek was, dus de regel gaat over het blad, nooit over het nummer. Een notitie waar al tekst of een opname in zit, wordt nooit overschreven.
+
+**Status:** Gebouwd — `CallSession.handle`, `logCall`, `VoiceLogModel.apply`, `VoiceLogSession.open(prefill:)`; tests in `CallPrepTests` (met een nep-observer) en `VoicePrefillTests`. Niet gemeten: een echt telefoongesprek op Martins toestel.
+
+#### Terug uit de Telefoon-app
+
+Na "Bel" neemt de Telefoon-app het scherm over en zet iOS verder het hele gesprek stil. Het bericht dat het gesprek is afgelopen kan dan te laat komen, samengevoegd worden of helemaal wegblijven. Daarom kijkt verder elke keer dat de app weer op de voorgrond komt bij iOS na welke gesprekken er nu nog lopen (`CXCallObserver.calls`). Een gesprek dat verder zag beginnen en dat niet meer loopt (of als afgelopen staat), is afgelopen: de Live Activity stopt en het blad komt terug met "Gesprek vastleggen", met het begintijdstip van dat gesprek. Zonder deze controle bleef de Live Activity tot uren na het gesprek op het toegangsscherm staan, en kon het einde van een later, ander gesprek voor dit gesprek worden aangezien. Alleen gesprekken die verder zag beginnen tellen: een Live Activity die Martin met de hand aanzette zonder te bellen, blijft staan als hij van app wisselt. Een gesprek dat begon terwijl er geen blad actief was, wordt bij terugkomst vergeten, zodat een later blad het niet overneemt.
+
+**Status:** Gebouwd — `CallSession.reconcile`, `CallObserving.currentCalls` (`LiveCallObserver`), aangeroepen vanuit `RootView` bij `scenePhase == .active`; tests in `CallPrepTests` (begin gezien, geen einde, terugkomst zonder lopend gesprek; gesprek als afgelopen vermeld; nog in gesprek; handmatige Live Activity; oud gesprek van vóór het blad). Niet gemeten: op Martins toestel; dat moet één keer gebeuren voordat dit als klaar geldt.
+
+#### Gebeld, maar het begin nooit gezien
+
+Na "Bel" kan iOS verder al stilzetten voordat het bericht "gesprek begonnen" binnenkomt. Dan kent verder bij terugkomst geen enkel gesprek, en zou de vorige controle niets doen: de Live Activity bleef staan en het einde van een later, ander gesprek werd voor dit gesprek aangezien. Nu onthoudt het blad wanneer Martin op "Bel" tikte. Is verder daarna naar de achtergrond gegaan (de Telefoon-app nam het scherm over) en loopt er bij terugkomst geen gesprek meer, dan is het gesprek afgelopen: de Live Activity stopt, het blad komt terug met "Gesprek vastleggen", en het tijdstip van "Bel" geldt als begin. Loopt er nog een gesprek, dan blijft alles staan. Tikt Martin in de vraag "Bel …?" van iOS op Annuleer, dan ging verder nooit naar de achtergrond en wordt er niets beëindigd. Die eerste terugkomst zonder achtergrond en zonder lopend gesprek telt als geannuleerd en vergeet het "Bel" ook meteen: anders bleef het staan tot verder later wél naar de achtergrond ging (telefoon op slot, even iets opzoeken in een andere app), en beëindigde de terugkomst daarna een gesprek dat nooit plaatsvond. Loopt er bij die terugkomst wel een gesprek, dan was het geen annulering en blijft het "Bel" staan. Een gesprek eindigt zo maar één keer, ook als iOS de berichten "begonnen" en "afgelopen" van dat gesprek pas daarna aflevert (een stilgezette app krijgt ze bij het hervatten, in een volgorde die niemand heeft gemeten): wat iOS op dat moment nog als gesprek noemt, en een "begonnen" of een los "afgelopen" dat binnen een minuut daarna binnenkomt, horen bij het gesprek dat al is beëindigd. Zo komt "Gesprek vastleggen" niet terug nadat Martin op "Niet nu" tikte, en beëindigt een los binnengekomen "begonnen" nooit een later blad. Een nieuwe tik op "Bel", "Toon tijdens het gesprek" of een andere partij openen sluit die minuut meteen, zodat een echt nieuw gesprek binnen die minuut wél gevolgd wordt. Een Live Activity die Martin met de hand aanzette zonder te bellen, blijft nog steeds staan.
+
+**Status:** Deels gebouwd — aanname niet gemeten op het toestel: de regel voor een geannuleerd "Bel …?" gaat ervan uit dat een BEVESTIGD gesprek verder altijd eerst naar de achtergrond brengt voordat de app weer actief is zonder lopend gesprek in `CXCallObserver.calls`. Komt verder na een bevestigd gesprek ooit weer op actief zonder achtergrond ertussen, terwijl iOS op dat moment geen gesprek noemt, dan telt dat als geannuleerd en wordt het einde van dat echte gesprek nooit aangeboden. Het gedrag is bewust niet veranderd; een Debug-build (`VERDER_CONFIGURATION=Debug scripts/install.sh`) schrijft de volgorde van de scènefasen en wat `CXCallObserver.calls` noemt rond elke "Bel" naar het systeemlog (`CallSession.traceDial`, subsystem `pro.vanderpoel.verder`, categorie `call-dial`, zonder nummer of naam), zodat één echt gesprek op Martins telefoon het kan beslissen. Gebouwd: `CallSession.bel` onthoudt `dialledAt`, `CallSession.sceneEnteredBackground` (vanuit `RootView` bij `scenePhase == .background`), `CallSession.reconcile`; tests `aDialledCallWhoseStartWasNeverSeenEndsOnReturn`, `aDialledCallStillLiveIsKeptEvenUnseen`, `aCancelledDialPromptEndsNothing`, `aCancelledDialPromptStaysEndedNothingAfterALaterBackground`, `aReturnDuringALiveDialledCallKeepsTheDial`, `lateCallKitEventsAfterADialPathEndAreThatSameCall`, `aLoneLateEndedAfterADialPathEndIsThatSameCall`, `aNewPartyInsideTheEchoWindowFollowsItsCall`, `aStartedActivityInsideTheEchoWindowFollowsItsCall`, `callsListedAtADialPathEndAreSpent` en `aDialEndsOnlyOnce` in `CallPrepTests` (`CallSession.lateEchoWindow`, 60 s). Ook niet gemeten: of iOS het "Bel …?"-venster echt alleen als inactief (niet als achtergrond) laat gelden, en de echte volgorde van uitgestelde CallKit-berichten; alles moet één keer met een echt gesprek gebeuren voordat dit als klaar geldt.
+
 ### Terugkoppeling
 
 #### Haptiek buiten de opname
@@ -428,10 +528,12 @@ Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname 
 - De serverhelft is **uitgerold** (P3-D3, 2026-11-01: migratie 0041, `/api/mobile/v1/{entries/voice,parties}` live, JSON 401 eerst).
 - Niet gebouwd: live transcript, timer, afschuiven om te annuleren, tikken om aan/uit te zetten, het opnameaccessoire in de tabbalk ("Opname loopt 0:14 Stop" in het frame "blad omlaag"), partij en kanaal uit de tekst halen, het doorzoekbare partijblad, de bevestiging "Weggooien?", de link naar Voor jou na het versturen, de downloadvoortgang, de Actieknop en App Intent. Elk ervan, met wat het nodig heeft, staat onder [Ontworpen, nog niet gebouwd](#ontworpen-nog-niet-gebouwd).
 - `participantNames` is een momentopname van de naam van de partij op het moment van versturen.
+- **Gesprekspunten (2026-11-03): serverhelft gebouwd, NIET uitgerold.** Volgorde bij uitrollen (dezelfde valkuil als 0020–0041, met een ergere fout): rsync, dan `pnpm --filter @verder/db migrate` vanaf de homelab-HOST, pas daarna web+worker opnieuw bouwen. Een worker met deze code laat anders de hele ontvangst van elke mail van een bekende partij mislukken op `relation "party_briefs" does not exist`, en die mail wordt dan elke poll opnieuw geprobeerd en komt nooit binnen.
 
 ## Waar in de code
 
 **iOS (`apps/ios/`)**
+- Gesprek voorbereiden (2026-11-03): `Verder/Call/` (`TalkingPoints.swift`, `CallChecklist.swift`, `CallPrepModel.swift`, `CallSession.swift`, `CallSystem.swift`, `CallPrepSheet.swift`), `Verder/Shared/CallActivity.swift`, `Verder/Widget/CallActivityViews.swift`, `VerderWidget/CallLiveActivity.swift`; tests `VerderTests/CallPrepTests.swift`
 - `Verder/Voice/VoiceLogModel.swift`: alle toestand, elke Nederlandse tekst, versturen, nieuwe poging en bestandsbeveiliging
 - `Verder/Voice/VoiceLogView.swift`: het blad (alleen layout), `HoldToRecord`, `VoiceLogFactory`, `holdsUnsentWork`
 - `Verder/Voice/VoiceLogSession.swift`: eigendom boven de vergrendeling en het inloggen
@@ -451,6 +553,7 @@ Geen haptiek zolang de microfoon aan staat (brief §2.5, R13). Buiten de opname 
 - `packages/api/src/voice-summary.ts` (+ test), `packages/api/src/entry-from-proposed.ts` (`VOICE_PROMPT_VERSION`, `source: manual`, gekozen partij)
 - `packages/db/drizzle/0041_doc_source_phone_voice.sql`, `packages/db/src/doc-source-voice.test.ts`
 - `apps/worker/src/voice-recording.ts` (+ test)
+- Gesprekspunten (2026-11-03): `apps/web/src/app/api/mobile/v1/parties/[id]/talking-points/route.ts` (+ test), `apps/web/src/lib/mobile-talking-points.ts` (+ `.fixture.test.ts`), `packages/api/src/talking-points.ts` en `talking-points-load.ts` (+ tests), `packages/db/drizzle/0042_party_briefs.sql`, `packages/db/src/party-briefs-grants.test.ts`, `apps/worker/src/briefs/` (`mark`, `context`, `prompt`, `validate`, `store` + tests), `apps/worker/src/ops/briefs-pending.ts`, `briefs-store.ts` (+ test), `ops/proposal-drafter.sh`
 
 **Documentatie:** spec `docs/superpowers/specs/2026-10-28-iphone-app-design.md` §7.4; plan `docs/superpowers/plans/2026-10-31-iphone-app-plan-3.md` Tasks 24, 25, 27; design brief `docs/superpowers/specs/2026-11-01-iphone-design-brief.md` §3.
 

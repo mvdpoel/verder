@@ -24,6 +24,15 @@
 #
 # Nothing here sends anything: a drafted proposal waits for Martin's approval
 # on the phone, behind Face ID.
+#
+# PARTY BRIEFS (Added 2026-11-03, talking points during a call): after the
+# proposals, the same loop drafts the one-sentence brief of every party whose
+# mail marked it pending (`briefs-pending`), through the SAME `draft` function
+# — the same token discipline, the same `--tools ""` — and hands the answer to
+# `briefs-store`, which refuses any cited id that is not in the context the
+# worker assembled. A brief is never sent anywhere; it is shown on the phone,
+# labelled as AI. Proposals come first and matter more: a failed brief listing
+# never stops a proposal, and the proposal-draft heartbeat stays the pulse.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,6 +48,12 @@ log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"; }
 worker() {
   timeout -k 5 60 docker compose --env-file .env.prod -f docker-compose.prod.yml \
     exec -T worker pnpm --silent --filter worker "$@"
+}
+
+# The ONE place `claude` runs. The token reaches it through its environment
+# only, read from the file at the moment of the call; stdin is the prompt.
+draft() {
+  CLAUDE_CODE_OAUTH_TOKEN="$(cat "$TOKEN_FILE")" timeout -k 5 300 claude -p --tools "" --no-session-persistence
 }
 
 # One run at a time: five 300 s drafts can outlast the 5-minute cadence.
@@ -61,16 +76,24 @@ if ! ids=$(worker proposals-pending --ids); then
   exit 1
 fi
 
+# Briefs are listed up front but never block the proposals: a failure here is
+# logged and the run carries on with proposals alone.
+if ! briefs=$(worker briefs-pending --ids); then
+  log "briefs-pending failed; no briefs drafted this run"
+  briefs=""
+fi
+
 if [ -z "$ids" ]; then
   worker proposals-store --heartbeat \
     || { log "could not record the heartbeat"; echo "proposal-drafter.sh: heartbeat failed" >&2; }
-  exit 0
+  [ -z "$briefs" ] && exit 0
 fi
 
 model="claude-cli $(timeout -k 5 30 claude --version 2>/dev/null | head -1 | tr -cd '\40-\176' | cut -c1-100)"
 
 # The ids come in on fd 3, NOT stdin: `docker compose exec -T` inside the loop
 # inherits stdin and would swallow the rest of the list, drafting only the first.
+if [ -n "$ids" ]; then
 while IFS= read -r id <&3; do
   if ! [[ "$id" =~ $UUID_RE ]]; then
     log "refusing a malformed id from proposals-pending"
@@ -82,8 +105,7 @@ while IFS= read -r id <&3; do
     continue
   fi
   started=$(date +%s)
-  answer=$(printf '%s' "$prompt" \
-    | CLAUDE_CODE_OAUTH_TOKEN="$(cat "$TOKEN_FILE")" timeout -k 5 300 claude -p --tools "" --no-session-persistence)
+  answer=$(printf '%s' "$prompt" | draft)
   rc=$?
   took=$(( $(date +%s) - started ))
   if [ "$rc" -ne 0 ] || [ -z "$answer" ]; then
@@ -100,5 +122,38 @@ while IFS= read -r id <&3; do
     log "$id proposals-store failed after ${took}s"
   fi
 done 3<<< "$ids"
+fi
+
+# Party briefs: one sentence per party for the phone's call screen. Same fd-3
+# discipline; `--prompt` claims the row (moves it to drafting) as it prints.
+if [ -n "$briefs" ]; then
+while IFS= read -r pid <&3; do
+  if ! [[ "$pid" =~ $UUID_RE ]]; then
+    log "refusing a malformed id from briefs-pending"
+    continue
+  fi
+  if ! prompt=$(worker briefs-pending --prompt "$pid" </dev/null); then
+    log "brief $pid no prompt (no longer pending, nothing to say, or exec failed)"
+    continue
+  fi
+  started=$(date +%s)
+  answer=$(printf '%s' "$prompt" | draft)
+  rc=$?
+  took=$(( $(date +%s) - started ))
+  if [ "$rc" -ne 0 ] || [ -z "$answer" ]; then
+    reason="claude-exit-$rc"
+    [ "$rc" -eq 0 ] && reason="empty-answer"
+    log "brief $pid claude failed ($reason) after ${took}s"
+    worker briefs-store --party "$pid" --model "$model" --failed "$reason" </dev/null >> "$LOG" 2>&1 \
+      || log "brief $pid could not record the failure"
+    continue
+  fi
+  if printf '%s' "$answer" | worker briefs-store --party "$pid" --model "$model" >> "$LOG" 2>&1; then
+    log "brief $pid stored after ${took}s"
+  else
+    log "brief $pid briefs-store failed after ${took}s"
+  fi
+done 3<<< "$briefs"
+fi
 
 exit 0

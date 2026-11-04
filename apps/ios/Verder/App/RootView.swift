@@ -22,6 +22,9 @@ struct RootView: View {
     let timeline: TimelineStore
     let weekly: WeeklyStore
     let voice: VoiceLogSession
+    /// "Gesprek voorbereiden" (Call/): opened from Dossier, Voor jou and a
+    /// proposal through the environment.
+    let call: CallSession
     /// Overzicht's clock (`AppServices.now`).
     var now: @Sendable () -> Date = { Date() }
     var camera: any CameraAccess = LiveCameraAccess()
@@ -92,13 +95,24 @@ struct RootView: View {
             if coversContent { PrivacyCover().transition(.identity) }
         }
         .onChange(of: scenePhase) { _, phase in
+            #if DEBUG
+            // The cancelled-dial rule is NOT MEASURED on the device; this
+            // records the phase sequence around a dial (`CallSession.traceDial`).
+            call.traceDial("scene \(phase)")
+            #endif
             switch phase {
-            case .background: lock.sceneDidEnterBackground()
+            case .background:
+                lock.sceneDidEnterBackground()
+                call.sceneEnteredBackground()
             case .active:
                 lock.sceneDidBecomeActive()
+                // Back from the Phone app: a call whose end iOS never
+                // delivered to the suspended app ends now (`CallSession.reconcile`).
+                call.reconcile()
                 if auth.isSignedIn { Task { await uploads.start() } }
                 if auth.signOutPending { Task { await auth.retryPendingSignOut() } }
                 promptOnOpen()
+                openSharedRecording()
             default: break
             }
         }
@@ -140,6 +154,7 @@ struct RootView: View {
             }
             if to.opensVoice { voice.open() }
             if to.opensCamera { cameraRequested = true }
+            if to.opensCall { call.reopen() }
         }
         // The widget's `widgetURL` (Task 23). verder registers NO URL scheme,
         // so only its own widget reaches this; the strict parse still applies.
@@ -198,9 +213,10 @@ struct RootView: View {
     }
 
     /// The sheet after a cancelled (or impossible) Face ID. Not on Scan: the
-    /// shutter is never covered; not over the voice sheet, which shows its own lock.
+    /// shutter is never covered; not over the voice or call sheet, which show their own lock.
     private var unlockSheet: Binding<AppLock.UnlockSheet?> {
-        Binding(get: { tab == .scan || voice.isPresented || !auth.isSignedIn ? nil : lock.unlockSheet },
+        Binding(get: { tab == .scan || voice.isPresented || call.isPresented || !auth.isSignedIn
+                    ? nil : lock.unlockSheet },
                 set: { if $0 == nil { lock.dismissUnlockSheet() } })
     }
 
@@ -211,6 +227,14 @@ struct RootView: View {
     /// Drawn on the presenting view, so it lies under the sheet, never on it.
     private var dimsBehindSheet: Bool {
         (lock.isUnlocking && tab != .scan) || unlockSheet.wrappedValue != nil || voice.isPresented
+    }
+
+    /// A call recording shared from any app (the share extension's audio drop,
+    /// Added 2026-11-03) opens the voice log in "opname uitschrijven" mode —
+    /// never over the call sheet; it opens when that sheet goes
+    /// (`SharedRecordingGate`, tested).
+    private func openSharedRecording() {
+        SharedRecordingGate.open(signedIn: auth.isSignedIn, call: call, voice: voice)
     }
 
     private func promptOnOpen() {
@@ -332,10 +356,26 @@ struct RootView: View {
         .onChange(of: voice.model?.phase) { _, phase in
             if case .sent(duplicate: false)? = phase { Task { await inbox.refresh() } }
         }
+        // Lock-gated: it names the party and the points. The Live Activity
+        // outside it shows counts only. "Gesprek vastleggen" opens the voice
+        // log once this sheet has gone (`sheetDismissed`); otherwise a call
+        // recording waiting behind it opens then.
+        .sheet(isPresented: Binding(get: { call.isPresented }, set: { call.presentationChanged($0) }),
+               onDismiss: {
+                   SharedRecordingGate.callSheetDismissed(signedIn: auth.isSignedIn, call: call, voice: voice)
+               }) {
+            CallPrepSheet(session: call, open: { link in
+                call.close()
+                links.deliver(DeepLink.parse(link))
+            })
+            .lockGated(by: lock)
+        }
+        .environment(call)
         // A cold launch is already `.active` when the tabs appear, so the
         // scene-phase change above never fires for it.
         .onAppear {
             promptOnOpen()
+            openSharedRecording()
             #if DEBUG
             applyFixtureStart()
             #endif
@@ -373,6 +413,7 @@ struct RootView: View {
         case .meer(let path)?:
             tab = .meer
             meerPath = path
+        case .call(let partyId)?: Task { await call.open(partyId: partyId, name: nil) }
         case nil: break
         }
     }

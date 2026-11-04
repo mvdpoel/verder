@@ -39,6 +39,12 @@ struct AppServices {
     var camera: any CameraAccess = LiveCameraAccess()
     /// Where an offline sign-out's cookie waits to be revoked (`AuthModel.signOut`).
     var pendingSignOut: any SessionStore = InMemorySessionStore()
+    /// The call sheet's copy of the talking points (`CallCache`): Application
+    /// Support, never the App Group.
+    var callCacheDir: URL = CallCache.live.dir
+    /// The call's Live Activity and CallKit's "a call started/ended".
+    var makeCallActivities: @MainActor () -> any CallActivityControlling = { LiveCallActivities() }
+    var makeCallObserver: @MainActor () -> any CallObserving = { LiveCallObserver() }
 
     static func live() -> AppServices {
         let store = KeychainSessionStore()

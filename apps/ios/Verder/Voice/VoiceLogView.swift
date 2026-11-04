@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Makes a voice log's model: one per fresh log (`VoiceLogSession`), so each
 /// log has its own clientId and its own (emptied) recordings folder.
@@ -190,6 +191,8 @@ struct VoiceLogView: View {
     var unlock: () -> Void = {}
     var openSuggestion: (String) -> Void = { _ in }
     @State private var discards = 0
+    /// "Opname kiezen": the document picker for a call recording.
+    @State private var picking = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.openURL) private var openURL
 
@@ -203,7 +206,7 @@ struct VoiceLogView: View {
             case .state(let page):
                 VoiceStatePage(page: page, model: model, header: header(titled: false), perform: perform)
             case .capture:
-                VoiceCapturePage(model: model, header: header(titled: true))
+                VoiceCapturePage(model: model, header: header(titled: true), pick: { picking = true })
             case .transcribing:
                 VoiceTranscribingPage(model: model, header: header(titled: true))
             case .editor:
@@ -237,6 +240,11 @@ struct VoiceLogView: View {
         .animation(.easeOut(duration: 0.2), value: model.confirmingClose || model.confirmingRecordAgain)
         .sensoryFeedback(.error, trigger: model.sendFailures)
         .sensoryFeedback(.warning, trigger: discards)
+        // Audio only; the picked file is copied, never moved or changed.
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.audio]) { result in
+            guard case .success(let url) = result else { return }
+            Task { await model.importPicked(url) }
+        }
     }
 
     private var closeActions: [VoiceActionSheet.Action] {
@@ -252,7 +260,7 @@ struct VoiceLogView: View {
     }
 
     private func header(titled: Bool) -> VoiceHeader {
-        VoiceHeader(title: titled ? VoiceLogModel.Copy.title : nil, close: {
+        VoiceHeader(title: titled ? model.title : nil, close: {
             if model.requestClose() { close() }
         })
     }
@@ -264,6 +272,7 @@ struct VoiceLogView: View {
         case .typeNote: model.typeInstead()
         case .recordAgain: model.recordAgain()
         case .retrySpeech: Task { await model.retrySpeech() }
+        case .retryTranscription: Task { await model.retryTranscription() }
         }
     }
 }
@@ -476,6 +485,8 @@ private struct VoiceNote: View {
 private struct VoiceCapturePage: View {
     let model: VoiceLogModel
     let header: VoiceHeader
+    /// "Opname kiezen".
+    let pick: () -> Void
 
     private var recording: Bool { model.phase == .recording }
 
@@ -483,6 +494,14 @@ private struct VoiceCapturePage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                // From a finished call (`CallSession`): goes on top of the text.
+                if let prefill = model.prefill {
+                    VoiceLabel("Uit je gesprekspunten").padding(.top, 16)
+                    VoiceNote(text: prefill, color: .ink)
+                        .padding(12)
+                        .glassPanel()
+                        .padding(.top, 8)
+                }
                 if recording {
                     RecordingLine(model: model).padding(.top, 20)
                     LiveTextView(live: model.live).padding(.top, 10)
@@ -518,6 +537,10 @@ private struct VoiceCapturePage: View {
                     VoiceNote(text: VoiceLogModel.Copy.privacy, color: .inkMute, centered: true)
                     AuthButton(title: VoiceLogModel.Copy.typeNote, weight: .ghost) { model.typeInstead() }
                         .padding(.top, 4)
+                    if model.phase == .idle {
+                        AuthButton(title: VoiceLogModel.Copy.pickRecording, weight: .ghost, action: pick)
+                        VoiceNote(text: VoiceLogModel.Copy.phoneRecordingHint, color: .inkMute, centered: true)
+                    }
                 }
             }
         }
@@ -645,10 +668,17 @@ private struct VoiceTranscribingPage: View {
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(Color.signalLink)
                         .symbolEffect(.variableColor.iterative)
-                    VoiceLabel("Omzetten naar tekst…", color: .inkBright)
+                    VoiceLabel(model.transcribingLine, color: .inkBright)
                 }
                 .padding(.top, 20)
                 .accessibilityElement(children: .combine)
+                if let progress = model.transcriptionProgress {
+                    // A long call takes a while on the phone: say how far.
+                    ProgressView(value: progress)
+                        .tint(Color.signal)
+                        .padding(.top, 10)
+                        .accessibilityLabel(model.transcribingLine)
+                }
                 if !model.live.isEmpty {
                     Text(model.live.whole)
                         .wholeWords(model.live.whole, font: VoiceType.headline)

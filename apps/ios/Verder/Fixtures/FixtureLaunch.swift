@@ -55,8 +55,8 @@ import Foundation
 ///                              scroll:<documenten|chips|server> · open:<document id> · balie ·
 ///                              balie-zoom · pagina
 ///     -tab <overzicht|voorjou|scan|dossier|meer>
-///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice
-///             |meer:<account|notifications|widgets|about|developer>>
+///     -route <proposal:<id>|suggestion:<id>|task:<id>|document:<id>|geld|weekly|timeline|voice|opname
+///             |call:<partyId>|meer:<account|notifications|widgets|about|developer>>
 ///
 /// Without `-fixtures` none of the others does anything: a DEBUG build on the
 /// real server never jumps tabs because of a stale scheme argument.
@@ -83,6 +83,9 @@ struct FixtureLaunch: Equatable, Sendable {
         case screen(Screen)
         /// A Meer screen, pushed onto the Meer stack as its row's tap does.
         case meer([MoreRoute])
+        /// "Gesprek voorbereiden" for this party (`CallSession.open`), the
+        /// sheet a Dossier row or a proposal's sender opens.
+        case call(String)
     }
 
     /// Meer states only a gesture reaches (`-fixtures-more`).
@@ -93,6 +96,9 @@ struct FixtureLaunch: Equatable, Sendable {
 
     enum Screen: String, CaseIterable, Identifiable, Sendable {
         case voice
+        /// The voice log writing out a synthetic call recording shared from
+        /// any app ("opname uitschrijven", Added 2026-11-03).
+        case opname
         var id: String { rawValue }
     }
 
@@ -427,6 +433,11 @@ struct FixtureLaunch: Equatable, Sendable {
             case "developer": return .meer([.about, .developer])
             default: throw .unknownRoute(raw)
             }
+        }
+        if raw.hasPrefix("call:") {
+            let id = String(raw.dropFirst("call:".count))
+            guard let uuid = UUID(uuidString: id) else { throw .unknownRoute(raw) }
+            return .call(uuid.uuidString.lowercased())
         }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, ["proposal", "suggestion", "task", "document"].contains(parts[0]) else {

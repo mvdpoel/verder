@@ -358,7 +358,7 @@ describe("proposals router", () => {
     const g = await caller(db, f.user.id).proposals.get({ id: p.id });
     expect(g).toMatchObject({
       id: p.id, kind: "reply", status: "pending", priority: "verder", revision: 1,
-      ask: "Loonstrook oktober aanleveren", partyName: f.party.name,
+      ask: "Loonstrook oktober aanleveren", partyName: f.party.name, partyId: f.party.id,
       dueAt: "2026-11-07", missing: ["Loonstrook oktober"],
       entrySummary: "Loonstroken gestuurd aan Team Opstart",
       senderUnconfirmed: false,

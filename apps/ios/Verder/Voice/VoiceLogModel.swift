@@ -32,6 +32,21 @@ import Observation
 /// gets a FRESH id, so nothing a refused attempt left behind (a kept
 /// recording is stored before the suggestion) is tied to the new take.
 ///
+/// AN IMPORTED CALL (Added 2026-11-03, `importRecording`): the same flow
+/// from a FILE — a recording made elsewhere (a call-recording app, a second
+/// device on the speaker) that Martin shared from any app (an audio
+/// `IncomingDrop`), or one picked with "Opname kiezen". verder
+/// copies it into its own folder (the copy is what is read and, kept, what
+/// is sent; the picked original is never touched), transcribes it on the
+/// phone with progress, and sends the edited text as the same suggestion.
+/// The drop in the App Group is deleted after a successful send or a
+/// cancel, and kept through a failed send, a relock or a sign-in, so even a
+/// killed app offers it again — under the SAME clientId, because a drop's
+/// clientId is the drop's id, so a retry after a relaunch dedups instead of
+/// storing the call twice. A call sheet active for a party within the
+/// last hour (`RecentCallSheet`) preselects that party and puts its ticked
+/// points on top, as "Gesprek vastleggen" after a call does.
+///
 /// THE RECORDING is NSFileProtectionComplete (unreadable while the phone is
 /// locked): its folder gets the class before the recorder writes a byte, so
 /// the file inherits it, and the file is set again once it exists.
@@ -50,6 +65,12 @@ final class VoiceLogModel {
         case editing
         case sending
         case sent(duplicate: Bool)
+    }
+
+    /// Dictating into the microphone, or writing out a recording that came in.
+    enum Mode: Equatable {
+        case dictate
+        case importRecording
     }
 
     enum Speech: Equatable {
@@ -132,6 +153,19 @@ final class VoiceLogModel {
         static let discard = "Weggooien"
         static let placeholder = "Wat is er besproken?"
         static let recordAgainTitle = "Je aanpassingen gaan verloren."
+        static let importTitle = "Opname uitschrijven"
+        static let pickRecording = "Opname kiezen"
+        static let importFailed = "Deze opname kon niet worden geopend. Kies een andere, of typ zelf wat er besproken is."
+        static let retryTranscription = "Opnieuw uitschrijven"
+        static let importNothingHeard = "verder hoorde niets in deze opname. Probeer het opnieuw, of typ zelf wat er besproken is."
+        static let importTranscribeFailed = "Uitschrijven lukte niet. Probeer het opnieuw, of typ zelf wat er besproken is; de kopie blijft op je iPhone tot je verstuurt."
+        /// Honest about where a recording can come from: the iPhone's own
+        /// call recording is not available in the Netherlands and no app can
+        /// record a call on the same iPhone (Martin, 2026-11-03), so it never
+        /// promises one — it names the ways a recording is made elsewhere.
+        static let phoneRecordingHint = "De iPhone kan in Nederland zelf geen gesprekken opnemen. Heb je wel een opname — van een opname-app of een tweede toestel op de luidspreker? Deel hem met verder, of kies hem hier."
+        static let keepRecordingHint = "Alleen dan gaat de opname naar verder. Anders wordt ze na het versturen gewist."
+        static let keepImportHint = "Alleen dan gaat de opname naar verder. Anders wist verder zijn kopie na het versturen; het origineel blijft staan waar het stond."
     }
 
     /// Shorter than this is a tap: it starts a hands-free recording (and a
@@ -179,6 +213,16 @@ final class VoiceLogModel {
     /// alert only after its "Ga verder" (brief R25).
     private(set) var micPrePrompt = false
     private(set) var clientId = UUID()
+    /// "Besproken: …" from a finished call's ticked points (`CallSession`):
+    /// shown above the recorder and put on top of whatever Martin then
+    /// dictates or types. Nil for a voice log opened any other way.
+    private(set) var prefill: String?
+    private(set) var mode: Mode = .dictate
+    /// How far the on-device model is through an imported recording, 0…1;
+    /// nil when nothing is being written out.
+    private(set) var transcriptionProgress: Double?
+    /// The App Group drop this log is writing out, if it came from one.
+    private(set) var importedDrop: UUID?
 
     // The recording gesture.
     /// A finger is on the button.
@@ -217,12 +261,21 @@ final class VoiceLogModel {
     /// The press that began on a hands-free recording ends it on release.
     @ObservationIgnored private var stopOnRelease = false
     @ObservationIgnored private var liveTask: Task<Void, Never>?
+    @ObservationIgnored private let recentCall: @MainActor () -> VoicePrefill?
+    @ObservationIgnored private var imported: RecordingImport?
+    /// The App Group that holds `importedDrop`. Set BEFORE the copy, with
+    /// `importedDrop`, so a drop whose copy failed is still this log's to
+    /// delete on cancel (review finding 2026-11-03: otherwise it reopened the
+    /// sheet with `importFailed` on every foreground, forever).
+    @ObservationIgnored private var importedGroupDir: URL?
 
     init(client: APIClient, recorder: any VoiceRecording, transcriber: any Transcribing, dir: URL,
          now: @escaping @MainActor () -> Date = { Date() },
          protect: @escaping @MainActor (URL) throws -> Void = VoiceLogModel.protectRecording,
          audioMaxBytes: Int = VoiceDraft.audioMaxBytes,
+         recentCall: @escaping @MainActor () -> VoicePrefill? = { nil },
          onUnauthorized: @escaping @MainActor () -> Void = {}) {
+        self.recentCall = recentCall
         self.client = client
         self.recorder = recorder
         self.transcriber = transcriber
@@ -270,8 +323,28 @@ final class VoiceLogModel {
     /// "Opnieuw opnemen": after a take (with text or without), never once a
     /// send was attempted, and only while Dutch speech is ready.
     var canRecordAgain: Bool {
-        phase == .editing && speech == .ready && !serverMayHoldId && (hasRecording || takeProblem != nil)
+        mode == .dictate && phase == .editing && speech == .ready && !serverMayHoldId
+            && (hasRecording || takeProblem != nil)
     }
+
+    /// "Opnieuw uitschrijven": an imported recording whose transcription gave
+    /// no text, while the copy is still here and before any send — never over
+    /// text Martin has, and never when Dutch is not on this phone at all.
+    var canRetryTranscription: Bool {
+        mode == .importRecording && phase == .editing && hasRecording && !sendAttempted && holdsNoOwnWords
+            && speech != .unavailable(Copy.unsupported)
+    }
+
+    /// Nothing in the text beyond the call sheet's points.
+    private var holdsNoOwnWords: Bool {
+        trimmedTranscript.isEmpty || trimmedTranscript == prefill?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The sheet's title: "Opname uitschrijven" for an imported call.
+    var title: String { mode == .importRecording ? Copy.importTitle : Copy.title }
+
+    /// The toggle's explanation: an imported call has an original elsewhere.
+    var keepRecordingHint: String { mode == .importRecording ? Copy.keepImportHint : Copy.keepRecordingHint }
 
     /// The latest time "Gesprek was om" may say: now. A call is never in the
     /// future.
@@ -299,6 +372,30 @@ final class VoiceLogModel {
     var blocksSwipe: Bool { holdsUnsentWork && !(phase == .recording && handsFree) }
 
     // MARK: - Opening
+
+    /// A voice log opened from a finished call: the ticked points, the party
+    /// and the call's own time. Applied only to a FRESH log — never over a
+    /// recording or text Martin already has (that work "blijft staan").
+    func apply(_ p: VoicePrefill) {
+        guard phase == .idle, trimmedTranscript.isEmpty, !hasRecording, !sendAttempted else { return }
+        let text = p.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        prefill = text.isEmpty ? nil : text
+        partyId = p.partyId
+        // The call's own party: a name the transcript happens to mention
+        // does not move it.
+        partySource = .chosen
+        if let at = p.occurredAt {
+            occurredAt = min(at, now())
+            occurredAtSetByHand = true
+        }
+    }
+
+    /// The prefill on top, Martin's own words under it.
+    private func withPrefill(_ words: String) -> String {
+        guard let prefill else { return words }
+        let own = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? prefill : prefill + "\n\n" + own
+    }
 
     /// Parties first (the picker should be ready the moment the transcript
     /// is), then the speech model, which may download once.
@@ -515,24 +612,117 @@ final class VoiceLogModel {
         }
         phase = .transcribing
         do throws(TranscriptionError) {
-            let text = try await transcriber.transcribe(url)
-            transcript = text
-            recognizedTranscript = text
-            takeProblem = nil
-            applyReading()
+            transcribed(try await transcriber.transcribe(url))
         } catch {
-            switch error {
-            case .nothingHeard: takeProblem = .nothingHeard
-            case .languageUnsupported:
-                speech = .unavailable(Copy.unsupported)
-                takeProblem = .failed
-            case .assetsUnavailable:
-                speech = .unavailable(Copy.assetsMissing)
-                takeProblem = .failed
-            case .failed: takeProblem = .failed
-            }
+            transcriptionFailed(error)
         }
         live = .empty
+        phase = .editing
+    }
+
+    /// Text came back: the prefill (if any) on top, then what was heard.
+    private func transcribed(_ words: String) {
+        let text = withPrefill(words)
+        transcript = text
+        recognizedTranscript = text
+        takeProblem = nil
+        applyReading()
+    }
+
+    /// No text came back: the state page for why, and the prefill (if any)
+    /// as the text so typing starts under it. Shared by dictation and an
+    /// imported recording, so both say the same thing for the same fault.
+    private func transcriptionFailed(_ error: TranscriptionError) {
+        if prefill != nil && trimmedTranscript.isEmpty { transcript = withPrefill("") }
+        switch error {
+        case .nothingHeard: takeProblem = .nothingHeard
+        case .languageUnsupported:
+            speech = .unavailable(Copy.unsupported)
+            takeProblem = .failed
+        case .assetsUnavailable:
+            speech = .unavailable(Copy.assetsMissing)
+            takeProblem = .failed
+        case .failed: takeProblem = .failed
+        }
+    }
+
+    // MARK: - An imported recording
+
+    /// Writes out a call recording that came in as a file. Only on a FRESH
+    /// log (nothing recorded, typed or sent): work in progress is never
+    /// replaced (`VoiceLogSession.openImport` checks this too).
+    func importRecording(_ source: RecordingImport) async {
+        guard phase == .idle, !hasRecording, !sendAttempted, holdsNoOwnWords else { return }
+        if prefill == nil, let recent = recentCall() { apply(recent) }
+        notice = nil
+        // Claimed before the copy: success or not, this log now owns the
+        // drop — `VoiceLogSession` will not reopen it, and `discard()` (close
+        // or swipe) deletes it. The original stays where it was.
+        importedDrop = source.drop
+        importedGroupDir = source.groupDir
+        // A drop's clientId IS the drop's id. The drop outlives this model (a
+        // failed send keeps it, and a killed app reopens it in a fresh model),
+        // so a per-model UUID would post a send whose outcome was unknown
+        // under a second id, and the route — which dedups on
+        // `phone:<clientId>` only — would store the call twice. With the drop
+        // id, every retry of it answers `duplicate: true`. A picked file has
+        // no drop and no afterlife, so it keeps the model's own id.
+        if let drop = source.drop { clientId = drop }
+        let url = dir.appending(path: "\(clientId.uuidString.lowercased()).\(source.fileExtension)")
+        do {
+            // The same class as a dictated recording, set on the folder before
+            // the copy lands and on the copy itself.
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                                    attributes: Self.recordingAttributes)
+            try protect(dir)
+            try? FileManager.default.removeItem(at: url)
+            try FileManager.default.copyItem(at: source.file, to: url)
+            try protect(url)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            notice = Copy.importFailed
+            return
+        }
+        mode = .importRecording
+        imported = source
+        recordingURL = url
+        if !occurredAtSetByHand { occurredAt = min(source.capturedAt ?? now(), now()) }
+        await transcribeImported()
+    }
+
+    /// "Opname kiezen": a file from the document picker. Read under its
+    /// security scope and COPIED; the original stays where it was.
+    func importPicked(_ url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let created = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+        await importRecording(RecordingImport(file: url, fileName: url.lastPathComponent, mime: "",
+                                              capturedAt: created, drop: nil, groupDir: nil))
+    }
+
+    /// "Opnieuw uitschrijven", after an import that gave no text.
+    func retryTranscription() async {
+        guard canRetryTranscription else { return }
+        if case .unavailable = speech { await prepareSpeech() }
+        await transcribeImported()
+    }
+
+    private func transcribeImported() async {
+        guard let url = recordingURL else { return }
+        phase = .transcribing
+        transcriptionProgress = 0
+        let report: @Sendable (Double) -> Void = { [weak self] fraction in
+            Task { @MainActor in
+                guard let self, self.phase == .transcribing, self.transcriptionProgress != nil else { return }
+                self.transcriptionProgress = max(self.transcriptionProgress ?? 0, fraction)
+            }
+        }
+        do throws(TranscriptionError) {
+            transcribed(try await transcriber.transcribe(url, progress: report))
+        } catch {
+            transcriptionFailed(error)
+        }
+        transcriptionProgress = nil
         phase = .editing
     }
 
@@ -609,6 +799,7 @@ final class VoiceLogModel {
             return
         }
         takeProblem = nil
+        if trimmedTranscript.isEmpty { transcript = withPrefill("") }
         notice = nil
         phase = .editing
         textFocused = true
@@ -698,8 +889,12 @@ final class VoiceLogModel {
             }
             audio = data
         }
-        let draft = VoiceDraft(clientId: clientId, occurredAt: occurredAt, partyId: partyId, channel: channel,
+        var draft = VoiceDraft(clientId: clientId, occurredAt: occurredAt, partyId: partyId, channel: channel,
                                transcript: trimmedTranscript, audio: audio)
+        if let imported {
+            draft.audioMime = imported.audioMime
+            draft.audioExtension = imported.fileExtension
+        }
         phase = .sending
         sendFailure = nil
         sendAttempted = true
@@ -707,6 +902,7 @@ final class VoiceLogModel {
             let (data, _) = try await client.send(draft.request(client))
             let answer: VoiceEntryAnswer = try APIClient.decode(data)
             deleteRecording()
+            deleteImportedDrop()
             sentSuggestionId = answer.suggestionId
             sentSummary = VoiceText.summary(trimmedTranscript)
             sentKeptRecording = answer.audioDocumentId != nil
@@ -740,6 +936,7 @@ final class VoiceLogModel {
             recorder.cancel()
         }
         deleteRecording()
+        deleteImportedDrop()
         reset()
     }
 
@@ -772,6 +969,12 @@ final class VoiceLogModel {
         pickerOpen = false
         timeOpen = false
         textFocused = false
+        prefill = nil
+        mode = .dictate
+        transcriptionProgress = nil
+        imported = nil
+        importedDrop = nil
+        importedGroupDir = nil
         clientId = UUID()
         partyId = parties.first?.id
         partySource = .lastSpoken
@@ -780,6 +983,13 @@ final class VoiceLogModel {
     private func deleteRecording() {
         if let url = recordingURL { try? FileManager.default.removeItem(at: url) }
         recordingURL = nil
+    }
+
+    /// The shared recording in the App Group: its job is done (sent) or
+    /// called off (cancelled). A picked file has no drop and is never touched.
+    private func deleteImportedDrop() {
+        guard let id = importedDrop, let groupDir = importedGroupDir else { return }
+        IncomingDrop.remove(id, groupDir: groupDir)
     }
 
     private static func clear(_ dir: URL) {
@@ -855,10 +1065,11 @@ extension VoiceLogModel {
 
     /// The one next step a button takes.
     enum Action: Equatable {
-        case openSettings, typeNote, recordAgain, retrySpeech
+        case openSettings, typeNote, recordAgain, retrySpeech, retryTranscription
 
         var label: String {
             switch self {
+            case .retryTranscription: Copy.retryTranscription
             case .openSettings: Copy.openSettings
             case .typeNote: Copy.typeNote
             case .recordAgain: Copy.recordAgain
@@ -920,6 +1131,17 @@ extension VoiceLogModel {
         case .transcribing: return .transcribing
         case .editing, .sending:
             switch takeProblem {
+            case .nothingHeard? where mode == .importRecording:
+                return .state(StatePage(kind: .nothingHeard, symbol: "waveform.slash", title: "Niets gehoord",
+                                        text: Copy.importNothingHeard,
+                                        primary: canRetryTranscription ? .retryTranscription : .typeNote,
+                                        secondary: canRetryTranscription ? .typeNote : nil))
+            case .failed? where mode == .importRecording:
+                return .state(StatePage(kind: .transcribeFailed, symbol: "exclamationmark.bubble",
+                                        title: "Uitschrijven lukte niet",
+                                        text: canRetryTranscription ? Copy.importTranscribeFailed : Copy.unsupported,
+                                        primary: canRetryTranscription ? .retryTranscription : .typeNote,
+                                        secondary: canRetryTranscription ? .typeNote : nil))
             case .nothingHeard?:
                 return .state(StatePage(kind: .nothingHeard, symbol: "waveform.slash", title: "Niets gehoord",
                                         text: Copy.nothingHeard,
@@ -967,6 +1189,17 @@ extension VoiceLogModel {
 
     var elapsedText: String { VoiceText.elapsed(elapsed) }
 
+    // MARK: Transcribing
+
+    /// "Omzetten naar tekst…", or for an imported call how far it is:
+    /// "Opname uitschrijven… 40%" (a long call takes a while on the phone).
+    var transcribingLine: String {
+        if mode == .importRecording, let p = transcriptionProgress {
+            return "Opname uitschrijven… \(Int((p * 100).rounded(.down)))%"
+        }
+        return mode == .importRecording ? "Opname uitschrijven…" : "Omzetten naar tekst…"
+    }
+
     // MARK: Editor
 
     struct RowText: Equatable {
@@ -1003,7 +1236,8 @@ extension VoiceLogModel {
     var channelRow: RowText { RowText(title: channel.label, meta: "HOE · TIK OM TE KIEZEN") }
 
     var keepRow: RowText {
-        RowText(title: "Bewaar opname", meta: keepRecording ? "GAAT MEE NAAR JE DOSSIER" : "ANDERS GEWIST NA VERSTUREN")
+        RowText(title: "Bewaar opname", meta: keepRecording ? "GAAT MEE NAAR JE DOSSIER"
+            : mode == .importRecording ? "ANDERS KOPIE GEWIST · ORIGINEEL BLIJFT" : "ANDERS GEWIST NA VERSTUREN")
     }
 
     /// "WAT JE ZEI", "WAT JE ZEI · AANGEPAST".

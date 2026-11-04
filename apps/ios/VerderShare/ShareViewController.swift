@@ -5,6 +5,13 @@ import UniformTypeIdentifiers
 /// The share extension (spec §7.8, plan 3 Task 22): PDFs, photos and files from
 /// any app go into verder's upload queue with source `phone-share`.
 ///
+/// A CALL RECORDING (Added 2026-11-03) does not: shared from any app — a
+/// call-recording app, Voice Memos, Files, AirDrop (iOS lets no app record a
+/// call on the same iPhone, and the iPhone's built-in call recording is not
+/// available in the Netherlands, so a recording is always made elsewhere) — it
+/// becomes an audio drop for the voice log and this screen says "Open verder om het
+/// gesprek uit te schrijven." (`ShareModel.handedToApp`). Nothing is uploaded.
+///
 /// It loads what the share sheet handed over, shows ONE screen (thumbnail,
 /// title, Versturen trailing — design brief, share extension row), and on
 /// Versturen leaves an `IncomingDrop` for the app and makes one bounded upload
@@ -138,7 +145,8 @@ final class ShareViewController: UIViewController {
             if type.conforms(to: .image), !type.conforms(to: .pdf) {
                 return ShareStaging.stagePhoto(url, fileName: url.lastPathComponent, mime: mime, into: staging)
             }
-            return ShareStaging.stage(url, fileName: url.lastPathComponent, mime: mime, into: staging)
+            return ShareStaging.stage(url, fileName: url.lastPathComponent, mime: mime, into: staging,
+                                      maxBytes: ShareModel.limit(fileName: url.lastPathComponent, mime: mime))
         }
         return nil
     }
@@ -184,7 +192,12 @@ final class ShareViewController: UIViewController {
                                  staging: URL) async -> SharedInput? {
         await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, _ in
-                c.resume(returning: url.map { ShareStaging.stage($0, fileName: name, mime: mime, into: staging) })
+                // A call recording may be larger than a document
+                // (`ShareModel.maxAudioBytes`); it is copied, never read.
+                c.resume(returning: url.map {
+                    ShareStaging.stage($0, fileName: name, mime: mime, into: staging,
+                                       maxBytes: ShareModel.limit(fileName: name, mime: mime))
+                })
             }
         }
     }

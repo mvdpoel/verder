@@ -9,7 +9,8 @@
       "priority": 1,
       "at": "2026-11-01T08:30:00.000Z",
       "dueAt": null,
-      "verder": true
+      "verder": true,
+      "partyId": "00000000-f1c5-4000-8000-600000000002"
     },
     {
       "kind": "question",
@@ -19,7 +20,8 @@
       "priority": 2,
       "at": "2026-11-01T10:15:00.000Z",
       "dueAt": null,
-      "verder": false
+      "verder": false,
+      "partyId": "00000000-f1c5-4000-8000-600000000003"
     },
     {
       "kind": "suggestion",
@@ -29,7 +31,8 @@
       "priority": 3,
       "at": "2026-10-31T14:05:00.000Z",
       "dueAt": null,
-      "verder": false
+      "verder": false,
+      "partyId": null
     },
     {
       "kind": "task",
@@ -39,7 +42,8 @@
       "priority": 1,
       "at": "2026-10-30T09:00:00.000Z",
       "dueAt": "2026-11-03T16:00:00.000Z",
-      "verder": false
+      "verder": false,
+      "partyId": null
     }
   ],
   "doneByVerder": [

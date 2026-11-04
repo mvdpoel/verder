@@ -27,14 +27,57 @@ final class VoiceLogSession {
 
     /// Also what the DEBUG fixture screen makes its own log with.
     @ObservationIgnored let factory: VoiceLogFactory
+    /// The App Group, where the share extension leaves call recordings
+    /// (audio `IncomingDrop`s). Nil where there is none (a fixture run).
+    @ObservationIgnored let groupDir: URL?
 
-    init(factory: VoiceLogFactory) {
+    init(factory: VoiceLogFactory, groupDir: URL? = nil) {
         self.factory = factory
+        self.groupDir = groupDir
+    }
+
+    // MARK: - A call recording shared from any app (Added 2026-11-03)
+
+    /// On launch and every return to the foreground (RootView): the oldest
+    /// recording the share extension left opens the voice log in "opname
+    /// uitschrijven" mode. Returns the write-out, or nil when nothing opened
+    /// — nothing waiting, this drop already open, or another log holding
+    /// work (the drop then waits for the next time; work is never replaced).
+    @discardableResult
+    func openPendingRecording() -> Task<Void, Never>? {
+        guard let groupDir, let drop = IncomingDrop.pendingAudio(groupDir: groupDir).first else { return nil }
+        return openImport(.drop(drop, groupDir: groupDir))
+    }
+
+    @discardableResult
+    func openImport(_ source: RecordingImport) -> Task<Void, Never>? {
+        if let model {
+            if source.drop != nil, model.importedDrop == source.drop { return nil }
+            switch model.phase {
+            case .idle where !model.holdsUnsentWork && !model.hasRecording, .sent:
+                close()
+            default:
+                return nil
+            }
+        }
+        let fresh = factory.make()
+        model = fresh
+        isPresented = true
+        return Task { await fresh.importRecording(source) }
     }
 
     /// Meer's entry or the quick action: the log in progress, else a new one.
     func open() {
         if model == nil { model = factory.make() }
+        isPresented = true
+    }
+
+    /// "Gesprek vastleggen" after a call: the log in progress if there is one
+    /// (its work is never overwritten — `VoiceLogModel.apply` refuses), else a
+    /// new one starting from the call's ticked points.
+    func open(prefill: VoicePrefill) {
+        if model == nil { model = factory.make() }
+        model?.apply(prefill)
         isPresented = true
     }
 

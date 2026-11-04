@@ -29,6 +29,9 @@ struct DossierTab: View {
     var openVoorJou: () -> Void = {}
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// "Bellen": the parties to prepare a call with (Call/).
+    @Environment(CallSession.self) private var call: CallSession?
+    @State private var showsAllParties = false
     @FocusState private var fieldFocused: Bool
     /// Where the title ends and the documents' label starts, in the scroll
     /// view's visible frame: what collapses the title and pins the bar.
@@ -109,6 +112,7 @@ struct DossierTab: View {
             await refresh()
             // The Tijdlijn row names the map's own counts.
             if timeline.map == nil { await timeline.load() }
+            await call?.loadParties()
             #if DEBUG
             // `-fixtures-dossier refresh`: a second sync, as the next return to
             // the foreground would start (the kept copy over a later delta).
@@ -157,6 +161,7 @@ struct DossierTab: View {
                     } else {
                         headlineSection.padding(.top, ax ? 24 : (compactHeight ? 16 : 22))
                         tasksSection.padding(.top, sectionGap)
+                        callSection.padding(.top, sectionGap)
                     }
                     documentsHeader(pinned: false)
                         // Pinned, the bar draws it; never both at once.
@@ -461,6 +466,56 @@ struct DossierTab: View {
             .frame(width: 18, height: 18)
             .background(RoundedRectangle(cornerRadius: 4).fill(Color.attn.opacity(0.12)))
             .accessibilityHidden(true)
+    }
+
+    // MARK: Bellen
+
+    /// The parties, most recent contact first; a tap opens "Gesprek
+    /// voorbereiden". Six at first, the rest behind "Alle partijen".
+    @ViewBuilder private var callSection: some View {
+        if let call, !call.parties.isEmpty || call.partiesFailed {
+            VStack(alignment: .leading, spacing: 8) {
+                labelRow(sectionLabel("Bellen")) {
+                    if call.parties.count > 6 && !showsAllParties {
+                        link("Alle partijen (\(call.parties.count))") { showsAllParties = true }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    if call.parties.isEmpty {
+                        muted("De partijen konden niet worden geladen.").padding(16)
+                    }
+                    let shown = showsAllParties ? call.parties : Array(call.parties.prefix(6))
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, party in
+                        if i > 0 { Hairline().padding(.horizontal, 16) }
+                        Button {
+                            Task { await call.open(partyId: party.id, name: party.name) }
+                        } label: {
+                            HStack(alignment: .center, spacing: 12) {
+                                Image(systemName: "phone")
+                                    .font(.system(size: 15, weight: .light))
+                                    .foregroundStyle(Color.signalLink)
+                                    .accessibilityHidden(true)
+                                Text(party.name)
+                                    .font(.display(17, relativeTo: .body))
+                                    .foregroundStyle(Color.inkBright)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: DossierSpacing.toChevron)
+                                chevron
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Gesprek voorbereiden: wat je vertelt en wat je vraagt.")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassPanel()
+            }
+        }
     }
 
     // MARK: Documenten

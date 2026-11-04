@@ -112,6 +112,18 @@ describe("waitingOnMartin", () => {
     expect(items.map((i) => [i.kind, i.id])).toEqual([["stop", "st"]]);
   });
 
+  it("a proposal item names its party's id (the call sheet opens from it); other kinds carry null", () => {
+    const items = run({
+      proposals: [proposal({ id: "p", partyId: "party-1", partyName: "Bewindkantoor Noordkust" }),
+        proposal({ id: "p-none" })],
+      suggestions: [suggestion({ id: "s" })],
+      tasks: [task({ id: "t" })],
+      currentStop: stop({ id: "st" }),
+    });
+    expect(items.map((i) => [i.id, i.partyId])).toEqual([
+      ["p", "party-1"], ["p-none", null], ["s", null], ["t", null], ["st", null]]);
+  });
+
   it("ranking is stable for equal timestamps (ties break on id)", () => {
     const at = ago(3);
     const input = {

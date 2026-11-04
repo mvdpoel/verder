@@ -34,6 +34,8 @@
     "fix-page-order": "tsx src/ops/fix-page-order.ts",
     "proposals-pending": "tsx src/ops/proposals-pending.ts",
     "proposals-store": "tsx src/ops/proposals-store.ts",
+    "briefs-pending": "tsx src/ops/briefs-pending.ts",
+    "briefs-store": "tsx src/ops/briefs-store.ts",
     "mail-agent-watch": "tsx src/ops/mail-agent-watch.ts",
     "export-docmeta-samples": "tsx src/ops/export-docmeta-samples.ts",
     "weekly-summary": "tsx src/ops/weekly-summary.ts"
