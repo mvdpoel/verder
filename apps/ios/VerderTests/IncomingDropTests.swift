@@ -174,7 +174,7 @@ struct IncomingDropTests {
 
         #expect(prepared.count == 2)
         let photos = try #require(prepared.first { $0.mime == "application/pdf" && $0.data != pdf })
-        #expect(photos.fileName == "Foto's 2027-01-15 09.00.pdf")
+        #expect(photos.fileName == "Gedeeld 15 jan 09.00.pdf")
         let photoData = try #require(photos.data)
         let doc = try #require(PDFDocument(data: photoData))
         #expect(doc.pageCount == 2)
@@ -320,8 +320,9 @@ struct IncomingDropTests {
 
         let input = ShareStaging.stage(source, fileName: "video.mov", mime: "video/quicktime", into: staging)
 
-        guard case .tooLarge(let name) = input else { Issue.record("expected tooLarge, got \(input)"); return }
+        guard case .tooLarge(let name, let bytes, _) = input else { Issue.record("expected tooLarge, got \(input)"); return }
         #expect(name == "video.mov")
+        #expect(bytes == 200 * 1024 * 1024)
         #expect(files(staging).isEmpty)
     }
 

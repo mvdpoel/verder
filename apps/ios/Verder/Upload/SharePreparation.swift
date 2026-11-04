@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import PDFKit
 import UIKit
 import UniformTypeIdentifiers
 
@@ -15,10 +16,15 @@ enum SharedInput {
     /// A file copied into the extension's own staging folder, never read into
     /// memory: `ShareStaging.stage` measured it before copying.
     case staged(url: URL, fileName: String, mime: String, bytes: Int)
-    /// Over `ShareModel.maxFileBytes`, refused on its size alone: nothing was
+    /// Over `ShareModel.maxFileBytes`, left out on its size alone: nothing was
     /// read or copied, so a 200 MB video cannot push the extension past its
-    /// memory limit before it is refused.
-    case tooLarge(fileName: String)
+    /// memory limit before it is refused. `bytes` is its measured size (for
+    /// "62 MB, max. 48 MB"); `thumbnail` a small PNG of a PDF's first page,
+    /// drawn lazily by PDFKit without reading the file whole.
+    case tooLarge(fileName: String, bytes: Int? = nil, thumbnail: Data? = nil)
+    /// A web link, not a file: verder keeps files only, and the screen says
+    /// so with the link itself ("Hier zit geen bestand in").
+    case link(String)
     /// Handed over, but nothing could be read from it. Kept as an input rather
     /// than dropped, so the screen can say that it did not go.
     case unreadable
@@ -76,8 +82,24 @@ enum SharePreparation {
         /// Inputs that went nowhere: unreadable items and images the PDF
         /// could not encode. Never silent: the screen says so.
         var leftOut = 0
-        /// Files refused on their size before being read.
-        var tooLarge = 0
+        /// Files left out on their size before being read, each with the
+        /// place it held among `files` so the screen lists it where it was.
+        var tooLargeFiles: [TooLargeFile] = []
+        /// Links handed over: never a file, never sent.
+        var links: [String] = []
+        /// Photos handed over (decodable or not), for "foto 11–14".
+        var photosHandedOver = 0
+
+        var tooLarge: Int { tooLargeFiles.count }
+    }
+
+    /// A file over `ShareModel.maxFileBytes`: named, measured, not sent.
+    struct TooLargeFile: Equatable, Sendable {
+        let fileName: String
+        let bytes: Int?
+        let thumbnail: Data?
+        /// How many of `Result.files` come before it.
+        let position: Int
     }
 
     /// Loads every item the share sheet handed over, in order, and accounts
@@ -110,10 +132,14 @@ enum SharePreparation {
                 result.files.append(PreparedShare(data: data, fileName: fileName, mime: mime))
             case .staged(let url, let fileName, let mime, let bytes):
                 result.files.append(PreparedShare(fileAt: url, bytes: bytes, fileName: fileName, mime: mime))
-            case .tooLarge: result.tooLarge += 1
+            case .tooLarge(let fileName, let bytes, let thumbnail):
+                result.tooLargeFiles.append(TooLargeFile(fileName: fileName, bytes: bytes, thumbnail: thumbnail,
+                                                         position: result.files.count))
+            case .link(let url): result.links.append(url)
             case .unreadable: result.leftOut += 1
             }
         }
+        result.photosHandedOver = photos.count
         guard !photos.isEmpty else { return result }
         let pdf = PDFAssembler.assemble(pageCount: photos.count) { photoPage(photos[$0]) }
         result.leftOut += photos.count - pdf.pageCount
@@ -121,14 +147,27 @@ enum SharePreparation {
         result.photoPages = pdf.pageCount
         result.files.insert(PreparedShare(data: pdf.data, fileName: photosTitle(capturedAt: capturedAt),
                                           mime: "application/pdf"), at: 0)
+        // The photo PDF leads the list, so every too-large file moves one down.
+        result.tooLargeFiles = result.tooLargeFiles.map {
+            TooLargeFile(fileName: $0.fileName, bytes: $0.bytes, thumbnail: $0.thumbnail, position: $0.position + 1)
+        }
         return result
     }
 
-    /// `Foto's 2026-11-01 14.05.pdf`, on the Amsterdam clock like a scan's
-    /// name. Auto-name renames it once the text is read.
+    /// `Gedeeld 1 nov 14.02.pdf`: the word the dossier files it under
+    /// ("Gedeeld"), then the Amsterdam day and clock, like a scan's name.
+    /// Auto-name renames it once the text is read.
     static func photosTitle(capturedAt: Date) -> String {
-        "Foto's " + ScanNaming.title(capturedAt: capturedAt).dropFirst("Scan ".count)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let c = calendar.dateComponents([.day, .month, .hour, .minute], from: capturedAt)
+        let month = dutchMonths[(c.month ?? 1) - 1]
+        return String(format: "Gedeeld %d %@ %02d.%02d.pdf", c.day ?? 1, month, c.hour ?? 0, c.minute ?? 0)
     }
+
+    /// Dutch short months, spelled out rather than taken from a locale whose
+    /// ICU version decides whether "nov" carries a full stop.
+    static let dutchMonths = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
 }
 
 /// How the share extension takes a file it was handed: MEASURED first, then
@@ -150,7 +189,10 @@ enum ShareStaging {
     static func stage(_ source: URL, fileName: String, mime: String, into dir: URL,
                       maxBytes: Int = ShareModel.maxFileBytes) -> SharedInput {
         guard let size = byteCount(source) else { return .unreadable }
-        guard size <= maxBytes else { return .tooLarge(fileName: fileName) }
+        guard size <= maxBytes else {
+            return .tooLarge(fileName: fileName, bytes: size,
+                             thumbnail: mime == "application/pdf" ? ShareStaging.firstPageThumbnail(source) : nil)
+        }
         let ext = (fileName as NSString).pathExtension
         let target = dir.appending(path: ext.isEmpty ? UUID().uuidString : "\(UUID().uuidString).\(ext)")
         do {
@@ -181,6 +223,13 @@ enum ShareStaging {
               PhotoPage.decodesCheaply(url, maxFullDecodePixels: maxFullDecodePixels)
         else { return staged }
         return .photo(url: url)
+    }
+
+    /// A small PNG of a PDF's first page. PDFKit opens a document lazily and
+    /// renders one page, so a 62 MB scan costs one page, not 62 MB.
+    static func firstPageThumbnail(_ url: URL) -> Data? {
+        PDFDocument(url: url)?.page(at: 0)?
+            .thumbnail(of: CGSize(width: 112, height: 158), for: .mediaBox).pngData()
     }
 
     /// The file's size from its metadata, without opening it.

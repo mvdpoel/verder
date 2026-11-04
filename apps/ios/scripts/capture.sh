@@ -22,6 +22,13 @@
 #            weekly-offline-missing, weekly-fout, voice, voice-offline, voice-verlopen,
 #            voice-te-groot, voice-geen-partijen, voice-partijen-fout, voice-verstuurd)
 #   tab      overzicht | voorjou | scan | dossier | meer
+#   share:<scene>  the share extension's screen, hosted in a sheet on a real
+#            ShareModel (Fixtures/FixtureShareHost.swift; "share · final"):
+#            deelblad (the system share sheet) laden laden-fout een-pdf
+#            een-pdf-lang (the SE frame's long name) fotos meerdere
+#            meerdere-deels meer-dan-10 versturen versturen-fout verstuurd
+#            bewaard-offline bewaard-groot niet-ingelogd bewaard
+#            niet-ondersteund te-groot; with --scrolled, opened at its end
 #   route    proposal:<id> | suggestion:<id> | task:<id> | document:<id> | geld | weekly | timeline | voice
 #            | meer:account | meer:notifications | meer:widgets | meer:about | meer:developer
 #            (a Meer screen pushed onto the Meer stack, as its row's tap does)
@@ -306,6 +313,10 @@ case "$TARGET" in
     WIDGET_SCENES="thuis-volle-kleur thuis-getint thuis-helder thuis-leeg thuis-leeg-getint thuis-een-item thuis-verouderd thuis-afgemeld groot-volle-kleur groot-getint groot-helder groot-leeg groot-verouderd groot-afgemeld vandaag-vergrendeld toegang-wacht toegang-een-item toegang-leeg toegang-verouderd toegang-afgemeld standby-ontgrendeld standby-vergrendeld standby-nacht standby-leeg standby-verouderd standby-afgemeld"
     case " $WIDGET_SCENES " in *" ${TARGET#widget:} "*) ;; *) echo "capture.sh: unknown widget scene '${TARGET#widget:}'; known: $WIDGET_SCENES" >&2; exit 2 ;; esac
     ARGS=(-widget-host "${TARGET#widget:}") ;;
+  share:*)
+    SHARE_SCENES="deelblad laden laden-fout een-pdf een-pdf-lang fotos meerdere meerdere-deels meer-dan-10 versturen versturen-fout verstuurd bewaard-offline bewaard-groot niet-ingelogd bewaard niet-ondersteund te-groot"
+    case " $SHARE_SCENES " in *" ${TARGET#share:} "*) ;; *) echo "capture.sh: unknown share scene '${TARGET#share:}'; known: $SHARE_SCENES" >&2; exit 2 ;; esac
+    ARGS=(-share-host "${TARGET#share:}") ;;
   proposal:*|suggestion:*|task:*|document:*)
     if [ "${CAPTURE_UNCHECKED_TARGET:-0}" != 1 ] && ! [[ "${TARGET#*:}" =~ $UUID_RE ]]; then
       echo "capture.sh: '$TARGET' — the id after '${TARGET%%:*}:' must be a UUID" >&2; exit 2

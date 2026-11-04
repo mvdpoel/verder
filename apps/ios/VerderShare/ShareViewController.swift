@@ -1,4 +1,3 @@
-import PDFKit
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -22,9 +21,13 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     private lazy var model: ShareModel = {
         let group = AppGroup.containerURL
-        return ShareModel(groupDir: group) { ids, groupDir in
-            let client = APIClient(session: APIClient.makeSession(), store: KeychainSessionStore())
-            return await ShareSender.send(ids, groupDir: groupDir, client: client)
+        // Signed out is known before Versturen: the sheet says so and offers
+        // Bewaar, rather than discovering it in a 401 after the tap.
+        let store = KeychainSessionStore()
+        let signedOut = store.load()?.isLive() != true
+        return ShareModel(groupDir: group, signedOut: signedOut) { id, groupDir in
+            let client = APIClient(session: APIClient.makeSession(), store: store)
+            return await ShareSender.sendOne(id, groupDir: groupDir, client: client)
         }
     }()
 
@@ -35,7 +38,8 @@ final class ShareViewController: UIViewController {
             model: model,
             cancel: { [weak self] in self?.finish(cancelled: true) },
             send: { [weak self] in self?.send() },
-            close: { [weak self] in self?.finish(cancelled: false) }))
+            close: { [weak self] in self?.finish(cancelled: false) },
+            retryLoad: { [weak self] in self?.model.retryLoad() }))
         host.view.backgroundColor = .clear
         addChild(host)
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -50,19 +54,20 @@ final class ShareViewController: UIViewController {
 
         let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? [])
             .flatMap { $0.attachments ?? [] }
-        // Every item is accounted for: too many refuses the share, and one
-        // that cannot be read stays an input the screen reports.
-        guard model.handedOver(count: providers.count) else { return }
+        // Every item is accounted for: more than ten keeps the first ten and
+        // names the rest; one that cannot be read stays an input the screen reports.
+        let loading = Array(providers.prefix(model.handedOver(count: providers.count)))
         guard let staging = ShareStaging.makeDirectory() else {
-            model.loaded(Array(repeating: .unreadable, count: providers.count))
+            model.loaded(Array(repeating: .unreadable, count: loading.count))
             return
         }
         stagingDir = staging
-        Task {
-            let inputs = await SharePreparation.collect(count: providers.count) { index in
-                await Self.load(providers[index], staging: staging)
+        // Bounded (`ShareModel.loadTimeout`): a source that never answers
+        // ends in a cause and "Opnieuw proberen", which runs this again.
+        model.load {
+            await SharePreparation.collect(count: loading.count) { index in
+                await Self.load(loading[index], staging: staging)
             }
-            model.loaded(inputs)
         }
     }
 
@@ -71,9 +76,12 @@ final class ShareViewController: UIViewController {
     private func send() {
         Task {
             await model.commit()
-            if case .done = model.phase, model.closesByItself {
-                // Long enough to read one line; the work is already safe on disk.
-                try? await Task.sleep(for: .seconds(1.2))
+            let largeText = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            if case .done = model.phase,
+               model.closesByItself(voiceOver: UIAccessibility.isVoiceOverRunning,
+                                    switchControl: UIAccessibility.isSwitchControlRunning, largeText: largeText) {
+                // Long enough to read the outcome; the work is already safe on disk.
+                try? await Task.sleep(for: ShareModel.autoCloseDelay)
                 finish(cancelled: false)
             }
         }
@@ -98,6 +106,13 @@ final class ShareViewController: UIViewController {
     /// (`ShareStaging`).
     static func load(_ provider: NSItemProvider, staging: URL) async -> SharedInput? {
         let types = provider.registeredContentTypes
+        // A web link (Safari, a link in Mail) is answered as a link: verder
+        // keeps files only. A text rendering offered beside it is not a file
+        // Martin chose, so it does not travel as one.
+        if types.contains(where: { $0.conforms(to: .url) && !$0.conforms(to: .fileURL) }),
+           !types.contains(where: { $0.conforms(to: .data) && !$0.conforms(to: .text) && !$0.conforms(to: .url) }) {
+            return await loadLink(provider)
+        }
         if !types.contains(where: { $0.conforms(to: .pdf) }),
            let imageType = types.first(where: { $0.conforms(to: .image) }) {
             let name = fileName(provider.suggestedName, type: imageType)
@@ -150,7 +165,9 @@ final class ShareViewController: UIViewController {
         return await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
             _ = provider.loadDataRepresentation(for: type) { data, _ in
                 guard let data else { return c.resume(returning: nil) }
-                guard data.count <= ShareModel.maxFileBytes else { return c.resume(returning: .tooLarge(fileName: name)) }
+                guard data.count <= ShareModel.maxFileBytes else {
+                    return c.resume(returning: .tooLarge(fileName: name, bytes: data.count))
+                }
                 let ext = type.preferredFilenameExtension ?? "img"
                 let temp = staging.appending(path: "data-\(UUID().uuidString).\(ext)")
                 guard (try? data.write(to: temp)) != nil else { return c.resume(returning: nil) }
@@ -172,118 +189,20 @@ final class ShareViewController: UIViewController {
         }
     }
 
+    private static func loadLink(_ provider: NSItemProvider) async -> SharedInput? {
+        await withCheckedContinuation { (c: CheckedContinuation<SharedInput?, Never>) in
+            provider.loadItem(forTypeIdentifier: UTType.url.identifier) { item, _ in
+                let url = (item as? URL) ?? (item as? String).flatMap(URL.init(string:))
+                c.resume(returning: url.map { .link($0.absoluteString) })
+            }
+        }
+    }
+
     private static func loadFileURL(_ provider: NSItemProvider) async -> URL? {
         await withCheckedContinuation { (c: CheckedContinuation<URL?, Never>) in
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                 c.resume(returning: item as? URL)
             }
         }
-    }
-}
-
-/// The one screen. Thin: everything it says comes from `ShareModel`.
-struct ShareView: View {
-    let model: ShareModel
-    let cancel: () -> Void
-    let send: () -> Void
-    let close: () -> Void
-
-    private var isDone: Bool {
-        if case .done = model.phase { true } else { false }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                // Only while cancelling is true (`ShareModel.canCancel`); the
-                // done state offers Sluiten alone.
-                if model.canCancel {
-                    Button(ShareModel.Copy.cancel, action: cancel)
-                        .font(.mono(13, relativeTo: .footnote))
-                        .foregroundStyle(Color.inkMute)
-                        .frame(minHeight: 44)
-                }
-                Spacer()
-                Text(ShareModel.Copy.heading)
-                    .font(.display(17, relativeTo: .headline, weight: .medium))
-                    .foregroundStyle(Color.inkBright)
-                Spacer()
-                if isDone {
-                    Button(ShareModel.Copy.close, action: close)
-                        .font(.mono(13, relativeTo: .footnote, weight: .medium))
-                        .foregroundStyle(Color.signal)
-                        .frame(minHeight: 44)
-                } else {
-                    Button(ShareModel.Copy.send, action: send)
-                        .font(.mono(13, relativeTo: .footnote, weight: .medium))
-                        .foregroundStyle(model.canSend ? Color.signal : Color.inkLabel)
-                        .disabled(!model.canSend)
-                        .frame(minHeight: 44)
-                }
-            }
-
-            if !model.prepared.isEmpty {
-                HStack(alignment: .top, spacing: 12) {
-                    Thumbnail(file: model.prepared[0])
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(model.title)
-                            .font(.display(17, relativeTo: .body))
-                            .foregroundStyle(Color.ink)
-                            .lineLimit(2)
-                            .truncationMode(.middle)
-                        Text(model.detail)
-                            .font(.mono(12, relativeTo: .caption))
-                            .foregroundStyle(Color.inkLabel)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(16)
-                .glassPanel()
-            }
-
-            if let warning = model.warning {
-                Text(warning)
-                    .font(.display(15, relativeTo: .subheadline))
-                    .foregroundStyle(Color.ink)
-            }
-
-            if let message = model.message {
-                Text(message)
-                    .font(.display(15, relativeTo: .subheadline))
-                    .foregroundStyle(Color.inkMute)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.void)
-        .preferredColorScheme(.dark)
-    }
-}
-
-private struct Thumbnail: View {
-    let file: PreparedShare
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image).resizable().scaledToFit()
-            } else {
-                Image(systemName: "doc").font(.system(size: 24)).foregroundStyle(Color.steel)
-            }
-        }
-        .frame(width: 48, height: 64)
-        .background(Color.plate)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-        .accessibilityHidden(true)
-    }
-
-    private var image: UIImage? {
-        guard file.mime == "application/pdf" else { return nil }
-        let document: PDFDocument? = switch file.content {
-        case .data(let data): PDFDocument(data: data)
-        case .file(let url): PDFDocument(url: url)
-        }
-        return document?.page(at: 0)?.thumbnail(of: CGSize(width: 96, height: 128), for: .mediaBox)
     }
 }

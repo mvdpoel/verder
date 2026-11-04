@@ -149,6 +149,7 @@ targets:
       - path: Verder/Upload/ShareSender.swift
       - path: Verder/Upload/SharePreparation.swift
       - path: Verder/Upload/ShareModel.swift
+      - path: Verder/Upload/ShareView.swift
       - path: Verder/Scan/PDFAssembler.swift
       - path: Verder/Scan/PageCleaner.swift
       - path: Verder/Scan/ScanNaming.swift
@@ -177,10 +178,18 @@ targets:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
           NSExtensionAttributes:
-            # PDFs arrive as files; photos as images; at most 10 of either.
+            # PDFs arrive as files; photos as images. verder takes TEN per
+            # share (ShareModel.maxItems), but is offered for up to 50, so a
+            # share of 14 photos gets "verder neemt de eerste 10 mee" and the
+            # range to share again, instead of verder missing from the sheet
+            # with no reason given. Only the first ten are loaded. One web
+            # link is accepted ONLY to be answered: "Hier zit geen bestand in"
+            # says verder keeps files and how to make one of the page; a link
+            # never travels as a file.
             NSExtensionActivationRule:
-              NSExtensionActivationSupportsFileWithMaxCount: 10
-              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsFileWithMaxCount: 50
+              NSExtensionActivationSupportsImageWithMaxCount: 50
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
     entitlements:
       path: VerderShare/VerderShare.entitlements
       properties:

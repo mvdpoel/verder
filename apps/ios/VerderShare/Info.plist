@@ -27,9 +27,11 @@
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
-				<integer>10</integer>
+				<integer>50</integer>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
-				<integer>10</integer>
+				<integer>50</integer>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

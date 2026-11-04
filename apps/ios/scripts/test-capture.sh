@@ -19,12 +19,13 @@ for good in overzicht voorjou scan dossier meer geld weekly timeline voice \
   proposal:00000000-f1c5-4000-8000-000000000002 suggestion:00000000-F1C5-4000-8000-000000000003 \
   task:00000000-f1c5-4000-8000-000000000004 document:00000000-f1c5-4000-8000-200000000311 \
   meer:account meer:notifications meer:widgets meer:about meer:developer \
-  widget:thuis-volle-kleur widget:groot-afgemeld widget:toegang-wacht widget:standby-nacht; do
+  widget:thuis-volle-kleur widget:groot-afgemeld widget:toegang-wacht widget:standby-nacht \
+  share:een-pdf share:deelblad share:te-groot; do
   expect 0 "accepts $good" check "$good"
 done
 for bad in proposal:nope suggestion:123 task: task:00000000-f1c5-4000-8000-00000000000 \
   proposal:00000000-f1c5-4000-8000-000000000002/x document:nope inbox:00000000-f1c5-4000-8000-000000000002 \
-  Overzicht bogus inbox meer:geheim meer: widget: widget:thuis widget:standby-dag; do
+  Overzicht bogus inbox meer:geheim meer: widget: widget:thuis widget:standby-dag share: share:pdf; do
   expect 2 "refuses $bad" check "$bad"
 done
 for g in open nov sep sheet; do

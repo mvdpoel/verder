@@ -2,21 +2,21 @@
 
 Dit document beschrijft wat de deelextensie van verder doet: wat ze accepteert, waar ze een gedeeld item in omzet, hoe het bestand in het dossier komt en wat elke toestand betekent. Het beschrijft de code op branch `feat/iphone-app` (`apps/ios`, target `VerderShare`, bundle `pro.vanderpoel.verder.share`). Het beschrijft niet het visuele ontwerp. De frames komen uit de Figma-sectie `share · final` (node 348:16604) en gebruiken de synthetische dataset (`docs/superpowers/specs/2026-11-01-iphone-synthetic-data.md`). Ze bevatten geen echte dossiergegevens.
 
-> **De frames gaan verder dan de code.** Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals ontworpen (definitieve frames, spec §7.8, design brief §2 en §3) en zegt per functie of de code die heeft. Elke functie heeft precies één statusregel: **Gebouwd** (bestaat in de code, bestand genoemd), **Deels gebouwd** (wat ontbreekt wordt genoemd) of **Nog te bouwen** (wat ervoor nodig is wordt genoemd). De ontworpen maar ontbrekende functies staan onder "Ontworpen, nog niet gebouwd". De status is bepaald door de code te lezen op 2026-11-03, inclusief de niet-gecommitte working tree op `feat/iphone-app`.
+> **De frames gaan verder dan de code.** Dit document beschrijft de VOLLEDIGE functieset van het scherm zoals ontworpen (definitieve frames, spec §7.8, design brief §2 en §3) en zegt per functie of de code die heeft. Elke functie heeft precies één statusregel: **Gebouwd** (bestaat in de code, bestand genoemd), **Deels gebouwd** (wat ontbreekt wordt genoemd) of **Nog te bouwen** (wat ervoor nodig is wordt genoemd). De ontworpen functies en hun stand staan onder "Ontworpen: wat nu gebouwd is en wat niet". De status is bepaald door de code te lezen op 2026-11-03, inclusief de niet-gecommitte working tree op `feat/iphone-app`, en bijgewerkt op 2026-11-04 toen het scherm naar de definitieve frames is gebouwd (`ShareView` in `apps/ios/Verder/Upload/ShareView.swift`; captures via `scripts/capture.sh <fixture> share:<scene>`).
 
 ## Stand van de bouw
 
 | Status | Functies |
 |---|---|
-| Gebouwd | 33 |
-| Deels gebouwd | 6 |
-| Nog te bouwen | 14 |
+| Gebouwd | 50 |
+| Deels gebouwd | 3 |
+| Nog te bouwen | 1 |
 
-De drie belangrijkste dingen die nog gebouwd moeten worden:
+Wat nog openstaat:
 
-1. **Een laadtimeout met "Opnieuw proberen"** (frame `Laden_fout`). Nu laat een deelbron die nooit antwoordt het blad eeuwig op "Even laden…" staan: de enige doodlopende weg op dit scherm, terwijl de brief uitgaat van 0 doodlopende wegen.
-2. **Eerlijk zeggen waarom een gedeeld item het dossier nog niet bereikte**: de uitgelogde toestand, herkend vóór Versturen (frame `Niet ingelogd`, daarna `Bewaard`), en de reden op het scherm voor later bewaren (`offline · in wachtrij`, `groot bestand · in wachtrij`). Nu leveren offline, uitgelogd, boven 8 MB en de grens van 20 s allemaal dezelfde regel op.
-3. **Gedeeltelijk meenemen in plaats van weigeren**: de eerste 10 van een grotere deling meenemen (frame `Meer_dan_10`) en de overige bestanden versturen als er één boven 48 MB zit (frame `Meerdere_bestanden_deels`), met één rij per bestand zodat Martin ziet wat meegaat en wat niet. Nu weigeren beide gevallen de hele deling.
+1. **De stap "PDF maken" na Versturen** (frame `Versturen`). De foto-pdf wordt bij het LADEN gemaakt, omdat het klaar-scherm zijn grootte ("1,8 MB") en paginatelling al toont; die zijn pas bekend als de pdf bestaat. De voortgangsbalk toont daarom de upload ("Versturen", of "Versturen · bestand 2 van 3"), en "Annuleren" is gedimd zodra de drops geschreven zijn.
+2. **De naam van de bron-app** in "Mail gaf het bestand niet binnen 10 seconden door." iOS geeft een extensie geen publieke manier om te weten welke app deelde; de code zegt dan "De app gaf het bestand …". Alleen de capture noemt "Mail".
+3. **Op de telefoon meten**: of de paginavolgorde van een foto-pdf echt Martins keuzevolgorde is (de regel "Pagina's in de volgorde waarin je ze koos." staat er nu wel), en de oude punten van plan 3 Task 22 Step 3.
 
 ---
 
@@ -51,8 +51,8 @@ De extensie beslist nooit iets over het document. Ze geeft het geen soort, archi
 
 - **Foto's (elke afbeelding die geen pdf is) worden ÉÉN pdf.** Elke afbeelding in één deling wordt een pagina van één pdf, in de volgorde waarin iOS ze aanleverde. De pdf wordt gebouwd met dezelfde `PDFAssembler` als een scan: lange zijde hoogstens 2200 px, grijswaarden als een pagina geen kleur heeft. Er is **geen `PageCleaner`-stap**, omdat een gedeelde foto niet per se een pagina is. Twee foto's van een brief van twee pagina's worden één brief.
   **Status:** Gebouwd (`SharePreparation.prepare` in `apps/ios/Verder/Upload/SharePreparation.swift`; `PDFAssemblerTests.swift`). Nog niet op de telefoon geprobeerd (plan 3 Task 22 Step 3).
-  - De pdf heet **`Foto's <yyyy-MM-dd HH.mm>.pdf`** volgens de Amsterdamse klok (`SharePreparation.photosTitle`). Auto-name hernoemt hem zodra de tekst gelezen is.
-    **Status:** Deels gebouwd — de code noemt hem `Foto's 2026-11-01 14.05.pdf`; de frames noemen hem `Gedeeld 1 nov 14.02.pdf` (Nederlandse dag en korte maand, het woord "Gedeeld", gelijk aan de bron). Vraagt om een nieuwe `photosTitle` met test.
+  - De pdf heet **`Gedeeld <d mmm HH.mm>.pdf`** volgens de Amsterdamse klok (`SharePreparation.photosTitle`). Auto-name hernoemt hem zodra de tekst gelezen is.
+    **Status:** Gebouwd — `Gedeeld 1 nov 14.02.pdf` (Nederlandse dag en korte maand, het woord "Gedeeld", gelijk aan de bron; `SharePreparation.photosTitle`, getest in `ShareModelTests.photosTitleIsDutchOnTheAmsterdamClock`).
   - Elke foto wordt op schijf klaargezet en **al verkleind** gedecodeerd (`PhotoPage.page(at:)`, ImageIO-thumbnail met de EXIF-oriëntatie toegepast). Een decodering op volle grootte van een foto van 24 MP kost ongeveer 96 MB, en een extensie wordt bij ongeveer 120 MB beëindigd. Een zijwaarts opgeslagen foto komt rechtop uit (getest).
     **Status:** Gebouwd (`PhotoPage` in `SharePreparation.swift`; `PhotoPageTests.swift`). Het piekgeheugen op de telefoon is niet gemeten.
   - Een afbeelding die geen JPEG/HEIC is en groter dan 16 MP (`PhotoPage.maxFullDecodePixels`) kan niet goedkoop verkleind worden. Die gaat mee als het **bestand** dat het is, met eigen naam en mime, en wordt geen pagina.
@@ -70,23 +70,24 @@ Grenzen (`ShareModel`):
 
 | Grens | Waarde | Wat er daarboven gebeurt |
 |---|---|---|
-| Items per deling | 10 (`maxItems`) | De hele deling wordt geweigerd voordat er iets geladen is: "Dat zijn er 12. verder neemt er maximaal 10 tegelijk mee; deel ze in delen." |
-| Bytes per bestand | 48 MB (`maxFileBytes`, onder de 50 MB `MAX_UPLOAD_BYTES` van de server) | De hele deling wordt geweigerd: "Dit is te groot voor verder (max. 48 MB per bestand)." Het bestand wordt niet gekopieerd. |
+| Items per deling | 10 (`maxItems`; de activatieregel biedt verder aan tot 50) | De eerste 10 worden geladen en gaan mee; de rest wordt genoemd: "Dat zijn er 14; verder neemt de eerste 10 mee. Deel foto 11–14 daarna opnieuw." |
+| Bytes per bestand | 48 MB (`maxFileBytes`, onder de 50 MB `MAX_UPLOAD_BYTES` van de server) | Dat bestand gaat niet mee en wordt bij naam genoemd ("Jaaropgaaf 2025 scan.pdf is te groot (62 MB, max. 48 MB)."); de andere gaan wel. Alleen als elk bestand te groot is, wordt de deling geweigerd ("Te groot om mee te nemen"). Het bestand wordt niet gekopieerd. |
+| Laden | 10 s (`loadTimeout`) | "Bestand laden lukt niet" met "Opnieuw proberen". |
 | Eigen upload van de extensie | 8 MB per bestand (`ShareSender.foregroundLimit`) | Niet geprobeerd vanuit de extensie. De wachtrij van de app verstuurt het. |
 | Eigen poging van de extensie | 20 s in totaal (`sendBound`), 30 s per verzoek | De poging wordt afgebroken en de wachtrij van de app verstuurt het. |
 
-**Status:** Gebouwd (`ShareModel.maxItems`, `maxFileBytes`, `sendBound`; `ShareSender.foregroundLimit`, `timeout`). Het ontwerp vervangt de eerste twee weigeringen door gedeeltelijk meenemen; zie "Ontworpen, nog niet gebouwd".
+**Status:** Gebouwd (`ShareModel.maxItems`, `maxFileBytes`, `loadTimeout`, `sendBound`; `ShareSender.foregroundLimit`, `timeout`).
 
 ![Eén pdf uit Mail, klaar om te versturen (ontwerp)](frames/Share_extension_E_n_PDF.jpg)
 
 ### Wat het scherm over een deling zegt
 
-- **Titel:** de bestandsnaam bij één bestand (hoogstens twee regels, in het midden ingekort), anders "N bestanden" (`ShareModel.title`). De foto-pdf telt als één bestand.
-  **Status:** Gebouwd (`ShareModel.title`).
-- **Detail** (`ShareModel.detail`): één pdf leest "PDF · 312 kB" (de extensie van het bestand in hoofdletters, of "Bestand" als er geen is; er is **geen paginatelling**). Eén foto leest "1 foto als PDF · …", meerdere "3 foto's als één PDF · 1,8 MB". Foto's plus bestanden lezen bijvoorbeeld "2 foto's als één PDF · 1 bestand · 1,4 MB". Meerdere bestanden zonder foto's tonen alleen de totale grootte.
-  **Status:** Gebouwd (`ShareModel.detail`). De paginatelling en de rijen per bestand die de frames toevoegen, zijn aparte functies hieronder.
-- **Thumbnail:** de eerste pagina van het eerste voorbereide bestand als dat een pdf is, anders een documentsymbool.
-  **Status:** Gebouwd (`Thumbnail` in `ShareViewController.swift`).
+- **Titel:** de bestandsnaam bij één bestand (hoogstens twee regels, in het midden ingekort; bij de toegankelijkheidsmaten de hele naam, want hier controleert Martin wat hij verstuurt), anders "N bestanden" (`ShareModel.title`). De foto-pdf telt als één bestand. Een dag en zijn maand ("30 okt") worden nooit over twee regels verdeeld (`ShareModel.displayName`).
+  **Status:** Gebouwd (`ShareModel.title`, `displayName`).
+- **Detail** (`ShareModel.detail`, per deel zodat grote tekst ze onder elkaar zet): één pdf leest "PDF · 2 pagina's · 312 kB", een foto-pdf "PDF van 3 foto's · 3 pagina's · 1,8 MB", een ander bestand "XLSX · 14 kB" (of "Bestand" zonder extensie). Meerdere bestanden lezen "PDF · samen 1,1 MB".
+  **Status:** Gebouwd (`ShareModel.detail`, `detail(of:)`, `pageCount` via PDFKit).
+- **Thumbnail:** de eerste pagina van een pdf (PDFKit), anders een documentsymbool; foto's als gestapelde pagina's van de foto-pdf.
+  **Status:** Gebouwd (`PageThumbnail`, `PhotoStack` in `ShareView.swift`).
 - **Elk bestand wordt een eigen document.** Alleen afbeeldingen worden samengevoegd; pdf's en andere bestanden worden nooit samengevoegd.
   **Status:** Gebouwd (één drop per bestand in `ShareModel.commit`; `ShareModelTests.swift`).
 
@@ -100,12 +101,12 @@ Grenzen (`ShareModel`):
 
 Een tik op **"Versturen"** (`ShareModel.commit`) doet drie dingen, in deze volgorde.
 
-1. **Ze schrijft een drop per bestand** in de App Group, in `<group>/uploads/incoming/` (`IncomingDrop.write`). Eerst de bytes (`<uuid>.bin`), als laatste de beschrijving (`<uuid>.json`), zodat de app nooit een halve drop ziet. Vanaf dat moment is de deling veilig: de app **gaat** hem versturen, wat er daarna ook gebeurt. Mislukt een schrijfactie, dan worden de al geschreven drops weer verwijderd en zegt het scherm "Dit kon niet worden bewaard. Probeer het opnieuw." Niets van die deling bereikt het dossier. Ontbreekt de App Group zelf (een verkeerd geconfigureerde build), dan weigert deze stap met "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
+1. **Ze schrijft een drop per bestand** in de App Group, in `<group>/uploads/incoming/` (`IncomingDrop.write`). Eerst de bytes (`<uuid>.bin`), als laatste de beschrijving (`<uuid>.json`), zodat de app nooit een halve drop ziet. Vanaf dat moment is de deling veilig: de app **gaat** hem versturen, wat er daarna ook gebeurt. Mislukt een schrijfactie, dan worden de al geschreven drops weer verwijderd en zegt het scherm "Opslaan lukte niet", met de oorzaak (te weinig ruimte, of een algemene regel) en "er is nog niets verstuurd", plus "Opnieuw proberen". Niets van die deling bereikt het dossier. Ontbreekt de App Group zelf (een verkeerd geconfigureerde build), dan weigert deze stap met "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw."
    **Status:** Gebouwd (`IncomingDrop.write` in `apps/ios/Verder/Upload/IncomingDrop.swift`, `ShareModel.commit`).
-2. **Ze doet één begrensde eigen uploadpoging** (`ShareSender.send`) voor elke drop tot 8 MB, de een na de ander. Ze gebruikt de sessiecookie van de app uit het gedeelde Keychain-item (`keychain-access-groups`). Het verzoek is hetzelfde dat de wachtrij bouwt (`UploadRequest.build`): `POST /api/mobile/v1/documents`, multipart met `clientId` = de UUID van de drop, `source` = `phone-share`, `capturedAt`, en het bestand met eigen naam en mime. Alleen een 2xx met de JSON van het endpoint schrijft `<uuid>.sent`. Al het andere (offline, geen sessie, een trage 4G-verbinding, de grens van 20 s) laat de drop over aan de app.
+2. **Ze doet één begrensde eigen uploadpoging** (`ShareSender.sendOne`, per drop, met een reden als hij niet lukt: `ShareSendResult`) voor elke drop tot 8 MB, de een na de ander. Ze gebruikt de sessiecookie van de app uit het gedeelde Keychain-item (`keychain-access-groups`). Het verzoek is hetzelfde dat de wachtrij bouwt (`UploadRequest.build`): `POST /api/mobile/v1/documents`, multipart met `clientId` = de UUID van de drop, `source` = `phone-share`, `capturedAt`, en het bestand met eigen naam en mime. Alleen een 2xx met de JSON van het endpoint schrijft `<uuid>.sent`. Al het andere (offline, geen sessie, een trage 4G-verbinding, de grens van 20 s) laat de drop over aan de app.
    **Status:** Gebouwd (`apps/ios/Verder/Upload/ShareSender.swift`). Of een bestand van 5 MB op 4G binnen de grens klaar is, is niet gemeten.
-3. **Ze meldt de uitkomst.** Heeft de server elk bestand binnen de grens bevestigd, dan toont ze "Staat in je dossier." Anders toont ze "Bewaard. Het gaat mee zodra je verder opent." De knop aan de eindkant wordt "Sluiten". Zonder waarschuwing op het scherm sluit de extensie zichzelf na 1,2 s. Met een waarschuwing blijft ze open tot Martin op "Sluiten" tikt.
-   **Status:** Gebouwd (`ShareModel.message`, `closesByItself`; `ShareViewController.send`). Het ontworpen eindscherm is rijker; zie "Ontworpen, nog niet gebouwd".
+3. **Ze meldt de uitkomst** op een eindscherm met een symbool, een kop, één uitlegregel en het bestand, met "Klaar" als enige knop. Heeft de server elk bestand bevestigd: "Staat in de wachtrij van verder". Anders "Bewaard in verder", met de reden ("offline · in wachtrij", "groot bestand · in wachtrij" met de grootte, "in wachtrij", of bij uitgelogd "Open verder en log in"). Zonder melding op het scherm sluit de extensie zichzelf na 3 s, maar nooit onder VoiceOver, Switch Control of een toegankelijkheidstekstmaat, en niet na "log in".
+   **Status:** Gebouwd (`ShareModel.closing`, `outcome`, `closesByItself`; `ShareViewController.send`).
 
 **`capturedAt` is het moment van Versturen**, niet de eigen datum van het bestand. Het wordt de `receivedAt` van het document, dus een pdf van vorig jaar die vandaag gedeeld wordt, staat in het dossier op vandaag.
 **Status:** Gebouwd (`ShareModel.commit` geeft `now()` door).
@@ -153,32 +154,31 @@ Daarna neemt de gewone pijplijn het over. Niets daarvan is specifiek voor delen:
 
 | Toestand | Wat het scherm toont | Wat Martin kan doen |
 |---|---|---|
-| Laden | "Even laden…", "Versturen" uitgeschakeld | "Annuleren" |
-| Klaar | Thumbnail, titel, detail; "Versturen" actief | "Versturen" of "Annuleren" |
-| Deel van de deling onleesbaar | Het klaar-paneel plus "1 van 3 kon niet worden meegenomen." ("2 van 12 konden …" bij meer) | De rest versturen, of annuleren |
-| Versturen | "Wordt verstuurd…"; "Annuleren" is **weg**, "Versturen" uitgeschakeld | Wachten (hoogstens ongeveer 20 s) |
-| Afgeleverd | "Staat in je dossier.", "Sluiten" | Sluit zichzelf na 1,2 s; met een waarschuwing tikt Martin op "Sluiten" |
-| Bewaard, nog niet afgeleverd (offline, geen sessie, > 8 MB, traag) | "Bewaard. Het gaat mee zodra je verder opent.", "Sluiten" | Hetzelfde als afgeleverd; verder later openen |
-| Meer dan 10 items | "Dat zijn er N. verder neemt er maximaal 10 tegelijk mee; deel ze in delen." | "Annuleren", in kleinere groepen delen |
-| Een bestand boven 48 MB | "Dit is te groot voor verder (max. 48 MB per bestand)." De hele deling wordt geweigerd, ook als de andere items in orde zijn | "Annuleren" |
-| Niets kon gelezen worden | "verder kon hier niets uit lezen. Er is niets verstuurd." | "Annuleren" |
-| Er is niets aangeleverd | "Hier zit niets in dat verder kan bewaren." | "Annuleren" |
-| Schrijven van de drop mislukt | "Dit kon niet worden bewaard. Probeer het opnieuw." Al geschreven drops worden verwijderd | "Annuleren", opnieuw delen |
-| App Group ontbreekt (verkeerd geconfigureerde build) | Pas na "Versturen": "verder kan hier niet bij zijn eigen map. Open de app en probeer het opnieuw." | "Annuleren" |
-| Niet ingelogd / sessie verlopen | **Geen eigen toestand.** De poging krijgt een 401, en het scherm leest "Bewaard. Het gaat mee zodra je verder opent." De drop wacht tot er in de app weer ingelogd is | verder openen en inloggen |
+| Laden | Een skeleton in de vorm van de thumbnail en twee regels, de uitlegkaart, "Versturen" uitgeschakeld | "Annuleren" |
+| Laden mislukt (10 s) | "Bestand laden lukt niet" met de oorzaak | "Opnieuw proberen", "Annuleren" |
+| Klaar | Thumbnail of fotostapel, naam, detail, uitlegkaart; "Versturen" actief | "Versturen" of "Annuleren" |
+| Deel gaat niet mee (onleesbaar, te groot, een link, meer dan 10) | Een melding ("verder neemt er 2 van de 3 mee." / "Dat zijn er 14; …") met de reden per geval, en bij meerdere bestanden een rij per bestand | De rest versturen, of annuleren |
+| Niet ingelogd | "Je bent niet ingelogd", de knop leest "Bewaar" | "Bewaar" (geen uploadpoging), of annuleren |
+| Versturen | Voortgangsbalk met "Versturen · bestand 1 van 3"; de knop wordt een uploadsymbool; "Annuleren" gedimd | Wachten (hoogstens ongeveer 20 s) |
+| Opslaan mislukt | "Opslaan lukte niet" met de oorzaak en "er is nog niets verstuurd"; de deling | "Opnieuw proberen", "Annuleren" |
+| Afgeleverd | "Staat in de wachtrij van verder", "Klaar" | Sluit zichzelf na 3 s (niet met een melding of hulptechnologie) |
+| Bewaard, nog niet afgeleverd | "Bewaard in verder" met de reden, "Klaar" | Idem; verder later openen |
+| Alleen te groot | "Te groot om mee te nemen", het bestand gedimd met "62 MB · max. 48 MB" | "Sluiten" |
+| Een link | "Hier zit geen bestand in" met de link | "Sluiten" |
+| Niets / onleesbaar / geen App Group | "Niets om te bewaren" / "Niet te lezen" / "Opslaan lukte niet" | "Sluiten" |
 | App vergrendeld (Face ID) | Niet van toepassing: de extensie heeft geen appvergrendeling (zie Privacy) | — |
-| Grote tekst | Alle tekst gebruikt Dynamic Type (`relativeTo:`). De weergave heeft **geen scrollview**, dus bij de grootste maten kunnen de onderste regels van het blad af geduwd worden | — |
-| Kleine telefoon (SE) | Dezelfde ene lay-out | — |
+| Grote tekst | Alles onder de balk scrolt; de balk schaalt niet mee (Large Content Viewer bij lang drukken); detailregels staan per feit onder elkaar | — |
+| Kleine telefoon (SE) | Dezelfde lay-out; de titel schuift tussen de knoppen als hij in het midden niet past | — |
 
-**Status van de tabel:** elke rij hierboven is Gebouwd (`ShareModel.Phase`, `ShareModel.Copy`; `ShareModelTests.swift`), behalve "Grote tekst", die Deels gebouwd is (Dynamic Type wel, scrollen niet; zie hieronder). De frames veranderen een aantal van deze rijen; die wijzigingen staan onder "Ontworpen, nog niet gebouwd".
+**Status van de tabel:** elke rij is Gebouwd (`ShareModel.Phase`, `notice`, `explanation`, `closing`, `failure`, `leading`, `trailing`; `ShareModelTests.swift`; captures in `share · final`-volgorde via `scripts/capture.sh empty share:<scene>`).
 
-In elke weigertoestand blijft "Versturen" zichtbaar maar uitgeschakeld.
+In elke weigertoestand leest de knop aan de beginkant "Sluiten" en is er geen "Versturen".
 
-Waarom "Annuleren" verdwijnt: vanaf "Versturen" is elke drop geschreven en gaat de app hem versturen, en elke drop wordt een blijvend `document.ingested`. Annuleren zou op dat punt niets annuleren, dus de knop wordt alleen getoond zolang hij waar is (`ShareModel.canCancel`).
+Waarom "Annuleren" gedimd wordt: vanaf "Versturen" is elke drop geschreven en gaat de app hem versturen, en elke drop wordt een blijvend `document.ingested`. Annuleren zou op dat punt niets annuleren, dus de knop is alleen actief zolang hij waar is (`ShareModel.canCancel`, `leading`); VoiceOver zegt "De bestanden staan al in de wachtrij."
 **Status:** Gebouwd (`ShareModel.canCancel`; getest in `ShareModelTests.swift`).
 
-Waarom een gedeeltelijke deling niet vanzelf sluit: een waarschuwing moet gelezen worden, dus "1 van 3 kon niet worden meegenomen." blijft vóór en na "Versturen" op het scherm (`closesByItself`). De waarschuwing voor gedeeltelijk meenemen dekt alleen items die niet gelezen konden worden en afbeeldingen die de pdf niet kon coderen. **Eén bestand boven 48 MB laat de hele deling weigeren**, en meer dan 10 items worden geweigerd in plaats van ingekort.
-**Status:** Gebouwd (`ShareModel.warning`, `closesByItself`).
+Waarom een gedeeltelijke deling niet vanzelf sluit: een melding moet gelezen worden (`closesByItself`). De melding dekt onleesbare items, afbeeldingen die de pdf niet kon coderen, bestanden boven 48 MB (bij naam), links en alles voorbij de eerste 10.
+**Status:** Gebouwd (`ShareModel.notice`, `closesByItself`).
 
 ![Te groot (ontwerp)](frames/Share_extension_Te_groot.jpg)
 
@@ -207,8 +207,8 @@ Waarom een gedeeltelijke deling niet vanzelf sluit: een waarschuwing moet geleze
 
 ## Meldingen en haptiek
 
-- De extensie geeft zelf **geen melding en geen haptiek**. Dat past bij de haptiekkaart van de brief voor succes (§2.5: "Upload succeeded: none in the foreground"). De `.error`-haptiek die de kaart geeft aan een mislukking met inline opnieuw proberen, is een aparte functie hieronder.
-  **Status:** Gebouwd (geen haptiek- of meldingscode in `apps/ios/VerderShare/`).
+- De extensie geeft zelf **geen melding**. Haptiek volgt de definitieve frames: `.impact(.medium)` op elk eindscherm, `.error` op "Laden mislukt" en "Opslaan mislukt", niets bij weigeringen of annuleren (overgeslagen als systeemhaptiek uit staat). NB: de brief (§2.5) zei "Upload succeeded: none in the foreground"; de frames (it5/it6/final) vragen `.impact(.medium)`, en die zijn gevolgd.
+  **Status:** Gebouwd (`.sensoryFeedback` in `ShareView`).
 - Verderop in de keten kan een gedeelde brief de push "Brief lijkt van Verder" (tijdgevoelig) of "Brief lijkt van <naam>" (actief) van de server opleveren. Zie `../13-meldingen/FEATURES.md`.
 
 ## Offline gedrag en synchronisatie
@@ -223,76 +223,75 @@ Waarom een gedeeltelijke deling niet vanzelf sluit: een waarschuwing moet geleze
 - **Plan 3 Task 22 Step 3 is nog niet afgevinkt.** Niets hiervan is al op de telefoon gedaan: een pdf uit Mail en twee foto's uit Foto's delen (verwacht: twee documenten onder bron "Gedeeld", geen dubbel, ledger +2 `document.ingested` plus hoogstens één `document.updated` van auto-name per document), of de eigen upload van de extensie van een bestand van 5 MB op 4G binnen de grens klaar is, en het piekgeheugen van de extensie met drie of meer foto's van 24/48 MP (verwacht ruim onder 120 MB). De weigering van een bestand boven 48 MB is alleen met unittests getest; die hoort niet bij Step 3 en is ook nog niet op de telefoon geprobeerd.
 - Een gemengde deling (bestanden plus afbeeldingen) kan meer dan 10 items aanleveren. De code weigert boven 10, maar het geval zelf is niet gemeten.
 - **De optionele notitie van één regel uit de spec is uitgesteld** (spec §7.8). `POST /api/mobile/v1/documents` heeft geen notitieveld en `documents` heeft geen notitiekolom.
-- Geen laadtimeout: een bron die nooit antwoordt, laat het scherm op "Even laden…" staan tot Martin annuleert.
 - De paginavolgorde van een foto-pdf is de volgorde waarin iOS de bronnen aanlevert; of dat altijd de volgorde is waarin Martin ze koos, is niet gecontroleerd.
-- Geen scrollview, dus de grootste Dynamic Type-maten kunnen de onderkant van het blad afsnijden.
-- De regel "Bewaard…" zegt niet waarom een bestand niet afgeleverd is: offline, geen sessie, boven 8 MB en de grens van 20 s lezen allemaal hetzelfde.
+- De bron-app wordt niet genoemd bij een mislukte lading: iOS heeft geen publieke API die een extensie vertelt welke app deelde.
+- De activatieregel biedt verder nu aan tot 50 bestanden/afbeeldingen en voor één web-link (om die met "Hier zit geen bestand in" te beantwoorden). Of een deling uit Safari ook tekst als bestand aanbiedt, is niet gemeten; de code behandelt een URL met alleen tekst ernaast als link.
 - **De bytes van een definitief verwijderd document delen zet ze terug op schijf.** De route roept `storeFile` aan vóór de sha256-dedup van `ingestDocument`, dus het bestand wordt opnieuw geschreven onder de hash van de tombstone, terwijl er geen nieuwe rij of event geschreven wordt. `/verify` meldt het als restant van een verwijdering en een herhaalde verwijdering haalt het weg. Dit volgt uit de code en is niet getest; het geldt voor elke uploadroute, niet alleen voor delen.
 
-## Ontworpen, nog niet gebouwd
+## Ontworpen: wat nu gebouwd is en wat niet
 
-De definitieve frames, de spec (§7.8) en de design brief (§2.4 toestanden, §2.5 haptiek, §2.7 toegankelijkheid, §3 flowrij) leggen deze vast. Elke functie wordt beschreven als wat ze doet; het frame dat haar toont, staat tussen haken.
+De definitieve frames, de spec (§7.8) en de design brief (§2.4 toestanden, §2.5 haptiek, §2.7 toegankelijkheid, §3 flowrij) leggen deze vast. Elke functie wordt beschreven als wat ze doet; het frame dat haar toont, staat tussen haken. Gebouwd op 2026-11-04 in `ShareModel.swift` (alle teksten en beslissingen, getest) en `ShareView.swift` (de weergave).
 
 ### Vóór Versturen: wat het scherm Martin vertelt
 
-- **"Waar het heen gaat": waar de deling terechtkomt.** Onder de deling één korte uitleg van wat er daarna gebeurt, afgestemd op de deling: "Komt in je dossier onder Gedeeld. Daarna zet verder een suggestie voor naam en soort klaar in Voor jou." bij één bestand; "Komen alle drie in je dossier onder Gedeeld, elk als eigen document." bij meerdere; "eerst met deze tijdelijke naam" bij een foto-pdf; "De twee die meegaan …" bij een gedeeltelijke deling; "Na het inloggen" bij uitgelogd. Het vat de pijplijn verderop samen in één zin, zodat een deling nooit lijkt te verdwijnen. [`E_n_PDF`, `Foto_s_n_PDF`, `Meerdere_bestanden`, `Meerdere_bestanden_deels`, `Meer_dan_10`, `Niet_ingelogd`, `Laden`]
-  **Status:** Nog te bouwen — tekst per geval in `ShareModel.Copy` (een berekende `explanation`), de kaart in `ShareView`, tests per geval.
-- **Paginatelling in de detailregel.** "PDF · 2 pagina's · 312 kB", "PDF van 3 foto's · 3 pagina's · 1,8 MB", "1 pagina" in het enkelvoud. Met een paginatelling ziet Martin in één oogopslag dat de hele brief er is. [`E_n_PDF`, `Foto_s_n_PDF`, `Meerdere_bestanden`]
-  **Status:** Nog te bouwen — een `pages`-waarde op `PreparedShare` (PDFKit `pageCount` op het klaargezette bestand; de foto-pdf kent `photoPages` al), het nieuwe detailformaat in `ShareModel.detail`, tests. Bestanden die geen pdf zijn, tonen geen telling.
-- **Eén rij per bestand bij meerdere bestanden.** De kop "3 bestanden" met "PDF · samen 1,1 MB", daarna een rij per bestand met eigen thumbnail, naam (twee regels, in het midden ingekort) en detailregel. Een bestand dat niet meegaat, staat gedimd in zijn rij met de reden ("Gaat niet mee · 62 MB, max. 48 MB"). [`Meerdere_bestanden`, `Meerdere_bestanden_deels`]
-  **Status:** Nog te bouwen — een rijmodel per bestand (naam, detail, meegenomen of de reden waarom niet) in `ShareModel`, de lijst in `ShareView`, tests. Nu worden alleen de thumbnail van het eerste bestand en één gecombineerde titel getoond.
-- **De foto-pdf noemt zijn foto's en hun volgorde.** Een badge "3 FOTO'S" (of "FOTO 1–10 VAN 14") op een gestapelde thumbnail, en de regel "Pagina's in de volgorde waarin je ze koos." zodat Martin weet dat de paginavolgorde zijn keuzevolgorde is. [`Foto_s_n_PDF`, `Meer_dan_10`]
-  **Status:** Nog te bouwen — de badge en regel in `ShareView`; EERST een meting op de telefoon dat de volgorde van de bronnen echt de keuzevolgorde is (nu niet geverifieerd), anders belooft de regel iets wat de code niet weet.
+- **"Waar het heen gaat": waar de deling terechtkomt**, afgestemd op de deling (één bestand, meerdere, een foto-pdf met tijdelijke naam, een gedeeltelijke deling, uitgelogd: "Na het inloggen"). [`E_n_PDF`, `Foto_s_n_PDF`, `Meerdere_bestanden`, `Meerdere_bestanden_deels`, `Meer_dan_10`, `Niet_ingelogd`, `Laden`]
+  **Status:** Gebouwd (`ShareModel.explanation`, `ShareExplanation`; tests per geval).
+- **Paginatelling in de detailregel.** "PDF · 2 pagina's · 312 kB", "PDF van 3 foto's · 3 pagina's · 1,8 MB", "1 pagina". [`E_n_PDF`, `Foto_s_n_PDF`, `Meerdere_bestanden`]
+  **Status:** Gebouwd (`ShareModel.pageCount` via PDFKit, `detail(of:)`).
+- **Eén rij per bestand bij meerdere bestanden**, in deelvolgorde, een te groot bestand gedimd met "Gaat niet mee · 62 MB, max. 48 MB". [`Meerdere_bestanden`, `Meerdere_bestanden_deels`]
+  **Status:** Gebouwd (`ShareModel.rows`, `ShareRows`).
+- **De foto-pdf noemt zijn foto's en hun volgorde.** Badge "3 FOTO'S" / "FOTO 1–10 VAN 14" op een gestapelde thumbnail, en "Pagina's in de volgorde waarin je ze koos." [`Foto_s_n_PDF`, `Meer_dan_10`]
+  **Status:** Deels gebouwd — badge, stapel en regel staan er (`photoBadge`, `orderNote`, `PhotoStack`); de meting op de telefoon dat de volgorde van de bronnen echt de keuzevolgorde is, ontbreekt nog. Tot die meting belooft de regel iets wat niet gecontroleerd is.
 
 ### Gedeeltelijk meenemen in plaats van weigeren
 
-- **De eerste 10 van een grotere deling meenemen.** "Dat zijn er 14; verder neemt er de eerste 10 mee. Deel foto 11–14 daarna opnieuw." De eerste tien gaan mee; de rest wordt genoemd zodat Martin die in een tweede ronde kan delen. Er wordt niets stilletjes weggelaten. [`Meer_dan_10`, `Meer_dan_10_AX5`]
-  **Status:** Nog te bouwen — `ShareModel.handedOver(count:)` en `loaded` moeten de eerste `maxItems` houden in plaats van te weigeren, het bereik "11–14" in de tekst, tests die de huidige weigertests vervangen. De geheugengrens (één foto tegelijk gedecodeerd) houdt al stand voor tien.
-- **De andere bestanden versturen als er één boven 48 MB zit.** "verder neemt er 2 van de 3 mee. Jaaropgaaf 2025 scan.pdf is te groot (62 MB, max. 48 MB). Scan de brief met verder, of deel later een kleinere versie." Het te grote bestand wordt bij naam weggelaten, de rest gaat mee, en de waarschuwing blijft na Versturen op het scherm, zoals de huidige waarschuwing voor gedeeltelijk meenemen. [`Meerdere_bestanden_deels`]
-  **Status:** Nog te bouwen — `loaded` moet alleen het te grote bestand weglaten (nu weigert `tooLarge > 0` alles), met naam en grootte bewaard voor de tekst en de rij, tests. Alleen een deling waarin ELK bestand te groot is, wordt geweigerd.
+- **De eerste 10 van een grotere deling meenemen**, met het bereik om opnieuw te delen. [`Meer_dan_10`, `Meer_dan_10_AX5`]
+  **Status:** Gebouwd (`handedOver(count:)` geeft het aantal te laden; `loaded` houdt de eerste `maxItems`; de activatieregel biedt verder aan tot 50).
+- **De andere bestanden versturen als er één boven 48 MB zit**, het te grote bij naam en grootte. [`Meerdere_bestanden_deels`]
+  **Status:** Gebouwd (`SharedInput.tooLarge(fileName:bytes:thumbnail:)`, `SharePreparation.TooLargeFile`, `ShareModel.notice`). Alleen als elk bestand te groot is, wordt geweigerd.
 
 ### Weigeringen, mislukkingen en doodlopende wegen
 
-- **Te groot: een scherm dat zegt wat te doen.** "Te groot om mee te nemen. Dat is meer dan verder per bestand meeneemt. Scan de brief met verder, of deel een kleinere versie." met de gedimde thumbnail van het bestand, de naam en "62 MB · max. 48 MB". De knop aan de beginkant leest "Sluiten" en er is geen uitgeschakeld Versturen. [`Te_groot`]
-  **Status:** Deels gebouwd — de weigering en haar regel van 48 MB bestaan (`ShareModel.loaded`, `Copy.tooLarge`); er ontbreken het advies, de weergave van het bestand met zijn grootte, en "Sluiten" in plaats van "Annuleren" plus een uitgeschakeld "Versturen" (dezelfde wijziging geldt voor elke weigertoestand).
-- **Laden toont de vorm van wat er komt.** Een skeleton in de vorm van de thumbnail en de twee tekstregels, met "Versturen" uitgeschakeld. (Brief §2.4: een skeleton, nooit een spinner of een kale regel.) [`Laden`]
-  **Status:** Deels gebouwd — de laadfase bestaat met "Versturen" uitgeschakeld (`ShareModel.Phase.loading`); ze toont de tekst "Even laden…" in plaats van het skeleton.
-- **Laden dat blijft hangen, eindigt met een oorzaak en opnieuw proberen.** Als de bron-app het bestand niet binnen 10 seconden aanlevert: "Bestand laden lukt niet. Mail gaf het bestand niet binnen 10 seconden door. Probeer het opnieuw; lukt het dan nog niet, bewaar het eerst in Bestanden en deel het van daaruit." met "Opnieuw proberen", dat dezelfde bronnen opnieuw laadt. De bron-app wordt genoemd als iOS zegt welke het is. [`Laden_fout`]
-  **Status:** Nog te bouwen — een grens van 10 s rond `SharePreparation.collect` in `ShareViewController.viewDidLoad`, een `loadFailed`-fase met opnieuw proberen dat het laden opnieuw uitvoert, de naam van de bron-app (of een neutrale terugval als die niet bekend is), tests. Nu laat een bron die nooit antwoordt het blad op "Even laden…" staan tot Martin annuleert.
-- **Een mislukte opslag noemt de oorzaak en biedt opnieuw proberen.** "Opslaan lukte niet. Er is te weinig ruimte vrij op je iPhone. Maak ruimte en probeer het opnieuw; er is nog niets verstuurd." met de naam en het detail van de deling, en "Opnieuw proberen", dat Versturen opnieuw uitvoert. [`Versturen_fout`]
-  **Status:** Deels gebouwd — de mislukking wordt afgehandeld en teruggedraaid zodat er niets half geschreven blijft staan (`ShareModel.commit`, `Copy.saveFailed`); er ontbreken de oorzaak (`NSFileWriteOutOfSpaceError` en andere vertalen naar een Nederlandse regel), de geruststelling "er is nog niets verstuurd", de weergave van de deling en de knop voor opnieuw proberen (nu moet Martin annuleren en opnieuw delen).
-- **Een gedeelde link krijgt een eigen antwoord.** "Hier zit geen bestand in. Je deelde een link. verder bewaart alleen bestanden, geen links. Open de link, bewaar de pagina als PDF en deel die met verder." met de link zelf onder "Wat je deelde · link", en alleen "Sluiten". [`Niet_ondersteund`]
-  **Status:** Nog te bouwen — de activatieregel (`project.yml`) moet OOK een web-URL accepteren, anders biedt iOS verder nooit aan voor een link en is dit scherm onbereikbaar; daarna een deling van alleen een URL herkennen in `ShareViewController.load`, een `link`-weigering met de URL in `ShareModel`, tests. Een ruimere regel mag een link niet als bestand laten meereizen.
-- **De `.error`-haptiek bij een mislukking met opnieuw proberen.** Brief §2.5: "Upload failed / action failed → `.error`, with the inline retry." Ze hoort bij de schermen voor mislukt laden en mislukt opslaan hierboven, niet bij weigeringen waar Martin niets aan kan doen, en wordt overgeslagen als systeemhaptiek uit staat.
-  **Status:** Nog te bouwen — `.sensoryFeedback(.error, trigger:)` op de twee toestanden met opnieuw proberen in `ShareView`. Hangt af van het bestaan van die toestanden.
+- **Te groot: een scherm dat zegt wat te doen**, met het bestand gedimd (de eerste pagina, door PDFKit getekend terwijl het gemeten werd) en "62 MB · max. 48 MB"; "Sluiten", geen Versturen. [`Te_groot`]
+  **Status:** Gebouwd (`ShareStaging.firstPageThumbnail`, `ShareFailureView`).
+- **Laden toont de vorm van wat er komt** (skeleton). [`Laden`]
+  **Status:** Gebouwd (`ShareLoadingView`).
+- **Laden dat blijft hangen, eindigt met een oorzaak en opnieuw proberen** (10 s). [`Laden_fout`]
+  **Status:** Deels gebouwd — grens, `loadFailed`, "Opnieuw proberen" (dat dezelfde bronnen opnieuw laadt; een laat antwoord van de eerste poging wordt genegeerd) zijn gebouwd en getest (`ShareModel.load`, `retryLoad`). De bron-app noemen ("Mail gaf …") kan niet: iOS geeft een extensie geen publieke API voor de deler, dus de regel leest "De app gaf …".
+- **Een mislukte opslag noemt de oorzaak en biedt opnieuw proberen.** [`Versturen_fout`]
+  **Status:** Gebouwd (`ShareModel.saveFailure` herkent ENOSPC/`NSFileWriteOutOfSpaceError`, ook onder een omhullende fout; `commit` vanuit `.saveFailed`).
+- **Een gedeelde link krijgt een eigen antwoord.** [`Niet_ondersteund`]
+  **Status:** Gebouwd (`NSExtensionActivationSupportsWebURLWithMaxCount: 1` in `project.yml`; `SharedInput.link`; `ShareViewController.loadLink`). Een link reist nooit als bestand mee.
+- **De `.error`-haptiek bij een mislukking met opnieuw proberen.**
+  **Status:** Gebouwd (`.sensoryFeedback` in `ShareView`).
 
 ### Uitgelogd, en waarom een deling wacht
 
-- **Uitgelogd, herkend vóór Versturen.** Als de gedeelde Keychain geen sessie bevat, zegt het blad dat meteen: "Je bent niet ingelogd. Tik op Bewaar en open daarna verder om in te loggen. Dan gaat het bestand vanzelf naar je dossier." De knop aan de eindkant leest "Bewaar" (die schrijft de drop en doet geen uploadpoging), en daarna: "Bewaard in verder. Open verder en log in; daarna gaat het bestand vanzelf naar je dossier." [`Niet_ingelogd`, `Bewaard`]
-  **Status:** Nog te bouwen — een controle op een aanwezige sessie via `KeychainSessionStore` bij het laden, een `signedOut`-vlag in `ShareModel` die de knop hernoemt en `ShareSender` overslaat, de twee teksten, tests. Nu wordt een ontbrekende sessie pas ontdekt door de 401 en leest die als elke andere "Bewaard…". Een verlopen maar aanwezige cookie eindigt nog steeds in het 401-pad, dat blijft zoals het nu is.
-- **Het scherm voor later bewaren zegt waarom.** "Bewaard in verder. Hij gaat mee zodra je verder opent." met een weergave van de reden en het bestand: "offline · in wachtrij", "groot bestand · in wachtrij" (met de grootte), en bij uitgelogd de inlogregel hierboven. [`Bewaard_offline`, `Bewaard_groot_bestand`, `Bewaard`]
-  **Status:** Nog te bouwen — `ShareSender.send` moet per drop een reden teruggeven (offline, boven 8 MB, 401, grens bereikt) in plaats van alleen de afgeleverde ids, `Phase.done` moet die meedragen, de weergave in `ShareView`, tests.
-- **Een eindscherm dat de deling afsluit.** Na Versturen toont het blad een bevestigingssymbool, een kop, één uitlegregel en de weergave van het bestand, met "Klaar" als enige knop: "Staat in de wachtrij van verder. Hij komt in je dossier onder Gedeeld. De voortgang zie je in verder." als hij verstuurd is, of "Bewaard in verder" als hij wacht. [`Verstuurd`, `Verstuurd_AX5`, `Bewaard_*`]
-  **Status:** Deels gebouwd — de eindfase, het onderscheid afgeleverd/in wachtrij en het zelf sluiten na 1,2 s bestaan (`ShareModel.Phase.done`, `ShareViewController.send`); er ontbreken de bevestigingslay-out, de uitleg en de weergave van het bestand, het knopwoord "Klaar" (code: "Sluiten") en de koptekst (code: "Staat in je dossier." / "Bewaard. Het gaat mee zodra je verder opent.").
+- **Uitgelogd, herkend vóór Versturen**: "Je bent niet ingelogd", de knop "Bewaar" (schrijft de drop, geen uploadpoging), daarna "Bewaard in verder. Open verder en log in; …". [`Niet_ingelogd`, `Bewaard`]
+  **Status:** Gebouwd (`ShareModel.signedOut`, gezet uit `KeychainSessionStore().load()?.isLive()` in `ShareViewController`). Een verlopen maar aanwezige cookie eindigt in de 401 en leest daarna ook "log in".
+- **Het scherm voor later bewaren zegt waarom.** [`Bewaard_offline`, `Bewaard_groot_bestand`, `Bewaard`]
+  **Status:** Gebouwd (`ShareSendResult`, `ShareModel.outcome`, `closing`).
+- **Een eindscherm dat de deling afsluit**, "Klaar" als enige knop. [`Verstuurd`, `Verstuurd_AX5`, `Bewaard_*`]
+  **Status:** Gebouwd (`ShareClosingView`).
 
 ### Tijdens het versturen
 
-- **Zichtbare voortgang, inclusief het maken van de pdf.** Tijdens het versturen wordt de knop aan de eindkant een voortgangssymbool en loopt er onder de deling een balk met de stap: "PDF maken · foto 2 van 3", daarna de upload. "Annuleren" blijft beschikbaar zolang de foto-pdf nog gemaakt wordt, want tot de drops geschreven zijn, is annuleren nog waar. [`Versturen`]
-  **Status:** Nog te bouwen — de foto-pdf wordt nu bij het LADEN gebouwd (`SharePreparation.prepare` vanuit `ShareModel.loaded`), dus een stap "PDF maken" na Versturen vraagt dat het samenstellen achter Versturen komt (of dat de stap in het frame een andere naam krijgt), een voortgangswaarde per pagina uit `PDFAssembler`, `canCancel` waar tot de eerste drop geschreven is, de balk in `ShareView`, tests. Nu toont het scherm "Wordt verstuurd…" en verbergt het "Annuleren".
+- **Zichtbare voortgang.** De knop wordt een uploadsymbool (`.pulse`, stil onder Verminder beweging), er loopt een balk met de stap. [`Versturen`]
+  **Status:** Deels gebouwd — balk, symbool en stap zijn er (`ShareModel.Progress`), maar de stap is de upload ("Versturen · bestand 2 van 3"), niet "PDF maken · foto 2 van 3": de foto-pdf wordt bij het laden gemaakt, omdat het klaar-scherm zijn grootte en paginatelling al toont. "Annuleren" is gedimd zodra de drops geschreven zijn, want annuleren is dan niet meer waar.
 
 ### De optionele notitie van één regel
 
-- **Eén regel voor Martins context.** Spec §7.8 en brief §3: een optionele notitie van één regel reist mee met de deling ("iets bijzonders?"), zodat een bestand aankomt met de reden waarom het gedeeld is. [geen frame]
-  **Status:** Nog te bouwen — UITGESTELD door de spec (2026-11-01): `POST /api/mobile/v1/documents` leest geen `note`-veld en `documents` heeft er geen plek voor (een `document_status_changes`-rij heeft de verkeerde vorm, een logboekregel is bewijs). Vraagt eerst om een ontworpen plek op de server, daarna een `note` in de JSON van `IncomingDrop`, een veld in `ShareView`, en tests. De helft van het transport bestaat al in de niet-gecommitte working tree: `UploadItem.note` en `UploadRequest.build` sturen al een `note`-deel mee als een item er een heeft (alleen bij scans); de route negeert het.
+- **Eén regel voor Martins context.** [geen frame]
+  **Status:** Nog te bouwen — UITGESTELD door de spec (2026-11-01): `POST /api/mobile/v1/documents` leest geen `note`-veld en `documents` heeft er geen plek voor. Vraagt eerst om een ontworpen plek op de server, daarna een `note` in de JSON van `IncomingDrop`, een veld in `ShareView`, en tests.
 
 ### Grote tekst en toegankelijkheid
 
-- **Het blad scrolt bij de grootste tekstmaten.** Bij AX5 blijft elk element leesbaar en scrolt het hele blad, met de kop vast, zodat er niets van de onderkant af geduwd wordt. [`E_n_PDF_AX5`, `E_n_PDF_AX5_doorgescrold`, `Verstuurd_AX5`, `Verstuurd_AX5_doorgescrold`, `Meer_dan_10_AX5`]
-  **Status:** Nog te bouwen — een `ScrollView` rond de inhoud in `ShareView`, met de koprij erbuiten. Dynamic Type zelf is Gebouwd (elk lettertype is `relativeTo:`).
-- **iPhone SE.** Dezelfde ene lay-out op 375 × 667. [`E_n_PDF_iPhone_SE`]
-  **Status:** Gebouwd (`ShareView` heeft één lay-out die niet van de breedte afhangt). Niet gecontroleerd in een simulator op SE-formaat.
-- **VoiceOver.** De kop "Naar verder" is een kop, de deling leest als één element (titel, dan detail), de decoratieve thumbnail wordt overgeslagen, en elke toestand wordt als tekst aangekondigd, nooit alleen met kleur (brief §2.7).
-  **Status:** Deels gebouwd — de thumbnail is verborgen voor VoiceOver en elke toestand is een tekstregel (`ShareViewController.swift`); er ontbreken `.accessibilityAddTraits(.isHeader)` op de kop en `.accessibilityElement(children: .combine)` op het delingspaneel.
+- **Het blad scrolt bij de grootste tekstmaten**, met de balk vast. [`E_n_PDF_AX5`, `E_n_PDF_AX5_doorgescrold`, `Verstuurd_AX5`, `Verstuurd_AX5_doorgescrold`, `Meer_dan_10_AX5`]
+  **Status:** Gebouwd (`ScrollView` in `ShareView`; onderaan 80 pt ruimte bij AX-maten zodat het einde nooit een half afgesneden regel onder de balk laat).
+- **iPhone SE.** [`E_n_PDF_iPhone_SE`]
+  **Status:** Gebouwd en gecontroleerd in de SE-simulator (`ShareNavLayout` centreert de titel tussen de knoppen als het midden niet past).
+- **VoiceOver.** Kop "Naar verder" als kop, de deling als één element, thumbnails overgeslagen, gedimde knoppen met een hint.
+  **Status:** Gebouwd (`ShareView.swift`).
 
 ### Verwant, elders belegd
 
@@ -304,7 +303,9 @@ De "Scan"-bediening van de brief in Bedieningspaneel / de Actieknop en de Live A
 
 **iOS**
 
-- `apps/ios/VerderShare/ShareViewController.swift`: het laden van de `NSItemProvider`s, klaarzetten, het ene scherm (`ShareView`), thumbnail, sluiten/annuleren.
+- `apps/ios/VerderShare/ShareViewController.swift`: het laden van de `NSItemProvider`s (ook een link), klaarzetten, de sessiecontrole, sluiten/annuleren.
+- `apps/ios/Verder/Upload/ShareView.swift`: het ene scherm, in de extensie EN de app gecompileerd zodat de captures hetzelfde scherm tekenen.
+- `apps/ios/Verder/Fixtures/FixtureShareHost.swift`: de capture-host (`-share-host <scene>`), alleen DEBUG.
 - `apps/ios/Verder/Upload/ShareModel.swift`: fasen, teksten, grenzen, `commit`, de begrensde poging, `canCancel`, waarschuwingen.
 - `apps/ios/Verder/Upload/SharePreparation.swift`: `SharedInput`, `PreparedShare`, `SharePreparation` (foto's naar één pdf, doorgeven), `ShareStaging`, `PhotoPage`.
 - `apps/ios/Verder/Upload/ShareSender.swift`: de ene voorgrondupload van de extensie en de `.sent`-markering.
@@ -333,30 +334,30 @@ De "Scan"-bediening van de brief in Bedieningspaneel / de Actieknop en de Live A
 
 ## Frames
 
-Frames gemarkeerd met *niet gebouwd* tonen een toestand die de code niet heeft (zie "Ontworpen, nog niet gebouwd"). Frames zonder die markering verschillen nog steeds van de code in de details die daar staan (uitlegkaart, paginatelling, lay-out van het eindscherm).
+Elke toestand is gebouwd; de captures maakt `scripts/capture.sh empty share:<scene>` (zie de kop van dat script). Waar de code nog afwijkt, staat hierboven onder "Ontworpen".
 
 | Frame | Toestand die het toont |
 |---|---|
 | `Share_extension_Deelblad_systeem.jpg` | Het iOS-deelblad in Mail, met verder in de rij apps |
 | `Share_extension_Laden.jpg` | Laden |
-| `Share_extension_Laden_fout.jpg` | Mislukt laden met opnieuw proberen (*niet gebouwd*) |
+| `Share_extension_Laden_fout.jpg` | Mislukt laden met opnieuw proberen |
 | `Share_extension_E_n_PDF.jpg` | Eén pdf, klaar om te versturen |
 | `Share_extension_Foto_s_n_PDF.jpg` | Drie foto's als één pdf |
 | `Share_extension_Meerdere_bestanden.jpg` | Drie bestanden |
-| `Share_extension_Meerdere_bestanden_deels.jpg` | Drie bestanden, één te groot en weggelaten (*niet gebouwd*: de code weigert de hele deling) |
-| `Share_extension_Meer_dan_10.jpg` | 14 foto's, de eerste 10 meegenomen (*niet gebouwd*: de code weigert de deling) |
+| `Share_extension_Meerdere_bestanden_deels.jpg` | Drie bestanden, één te groot en weggelaten |
+| `Share_extension_Meer_dan_10.jpg` | 14 foto's, de eerste 10 meegenomen |
 | `Share_extension_Versturen.jpg` | Versturen |
-| `Share_extension_Versturen_fout.jpg` | Mislukte opslag met opnieuw proberen (*niet gebouwd*) |
+| `Share_extension_Versturen_fout.jpg` | Mislukte opslag met opnieuw proberen |
 | `Share_extension_Verstuurd.jpg` | Verstuurd |
 | `Share_extension_Bewaard_offline.jpg` | Bewaard voor later, offline |
 | `Share_extension_Bewaard_groot_bestand.jpg` | Bewaard voor later, groot bestand (boven de uploadgrens van 8 MB van de extensie) |
-| `Share_extension_Niet_ingelogd.jpg` | Niet ingelogd, vooraf herkend (*niet gebouwd*) |
-| `Share_extension_Bewaard.jpg` | Bewaard na de melding over uitgelogd zijn (*niet gebouwd*) |
-| `Share_extension_Niet_ondersteund.jpg` | Een gedeelde link (*niet gebouwd*) |
+| `Share_extension_Niet_ingelogd.jpg` | Niet ingelogd, vooraf herkend |
+| `Share_extension_Bewaard.jpg` | Bewaard na de melding over uitgelogd zijn |
+| `Share_extension_Niet_ondersteund.jpg` | Een gedeelde link |
 | `Share_extension_Te_groot.jpg` | Een bestand boven 48 MB, geweigerd |
 | `Share_extension_E_n_PDF_iPhone_SE.jpg` | Eén pdf op de iPhone SE (375 × 667) |
 | `Share_extension_E_n_PDF_AX5.jpg` | Eén pdf bij de grootste toegankelijkheidstekstmaat |
-| `Share_extension_E_n_PDF_AX5_doorgescrold.jpg` | Hetzelfde, doorgescrold (*niet gebouwd*: geen scrollview) |
+| `Share_extension_E_n_PDF_AX5_doorgescrold.jpg` | Hetzelfde, doorgescrold |
 | `Share_extension_Meer_dan_10_AX5.jpg` | Meer dan 10 bij de grootste tekstmaat |
 | `Share_extension_Verstuurd_AX5.jpg` | Verstuurd bij de grootste tekstmaat |
-| `Share_extension_Verstuurd_AX5_doorgescrold.jpg` | Hetzelfde, doorgescrold (*niet gebouwd*: geen scrollview) |
+| `Share_extension_Verstuurd_AX5_doorgescrold.jpg` | Hetzelfde, doorgescrold |

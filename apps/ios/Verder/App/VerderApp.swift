@@ -108,6 +108,10 @@ struct VerderApp: App {
             // lock screen or StandBy, for the captures (FixtureWidgetHost).
             if let scene = WidgetHostScene.current {
                 WidgetHostView(scene: scene)
+            } else if let scene = ShareHostScene.current {
+                // `-share-host <scene>`: the share extension's screen in a
+                // sheet, on a real ShareModel (FixtureShareHost).
+                ShareHostView(scene: scene)
             } else {
                 root
             }

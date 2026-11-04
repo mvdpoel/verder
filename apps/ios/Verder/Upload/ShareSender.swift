@@ -23,30 +23,69 @@ enum ShareSender {
     /// A drop over `foregroundLimit` is not attempted (and not read).
     static func send(_ ids: [UUID], groupDir: URL, client: APIClient,
                      foregroundLimit: Int = foregroundLimit) async -> [UUID] {
-        let dir = IncomingDrop.directory(groupDir: groupDir)
         var sent: [UUID] = []
         for id in ids {
-            guard !Task.isCancelled,
-                  let size = ShareStaging.byteCount(IncomingDrop.binURL(id, in: dir)),
-                  size <= foregroundLimit,
-                  let drop = IncomingDrop.read(IncomingDrop.jsonURL(id, in: dir)),
-                  let bytes = try? Data(contentsOf: IncomingDrop.binURL(id, in: dir))
-            else { continue }
-            let item = UploadItem(id: drop.id, fileName: drop.fileName, capturedAt: drop.capturedAt,
-                                  source: IncomingDrop.source, state: .sending, attempts: 0,
-                                  nextAttemptAt: nil, sentAt: nil, mime: drop.mime, fileExtension: drop.fileExtension)
-            var (req, body) = UploadRequest.build(item, file: bytes, client: client)
-            req.httpBody = body
-            req.timeoutInterval = timeout
-            do {
-                let (data, _) = try await client.send(req)
-                guard (try? JSONDecoder().decode(UploadResponse.self, from: data)) != nil else { continue }
-                try IncomingDrop.markSent(id, groupDir: groupDir)
+            guard !Task.isCancelled else { break }
+            if await sendOne(id, groupDir: groupDir, client: client, foregroundLimit: foregroundLimit) == .sent {
                 sent.append(id)
-            } catch {
-                continue
             }
         }
         return sent
     }
+
+    /// One drop, and WHY it did not go when it did not: the share screen
+    /// names the reason ("offline · in wachtrij", "groot bestand · in
+    /// wachtrij", "log in") instead of one line for every failure.
+    static func sendOne(_ id: UUID, groupDir: URL, client: APIClient,
+                        foregroundLimit: Int = foregroundLimit) async -> ShareSendResult {
+        let dir = IncomingDrop.directory(groupDir: groupDir)
+        guard let size = ShareStaging.byteCount(IncomingDrop.binURL(id, in: dir)) else { return .failed }
+        guard size <= foregroundLimit else { return .tooLargeForExtension }
+        guard let drop = IncomingDrop.read(IncomingDrop.jsonURL(id, in: dir)),
+              let bytes = try? Data(contentsOf: IncomingDrop.binURL(id, in: dir))
+        else { return .failed }
+        let item = UploadItem(id: drop.id, fileName: drop.fileName, capturedAt: drop.capturedAt,
+                              source: IncomingDrop.source, state: .sending, attempts: 0,
+                              nextAttemptAt: nil, sentAt: nil, mime: drop.mime, fileExtension: drop.fileExtension)
+        var (req, body) = UploadRequest.build(item, file: bytes, client: client)
+        req.httpBody = body
+        req.timeoutInterval = timeout
+        do {
+            let (data, _) = try await client.send(req)
+            guard (try? JSONDecoder().decode(UploadResponse.self, from: data)) != nil else { return .failed }
+            try IncomingDrop.markSent(id, groupDir: groupDir)
+            return .sent
+        } catch {
+            return ShareSendResult(error)
+        }
+    }
+}
+
+/// How the extension's own attempt at one drop ended. Every case but `.sent`
+/// leaves the drop for the app's queue.
+enum ShareSendResult: Equatable, Sendable {
+    case sent
+    /// Over `ShareSender.foregroundLimit`: not tried here at all.
+    case tooLargeForExtension
+    /// 401 or any 3xx: no session, or an expired one.
+    case unauthorized
+    /// No network at all (not a slow one: that is `.failed`).
+    case offline
+    case failed
+
+    init(_ error: any Error) {
+        switch error as? APIError {
+        case .unauthorized: self = .unauthorized
+        case .transport(let what) where Self.offlineCodes.contains(where: {
+            what == APIError.transportDescription(URLError($0))
+        }): self = .offline
+        default: self = .failed
+        }
+    }
+
+    /// The URLErrors that mean "this phone has no connection", as opposed to
+    /// a server that is slow or unreachable.
+    static let offlineCodes: [URLError.Code] = [
+        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff,
+    ]
 }
