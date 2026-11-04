@@ -29,7 +29,7 @@ describe("entry labels", () => {
   });
 
   it("proposal has a Dutch label", () => {
-    expect(ENTRY_SOURCE_LABEL.proposal).toBe("verstuurd via verder");
+    expect(ENTRY_SOURCE_LABEL.proposal).toBe("verstuurd via Grip");
   });
 
   it("translates rather than echoing the identifier", () => {

@@ -3,11 +3,11 @@ import { gripActionChanges, gripActionHeadline, gripActionNote } from "./grip-ac
 
 const s = (status: string, title: string | null, docType: string | null) => ({ status, title, docType });
 
-describe("verder action copy", () => {
+describe("Grip action copy", () => {
   it("an auto-file names the status and the soort, not an unchanged name", () => {
     expect(gripActionChanges({ before: s("inbox", "a.pdf", null), after: s("filed", "a.pdf", "Loonstrook") }))
       .toEqual(["inbox → opgeborgen", "soort zonder soort → Loonstrook"]);
-    expect(gripActionHeadline({ kind: "auto-file" })).toBe("Opgeborgen door verder");
+    expect(gripActionHeadline({ kind: "auto-file" })).toBe("Opgeborgen door Grip");
   });
 
   it("an empty soort reads as no soort, the same branch as null", () => {
@@ -17,7 +17,7 @@ describe("verder action copy", () => {
   it("an auto-name names the rename", () => {
     expect(gripActionChanges({ before: s("inbox", "scan1.pdf", null), after: s("inbox", "Brief.pdf", null) }))
       .toEqual(["naam scan1.pdf → Brief.pdf"]);
-    expect(gripActionHeadline({ kind: "auto-name" })).toBe("Hernoemd door verder");
+    expect(gripActionHeadline({ kind: "auto-name" })).toBe("Hernoemd door Grip");
   });
 
   it("the note says why the button is off, and an undo wins", () => {

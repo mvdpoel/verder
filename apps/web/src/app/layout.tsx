@@ -23,7 +23,7 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
-export const metadata = { title: "verder — jouw dossier, jouw bewijs" };
+export const metadata = { title: "Grip — jouw dossier, jouw bewijs" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

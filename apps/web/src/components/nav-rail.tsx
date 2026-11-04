@@ -30,7 +30,7 @@ export function NavRail() {
     <nav
       aria-label="Hoofdnavigatie"
       className="flex w-[78px] shrink-0 flex-col items-center gap-1.5 border-r border-edge bg-rail py-[26px]">
-      <Link href="/dashboard" aria-label="verder" className="mb-[22px] text-signal">
+      <Link href="/dashboard" aria-label="Grip" className="mb-[22px] text-signal">
         <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
           <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1" />
           <path d="M13 3.2 L13 22.8" stroke="currentColor" strokeWidth="1" opacity="0.45" />

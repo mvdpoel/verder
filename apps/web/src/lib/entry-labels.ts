@@ -44,7 +44,7 @@ export const CLARITY_LABEL: Record<string, string> = {
 
 /**
  * Where an entry came from. `manual` is Martin typing it; the watchers are
- * `gmail-watch` and `nas-watch`; `proposal` is a mail verder sent for him after
+ * `gmail-watch` and `nas-watch`; `proposal` is a mail Grip sent for him after
  * he approved its final text. Keyed on `EntrySource`, so a value added to the
  * enum and not here fails to typecheck.
  */
@@ -52,7 +52,7 @@ export const ENTRY_SOURCE_LABEL: Record<EntrySource, string> = {
   manual: "handmatig",
   "gmail-watch": "e-mailwatcher",
   "nas-watch": "scanwatcher",
-  proposal: "verstuurd via verder",
+  proposal: "verstuurd via Grip",
 };
 
 /** How a document reached the vault. */

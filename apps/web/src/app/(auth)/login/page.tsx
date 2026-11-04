@@ -73,7 +73,7 @@ export default function LoginPage() {
             <path d="M13 3.2 L13 22.8" stroke="currentColor" strokeWidth="1" opacity="0.45" />
             <path d="M5.4 8.4 C 10 13, 16 13, 20.6 8.4" stroke="currentColor" strokeWidth="1.2" />
           </svg>
-          <div className="text-[15px] tracking-[0.44em] text-ink-soft">VERDER</div>
+          <div className="text-[15px] tracking-[0.44em] text-ink-soft">GRIP</div>
         </div>
 
         <Panel lit>

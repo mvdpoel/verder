@@ -1,9 +1,9 @@
 import type { GripActionDTO } from "@grip/api/src/routers/grip-actions";
 
 /**
- * The words "Door verder gedaan" uses for one action, on the web. Pure, so the
+ * The words "Door Grip gedaan" uses for one action, on the web. Pure, so the
  * copy is tested without React. The phone spells the same sentences in
- * DoneByVerderSection.swift; keep the two in step.
+ * DoneByGripSection.swift; keep the two in step.
  */
 
 const STATUS: Record<string, string> = { inbox: "inbox", filed: "opgeborgen", discarded: "weggegooid" };
@@ -23,7 +23,7 @@ export function gripActionChanges(a: Pick<GripActionDTO, "before" | "after">): s
 }
 
 export function gripActionHeadline(a: Pick<GripActionDTO, "kind">): string {
-  return a.kind === "auto-file" ? "Opgeborgen door verder" : "Hernoemd door verder";
+  return a.kind === "auto-file" ? "Opgeborgen door Grip" : "Hernoemd door Grip";
 }
 
 /**

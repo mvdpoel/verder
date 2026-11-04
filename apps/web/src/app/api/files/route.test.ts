@@ -35,7 +35,7 @@ function registerDoc(doc: Doc): void {
 
 beforeEach(async () => {
   docs.clear();
-  vaultDir = await mkdtemp(join(tmpdir(), "verder-files-"));
+  vaultDir = await mkdtemp(join(tmpdir(), "grip-files-"));
   process.env.VAULT_DIR = vaultDir;
 });
 

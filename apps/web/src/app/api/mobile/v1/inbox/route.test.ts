@@ -51,7 +51,7 @@ describe("GET /api/mobile/v1/inbox", () => {
     expect(body.doneByGrip).toEqual([]);
   });
 
-  it("doneByGrip carries the last week of verder's actions and never counts", async () => {
+  it("doneByGrip carries the last week of Grip's actions and never counts", async () => {
     const action = {
       changeId: "c1", documentId: "d1", documentTitle: "Loonstrook juli.pdf",
       at: "2026-10-31T17:00:00.000Z", kind: "auto-file",

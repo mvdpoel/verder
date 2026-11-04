@@ -30,7 +30,7 @@ export default function GlobalError({
       }}>
         <main style={{ maxWidth: 460 }}>
           <h1 style={{ fontSize: 26, fontWeight: 200, color: "#f0f7fc", margin: "0 0 14px" }}>
-            Verder kon niet opstarten
+            Grip kon niet opstarten
           </h1>
           <p style={{ fontSize: 14, lineHeight: 1.7, color: "#93a8bd", margin: "0 0 22px" }}>
             Er is niets kwijt en er is niets veranderd — het dossier staat er nog

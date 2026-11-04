@@ -5,11 +5,11 @@ import { mobilePost } from "@/lib/mobile-route";
 const undoBody = z.object({}).strict();
 
 /**
- * One tap undoes one thing verder did on its own (spec §6.6, Plan 3 Task 15).
+ * One tap undoes one thing Grip did on its own (spec §6.6, Plan 3 Task 15).
  *
  * NO FACE ID, deliberately: an undo reveals nothing and sends nothing — it
  * appends a correction in Martin's name restoring what the document was before
- * verder touched it. 409 when something changed since ("al aangepast", which
+ * Grip touched it. 409 when something changed since ("al aangepast", which
  * is also a second tap) or the document was destroyed ("vernietigd"); 400 for
  * an auto-name, whose name also lives on the NAS share.
  */

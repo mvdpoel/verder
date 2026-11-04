@@ -14,7 +14,7 @@ export function getAuth(): ReturnType<typeof createAuth> {
     // will never work against grip.vanderpoel.pro. That is WebAuthn
     // behaving correctly; the production passkey is registered in production.
     rpID: process.env.PASSKEY_RP_ID ?? "localhost",
-    rpName: process.env.PASSKEY_RP_NAME ?? "Verder",
+    rpName: process.env.PASSKEY_RP_NAME ?? "Grip",
   });
   return g.__gripAuth;
 }

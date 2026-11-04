@@ -20,7 +20,7 @@ const isoOrNull = (d: Date | string | null | undefined): string | null =>
 // --- inbox -------------------------------------------------------------------
 
 /**
- * One thing verder did on its own, offered for undo: `gripActions.list`'s
+ * One thing Grip did on its own, offered for undo: `gripActions.list`'s
  * row, which is already hand-shaped (dates as ISO strings, the effective
  * title, the reason an undo is refused) and is published as it stands.
  */
@@ -30,7 +30,7 @@ export interface InboxDTO {
   count: number;
   items: WaitingItem[];
   /**
-   * "Door verder gedaan". NOT part of `count`: what verder already did is
+   * "Door Grip gedaan". NOT part of `count`: what Grip already did is
    * there to check, not waiting on Martin, so it never reaches the badge.
    */
   doneByGrip: GripActionDTO[];

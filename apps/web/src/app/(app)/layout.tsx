@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-[62px] shrink-0 items-center gap-7 border-b border-hairline-lit px-10">
-            <div className="text-[15px] tracking-[0.44em] text-ink-soft">VERDER</div>
+            <div className="text-[15px] tracking-[0.44em] text-ink-soft">GRIP</div>
             <div className="hidden font-mono text-[10.5px] tracking-[0.16em] text-ink-dim lg:block">
               DOSSIER NLTZ2612548IVB · ONDER BEWIND · VERDERGROEP
             </div>

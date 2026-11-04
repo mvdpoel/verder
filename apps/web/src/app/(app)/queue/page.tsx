@@ -15,8 +15,8 @@ import { Empty, PageTitle } from "@/components/ui";
 export default async function QueuePage() {
   const caller = await serverCaller();
   // Open verdicts only. An `auto-applied` suggestion (migration 0040) is
-  // already decided — verder filed it — so it never appears as a card here;
-  // it is listed under "Door verder gedaan", where it can be undone.
+  // already decided — Grip filed it — so it never appears as a card here;
+  // it is listed under "Door Grip gedaan", where it can be undone.
   const [pending, manual, waitingCount, doneByGrip] = await Promise.all([
     caller.suggestions.list({ status: "pending" }),
     caller.suggestions.list({ status: "needs-manual" }),
@@ -48,7 +48,7 @@ export default async function QueuePage() {
       ) : (
         <Empty title="Niets te beoordelen. Alles is afgehandeld — even ademhalen. ☕" />
       )}
-      {/* Below the cards and closed: what verder already did is there to
+      {/* Below the cards and closed: what Grip already did is there to
           check, never waiting on Martin, so it never competes with them. */}
       <DoneByGrip actions={doneByGrip} />
     </div>

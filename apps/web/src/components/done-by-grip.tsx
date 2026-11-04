@@ -10,7 +10,7 @@ const D = (iso: string) => new Date(iso).toLocaleString("nl-NL", {
   timeZone: "Europe/Amsterdam", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 /**
- * "Door verder gedaan" (spec §6.6): what verder changed on its own in the last
+ * "Door Grip gedaan" (spec §6.6): what Grip changed on its own in the last
  * week, each with a one-tap undo.
  *
  * NEVER AMBER. Everything here is already done; it is there to check, not
@@ -27,7 +27,7 @@ export function DoneByGrip({ actions }: { actions: GripActionDTO[] }) {
     <details className="group">
       <summary className="cursor-pointer list-none">
         <Label as="h2" className="transition-colors group-hover:text-signal">
-          Door verder gedaan · {actions.length}
+          Door Grip gedaan · {actions.length}
         </Label>
       </summary>
       <ul className="mt-4 flex flex-col gap-3">
